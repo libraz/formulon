@@ -33,6 +33,7 @@
 #include "cell.h"
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
+#include "io/ooxml/external_link_writer.h"
 #include "io/ooxml/shared_strings_writer.h"
 #include "io/phonetic_pr.h"
 #include "io/stored_cell_error.h"
@@ -276,7 +277,7 @@ void AppendPhantomCellXml(std::string& out, std::uint32_t row, std::uint32_t col
 // this function trusts the caller and never re-checks.
 bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
                    const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
-                   const xlsb::NameShapes& name_shapes) {
+                   const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer) {
   const bool has_formula = !cell.formula_text.empty();
   if (!CellIsEmitted(cell)) {
     return false;
@@ -382,12 +383,13 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
       if (!cell.dynamic_array && anchored == nullptr) {
         implied_at = xlsb::legacy_intersections(*formula_root, name_shapes);
       }
-      const std::string storage = parser::format_formula_storage(*formula_root, &storage_call_name, &implied_at);
-      // Only re-serialise when a storage prefix was actually added (the
-      // formula uses a future function or LET / LAMBDA). For a classic
-      // formula the storage form equals the plain form, so the stored text
-      // is emitted verbatim below to preserve its exact spelling.
-      if (storage != parser::format_formula(*formula_root)) {
+      const std::string storage =
+          parser::format_formula_storage(*formula_root, &storage_call_name, &implied_at, indexer);
+      // Only re-serialise when the storage form differs in substance: a
+      // storage prefix, an external book's `[N]`, or a bare sheet name that
+      // needs quotes. A classic formula's stored text is emitted verbatim
+      // below to preserve its exact spelling.
+      if (NeedsStorageSpelling(*formula_root, storage)) {
         AppendXmlEscaped(out, storage);
         storage_emitted = true;
       }
@@ -461,7 +463,8 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
 bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const RowCells& row_cells,
                   const std::vector<std::uint32_t>& phantom_cols, std::string_view override_attrs,
                   const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
-                  const xlsb::NameShapes& name_shapes, std::unordered_map<std::uint64_t, bool>& always_by_anchor) {
+                  const xlsb::NameShapes& name_shapes, std::unordered_map<std::uint64_t, bool>& always_by_anchor,
+                  const parser::ExternalBookIndexer* indexer) {
   // Buffer the row body separately so we can tell whether anything ended
   // up inside the <row> wrapper before we commit to writing it.
   std::string body;
@@ -492,7 +495,8 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
       emit_phantom(col);
       continue;
     }
-    (void)AppendCellXml(body, sheet, row, col, row_cells[col], shared_strings, dynamic_array_cm_index, name_shapes);
+    (void)AppendCellXml(body, sheet, row, col, row_cells[col], shared_strings, dynamic_array_cm_index, name_shapes,
+                        indexer);
   }
   for (const std::uint32_t col : phantom_cols) {
     if (col >= stored) {
@@ -525,7 +529,8 @@ bool CellIsEmitted(const Cell& cell) {
 }
 
 std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings,
-                              std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes) {
+                              std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
+                              const parser::ExternalBookIndexer* indexer) {
   // Collect populated row indices and sort ascending so the output is
   // deterministic regardless of unordered_map iteration order.
   const auto& rows_map = sheet.rows();
@@ -587,7 +592,7 @@ std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_st
     const RowCells& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;
     const auto phantoms_it = phantom_cols.find(row);
     AppendRowXml(body, sheet, row, row_cells, phantoms_it != phantom_cols.end() ? phantoms_it->second : kNoPhantoms,
-                 override_attrs, shared_strings, dynamic_array_cm_index, name_shapes, always_by_anchor);
+                 override_attrs, shared_strings, dynamic_array_cm_index, name_shapes, always_by_anchor, indexer);
   }
 
   if (body.empty()) {

@@ -35,6 +35,9 @@ enum class TokenKind : std::uint8_t {
   // Names.
   Ident,
   SheetName,  // The unquoted / escape-resolved content of a 'Sheet 1' ref.
+  // The unquoted qualifier of a cross-workbook reference, `[Book.xlsx]Sheet`
+  // or `[Book.xlsx]S1:S2`, up to but excluding its `!`.
+  ExternalQualifier,
   // References.
   CellRef,
   // Structural punctuation.
@@ -93,6 +96,8 @@ struct TextRange {
 ///   - `Bool`         -> `boolean`.
 ///   - `String`       -> `text` (escape-resolved, arena-backed).
 ///   - `SheetName`    -> `text` (escape-resolved, arena-backed).
+///   - `ExternalQualifier` -> `lexeme` only; the parser splits it into its
+///     book, sheet and optional second sheet.
 ///   - `ErrorLiteral` -> `error_code`.
 /// All other kinds leave the payload slots at their default values.
 struct Token {

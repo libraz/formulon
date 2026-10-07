@@ -1131,21 +1131,33 @@ entries:
     first_noted: 2026-07-02
     last_verified_excel_version: "16.112.1"
 
-  # -- Cross-workbook references on save -----------------------------------
-  # Both readers resolve a cross-workbook reference against the values Excel
-  # cached in the external link part, which is what Excel itself shows once
-  # the supporting workbook is closed. Only the XLSB *writer* cannot put one
-  # back, so an xlsb save keeps the cached value and drops the formula.
-  - id: xlsb_external_reference_not_encoded_on_save
-    applies_to: all
-    cause: engine-gap
+  # -- Cross-workbook references: sheet qualifiers ---------------------------
+  # Excel binds a qualifier naming no local sheet as an external book of that
+  # name; Formulon keeps it local and never creates a link without brackets
+  # or a path.
+  - id: missing_local_sheet_qualifier_binds_external_book
+    applies_to: [mac-365-ja_JP]
+    cause: accepted-divergence
     mode: skip-oracle
-    scope: deferred-feature
-    evidence: [tests/unit/io/external_link_fixture_test.cpp, tests/unit/io/xlsb/ptg_test.cpp]
-    reason: "A cross-workbook reference reads and evaluates in both container formats, against the sheet names, defined names and cached cell values decoded from `xl/externalLinks/externalLink*.{xml,bin}`. Writing one back is where the two formats part: the xlsx writer re-serialises the formula as text and the link parts ride through passthrough, so an xlsx save round-trips it, while the XLSB writer emits no supporting-book table and so has no `iSupBook` to point a `PtgNameX` or an external `PtgRef3d` at. Such a formula is therefore downgraded on an xlsb save -- the cell keeps Excel's cached value and loses the formula. That is the same output the writer produced before the reader could decode these tokens at all, so nothing regressed; encoding them needs the writer to author `BrtSupSelf` / `BrtSupBookSrc` and to bind each entry to the relationship id it allocates for the external link part."
-    prefer: mac-excel-365
-    first_noted: 2026-08-05
-    last_verified_excel_version: "16.112.1"
+    scope: unit-test
+    evidence: [tests/unit/eval/local_sheet_qualifier_eval_test.cpp]
+    reason: "A sheet qualifier that names no sheet of the workbook is bound by Mac Excel 365 ja-JP as a link to an external book of that name: `=Nope!A1` is recorded in link_sources and reads #REF!, `=SUM(Data:S2!A1)` with S2 absent is no 3-D reference (it reads back `Data:'S2'!A1`) and gives #NAME?, and `=S2!LocalName` gives #NAME?. Formulon keeps the qualifier local and creates no link: `=Nope!A1` and `=SUM(Data:S2!A1)` give #REF!, so only the first agrees in value, and `=S2!LocalName` is not a reference Formulon binds to any book. A link needs the bracketed or path-qualified spelling, which Formulon accepts and binds."
+    prefer: formulon
+    first_noted: 2026-10-07
+    last_verified_excel_version: "16.113.3"
+
+  # A scalar 3-D reference with both sheets present. The local and the
+  # external form share one rule, so they move together if this is closed.
+  - id: scalar_3d_reference_value_error
+    applies_to: [mac-365-ja_JP]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/cross_sheet_test.cpp]
+    reason: "A 3-D reference used where a single value is wanted, `=Sa:Sb!A1` with both sheets present, is #REF! in Mac Excel 365 ja-JP (`=SUM(Sa:Sb!A1)` is the sum, 7 over the probe's 3 and 4) and #VALUE! in Formulon. The external form `=[Book.xlsx]Sa:Sb!A1` is #REF! in Excel and follows the same rule as the local one in Formulon."
+    prefer: formulon
+    first_noted: 2026-10-07
+    last_verified_excel_version: "16.113.3"
 
 # -- Parser internal-safety limits ------------------------------------------
   # `Parser::parse_expression`'s recursion-depth guard (`kMaxFormulaAstDepth`,

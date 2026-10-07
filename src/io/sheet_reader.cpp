@@ -306,7 +306,7 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
     // '=' here.
     std::string with_eq("=");
     with_eq.append(formula_text);
-    auto wf = workbook.set_cell_formula(sheet_index, parsed.row, parsed.col, std::move(with_eq));
+    auto wf = workbook.set_cell_formula(sheet_index, parsed.row, parsed.col, workbook.ingest_stored_formula(with_eq));
     if (!wf) {
       return wf.error();
     }

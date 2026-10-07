@@ -21,17 +21,21 @@
 //     small and lets the parser handle the context-sensitive grammar.
 //     Bare structured refs with no table name (`[@col]` on its own) are
 //     rejected by the parser as `UnsupportedConstruct`.
-//     Cross-workbook references tokenize as the same component
-//     punctuation and are reinterpreted by the parser into an
-//     `ExternalRef` node when the supporting workbook is named by index
-//     (`[1]Sheet1!A1`, `[1]!Name`), which is the only spelling Excel
-//     stores. A quoted qualifier keeps the bracket inside the quotes
-//     (`'[1]My Sheet'!A1`) and so arrives as a single SheetName token.
-//     The path-spelled form (`[Book1.xlsx]Sheet1!A1`) has no link table
-//     to bind the file name against and falls through to the same
-//     bare-bracket handling as an unqualified structured ref, rejected as
-//     `UnsupportedConstruct`. What such a reference resolves to lives in
-//     the external link cache (see `external_book.h`).
+//   * Cross-workbook qualifiers spelled bare (`[Book.xlsx]Sheet!`,
+//     `[Book.xlsx]S1:S2!`) are one `ExternalQualifier` token, scanned only
+//     where an operand may start and only when the whole shape up to the
+//     `!` is present; anything short of that falls back to `LBracket`, so
+//     structured references and the self-book `[0]!Name` keep their
+//     component punctuation. A quoted qualifier (`'/path/[Book.xlsx]My
+//     Sheet'!A1`) arrives as a single SheetName token for the parser to
+//     split.
+//   * A bare qualifier run directly followed by `!` is a sheet qualifier
+//     and is emitted as an `Ident`, whatever it would otherwise read as:
+//     `S2!A1`, `2024!A1` and `R1C1!A1` all name a sheet. TRUE / FALSE stay
+//     bool literals, so `TRUE!A1` is no reference. The left endpoint of a
+//     3-D span (`2024:Zed!A1`) is promoted the same way unless it is
+//     cell-shaped or the right endpoint opens with a digit, in which case
+//     the `:` is the range operator (`S2:Zed!A1`, `Data:2024!A1`).
 //   * Column-only (`A:A`) and row-only (`1:1`) references: the lexer emits
 //     them as `Ident COLON Ident` and `Number COLON Number` respectively;
 //     the parser promotes the adjacent tokens to full range references.
@@ -138,6 +142,16 @@ class Tokenizer {
   void scan_number();
   void scan_error_literal();
   void scan_ident_or_cellref_or_bool();
+  // Emits the bare qualifier run at the cursor as an `Ident` when it is a
+  // sheet qualifier (see the header notes). Returns false, consuming
+  // nothing, otherwise.
+  bool try_scan_local_sheet_qualifier();
+  // Emits an `ExternalQualifier` for the `[` at the cursor when the bare
+  // `[book]sheet[:sheet]!` shape follows. Returns false, consuming
+  // nothing, otherwise.
+  bool try_scan_external_qualifier();
+  // True when the token emitted last allows an operand to start here.
+  bool at_operand_start() const noexcept;
   void scan_lt();
   void scan_gt();
 

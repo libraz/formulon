@@ -485,6 +485,11 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
     new_index += block.rules.size();
   }
   blocks_mut.push_back(std::move(new_block));
+  for (const char* text : {rule.formula1, rule.formula2}) {
+    if (text != nullptr && text[0] != '\0') {
+      wb->workbook().bind_external_books(text);
+    }
+  }
   *out_index = new_index;
   return 0;
 }

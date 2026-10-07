@@ -29,6 +29,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/sheet_spill_scale_test.cpp
   unit/sheet_cached_text_test.cpp
   unit/workbook_test.cpp
+  unit/workbook_external_bind_test.cpp
   unit/auto_filter_eval_test.cpp
   unit/auto_filter_model_test.cpp
   unit/validation_eval_test.cpp
@@ -90,6 +91,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/workbook_kind_test.cpp
   unit/io/x14_structural_edit_fixture_test.cpp
   unit/io/xml_escape_test.cpp
+  unit/io/ooxml_external_link_writer_test.cpp
   unit/io/xml_utils_test.cpp
   unit/io/xsd_bool_test.cpp
   unit/io/xsd_double_test.cpp
@@ -107,6 +109,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/func_id_fixture_test.cpp
   unit/io/xlsb/func_id_test.cpp
   unit/io/xlsb/ptg_test.cpp
+  unit/io/xlsb/writer_external_link_test.cpp
   unit/io/xlsb/ptg_class_fixture_test.cpp
   unit/io/xlsb/ptg_codec_test.cpp
   unit/io/xlsb/ptg_codec_function_classes_test.cpp
@@ -133,6 +136,10 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/ooxml_output_contract_test.cpp
   unit/io/spill_phantom_fixture_test.cpp
   unit/parser/tokenizer_test.cpp
+  unit/parser/local_sheet_qualifier_test.cpp
+  unit/parser/sheet_quoting_test.cpp
+  unit/parser/external_ref_parse_test.cpp
+  unit/parser/external_book_spelling_test.cpp
   unit/parser/ast_test.cpp
   unit/parser/ast_dump_test.cpp
   unit/parser/ast_format_r1c1_test.cpp
@@ -145,6 +152,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/jp_kana_table_test.cpp
   unit/eval/tree_walker_test.cpp
   unit/eval/defined_name_resolve_test.cpp
+  unit/eval/external_ref_eval_test.cpp
+  unit/eval/local_sheet_qualifier_eval_test.cpp
   unit/eval/eval_sweep_batch_test.cpp
   unit/eval/scalar_ops_test.cpp
   unit/eval/eval_context_test.cpp

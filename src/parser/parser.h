@@ -17,16 +17,14 @@
 //     operator left-associates, including repeated `^` (`2^3^2` = 64,
 //     matching Excel 365).
 //
-//   * External-workbook references spelled the way Excel stores them,
-//     with the supporting workbook named by index: `[1]Sheet1!A1`,
-//     `[1]Sheet1!A1:B2`, `[1]!Name`, and the quoted-sheet variant
-//     `'[1]My Sheet'!A1`.
+//   * External-workbook references as the formula bar spells them:
+//     `[Book.xlsx]Sheet!A1` (cell, range, whole column or row, or a
+//     sheet-local name), the 3-D `[Book.xlsx]S1:S2!A1`, the quoted and
+//     path-qualified `'/dir/[Book.xlsx]My Sheet'!A1`, and book-scope names
+//     `Book.xlsx!Name` / `'/dir/Book.xlsx'!Name`. The book is kept as
+//     spelled; binding it to an external link is the workbook's job.
 //
 // Out of scope for the current parser:
-//   * The path-spelled form of an external reference
-//     (`[Book1.xlsx]Sheet1!A1`). Excel rewrites it to the index form on
-//     entry, so it only reaches the parser from a caller typing it, and
-//     there is no link table to bind the file name against.
 //   * Suggestion engine (the `ParseError::suggestion` slot is reserved but
 //     never populated yet).
 //
@@ -204,16 +202,27 @@ class Parser {
   // the second. Records a diagnostic and returns false on a malformed tail.
   bool parse_3d_ref_tail(Reference* first, Reference* last, bool* is_range, TextRange* tail_range);
   // Parses the tail of a cross-workbook reference, from the `!` onwards.
-  // The caller has identified the supporting workbook's 1-based index
-  // (`[N]`) and the sheet name that followed the bracket, which is empty
-  // for the book-scope defined-name form (`[1]!Name`). Consumes the bang
-  // and everything the reference names. Returns an `ExternalRef` node, or
-  // `nullptr` on a malformed tail after recording a diagnostic.
-  AstNode* parse_external_ref_tail(std::uint32_t book, std::string_view sheet, TextRange start_range);
-  // Splits a `[N]Sheet` qualifier into its book index and sheet name.
-  // Returns false when `text` does not open with a bracketed decimal
-  // index, leaving the out-params untouched.
-  static bool split_external_qualifier(std::string_view text, std::uint32_t* out_book, std::string_view* out_sheet);
+  // The caller has split the qualifier into its directory `path` (empty
+  // when absent), `book`, `sheet` and the 3-D span's `sheet_end` (empty for
+  // one sheet). An empty `sheet` is the book-scope defined-name form
+  // (`Book.xlsx!Name`, `[0]!Name`). Consumes the bang and everything the
+  // reference names. Returns an `ExternalRef` node, or `nullptr` on a
+  // malformed tail after recording a diagnostic.
+  AstNode* parse_external_ref_tail(std::string_view path, std::string_view book, std::string_view sheet,
+                                   std::string_view sheet_end, TextRange start_range);
+  // Parses the reference opened by the quoted qualifier at the cursor
+  // (`'Sheet 1'!A1`, `'[Book.xlsx]Sheet'!A1`, `'/dir/Book.xlsx'!Name`),
+  // deciding from its text and what follows the `!` whether it is local or
+  // cross-workbook.
+  AstNode* parse_quoted_qualifier_ref(SyncContext ctx);
+  // True when the tokens from `offset` name a defined name rather than
+  // cells: an identifier that does not open a whole-column pair (`A:C`).
+  bool defined_name_at(std::size_t offset) const noexcept;
+  // True when the token at `offset` can close a 3-D span `X:Y!`: a sheet
+  // name, bare or quoted, or a bool word, that does not open with a digit.
+  // A digit-leading second sheet makes the `:` the range operator instead
+  // (`Data:2024!A1` is `Data` ranged with `'2024'!A1`).
+  bool sheet_span_end_at(std::size_t offset) const noexcept;
   AstNode* parse_cellref_atom();
   AstNode* parse_full_row_or_number(const Token& first);
 

@@ -1,5 +1,5 @@
 //
-// Unit tests for `SheetRenameTransform` and the `sheet_name_needs_quoting`
+// Unit tests for `SheetRenameTransform` and the `local_sheet_needs_quoting_a1`
 // helper. The walker integration is exercised in `ast_shift_test.cpp`;
 // these tests focus on the per-Reference contract.
 
@@ -17,44 +17,43 @@ namespace formulon {
 namespace parser {
 namespace {
 
-TEST(SheetNameNeedsQuoting, EmptyRequiresQuotes) {
-  EXPECT_TRUE(sheet_name_needs_quoting(""));
+TEST(LocalSheetNeedsQuotingA1, EmptyRequiresQuotes) {
+  EXPECT_TRUE(local_sheet_needs_quoting_a1(""));
 }
 
-TEST(SheetNameNeedsQuoting, SimpleAsciiNoQuotes) {
-  EXPECT_FALSE(sheet_name_needs_quoting("Sheet1"));
+TEST(LocalSheetNeedsQuotingA1, SimpleAsciiNoQuotes) {
+  EXPECT_FALSE(local_sheet_needs_quoting_a1("Sheet1"));
 }
 
-TEST(SheetNameNeedsQuoting, NumericAndCellReferenceNamesRequireQuotes) {
-  EXPECT_TRUE(sheet_name_needs_quoting("2026"));
-  EXPECT_TRUE(sheet_name_needs_quoting("S2"));
-  EXPECT_FALSE(sheet_name_needs_quoting("S0"));
+TEST(LocalSheetNeedsQuotingA1, NumericAndCellReferenceNamesRequireQuotes) {
+  EXPECT_TRUE(local_sheet_needs_quoting_a1("2026"));
+  EXPECT_TRUE(local_sheet_needs_quoting_a1("S2"));
+  EXPECT_FALSE(local_sheet_needs_quoting_a1("S0"));
 }
 
-TEST(SheetNameNeedsQuoting, DigitLeadingNamesRequireQuotes) {
-  // Unquoted, the tokenizer reads the leading digits as a numeric literal and
-  // never reaches the `!`, so these names are only writable quoted.
-  EXPECT_TRUE(sheet_name_needs_quoting("3S1"));
-  EXPECT_TRUE(sheet_name_needs_quoting("1abc"));
-  EXPECT_TRUE(sheet_name_needs_quoting("0"));
+TEST(LocalSheetNeedsQuotingA1, DigitLeadingNamesRequireQuotes) {
+  // Excel accepts `2024!A1` on entry but always displays such a name quoted.
+  EXPECT_TRUE(local_sheet_needs_quoting_a1("3S1"));
+  EXPECT_TRUE(local_sheet_needs_quoting_a1("1abc"));
+  EXPECT_TRUE(local_sheet_needs_quoting_a1("0"));
 }
 
-TEST(SheetNameNeedsQuoting, UnderscoreAndDotAllowed) {
-  EXPECT_FALSE(sheet_name_needs_quoting("My_Sheet.1"));
+TEST(LocalSheetNeedsQuotingA1, UnderscoreAndDotAllowed) {
+  EXPECT_FALSE(local_sheet_needs_quoting_a1("My_Sheet.1"));
 }
 
-TEST(SheetNameNeedsQuoting, SpaceTriggersQuoting) {
-  EXPECT_TRUE(sheet_name_needs_quoting("Sheet 1"));
+TEST(LocalSheetNeedsQuotingA1, SpaceTriggersQuoting) {
+  EXPECT_TRUE(local_sheet_needs_quoting_a1("Sheet 1"));
 }
 
-TEST(SheetNameNeedsQuoting, HyphenTriggersQuoting) {
-  EXPECT_TRUE(sheet_name_needs_quoting("Sheet-1"));
+TEST(LocalSheetNeedsQuotingA1, HyphenTriggersQuoting) {
+  EXPECT_TRUE(local_sheet_needs_quoting_a1("Sheet-1"));
 }
 
-TEST(SheetNameNeedsQuoting, UnicodeBytesTriggerQuoting) {
+TEST(LocalSheetNeedsQuotingA1, UnicodeBytesTriggerQuoting) {
   // Hiragana sheet name (UTF-8) lives outside the ASCII ident ruleset; we
   // conservatively require quoting.
-  EXPECT_TRUE(sheet_name_needs_quoting("\xe3\x82\xb7\xe3\x83\xbc\xe3\x83\x88"));  // "シート"
+  EXPECT_TRUE(local_sheet_needs_quoting_a1("\xe3\x82\xb7\xe3\x83\xbc\xe3\x83\x88"));  // "シート"
 }
 
 // ---------------------------------------------------------------------------

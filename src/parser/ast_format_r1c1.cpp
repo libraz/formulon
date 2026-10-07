@@ -52,23 +52,39 @@ void AppendCell(const Reference& r, const Host& host, std::string& out) {
   }
 }
 
-void AppendSheetQualifier(const Reference& r, std::string& out) {
-  if (r.sheet.empty()) {
+// A local sheet name under the R1C1 quoting rule. The source's quoting
+// hint is not consulted: `'S2'!A1` reads back as `S2!RC`.
+void AppendSheetName(std::string_view sheet, std::string& out) {
+  if (!local_sheet_needs_quoting_r1c1(sheet)) {
+    out.append(sheet);
     return;
   }
-  append_sheet_name(r.sheet, r.sheet_quoted, out);
+  out.push_back('\'');
+  for (char c : sheet) {
+    if (c == '\'') {
+      out.push_back('\'');
+    }
+    out.push_back(c);
+  }
+  out.push_back('\'');
+}
+
+void AppendSheetQualifier(std::string_view sheet, std::string& out) {
+  if (sheet.empty()) {
+    return;
+  }
+  AppendSheetName(sheet, out);
   out.push_back('!');
 }
 
 void AppendRef(const Reference& r, const Host& host, std::string& out) {
-  AppendSheetQualifier(r, out);
+  AppendSheetQualifier(r.sheet, out);
   AppendCell(r, host, out);
 }
 
 void AppendExternalRef(const AstNode& node, const Host& host, std::string& out) {
-  const std::string_view sheet = node.as_external_ref_sheet();
   const std::string_view name = node.as_external_ref_name();
-  append_external_qualifier(node.as_external_ref_book(), sheet, out);
+  append_external_qualifier(node, /*r1c1=*/true, out);
   if (!name.empty()) {
     out.append(name);
     return;
@@ -83,9 +99,9 @@ void AppendExternalRef(const AstNode& node, const Host& host, std::string& out) 
 // Excel's R1C1 reading quotes each sheet of a 3-D span on its own
 // (`Data:'My Sheet'!`), unlike the single quoted unit its A1 storage uses.
 void AppendRef3D(const AstNode& node, const Host& host, std::string& out) {
-  append_sheet_name(node.as_ref3d_sheet_begin(), false, out);
+  AppendSheetName(node.as_ref3d_sheet_begin(), out);
   out.push_back(':');
-  append_sheet_name(node.as_ref3d_sheet_end(), false, out);
+  AppendSheetName(node.as_ref3d_sheet_end(), out);
   out.push_back('!');
   AppendCell(node.as_ref3d_cell(), host, out);
   if (node.as_ref3d_is_range()) {
@@ -113,9 +129,14 @@ struct Emitter {
 
   void emit(const AstNode& node, std::string& out) const {
     switch (node.kind()) {
+      case NodeKind::NameRef:
+        if (!node.as_name_sheet().empty()) {
+          break;
+        }
+        out.append(format_formula(node));
+        return;
       case NodeKind::Literal:
       case NodeKind::StructuredRef:
-      case NodeKind::NameRef:
       case NodeKind::ArrayLiteral:
       case NodeKind::ErrorLiteral:
       case NodeKind::ErrorPlaceholder:
@@ -242,9 +263,14 @@ struct Emitter {
         emit_args(node.as_lambda_call_arity(), &AstNode::as_lambda_call_arg, node, out);
         out.push_back(')');
         return;
+      case NodeKind::NameRef:
+        // Only a sheet-qualified name reaches here; its qualifier follows
+        // the R1C1 quoting rule.
+        AppendSheetQualifier(node.as_name_sheet(), out);
+        out.append(node.as_name());
+        return;
       case NodeKind::Literal:
       case NodeKind::StructuredRef:
-      case NodeKind::NameRef:
       case NodeKind::ArrayLiteral:
       case NodeKind::ErrorLiteral:
       case NodeKind::ErrorPlaceholder:

@@ -50,29 +50,93 @@ Value MaterializeRect(const ExternalBook& book, std::uint32_t sheet, std::uint32
   return Value::array(arr);
 }
 
+/// The rectangle `first`..`last` spans on `sheet`, a whole column or row
+/// clipped to the sheet's cached extent. False for a whole column or row
+/// over a sheet that caches nothing.
+bool TailRect(const ExternalBook& book, std::uint32_t sheet, const parser::Reference& first,
+              const parser::Reference& last, std::uint32_t* row_first, std::uint32_t* row_last,
+              std::uint32_t* col_first, std::uint32_t* col_last) {
+  // Endpoint order is normalised the same way a local range is, so
+  // `Data!A3:A1` and `Data!A1:A3` denote one rectangle.
+  *row_first = first.row < last.row ? first.row : last.row;
+  *row_last = first.row < last.row ? last.row : first.row;
+  *col_first = first.col < last.col ? first.col : last.col;
+  *col_last = first.col < last.col ? last.col : first.col;
+  if (!first.is_full_col && !first.is_full_row) {
+    return true;
+  }
+  std::uint32_t extent_row = 0;
+  std::uint32_t extent_col = 0;
+  if (!book.cached_extent(sheet, &extent_row, &extent_col)) {
+    return false;
+  }
+  if (first.is_full_col) {
+    *row_first = 0;
+    *row_last = extent_row;
+  } else {
+    *col_first = 0;
+    *col_last = extent_col;
+  }
+  return true;
+}
+
+/// Whether every sheet of the 3-D span `node` names is listed and cached,
+/// with the span's first and last sheet in `*lo` / `*hi`.
+bool SpanReadable(const ExternalBook& book, const parser::AstNode& node, std::uint32_t* lo = nullptr,
+                  std::uint32_t* hi = nullptr) {
+  const std::uint32_t begin = book.sheet_index(node.as_external_ref_sheet());
+  const std::uint32_t end = book.sheet_index(node.as_external_ref_sheet_end());
+  if (begin == ExternalBook::kNoSheet || end == ExternalBook::kNoSheet) {
+    return false;
+  }
+  const std::uint32_t first = begin < end ? begin : end;
+  const std::uint32_t last = begin < end ? end : begin;
+  for (std::uint32_t sheet = first; sheet <= last; ++sheet) {
+    if (!book.sheet_has_data(sheet)) {
+      return false;
+    }
+  }
+  if (lo != nullptr) {
+    *lo = first;
+    *hi = last;
+  }
+  return true;
+}
+
+const ExternalBook* BookFor(const parser::AstNode& node, const EvalContext& ctx) {
+  const Workbook* wb = ctx.workbook();
+  if (wb == nullptr) {
+    return nullptr;
+  }
+  const ExternalLinkRecord* link = wb->find_external_link(node.as_external_ref_path(), node.as_external_ref_book());
+  return link == nullptr ? nullptr : &link->book;
+}
+
 }  // namespace
 
 Value resolve_external_ref(const parser::AstNode& node, Arena& arena, const EvalContext& ctx) {
-  const Workbook* wb = ctx.workbook();
-  if (wb == nullptr) {
+  const ExternalBook* found = BookFor(node, ctx);
+  if (found == nullptr) {
     return Value::error(ErrorCode::Ref);
   }
-  // `[N]` is 1-based and selects the N-th `<externalReference>`, which is
-  // the N-th entry of this list because the reader builds it in document
-  // order.
-  const std::vector<ExternalLinkRecord>& links = wb->external_links();
-  const std::uint32_t book_index = node.as_external_ref_book();
-  if (book_index == 0 || book_index > links.size()) {
-    return Value::error(ErrorCode::Ref);
-  }
-  const ExternalBook& book = links[book_index - 1U].book;
+  const ExternalBook& book = *found;
+  const std::string_view sheet_name = node.as_external_ref_sheet();
 
   if (const std::string_view name = node.as_external_ref_name(); !name.empty()) {
-    const ExternalBookName* entry = book.find_name(name);
+    // `[Book]Sheet!Name` is the name local to that sheet; `Book!Name` the
+    // book-scope one.
+    std::uint32_t scope = ExternalBook::kNoSheet;
+    if (!sheet_name.empty()) {
+      scope = book.sheet_index(sheet_name);
+      if (scope == ExternalBook::kNoSheet) {
+        return Value::error(ErrorCode::Name);
+      }
+    }
+    const ExternalBookName* entry = book.find_name(name, scope);
     if (entry == nullptr) {
       return Value::error(ErrorCode::Name);
     }
-    if (!entry->resolvable) {
+    if (!entry->resolvable || !book.sheet_has_data(entry->sheet)) {
       return Value::error(ErrorCode::Ref);
     }
     if (!entry->is_range) {
@@ -81,22 +145,61 @@ Value resolve_external_ref(const parser::AstNode& node, Arena& arena, const Eval
     return MaterializeRect(book, entry->sheet, entry->row, entry->row_end, entry->col, entry->col_end, arena);
   }
 
-  const std::uint32_t sheet = book.sheet_index(node.as_external_ref_sheet());
-  if (sheet == ExternalBook::kNoSheet) {
+  if (!node.as_external_ref_sheet_end().empty()) {
+    // Scalar context, as a local 3-D reference: a span of sheets collapses
+    // to no single value, and a span it cannot read at all is #REF!.
+    return Value::error(SpanReadable(book, node) ? ErrorCode::Value : ErrorCode::Ref);
+  }
+  const std::uint32_t sheet = book.sheet_index(sheet_name);
+  if (sheet == ExternalBook::kNoSheet || !book.sheet_has_data(sheet)) {
     return Value::error(ErrorCode::Ref);
   }
   const parser::Reference& first = node.as_external_ref_cell();
-  if (!node.as_external_ref_is_range()) {
+  if (!node.as_external_ref_is_range() && !first.is_full_col && !first.is_full_row) {
     return ReifyCached(book.cached_cell(sheet, first.row, first.col), arena);
   }
-  // Endpoint order is normalised the same way a local range is, so
-  // `[1]Data!A3:A1` and `[1]Data!A1:A3` denote one rectangle.
-  const parser::Reference& last = node.as_external_ref_cell_end();
-  const std::uint32_t row_first = first.row < last.row ? first.row : last.row;
-  const std::uint32_t row_last = first.row < last.row ? last.row : first.row;
-  const std::uint32_t col_first = first.col < last.col ? first.col : last.col;
-  const std::uint32_t col_last = first.col < last.col ? last.col : first.col;
+  std::uint32_t row_first = 0;
+  std::uint32_t row_last = 0;
+  std::uint32_t col_first = 0;
+  std::uint32_t col_last = 0;
+  if (!TailRect(book, sheet, first, node.as_external_ref_cell_end(), &row_first, &row_last, &col_first, &col_last)) {
+    // Nothing cached: the clipped rectangle is the corner cell alone.
+    row_last = row_first;
+    col_last = col_first;
+  }
   return MaterializeRect(book, sheet, row_first, row_last, col_first, col_last, arena);
+}
+
+bool collect_external_ref3d_cells(const parser::AstNode& node, Arena& arena, const EvalContext& ctx,
+                                  std::vector<Value>* out) {
+  const ExternalBook* found = BookFor(node, ctx);
+  if (found == nullptr) {
+    return false;
+  }
+  const ExternalBook& book = *found;
+  std::uint32_t lo = 0;
+  std::uint32_t hi = 0;
+  if (!SpanReadable(book, node, &lo, &hi)) {
+    return false;
+  }
+  const parser::Reference& first = node.as_external_ref_cell();
+  const parser::Reference& last = node.as_external_ref_cell_end();
+  for (std::uint32_t sheet = lo; sheet <= hi; ++sheet) {
+    std::uint32_t row_first = 0;
+    std::uint32_t row_last = 0;
+    std::uint32_t col_first = 0;
+    std::uint32_t col_last = 0;
+    if (!TailRect(book, sheet, first, node.as_external_ref_is_range() ? last : first, &row_first, &row_last, &col_first,
+                  &col_last)) {
+      continue;
+    }
+    for (std::uint32_t r = row_first; r <= row_last; ++r) {
+      for (std::uint32_t c = col_first; c <= col_last; ++c) {
+        out->push_back(ReifyCached(book.cached_cell(sheet, r, c), arena));
+      }
+    }
+  }
+  return true;
 }
 
 }  // namespace eval

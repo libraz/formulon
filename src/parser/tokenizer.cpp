@@ -26,6 +26,7 @@
 #include <string>
 #include <string_view>
 
+#include "parser/parser_detail.h"
 #include "utils/double_parse.h"
 
 namespace formulon {
@@ -428,6 +429,9 @@ const std::vector<Token>& Tokenizer::tokens() {
         emit_single_char(TokenKind::RBrace);
         continue;
       case '[':
+        if (bracket_depth_ == 0 && at_operand_start() && try_scan_external_qualifier()) {
+          continue;
+        }
         emit_single_char(TokenKind::LBracket);
         ++bracket_depth_;
         continue;
@@ -484,6 +488,12 @@ const std::vector<Token>& Tokenizer::tokens() {
         continue;
       default:
         break;
+    }
+
+    // A sheet qualifier, whatever the run would otherwise tokenize as.
+    if (bracket_depth_ == 0 && (is_ascii_digit(static_cast<char>(c)) || (c != '\\' && is_ident_start_byte(c))) &&
+        try_scan_local_sheet_qualifier()) {
+      continue;
     }
 
     // Digits: number literal.
@@ -1112,6 +1122,103 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
   // `LET(x, A4, SUM(x#))`), so an identifier arms the operator too.
   last_anchor_tail_end_byte_ = byte_pos_;
   (void)letters_only;
+}
+
+bool Tokenizer::try_scan_local_sheet_qualifier() {
+  const std::size_t start = byte_pos_;
+  const std::size_t len = detail::BareQualifierRunLength(source_, start);
+  const std::size_t end = start + len;
+  if (len == 0 || end >= source_.size()) {
+    return false;
+  }
+  const std::string_view run = source_.substr(start, len);
+  bool b = false;
+  if (is_bool_word(run, &b)) {
+    return false;
+  }
+  if (source_[end] != '!') {
+    // `X:Y!`: the run is a 3-D span's first sheet unless it is cell-shaped
+    // or the second sheet opens with a digit.
+    if (source_[end] != ':') {
+      return false;
+    }
+    const std::size_t second_len = detail::BareQualifierRunLength(source_, end + 1);
+    const std::size_t second_end = end + 1 + second_len;
+    bool letters_only = false;
+    if (second_len == 0 || second_end >= source_.size() || source_[second_end] != '!' ||
+        is_ascii_digit(source_[end + 1]) || looks_like_cellref(run, &letters_only)) {
+      return false;
+    }
+  }
+  mark_start();
+  while (byte_pos_ < end) {
+    advance_one();
+  }
+  emit(TokenKind::Ident, start);
+  last_anchor_tail_end_byte_ = byte_pos_;
+  return true;
+}
+
+bool Tokenizer::try_scan_external_qualifier() {
+  const std::size_t start = byte_pos_;
+  std::size_t pos = start + 1;
+  const std::size_t book_len = detail::BareQualifierRunLength(source_, pos);
+  pos += book_len;
+  if (book_len == 0 || pos >= source_.size() || source_[pos] != ']') {
+    return false;
+  }
+  ++pos;
+  const std::size_t sheet_len = detail::BareQualifierRunLength(source_, pos);
+  pos += sheet_len;
+  if (sheet_len == 0) {
+    return false;
+  }
+  if (pos < source_.size() && source_[pos] == ':') {
+    const std::size_t end_len = detail::BareQualifierRunLength(source_, pos + 1);
+    if (end_len == 0) {
+      return false;
+    }
+    pos += 1 + end_len;
+  }
+  if (pos >= source_.size() || source_[pos] != '!') {
+    return false;
+  }
+  mark_start();
+  while (byte_pos_ < pos) {
+    advance_one();
+  }
+  emit(TokenKind::ExternalQualifier, start);
+  return true;
+}
+
+bool Tokenizer::at_operand_start() const noexcept {
+  if (tokens_.empty()) {
+    return true;
+  }
+  switch (tokens_.back().kind) {
+    case TokenKind::Whitespace:
+    case TokenKind::LParen:
+    case TokenKind::LBrace:
+    case TokenKind::Comma:
+    case TokenKind::Semicolon:
+    case TokenKind::Colon:
+    case TokenKind::Plus:
+    case TokenKind::Minus:
+    case TokenKind::Star:
+    case TokenKind::Slash:
+    case TokenKind::Caret:
+    case TokenKind::Ampersand:
+    case TokenKind::Eq:
+    case TokenKind::NotEq:
+    case TokenKind::Lt:
+    case TokenKind::LtEq:
+    case TokenKind::Gt:
+    case TokenKind::GtEq:
+    case TokenKind::At:
+      return true;
+    default:
+      return false;
+  }
 }
 
 void Tokenizer::scan_lt() {

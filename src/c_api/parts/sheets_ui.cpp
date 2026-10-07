@@ -498,6 +498,11 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::uint32_t 
   out.prompt_title = (v.prompt_title != nullptr) ? std::string(v.prompt_title) : std::string();
   out.prompt_message = (v.prompt_message != nullptr) ? std::string(v.prompt_message) : std::string();
   wb->workbook().sheet(sheet).mutable_validations().push_back(std::move(out));
+  for (const char* text : formula_fields) {
+    if (text != nullptr && text[0] != '\0') {
+      wb->workbook().bind_external_books(text);
+    }
+  }
   return 0;
 }
 

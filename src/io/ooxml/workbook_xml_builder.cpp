@@ -22,6 +22,7 @@
 #include "defined_name.h"
 #include "io/future_functions.h"
 #include "io/ooxml/emission_plan.h"
+#include "io/ooxml/external_link_writer.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml_defs.h"
 #include "io/workbook_kind_ooxml.h"
@@ -70,6 +71,8 @@ constexpr std::string_view kCtComments = "application/vnd.openxmlformats-officed
 constexpr std::string_view kCtVmlDrawing = "application/vnd.openxmlformats-officedocument.vmlDrawing";
 constexpr std::string_view kCtThreadedComments = "application/vnd.ms-excel.threadedcomments+xml";
 constexpr std::string_view kCtPerson = "application/vnd.ms-excel.person+xml";
+constexpr std::string_view kCtExternalLink =
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml";
 
 // Relationship URI only this writer emits.
 constexpr std::string_view kRelCalcChain =
@@ -114,7 +117,8 @@ std::string SynchronizedWorkbookPr(const Workbook& wb) {
   return raw_xml(root);
 }
 
-void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& names) {
+void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& names,
+                             const parser::ExternalBookIndexer& indexer) {
   if (names.empty()) {
     return;
   }
@@ -150,12 +154,12 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
     parser::AstNode* formula_root = formula_parser.parse();
     bool storage_emitted = false;
     if (formula_root != nullptr && formula_parser.errors().empty()) {
-      const std::string storage = parser::format_formula_storage(*formula_root, &storage_call_name);
-      // Only re-serialise when a storage prefix was actually added; a
-      // classic formula's storage form equals its plain form, so the
-      // stored text is emitted verbatim below to preserve its exact
+      const std::string storage =
+          parser::format_formula_storage(*formula_root, &storage_call_name, /*omitted_at=*/nullptr, &indexer);
+      // Only re-serialise when the storage form differs in substance; a
+      // classic formula is emitted verbatim below to preserve its exact
       // spelling.
-      if (storage != parser::format_formula(*formula_root)) {
+      if (NeedsStorageSpelling(*formula_root, storage)) {
         AppendXmlEscaped(out, storage);
         storage_emitted = true;
       }
@@ -169,16 +173,14 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
 }
 
 /// True when the external-link part `link` names will actually be present
-/// in the package this plan produces.
+/// in the package this plan produces: a kept loaded body or a generated one.
 ///
-/// The body part rides through passthrough, so a source package that never
-/// carried it (or lost it to collision handling) leaves nothing for the
-/// reference to resolve against. Both halves of the reference are gated on
-/// this one answer -- `<externalReference r:id>` in `workbook.xml` and the
-/// matching workbook-rels `<Relationship>` -- because either surviving
-/// alone is a dangling edge that opens the package in repair mode.
-bool ExternalLinkPartIsWritten(const EmissionPlan& plan, const EmissionPlan::ExternalLinkPlan& link) {
-  return link.record != nullptr && HasPassthroughPart(plan, link.record->part_path);
+/// Both halves of the reference are gated on this one answer --
+/// `<externalReference r:id>` in `workbook.xml` and the matching
+/// workbook-rels `<Relationship>` -- because either surviving alone is a
+/// dangling edge that opens the package in repair mode.
+bool ExternalLinkPartIsWritten(const EmissionPlan::ExternalLinkPlan& link) {
+  return link.written;
 }
 
 }  // namespace
@@ -287,6 +289,13 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   }
   if (plan.generated_persons) {
     AppendOverride(out, kPersonsPartPath, kCtPerson);
+  }
+  // Generated external-link bodies; a kept loaded body is a passthrough
+  // part and gets its Override below.
+  for (const EmissionPlan::ExternalLinkPlan& e : plan.external_links) {
+    if (!e.generated_body.empty()) {
+      AppendOverride(out, e.part_path, kCtExternalLink, /*escape_path=*/true);
+    }
   }
   // Passthrough overrides: only for entries that carried an explicit
   // ContentType in the source archive. Default-typed parts (empty
@@ -433,7 +442,7 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   {
     std::string external_refs;
     for (const EmissionPlan::ExternalLinkPlan& e : plan.external_links) {
-      if (!ExternalLinkPartIsWritten(plan, e)) {
+      if (!ExternalLinkPartIsWritten(e)) {
         continue;
       }
       external_refs.append("    <externalReference r:id=\"rId");
@@ -448,7 +457,8 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   }
   // <definedNames> sits between <sheets> and <calcPr>/end-of-workbook
   // per OOXML schema (cf. ECMA-376 sheet ordering).
-  AppendDefinedNamesBlock(out, wb.defined_names());
+  const parser::ExternalBookIndexer indexer = plan.external_link_ordinals.indexer();
+  AppendDefinedNamesBlock(out, wb.defined_names(), indexer);
   // <calcPr> persists Excel's workbook-level calculation policy
   // (`calcMode` + iterative trio). Emit only when at least one
   // attribute differs from the spec defaults so a fresh workbook keeps
@@ -535,24 +545,23 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
   }
   // External link relationships. Same `xl/` prefix stripping as pivot
   // caches above; targets land as `Target="externalLinks/externalLink1.xml"`.
-  // The body part rides through passthrough, so it is subject to the same
-  // "target must actually be written" rule the unknown relationships below
-  // follow: a source package whose `externalLink1.xml` never arrived would
-  // otherwise leave a dangling edge and Excel would open the result in
-  // repair mode.
+  // Subject to the same "target must actually be written" rule the unknown
+  // relationships below follow: an OLE / DDE link whose body never arrived
+  // would otherwise leave a dangling edge and Excel would open the result
+  // in repair mode.
   for (const EmissionPlan::ExternalLinkPlan& e : plan.external_links) {
-    if (!ExternalLinkPartIsWritten(plan, e)) {
+    if (!ExternalLinkPartIsWritten(e)) {
       StructuredLog("ooxml_writer.workbook_rel_skipped")
           .field("reason", std::string_view("target_part_absent"))
           .field("type", std::string_view(kRelExternalLink))
-          .field("target", e.record == nullptr ? std::string() : e.record->part_path)
+          .field("target", e.part_path)
           .warn();
       if (diagnostics != nullptr) {
         ++diagnostics->dropped_relationship_count;
       }
       continue;
     }
-    AppendRelationship(out, e.workbook_rid, kRelExternalLink, TargetRelativeToWorkbook(e.record->part_path),
+    AppendRelationship(out, e.workbook_rid, kRelExternalLink, TargetRelativeToWorkbook(e.part_path),
                        /*target_external=*/false, /*escape_target=*/true);
   }
   // Round-tripped relationships whose Type URI the reader did not

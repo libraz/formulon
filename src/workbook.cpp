@@ -38,6 +38,7 @@
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/ast_shift.h"
+#include "parser/external_book_spelling.h"
 #include "parser/formula_prefix.h"
 #include "parser/parser.h"
 #include "parser/ref_transforms.h"
@@ -994,6 +995,9 @@ void Workbook::set_defined_names(std::vector<DefinedName> names) {
       }
     }
   }
+  for (const DefinedName& entry : names) {
+    bind_external_books_unlocked(std::string_view(entry.formula));
+  }
   defined_names_ = std::move(names);
   if (changed.empty()) {
     return;
@@ -1023,6 +1027,7 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
         FormulonErrorCode::kInvalidArgument, "set_defined_name_scoped: local_sheet_id out of range",
         "local_sheet_id=" + std::to_string(local_sheet_id) + " sheet_count=" + std::to_string(sheets_.size()));
   }
+  bind_external_books_unlocked(std::string_view(formula));
   // Case-insensitive lookup: Excel resolves defined names case-folded.
   // Restrict the search to the requested scope.
   for (auto it = defined_names_.begin(); it != defined_names_.end(); ++it) {
@@ -1494,6 +1499,256 @@ std::string Workbook::normalize_formula_text(std::string formula) {
   return parser::spell_storage_operators(parser::strip_storage_prefixes(formula, &io::has_storage_prefix));
 }
 
+namespace {
+
+// The file name a link target ends in; a `file:` URL is percent-decoded.
+std::string LinkFileName(std::string_view target) {
+  const std::size_t sep = target.find_last_of("/\\");
+  const std::string_view name = sep == std::string_view::npos ? target : target.substr(sep + 1);
+  if (target.compare(0, 5, "file:") != 0) {
+    return std::string(name);
+  }
+  return parser::percent_decode(name);
+}
+
+// Directory the link displays: from the alternate absolute URL when Excel
+// recorded one, otherwise from the target itself.
+std::string LinkDisplayPath(const ExternalLinkRecord& rec) {
+  return parser::display_path_for_link_target(rec.absolute_target.empty() ? rec.target : rec.absolute_target);
+}
+
+std::string LinkBookName(const ExternalLinkRecord& rec) {
+  return LinkFileName(rec.target.empty() ? rec.absolute_target : rec.target);
+}
+
+bool IsPathSeparator(char c) noexcept {
+  return c == '/' || c == '\\';
+}
+
+// Path equality under ASCII case folding, with `/` and `\` interchangeable.
+bool SamePath(std::string_view a, std::string_view b) noexcept {
+  if (a.size() != b.size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    if (IsPathSeparator(a[i]) && IsPathSeparator(b[i])) {
+      continue;
+    }
+    if (strings::ascii_to_lower(a[i]) != strings::ascii_to_lower(b[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// The target a new link records for `path` + `book`: the file name alone,
+// a POSIX path as written, and a Windows drive or UNC path as a `file:` URL.
+std::string TargetForNewLink(std::string_view path, std::string_view book) {
+  std::string out;
+  const bool drive =
+      path.size() >= 2 && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':';
+  const bool unc = path.size() >= 2 && path[0] == '\\' && path[1] == '\\';
+  if (drive) {
+    out = "file:///";
+    out.append(path);
+  } else if (unc) {
+    out = "file:";
+    for (const char c : path) {
+      out.push_back(c == '\\' ? '/' : c);
+    }
+  } else {
+    out.append(path);
+  }
+  out.append(book);
+  return out;
+}
+
+// Whether `formula` can contain a cross-workbook reference at all: every
+// spelling has a `[`, or a `!` after a workbook extension or a quoted path.
+bool MayNameExternalBook(std::string_view formula) noexcept {
+  if (formula.find('[') != std::string_view::npos) {
+    return true;
+  }
+  if (formula.find('!') == std::string_view::npos) {
+    return false;
+  }
+  return strings::case_insensitive_contains(formula, ".xl") ||
+         (formula.find('\'') != std::string_view::npos && formula.find_first_of("/\\") != std::string_view::npos);
+}
+
+// Position in `links` of the link `path` + `book` names (see
+// `Workbook::find_external_link`), or `links.size()` when none does.
+std::size_t FindLinkPosition(const std::vector<ExternalLinkRecord>& links, std::string_view path,
+                             std::string_view book) noexcept {
+  std::size_t found = links.size();
+  const auto take_lowest = [&links, &found](std::size_t i) {
+    if (found == links.size() || links[i].index < links[found].index) {
+      found = i;
+    }
+  };
+  if (!path.empty()) {
+    std::string key(path);
+    key.append(book);
+    for (std::size_t i = 0; i < links.size(); ++i) {
+      const std::string dir = LinkDisplayPath(links[i]);
+      if (!dir.empty() && SamePath(dir + LinkBookName(links[i]), key)) {
+        return i;
+      }
+    }
+    for (std::size_t i = 0; i < links.size(); ++i) {
+      if (LinkDisplayPath(links[i]).empty() && strings::case_insensitive_eq(LinkBookName(links[i]), book)) {
+        take_lowest(i);
+      }
+    }
+    return found;
+  }
+  for (std::size_t i = 0; i < links.size(); ++i) {
+    if (strings::case_insensitive_eq(LinkFileName(links[i].target), book) ||
+        strings::case_insensitive_eq(LinkFileName(links[i].absolute_target), book)) {
+      take_lowest(i);
+    }
+  }
+  return found;
+}
+
+std::uint32_t IndexForBook(const void* ctx, std::string_view path, std::string_view book) {
+  const ExternalLinkRecord* rec = static_cast<const Workbook*>(ctx)->find_external_link(path, book);
+  return rec == nullptr ? 0U : rec->index;
+}
+
+bool ResolveLinkIndex(const void* ctx, std::uint32_t index, parser::ExternalBookDisplay* out) {
+  for (const ExternalLinkRecord& rec : *static_cast<const std::vector<ExternalLinkRecord>*>(ctx)) {
+    if (rec.index != index) {
+      continue;
+    }
+    out->book = LinkBookName(rec);
+    if (out->book.empty()) {
+      return false;
+    }
+    out->path = LinkDisplayPath(rec);
+    return true;
+  }
+  return false;
+}
+
+}  // namespace
+
+std::vector<const ExternalLinkRecord*> Workbook::external_links_by_index(bool skip_ole_dde) const {
+  std::vector<const ExternalLinkRecord*> out;
+  out.reserve(external_links_.size());
+  for (const ExternalLinkRecord& rec : external_links_) {
+    if (skip_ole_dde &&
+        (rec.kind == ExternalLinkRecord::Kind::kOleLink || rec.kind == ExternalLinkRecord::Kind::kDdeLink)) {
+      continue;
+    }
+    // Insertion sort: stable, and the list is almost always in order already.
+    std::size_t at = out.size();
+    out.push_back(&rec);
+    for (; at > 0 && out[at - 1]->index > rec.index; --at) {
+      out[at] = out[at - 1];
+    }
+    out[at] = &rec;
+  }
+  return out;
+}
+
+const ExternalLinkRecord* Workbook::find_external_link(std::string_view path, std::string_view book) const noexcept {
+  const std::size_t at = FindLinkPosition(external_links_, path, book);
+  return at == external_links_.size() ? nullptr : &external_links_[at];
+}
+
+parser::ExternalBookIndexer Workbook::external_book_indexer() const noexcept {
+  return parser::ExternalBookIndexer{&IndexForBook, this};
+}
+
+void Workbook::bind_external_books(const parser::AstNode& root) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  bind_external_books_unlocked(root);
+}
+
+void Workbook::bind_external_books(std::string_view formula) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  bind_external_books_unlocked(formula);
+}
+
+void Workbook::bind_external_books_unlocked(std::string_view formula) {
+  if (!MayNameExternalBook(formula)) {
+    return;
+  }
+  if (!formula.empty() && formula.front() == '=') {
+    formula.remove_prefix(1);
+  }
+  Arena arena;
+  if (const parser::AstNode* root = parse_indexable_formula(formula, arena); root != nullptr) {
+    bind_external_books_unlocked(*root);
+  }
+}
+
+void Workbook::bind_external_books_unlocked(const parser::AstNode& root) {
+  std::vector<const parser::AstNode*> pending{&root};
+  while (!pending.empty()) {
+    const parser::AstNode* node = pending.back();
+    pending.pop_back();
+    if (node->kind() != parser::NodeKind::ExternalRef) {
+      // Reversed, so references bind in source order.
+      const std::vector<const parser::AstNode*> children = parser::child_nodes(*node);
+      pending.insert(pending.end(), children.rbegin(), children.rend());
+      continue;
+    }
+    if (parser::is_self_book_name_ref(*node)) {
+      continue;
+    }
+    const std::string_view path = node->as_external_ref_path();
+    const std::string_view book = node->as_external_ref_book();
+    const std::size_t at = FindLinkPosition(external_links_, path, book);
+    ExternalLinkRecord* rec = at == external_links_.size() ? nullptr : &external_links_[at];
+    if (rec == nullptr) {
+      std::uint32_t next = 1;
+      for (const ExternalLinkRecord& existing : external_links_) {
+        next = existing.index >= next ? existing.index + 1U : next;
+      }
+      ExternalLinkRecord created;
+      created.index = next;
+      created.kind = ExternalLinkRecord::Kind::kExternalBook;
+      created.target_external = true;
+      created.target = TargetForNewLink(path, book);
+      external_links_.push_back(std::move(created));
+      rec = &external_links_.back();
+    } else if (!path.empty() && LinkDisplayPath(*rec).empty()) {
+      // Excel keeps one link for the book and retargets it at the absolute path.
+      rec->target = TargetForNewLink(path, book);
+      rec->absolute_target = rec->target;
+      rec->body_stale = rec->body_stale || !rec->part_path.empty();
+    }
+    for (const std::string_view sheet : {node->as_external_ref_sheet(), node->as_external_ref_sheet_end()}) {
+      if (sheet.empty() || rec->book.sheet_index(sheet) != ExternalBook::kNoSheet) {
+        continue;
+      }
+      rec->book.sheet_names.emplace_back(sheet);
+      // A loaded body no longer lists every sheet the model does.
+      rec->body_stale = rec->body_stale || !rec->part_path.empty();
+    }
+  }
+}
+
+std::string Workbook::ingest_stored_formula(std::string_view stored) {
+  std::string text = normalize_formula_text(std::string(stored));
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (text.find('[') != std::string::npos) {
+    // A link whose rels named no target is the book its index spells.
+    for (ExternalLinkRecord& rec : external_links_) {
+      const bool book_kind =
+          rec.kind == ExternalLinkRecord::Kind::kExternalBook || rec.kind == ExternalLinkRecord::Kind::kUnknown;
+      if (book_kind && rec.target.empty() && rec.absolute_target.empty()) {
+        rec.target = std::to_string(rec.index);
+      }
+    }
+    text = parser::spell_external_books(text, parser::ExternalBookResolver{&ResolveLinkIndex, &external_links_});
+  }
+  bind_external_books_unlocked(std::string_view(text));
+  return text;
+}
+
 Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                                  std::string formula) {
   if (sheet_index >= sheets_.size()) {
@@ -1530,6 +1785,7 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
 
   Arena tmp_arena;
   parser::AstNode* root = parse_indexable_formula(src, tmp_arena);
+  const bool may_name_external_book = MayNameExternalBook(src);
 
   // The compound mutation runs under a single hold of the engine mutex
   // so a concurrent `recalc_parallel` does not see a half-applied
@@ -1551,6 +1807,9 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
         row, col, root != nullptr && io::entered_as_dynamic_array(*this, sheet_index, *root));
 
     if (root != nullptr) {
+      if (may_name_external_book) {
+        bind_external_books_unlocked(*root);
+      }
       mutator.register_formula(node, *root, *this);
     } else {
       // Hard parse failure, or a valid prefix trailed by unparseable

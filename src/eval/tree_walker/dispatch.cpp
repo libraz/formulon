@@ -37,6 +37,7 @@
 #include "eval/defined_name_resolve.h"
 #include "eval/dynamic_array/anchor.h"
 #include "eval/eval_context.h"
+#include "eval/external_ref.h"
 #include "eval/function_registry.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
@@ -557,6 +558,26 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
           }
         }
       }
+      Value range_err = Value::blank();
+      if (!append_range_sourced_values(*def, ref3d_cells.data(), ref3d_cells.size(), &values, &range_err)) {
+        return range_err;
+      }
+      continue;
+    }
+    // Cross-workbook 3-D reference (`SUM([Book.xlsx]S1:S2!A1)`): the same
+    // flattening over the link's sheet order, read from its cache.
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::ExternalRef &&
+        !arg_node.as_external_ref_sheet_end().empty()) {
+      std::vector<Value> ref3d_cells;
+      if (!collect_external_ref3d_cells(arg_node, arena, ctx, &ref3d_cells)) {
+        const Value err = Value::error(ErrorCode::Ref);
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      had_range_shaped_arg = true;
       Value range_err = Value::blank();
       if (!append_range_sourced_values(*def, ref3d_cells.data(), ref3d_cells.size(), &values, &range_err)) {
         return range_err;

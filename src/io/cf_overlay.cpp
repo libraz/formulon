@@ -136,8 +136,9 @@ void PatchX14DataBar(pugi::xml_node captured, const cf::DataBarSpec& bar) {
 
 }  // namespace
 
-std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vector<cf::ConditionalFormat>& formats) {
-  const std::string entries = build_x14_cf_overlay_entries(formats);
+std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vector<cf::ConditionalFormat>& formats,
+                                 const parser::ExternalBookIndexer* indexer) {
+  const std::string entries = build_x14_cf_overlay_entries(formats, indexer);
   std::unordered_map<std::string, const cf::DataBarSpec*> model_bars;
   for (const cf::ConditionalFormat& format : formats) {
     for (const cf::CFRule& rule : format.rules) {

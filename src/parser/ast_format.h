@@ -25,6 +25,7 @@
 #ifndef FORMULON_PARSER_AST_FORMAT_H_
 #define FORMULON_PARSER_AST_FORMAT_H_
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -51,10 +52,22 @@ const char* binop_token(BinOp op) noexcept;
 /// when `force_quote` is set or the name needs quoting. No trailing `!`.
 void append_sheet_name(std::string_view sheet, bool force_quote, std::string& out);
 
-/// Appends the `[n]Sheet!` qualifier of a cross-workbook reference. When the
-/// sheet needs quoting the book index goes inside the quotes
-/// (`'[1]My Sheet'!`); an empty sheet yields `[1]!` for a book-level name.
-void append_external_qualifier(std::uint32_t book, std::string_view sheet, std::string& out);
+/// Appends the qualifier of the cross-workbook reference `node`, through
+/// its `!`, as the formula bar spells it: `[Book.xlsx]Sheet!`, or one quoted
+/// unit around directory, book and sheets (`'/dir/[Book.xlsx]Sheet'!`) when
+/// a directory is written, the book or a sheet needs quoting, or, in A1
+/// notation only, the reference spans sheets. A book-scope name prints its
+/// file instead (`Book.xlsx!`, `'/dir/Book.xlsx'!`), except a decimal book
+/// with no directory, which keeps the bracketed `[1]!` / `[0]!` spelling.
+void append_external_qualifier(const AstNode& node, bool r1c1, std::string& out);
+
+/// Maps a cross-workbook reference's directory and book to the 1-based
+/// index of its external link, for the `[N]` a stored formula carries.
+/// `index` returns 0 when no link matches.
+struct ExternalBookIndexer {
+  std::uint32_t (*index)(const void* ctx, std::string_view path, std::string_view book);
+  const void* ctx;
+};
 
 /// Fills `out` with the parenthesis pairs each node of `root` prints with:
 /// the pairs written around it (`AstNode::paren_depth`), or one where its
@@ -95,8 +108,20 @@ using StorageFunctionNameSpeller = std::string (*)(std::string_view name);
 /// writer produces, so a save → load cycle round-trips the canonical text.
 /// A written `@` is stored as `_xlfn.SINGLE(...)`, or as nothing when it is
 /// one of `omitted_at` (a legacy formula's implied ones).
+///
+/// With an `indexer`, each cross-workbook reference names its book by link
+/// index and drops the directory (`[1]Sheet!A1`, `'[1]My Sheet'!A1`,
+/// `'[1]S1:S2'!A1`, `[1]!Name`); every reference must bind to a link.
+/// Without one, the book is spelled as `format_formula` spells it.
 std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpeller spell,
-                                   const std::vector<const AstNode*>* omitted_at = nullptr);
+                                   const std::vector<const AstNode*>* omitted_at = nullptr,
+                                   const ExternalBookIndexer* indexer = nullptr);
+
+/// True when `root` holds a local sheet qualifier written bare that A1
+/// notation requires quoted (`S2!A1`, `2024!A1`, `Data:S2!A1`): stored
+/// verbatim, that text would not read back in a file, so the writer emits
+/// the storage formatter's spelling instead.
+bool formula_needs_storage_requote(const AstNode& root);
 
 }  // namespace parser
 }  // namespace formulon

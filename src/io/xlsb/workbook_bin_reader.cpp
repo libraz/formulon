@@ -14,13 +14,11 @@
 #include <utility>
 #include <vector>
 
-#include "io/future_functions.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
-#include "parser/formula_prefix.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -502,10 +500,10 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     // `=`), matching the OOXML `<definedName>` element's text content.
     DefinedName dn;
     dn.name = entry.name;
-    // The decoder names a hidden-name callee with its storage prefix; the
-    // text reads back in formula-bar spelling, like a cell's.
-    dn.formula = parser::spell_storage_operators(
-        parser::strip_storage_prefixes(parser::format_formula(*ast_or.value()), &has_storage_prefix));
+    // The decoder names a hidden-name callee with its storage prefix and a
+    // book by its link index; the text reads back in formula-bar spelling,
+    // like a cell's.
+    dn.formula = wb.ingest_stored_formula(parser::format_formula(*ast_or.value()));
     dn.local_sheet_id = entry.itab;
     dn.hidden = entry.hidden;
     dn.comment = std::move(comment_or.value());

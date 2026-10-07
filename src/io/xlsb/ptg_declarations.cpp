@@ -34,23 +34,55 @@ void AddName(std::string_view name, std::vector<std::string>& names, std::unorde
   }
 }
 
-/// Packs an `(itabFirst, itabLast)` pair into a single dedupe key.
-std::uint64_t PackRangeKey(std::int32_t itab_first, std::int32_t itab_last) {
-  return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(itab_first)) << 32) |
-         static_cast<std::uint64_t>(static_cast<std::uint32_t>(itab_last));
+/// Packs an XTI into a single dedupe key. Sheet indices stay below 2^19,
+/// so 20 bits each keep `kXtiNoSheet` distinct.
+std::uint64_t PackRangeKey(std::uint32_t book, std::int32_t itab_first, std::int32_t itab_last) {
+  constexpr std::uint64_t kMask = (std::uint64_t{1} << 20) - 1U;
+  return (static_cast<std::uint64_t>(book) << 40) |
+         ((static_cast<std::uint64_t>(static_cast<std::uint32_t>(itab_first)) & kMask) << 20) |
+         (static_cast<std::uint64_t>(static_cast<std::uint32_t>(itab_last)) & kMask);
 }
 
-/// Recursion helper for `collect_ptg_sheet_ranges`: resolves `itab_first`
-/// / `itab_last` and, when both are valid, appends the pair to `ranges`
-/// unless already present in `seen`.
-void AddSheetRange(std::int32_t itab_first, std::int32_t itab_last, SheetRangeTable& ranges,
+/// Appends the XTI `(book, itab_first, itab_last)` to `ranges` unless
+/// already present in `seen`.
+void AddXti(std::uint32_t book, std::int32_t itab_first, std::int32_t itab_last, SheetRangeTable& ranges,
+            std::unordered_set<std::uint64_t>& seen) {
+  if (seen.insert(PackRangeKey(book, itab_first, itab_last)).second) {
+    ranges.xti.push_back(XtiEntry{book, itab_first, itab_last});
+  }
+}
+
+/// Recursion helper for `collect_ptg_sheet_ranges`: when both sheet indices
+/// resolved, appends their span in `book`.
+void AddSheetRange(std::uint32_t book, std::int32_t itab_first, std::int32_t itab_last, SheetRangeTable& ranges,
                    std::unordered_set<std::uint64_t>& seen) {
   if (itab_first < 0 || itab_last < 0) {
     return;  // Unresolvable sheet name; the encode fails later with a precise error.
   }
-  if (seen.insert(PackRangeKey(itab_first, itab_last)).second) {
-    ranges.emplace_back(itab_first, itab_last);
+  AddXti(book, itab_first, itab_last, ranges, seen);
+}
+
+/// The XTI a cross-workbook reference resolves through, plus any name its
+/// link's cache lacks.
+void AddExternalRef(const parser::AstNode& node, SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen) {
+  const std::uint32_t position = external_link_position(ranges, node);
+  if (position == 0U) {
+    return;  // The encode reports the unknown book.
   }
+  XlsbLinkTables& link = ranges.links[position - 1U];
+  const std::string_view name = node.as_external_ref_name();
+  if (!name.empty()) {
+    // Saved book-scope whatever its sheet: the part records no name scope.
+    if (external_name_ilbl(link, name) == 0U) {
+      link.names.emplace_back(name);
+    }
+    AddXti(position, kXtiNoSheet, kXtiNoSheet, ranges, seen);
+    return;
+  }
+  const int first = external_sheet_index(link, node.as_external_ref_sheet());
+  const std::string_view sheet_end = node.as_external_ref_sheet_end();
+  const int last = sheet_end.empty() ? first : external_sheet_index(link, sheet_end);
+  AddSheetRange(position, first, last, ranges, seen);
 }
 
 enum class NameCollectMode : std::uint8_t { kPtg, kScopeResolved, kSheetQualified };
@@ -241,6 +273,49 @@ void collect_sheet_qualified_names(const parser::AstNode& node,
   }
 }
 
+std::uint32_t xti_sup_book(const SheetRangeTable& table, std::uint32_t book) {
+  if (book == 0U) {
+    return 0U;
+  }
+  return book - (xti_names_self(table) ? 0U : 1U);
+}
+
+bool xti_names_self(const SheetRangeTable& table) {
+  return std::any_of(table.xti.begin(), table.xti.end(), [](const XtiEntry& entry) { return entry.book == 0U; });
+}
+
+std::uint32_t external_link_position(const SheetRangeTable& table, const parser::AstNode& node) {
+  if (table.indexer.index == nullptr) {
+    return 0U;
+  }
+  const std::uint32_t index =
+      table.indexer.index(table.indexer.ctx, node.as_external_ref_path(), node.as_external_ref_book());
+  for (std::size_t i = 0; index != 0U && i < table.links.size(); ++i) {
+    if (table.links[i].index == index) {
+      return static_cast<std::uint32_t>(i + 1U);
+    }
+  }
+  return 0U;
+}
+
+int external_sheet_index(const XlsbLinkTables& link, std::string_view sheet) {
+  for (std::size_t i = 0; i < link.sheet_names.size(); ++i) {
+    if (strings::case_insensitive_eq(link.sheet_names[i], sheet)) {
+      return static_cast<int>(i);
+    }
+  }
+  return -1;
+}
+
+std::uint32_t external_name_ilbl(const XlsbLinkTables& link, std::string_view name) {
+  for (std::size_t i = 0; i < link.names.size(); ++i) {
+    if (strings::case_insensitive_eq(link.names[i], name)) {
+      return static_cast<std::uint32_t>(i + 1U);
+    }
+  }
+  return 0U;
+}
+
 void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                               SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen) {
   switch (node.kind()) {
@@ -248,24 +323,26 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
       const parser::Reference& r = node.as_ref();
       if (!r.sheet.empty()) {
         const int itab = resolve_ixti(sheet_names, r.sheet);
-        AddSheetRange(itab, itab, ranges, seen);
+        AddSheetRange(0U, itab, itab, ranges, seen);
       }
       return;
     }
     case parser::NodeKind::Ref3D: {
       const int itab_begin = resolve_ixti(sheet_names, node.as_ref3d_sheet_begin());
       const int itab_end = resolve_ixti(sheet_names, node.as_ref3d_sheet_end());
-      AddSheetRange(itab_begin, itab_end, ranges, seen);
+      AddSheetRange(0U, itab_begin, itab_end, ranges, seen);
       return;
     }
     case parser::NodeKind::NameRef:
     case parser::NodeKind::ExternalRef: {
+      if (node.kind() == parser::NodeKind::ExternalRef && !parser::is_self_book_name_ref(node)) {
+        AddExternalRef(node, ranges, seen);
+        return;
+      }
       // `Sheet1!Rate` and `[0]!Rate` encode as `PtgNameX` through the
       // book-scope entry.
-      const bool name_x = node.kind() == parser::NodeKind::NameRef ? !node.as_name_sheet().empty()
-                                                                   : parser::is_self_book_name_ref(node);
-      if (name_x && seen.insert(PackRangeKey(kXtiNoSheet, kXtiNoSheet)).second) {
-        ranges.emplace_back(kXtiNoSheet, kXtiNoSheet);
+      if (node.kind() == parser::NodeKind::ExternalRef || !node.as_name_sheet().empty()) {
+        AddXti(0U, kXtiNoSheet, kXtiNoSheet, ranges, seen);
       }
       return;
     }

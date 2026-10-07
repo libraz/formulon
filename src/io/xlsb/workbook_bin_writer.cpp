@@ -16,8 +16,11 @@
 #include <vector>
 
 #include "cf/cf_types.h"
+#include "external_book.h"
+#include "external_link.h"
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
+#include "io/xlsb/external_link_writer.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_targets.h"
 #include "io/xlsb/ptg_writer.h"
@@ -29,6 +32,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/index_sort.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -38,12 +42,6 @@ namespace {
 
 // Workbook-globals record ids the reader does not consume (so they are absent
 // from `XlsbRecordType`) but the writer must emit for a well-formed stream.
-// A `BrtExternSheet` must live inside a `BrtBeginExternals ... BrtEndExternals`
-// block with a `BrtSupSelf` (self-referencing supporting book); Excel rejects a
-// bare `BrtExternSheet`. Ids per [MS-XLSB] §2.4.
-constexpr std::uint16_t kBrtBeginExternals = 353;
-constexpr std::uint16_t kBrtSupSelf = 357;
-constexpr std::uint16_t kBrtEndExternals = 354;
 // Workbook-globals structural records Excel expects before the sheet bundle.
 constexpr std::uint16_t kBrtFileVersion = 128;
 constexpr std::uint16_t kBrtBeginBookViews = 135;
@@ -108,15 +106,21 @@ void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_
 }
 
 /// Calls `visit` with the text (no leading `=`) of every formula a sheet
-/// part carries: cell formulas, conditional-format rule and threshold
-/// formulas, and data-validation formulas. The name and ExternSheet tables
-/// are both built over this one walk, so every formula the sheet writer
-/// encodes finds its entries.
+/// part carries: cell formulas in row-major order, as Excel numbers their
+/// entries, then conditional-format rule and threshold formulas, and
+/// data-validation formulas. The name and ExternSheet tables are both built
+/// over this one walk, so every formula the sheet writer encodes finds its
+/// entries.
 template <typename Visit>
 void ForEachSheetFormula(const Sheet& sheet, Visit&& visit) {
-  for (const auto& [row, cells] : sheet.rows()) {
-    (void)row;
-    for (const Cell& cell : cells) {
+  std::vector<std::uint32_t> rows;
+  rows.reserve(sheet.rows().size());
+  for (const auto& kv : sheet.rows()) {
+    rows.push_back(kv.first);
+  }
+  sort_ascending(rows);
+  for (const std::uint32_t row : rows) {
+    for (const Cell& cell : sheet.rows().at(row)) {
       std::string_view body(cell.formula_text);
       if (!body.empty() && body.front() == '=') {
         body.remove_prefix(1);
@@ -326,13 +330,35 @@ bool HoldsFrtBlock(const std::vector<std::uint8_t>& records) {
   return false;
 }
 
+/// The XTI that names, among the saved `links`, what a retained entry of
+/// another workbook named in the source; none when no link carries it.
+std::optional<XtiEntry> ExternalSeedEntry(const XlsbExternSheetEntry& entry, const std::vector<XlsbLinkTables>& links) {
+  for (std::size_t k = 0; k < links.size(); ++k) {
+    if (links[k].index != entry.external_book) {
+      continue;
+    }
+    const auto position = static_cast<std::uint32_t>(k + 1U);
+    if (entry.first.empty() && entry.last.empty()) {
+      return XtiEntry{position, kXtiNoSheet, kXtiNoSheet};
+    }
+    const int first = external_sheet_index(links[k], entry.first);
+    const int last = external_sheet_index(links[k], entry.last);
+    if (first < 0 || last < 0) {
+      return std::nullopt;
+    }
+    return XtiEntry{position, first, last};
+  }
+  return std::nullopt;
+}
+
 /// The leading entries of the `BrtExternSheet` table: the source
 /// workbook's table, in its `ixti` order, when a retained sheet tail holds
 /// a block that may reference it, so those verbatim indices keep naming
-/// the same sheets. Fails when an entry no longer names a sheet of this
-/// workbook (renamed or removed since load, or another workbook's), since
+/// the same sheets. Another workbook's entry is re-pointed at its link's
+/// position in `links`. Fails when an entry no longer names a sheet it can
+/// be bound to (renamed or removed since load, or an unbound link), since
 /// the retained bytes would then reference the wrong sheet.
-Expected<SheetRangeTable, Error> SeedFromRetainedTails(const Workbook& wb) {
+Expected<SheetRangeTable, Error> SeedFromRetainedTails(const Workbook& wb, const std::vector<XlsbLinkTables>& links) {
   SheetRangeTable seed;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     const XlsbSheetTail& tail = wb.sheet(i).xlsb_tail();
@@ -342,8 +368,18 @@ Expected<SheetRangeTable, Error> SeedFromRetainedTails(const Workbook& wb) {
       continue;
     }
     for (const XlsbExternSheetEntry& entry : tail.extern_sheets) {
+      if (entry.external_book != 0U) {
+        const std::optional<XtiEntry> xti = ExternalSeedEntry(entry, links);
+        if (!xti) {
+          return make_error(FormulonErrorCode::kIoXlsbRetainedPartStale,
+                            "retained XLSB sheet records reference an external sheet no link carries",
+                            "context=write_xlsb sheet=" + wb.sheet(i).name() + " ref=" + entry.first);
+        }
+        seed.xti.push_back(*xti);
+        continue;
+      }
       if (entry.first.empty() && entry.last.empty() && !entry.unresolved) {
-        seed.emplace_back(kXtiNoSheet, kXtiNoSheet);
+        seed.xti.push_back(XtiEntry{0U, kXtiNoSheet, kXtiNoSheet});
         continue;
       }
       const std::size_t first = wb.sheet_index_by_name(entry.first);
@@ -353,7 +389,7 @@ Expected<SheetRangeTable, Error> SeedFromRetainedTails(const Workbook& wb) {
                           "retained XLSB sheet records reference a sheet this workbook no longer has",
                           "context=write_xlsb sheet=" + wb.sheet(i).name() + " ref=" + entry.first);
       }
-      seed.emplace_back(static_cast<std::int32_t>(first), static_cast<std::int32_t>(last));
+      seed.xti.push_back(XtiEntry{0U, static_cast<std::int32_t>(first), static_cast<std::int32_t>(last)});
     }
     break;
   }
@@ -375,6 +411,18 @@ Expected<SheetRangeTable, Error> SeedFromRetainedTails(const Workbook& wb) {
 /// cannot use two different numbering schemes in the same file.
 Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const std::vector<std::string>& sheet_names) {
   SheetRangeTable collected;
+  for (const ExternalLinkRecord* link : written_external_links(wb)) {
+    XlsbLinkTables tables;
+    tables.index = link->index;
+    tables.sheet_names = link->book.sheet_names;
+    for (const ExternalBookName& name : link->book.names) {
+      tables.names.push_back(name.name);
+    }
+    collected.links.push_back(std::move(tables));
+  }
+  if (!collected.links.empty()) {
+    collected.indexer = wb.external_book_indexer();
+  }
   std::unordered_set<std::uint64_t> seen;
   for (const DefinedName& dn : wb.defined_names()) {
     CollectSheetRangesFromFormula(dn.formula, sheet_names, collected, seen);
@@ -384,15 +432,18 @@ Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const 
       CollectSheetRangesFromFormula(formula, sheet_names, collected, seen);
     });
   }
-  auto ranges = SeedFromRetainedTails(wb);
+  auto ranges = SeedFromRetainedTails(wb, collected.links);
   if (!ranges) {
     return ranges.error();
   }
-  for (const auto& range : collected) {
-    if (std::find(ranges.value().begin(), ranges.value().end(), range) == ranges.value().end()) {
-      ranges.value().push_back(range);
+  std::vector<XtiEntry>& xti = ranges.value().xti;
+  for (const XtiEntry& entry : collected.xti) {
+    if (std::find(xti.begin(), xti.end(), entry) == xti.end()) {
+      xti.push_back(entry);
     }
   }
+  ranges.value().links = std::move(collected.links);
+  ranges.value().indexer = collected.indexer;
   return ranges;
 }
 
@@ -402,19 +453,15 @@ namespace {
 /// real Excel-365-produced `xl/workbook.bin` (see `workbook_bin_reader.cpp`'s
 /// `DecodeExternSheet`, the decoder counterpart): `count(u32)` followed
 /// by `count` entries of `(iSupBook, itabFirst, itabLast)` as three
-/// `i32`s each. `iSupBook` is always 0 here (internal-workbook sheets
-/// only; external-workbook 3-D ranges are out of scope for this
-/// writer).
+/// `i32`s each, `iSupBook` indexing the supporting books `BuildWorkbookBin`
+/// lists before it.
 void EmitExternSheet(std::vector<std::uint8_t>& body, const SheetRangeTable& ranges) {
-  if (ranges.empty()) {
-    return;
-  }
   std::vector<std::uint8_t> p;
-  emit_u32(p, static_cast<std::uint32_t>(ranges.size()));
-  for (const auto& [itab_first, itab_last] : ranges) {
-    emit_u32(p, 0);  // iSupBook
-    emit_u32(p, static_cast<std::uint32_t>(itab_first));
-    emit_u32(p, static_cast<std::uint32_t>(itab_last));
+  emit_u32(p, static_cast<std::uint32_t>(ranges.xti.size()));
+  for (const XtiEntry& entry : ranges.xti) {
+    emit_u32(p, xti_sup_book(ranges, entry.book));
+    emit_u32(p, static_cast<std::uint32_t>(entry.first));
+    emit_u32(p, static_cast<std::uint32_t>(entry.last));
   }
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtExternSheet), p);
 }
@@ -527,7 +574,8 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
 Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
                                                             const std::vector<OrderedName>& ordered_names,
                                                             const SheetRangeTable& sheet_ranges,
-                                                            const std::vector<std::string>& sheet_names) {
+                                                            const std::vector<std::string>& sheet_names,
+                                                            const std::vector<std::string>& link_rel_ids) {
   std::vector<std::uint8_t> body;
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginBook), ByteSpan{});
 
@@ -603,19 +651,29 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   // workbook's formulas need an `ixti` for (single- and multi-sheet
   // alike; see `BuildSheetRangeTable`'s doc comment for why both share
   // this one table). Omitted entirely when no formula uses a qualified
-  // reference, matching the fallback the reader's `sheet_for_ixti` /
-  // `sheet_range_for_ixti` already implement for that case.
+  // reference and there is no external link, matching the fallback the
+  // reader's `sheet_for_ixti` / `sheet_range_for_ixti` already implement
+  // for that case.
   //
   // The record MUST be wrapped in the externals block: a bare
   // `BrtExternSheet` outside `BrtBeginExternals ... BrtEndExternals` is an
-  // out-of-place record that makes Excel reject the package. A workbook that
-  // only references its own sheets still needs a single `BrtSupSelf`
-  // supporting-book entry inside the block.
-  if (!sheet_ranges.empty()) {
-    emit_record(body, kBrtBeginExternals, ByteSpan{});
-    emit_record(body, kBrtSupSelf, ByteSpan{});
+  // out-of-place record that makes Excel reject the package. The block lists
+  // the supporting books in Excel's order: `BrtSupSelf` when an XTI names
+  // this workbook, then one `BrtSupBookSrc` per external link, named by its
+  // workbook relationship. Every link is listed, referenced or not, so a
+  // reload finds each part.
+  if (!sheet_ranges.xti.empty() || !link_rel_ids.empty()) {
+    emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginExternals), ByteSpan{});
+    if (xti_names_self(sheet_ranges)) {
+      emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtSupSelf), ByteSpan{});
+    }
+    for (const std::string& rel_id : link_rel_ids) {
+      std::vector<std::uint8_t> p;
+      emit_xlwidestring(p, rel_id);
+      emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtSupBookSrc), p);
+    }
     EmitExternSheet(body, sheet_ranges);
-    emit_record(body, kBrtEndExternals, ByteSpan{});
+    emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtEndExternals), ByteSpan{});
   }
 
   // BrtName table: every genuine defined name (hidden per its own OOXML

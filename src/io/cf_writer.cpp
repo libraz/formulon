@@ -12,6 +12,7 @@
 #include "cf/cf_types.h"
 #include "io/color_spec_xml.h"
 #include "io/future_functions.h"
+#include "io/ooxml/external_link_writer.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "parser/ast.h"
@@ -221,13 +222,13 @@ void AppendColor(std::string& out, const cf::Color& c) {
   out.append("/>");
 }
 
-void AppendCfvo(std::string& out, const cf::CfValueObject& v) {
+void AppendCfvo(std::string& out, const cf::CfValueObject& v, const parser::ExternalBookIndexer* indexer) {
   out.append("<cfvo type=\"");
   out.append(CfvoTypeToString(v.type));
   out.push_back('"');
   if (!v.value.empty()) {
     out.append(" val=\"");
-    AppendXmlAttrEscaped(out, v.type == cf::CfvoType::Formula ? storage_feature_formula(v.value) : v.value);
+    AppendXmlAttrEscaped(out, v.type == cf::CfvoType::Formula ? storage_feature_formula(v.value, indexer) : v.value);
     out.push_back('"');
   }
   if (!v.gte) {
@@ -236,10 +237,10 @@ void AppendCfvo(std::string& out, const cf::CfValueObject& v) {
   out.append("/>");
 }
 
-void AppendColorScale(std::string& out, const cf::ColorScaleSpec& s) {
+void AppendColorScale(std::string& out, const cf::ColorScaleSpec& s, const parser::ExternalBookIndexer* indexer) {
   out.append("<colorScale>");
   for (const auto& th : s.thresholds) {
-    AppendCfvo(out, th);
+    AppendCfvo(out, th, indexer);
   }
   for (const auto& c : s.colors) {
     AppendColor(out, c);
@@ -250,7 +251,8 @@ void AppendColorScale(std::string& out, const cf::ColorScaleSpec& s) {
 /// `linked`: the bar has an x14 counterpart, which carries its lengths.
 /// Excel then leaves the legacy lengths at the pre-2010 defaults (10/90,
 /// omitted), and so does this writer.
-void AppendDataBar(std::string& out, const cf::DataBarSpec& d, bool linked) {
+void AppendDataBar(std::string& out, const cf::DataBarSpec& d, bool linked,
+                   const parser::ExternalBookIndexer* indexer) {
   out.append("<dataBar");
   if (!linked) {
     out.append(" minLength=\"");
@@ -263,13 +265,13 @@ void AppendDataBar(std::string& out, const cf::DataBarSpec& d, bool linked) {
     out.append(" showValue=\"0\"");
   }
   out.push_back('>');
-  AppendCfvo(out, d.min);
-  AppendCfvo(out, d.max);
+  AppendCfvo(out, d.min, indexer);
+  AppendCfvo(out, d.max, indexer);
   AppendColor(out, d.fill);
   out.append("</dataBar>");
 }
 
-void AppendIconSet(std::string& out, const cf::IconSetSpec& i) {
+void AppendIconSet(std::string& out, const cf::IconSetSpec& i, const parser::ExternalBookIndexer* indexer) {
   out.append("<iconSet");
   // Excel omits the attribute for the schema default, 3TrafficLights1.
   if (i.name != cf::IconSetName::Three_TrafficLights1) {
@@ -289,9 +291,9 @@ void AppendIconSet(std::string& out, const cf::IconSetSpec& i) {
     out.append(" percent=\"0\"");
   }
   out.push_back('>');
-  AppendCfvo(out, i.floor);
+  AppendCfvo(out, i.floor, indexer);
   for (const auto& th : i.thresholds) {
-    AppendCfvo(out, th);
+    AppendCfvo(out, th, indexer);
   }
   out.append("</iconSet>");
 }
@@ -384,7 +386,7 @@ void AppendX14Color(std::string& out, std::string_view element, const cf::Color&
 /// Emits one `<x14:cfvo>`, mirroring the legacy `<cfvo>` it accompanies.
 /// The x14 shape differs: the value is an `<xm:f>` child, not a `val`
 /// attribute.
-void AppendX14Cfvo(std::string& out, const cf::CfValueObject& v) {
+void AppendX14Cfvo(std::string& out, const cf::CfValueObject& v, const parser::ExternalBookIndexer* indexer) {
   out.append("<x14:cfvo type=\"");
   out.append(CfvoTypeToString(v.type));
   out.push_back('"');
@@ -396,14 +398,14 @@ void AppendX14Cfvo(std::string& out, const cf::CfValueObject& v) {
     return;
   }
   out.append("><xm:f>");
-  AppendXmlEscaped(out, v.type == cf::CfvoType::Formula ? storage_feature_formula(v.value) : v.value);
+  AppendXmlEscaped(out, v.type == cf::CfvoType::Formula ? storage_feature_formula(v.value, indexer) : v.value);
   out.append("</xm:f></x14:cfvo>");
 }
 
 /// Emits `d`'s `<x14:dataBar>` element. The bar lengths are always
 /// stated here: the legacy element of a linked bar leaves them at the
 /// pre-2010 defaults, as Excel does.
-void AppendX14DataBar(std::string& out, const cf::DataBarSpec& d) {
+void AppendX14DataBar(std::string& out, const cf::DataBarSpec& d, const parser::ExternalBookIndexer* indexer) {
   out.append("<x14:dataBar minLength=\"");
   out.append(std::to_string(static_cast<unsigned>(d.min_length_pct)));
   out.append("\" maxLength=\"");
@@ -434,8 +436,8 @@ void AppendX14DataBar(std::string& out, const cf::DataBarSpec& d) {
   out.push_back('>');
   // Schema order inside `<x14:dataBar>`: two cfvo, then the colour slots
   // border / negativeFill / negativeBorder / axis.
-  AppendX14Cfvo(out, d.min);
-  AppendX14Cfvo(out, d.max);
+  AppendX14Cfvo(out, d.min, indexer);
+  AppendX14Cfvo(out, d.max, indexer);
   if (d.border.has_value()) {
     AppendX14Color(out, "x14:borderColor", d.border.value());
   }
@@ -455,19 +457,21 @@ void AppendX14DataBar(std::string& out, const cf::DataBarSpec& d) {
 /// extension payload, scoped to `sqref` (the enclosing block's range
 /// union, restated because the entry is a sibling of the legacy block
 /// rather than a child of it).
-void AppendX14CfRuleEntry(std::string& out, const cf::CFRule& r, const std::vector<cf::CFCellRange>& sqref) {
+void AppendX14CfRuleEntry(std::string& out, const cf::CFRule& r, const std::vector<cf::CFCellRange>& sqref,
+                          const parser::ExternalBookIndexer* indexer) {
   out.append("<x14:conditionalFormatting xmlns:xm=\"");
   out.append(kXmNs);
   out.append("\"><x14:cfRule type=\"dataBar\" id=\"");
   AppendXmlAttrEscaped(out, r.id);
   out.append("\">");
-  AppendX14DataBar(out, r.data_bar.value());
+  AppendX14DataBar(out, r.data_bar.value(), indexer);
   out.append("</x14:cfRule><xm:sqref>");
   AppendXmlEscaped(out, EncodeSqref(sqref));
   out.append("</xm:sqref></x14:conditionalFormatting>");
 }
 
-void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count) {
+void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count,
+                  const parser::ExternalBookIndexer* indexer) {
   out.append("<cfRule type=\"");
   out.append(RuleTypeToString(r.type));
   out.append("\" priority=\"");
@@ -561,22 +565,22 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count) 
 
   if (r.formula1.has_value()) {
     out.append("<formula>");
-    AppendXmlEscaped(out, storage_feature_formula(r.formula1.value()));
+    AppendXmlEscaped(out, storage_feature_formula(r.formula1.value(), indexer));
     out.append("</formula>");
   }
   if (r.formula2.has_value()) {
     out.append("<formula>");
-    AppendXmlEscaped(out, storage_feature_formula(r.formula2.value()));
+    AppendXmlEscaped(out, storage_feature_formula(r.formula2.value(), indexer));
     out.append("</formula>");
   }
   if (r.color_scale.has_value()) {
-    AppendColorScale(out, r.color_scale.value());
+    AppendColorScale(out, r.color_scale.value(), indexer);
   }
   if (r.data_bar.has_value()) {
-    AppendDataBar(out, r.data_bar.value(), RuleNeedsX14Payload(r) || HasCapturedX14Link(r));
+    AppendDataBar(out, r.data_bar.value(), RuleNeedsX14Payload(r) || HasCapturedX14Link(r), indexer);
   }
   if (r.icon_set.has_value()) {
-    AppendIconSet(out, r.icon_set.value());
+    AppendIconSet(out, r.icon_set.value(), indexer);
   }
   AppendRuleExtLst(out, r);
 
@@ -585,7 +589,8 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count) 
 
 }  // namespace
 
-std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count) {
+std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count,
+                                          const parser::ExternalBookIndexer* indexer) {
   if (formats.empty()) {
     return std::string{};
   }
@@ -600,7 +605,7 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
     }
     out.push_back('>');
     for (const auto& rule : cf.rules) {
-      AppendCfRule(out, rule, dxf_count);
+      AppendCfRule(out, rule, dxf_count, indexer);
     }
     // `CT_ConditionalFormatting`'s schema-trailing `extLst?`, round-tripped
     // byte-for-byte (see `ConditionalFormat::ext_lst_raw`).
@@ -612,16 +617,16 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
   return out;
 }
 
-std::string storage_feature_formula(std::string_view formula) {
+std::string storage_feature_formula(std::string_view formula, const parser::ExternalBookIndexer* indexer) {
   Arena arena;
   parser::Parser parser(formula, arena);
   const parser::AstNode* root = parser.parse();
   if (root == nullptr || !parser.errors().empty()) {
     return std::string(formula);
   }
-  std::string storage = parser::format_formula_storage(*root, &storage_call_name);
+  std::string storage = parser::format_formula_storage(*root, &storage_call_name, /*omitted_at=*/nullptr, indexer);
   // A classic formula is written verbatim, keeping its exact spelling.
-  return storage != parser::format_formula(*root) ? storage : std::string(formula);
+  return NeedsStorageSpelling(*root, storage) ? storage : std::string(formula);
 }
 
 bool data_bar_needs_x14(const cf::DataBarSpec& bar) {
@@ -630,16 +635,17 @@ bool data_bar_needs_x14(const cf::DataBarSpec& bar) {
 
 std::string build_x14_data_bar_element(const cf::DataBarSpec& bar) {
   std::string out;
-  AppendX14DataBar(out, bar);
+  AppendX14DataBar(out, bar, /*indexer=*/nullptr);
   return out;
 }
 
-std::string build_x14_cf_overlay_entries(const std::vector<cf::ConditionalFormat>& formats) {
+std::string build_x14_cf_overlay_entries(const std::vector<cf::ConditionalFormat>& formats,
+                                         const parser::ExternalBookIndexer* indexer) {
   std::string out;
   for (const auto& cf : formats) {
     for (const auto& rule : cf.rules) {
       if (RuleNeedsX14Payload(rule)) {
-        AppendX14CfRuleEntry(out, rule, cf.sqref);
+        AppendX14CfRuleEntry(out, rule, cf.sqref, indexer);
       }
     }
   }

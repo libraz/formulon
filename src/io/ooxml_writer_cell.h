@@ -19,6 +19,9 @@
 namespace formulon {
 class Sheet;
 struct Cell;
+namespace parser {
+struct ExternalBookIndexer;
+}  // namespace parser
 namespace io {
 class SharedStrings;
 
@@ -43,10 +46,12 @@ bool CellIsEmitted(const Cell& cell);
 /// spill anchor's `<c cm="N">` names; 0 (the default) omits `cm=`
 /// entirely, which is correct whenever the saved package carries no
 /// XLDAPR-typed `xl/metadata.xml` for it to reference. `name_shapes`
-/// feeds a legacy formula's `xlsb::legacy_intersections`.
+/// feeds a legacy formula's `xlsb::legacy_intersections`. `indexer` numbers
+/// the external books formulas name; null spells them by name.
 std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings = nullptr,
                               std::uint32_t dynamic_array_cm_index = 0U,
-                              const xlsb::NameShapes& name_shapes = xlsb::NameShapes());
+                              const xlsb::NameShapes& name_shapes = xlsb::NameShapes(),
+                              const parser::ExternalBookIndexer* indexer = nullptr);
 
 }  // namespace io
 }  // namespace formulon

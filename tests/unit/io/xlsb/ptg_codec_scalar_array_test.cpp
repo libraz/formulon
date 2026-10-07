@@ -91,7 +91,8 @@ TEST(XlsbPtgCodec, GenuineThreeDimensionalRangeRoundTrips) {
   parser::AstNode* node = parser::make_ref3d(arena, "Sheet1", "Sheet3", cell);
   ASSERT_NE(node, nullptr);
 
-  const SheetRangeTable sheet_ranges = {{0, 2}};  // Sheet1 (itab 0) : Sheet3 (itab 2)
+  SheetRangeTable sheet_ranges;
+  sheet_ranges.xti = {{0U, 0, 2}};  // Sheet1 (itab 0) : Sheet3 (itab 2)
   auto encoded = encode_ptgs(*node, sheets, sheet_ranges, {}, PtgRootClass::kValue);
   ASSERT_TRUE(static_cast<bool>(encoded)) << (encoded ? "" : encoded.error().message);
 
@@ -119,7 +120,8 @@ TEST(XlsbPtgCodec, GenuineThreeDimensionalRangeTailRoundTrips) {
   b.col = 1;
   parser::AstNode* node = parser::make_ref3d_range(arena, "Sheet1", "Sheet3", a, b);
   ASSERT_NE(node, nullptr);
-  const SheetRangeTable sheet_ranges = {{0, 2}};
+  SheetRangeTable sheet_ranges;
+  sheet_ranges.xti = {{0U, 0, 2}};
   auto encoded = encode_ptgs(*node, sheets, sheet_ranges, {}, PtgRootClass::kValue);
   ASSERT_TRUE(static_cast<bool>(encoded)) << (encoded ? "" : encoded.error().message);
   Arena dec_arena;

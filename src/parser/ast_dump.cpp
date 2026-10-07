@@ -179,17 +179,25 @@ void DumpInto(const AstNode& node, std::string& out) {
     }
 
     case NodeKind::ExternalRef: {
-      out.append("(external-ref [");
-      out.append(std::to_string(node.as_external_ref_book()));
+      out.append("(external-ref ");
+      out.append(node.as_external_ref_path());
+      out.push_back('[');
+      out.append(node.as_external_ref_book());
       out.push_back(']');
+      if (const std::string_view sheet = node.as_external_ref_sheet(); !sheet.empty()) {
+        out.push_back(' ');
+        out.append(sheet);
+        if (const std::string_view sheet_end = node.as_external_ref_sheet_end(); !sheet_end.empty()) {
+          out.push_back(':');
+          out.append(sheet_end);
+        }
+      }
       if (const std::string_view name = node.as_external_ref_name(); !name.empty()) {
         out.append(" name ");
         out.append(name);
         out.push_back(')');
         return;
       }
-      out.push_back(' ');
-      out.append(node.as_external_ref_sheet());
       out.push_back(' ');
       out.append(format_a1(node.as_external_ref_cell()));
       if (node.as_external_ref_is_range()) {
@@ -220,7 +228,7 @@ void DumpInto(const AstNode& node, std::string& out) {
     case NodeKind::NameRef:
       out.append("(name ");
       if (const std::string_view sheet = node.as_name_sheet(); !sheet.empty()) {
-        const bool quoted = node.as_name_sheet_quoted() || sheet_name_needs_quoting(sheet);
+        const bool quoted = node.as_name_sheet_quoted() || local_sheet_needs_quoting_a1(sheet);
         if (quoted) {
           out.push_back('\'');
         }

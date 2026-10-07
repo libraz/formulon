@@ -6,6 +6,7 @@
 
 #include "io/ooxml/emission_plan.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -17,6 +18,7 @@
 
 #include "default_content_type.h"
 #include "external_link.h"
+#include "io/ooxml/external_link_writer.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml/sheet_xml_builder.h"
@@ -75,7 +77,8 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
     const Workbook& wb, const std::vector<EmissionPlan::PerSheetTable>& flat_tables,
     const std::vector<EmissionPlan::PivotCachePlan>& pivot_caches,
     const std::vector<std::vector<EmissionPlan::PivotTablePlan>>& pivot_tables_by_sheet,
-    const std::vector<EmissionPlan::CommentsPlan>& comments_by_sheet, bool generated_shared_strings) {
+    const std::vector<EmissionPlan::CommentsPlan>& comments_by_sheet,
+    const std::vector<EmissionPlan::ExternalLinkPlan>& external_links, bool generated_shared_strings) {
   std::unordered_set<std::string> paths;
   paths.insert("[Content_Types].xml");
   paths.insert("_rels/.rels");
@@ -124,11 +127,12 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
   if (!wb.persons().empty()) {
     paths.insert(std::string(kPersonsPartPath));
   }
-  // Per-link rels files for external links — the writer generates these
-  // from the captured `ExternalLinkRecord`s; the body parts themselves
-  // are passthrough.
-  for (const ExternalLinkRecord& rec : wb.external_links()) {
-    paths.insert(ooxml::rels_path_for_part(rec.part_path));
+  // Per-link rels files for written external links — the writer generates
+  // these from the captured `ExternalLinkRecord`s.
+  for (const EmissionPlan::ExternalLinkPlan& link : external_links) {
+    if (link.written) {
+      paths.insert(ooxml::rels_path_for_part(link.part_path));
+    }
   }
   // Sheet rels are model-owned paths even when the eventual rels document
   // turns out to have no relationships. Reserve every canonical path before
@@ -162,6 +166,63 @@ std::string_view EffectiveContentType(const Workbook& wb, const PassthroughPart&
     }
   }
   return {};
+}
+
+/// True when `path` names a loaded part this package can carry verbatim.
+bool HasRetainedPart(const Workbook& wb, std::string_view path) {
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    if (part.path == path) {
+      return !IsXlsbBinaryContentType(EffectiveContentType(wb, part));
+    }
+  }
+  return false;
+}
+
+bool EndsWith(std::string_view text, std::string_view suffix) {
+  return text.size() >= suffix.size() && text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+/// Plans every external link in index order. A loaded body the model still
+/// matches is kept; an OLE / DDE link without one cannot be rebuilt and is
+/// not written; every other link gets a generated body, at its own `.xml`
+/// path or else at the smallest `externalLink<k>.xml` no record or loaded
+/// part uses.
+void PlanExternalLinks(const Workbook& wb, std::size_t first_rid, EmissionPlan& plan) {
+  const std::vector<const ExternalLinkRecord*> records = wb.external_links_by_index(/*skip_ole_dde=*/false);
+  std::unordered_set<std::string> used_paths;
+  for (const ExternalLinkRecord& rec : wb.external_links()) {
+    used_paths.insert(rec.part_path);
+  }
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    used_paths.insert(part.path);
+  }
+  std::vector<std::uint32_t> written_indices;
+  std::uint32_t next_part_id = 1;
+  for (std::size_t i = 0; i < records.size(); ++i) {
+    const ExternalLinkRecord& rec = *records[i];
+    EmissionPlan::ExternalLinkPlan entry;
+    entry.record = &rec;
+    entry.workbook_rid = static_cast<std::uint32_t>(first_rid + i);
+    entry.part_path = rec.part_path;
+    if (!rec.body_stale && HasRetainedPart(wb, rec.part_path)) {
+      entry.written = true;
+    } else if (rec.kind != ExternalLinkRecord::Kind::kOleLink && rec.kind != ExternalLinkRecord::Kind::kDdeLink) {
+      if (!EndsWith(rec.part_path, ".xml")) {
+        while (used_paths.count(NumberedPartPath("xl/externalLinks/externalLink", next_part_id, ".xml")) != 0U) {
+          ++next_part_id;
+        }
+        entry.part_path = NumberedPartPath("xl/externalLinks/externalLink", next_part_id++, ".xml");
+        used_paths.insert(entry.part_path);
+      }
+      entry.generated_body = BuildExternalLinkXml(rec);
+      entry.written = true;
+    }
+    if (entry.written) {
+      written_indices.push_back(rec.index);
+    }
+    plan.external_links.push_back(std::move(entry));
+  }
+  plan.external_link_ordinals = ExternalLinkOrdinals(wb, std::move(written_indices));
 }
 
 }  // namespace
@@ -341,26 +402,30 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
 
   // External link relationships. Assigned rIds follow the pivot caches
   // in the workbook-rels numbering scheme, mirroring how Excel emits
-  // them when multiple optional sections coexist. The body parts ride
-  // through `passthrough_parts()`; only the per-link rels files are
-  // generated below.
-  {
-    const std::size_t base = static_cast<std::size_t>(wb.sheet_count()) + 2U + (generated_shared_strings ? 1U : 0U) +
-                             plan.pivot_caches.size();
-    for (std::size_t i = 0; i < wb.external_links().size(); ++i) {
-      EmissionPlan::ExternalLinkPlan entry;
-      entry.record = &wb.external_links()[i];
-      entry.workbook_rid = static_cast<std::uint32_t>(base + i);
-      plan.external_links.push_back(entry);
+  // them when multiple optional sections coexist.
+  PlanExternalLinks(
+      wb,
+      static_cast<std::size_t>(wb.sheet_count()) + 2U + (generated_shared_strings ? 1U : 0U) + plan.pivot_caches.size(),
+      plan);
+  std::unordered_set<std::string> regenerated_link_bodies;
+  for (const EmissionPlan::ExternalLinkPlan& link : plan.external_links) {
+    if (!link.generated_body.empty()) {
+      regenerated_link_bodies.insert(link.part_path);
     }
   }
 
   // Collision detection between generated paths and passthrough paths.
   // Generated paths win; passthrough copy is dropped with a warning.
-  std::unordered_set<std::string> generated = BuildGeneratedPathSet(
-      wb, flat_tables, plan.pivot_caches, plan.pivot_tables_by_sheet, plan.comments_by_sheet, generated_shared_strings);
+  std::unordered_set<std::string> generated =
+      BuildGeneratedPathSet(wb, flat_tables, plan.pivot_caches, plan.pivot_tables_by_sheet, plan.comments_by_sheet,
+                            plan.external_links, generated_shared_strings);
 
   for (const PassthroughPart& part : wb.passthrough_parts()) {
+    // A stale external-link body is superseded by the one generated from
+    // the model, which carries everything it did; nothing is lost.
+    if (regenerated_link_bodies.count(part.path) != 0U) {
+      continue;
+    }
     if (generated.count(part.path) != 0U) {
       StructuredLog("ooxml_writer.passthrough_collision")
           .field("path", part.path)

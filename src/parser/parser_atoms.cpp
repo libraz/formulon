@@ -16,6 +16,7 @@
 namespace formulon {
 namespace parser {
 
+using detail::HasWorkbookExtension;
 using detail::kBpAtPrefix;
 using detail::kBpUnaryPrefix;
 using detail::SpanRange;
@@ -590,6 +591,12 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
     const std::string_view sheet = ident.lexeme;
     const TextRange sheet_range = ident.range;
     advance();  // Ident
+    // `Book.xlsx!Name`: a qualifier spelled as a workbook file names that
+    // workbook's book-scope name; with cells after the `!` it stays a sheet.
+    if (HasWorkbookExtension(sheet) && defined_name_at(1)) {
+      AstNode* ext = parse_external_ref_tail({}, sheet, {}, {}, sheet_range);
+      return ext != nullptr ? ext : make_recovery_placeholder(sheet_range);
+    }
     AstNode* n = parse_sheet_qualified_ref(sheet, /*quoted=*/false, sheet_range);
     if (n != nullptr) {
       return n;
@@ -598,11 +605,10 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
   }
 
   // 3-D reference `Sheet2:Sheet3!A1`: an Ident followed by `:` then a sheet
-  // name (Ident or quoted SheetName) and then `!`. This must be checked
-  // before the whole-column `A:A` rule below so a sheet name that happens
-  // to also be column-shaped is not mis-parsed.
-  if (next == TokenKind::Colon && (peek_kind_at(2) == TokenKind::Ident || peek_kind_at(2) == TokenKind::SheetName) &&
-      peek_kind_at(3) == TokenKind::Bang) {
+  // name and then `!`. This must be checked before the whole-column `A:A`
+  // rule below so a sheet name that happens to also be column-shaped is not
+  // mis-parsed.
+  if (next == TokenKind::Colon && sheet_span_end_at(2) && peek_kind_at(3) == TokenKind::Bang) {
     const std::string_view sheet1 = ident.lexeme;
     const TextRange sheet1_range = ident.range;
     advance();  // Ident (sheet1)

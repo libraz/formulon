@@ -215,6 +215,25 @@ parser::AstNode* make_area(Arena& arena, parser::Reference first, parser::Refere
   return lhs == nullptr || rhs == nullptr ? nullptr : parser::make_range_op(arena, lhs, rhs);
 }
 
+// The external counterpart of `make_area`: whole columns and rows read back
+// as such, a single one as the cell form with its flag set.
+parser::AstNode* make_external_area(Arena& arena, std::string_view book, std::string_view sheet,
+                                    std::string_view sheet_end, parser::Reference first, parser::Reference last) {
+  const bool cols = first.row == 0U && last.row == Sheet::kMaxRows - 1U && first.row_abs && last.row_abs;
+  const bool rows = !cols && first.col == 0U && last.col == Sheet::kMaxCols - 1U && first.col_abs && last.col_abs;
+  bool is_range = true;
+  if (cols || rows) {
+    first.is_full_col = last.is_full_col = cols;
+    first.is_full_row = last.is_full_row = rows;
+    is_range = cols ? !(first.col == last.col && first.col_abs == last.col_abs)
+                    : !(first.row == last.row && first.row_abs == last.row_abs);
+    if (!is_range) {
+      last = first;
+    }
+  }
+  return parser::make_external_ref(arena, {}, book, sheet, sheet_end, first, last, is_range);
+}
+
 // Resolves a `PtgRefN` / `PtgAreaN` corner read by `read_loc` / `read_area`
 // against `base`: a relative axis holds an offset modulo the grid.
 void resolve_relative(parser::Reference& ref, PtgBaseCell base) {
@@ -301,13 +320,12 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
   };
 
   // Resolves an external `ixti` to the supporting book's `[N]` index and
-  // the name of the sheet it qualifies. Returns 0 when the reference
-  // cannot be bound: an unknown book, a sheet index the supporting
-  // book's own table does not cover, or a span across more than one of
-  // its sheets, which `ExternalRef` does not model. The caller then
-  // reports the token undecodable and Excel's cached value stands.
-  auto external_sheet_for_ixti = [&sheet_ranges, &external_books](std::uint32_t ixti,
-                                                                  std::string_view& sheet_out) -> std::uint32_t {
+  // the names of the sheets it spans (`sheet_end_out` empty for one sheet).
+  // Returns 0 when the reference cannot be bound: an unknown book, or a
+  // sheet index the supporting book's own table does not cover. The caller
+  // then reports the token undecodable and Excel's cached value stands.
+  auto external_sheet_for_ixti = [&sheet_ranges, &external_books](std::uint32_t ixti, std::string_view& sheet_out,
+                                                                  std::string_view& sheet_end_out) -> std::uint32_t {
     if (ixti >= sheet_ranges.size()) {
       return 0;
     }
@@ -315,14 +333,16 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     if (range.external_book == 0 || range.external_book > external_books.size()) {
       return 0;
     }
-    if (range.itab_first != range.itab_last || range.itab_first < 0) {
-      return 0;
-    }
     const std::vector<std::string>& sheets = external_books[range.external_book - 1U].sheet_names;
-    if (static_cast<std::size_t>(range.itab_first) >= sheets.size()) {
+    const auto in_book = [&sheets](std::int32_t itab) {
+      return itab >= 0 && static_cast<std::size_t>(itab) < sheets.size();
+    };
+    if (!in_book(range.itab_first) || !in_book(range.itab_last)) {
       return 0;
     }
     sheet_out = sheets[static_cast<std::size_t>(range.itab_first)];
+    sheet_end_out =
+        range.itab_first == range.itab_last ? std::string_view() : sheets[static_cast<std::size_t>(range.itab_last)];
     return range.external_book;
   };
 
@@ -840,7 +860,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                               "context=xlsb_ptg_reader ilbl=" + std::to_string(ilbl_or.value()));
           }
           parser::AstNode* n = name_table[ilbl_or.value() - 1U].itab < 0
-                                   ? parser::make_external_name_ref(arena, 0U, name)
+                                   ? parser::make_external_name_ref(arena, {}, "0", {}, name)
                                    : make_local_name_ref(ilbl_or.value(), /*qualified=*/true);
           if (n == nullptr) {
             return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgNameX)", "context=xlsb_ptg_reader");
@@ -859,7 +879,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                             "PtgNameX ilbl is outside the supporting workbook's name table",
                             "context=xlsb_ptg_reader ilbl=" + std::to_string(ilbl_or.value()));
         }
-        parser::AstNode* n = parser::make_external_name_ref(arena, book, arena.intern(names[ilbl_or.value() - 1U]));
+        // The book is spelled as its link index; ingestion rewrites it to the
+        // file name the formula bar shows.
+        parser::AstNode* n =
+            parser::make_external_name_ref(arena, {}, std::to_string(book), {}, names[ilbl_or.value() - 1U]);
         if (n == nullptr) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgNameX)", "context=xlsb_ptg_reader");
         }
@@ -951,7 +974,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // this token already produced.
         if (ixti_is_external(ixti_or.value())) {
           std::string_view external_sheet;
-          const std::uint32_t book = external_sheet_for_ixti(ixti_or.value(), external_sheet);
+          std::string_view external_sheet_end;
+          const std::uint32_t book = external_sheet_for_ixti(ixti_or.value(), external_sheet, external_sheet_end);
           if (book == 0) {
             return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
                               "PtgRef3d qualifies a sheet of an external workbook this reader cannot bind",
@@ -965,8 +989,9 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           if (!domain_or) {
             return domain_or.error();
           }
-          parser::AstNode* n = parser::make_external_ref(arena, book, arena.intern(external_sheet), loc_or.value(),
-                                                         loc_or.value(), /*is_range=*/false);
+          parser::AstNode* n = parser::make_external_ref(arena, {}, std::to_string(book), external_sheet,
+                                                         external_sheet_end, loc_or.value(), loc_or.value(),
+                                                         /*is_range=*/false);
           if (n == nullptr) {
             return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgRef3d external)",
                               "context=xlsb_ptg_reader");
@@ -1004,7 +1029,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         }
         parser::Reference ref = ref_or.value();
         ref.sheet = arena.intern(ref.sheet);
-        ref.sheet_quoted = parser::sheet_name_needs_quoting(ref.sheet);
+        ref.sheet_quoted = parser::local_sheet_needs_quoting_a1(ref.sheet);
         parser::AstNode* n = parser::make_ref(arena, ref);
         if (n == nullptr) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgRef3d)", "context=xlsb_ptg_reader");
@@ -1023,7 +1048,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // `RangeOp` of two qualified refs.
         if (ixti_is_external(ixti_or.value())) {
           std::string_view external_sheet;
-          const std::uint32_t book = external_sheet_for_ixti(ixti_or.value(), external_sheet);
+          std::string_view external_sheet_end;
+          const std::uint32_t book = external_sheet_for_ixti(ixti_or.value(), external_sheet, external_sheet_end);
           if (book == 0) {
             return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
                               "PtgArea3d qualifies a sheet of an external workbook this reader cannot bind",
@@ -1037,9 +1063,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           if (!domain_or) {
             return domain_or.error();
           }
-          parser::AstNode* n = parser::make_external_ref(arena, book, arena.intern(external_sheet),
-                                                         area_or.value().first, area_or.value().second,
-                                                         /*is_range=*/true);
+          parser::AstNode* n = make_external_area(arena, std::to_string(book), external_sheet, external_sheet_end,
+                                                  area_or.value().first, area_or.value().second);
           if (n == nullptr) {
             return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgArea3d external)",
                               "context=xlsb_ptg_reader");
@@ -1078,7 +1103,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         }
         parser::Reference first = area_or.value().first;
         first.sheet = arena.intern(first.sheet);
-        first.sheet_quoted = parser::sheet_name_needs_quoting(first.sheet);
+        first.sheet_quoted = parser::local_sheet_needs_quoting_a1(first.sheet);
         parser::AstNode* n = make_area(arena, first, area_or.value().second);
         if (n == nullptr) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgArea3d range)",

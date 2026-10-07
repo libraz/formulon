@@ -12,7 +12,7 @@
 // consistent with it.
 //
 // Tokens the AST can carry but the encoder cannot lower (structured refs,
-// cross-workbook refs, implicit-intersection, optional LAMBDA parameters)
+// implicit-intersection, optional LAMBDA parameters)
 // return `kIoXlsbUnsupportedPtg` rather
 // than silently dropping data; the cell writer surfaces that as a hard
 // failure through `write_xlsb`'s `Expected` return.
@@ -32,6 +32,7 @@
 
 #include "io/xlsb/ptg.h"
 #include "parser/ast.h"
+#include "parser/ast_format.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -53,16 +54,70 @@ using NameTable = std::unordered_map<std::string, std::uint32_t>;
 /// `!` never occurs in a defined name, so they cannot collide with one.
 std::string sheet_scoped_name_key(std::int32_t itab, std::string_view name);
 
-/// Ordered `(itabFirst, itabLast)` pairs, mirroring `xl/workbook.bin`'s
-/// `BrtExternSheet` table: entry `i` is the range a `PtgRef3d` /
-/// `PtgArea3d` token resolves via `ixti == i`. A single-sheet qualified
-/// reference (`Sheet1!A1`) stores `itabFirst == itabLast`; a genuine
-/// 3-D range (`Sheet1:Sheet3!A1`) stores the full span. Built once per
-/// workbook by `collect_ptg_sheet_ranges` (mirroring `NameTable` /
-/// `collect_ptg_names`) so every sheet's cell encoder and the
-/// `BrtExternSheet` record the top-level writer emits agree on `ixti`
-/// assignments.
-using SheetRangeTable = std::vector<std::pair<std::int32_t, std::int32_t>>;
+/// One `BrtExternSheet` XTI: the book it qualifies and the span of that
+/// book's sheets. `book` is 0 for this workbook, else the 1-based position
+/// of an external link in `SheetRangeTable::links`; the supporting-book
+/// index the file stores follows from the table (`xti_sup_book`). A
+/// single-sheet qualified reference (`Sheet1!A1`) stores `first == last`, a
+/// genuine 3-D range (`Sheet1:Sheet3!A1`) the full span, and a book-scope
+/// `PtgNameX` `kXtiNoSheet` for both.
+struct XtiEntry {
+  std::uint32_t book = 0;
+  std::int32_t first = 0;
+  std::int32_t last = 0;
+
+  bool operator==(const XtiEntry& other) const noexcept {
+    return book == other.book && first == other.first && last == other.last;
+  }
+};
+
+/// What a formula can name inside one saved external link.
+struct XlsbLinkTables {
+  /// `ExternalLinkRecord::index` of the link.
+  std::uint32_t index = 0;
+  /// The supporting workbook's sheets; an XTI's span indexes these.
+  std::vector<std::string> sheet_names;
+  /// The defined names its part lists: the cached ones in cache order, then
+  /// any a formula names that the cache lacks. `PtgNameX` names entry `i`
+  /// as `ilbl == i + 1`.
+  std::vector<std::string> names;
+};
+
+/// Mirrors `xl/workbook.bin`'s `BrtExternSheet` table: `xti[i]` is the
+/// entry a `PtgRef3d` / `PtgArea3d` / `PtgNameX` token resolves via
+/// `ixti == i`. Built once per workbook by `collect_ptg_sheet_ranges`
+/// (mirroring `NameTable` / `collect_ptg_names`) so every sheet's cell
+/// encoder and the `BrtExternSheet` record the top-level writer emits agree
+/// on `ixti` assignments.
+struct SheetRangeTable {
+  std::vector<XtiEntry> xti;
+  /// The external links the package saves, in the order their parts and
+  /// `BrtSupBookSrc` records are written.
+  std::vector<XlsbLinkTables> links;
+  /// Maps a cross-workbook reference's directory and book to the
+  /// `ExternalLinkRecord::index` it names; unset when there are no links.
+  parser::ExternalBookIndexer indexer{nullptr, nullptr};
+};
+
+/// The `iSupBook` the file stores for an XTI naming `book`: this workbook's
+/// `BrtSupSelf` comes first when any XTI names it, then one `BrtSupBookSrc`
+/// per link. Index 0 is therefore an external link in a table without a
+/// self entry.
+std::uint32_t xti_sup_book(const SheetRangeTable& table, std::uint32_t book);
+
+/// True when an XTI names this workbook, which then needs `BrtSupSelf`.
+bool xti_names_self(const SheetRangeTable& table);
+
+/// 1-based position in `table.links` of the link the cross-workbook
+/// reference `node` names; 0 when no saved link matches.
+std::uint32_t external_link_position(const SheetRangeTable& table, const parser::AstNode& node);
+
+/// 0-based index of `sheet` among `link.sheet_names` under ASCII case
+/// folding, as Excel matches sheet names; -1 when absent.
+int external_sheet_index(const XlsbLinkTables& link, std::string_view sheet);
+
+/// `ilbl` of `name` in `link.names` under ASCII case folding; 0 when absent.
+std::uint32_t external_name_ilbl(const XlsbLinkTables& link, std::string_view name);
 
 /// Ptg class of a formula's own root token (the whole formula, or a bare
 /// reference an enclosing function/operator does not consume). Measured
@@ -147,12 +202,14 @@ void collect_sheet_qualified_names(const parser::AstNode& node,
 /// `sheet` is non-empty contributes `(itab, itab)`; a `Ref3D` node
 /// contributes its full `(begin, end)` span; a sheet-qualified defined
 /// or self-book name (`Sheet2!Rate`, `[0]!Rate`) contributes the sheetless
-/// `(-2, -2)` entry its `PtgNameX` resolves through. `sheet_names` resolves
-/// a sheet display name to its 0-based index; a name absent from
-/// `sheet_names` is skipped here (the encode fails later with a precise
-/// error instead of silently fabricating an entry). `seen` dedupes
+/// `(-2, -2)` entry its `PtgNameX` resolves through. A cross-workbook
+/// reference contributes the same shapes against its link's sheets, and a
+/// name the link's cache lacks is appended to that link's `names`.
+/// `sheet_names` resolves a sheet display name to its 0-based index; a name
+/// absent from `sheet_names` is skipped here (the encode fails later with a
+/// precise error instead of silently fabricating an entry). `seen` dedupes
 /// (both across one call and across callers pre-seeding it), and
-/// `ranges`' index order becomes the `ixti` assignment `encode_ptgs`
+/// `ranges.xti`'s index order becomes the `ixti` assignment `encode_ptgs`
 /// consults via `sheet_ranges`.
 void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                               SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen);

@@ -6,10 +6,12 @@
 #ifndef FORMULON_PARSER_PARSER_DETAIL_H_
 #define FORMULON_PARSER_PARSER_DETAIL_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
 #include "parser/token.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace parser {
@@ -56,14 +58,6 @@ inline constexpr int kBpAtPrefix = 65;
 inline constexpr std::uint32_t kMaxColumn = 16384;  // XFD
 inline constexpr std::uint32_t kMaxRow = 1048576;   // 2^20
 
-// Ceiling on the `[N]` supporting-workbook index of a cross-workbook
-// reference. Excel sets no documented limit; this one exists so a long
-// digit run inside the brackets stops accumulating instead of
-// overflowing, and sits far above any plausible number of external links
-// so it never rejects a real file. An index past the workbook's actual
-// link count resolves to `#REF!` at evaluation, not here.
-inline constexpr std::uint32_t kMaxExternalBookIndex = 65535;
-
 // ASCII helpers. Re-implemented locally to avoid depending on the tokenizer's
 // privates and to keep the parser self-contained.
 inline bool IsAsciiLetter(char c) noexcept {
@@ -72,6 +66,44 @@ inline bool IsAsciiLetter(char c) noexcept {
 
 inline bool IsAsciiDigit(char c) noexcept {
   return c >= '0' && c <= '9';
+}
+
+// Byte length of the bare qualifier run starting at `pos` of `text`: ASCII
+// letters, digits, `.`, `_` and non-ASCII characters other than U+3000 and
+// U+FEFF. It is the shape of an unquoted local sheet qualifier and of the
+// book and sheet parts of an unquoted cross-workbook qualifier.
+inline std::size_t BareQualifierRunLength(std::string_view text, std::size_t pos) noexcept {
+  std::size_t i = pos;
+  while (i < text.size()) {
+    const unsigned char c = static_cast<unsigned char>(text[i]);
+    if (c < 0x80) {
+      if (!IsAsciiLetter(static_cast<char>(c)) && !IsAsciiDigit(static_cast<char>(c)) && c != '.' && c != '_') {
+        break;
+      }
+      ++i;
+      continue;
+    }
+    const std::string_view rest = text.substr(i);
+    if (rest.substr(0, 3) == "\xE3\x80\x80" || rest.substr(0, 3) == "\xEF\xBB\xBF") {
+      break;
+    }
+    ++i;
+  }
+  return i - pos;
+}
+
+// True when `name` ends with a workbook file extension (ASCII
+// case-insensitive): what marks `Book.xlsx!Name` as a book-scope name of
+// another workbook rather than a name local to a sheet.
+inline bool HasWorkbookExtension(std::string_view name) noexcept {
+  constexpr std::string_view kExtensions[] = {".xlsx", ".xlsm", ".xlsb", ".xls", ".xltx",
+                                              ".xltm", ".xlt",  ".xlam", ".xla"};
+  for (const std::string_view ext : kExtensions) {
+    if (name.size() > ext.size() && strings::case_insensitive_eq(name.substr(name.size() - ext.size()), ext)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // Decodes a run of ASCII decimal digits into an unsigned magnitude,

@@ -40,13 +40,19 @@
 
 #include "cf/cf_types.h"
 
+namespace formulon::parser {
+struct ExternalBookIndexer;
+}  // namespace formulon::parser
+
 namespace formulon::io {
 
 /// The inverse of `canonical_feature_formula` (cf_reader.h), for writing a
 /// CF / DV formula into .xlsx: storage prefixes
-/// re-applied, `@` / `#` spelled as the functions Excel stores. A formula
-/// that needs neither, or does not parse, is returned unchanged.
-std::string storage_feature_formula(std::string_view formula);
+/// re-applied, `@` / `#` spelled as the functions Excel stores, each
+/// external book named by `indexer`'s `[N]`, a bare sheet that needs quotes
+/// quoted. A formula that needs none of that, or does not parse, is
+/// returned unchanged.
+std::string storage_feature_formula(std::string_view formula, const parser::ExternalBookIndexer* indexer = nullptr);
 
 /// Emits all `<conditionalFormatting>` blocks for one sheet as a single
 /// concatenated XML chunk. The output has neither outer XML declaration
@@ -64,8 +70,10 @@ std::string storage_feature_formula(std::string_view formula);
 /// rather than written dangling: Excel treats an unresolvable `dxfId`
 /// as package corruption and repairs the sheet by discarding *all* of
 /// its conditional formatting, which costs far more than the one rule's
-/// formatting. The rule itself is still emitted.
-std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count);
+/// formatting. The rule itself is still emitted. `indexer` numbers the
+/// external books the rule formulas name (see `storage_feature_formula`).
+std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count,
+                                          const parser::ExternalBookIndexer* indexer = nullptr);
 
 /// Builds the `<x14:conditionalFormatting>` entries that carry the
 /// data-bar settings the legacy `<dataBar>` element cannot express, for
@@ -82,15 +90,18 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
 ///
 /// A rule loaded from an x14-bearing file is included here too;
 /// `merge_x14_cf_entries` reconciles it with the captured original, which
-/// this writer does not see.
-std::string build_x14_cf_overlay_entries(const std::vector<cf::ConditionalFormat>& formats);
+/// this writer does not see. `indexer` numbers external books as in
+/// `storage_feature_formula`.
+std::string build_x14_cf_overlay_entries(const std::vector<cf::ConditionalFormat>& formats,
+                                         const parser::ExternalBookIndexer* indexer = nullptr);
 
 /// True when `bar` carries a setting the legacy data-bar record has no
 /// field for, so the rule needs an x14 counterpart to survive a save.
 bool data_bar_needs_x14(const cf::DataBarSpec& bar);
 
 /// `bar`'s `<x14:dataBar>` element, as `build_x14_cf_overlay_entries`
-/// writes it.
+/// writes it, with its external books spelled by name: only its attributes
+/// and colours are meant to be read.
 std::string build_x14_data_bar_element(const cf::DataBarSpec& bar);
 
 }  // namespace formulon::io

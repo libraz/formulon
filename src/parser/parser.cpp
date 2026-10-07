@@ -373,14 +373,13 @@ AstNode* Parser::parse() {
   // formula real Excel accepts into #NAME?.
   auto is_ref_right_candidate = [](TokenKind k) noexcept {
     return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::SheetName || k == TokenKind::LParen ||
-           k == TokenKind::Number;
+           k == TokenKind::Number || k == TokenKind::ExternalQualifier;
   };
-  // A `[` opens an intersection RHS only as a workbook-index qualifier
+  // A `[` opens an intersection RHS only as a workbook-index name qualifier
   // (`A1:A5 [0]!Rng`); any other bracket belongs to a structured reference.
   auto is_book_qualifier_at = [&raw](std::size_t j) noexcept {
     return j + 3 < raw.size() && raw[j].kind == TokenKind::LBracket && raw[j + 1].kind == TokenKind::Number &&
-           raw[j + 2].kind == TokenKind::RBracket &&
-           (raw[j + 3].kind == TokenKind::Bang || raw[j + 3].kind == TokenKind::Ident);
+           raw[j + 2].kind == TokenKind::RBracket && raw[j + 3].kind == TokenKind::Bang;
   };
   // Walk `raw` with a sliding window over the most recent non-whitespace
   // token and the next non-whitespace token after each whitespace run. If
@@ -400,6 +399,12 @@ AstNode* Parser::parse() {
         next_book_qualifier = is_book_qualifier_at(j);
         break;
       }
+    }
+    // A qualifier is glued to its `!` (`Data !A1` is no reference), so a
+    // space before a `!` is kept for the parser to reject.
+    if (next_kind == TokenKind::Bang) {
+      tokens_.push_back(t);
+      continue;
     }
     // Find the previous non-whitespace token already pushed onto `tokens_`.
     TokenKind prev_kind = tokens_.empty() ? TokenKind::Eof : tokens_.back().kind;
@@ -914,87 +919,52 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
       return parse_unary_prefix_atom(UnaryOp::Minus, ctx);
     case TokenKind::Ident:
       return parse_ident_or_call_or_full_col();
-    case TokenKind::SheetName: {
-      // 3-D reference whose first endpoint is a quoted sheet name
-      // (`'My Sheet':Sheet3!A1`): SheetName followed by `:` then a sheet
-      // name and then `!`.
-      if (peek_kind_at(1) == TokenKind::Colon &&
-          (peek_kind_at(2) == TokenKind::Ident || peek_kind_at(2) == TokenKind::SheetName) &&
-          peek_kind_at(3) == TokenKind::Bang) {
-        const Token& sheet1 = advance();  // SheetName
-        AstNode* n3d = parse_3d_ref(sheet1.text, sheet1.range);
-        if (n3d != nullptr) {
-          return n3d;
-        }
-        skip_to_sync(ctx);
-        return make_recovery_placeholder(sheet1.range);
+    case TokenKind::SheetName:
+      return parse_quoted_qualifier_ref(ctx);
+    case TokenKind::ExternalQualifier: {
+      // `[book]sheet` or `[book]sheet:sheet_end`; the tokenizer only emits
+      // the token when the run shapes are well formed.
+      const Token& qualifier = advance();
+      const std::string_view lex = qualifier.lexeme;
+      const std::size_t close = lex.find(']');
+      const std::string_view book = lex.substr(1, close - 1);
+      std::string_view sheet = lex.substr(close + 1);
+      std::string_view sheet_end;
+      if (const std::size_t colon = sheet.find(':'); colon != std::string_view::npos) {
+        sheet_end = sheet.substr(colon + 1);
+        sheet = sheet.substr(0, colon);
       }
-      // A quoted qualifier that opens with `[N]` is a cross-workbook
-      // reference whose sheet name needed quoting (`'[1]My Sheet'!A1`).
-      // The bracket sits inside the quotes, so the whole thing arrives as
-      // one SheetName token.
-      {
-        std::uint32_t book = 0;
-        std::string_view book_sheet;
-        if (split_external_qualifier(peek().text, &book, &book_sheet)) {
-          const Token& qualifier = advance();
-          AstNode* ext = parse_external_ref_tail(book, book_sheet, qualifier.range);
-          if (ext != nullptr) {
-            return ext;
-          }
-          skip_to_sync(ctx);
-          return make_recovery_placeholder(qualifier.range);
-        }
-      }
-      const Token& sheet = advance();
-      AstNode* n = parse_sheet_qualified_ref(sheet.text, /*quoted=*/true, sheet.range);
-      if (n != nullptr) {
-        return n;
+      AstNode* ext = parse_external_ref_tail({}, book, sheet, sheet_end, qualifier.range);
+      if (ext != nullptr) {
+        return ext;
       }
       skip_to_sync(ctx);
-      return make_recovery_placeholder(sheet.range);
+      return make_recovery_placeholder(qualifier.range);
     }
     case TokenKind::LBracket: {
-      // `[` opening an atom with no preceding identifier is one of three
-      // shapes. Two are cross-workbook references naming the supporting
-      // workbook by its index — `=[1]Sheet1!A1` and `=[1]!Name`, which is
-      // how Excel stores every such reference — and are parsed here into
-      // an `ExternalRef`. The third is a *bare* structured reference
-      // (`=[@col]`, `=[col]`), which has no table to qualify against, and
-      // stays `UnsupportedConstruct`. So does the path-spelled book form
-      // (`=[Book1.xlsx]Sheet1!A1`): Excel rewrites it to the index form
-      // on entry, so it only ever arrives from a caller typing it, and
-      // there is no link table to bind the file name against.
+      // `[` opening an atom that is no bare `[book]sheet!` qualifier: the
+      // self-book name `[0]!Name`, which is how Excel stores `Book!Name`; or
+      // a *bare* structured reference (`=[@col]`, `=[col]`), which has no
+      // table to qualify against and stays `UnsupportedConstruct`, as does a
+      // qualifier whose book or sheet needs quoting
+      // (`=[My Book.xlsx]Sheet!A1`) and another book's name written
+      // `[book]!Name`.
       //
       // Table-qualified structured refs (`=Table[col]`, `=Table[@col]`)
       // never reach this arm: they dispatch through `TokenKind::Ident`
       // to `parse_ident_or_call_or_full_col`, which builds a real
       // `StructuredRef` node.
-      if (peek_kind_at(1) == TokenKind::Number && peek_at(1).is_integer && peek_kind_at(2) == TokenKind::RBracket) {
-        const bool name_form = peek_kind_at(3) == TokenKind::Bang;
-        const bool cell_form = peek_kind_at(3) == TokenKind::Ident && peek_kind_at(4) == TokenKind::Bang;
-        if (name_form || cell_form) {
-          const Token& open = advance();  // LBracket
-          const Token& index = advance();
-          advance();  // RBracket
-          std::uint32_t book = 0;
-          std::string_view unused_sheet;
-          const std::string qualifier = "[" + std::string(index.lexeme) + "]";
-          if (split_external_qualifier(qualifier, &book, &unused_sheet)) {
-            std::string_view sheet;
-            if (cell_form) {
-              sheet = advance().lexeme;
-            }
-            AstNode* ext = parse_external_ref_tail(book, sheet, open.range);
-            if (ext != nullptr) {
-              return ext;
-            }
-          } else {
-            record_error_with_token(ParseErrorCode::InvalidReference, index.range, index.lexeme);
-          }
-          skip_to_sync(ctx);
-          return make_recovery_placeholder(open.range);
+      if (peek_kind_at(1) == TokenKind::Number && peek_at(1).lexeme == "0" && peek_kind_at(2) == TokenKind::RBracket &&
+          peek_kind_at(3) == TokenKind::Bang) {
+        const Token& open = advance();  // LBracket
+        const Token& index = advance();
+        advance();  // RBracket
+        AstNode* ext = parse_external_ref_tail({}, index.lexeme, {}, {}, open.range);
+        if (ext != nullptr) {
+          return ext;
         }
+        skip_to_sync(ctx);
+        return make_recovery_placeholder(open.range);
       }
       const Token& lbracket = peek();
       bool found_close = false;

@@ -176,7 +176,7 @@ const AstNode* TransformNameRef(const AstNode& node, Arena& arena, const RefTran
   if (*mapped == sheet) {
     return &node;
   }
-  return make_sheet_name_ref(arena, *mapped, node.as_name(), sheet_name_needs_quoting(*mapped));
+  return make_sheet_name_ref(arena, *mapped, node.as_name(), local_sheet_needs_quoting_a1(*mapped));
 }
 
 const AstNode* TransformUnary(const AstNode& node, Arena& arena, const RefTransform& transform) {

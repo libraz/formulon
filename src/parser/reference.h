@@ -58,16 +58,33 @@ struct Reference {
 /// Formats `r` as canonical A1 syntax.
 ///
 /// Examples: `A1`, `$A$1`, `Sheet1!A1`, `'Sheet 1'!$A$1`. The sheet name is
-/// wrapped in single quotes iff `r.sheet_quoted` is true or the sheet name
-/// cannot be represented unambiguously without them; any embedded single
-/// quotes are doubled per Excel's escaping convention.
+/// wrapped in single quotes iff `r.sheet_quoted` is true or
+/// `local_sheet_needs_quoting_a1` holds; any embedded single quotes are
+/// doubled per Excel's escaping convention.
 std::string format_a1(const Reference& r);
 
-/// Returns true iff `name` must be wrapped in single quotes when written
-/// into a sheet-qualified A1 reference. Besides names containing bytes
-/// outside `[A-Za-z0-9_.]`, this covers all-numeric names and names shaped
-/// like A1 cell references, both of which are ambiguous to the tokenizer.
-bool sheet_name_needs_quoting(std::string_view name) noexcept;
+/// Returns true iff the local sheet `name` must be wrapped in single quotes
+/// when written into an A1 reference: names containing bytes outside
+/// `[A-Za-z0-9_.]`, digit-leading names, TRUE / FALSE, names shaped like an
+/// A1 cell inside the grid, and names shaped like an R1C1 reference (`R`,
+/// `C`, `R2`, `C3`, `R2C3`, `RC3`, `R2C`, `RC`).
+bool local_sheet_needs_quoting_a1(std::string_view name) noexcept;
+
+/// The R1C1 counterpart of `local_sheet_needs_quoting_a1`: the same rule
+/// minus the A1 cell shape, which is no reference in R1C1 notation (`S2`,
+/// `A1` and `XFE1` print bare).
+bool local_sheet_needs_quoting_r1c1(std::string_view name) noexcept;
+
+/// True iff the book part of a cross-workbook qualifier (the text between
+/// `[` and `]`, or the file name of a book-scope name) contains a byte
+/// outside the bare run: ASCII letters, digits, `.`, `_` and non-ASCII
+/// characters other than U+3000 and U+FEFF.
+bool external_book_needs_quoting(std::string_view book) noexcept;
+
+/// True iff the sheet part of a cross-workbook qualifier opens with a digit
+/// or contains a byte outside the bare run. Unlike a local sheet, a cell-,
+/// R1C1- or bool-shaped name stays bare (`[Book.xlsx]S2!A1`).
+bool external_sheet_needs_quoting(std::string_view sheet) noexcept;
 
 }  // namespace parser
 }  // namespace formulon

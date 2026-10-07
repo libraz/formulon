@@ -78,7 +78,7 @@ void DecodeNameFormula(ByteSpan rgce, ExternalBookName* out) {
 
 }  // namespace
 
-Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor) {
+Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::string* book_rel_id) {
   ExternalBook book;
   // The record stream is flat: a name's `BrtExternNameFmla` applies to
   // the `BrtExternNameStart` before it, and a cell record to the most
@@ -103,6 +103,22 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor) {
     const XlsbRecord& rec = rec_or.value();
     ByteSpan payload = rec.payload;
     switch (static_cast<XlsbRecordType>(rec.type)) {
+      case XlsbRecordType::BrtBeginExternalBook: {
+        // `sbt` (u16, 0 for a workbook), then the rel id as a wide string.
+        if (book_rel_id == nullptr) {
+          break;
+        }
+        auto sbt_or = read_u16(payload);
+        if (!sbt_or) {
+          return sbt_or.error();
+        }
+        auto rel_or = read_xlwidestring(payload);
+        if (!rel_or) {
+          return rel_or.error();
+        }
+        *book_rel_id = std::move(rel_or.value());
+        break;
+      }
       case XlsbRecordType::BrtSupTabs: {
         auto count_or = read_u32(payload);
         if (!count_or) {
@@ -151,6 +167,8 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor) {
           return CorruptError("xlsb external cached sheet index is outside the supporting book's sheet table");
         }
         current_sheet = sheet_or.value();
+        book.sheet_data.resize(book.sheet_names.size(), false);
+        book.sheet_data[current_sheet] = true;
         row_seen = false;
         break;
       }
@@ -238,9 +256,8 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor) {
         break;
       }
       default:
-        // The part also carries its own framing, the link's relationship
-        // id, and the alternate-URL future records. None of them
-        // contributes to the cache.
+        // The part also carries its own framing and the alternate-URL
+        // future records. Neither contributes to the cache.
         break;
     }
   }

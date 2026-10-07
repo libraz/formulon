@@ -2497,11 +2497,13 @@ export interface Workbook {
   // Iteration / metadata.
   cellCount(sheet: number): NumberResult;
   cellAt(sheet: number, idx: number): CellEntry;
-  /** Reads the cell's stored formula in A1 notation (leading `=` included); `formula` is `null` for a non-formula cell. */
+  /** Reads the cell's stored formula in A1 notation (leading `=` included); `formula` is `null` for a non-formula cell.
+   *  The text is returned as entered; a formula loaded from a file shows book names, not `[N]` indexes. */
   getFormula(sheet: number, row: number, col: number): FormulaResult;
   /** Reads the cell's formula in R1C1 notation relative to the cell (no leading `=`); `null` for a non-formula cell.
    *  A formula loaded from a file that does not parse is kept verbatim, evaluates to `#NAME?`, and fails here with
-   *  `kParserUnexpectedToken`; `setFormula` never produces that state. */
+   *  `kParserUnexpectedToken`; `setFormula` never produces that state.
+   *  Sheet and external qualifiers are quoted as a whole only when the path, book or sheet name needs it. */
   getFormulaR1C1(sheet: number, row: number, col: number): FormulaResult;
   /** Enumerates the populated cells of `range` row-major, one page at a time. Pass the previous `nextCursor` as `cursor` to resume; `limit` 0 / omitted means the maximum (65,536). */
   getCellsInRange(sheet: number, range: MergeRange, cursor?: number | null, limit?: number | null): CellsInRangeResult;
@@ -3147,7 +3149,9 @@ export interface Workbook {
   // External links.
   /** Returns every external-link record carried by the workbook in
    *  `<externalReferences>` document order. Empty for fresh workbooks
-   *  and packages with no `<externalReferences>` block. */
+   *  and packages with no `<externalReferences>` block. A formula, name, conditional-format
+   *  rule or data validation that names an unregistered book (bracket or path spelling) appends a
+   *  record without renumbering; a book already present, in any letter case, adds none. */
   getExternalLinks(): ListResult<ExternalLinkRecord>;
 
   // Dynamic-array spill.

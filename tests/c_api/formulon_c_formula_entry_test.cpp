@@ -58,6 +58,23 @@ const std::vector<std::string>& AcceptedFormulas() {
       "=[1]Sheet1!A1",
       "='[Book.xlsx]Sheet'!A1",
       "SUM(1,2)",
+      "=S2!A1",
+      "=2024!A1",
+      "=R1C1!A1",
+      "=XFE1!$A$1",
+      "=S2!A:A",
+      "=S2!1:1",
+      "=S2! A1",
+      "=Data:S2!A1",
+      "=[Book.xlsx]Sheet!A1",
+      "=[Book.xlsx]Sheet!$A$1:B2",
+      "=[Book.xlsx]Sheet!A:A",
+      "=[Book.xlsx]Sheet!1:1",
+      "=[Book.xlsx]S1:S2!A1",
+      "='/p/[Book.xlsx]S'!A1",
+      "='/p/[Book.xlsx]S1:S2'!A1",
+      "=Book.xlsx!Name",
+      "='/p/Book.xlsx'!Name",
   };
   return formulas;
 }

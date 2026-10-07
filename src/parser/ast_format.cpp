@@ -20,6 +20,7 @@
 #include "parser/reference.h"
 #include "utils/arena.h"
 #include "utils/double_format.h"
+#include "utils/expected.h"  // FM_CHECK
 #include "utils/strings.h"
 #include "value.h"
 
@@ -168,33 +169,115 @@ void AppendNameSheetQualifier(const AstNode& node, std::string& out) {
   out.push_back('!');
 }
 
-void FormatExternalRef(const AstNode& node, std::string& out) {
-  // Excel stores a cross-workbook reference with the supporting book
-  // named by its 1-based position in `<externalReferences>`, never by
-  // path: `[1]Data!A1`, `[1]Data!A1:A3`, `[1]!SrcTotal`. When the sheet
-  // name needs quoting the bracket goes *inside* the quotes
-  // (`'[1]My Sheet'!A1`), because the whole book-and-sheet qualifier is
-  // one quoted unit.
+// Appends the sheet-less cell part of a reference tail in A1 notation: a
+// cell, a rectangle, or a whole column / row span (`A:C`, never `A:A:C:C`).
+void AppendSheetlessArea(const Reference& first, const Reference& last, bool is_range, std::string& out) {
+  Reference cell_no_sheet = first;
+  cell_no_sheet.sheet = {};
+  cell_no_sheet.sheet_quoted = false;
+  const std::string first_text = format_a1(cell_no_sheet);
+  if (!is_range) {
+    out.append(first_text);
+    return;
+  }
+  Reference end_no_sheet = last;
+  end_no_sheet.sheet = {};
+  end_no_sheet.sheet_quoted = false;
+  const std::string end_text = format_a1(end_no_sheet);
+  if ((cell_no_sheet.is_full_col && end_no_sheet.is_full_col) ||
+      (cell_no_sheet.is_full_row && end_no_sheet.is_full_row)) {
+    out.append(first_text, 0, first_text.find(':'));
+    out.push_back(':');
+    out.append(end_text, 0, end_text.find(':'));
+    return;
+  }
+  out.append(first_text);
+  out.push_back(':');
+  out.append(end_text);
+}
+
+bool IsDecimal(std::string_view text) noexcept {
+  if (text.empty()) {
+    return false;
+  }
+  for (char c : text) {
+    if (!detail::IsAsciiDigit(c)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// The qualifier of a cross-workbook reference through its `!`. With an
+// `indexer` the book is the link index and the directory is dropped, the
+// shape a stored formula carries.
+void AppendExternalQualifier(const AstNode& node, bool r1c1, const ExternalBookIndexer* indexer, std::string& out) {
+  if (is_self_book_name_ref(node)) {
+    out.append("[0]!");
+    return;
+  }
+  std::string_view path = node.as_external_ref_path();
+  std::string_view book = node.as_external_ref_book();
   const std::string_view sheet = node.as_external_ref_sheet();
-  const std::string_view name = node.as_external_ref_name();
-  // The name form carries no sheet at all, and an absent qualifier is not
-  // a name that needs quoting: `[1]!SrcTotal`, never `'[1]'!SrcTotal`.
-  append_external_qualifier(node.as_external_ref_book(), sheet, out);
-  if (!name.empty()) {
+  const std::string_view sheet_end = node.as_external_ref_sheet_end();
+  std::string index_text;
+  if (indexer != nullptr) {
+    const std::uint32_t index = indexer->index(indexer->ctx, path, book);
+    FM_CHECK(index != 0U, "cross-workbook reference names a book with no external link");
+    index_text = std::to_string(index);
+    book = index_text;
+    path = {};
+  }
+  if (sheet.empty()) {
+    // A book-scope name: `Book.xlsx!Name`, but `[1]!Name` for a book that
+    // is a link index, which only the storage indexer and the XLSB decoder
+    // produce.
+    if (path.empty() && IsDecimal(book)) {
+      out.push_back('[');
+      out.append(book);
+      out.append("]!");
+      return;
+    }
+    if (path.empty() && !external_book_needs_quoting(book)) {
+      out.append(book);
+    } else {
+      out.push_back('\'');
+      AppendQuoteEscaped(path, out);
+      AppendQuoteEscaped(book, out);
+      out.push_back('\'');
+    }
+    out.push_back('!');
+    return;
+  }
+  const bool spans_sheets = !sheet_end.empty();
+  const bool quoted = !path.empty() || external_book_needs_quoting(book) || external_sheet_needs_quoting(sheet) ||
+                      external_sheet_needs_quoting(sheet_end) || (spans_sheets && !r1c1);
+  if (quoted) {
+    out.push_back('\'');
+  }
+  AppendQuoteEscaped(path, out);
+  out.push_back('[');
+  AppendQuoteEscaped(book, out);
+  out.push_back(']');
+  AppendQuoteEscaped(sheet, out);
+  if (spans_sheets) {
+    out.push_back(':');
+    AppendQuoteEscaped(sheet_end, out);
+  }
+  if (quoted) {
+    out.push_back('\'');
+  }
+  out.push_back('!');
+}
+
+void FormatExternalRef(const AstNode& node, std::string& out, const ExternalBookIndexer* indexer = nullptr) {
+  AppendExternalQualifier(node, /*r1c1=*/false, indexer, out);
+  if (const std::string_view name = node.as_external_ref_name(); !name.empty()) {
     out.append(name);
     return;
   }
-  Reference cell_no_sheet = node.as_external_ref_cell();
-  cell_no_sheet.sheet = {};
-  cell_no_sheet.sheet_quoted = false;
-  out.append(format_a1(cell_no_sheet));
-  if (node.as_external_ref_is_range()) {
-    Reference end_no_sheet = node.as_external_ref_cell_end();
-    end_no_sheet.sheet = {};
-    end_no_sheet.sheet_quoted = false;
-    out.push_back(':');
-    out.append(format_a1(end_no_sheet));
-  }
+  AppendSheetlessArea(node.as_external_ref_cell(), node.as_external_ref_cell_end(), node.as_external_ref_is_range(),
+                      out);
 }
 
 void FormatRef3D(const AstNode& node, std::string& out) {
@@ -206,7 +289,7 @@ void FormatRef3D(const AstNode& node, std::string& out) {
   // cell reference) serialises as `SUM('Data:S2'!B1)`.
   const std::string_view begin = node.as_ref3d_sheet_begin();
   const std::string_view end = node.as_ref3d_sheet_end();
-  if (sheet_name_needs_quoting(begin) || sheet_name_needs_quoting(end)) {
+  if (local_sheet_needs_quoting_a1(begin) || local_sheet_needs_quoting_a1(end)) {
     out.push_back('\'');
     AppendQuoteEscaped(begin, out);
     out.push_back(':');
@@ -218,27 +301,7 @@ void FormatRef3D(const AstNode& node, std::string& out) {
     out.append(end);
   }
   out.push_back('!');
-  Reference cell_no_sheet = node.as_ref3d_cell();
-  cell_no_sheet.sheet = {};
-  cell_no_sheet.sheet_quoted = false;
-  out.append(format_a1(cell_no_sheet));
-  // Range tail (`'Data:S2'!A1:B2`): append the bottom-right corner.
-  if (node.as_ref3d_is_range()) {
-    Reference end_no_sheet = node.as_ref3d_cell_end();
-    end_no_sheet.sheet = {};
-    end_no_sheet.sheet_quoted = false;
-    if ((cell_no_sheet.is_full_col && end_no_sheet.is_full_col) ||
-        (cell_no_sheet.is_full_row && end_no_sheet.is_full_row)) {
-      const std::string end_ref_text = format_a1(end_no_sheet);
-      const std::size_t begin_axis_end = out.find(':', out.size() - format_a1(cell_no_sheet).size());
-      out.erase(begin_axis_end);
-      out.push_back(':');
-      out.append(end_ref_text, 0, end_ref_text.find(':'));
-    } else {
-      out.push_back(':');
-      out.append(format_a1(end_no_sheet));
-    }
-  }
+  AppendSheetlessArea(node.as_ref3d_cell(), node.as_ref3d_cell_end(), node.as_ref3d_is_range(), out);
 }
 
 void FormatStructuredRef(const AstNode& node, std::string& out) {
@@ -346,8 +409,8 @@ std::string_view LeadingIdentifier(const AstNode& node) noexcept {
     case NodeKind::NameRef:
       // `Sheet1!Name` opens with its sheet; a quoted qualifier is no identifier.
       if (!node.as_name_sheet().empty()) {
-        return node.as_name_sheet_quoted() || sheet_name_needs_quoting(node.as_name_sheet()) ? std::string_view{}
-                                                                                             : node.as_name_sheet();
+        return node.as_name_sheet_quoted() || local_sheet_needs_quoting_a1(node.as_name_sheet()) ? std::string_view{}
+                                                                                                 : node.as_name_sheet();
       }
       return node.as_name();
     case NodeKind::Call:
@@ -749,6 +812,7 @@ struct StorageEmitter {
   StorageFunctionNameSpeller spell;
   std::vector<std::string_view> scope;  // in-scope LET binding / LAMBDA param names
   const std::vector<const AstNode*>* omitted_at = nullptr;
+  const ExternalBookIndexer* indexer = nullptr;
   ParenCounts parens;
 
   bool in_scope(std::string_view name) const {
@@ -802,7 +866,7 @@ struct StorageEmitter {
         FormatRef3D(node, out);
         return;
       case NodeKind::ExternalRef:
-        FormatExternalRef(node, out);
+        FormatExternalRef(node, out, indexer);
         return;
       case NodeKind::StructuredRef:
         FormatStructuredRef(node, out);
@@ -1023,7 +1087,7 @@ const char* binop_token(BinOp op) noexcept {
 }
 
 void append_sheet_name(std::string_view sheet, bool force_quote, std::string& out) {
-  if (force_quote || sheet_name_needs_quoting(sheet)) {
+  if (force_quote || local_sheet_needs_quoting_a1(sheet)) {
     out.push_back('\'');
     AppendQuoteEscaped(sheet, out);
     out.push_back('\'');
@@ -1032,21 +1096,8 @@ void append_sheet_name(std::string_view sheet, bool force_quote, std::string& ou
   }
 }
 
-void append_external_qualifier(std::uint32_t book, std::string_view sheet, std::string& out) {
-  // The name form carries no sheet at all, and an absent qualifier is not
-  // a name that needs quoting: `[1]!SrcTotal`, never `'[1]'!SrcTotal`.
-  const bool quoted = !sheet.empty() && sheet_name_needs_quoting(sheet);
-  if (quoted) {
-    out.push_back('\'');
-  }
-  out.push_back('[');
-  out.append(std::to_string(book));
-  out.push_back(']');
-  AppendQuoteEscaped(sheet, out);
-  if (quoted) {
-    out.push_back('\'');
-  }
-  out.push_back('!');
+void append_external_qualifier(const AstNode& node, bool r1c1, std::string& out) {
+  AppendExternalQualifier(node, r1c1, nullptr, out);
 }
 
 void collect_parenthesized_nodes(const AstNode& root, std::unordered_map<const AstNode*, std::uint8_t>& out) {
@@ -1068,16 +1119,59 @@ std::string format_formula(const AstNode& node) {
 }
 
 std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpeller spell,
-                                   const std::vector<const AstNode*>* omitted_at) {
+                                   const std::vector<const AstNode*>* omitted_at, const ExternalBookIndexer* indexer) {
   if (!ast_depth_within_limit(node, kMaxFormulaAstDepth)) {
     return "#REF!";
   }
-  StorageEmitter emitter{spell, {}, omitted_at, {}};
+  StorageEmitter emitter{spell, {}, omitted_at, indexer, {}};
   CollectParens(node, 0, emitter.parens);
   std::string out;
   out.reserve(64);
   emitter.emit(node, out);
   return out;
+}
+
+bool formula_needs_storage_requote(const AstNode& root) {
+  const auto bare_but_needs_quotes = [](std::string_view sheet, bool quoted) {
+    return !sheet.empty() && !quoted && local_sheet_needs_quoting_a1(sheet);
+  };
+  std::vector<const AstNode*> pending{&root};
+  while (!pending.empty()) {
+    const AstNode& node = *pending.back();
+    pending.pop_back();
+    switch (node.kind()) {
+      case NodeKind::Ref:
+        if (bare_but_needs_quotes(node.as_ref().sheet, node.as_ref().sheet_quoted)) {
+          return true;
+        }
+        break;
+      case NodeKind::SpillRef:
+        if (node.as_spill_ref_anchor_expr() == nullptr &&
+            bare_but_needs_quotes(node.as_spill_ref().sheet, node.as_spill_ref().sheet_quoted)) {
+          return true;
+        }
+        break;
+      case NodeKind::NameRef:
+        if (bare_but_needs_quotes(node.as_name_sheet(), node.as_name_sheet_quoted())) {
+          return true;
+        }
+        break;
+      case NodeKind::Ref3D:
+        // The span keeps no quoting hint; requoting text that was already
+        // quoted rewrites it to the same spelling.
+        if (local_sheet_needs_quoting_a1(node.as_ref3d_sheet_begin()) ||
+            local_sheet_needs_quoting_a1(node.as_ref3d_sheet_end())) {
+          return true;
+        }
+        break;
+      default:
+        break;
+    }
+    for (const AstNode* child : child_nodes(node)) {
+      pending.push_back(child);
+    }
+  }
+  return false;
 }
 
 }  // namespace parser

@@ -10,8 +10,8 @@
 // the engine AST and lowered to a Ptg (`rgce`) byte stream via
 // `io::xlsb::encode_ptgs`, spliced into a `BrtFmla*` record matching the
 // cached value's kind. A formula that cannot be parsed or lowered (a
-// token outside the supported Ptg set, e.g. a defined-name or external
-// reference) is written as its cached literal value instead. The caller
+// token outside the supported Ptg set, e.g. a reference to an OLE / DDE
+// link) is written as its cached literal value instead. The caller
 // receives a downgrade count so this intentionally lossy path is visible.
 //
 // Design references:

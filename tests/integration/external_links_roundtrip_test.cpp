@@ -5,17 +5,31 @@
 // references. The body parts themselves ride through passthrough.
 
 #include <cstdint>
+#include <cstdio>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
+#include "cell.h"
+#include "cf/cf_types.h"
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "external_link.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
+#include "io/xlsb/reader.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
 #include "passthrough_part.h"
+#include "sheet.h"
+#include "value.h"
 #include "workbook.h"
+#include "workbook_format.h"
+
+#ifndef FORMULON_FIXTURES_DIR
+#error "FORMULON_FIXTURES_DIR must be defined by the build"
+#endif
 
 namespace formulon {
 namespace {
@@ -316,6 +330,308 @@ TEST(ExternalLinksRoundTrip, EmptyWorkbookEmitsNoExternalReferencesBlock) {
   auto load_or = io::read_ooxml(SpanOf(save_or.value()));
   ASSERT_TRUE(static_cast<bool>(load_or));
   EXPECT_TRUE(load_or.value().workbook.external_links().empty());
+}
+
+// ---------------------------------------------------------------------------
+// Authoring a cross-workbook reference, saving it and reading it back.
+// ---------------------------------------------------------------------------
+
+struct PartFile {
+  const char* path;
+  std::string_view body;
+};
+
+std::vector<std::uint8_t> BuildZip(const std::vector<PartFile>& parts) {
+  mz_zip_archive writer{};
+  EXPECT_NE(mz_zip_writer_init_heap(&writer, 0, 4096), MZ_FALSE);
+  for (const auto& p : parts) {
+    EXPECT_NE(mz_zip_writer_add_mem(&writer, p.path, p.body.data(), p.body.size(),
+                                    static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)),
+              MZ_FALSE)
+        << "miniz add failed for " << p.path;
+  }
+  void* archive_ptr = nullptr;
+  std::size_t archive_size = 0;
+  EXPECT_NE(mz_zip_writer_finalize_heap_archive(&writer, &archive_ptr, &archive_size), MZ_FALSE);
+  EXPECT_NE(mz_zip_writer_end(&writer), MZ_FALSE);
+  std::vector<std::uint8_t> out(static_cast<const std::uint8_t*>(archive_ptr),
+                                static_cast<const std::uint8_t*>(archive_ptr) + archive_size);
+  mz_free(archive_ptr);
+  return out;
+}
+
+std::vector<std::uint8_t> ReadFileBytes(const std::string& path) {
+  std::vector<std::uint8_t> out;
+  FILE* f = std::fopen(path.c_str(), "rb");
+  if (f == nullptr) {
+    ADD_FAILURE() << "could not open fixture: " << path;
+    return out;
+  }
+  std::fseek(f, 0, SEEK_END);
+  const long size = std::ftell(f);
+  std::fseek(f, 0, SEEK_SET);
+  if (size > 0) {
+    out.resize(static_cast<std::size_t>(size));
+    if (std::fread(out.data(), 1, out.size(), f) != out.size()) {
+      ADD_FAILURE() << "short read on fixture: " << path;
+      out.clear();
+    }
+  }
+  std::fclose(f);
+  return out;
+}
+
+std::string FixturePath(const char* name) {
+  return std::string(FORMULON_FIXTURES_DIR) + "/excel/" + name;
+}
+
+std::string EntryText(const std::vector<std::uint8_t>& package, std::string_view name) {
+  io::ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(SpanOf(package))));
+  auto entry_or = zip.read_entry(name);
+  EXPECT_TRUE(static_cast<bool>(entry_or)) << "missing entry " << name;
+  if (!entry_or) {
+    return {};
+  }
+  return std::string(entry_or.value().begin(), entry_or.value().end());
+}
+
+// Largest N of any `[N]` (a bracketed run of digits) in `text`; 0 when none.
+std::uint32_t MaxBracketIndex(const std::string& text) {
+  std::uint32_t max_index = 0;
+  for (std::size_t i = 0; i < text.size(); ++i) {
+    if (text[i] != '[') {
+      continue;
+    }
+    std::size_t j = i + 1U;
+    std::uint32_t n = 0;
+    while (j < text.size() && text[j] >= '0' && text[j] <= '9' && j - i < 9U) {
+      n = n * 10U + static_cast<std::uint32_t>(text[j] - '0');
+      ++j;
+    }
+    if (j > i + 1U && j < text.size() && text[j] == ']' && n > max_index) {
+      max_index = n;
+    }
+  }
+  return max_index;
+}
+
+// Concatenated content of every `<tag>...</tag>` run, separated by '\n'.
+std::string TagTexts(const std::string& xml, const std::string& tag) {
+  const std::string open = "<" + tag + ">";
+  const std::string close = "</" + tag + ">";
+  std::string out;
+  std::size_t pos = 0;
+  while ((pos = xml.find(open, pos)) != std::string::npos) {
+    const std::size_t begin = pos + open.size();
+    const std::size_t end = xml.find(close, begin);
+    if (end == std::string::npos) {
+      break;
+    }
+    out.append(xml, begin, end - begin);
+    out.push_back('\n');
+    pos = end + close.size();
+  }
+  return out;
+}
+
+std::string FormulaAt(const Workbook& wb, std::size_t sheet, std::uint32_t row, std::uint32_t col) {
+  const Cell* cell = wb.sheet(sheet).cell_at(row, col);
+  return cell == nullptr ? std::string() : cell->formula_text;
+}
+
+Value ValueAt(const Workbook& wb, std::size_t sheet, std::uint32_t row, std::uint32_t col) {
+  return wb.sheet(sheet).resolve_cell_value(row, col);
+}
+
+constexpr const char* kCfFormula = "[Book.xlsx]Sheet1!$A$1>0";
+constexpr const char* kNameFormula = "[Book.xlsx]Sheet1!$A$1";
+
+// Cells A1:A6 on the first sheet, one conditional format and one defined name,
+// every one of them naming a workbook that is not open.
+Workbook AuthorExternalReferences() {
+  Workbook wb = Workbook::create();
+  const char* formulas[] = {
+      "=[Book.xlsx]Sheet1!A1", "='/Users/x/[Path.xlsx]Sheet1'!A1", "=SUM([Book.xlsx]Sheet1:Sheet2!A1)",
+      "=Book.xlsx!Total",      "=[Other.xlsx]Sheet1!B2",           "='/Users/x/[Book.xlsx]Sheet1'!A1",
+  };
+  std::uint32_t row = 0;
+  for (const char* f : formulas) {
+    EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0, row++, 0, f))) << f;
+  }
+  cf::ConditionalFormat block;
+  block.sqref.push_back(cf::CFCellRange{CellAddress{0, 2}, CellAddress{9, 2}});
+  cf::CFRule rule;
+  rule.type = cf::RuleType::Expression;
+  rule.priority = 1;
+  rule.formula1 = kCfFormula;
+  block.rules.push_back(std::move(rule));
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(block));
+  wb.bind_external_books(kCfFormula);
+  EXPECT_TRUE(static_cast<bool>(wb.set_defined_name("ExtName", kNameFormula)));
+  return wb;
+}
+
+Workbook ReloadAs(const Workbook& src, WorkbookFormat format, std::vector<std::uint8_t>* package_out) {
+  auto save_or = src.save_as(format);
+  EXPECT_TRUE(static_cast<bool>(save_or)) << (save_or ? "" : save_or.error().message);
+  if (!save_or) {
+    return Workbook::create_empty();
+  }
+  *package_out = save_or.value();
+  if (format == WorkbookFormat::Xlsb) {
+    auto load_or = io::xlsb::read_xlsb(SpanOf(*package_out));
+    EXPECT_TRUE(static_cast<bool>(load_or)) << (load_or ? "" : load_or.error().message);
+    return load_or ? std::move(load_or.value().workbook) : Workbook::create_empty();
+  }
+  auto load_or = io::read_ooxml(SpanOf(*package_out));
+  EXPECT_TRUE(static_cast<bool>(load_or)) << (load_or ? "" : load_or.error().message);
+  return load_or ? std::move(load_or.value().workbook) : Workbook::create_empty();
+}
+
+void ExpectAuthoredReferencesSurvive(WorkbookFormat format) {
+  Workbook src = AuthorExternalReferences();
+  const std::size_t link_count = src.external_links().size();
+  ASSERT_EQ(link_count, 3U) << "Book.xlsx (also spelled with a path), Path.xlsx and Other.xlsx";
+
+  std::vector<std::uint8_t> package;
+  Workbook wb = ReloadAs(src, format, &package);
+  ASSERT_EQ(wb.sheet_count(), 1U);
+  EXPECT_EQ(wb.external_links().size(), link_count);
+
+  // Book.xlsx is linked once; the path-qualified entry gives that link its absolute path,
+  // so every reference to it reads back in the path-qualified spelling.
+  EXPECT_EQ(FormulaAt(wb, 0, 0, 0), "='/Users/x/[Book.xlsx]Sheet1'!A1");
+  EXPECT_EQ(FormulaAt(wb, 0, 1, 0), "='/Users/x/[Path.xlsx]Sheet1'!A1");
+  EXPECT_EQ(FormulaAt(wb, 0, 2, 0), "=SUM('/Users/x/[Book.xlsx]Sheet1:Sheet2'!A1)");
+  EXPECT_EQ(FormulaAt(wb, 0, 3, 0), "='/Users/x/Book.xlsx'!Total");
+  EXPECT_EQ(FormulaAt(wb, 0, 4, 0), "=[Other.xlsx]Sheet1!B2");
+  EXPECT_EQ(FormulaAt(wb, 0, 5, 0), "='/Users/x/[Book.xlsx]Sheet1'!A1");
+
+  ASSERT_EQ(wb.sheet(0).conditional_formats().size(), 1U);
+  ASSERT_EQ(wb.sheet(0).conditional_formats()[0].rules.size(), 1U);
+  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].formula1.value_or(""), "'/Users/x/[Book.xlsx]Sheet1'!$A$1>0");
+  bool name_found = false;
+  for (const DefinedName& dn : wb.defined_names()) {
+    if (dn.name == "ExtName") {
+      name_found = true;
+      EXPECT_EQ(dn.formula, "'/Users/x/[Book.xlsx]Sheet1'!$A$1");
+    }
+  }
+  EXPECT_TRUE(name_found);
+
+  // The links carry no sheetData, so every reference reads #REF!. The one
+  // exception is the name `Total`, which reads #NAME? after an xlsx round trip
+  // and #REF! after an xlsb one.
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  for (std::uint32_t row = 0; row < 6U; ++row) {
+    const Value v = ValueAt(wb, 0, row, 0);
+    ASSERT_TRUE(v.is_error()) << "row " << row;
+    const ErrorCode expected = (row == 3U && format == WorkbookFormat::Ooxml) ? ErrorCode::Name : ErrorCode::Ref;
+    EXPECT_EQ(v.as_error(), expected) << "row " << row;
+  }
+
+  if (format == WorkbookFormat::Ooxml) {
+    // Every `[N]` the package stores must name a link that exists.
+    const std::string sheet_xml = EntryText(package, "xl/worksheets/sheet1.xml");
+    const std::string workbook_xml = EntryText(package, "xl/workbook.xml");
+    EXPECT_FALSE(TagTexts(sheet_xml, "f").empty());
+    EXPECT_LE(MaxBracketIndex(sheet_xml), link_count);
+    EXPECT_LE(MaxBracketIndex(workbook_xml), link_count);
+    EXPECT_GE(MaxBracketIndex(sheet_xml), 1U);
+    EXPECT_NE(sheet_xml.find("[1]"), std::string::npos);
+    EXPECT_NE(EntryText(package, "xl/externalLinks/_rels/externalLink1.xml.rels").find("/Users/x/Book.xlsx"),
+              std::string::npos);
+    EXPECT_NE(EntryText(package, "xl/externalLinks/externalLink1.xml").find("absoluteUrl"), std::string::npos);
+  }
+}
+
+TEST(ExternalLinksAuthoring, XlsxRoundTripKeepsEveryReference) {
+  ExpectAuthoredReferencesSurvive(WorkbookFormat::Ooxml);
+}
+
+TEST(ExternalLinksAuthoring, XlsbRoundTripKeepsEveryReference) {
+  ExpectAuthoredReferencesSurvive(WorkbookFormat::Xlsb);
+}
+
+TEST(ExternalLinksAuthoring, NumericBracketIsABookNamedByTheNumber) {
+  Workbook src = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_formula(0, 0, 0, "=[1]Sheet1!A1")));
+  ASSERT_EQ(src.external_links().size(), 1U);
+  std::vector<std::uint8_t> package;
+  Workbook wb = ReloadAs(src, WorkbookFormat::Ooxml, &package);
+  EXPECT_EQ(wb.external_links().size(), 1U);
+  EXPECT_EQ(FormulaAt(wb, 0, 0, 0), "=[1]Sheet1!A1");
+  EXPECT_LE(MaxBracketIndex(EntryText(package, "xl/worksheets/sheet1.xml")), 1U);
+}
+
+// ---------------------------------------------------------------------------
+// A file Excel wrote: re-saving keeps the stored text and the absolute path.
+// ---------------------------------------------------------------------------
+
+TEST(ExternalLinksFixture, ResaveKeepsStoredFormulaTextAndAbsoluteUrl) {
+  const std::vector<std::uint8_t> original = ReadFileBytes(FixturePath("external_link_mixed.xlsx"));
+  ASSERT_FALSE(original.empty());
+  const std::string original_formulas = TagTexts(EntryText(original, "xl/worksheets/sheet1.xml"), "f");
+  ASSERT_FALSE(original_formulas.empty());
+
+  auto first_or = io::read_ooxml(SpanOf(original));
+  ASSERT_TRUE(static_cast<bool>(first_or)) << first_or.error().message;
+  EXPECT_EQ(FormulaAt(first_or.value().workbook, 0, 2, 0),
+            "='/Users/libraz/Documents/ext_link_probe/[ExtSource.xlsx]Data'!A1");
+
+  std::vector<std::uint8_t> save1;
+  Workbook second = ReloadAs(first_or.value().workbook, WorkbookFormat::Ooxml, &save1);
+  EXPECT_EQ(TagTexts(EntryText(save1, "xl/worksheets/sheet1.xml"), "f"), original_formulas);
+
+  std::vector<std::uint8_t> save2;
+  Workbook third = ReloadAs(second, WorkbookFormat::Ooxml, &save2);
+  EXPECT_EQ(TagTexts(EntryText(save2, "xl/worksheets/sheet1.xml"), "f"), original_formulas);
+  ASSERT_EQ(third.external_links().size(), 2U);
+  EXPECT_EQ(third.external_links()[0].absolute_target, "/Users/libraz/Documents/ext_link_probe/ExtSource.xlsx");
+
+  const std::string rels = EntryText(save2, "xl/externalLinks/_rels/externalLink1.xml.rels");
+  EXPECT_NE(rels.find("/Users/libraz/Documents/ext_link_probe/ExtSource.xlsx"), std::string::npos);
+  EXPECT_NE(EntryText(save2, "xl/externalLinks/externalLink1.xml").find("absoluteUrl"), std::string::npos);
+}
+
+// The reader must find the absolute-path relationship wherever it sits in the
+// link's rels file, including after the relationship the body part names.
+TEST(ExternalLinksFixture, AbsoluteTargetIsReadWhenItsRelFollowsTheBodyRel) {
+  const std::vector<std::uint8_t> original = ReadFileBytes(FixturePath("external_link_mixed.xlsx"));
+  ASSERT_FALSE(original.empty());
+
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(original))));
+  const std::string rels_name = "xl/externalLinks/_rels/externalLink1.xml.rels";
+  const std::string swapped =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+      "externalLinkPath\" Target=\"ExtSource.xlsx\" TargetMode=\"External\"/>"
+      "<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+      "externalLinkPath\" Target=\"/Users/libraz/Documents/ext_link_probe/ExtSource.xlsx\" TargetMode=\"External\"/>"
+      "</Relationships>";
+  ASSERT_NE(EntryText(original, rels_name).find("rId2"), EntryText(original, rels_name).find("rId1"));
+
+  std::vector<std::string> names = zip.list_entries();
+  std::vector<std::string> bodies;
+  bodies.reserve(names.size());
+  for (const std::string& name : names) {
+    bodies.push_back(name == rels_name ? swapped : EntryText(original, name));
+  }
+  std::vector<PartFile> parts;
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    parts.push_back(PartFile{names[i].c_str(), bodies[i]});
+  }
+
+  auto load_or = io::read_ooxml(SpanOf(BuildZip(parts)));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << load_or.error().message;
+  const auto& links = load_or.value().workbook.external_links();
+  ASSERT_EQ(links.size(), 2U);
+  EXPECT_EQ(links[0].target, "ExtSource.xlsx");
+  EXPECT_EQ(links[0].absolute_target, "/Users/libraz/Documents/ext_link_probe/ExtSource.xlsx");
+  EXPECT_EQ(links[0].absolute_rel_id, "rId2");
 }
 
 }  // namespace

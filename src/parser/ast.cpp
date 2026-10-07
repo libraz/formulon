@@ -275,16 +275,19 @@ AstNode* make_ref3d_range(Arena& arena, std::string_view sheet_begin, std::strin
   return n;
 }
 
-AstNode* make_external_ref(Arena& arena, std::uint32_t book, std::string_view sheet, const Reference& cell,
-                           const Reference& cell_end, bool is_range) {
+AstNode* make_external_ref(Arena& arena, std::string_view path, std::string_view book, std::string_view sheet,
+                           std::string_view sheet_end, const Reference& cell, const Reference& cell_end,
+                           bool is_range) {
   // Heap-allocate the payload for the same reason `make_ref3d` does: the
   // AstNode union has a size budget asserted in ast.h.
   auto* payload = arena.create<AstNode::ExternalRefPayload>();
   if (payload == nullptr) {
     return nullptr;
   }
-  payload->book = book;
+  payload->path = arena.intern(path);
+  payload->book = arena.intern(book);
   payload->sheet = arena.intern(sheet);
+  payload->sheet_end = arena.intern(sheet_end);
   payload->name = {};
   payload->cell = cell;
   // The payload's `sheet` carries the identity; the corner refs are
@@ -304,13 +307,16 @@ AstNode* make_external_ref(Arena& arena, std::uint32_t book, std::string_view sh
   return n;
 }
 
-AstNode* make_external_name_ref(Arena& arena, std::uint32_t book, std::string_view name) {
+AstNode* make_external_name_ref(Arena& arena, std::string_view path, std::string_view book, std::string_view sheet,
+                                std::string_view name) {
   auto* payload = arena.create<AstNode::ExternalRefPayload>();
   if (payload == nullptr) {
     return nullptr;
   }
-  payload->book = book;
-  payload->sheet = {};
+  payload->path = arena.intern(path);
+  payload->book = arena.intern(book);
+  payload->sheet = arena.intern(sheet);
+  payload->sheet_end = {};
   payload->name = arena.intern(name);
   payload->is_range = false;
   AstNode* n = arena.create<AstNode>();
@@ -688,7 +694,8 @@ std::vector<const AstNode*> child_nodes(const AstNode& node) {
 }
 
 bool is_self_book_name_ref(const AstNode& node) noexcept {
-  return node.kind() == NodeKind::ExternalRef && node.as_external_ref_book() == 0U &&
+  return node.kind() == NodeKind::ExternalRef && node.as_external_ref_book() == "0" &&
+         node.as_external_ref_path().empty() && node.as_external_ref_sheet().empty() &&
          !node.as_external_ref_name().empty();
 }
 
@@ -733,14 +740,24 @@ bool is_dynamic_reference_function_name(std::string_view name) noexcept {
   return strings::case_insensitive_eq(name, "INDIRECT") || strings::case_insensitive_eq(name, "OFFSET");
 }
 
-std::uint32_t AstNode::as_external_ref_book() const {
+std::string_view AstNode::as_external_ref_book() const {
   FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_book on non-ExternalRef");
   return data_.external_ref->book;
+}
+
+std::string_view AstNode::as_external_ref_path() const {
+  FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_path on non-ExternalRef");
+  return data_.external_ref->path;
 }
 
 std::string_view AstNode::as_external_ref_sheet() const {
   FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_sheet on non-ExternalRef");
   return data_.external_ref->sheet;
+}
+
+std::string_view AstNode::as_external_ref_sheet_end() const {
+  FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_sheet_end on non-ExternalRef");
+  return data_.external_ref->sheet_end;
 }
 
 std::string_view AstNode::as_external_ref_name() const {

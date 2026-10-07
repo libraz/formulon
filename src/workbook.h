@@ -62,6 +62,11 @@ namespace pivot {
 class PivotCache;
 }  // namespace pivot
 
+namespace parser {
+class AstNode;
+struct ExternalBookIndexer;
+}  // namespace parser
+
 /// Move-only container representing a spreadsheet workbook.
 ///
 /// Instances are constructed via the `create()` factory, which returns a
@@ -339,6 +344,12 @@ class Workbook {
   /// normalization `set_cell_formula` applies, exposed so an entry check
   /// judges exactly the text that would be stored.
   static std::string normalize_formula_text(std::string formula);
+
+  /// Model spelling of a formula read from a file: `normalize_formula_text`,
+  /// then every `[N]` link index rewritten to the book name the formula bar
+  /// shows (with the link's absolute directory when it has one), then
+  /// `bind_external_books`. `[0]!Name` is kept as stored.
+  std::string ingest_stored_formula(std::string_view stored);
 
   /// Spells every loaded formula without the dynamic-array mark as Excel 365
   /// shows it, with an `@` wherever the legacy formula intersects implicitly
@@ -678,9 +689,35 @@ class Workbook {
   /// part itself round-trips through `passthrough_parts()` unchanged.
   const std::vector<ExternalLinkRecord>& external_links() const noexcept { return external_links_; }
 
+  /// The external links ordered by `index` (document order for equal
+  /// indices). `skip_ole_dde` drops OLE and DDE links, which hold no
+  /// supporting workbook.
+  std::vector<const ExternalLinkRecord*> external_links_by_index(bool skip_ole_dde) const;
+
   /// Replaces the workbook's external-link list. Move-assigns to keep
   /// the I/O hand-off allocation-free.
   void set_external_links(std::vector<ExternalLinkRecord> links) { external_links_ = std::move(links); }
+
+  /// Ensures every external book `root` names has a link: a book no link
+  /// matches gets a new record appended (index `size()+1`), and a sheet the
+  /// matched link does not list is appended to its sheet names. `[0]!Name`
+  /// is this workbook and binds nothing. Idempotent.
+  void bind_external_books(const parser::AstNode& root);
+
+  /// Text form of `bind_external_books`: parses `formula` (with or without
+  /// a leading `=`) and binds it; an unparseable formula binds nothing.
+  void bind_external_books(std::string_view formula);
+
+  /// The link a reference spelled with directory `path` (empty for none,
+  /// otherwise with its trailing separator) and file `book` names, under
+  /// ASCII case folding. A path matches a link's absolute path, falling back
+  /// to a pathless link of the same file; a bare book matches the file name
+  /// of the lowest-index link. Null when none matches.
+  const ExternalLinkRecord* find_external_link(std::string_view path, std::string_view book) const noexcept;
+
+  /// The `[N]` mapping a storage formatter writes cross-workbook references
+  /// with, backed by `find_external_link`. Valid while this workbook lives.
+  parser::ExternalBookIndexer external_book_indexer() const noexcept;
 
   // ---------------------------------------------------------------------------
   // Pivot caches
@@ -992,6 +1029,10 @@ class Workbook {
 
  private:
   Workbook();
+
+  // `bind_external_books` for a caller already holding the engine mutex.
+  void bind_external_books_unlocked(const parser::AstNode& root);
+  void bind_external_books_unlocked(std::string_view formula);
 
   std::vector<Sheet> sheets_;
   // Embedded recalc engine. PIMPL-via-unique_ptr so callers can include

@@ -25,6 +25,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/structured_log.h"
+#include "workbook.h"
 
 namespace formulon::io {
 namespace {
@@ -720,6 +721,51 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
 
 std::string canonical_feature_formula(std::string_view stored) {
   return parser::spell_storage_operators(parser::strip_storage_prefixes(stored, &has_storage_prefix));
+}
+
+void ingest_feature_formulas(Workbook& wb) {
+  const auto ingest = [&wb](std::string& formula) {
+    if (!formula.empty()) {
+      formula = wb.ingest_stored_formula(formula);
+    }
+  };
+  const auto ingest_cfvo = [&ingest](cf::CfValueObject& cfvo) {
+    if (cfvo.type == cf::CfvoType::Formula) {
+      ingest(cfvo.value);
+    }
+  };
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    Sheet& sheet = wb.sheet(i);
+    for (cf::ConditionalFormat& format : sheet.mutable_conditional_formats()) {
+      for (cf::CFRule& rule : format.rules) {
+        if (rule.formula1.has_value()) {
+          ingest(*rule.formula1);
+        }
+        if (rule.formula2.has_value()) {
+          ingest(*rule.formula2);
+        }
+        if (rule.color_scale.has_value()) {
+          for (cf::CfValueObject& cfvo : rule.color_scale->thresholds) {
+            ingest_cfvo(cfvo);
+          }
+        }
+        if (rule.data_bar.has_value()) {
+          ingest_cfvo(rule.data_bar->min);
+          ingest_cfvo(rule.data_bar->max);
+        }
+        if (rule.icon_set.has_value()) {
+          ingest_cfvo(rule.icon_set->floor);
+          for (cf::CfValueObject& cfvo : rule.icon_set->thresholds) {
+            ingest_cfvo(cfvo);
+          }
+        }
+      }
+    }
+    for (DataValidation& validation : sheet.mutable_validations()) {
+      ingest(validation.formula1);
+      ingest(validation.formula2);
+    }
+  }
 }
 
 void apply_x14_data_bar_overlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* out) {

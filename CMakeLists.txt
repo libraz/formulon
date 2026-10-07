@@ -157,6 +157,7 @@ set(FORMULON_CORE_SOURCES
   src/io/ooxml_writer_cell.cpp
   src/io/ooxml/cell_ref_writer.cpp
   src/io/ooxml/emission_plan.cpp
+  src/io/ooxml/external_link_writer.cpp
   src/io/ooxml/relationship_writer.cpp
   src/io/ooxml/shared_strings_writer.cpp
   src/io/ooxml/sheet_xml_builder.cpp
@@ -184,6 +185,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/cf_records.cpp
   src/io/xlsb/dv_records.cpp
   src/io/xlsb/external_link_reader.cpp
+  src/io/xlsb/external_link_writer.cpp
   src/io/xlsb/feature_formula.cpp
   src/io/xlsb/func_id_table.cpp
   src/io/xlsb/metadata_bin.cpp
@@ -218,6 +220,7 @@ set(FORMULON_CORE_SOURCES
   src/parser/reference.cpp
   src/parser/ast_dump.cpp
   src/parser/ast_format.cpp
+  src/parser/external_book_spelling.cpp
   src/parser/ast_format_r1c1.cpp
   src/parser/formula_prefix.cpp
   src/parser/ast_shift.cpp

@@ -161,8 +161,10 @@ ExcelTokens ReadExcelTokens(const std::vector<std::uint8_t>& package) {
       const std::uint32_t count = U32(p, 0);
       for (std::uint32_t i = 0; i < count; ++i) {
         const std::size_t at = 4U + 12U * i;  // iSupBook, itabFirst, itabLast
-        out.sheet_ranges.emplace_back(static_cast<std::int32_t>(U32(p, at + 4)),
-                                      static_cast<std::int32_t>(U32(p, at + 8)));
+        // `XtiEntry::book` is a link position, not `iSupBook`; this fixture
+        // names only its own sheets.
+        out.sheet_ranges.xti.push_back(
+            XtiEntry{0U, static_cast<std::int32_t>(U32(p, at + 4)), static_cast<std::int32_t>(U32(p, at + 8))});
       }
     }
   }

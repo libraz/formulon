@@ -146,7 +146,7 @@ std::string_view DataValidationErrorStyleToString(std::uint8_t style) {
   }
 }
 
-std::string BuildDataValidationsBlock(const Sheet& sheet) {
+std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::ExternalBookIndexer* indexer) {
   if (sheet.validations().empty()) {
     return {};
   }
@@ -217,12 +217,12 @@ std::string BuildDataValidationsBlock(const Sheet& sheet) {
     out.append("\">");
     if (!v.formula1.empty()) {
       out.append("<formula1>");
-      AppendXmlEscaped(out, storage_feature_formula(v.formula1));
+      AppendXmlEscaped(out, storage_feature_formula(v.formula1, indexer));
       out.append("</formula1>");
     }
     if (!v.formula2.empty()) {
       out.append("<formula2>");
-      AppendXmlEscaped(out, storage_feature_formula(v.formula2));
+      AppendXmlEscaped(out, storage_feature_formula(v.formula2, indexer));
       out.append("</formula2>");
     }
     out.append("</dataValidation>");
@@ -741,21 +741,22 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
                               std::string_view drawing_rid, std::string_view legacy_drawing_rid,
                               const SharedStrings* shared_strings, std::size_t dxf_count,
-                              std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes) {
+                              std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
+                              const parser::ExternalBookIndexer* indexer) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string sheet_format_xml = BuildSheetFormatPrXml(sheet.format_defaults());
   const std::string cols_xml = BuildColsXml(sheet.layout());
-  const std::string sheet_data = BuildSheetDataXml(sheet, shared_strings, dynamic_array_cm_index, name_shapes);
+  const std::string sheet_data = BuildSheetDataXml(sheet, shared_strings, dynamic_array_cm_index, name_shapes, indexer);
   // Conditional-format blocks live between <sheetData> and <tableParts>
   // in ECMA-376 document order. Empty list => empty string, no
   // wrapper.
-  const std::string cf_xml = write_conditional_formattings(sheet.conditional_formats(), dxf_count);
+  const std::string cf_xml = write_conditional_formattings(sheet.conditional_formats(), dxf_count, indexer);
   // Data-bar settings with no legacy attribute live in the worksheet
   // `<extLst>`, which is emitted much further down; build them here so
   // the CF model is read once.
-  const std::string ext_lst_xml = merge_x14_cf_entries(sheet.ext_lst_xml(), sheet.conditional_formats());
+  const std::string ext_lst_xml = merge_x14_cf_entries(sheet.ext_lst_xml(), sheet.conditional_formats(), indexer);
   const std::string merges_xml = BuildMergeCellsBlock(sheet);
-  const std::string dv_xml = BuildDataValidationsBlock(sheet);
+  const std::string dv_xml = BuildDataValidationsBlock(sheet, indexer);
   const std::string hl_xml = BuildHyperlinksBlock(sheet, hyperlink_rids);
   const SheetPrintSettings& print = sheet.print_settings();
   const WorksheetRawExtensions& raw_extensions = sheet.raw_extensions();

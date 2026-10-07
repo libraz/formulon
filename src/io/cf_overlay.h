@@ -30,6 +30,10 @@
 
 #include "cf/cf_types.h"
 
+namespace formulon::parser {
+struct ExternalBookIndexer;
+}  // namespace formulon::parser
+
 namespace formulon::io {
 
 /// Prunes from `ext_lst_xml` every `<x14:cfRule id="...">` whose id no
@@ -66,8 +70,10 @@ std::string reconcile_x14_cf_overlay(const std::string& ext_lst_xml, const std::
 /// Returns `ext_lst_xml` byte-for-byte when nothing changes, so a save
 /// that needs no new extension content cannot perturb the captured
 /// overlay's serialisation. An unparseable `ext_lst_xml` is likewise
-/// returned unchanged.
-std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vector<cf::ConditionalFormat>& formats);
+/// returned unchanged. `indexer` numbers the external books a built entry's
+/// formulas name (see `storage_feature_formula`).
+std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vector<cf::ConditionalFormat>& formats,
+                                 const parser::ExternalBookIndexer* indexer = nullptr);
 
 }  // namespace formulon::io
 

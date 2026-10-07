@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "default_content_type.h"
+#include "io/cf_reader.h"
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
 #include "io/ooxml/package_validator.h"
@@ -485,24 +486,35 @@ std::optional<std::uint32_t> LoadPivotCacheFor(const ZipReader& zip, Workbook& w
   return cache_id;
 }
 
-/// Reads the remote workbook URL recorded in an external link part's own
-/// rels file. Empty when the part has no rels or no external-path
-/// relationship, which is what an unresolvable link already looks like.
-std::string ReadExternalLinkTarget(const ZipReader& zip, std::string_view part_path) {
-  const std::string rels_path = ooxml::rels_path_for_part(part_path);
+/// Reads the remote workbook URLs recorded in an external link part's own
+/// rels file into `record`: the relationship `record.body_rel_id` names is
+/// the target, and another external-path relationship beside it is the
+/// absolute URL Excel records for a relative target. Without a body rel id
+/// the first external-path relationship is the target and no absolute URL
+/// is read. Leaves both empty when the part has no rels, which is what an
+/// unresolvable link already looks like.
+void ReadExternalLinkTargets(const ZipReader& zip, ExternalLinkRecord& record) {
+  const std::string rels_path = ooxml::rels_path_for_part(record.part_path);
   if (!zip.has_entry(rels_path)) {
-    return std::string();
+    return;
   }
-  std::string found;
+  const bool body_known = !record.body_rel_id.empty();
   auto status = ooxml::visit_relationship_nodes(
       zip, rels_path, "external link rels", "xlsb_reader", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-        if (found.empty() && std::string_view(rel.attribute("Type").value()) == kRelExternalLinkPath) {
-          found = rel.attribute("Target").value();
+        if (std::string_view(rel.attribute("Type").value()) != kRelExternalLinkPath) {
+          return Expected<void, Error>::Ok();
+        }
+        const std::string_view id = rel.attribute("Id").value();
+        const bool is_body = body_known ? id == record.body_rel_id : record.target.empty();
+        if (is_body) {
+          record.target = rel.attribute("Target").value();
+        } else if (body_known && record.absolute_target.empty()) {
+          record.absolute_target = rel.attribute("Target").value();
+          record.absolute_rel_id = id;
         }
         return Expected<void, Error>::Ok();
       });
   (void)status;
-  return found;
 }
 
 /// Loads every external link part the supporting-book list names, in
@@ -530,16 +542,18 @@ void LoadExternalLinkParts(const ZipReader& zip, Workbook& wb, const std::vector
     auto path_or = FindRelationship(zip, "xl/workbook.bin", "Id", sup.rel_id, "external link rels");
     if (path_or && !path_or.value().empty() && zip.has_entry(path_or.value())) {
       record.part_path = path_or.value();
-      record.target = ReadExternalLinkTarget(zip, record.part_path);
       auto bytes_or = zip.read_entry(record.part_path);
       if (bytes_or) {
         const std::vector<std::uint8_t>& bytes = bytes_or.value();
-        auto book_or = read_external_link_bin(ByteSpan{bytes.data(), bytes.size()});
+        auto book_or = read_external_link_bin(ByteSpan{bytes.data(), bytes.size()}, &record.body_rel_id);
         if (book_or) {
           record.kind = ExternalLinkRecord::Kind::kExternalBook;
           record.book = std::move(book_or.value());
+        } else {
+          record.body_rel_id.clear();
         }
       }
+      ReadExternalLinkTargets(zip, record);
     }
     links.push_back(std::move(record));
   }
@@ -938,6 +952,10 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
       }
     }
   }
+
+  // Conditional-format and data-validation formulas name other books
+  // through the same `[N]` cell formulas do.
+  ingest_feature_formulas(wb);
 
   // Pivot caches and tables, reached through the sheet relationships the
   // loop above stored. Runs after every sheet is decoded because a table

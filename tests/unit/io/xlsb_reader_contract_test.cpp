@@ -416,7 +416,9 @@ TEST(XlsbDefinedNames, StoragePlaceholdersStayOutOfTheNameTable) {
 
 /// Encodes `formula` against `sheet_names` and returns its `rgce`.
 std::vector<std::uint8_t> EncodeRgce(std::string_view formula, const std::vector<std::string>& sheet_names,
-                                     const io::xlsb::SheetRangeTable& sheet_ranges) {
+                                     const std::vector<io::xlsb::XtiEntry>& xti) {
+  io::xlsb::SheetRangeTable sheet_ranges;
+  sheet_ranges.xti = xti;
   Arena arena;
   parser::Parser parser(formula, arena);
   parser::AstNode* root = parser.parse();
@@ -437,7 +439,7 @@ TEST(XlsbExternalReference, LocalSupBookStillResolves) {
   // Control for the case below: the identical Ptg stream, differing only
   // in the ExternSheet entry's `iSupBook`, decodes normally.
   const std::vector<std::string> sheets = {"Alpha", "Beta"};
-  const std::vector<std::uint8_t> rgce = EncodeRgce("Beta!A1*2", sheets, {{1, 1}});
+  const std::vector<std::uint8_t> rgce = EncodeRgce("Beta!A1*2", sheets, {{0U, 1, 1}});
   ASSERT_FALSE(rgce.empty());
 
   const std::vector<std::uint8_t> archive =
@@ -457,7 +459,7 @@ TEST(XlsbExternalReference, ExternalSupBookKeepsTheCachedValueAndReportsTheToken
   // on unrelated data. The reader surfaces the token instead and leaves
   // Excel's cached result in place.
   const std::vector<std::string> sheets = {"Alpha", "Beta"};
-  const std::vector<std::uint8_t> rgce = EncodeRgce("Beta!A1*2", sheets, {{1, 1}});
+  const std::vector<std::uint8_t> rgce = EncodeRgce("Beta!A1*2", sheets, {{0U, 1, 1}});
   ASSERT_FALSE(rgce.empty());
 
   const std::vector<std::uint8_t> archive = BuildPackage(SheetBinFmlaNum(14.0, rgce), {{{1U, 1U, 1U}}});
@@ -474,7 +476,7 @@ TEST(XlsbExternalReference, ExternalSupBookKeepsTheCachedValueAndReportsTheToken
 
 TEST(XlsbExternalReference, ExternalSupBookAppliesToAreaTokensToo) {
   const std::vector<std::string> sheets = {"Alpha", "Beta"};
-  const std::vector<std::uint8_t> rgce = EncodeRgce("SUM(Beta!A1:B2)", sheets, {{1, 1}});
+  const std::vector<std::uint8_t> rgce = EncodeRgce("SUM(Beta!A1:B2)", sheets, {{0U, 1, 1}});
   ASSERT_FALSE(rgce.empty());
 
   const std::vector<std::uint8_t> archive = BuildPackage(SheetBinFmlaNum(3.0, rgce), {{{2U, 1U, 1U}}});

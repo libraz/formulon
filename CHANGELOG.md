@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- References to another workbook can be entered, displayed and evaluated:
+  `=[Book.xlsx]Sheet1!A1`, `='/Users/x/[Book.xlsx]Sheet1'!A1`,
+  `=SUM([Book.xlsx]Sheet1:Sheet2!A1)` and `=Book.xlsx!Name`, in cells, defined
+  names, conditional formats and data validations. Entering one for a workbook
+  that has no link yet creates the link, and XLSX and XLSB saves write it with
+  its link part, so the formula survives a save and reload.
+- Sheet names that look like a cell address (`S2`) or start with a digit
+  (`2024`) are accepted unquoted before `!`, as Excel does.
+
+### Changed
+
+- Formulas loaded with cross-workbook references read back with the book name
+  (`[Book.xlsx]Sheet1!A1`, or the quoted path form when the link has an
+  absolute path) instead of `[N]`, and are written back with the original
+  index.
+- A typed `[1]` names a book called `1`; it no longer addresses the first link.
+- `Sheet !A1`, with a space before `!`, is rejected.
+- Sheet names shaped like `R`, `C` or `R1C1` are quoted in formula text.
+- The XLSB writer encodes cross-workbook references as formulas instead of
+  keeping only their cached values.
+
 ## [0.13.0] - 2026-10-06
 
 ### BREAKING

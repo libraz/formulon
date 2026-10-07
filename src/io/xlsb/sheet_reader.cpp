@@ -1222,7 +1222,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
         // Register the real formula via the workbook-level entry so the
         // dep graph tracks it (matching the OOXML reader). The cached
         // value is preserved separately below.
-        auto wf = wb.set_cell_formula(sheet_index, state.current_row, col_or.value().col, formula_text);
+        auto wf = wb.set_cell_formula(sheet_index, state.current_row, col_or.value().col,
+                                      wb.ingest_stored_formula(formula_text));
         if (!wf) {
           return wf.error();
         }
@@ -1334,7 +1335,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       const Cell* shell = wb.sheet(sheet_index).cell_at(rw_first_or.value(), col_first_or.value());
       Value cached = shell != nullptr ? shell->cached_value : Value::blank();
       const std::string cached_text = cached.is_text() ? std::string(cached.as_text()) : std::string();
-      auto wf = wb.set_cell_formula(sheet_index, rw_first_or.value(), col_first_or.value(), formula_text);
+      auto wf = wb.set_cell_formula(sheet_index, rw_first_or.value(), col_first_or.value(),
+                                    wb.ingest_stored_formula(formula_text));
       if (!wf) {
         return wf.error();
       }
@@ -1435,6 +1437,21 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
       if (!sheetless && !entry.unresolved) {
         entry.first = sheet_names[static_cast<std::size_t>(range.itab_first)];
         entry.last = sheet_names[static_cast<std::size_t>(range.itab_last)];
+      }
+      // Another workbook's entry keeps its link and that book's sheet names,
+      // so the writer can re-point it at the saved link.
+      if (range.external_book != 0U && range.external_book <= external_books.size()) {
+        const std::vector<std::string>& sheets = external_books[range.external_book - 1U].sheet_names;
+        const auto in_link = [&sheets](std::int32_t itab) {
+          return itab >= 0 && static_cast<std::size_t>(itab) < sheets.size();
+        };
+        if (sheetless || (in_link(range.itab_first) && in_link(range.itab_last))) {
+          entry.external_book = range.external_book;
+          if (!sheetless) {
+            entry.first = sheets[static_cast<std::size_t>(range.itab_first)];
+            entry.last = sheets[static_cast<std::size_t>(range.itab_last)];
+          }
+        }
       }
       state.tail.extern_sheets.push_back(std::move(entry));
     }

@@ -113,9 +113,13 @@ struct XlsbExternSheetEntry {
   /// book-scope `PtgNameX` resolves through.
   std::string first;
   std::string last;
-  /// True for an entry the writer cannot reproduce: another workbook's
-  /// sheets, or a sheet index outside the source workbook.
+  /// True for an entry naming no sheet of this workbook: another
+  /// workbook's sheets, or a sheet index outside the source workbook.
   bool unresolved = false;
+  /// For another workbook's entry, the `ExternalLinkRecord::index` of its
+  /// link, with `first` / `last` naming that book's sheets. 0 for this
+  /// workbook, and for an entry whose book or sheets could not be bound.
+  std::uint32_t external_book = 0;
 };
 
 /// Worksheet records captured verbatim from an `.xlsb` sheet part that the

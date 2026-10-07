@@ -120,9 +120,9 @@ TEST(XlsbPtgCodec, SheetQualifiedNameEncodesPtgNameX) {
     SheetRangeTable ranges;
     std::unordered_set<std::uint64_t> seen;
     collect_ptg_sheet_ranges(*root, sheets, ranges, seen);
-    ASSERT_EQ(ranges.size(), 1U) << c.formula;
-    EXPECT_EQ(ranges[0].first, -2);
-    EXPECT_EQ(ranges[0].second, -2);
+    ASSERT_EQ(ranges.xti.size(), 1U) << c.formula;
+    EXPECT_EQ(ranges.xti[0].first, -2);
+    EXPECT_EQ(ranges.xti[0].last, -2);
     auto encoded = encode_ptgs(*root, sheets, ranges, table, PtgRootClass::kValue);
     ASSERT_TRUE(static_cast<bool>(encoded)) << c.formula << " | " << (encoded ? "" : encoded.error().message);
     EXPECT_EQ(encoded.value().rgce, c.want) << c.formula;
@@ -159,8 +159,8 @@ TEST(XlsbPtgCodec, CellReferenceCalleeMatchesExcelBytes) {
     EXPECT_EQ(encoded.value().rgce, c.want) << c.formula;
 
     std::vector<XlsbSheetRange> decode_ranges;
-    for (const auto& [first, last] : ranges) {
-      decode_ranges.push_back(XlsbSheetRange{first, last});
+    for (const XtiEntry& entry : ranges.xti) {
+      decode_ranges.push_back(XlsbSheetRange{entry.first, entry.last});
     }
     Arena dec_arena;
     auto decoded = decode_ptgs(ByteSpan{c.want.data(), c.want.size()}, {}, dec_arena, sheets, {}, decode_ranges, {},

@@ -14,9 +14,10 @@
 // builders (worksheet part, sheet views, cols, merge cells, data
 // validations, hyperlinks, sheet protection, page breaks, sheet rels)
 // live in `src/io/ooxml/sheet_xml_builder.{h,cpp}`. The pipeline-only
-// pieces — `BuildTableXml`, `BuildExternalLinkRels`,
-// `BuildSingleRelationshipRels`, and `write_ooxml()` itself — stay
-// here because each is consumed only by `write_ooxml()`.
+// pieces — `BuildTableXml`, `BuildSingleRelationshipRels`, and
+// `write_ooxml()` itself — stay here because each is consumed only by
+// `write_ooxml()`. External-link bodies and rels are built in
+// `src/io/ooxml/external_link_writer.{h,cpp}`.
 
 #include "io/ooxml_writer.h"
 
@@ -36,6 +37,7 @@
 #include "io/comments_writer.h"
 #include "io/dynamic_array_formula.h"
 #include "io/ooxml/emission_plan.h"
+#include "io/ooxml/external_link_writer.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml/shared_strings_writer.h"
@@ -127,37 +129,6 @@ std::optional<PivotRenderedSpan> ProjectPivotSpan(const Workbook& wb, const pivo
     return std::nullopt;
   }
   return PivotRenderedSpan{layout_or.value().rows, layout_or.value().cols};
-}
-
-/// Builds the per-link rels file content for one external link.
-/// Returns an empty string when the record has no captured target —
-/// callers should skip the AddPart call in that case so the package
-/// does not carry an empty rels file Excel would treat as malformed.
-std::string BuildExternalLinkRels(const ExternalLinkRecord& rec) {
-  if (rec.target.empty()) {
-    return {};
-  }
-  std::string out;
-  out.reserve(256);
-  out.append(kXmlDecl);
-  out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
-  std::string_view type = kRelExternalLinkPath;
-  switch (rec.kind) {
-    case ExternalLinkRecord::Kind::kOleLink:
-      type = kRelOleLink;
-      break;
-    case ExternalLinkRecord::Kind::kDdeLink:
-      type = kRelDdeLink;
-      break;
-    case ExternalLinkRecord::Kind::kExternalBook:
-    case ExternalLinkRecord::Kind::kUnknown:
-    default:
-      break;
-  }
-  AppendRelationship(out, rec.body_rel_id.empty() ? std::string_view("rId1") : std::string_view(rec.body_rel_id), type,
-                     rec.target, rec.target_external, /*escape_target=*/true);
-  out.append("</Relationships>\n");
-  return out;
 }
 
 std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
@@ -326,6 +297,9 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     dynamic_array_cm_index = 1U;
   }
 
+  // Numbers each external book a formula names by its written link.
+  const parser::ExternalBookIndexer external_book_indexer = plan.external_link_ordinals.indexer();
+
   ZipWriterGuard writer;
   if (!writer.init()) {
     return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_init_heap failed", "context=write_ooxml");
@@ -385,12 +359,13 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     std::string part_path("xl/worksheets/sheet");
     part_path.append(std::to_string(i + 1));
     part_path.append(".xml");
-    auto wresult = AddPart(
-        writer.get(), part_path,
-        BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids,
-                          rels_result.printer_settings_rid, rels_result.drawing_rid, rels_result.legacy_drawing_rid,
-                          &shared_strings, wb.styles().dxfs.size(), dynamic_array_cm_index, name_shapes(wb, i)),
-        &written_paths);
+    auto wresult =
+        AddPart(writer.get(), part_path,
+                BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids,
+                                  rels_result.printer_settings_rid, rels_result.drawing_rid,
+                                  rels_result.legacy_drawing_rid, &shared_strings, wb.styles().dxfs.size(),
+                                  dynamic_array_cm_index, name_shapes(wb, i), &external_book_indexer),
+                &written_paths);
     if (!wresult) {
       return wresult.error();
     }
@@ -520,38 +495,34 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     }
   }
 
-  // 9.25. External link rels — one per `wb.external_links()` record
-  // with a captured target URL. The body part itself rides through
-  // passthrough; we only generate the rels file pointing at the remote
-  // workbook URL. Records without a target are skipped (Excel writers
-  // never emit a relationship-less rels file and would treat one as
-  // malformed).
+  // 9.25. External links — the generated body of each link without a
+  // current loaded one (a kept body is a passthrough part, step 10), and
+  // every written link's rels file pointing at the remote workbook.
   for (const EmissionPlan::ExternalLinkPlan& e : plan.external_links) {
-    std::string rels_xml = BuildExternalLinkRels(*e.record);
-    if (rels_xml.empty()) {
+    // A rels part describes the part it is named after, so a link whose
+    // body is not in this package gets none; the workbook rels and the
+    // `<externalReference>` are gated on the same answer and already
+    // reported the loss.
+    if (!e.written) {
       continue;
     }
-    std::string rels_path = ooxml::rels_path_for_part(e.record->part_path);
+    std::string rels_path = ooxml::rels_path_for_part(e.part_path);
     // Same rule as the passthrough parts below: `part_path` can reach the
     // model without passing the reader's traversal check, and this is the
-    // only other place a model field becomes a zip entry name. This is a
-    // judgement about the name itself, so it precedes any decision about
-    // whether the part is worth writing -- a traversal-shaped path must
-    // fail the save whichever way that decision goes.
-    if (!ooxml::is_safe_part_name(rels_path)) {
+    // only other place a model field becomes a zip entry name.
+    if (!ooxml::is_safe_part_name(e.part_path) || !ooxml::is_safe_part_name(rels_path)) {
       return make_error(FormulonErrorCode::kIoZipSlip,
-                        "external link rels path escapes package root; refusing to write",
-                        "context=write_ooxml part=" + rels_path);
+                        "external link part path escapes package root; refusing to write",
+                        "context=write_ooxml part=" + e.part_path);
     }
-    // A rels part describes the part it is named after, so writing one
-    // for a body that is not in this package leaves an orphan: OPC has no
-    // reading of `xl/externalLinks/_rels/externalLink1.xml.rels` when
-    // `xl/externalLinks/externalLink1.xml` is absent. The workbook rels
-    // and the `<externalReference>` are gated on the same answer, so this
-    // is the third face of one decision, and it already reported itself
-    // there -- counting the loss again here would make one missing link
-    // look like several.
-    if (!HasPassthroughPart(plan, e.record->part_path)) {
+    if (!e.generated_body.empty()) {
+      auto result = AddPart(writer.get(), e.part_path, e.generated_body, &written_paths);
+      if (!result) {
+        return result.error();
+      }
+    }
+    std::string rels_xml = BuildExternalLinkRels(*e.record);
+    if (rels_xml.empty()) {
       continue;
     }
     auto result = AddPart(writer.get(), rels_path, rels_xml, &written_paths);

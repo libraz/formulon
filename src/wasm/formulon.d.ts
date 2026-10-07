@@ -2350,11 +2350,13 @@ export interface Workbook {
 
   getValue(sheet: number, row: number, col: number): CellResult;
 
-  /** The stored A1 formula (leading `=` included), or `formula: null` for a cell that holds none. */
+  /** The stored A1 formula (leading `=` included), or `formula: null` for a cell that holds none.
+   *  The text is returned as entered; a formula loaded from a file shows book names, not `[N]` indexes. */
   getFormula(sheet: number, row: number, col: number): FormulaResult;
   /** The formula in R1C1 notation relative to the cell, without a leading `=`; `formula: null` when the cell holds none.
    *  A formula loaded from a file that does not parse is kept verbatim, evaluates to `#NAME?`, and fails here with
-   *  `kParserUnexpectedToken`; `setFormula` never produces that state. */
+   *  `kParserUnexpectedToken`; `setFormula` never produces that state.
+   *  Sheet and external qualifiers are quoted as a whole only when the path, book or sheet name needs it. */
   getFormulaR1C1(sheet: number, row: number, col: number): FormulaResult;
   /** One page of the populated cells (formula or non-blank value, spill phantoms included) inside
    *  `range`, row-major. `cursor` is the `nextCursor` of the previous page (omit for the first);
@@ -3088,7 +3090,9 @@ export interface Workbook {
   /** Returns every external-link record carried by the workbook in
    *  `<externalReferences>` document order. Empty for fresh workbooks
    *  and any package whose source archive had no `<externalReferences>`
-   *  block. */
+   *  block. A formula, name, conditional-format rule or data validation that names an unregistered
+   *  book (bracket or path spelling) appends a record without renumbering; a book already present,
+   *  in any letter case, adds none. */
   getExternalLinks(): ListResult<ExternalLinkRecord>;
 
   /** Adds a merge range to `sheet`. */

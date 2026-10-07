@@ -662,22 +662,35 @@ TEST(OoxmlExternalLinks, PresentBodyPartKeepsBothHalvesOfTheReference) {
   EXPECT_NE(workbook_rels.find("externalLinks/externalLink1.xml"), std::string::npos) << workbook_rels;
 }
 
-TEST(OoxmlExternalLinks, MissingBodyPartDropsBothHalvesAndCounts) {
+TEST(OoxmlExternalLinks, MissingBodyPartIsGeneratedFromTheModel) {
   const Workbook wb = WorkbookWithExternalLink(/*with_body_part=*/false);
   auto saved = io::write_ooxml_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  const io::ByteSpan pkg = test::span_of(saved.value().bytes);
 
   std::string workbook_xml;
   std::string workbook_rels;
-  ASSERT_TRUE(test::extract_part(test::span_of(saved.value().bytes), "xl/workbook.xml", &workbook_xml));
-  ASSERT_TRUE(test::extract_part(test::span_of(saved.value().bytes), "xl/_rels/workbook.xml.rels", &workbook_rels));
+  std::string content_types;
+  std::string body;
+  std::string link_rels;
+  ASSERT_TRUE(test::extract_part(pkg, "xl/workbook.xml", &workbook_xml));
+  ASSERT_TRUE(test::extract_part(pkg, "xl/_rels/workbook.xml.rels", &workbook_rels));
+  ASSERT_TRUE(test::extract_part(pkg, "[Content_Types].xml", &content_types));
+  ASSERT_TRUE(test::extract_part(pkg, "xl/externalLinks/externalLink1.xml", &body));
+  ASSERT_TRUE(test::extract_part(pkg, "xl/externalLinks/_rels/externalLink1.xml.rels", &link_rels));
 
-  // Neither half may survive: a `<Relationship>` with no part and an
-  // `<externalReference r:id>` with no relationship are both repair-mode
-  // triggers, so the two are gated on the same answer.
-  EXPECT_EQ(workbook_xml.find("<externalReference"), std::string::npos) << workbook_xml;
-  EXPECT_EQ(workbook_rels.find("externalLink"), std::string::npos) << workbook_rels;
-  EXPECT_GE(saved.value().diagnostics.dropped_relationship_count, 1U);
+  // A formula's `[N]` must always name a written link, so a link whose
+  // body never arrived is written from the model with every package face.
+  EXPECT_NE(workbook_xml.find("<externalReference"), std::string::npos) << workbook_xml;
+  EXPECT_NE(workbook_rels.find("externalLinks/externalLink1.xml"), std::string::npos) << workbook_rels;
+  EXPECT_NE(content_types.find("/xl/externalLinks/externalLink1.xml\" "
+                               "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml."
+                               "externalLink+xml\""),
+            std::string::npos)
+      << content_types;
+  EXPECT_NE(body.find("<externalBook"), std::string::npos) << body;
+  EXPECT_NE(link_rels.find("Target=\"file:///tmp/remote.xlsx\""), std::string::npos) << link_rels;
+  EXPECT_EQ(saved.value().diagnostics.dropped_relationship_count, 0U);
 }
 
 TEST(OoxmlWorkbookRelationships, RootCustomXmlUsesWorkbookRelativeTargetAndSurvivesReload) {

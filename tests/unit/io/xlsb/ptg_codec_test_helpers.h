@@ -44,9 +44,9 @@ inline std::string RoundTrip(std::string_view formula, const std::vector<std::st
   }
 
   std::vector<XlsbSheetRange> decode_ranges;
-  decode_ranges.reserve(sheet_ranges.size());
-  for (const auto& [itab_first, itab_last] : sheet_ranges) {
-    decode_ranges.push_back(XlsbSheetRange{itab_first, itab_last});
+  decode_ranges.reserve(sheet_ranges.xti.size());
+  for (const XtiEntry& entry : sheet_ranges.xti) {
+    decode_ranges.push_back(XlsbSheetRange{entry.first, entry.last});
   }
 
   Arena dec_arena;

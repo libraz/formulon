@@ -17,7 +17,7 @@ namespace formulon {
 namespace parser {
 
 SheetRenameTransform::SheetRenameTransform(std::string_view old_name, std::string_view new_name) noexcept
-    : old_name_(old_name), new_name_(new_name), new_name_needs_quotes_(sheet_name_needs_quoting(new_name)) {}
+    : old_name_(old_name), new_name_(new_name), new_name_needs_quotes_(local_sheet_needs_quoting_a1(new_name)) {}
 
 std::optional<std::string_view> SheetRenameTransform::remap_sheet(std::string_view sheet) const noexcept {
   if (sheet.empty()) {

@@ -55,6 +55,10 @@ struct ExternalCell {
 /// never this workbook's sheets.
 struct ExternalBookName {
   std::string name;
+  /// 0-based index into `ExternalBook::sheet_names` of the sheet the name is
+  /// local to (`<definedName sheetId>`), or `ExternalBook::kNoSheet` for a
+  /// book-scope name.
+  std::uint32_t scope_sheet = static_cast<std::uint32_t>(-1);
   /// 0-based index into `ExternalBook::sheet_names`.
   std::uint32_t sheet = 0;
   std::uint32_t row = 0;
@@ -79,6 +83,9 @@ struct ExternalBook {
   /// this workbook's sheets.
   std::vector<std::string> sheet_names;
   std::vector<ExternalBookName> names;
+  /// Parallel to `sheet_names`: whether the part carries a cached
+  /// `<sheetData>` for that sheet. A missing entry reads as false.
+  std::vector<bool> sheet_data;
 
   /// Cached cell values keyed by `cell_key`. Absent means Excel never
   /// cached that cell, which is not an error: see `cached_cell`.
@@ -92,14 +99,28 @@ struct ExternalBook {
            static_cast<std::uint64_t>(col);
   }
 
-  /// Returns the 0-based index of `sheet` in `sheet_names` under exact
-  /// byte comparison, or `kNoSheet` when absent.
+  /// Every `cells` key in ascending order, which is sheet, then row, then
+  /// column; the writers emit cached cells in this order.
+  std::vector<std::uint64_t> sorted_cell_keys() const;
+
+  /// Returns the 0-based index of `sheet` in `sheet_names` under ASCII
+  /// case folding, as Excel matches sheet names, or `kNoSheet` when absent.
   std::uint32_t sheet_index(std::string_view sheet) const noexcept;
 
-  /// Returns the named entry, or `nullptr` when the supporting workbook
-  /// declares no such name. Matched under ASCII case folding, the same
-  /// comparison the engine's own defined-name lookup uses.
-  const ExternalBookName* find_name(std::string_view name) const noexcept;
+  /// Whether `sheet` has a cached `<sheetData>`. A sheet without one -- a
+  /// link created in this session, or one Excel could not refresh -- reads
+  /// as `#REF!` rather than as zeros.
+  bool sheet_has_data(std::uint32_t sheet) const noexcept { return sheet < sheet_data.size() && sheet_data[sheet]; }
+
+  /// Returns the entry named `name` in `scope_sheet` (`kNoSheet` for book
+  /// scope), or `nullptr` when the supporting workbook declares no such
+  /// name there. Matched under ASCII case folding, the same comparison the
+  /// engine's own defined-name lookup uses.
+  const ExternalBookName* find_name(std::string_view name, std::uint32_t scope_sheet = kNoSheet) const noexcept;
+
+  /// The last row and column holding a cached cell on `sheet`; false when
+  /// the sheet caches no cell.
+  bool cached_extent(std::uint32_t sheet, std::uint32_t* last_row, std::uint32_t* last_col) const noexcept;
 
   /// Returns the cached value at `(sheet, row, col)`, borrowing this
   /// book's storage for a Text result.
@@ -115,6 +136,8 @@ struct ExternalBook {
  private:
   static constexpr unsigned kRowShift = 14U;
   static constexpr unsigned kSheetShift = 35U;
+  static constexpr std::uint64_t kRowMask = (std::uint64_t{1} << (kSheetShift - kRowShift)) - 1U;
+  static constexpr std::uint64_t kColMask = (std::uint64_t{1} << kRowShift) - 1U;
 };
 
 }  // namespace formulon

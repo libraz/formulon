@@ -17,6 +17,8 @@
 #define FORMULON_IO_CF_READER_H_
 
 #include <cstddef>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "cf/cf_types.h"
@@ -24,6 +26,10 @@
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+
+namespace formulon {
+class Workbook;
+}  // namespace formulon
 
 namespace formulon::io {
 
@@ -89,6 +95,12 @@ void normalize_cf_dxf_ids(std::vector<cf::ConditionalFormat>& formats, std::size
 /// `_xlfn.SINGLE(x)` / `_xlfn.ANCHORARRAY(x)` shown as `@x` / `x#`, the same
 /// canonical form cell and defined-name formulas take on load.
 std::string canonical_feature_formula(std::string_view stored);
+
+/// Passes every conditional-format (rule and `cfvo`) and data-validation
+/// formula of every sheet through `Workbook::ingest_stored_formula`, once the
+/// workbook's external links are loaded, so their `[N]` link indexes read
+/// back as book names and every book they name has a link.
+void ingest_feature_formulas(Workbook& wb);
 
 /// Folds an `<x14:dataBar>` element onto a data bar decoded from its
 /// legacy `<dataBar>`: the settings only the extension carries (negative

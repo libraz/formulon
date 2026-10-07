@@ -83,12 +83,14 @@ enum class NodeKind : std::uint8_t {
   /// names plus the (sheet-less) cell `Reference`; the evaluator expands
   /// it to one cell per sheet in the inclusive workbook-order span.
   Ref3D = 18,
-  /// Reference into another workbook, in either of the two shapes Excel
-  /// stores: a cell or rectangle on one of the supporting workbook's
-  /// sheets (`[1]Data!A1`, `[1]Data!A1:A3`) or one of its book-scope
-  /// defined names (`[1]!SrcTotal`). The book is identified by the
-  /// 1-based index the formula text spells as `[N]`, which selects the
-  /// N-th entry of `Workbook::external_links()`.
+  /// Reference into another workbook: a cell, rectangle, whole column or
+  /// row, or sheet-local name on one or a 3-D span of the supporting
+  /// workbook's sheets (`[Book.xlsx]Data!A1`, `'[Book.xlsx]S1:S2'!A1`,
+  /// `[Book.xlsx]Data!Rate`), or one of its book-scope defined names
+  /// (`Book.xlsx!Total`). The book is held as spelled, with its directory
+  /// when one was written; `Workbook::find_external_link` binds it to an
+  /// entry of `Workbook::external_links()`. `[0]!Name` is the formula's own
+  /// workbook (see `is_self_book_name_ref`).
   ///
   /// The node is always a leaf: the target lives in a file this engine
   /// does not open, so it is resolved against the values Excel cached in
@@ -188,23 +190,27 @@ class AstNode final {
   bool as_ref3d_is_range() const;
 
   // --- ExternalRef ---------------------------------------------------------
-  /// 1-based index of the supporting workbook (the `[N]` of the formula
-  /// text), selecting the N-th entry of `Workbook::external_links()`; 0
-  /// is the formula's own workbook, which only the name form carries (see
-  /// `is_self_book_name_ref`).
-  std::uint32_t as_external_ref_book() const;
-  /// Sheet name inside the supporting workbook; empty for the
-  /// defined-name form.
+  /// The supporting workbook's file name as spelled (`Book.xlsx`, or the
+  /// decimal `1` of a reference decoded from a link index); `0` with no
+  /// path and no sheet is the formula's own workbook.
+  std::string_view as_external_ref_book() const;
+  /// Directory written before the book (`/Users/x/`, `C:\a\`), with its
+  /// trailing separator; empty when none was written.
+  std::string_view as_external_ref_path() const;
+  /// Sheet name inside the supporting workbook (the first of a 3-D span);
+  /// empty for a book-scope defined name.
   std::string_view as_external_ref_sheet() const;
+  /// Last sheet of a 3-D span; empty for a single sheet.
+  std::string_view as_external_ref_sheet_end() const;
   /// Defined name inside the supporting workbook; empty for the cell
-  /// form. Non-empty is what distinguishes the two.
+  /// form. Non-empty is what distinguishes the two; with a sheet it is that
+  /// sheet's local name.
   std::string_view as_external_ref_name() const;
   const Reference& as_external_ref_cell() const;
   /// Bottom-right corner of a rectangle; equals `as_external_ref_cell()`
   /// when `as_external_ref_is_range()` is false.
   const Reference& as_external_ref_cell_end() const;
   bool as_external_ref_is_range() const;
-
   // --- StructuredRef -------------------------------------------------------
   std::string_view as_structured_ref_table() const;
   std::string_view as_structured_ref_column() const;
@@ -287,8 +293,10 @@ class AstNode final {
   friend AstNode* make_spill_ref_expr(Arena&, const AstNode*);
   friend AstNode* make_ref3d(Arena&, std::string_view, std::string_view, const Reference&);
   friend AstNode* make_ref3d_range(Arena&, std::string_view, std::string_view, const Reference&, const Reference&);
-  friend AstNode* make_external_ref(Arena&, std::uint32_t, std::string_view, const Reference&, const Reference&, bool);
-  friend AstNode* make_external_name_ref(Arena&, std::uint32_t, std::string_view);
+  friend AstNode* make_external_ref(Arena&, std::string_view, std::string_view, std::string_view, std::string_view,
+                                    const Reference&, const Reference&, bool);
+  friend AstNode* make_external_name_ref(Arena&, std::string_view, std::string_view, std::string_view,
+                                         std::string_view);
   friend AstNode* make_structured_ref(Arena&, std::string_view, std::string_view, StructuredRefModifier);
   friend AstNode* make_name_ref(Arena&, std::string_view);
   friend AstNode* make_sheet_name_ref(Arena&, std::string_view, std::string_view, bool);
@@ -325,14 +333,14 @@ class AstNode final {
     bool is_range = false;
   };
   /// The two shapes of `ExternalRef` share one payload: `name` empty
-  /// means the cell form (`sheet` + `cell` [+ `cell_end`]), `name`
-  /// non-empty the defined-name form (`sheet` unused, because a
-  /// book-scope name carries its own sheet qualifier inside the
-  /// supporting workbook).
+  /// means the cell form (`sheet` [+ `sheet_end`] + `cell` [+ `cell_end`]),
+  /// `name` non-empty the defined-name form, sheet-local when `sheet` is
+  /// set. Whole columns and rows use the `Reference` flags of a local ref.
   struct ExternalRefPayload {
-    /// 1-based, matching the `[N]` of the equivalent formula text.
-    std::uint32_t book = 0;
+    std::string_view path;
+    std::string_view book;
     std::string_view sheet;
+    std::string_view sheet_end;
     std::string_view name;
     Reference cell;
     Reference cell_end;
@@ -498,17 +506,20 @@ AstNode* make_ref3d(Arena& arena, std::string_view sheet_begin, std::string_view
 AstNode* make_ref3d_range(Arena& arena, std::string_view sheet_begin, std::string_view sheet_end, const Reference& cell,
                           const Reference& cell_end);
 
-/// Builds an `ExternalRef` node naming `[book]sheet!cell`, or
-/// `[book]sheet!cell:cell_end` when `is_range`. Both corners' own `sheet`
-/// qualifiers are dropped (the payload's `sheet` carries the identity).
-/// `sheet` is re-interned into `arena`.
-AstNode* make_external_ref(Arena& arena, std::uint32_t book, std::string_view sheet, const Reference& cell,
-                           const Reference& cell_end, bool is_range);
+/// Builds an `ExternalRef` node naming `<path>[book]sheet!cell` (or the
+/// 3-D `<path>[book]sheet:sheet_end!cell` when `sheet_end` is non-empty),
+/// or the rectangle `...!cell:cell_end` when `is_range`. Both corners' own
+/// `sheet` qualifiers are dropped (the payload carries the identity). The
+/// string views are re-interned into `arena`.
+AstNode* make_external_ref(Arena& arena, std::string_view path, std::string_view book, std::string_view sheet,
+                           std::string_view sheet_end, const Reference& cell, const Reference& cell_end, bool is_range);
 
-/// Builds an `ExternalRef` node naming the supporting workbook's
-/// book-scope defined name `[book]!name`. `name` is re-interned into
-/// `arena`.
-AstNode* make_external_name_ref(Arena& arena, std::uint32_t book, std::string_view name);
+/// Builds an `ExternalRef` node naming the supporting workbook's defined
+/// name `name`: book-scope (`<path>book!name`) when `sheet` is empty,
+/// otherwise local to that sheet (`<path>[book]sheet!name`). The string
+/// views are re-interned into `arena`.
+AstNode* make_external_name_ref(Arena& arena, std::string_view path, std::string_view book, std::string_view sheet,
+                                std::string_view name);
 
 /// True for `[0]!Name`: the defined name `Name` of the formula's own
 /// workbook, read as workbook-scoped first (see

@@ -24,6 +24,7 @@
 #include "cell.h"
 #include "cf/cf_types.h"
 #include "default_content_type.h"
+#include "external_link.h"
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
 #include "io/ooxml/package_validator.h"
@@ -31,6 +32,7 @@
 #include "io/ooxml/workbook_xml_builder.h"
 #include "io/ooxml/zip_part_writer.h"
 #include "io/ooxml_defs.h"
+#include "io/xlsb/external_link_writer.h"
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_targets.h"
@@ -84,6 +86,7 @@ constexpr std::string_view kCtWorksheetXlsb = "application/vnd.ms-excel.workshee
 constexpr std::string_view kCtSharedStringsXlsb = "application/vnd.ms-excel.sharedStrings";
 constexpr std::string_view kCtStylesXlsb = "application/vnd.ms-excel.styles";
 constexpr std::string_view kCtSheetMetadataXlsb = "application/vnd.ms-excel.sheetMetadata";
+constexpr std::string_view kCtExternalLinkXlsb = "application/vnd.ms-excel.externalLink";
 
 // ---------------------------------------------------------------------------
 // Emission plan: where do passthrough parts land, do any collide?
@@ -103,6 +106,8 @@ struct EmissionPlan {
   bool has_text_cells = false;  // gates emission of xl/sharedStrings.bin
   bool has_generated_styles = false;
   bool has_generated_dynamic_metadata = false;
+  /// External link parts generated from the model, in written order.
+  std::size_t external_link_count = 0;
 };
 
 void ReportDeferred(std::uint32_t* count, std::string_view kind, std::size_t items, std::size_t sheet_index) {
@@ -243,6 +248,17 @@ bool IsXlsxOnlyMetadataPart(const std::string& path) {
   return path == "xl/metadata.xml";
 }
 
+// An external link part or its rels. The writer generates every link from the
+// model, so a source package's own parts are stale.
+bool IsExternalLinkPart(const std::string& path) {
+  constexpr std::string_view kPrefix = "xl/externalLinks/";
+  return path.compare(0, kPrefix.size(), kPrefix) == 0;
+}
+
+std::string ExternalLinkRelsPath(std::size_t position) {
+  return "xl/externalLinks/_rels/externalLink" + std::to_string(position) + ".bin.rels";
+}
+
 bool HasRawStylesPart(const Workbook& wb) {
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (part.path == "xl/styles.bin")
@@ -307,7 +323,8 @@ DynamicArrayMetadataPlan BuildDynamicArrayMetadataPlan(const Workbook& wb) {
 }
 
 std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool emit_sst_part, bool emit_styles_part,
-                                                      bool emit_dynamic_metadata_part) {
+                                                      bool emit_dynamic_metadata_part,
+                                                      std::size_t external_link_count) {
   std::unordered_set<std::string> paths;
   paths.insert("[Content_Types].xml");
   paths.insert("_rels/.rels");
@@ -326,11 +343,15 @@ std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool e
   if (emit_dynamic_metadata_part) {
     paths.insert("xl/metadata.bin");
   }
+  for (std::size_t i = 1; i <= external_link_count; ++i) {
+    paths.insert(external_link_part_path(i));
+    paths.insert(ExternalLinkRelsPath(i));
+  }
   return paths;
 }
 
 Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present, bool generate_dynamic_metadata,
-                                                WriteDiagnostics* diagnostics) {
+                                                std::size_t external_link_count, WriteDiagnostics* diagnostics) {
   EmissionPlan plan;
   plan.has_text_cells = sst_present;
   // Existing XLSB packages retain their original styles bytes verbatim.  This
@@ -341,9 +362,10 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
   // Decided by `BuildDynamicArrayMetadataPlan`, which the sheet bodies were
   // already emitted against.
   plan.has_generated_dynamic_metadata = generate_dynamic_metadata;
+  plan.external_link_count = external_link_count;
 
-  const std::unordered_set<std::string> generated =
-      BuildGeneratedPathSet(wb, sst_present, plan.has_generated_styles, plan.has_generated_dynamic_metadata);
+  const std::unordered_set<std::string> generated = BuildGeneratedPathSet(
+      wb, sst_present, plan.has_generated_styles, plan.has_generated_dynamic_metadata, external_link_count);
 
   // The reader rejects conflicting defaults, but Workbook is also a public
   // construction surface. Validate that hand-built workbooks cannot produce
@@ -386,8 +408,11 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
     // calc chain likewise references the original formula graph; a stale
     // chain is rejected, and Excel rebuilds it on load when absent (same
     // policy as the OOXML writer). Neither carries a workbook relationship
-    // here, so keeping them would leave dangling / mismatched parts.
-    if (IsBinaryIndexPart(part.path) || part.path == "xl/calcChain.bin" || IsXlsxOnlyMetadataPart(part.path)) {
+    // here, so keeping them would leave dangling / mismatched parts. A
+    // source external link part the generated set does not replace (an
+    // `.xml` one, or a number past the model's links) would be an orphan.
+    if (IsBinaryIndexPart(part.path) || part.path == "xl/calcChain.bin" || IsXlsxOnlyMetadataPart(part.path) ||
+        IsExternalLinkPart(part.path)) {
       if (IsXlsxOnlyMetadataPart(part.path)) {
         StructuredLog("xlsb.writer.deferred")
             .field("kind", std::string_view("xlsx_metadata"))
@@ -492,6 +517,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   if (rels_default != kCtPackageRels) {
     append_override("_rels/.rels", kCtPackageRels);
     append_override("xl/_rels/workbook.bin.rels", kCtPackageRels);
+    for (std::size_t i = 1; i <= plan.external_link_count; ++i) {
+      append_override(ExternalLinkRelsPath(i), kCtPackageRels);
+    }
     for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
       bool has_emitted_sheet_rels = std::any_of(wb.sheet(i).hyperlinks().begin(), wb.sheet(i).hyperlinks().end(),
                                                 [](const Hyperlink& hyperlink) { return !hyperlink.target.empty(); });
@@ -532,6 +560,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     out.append("  <Override PartName=\"/xl/styles.bin\" ContentType=\"");
     out.append(kCtStylesXlsb);
     out.append("\"/>\n");
+  }
+  for (std::size_t i = 1; i <= plan.external_link_count; ++i) {
+    append_override(external_link_part_path(i), kCtExternalLinkXlsb);
   }
   // Passthrough overrides: only for entries that carried an explicit
   // ContentType in the source archive. Default-typed parts (empty
@@ -620,7 +651,7 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, WriteDi
 }
 
 std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const EmissionPlan& plan, const Workbook& wb,
-                              WriteDiagnostics* diagnostics) {
+                              const std::vector<std::string>& link_rel_ids, WriteDiagnostics* diagnostics) {
   std::string out;
   out.reserve(256 + sheet_count * 192 + wb.unknown_workbook_rels().size() * 192);
   out.append(kXmlDecl);
@@ -635,6 +666,13 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
     out.append(std::to_string(i + 1));
     out.append(".bin\"/>\n");
   }
+  // The ids `BrtSupBookSrc` names each link by, numbered right after the sheets.
+  for (std::size_t i = 0; i < link_rel_ids.size(); ++i) {
+    AppendRelationship(out, link_rel_ids[i], kRelExternalLink,
+                       TargetRelativeToWorkbook(external_link_part_path(i + 1U)),
+                       /*target_external=*/false, /*escape_target=*/true);
+  }
+  next_rid += static_cast<std::uint32_t>(link_rel_ids.size());
   if (emit_sst) {
     AppendRelationship(out, next_rid++, kRelSharedStrings, "sharedStrings.bin", /*target_external=*/false,
                        /*escape_target=*/true);
@@ -661,6 +699,10 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
   // `xl/`.  Do not duplicate relationships which the generated package
   // already owns above.
   for (const UnknownRelationship& rel : wb.unknown_workbook_rels()) {
+    // The source's link relationships are replaced by the generated ones above.
+    if (rel.type == kRelExternalLink) {
+      continue;
+    }
     if (!rel.target_external && !HasPassthroughPart(plan.passthrough_kept, rel.target)) {
       StructuredLog("xlsb.writer.workbook_rel_skipped")
           .field("reason", std::string_view("target_part_absent"))
@@ -743,11 +785,18 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
   const bool emit_sst_part = !sst.empty();
 
-  auto plan_or = BuildEmissionPlan(workbook, emit_sst_part, dynamic_array.generate_part, &diagnostics);
+  auto plan_or =
+      BuildEmissionPlan(workbook, emit_sst_part, dynamic_array.generate_part, sheet_ranges.links.size(), &diagnostics);
   if (!plan_or) {
     return plan_or.error();
   }
   const EmissionPlan plan = plan_or.take();
+  const std::vector<const ExternalLinkRecord*> links = written_external_links(workbook);
+  std::vector<std::string> link_rel_ids;
+  link_rel_ids.reserve(links.size());
+  for (std::size_t i = 0; i < links.size(); ++i) {
+    link_rel_ids.push_back("rId" + std::to_string(sheet_count + i + 1U));
+  }
 
   ZipWriterGuard writer;
   if (!writer.init()) {
@@ -770,13 +819,13 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // discoverable through workbook relationships; BuildWorkbookRels emits a rel
   // for each part actually present so none dangle on reload.
   if (auto r = AddPart(writer.get(), "xl/_rels/workbook.bin.rels",
-                       BuildWorkbookRels(sheet_count, emit_sst_part, plan, workbook, &diagnostics));
+                       BuildWorkbookRels(sheet_count, emit_sst_part, plan, workbook, link_rel_ids, &diagnostics));
       !r) {
     return r.error();
   }
   // 4. xl/workbook.bin
   {
-    auto wb_bytes_or = BuildWorkbookBin(workbook, ordered_names, sheet_ranges, sheet_names);
+    auto wb_bytes_or = BuildWorkbookBin(workbook, ordered_names, sheet_ranges, sheet_names, link_rel_ids);
     if (!wb_bytes_or) {
       return wb_bytes_or.error();
     }
@@ -818,6 +867,17 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       if (auto r = AddPart(writer.get(), rels_path, sheet_rels); !r) {
         return r.error();
       }
+    }
+  }
+  // 5b. xl/externalLinks/externalLink<N>.bin and its rels, one per link, in
+  // the order `BrtSupBookSrc` lists them.
+  for (std::size_t i = 0; i < links.size(); ++i) {
+    const std::vector<std::uint8_t> link_bytes = build_external_link_bin(*links[i], sheet_ranges.links[i]);
+    if (auto r = AddPartBytes(writer.get(), external_link_part_path(i + 1U), link_bytes); !r) {
+      return r.error();
+    }
+    if (auto r = AddPart(writer.get(), ExternalLinkRelsPath(i + 1U), build_external_link_rels(*links[i])); !r) {
+      return r.error();
     }
   }
   // 6. xl/sharedStrings.bin (conditional)

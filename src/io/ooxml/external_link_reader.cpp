@@ -107,6 +107,7 @@ void DecodeExternalBook(const pugi::xml_node& book_node, ExternalBook* out) {
        sheet = sheet.next_sibling("sheetName")) {
     out->sheet_names.emplace_back(sheet.attribute("val").value());
   }
+  out->sheet_data.assign(out->sheet_names.size(), false);
   for (pugi::xml_node name = book_node.child("definedNames").child("definedName"); name;
        name = name.next_sibling("definedName")) {
     ExternalBookName entry;
@@ -119,6 +120,14 @@ void DecodeExternalBook(const pugi::xml_node& book_node, ExternalBook* out) {
     // reachable) and `#NAME?` (no such name), and Excel distinguishes
     // the two.
     ParseExternalRefersTo(name.attribute("refersTo").value(), *out, &entry);
+    // `sheetId` makes the name local to that sheet of the supporting book.
+    if (pugi::xml_attribute scope = name.attribute("sheetId"); scope) {
+      const std::uint32_t sheet_id = scope.as_uint(ExternalBook::kNoSheet);
+      if (sheet_id >= out->sheet_names.size()) {
+        continue;
+      }
+      entry.scope_sheet = sheet_id;
+    }
     out->names.push_back(std::move(entry));
   }
   for (pugi::xml_node data = book_node.child("sheetDataSet").child("sheetData"); data;
@@ -127,6 +136,10 @@ void DecodeExternalBook(const pugi::xml_node& book_node, ExternalBook* out) {
     if (sheet_id >= out->sheet_names.size()) {
       continue;
     }
+    // Excel writes `refreshError="1"` with no cells for a sheet it never
+    // read, which holds no more data than an absent `<sheetData>`.
+    const bool refresh_failed = data.attribute("refreshError").as_bool() && !data.child("row");
+    out->sheet_data[sheet_id] = out->sheet_data[sheet_id] || !refresh_failed;
     for (pugi::xml_node row = data.child("row"); row; row = row.next_sibling("row")) {
       for (pugi::xml_node cell = row.child("cell"); cell; cell = cell.next_sibling("cell")) {
         std::uint32_t cell_row = 0;
@@ -196,6 +209,7 @@ Expected<ExternalLinkLoadResult, Error> load_external_links(const ZipReader& zip
           if (pugi::xml_node book = link_root.child("externalBook"); book) {
             rec.kind = ExternalLinkRecord::Kind::kExternalBook;
             rec.body_rel_id = relationship_ref_id(book);
+            rec.absolute_rel_id = relationship_ref_id(book.child("xxl21:alternateUrls").child("xxl21:absoluteUrl"));
             DecodeExternalBook(book, &rec.book);
           } else if (pugi::xml_node ole = link_root.child("oleLink"); ole) {
             rec.kind = ExternalLinkRecord::Kind::kOleLink;
@@ -231,6 +245,10 @@ Expected<ExternalLinkLoadResult, Error> load_external_links(const ZipReader& zip
               continue;
             }
             const std::string_view rel_id = rel.attribute("Id").value();
+            if (!rec.absolute_rel_id.empty() && rel_id == rec.absolute_rel_id) {
+              rec.absolute_target = rel.attribute("Target").value();
+              continue;
+            }
             const bool id_match = !rec.body_rel_id.empty() && rel_id == rec.body_rel_id;
             if (rec.target.empty() || id_match) {
               rec.target = rel.attribute("Target").value();
@@ -244,7 +262,8 @@ Expected<ExternalLinkLoadResult, Error> load_external_links(const ZipReader& zip
               if (rec.body_rel_id.empty()) {
                 rec.body_rel_id = rel_id;
               }
-              if (id_match) {
+              // The absolute rel may follow the body rel, so keep scanning for it.
+              if (id_match && (rec.absolute_rel_id.empty() || !rec.absolute_target.empty())) {
                 break;
               }
             }

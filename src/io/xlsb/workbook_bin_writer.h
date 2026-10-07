@@ -1,8 +1,9 @@
 //
 // Writer of the `xl/workbook.bin` stream: workbook globals, the sheet
-// bundle, the `BrtExternSheet` table and the `BrtName` table. The name and
-// sheet-range tables are built once per workbook and shared with every
-// sheet's cell encoder so `ilbl` / `ixti` assignments stay consistent.
+// bundle, the supporting-book and `BrtExternSheet` tables and the `BrtName`
+// table. The name and sheet-range tables are built once per workbook and
+// shared with every sheet's cell encoder so `ilbl` / `ixti` assignments stay
+// consistent.
 
 #ifndef FORMULON_IO_XLSB_WORKBOOK_BIN_WRITER_H_
 #define FORMULON_IO_XLSB_WORKBOOK_BIN_WRITER_H_
@@ -37,14 +38,18 @@ void BuildOrderedNames(const Workbook& wb, std::vector<OrderedName>& ordered_nam
 NameTable BuildNameTableForScope(const Workbook& wb, const std::vector<OrderedName>& ordered_names,
                                  std::int32_t scope_sheet_id);
 
-/// Builds the `BrtExternSheet` table for the whole workbook.
+/// Builds the `BrtExternSheet` table for the whole workbook, with the
+/// external links its entries can name.
 Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const std::vector<std::string>& sheet_names);
 
-/// Emits the whole `xl/workbook.bin` record stream.
+/// Emits the whole `xl/workbook.bin` record stream. `link_rel_ids` holds
+/// the workbook relationship id of each external link part, in
+/// `sheet_ranges.links` order.
 Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
                                                             const std::vector<OrderedName>& ordered_names,
                                                             const SheetRangeTable& sheet_ranges,
-                                                            const std::vector<std::string>& sheet_names);
+                                                            const std::vector<std::string>& sheet_names,
+                                                            const std::vector<std::string>& link_rel_ids);
 
 }  // namespace xlsb
 }  // namespace io

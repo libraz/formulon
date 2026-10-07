@@ -13,10 +13,10 @@ namespace formulon {
 namespace parser {
 
 using detail::DecodeDigitRunClamped;
+using detail::HasWorkbookExtension;
 using detail::IsAsciiDigit;
 using detail::IsAsciiLetter;
 using detail::kMaxColumn;
-using detail::kMaxExternalBookIndex;
 using detail::kMaxRow;
 using detail::SpanRange;
 
@@ -183,30 +183,102 @@ AstNode* Parser::make_whole_axis_ref(const Reference& lhs, const Reference& rhs,
 // Sheet-qualified refs
 // ---------------------------------------------------------------------------
 
-bool Parser::split_external_qualifier(std::string_view text, std::uint32_t* out_book, std::string_view* out_sheet) {
-  if (text.empty() || text.front() != '[') {
+bool Parser::defined_name_at(std::size_t offset) const noexcept {
+  if (peek_kind_at(offset) != TokenKind::Ident) {
     return false;
   }
-  const std::size_t close = text.find(']');
-  if (close == std::string_view::npos || close == 1U) {
-    return false;
+  if (peek_kind_at(offset + 1) == TokenKind::Colon && peek_kind_at(offset + 2) == TokenKind::Ident) {
+    Reference lhs;
+    Reference rhs;
+    return !(decode_full_col_endpoint(peek_at(offset), &lhs) && decode_full_col_endpoint(peek_at(offset + 2), &rhs));
   }
-  std::uint64_t book = 0;
-  for (std::size_t i = 1; i < close; ++i) {
-    if (!IsAsciiDigit(text[i])) {
-      return false;
-    }
-    book = book * 10U + static_cast<std::uint64_t>(text[i] - '0');
-    if (book > kMaxExternalBookIndex) {
-      return false;
-    }
-  }
-  *out_book = static_cast<std::uint32_t>(book);
-  *out_sheet = text.substr(close + 1U);
   return true;
 }
 
-AstNode* Parser::parse_external_ref_tail(std::uint32_t book, std::string_view sheet, TextRange start_range) {
+bool Parser::sheet_span_end_at(std::size_t offset) const noexcept {
+  const Token& tok = peek_at(offset);
+  if (tok.kind != TokenKind::Ident && tok.kind != TokenKind::SheetName && tok.kind != TokenKind::Bool) {
+    return false;
+  }
+  const std::string_view name = tok.kind == TokenKind::SheetName ? tok.text : tok.lexeme;
+  return !name.empty() && !IsAsciiDigit(name.front());
+}
+
+AstNode* Parser::parse_quoted_qualifier_ref(SyncContext ctx) {
+  const Token& tok = peek();
+  const std::string_view text = tok.text;
+  const std::size_t open = text.rfind('[');
+  const bool has_separator = text.find_first_of("/\\") != std::string_view::npos;
+  auto reject = [&]() {
+    record_error_with_token(ParseErrorCode::InvalidReference, tok.range, tok.lexeme);
+    advance();
+    skip_to_sync(ctx);
+    return make_recovery_placeholder(tok.range);
+  };
+  auto finish = [&](AstNode* n) {
+    if (n != nullptr) {
+      return n;
+    }
+    skip_to_sync(ctx);
+    return make_recovery_placeholder(tok.range);
+  };
+
+  // `'<path>[Book.xlsx]Sheet'` or the 3-D `'<path>[Book.xlsx]S1:S2'`. The
+  // last `[` opens the book, so a directory may itself hold brackets or a
+  // drive colon (`'C:\x\[Book.xlsx]Sheet'`); only the sheet part splits on
+  // `:`.
+  if (open != std::string_view::npos) {
+    const std::size_t close = text.find(']', open);
+    if (close == std::string_view::npos || close == open + 1U) {
+      return reject();
+    }
+    std::string_view sheet = text.substr(close + 1U);
+    std::string_view sheet_end;
+    if (const std::size_t colon = sheet.find(':'); colon != std::string_view::npos) {
+      sheet_end = sheet.substr(colon + 1U);
+      sheet = sheet.substr(0, colon);
+      if (sheet_end.empty()) {
+        return reject();
+      }
+    }
+    if (sheet.empty() || sheet.find(']') != std::string_view::npos) {
+      return reject();
+    }
+    advance();
+    return finish(parse_external_ref_tail(text.substr(0, open), text.substr(open + 1U, close - open - 1U), sheet,
+                                          sheet_end, tok.range));
+  }
+
+  // `'<path>Book.xlsx'!Name`: a book-scope name of another workbook, told
+  // apart from a sheet-local name by a directory or a workbook extension.
+  if (peek_kind_at(1) == TokenKind::Bang && defined_name_at(2) && (has_separator || HasWorkbookExtension(text))) {
+    const std::size_t split = text.find_last_of("/\\");
+    const std::size_t book_begin = split == std::string_view::npos ? 0U : split + 1U;
+    if (book_begin == text.size()) {
+      return reject();
+    }
+    advance();
+    return finish(parse_external_ref_tail(text.substr(0, book_begin), text.substr(book_begin), {}, {}, tok.range));
+  }
+
+  // A sheet name cannot hold a path separator, and a directory with no
+  // bracketed book names no sheet to take cells from.
+  if (has_separator) {
+    return reject();
+  }
+
+  // 3-D reference whose first endpoint is a quoted sheet name
+  // (`'My Sheet':Sheet3!A1`).
+  if (peek_kind_at(1) == TokenKind::Colon && sheet_span_end_at(2) && peek_kind_at(3) == TokenKind::Bang) {
+    advance();
+    return finish(parse_3d_ref(text, tok.range));
+  }
+  advance();
+  return finish(parse_sheet_qualified_ref(text, /*quoted=*/true, tok.range));
+}
+
+AstNode* Parser::parse_external_ref_tail(std::string_view path, std::string_view book, std::string_view sheet,
+                                         std::string_view sheet_end, TextRange start_range) {
   if (peek_kind() != TokenKind::Bang) {
     record_error_with_token(ParseErrorCode::UnexpectedToken, peek().range, peek().lexeme);
     return nullptr;
@@ -215,23 +287,20 @@ AstNode* Parser::parse_external_ref_tail(std::uint32_t book, std::string_view sh
 
   // `[0]` is the formula's own workbook, which Excel only writes in the
   // name form (`[0]!Name`, the storage spelling of `Book!Name`).
-  if (book == 0 && !sheet.empty()) {
+  if (book == "0" && path.empty() && !sheet.empty()) {
     record_error_with_token(ParseErrorCode::InvalidReference, start_range, "[0]");
     return nullptr;
   }
 
-  // `[1]!Name` — a book-scope defined name in the supporting workbook.
-  // The sheet-qualified spelling of an external name is deliberately not
-  // accepted here: the external-link cache records book-scope names only,
-  // so binding one would mean guessing which sheet's namespace it came
-  // from.
-  if (sheet.empty()) {
+  // `Book.xlsx!Name` / `[0]!Name`: a book-scope defined name, or with a
+  // single sheet (`[Book.xlsx]Data!Rate`) one local to that sheet.
+  if (sheet.empty() || (sheet_end.empty() && defined_name_at(0))) {
     if (peek_kind() != TokenKind::Ident) {
       record_error_with_token(ParseErrorCode::InvalidReference, peek().range, peek().lexeme);
       return nullptr;
     }
     const Token& name = advance();
-    AstNode* node = make_external_name_ref(arena_, book, name.lexeme);
+    AstNode* node = make_external_name_ref(arena_, path, book, sheet, name.lexeme);
     if (node == nullptr) {
       return nullptr;
     }
@@ -239,40 +308,20 @@ AstNode* Parser::parse_external_ref_tail(std::uint32_t book, std::string_view sh
     return node;
   }
 
-  // `[1]Data!A1` and `[1]Data!A1:A3`. Whole-axis tails (`[1]Data!A:A`)
-  // are not accepted: Excel writes a cross-workbook reference against the
-  // cells it cached, and it caches no whole column, so the rectangle such
-  // a tail declares has no cached content to name.
-  if (peek_kind() != TokenKind::CellRef) {
-    record_error_with_token(ParseErrorCode::InvalidReference, peek().range, peek().lexeme);
-    return nullptr;
-  }
-  const Token& cell = advance();
+  // A cell, a rectangle, or a whole column / row (`[Book.xlsx]Data!A:A`),
+  // on one sheet or across the span.
   Reference first;
-  if (!decode_cellref_lexeme(cell.lexeme, &first)) {
-    record_error_with_token(ParseErrorCode::InvalidReference, cell.range, cell.lexeme);
+  Reference last;
+  bool is_range = false;
+  TextRange tail_range;
+  if (!parse_3d_ref_tail(&first, &last, &is_range, &tail_range)) {
     return nullptr;
   }
-  if (peek_kind() == TokenKind::Colon && peek_kind_at(1) == TokenKind::CellRef) {
-    advance();  // Colon
-    const Token& tail = advance();
-    Reference last;
-    if (!decode_cellref_lexeme(tail.lexeme, &last)) {
-      record_error_with_token(ParseErrorCode::InvalidReference, tail.range, tail.lexeme);
-      return nullptr;
-    }
-    AstNode* range_node = make_external_ref(arena_, book, sheet, first, last, /*is_range=*/true);
-    if (range_node == nullptr) {
-      return nullptr;
-    }
-    range_node->set_range(SpanRange(start_range, tail.range));
-    return range_node;
-  }
-  AstNode* node = make_external_ref(arena_, book, sheet, first, first, /*is_range=*/false);
+  AstNode* node = make_external_ref(arena_, path, book, sheet, sheet_end, first, last, is_range);
   if (node == nullptr) {
     return nullptr;
   }
-  node->set_range(SpanRange(start_range, cell.range));
+  node->set_range(SpanRange(start_range, tail_range));
   return node;
 }
 

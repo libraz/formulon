@@ -1232,6 +1232,10 @@ FM_API fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet_ind
  * `fm_workbook_cell_at` reports it. A cell that holds no formula (a literal,
  * a spill phantom, or no cell at all) yields `""`.
  *
+ * The text is returned as entered. A formula loaded from a file shows the
+ * formula-bar spelling: external references name the book (`[Book.xlsx]Sheet1!A1`),
+ * never its `[N]` index.
+ *
  * `*out_formula` is a read-scratch-backed view: valid until the next
  * successful scratch-backed read, any mutation, or handle destruction.
  *
@@ -1248,7 +1252,9 @@ FM_API fm_status_t fm_workbook_get_formula(const fm_workbook_t* wb, size_t sheet
  *        relative to that cell.
  *
  * The text carries no leading `=`, and follows the A1 formatter's spacing
- * and case rules. A cell that holds no formula yields `""`. Lifetime as
+ * and case rules. Sheet and external qualifiers are quoted as a whole
+ * (`'[Book.xlsx]My Sheet'!R1C1`) only when the path, book or sheet name needs
+ * it; a 3-D external reference with no path stays unquoted. A cell that holds no formula yields `""`. Lifetime as
  * `fm_workbook_get_formula`.
  *
  * A formula loaded from a file that does not parse is kept verbatim: it
@@ -6404,8 +6410,8 @@ FM_API fm_status_t fm_sheet_get_effective_style(const fm_workbook_t* wb, size_t 
  * `rel_id`, `part_path`, and `target` are NUL-terminated UTF-8
  * model-backed views into the workbook's external-links table; they remain
  * valid until the workbook is destroyed or the external-links table is
- * replaced (currently only the OOXML reader replaces it; there is no
- * mutator on this surface). `target_external` follows the wide-POD
+ * replaced (the OOXML reader replaces it; entering a formula that names a
+ * new book appends to it). `target_external` follows the wide-POD
  * convention used elsewhere on this surface.
  *
  * `index` is the 1-based position in `<externalReferences>` document
@@ -6429,7 +6435,11 @@ typedef struct {
  *
  * Always succeeds for a non-NULL workbook. Returns `0` for fresh
  * workbooks and any package whose source archive had no
- * `<externalReferences>` block.
+ * `<externalReferences>` block. A formula, defined name, conditional-format
+ * rule or data validation entered through this API that names an
+ * unregistered book (bracket or path spelling, e.g. `[Book.xlsx]Sheet1!A1`)
+ * adds a record at the end without renumbering the others; a book already
+ * present, in any letter case, adds none.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`.

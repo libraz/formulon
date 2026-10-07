@@ -35,9 +35,9 @@ struct ProbeRow {
   const char* r1c1;
 };
 
-// The parser only reads cross-workbook references by book index, so the
-// probe's `[o7_ext.xlsx]` rows are entered (and expected) as `[1]`. The
-// external whole-column row does not parse and is built by hand below.
+// The probe's `[o7_ext.xlsx]` rows are entered (and expected) with the book
+// spelled `[1]`, which reads the same way; the external whole-column row is
+// also built by hand below.
 constexpr ProbeRow kProbeRows[] = {
     {"A1", 4, 2, "R[-4]C[-2]"},
     {"$A$1", 4, 2, "R1C1"},
@@ -121,7 +121,7 @@ TEST(AstFormatR1C1, ExternalWholeColumn) {
   Reference col;
   col.col = 0;
   col.is_full_col = true;
-  const AstNode* node = make_external_ref(arena, 1, "Sheet1", col, col, false);
+  const AstNode* node = make_external_ref(arena, {}, "1", "Sheet1", {}, col, col, false);
   EXPECT_EQ(format_formula_r1c1(*node, 4, 2), "[1]Sheet1!C[-2]");
 }
 

@@ -381,8 +381,11 @@ class Shapes {
         if (parser::is_self_book_name_ref(node)) {
           return name_shape(node);
         }
-        return node.as_external_ref_is_range() || !node.as_external_ref_name().empty() ? Shape::kReference
-                                                                                       : Shape::kScalar;
+        return node.as_external_ref_is_range() || !node.as_external_ref_name().empty() ||
+                       !node.as_external_ref_sheet_end().empty() || node.as_external_ref_cell().is_full_col ||
+                       node.as_external_ref_cell().is_full_row
+                   ? Shape::kReference
+                   : Shape::kScalar;
       case NodeKind::StructuredRef:
         return node.as_structured_ref_modifier() == parser::StructuredRefModifier::At ? Shape::kScalar
                                                                                       : Shape::kReference;
@@ -871,7 +874,10 @@ class Encoder {
           return emit_self_book_name_ref(node.as_external_ref_name(),
                                          cls(measured_calls_ && shapes_.of(node) != Shape::kScalar));
         }
-        return unsupported_node("ExternalRef");
+        // A name's class follows a local name's; a cell's or an area's a local reference's.
+        return emit_external_ref(
+            node, cls(node.as_external_ref_name().empty() ? shapes_.of(node) != Shape::kScalar : measured_calls_),
+            promote);
       case parser::NodeKind::StructuredRef:
         return unsupported_node("StructuredRef");
       case parser::NodeKind::SpillRef:
@@ -1263,6 +1269,68 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
+  /// Encodes a cross-workbook reference through the XTI naming its link: a
+  /// defined name as `PtgNameX` into the link part's name list, a cell or
+  /// rectangle as `PtgRef3d` / `PtgArea3d` over the link's sheets. A span
+  /// across sheets keeps reference class, as a local 3-D one does.
+  Expected<void, Error> emit_external_ref(const parser::AstNode& node, std::uint8_t cls, bool promote) {
+    const std::uint32_t position = external_link_position(sheet_ranges_, node);
+    if (position == 0U) {
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                        "xlsb encoder: cross-workbook reference names no saved link",
+                        std::string("context=xlsb_ptg_writer book=") + std::string(node.as_external_ref_book()));
+    }
+    const XlsbLinkTables& link = sheet_ranges_.links[position - 1U];
+    if (const std::string_view name = node.as_external_ref_name(); !name.empty()) {
+      const std::uint32_t ilbl = external_name_ilbl(link, name);
+      if (ilbl == 0U) {
+        return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                          "xlsb encoder: external name not in its link's name list",
+                          std::string("context=xlsb_ptg_writer name=") + std::string(name));
+      }
+      ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(kXtiNoSheet, kXtiNoSheet, position));
+      emit_u8(out_, ClassedPtg(0x39, cls));  // PtgNameX
+      emit_u16(out_, ixti);
+      emit_u32(out_, ilbl);
+      return Expected<void, Error>::Ok();
+    }
+    const std::string_view sheet_end = node.as_external_ref_sheet_end();
+    const int first = external_sheet_index(link, node.as_external_ref_sheet());
+    const int last = sheet_end.empty() ? first : external_sheet_index(link, sheet_end);
+    if (first < 0 || last < 0) {
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                        "xlsb encoder: external sheet not in its link's sheet list",
+                        std::string("context=xlsb_ptg_writer sheet=") + std::string(node.as_external_ref_sheet()));
+    }
+    ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(first, last, position));
+    if (!sheet_end.empty()) {
+      cls = promote ? kPtgValueClass : kPtgReferenceClass;
+    }
+    parser::Reference a = node.as_external_ref_cell();
+    parser::Reference b = node.as_external_ref_is_range() ? node.as_external_ref_cell_end() : a;
+    if (!node.as_external_ref_is_range() && !a.is_full_col && !a.is_full_row) {
+      emit_u8(out_, ClassedPtg(0x3A, cls));  // PtgRef3d
+      emit_u16(out_, ixti);
+      emit_loc(out_, a);
+      return Expected<void, Error>::Ok();
+    }
+    // A whole column or row is the grid-spanning area, its spanned axis absolute.
+    if (a.is_full_col) {
+      a.row = 0;
+      b.row = 1048575U;
+      a.row_abs = b.row_abs = true;
+    } else if (a.is_full_row) {
+      a.col = 0;
+      b.col = 16383U;
+      a.col_abs = b.col_abs = true;
+    }
+    a.is_full_col = a.is_full_row = b.is_full_col = b.is_full_row = false;
+    emit_u8(out_, ClassedPtg(0x3B, cls));  // PtgArea3d
+    emit_u16(out_, ixti);
+    emit_area(out_, a, b);
+    return Expected<void, Error>::Ok();
+  }
+
   /// Resolves `sheet`'s single-sheet-qualified `ixti` (stored in
   /// `sheet_ranges_` as `(itab, itab)`), so single- and multi-sheet
   /// qualified references share the same `ixti` numbering space. See
@@ -1280,8 +1348,8 @@ class Encoder {
     return resolve_range_ixti(itab, itab);
   }
 
-  Expected<std::uint16_t, Error> resolve_range_ixti(int itab_first, int itab_last) {
-    const int ixti = try_resolve_range_ixti(itab_first, itab_last);
+  Expected<std::uint16_t, Error> resolve_range_ixti(int itab_first, int itab_last, std::uint32_t book = 0U) {
+    const int ixti = try_resolve_range_ixti(itab_first, itab_last, book);
     if (ixti < 0) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: sheet range not pre-registered",
                         "context=xlsb_ptg_writer");
@@ -1292,10 +1360,11 @@ class Encoder {
   /// Non-`Expected` variant for callers (the `PtgArea` fast path) that
   /// fall back to a different encoding on a lookup miss rather than
   /// failing outright. Returns -1 when `(itab_first, itab_last)` is not
-  /// in `sheet_ranges_`.
-  int try_resolve_range_ixti(int itab_first, int itab_last) const {
-    for (std::size_t i = 0; i < sheet_ranges_.size(); ++i) {
-      if (sheet_ranges_[i].first == itab_first && sheet_ranges_[i].second == itab_last) {
+  /// in `sheet_ranges_` for `book` (0: this workbook).
+  int try_resolve_range_ixti(int itab_first, int itab_last, std::uint32_t book = 0U) const {
+    const XtiEntry want{book, itab_first, itab_last};
+    for (std::size_t i = 0; i < sheet_ranges_.xti.size(); ++i) {
+      if (sheet_ranges_.xti[i] == want) {
         return static_cast<int>(i);
       }
     }

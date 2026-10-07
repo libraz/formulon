@@ -43,7 +43,7 @@ constexpr std::string_view kPrintTitlesName = "_xlnm.Print_Titles";
 /// defined-name formula, quoting per Excel's rules.
 std::string sheet_qualifier(std::string_view sheet_name) {
   std::string out;
-  if (!formulon::parser::sheet_name_needs_quoting(sheet_name)) {
+  if (!formulon::parser::local_sheet_needs_quoting_a1(sheet_name)) {
     out.append(sheet_name);
     out.push_back('!');
     return out;
