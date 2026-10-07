@@ -33,15 +33,6 @@ fm_cfvo_t PullCfvo(CheckedSpecReader& reader, const Napi::Object& spec, formulon
   return out;
 }
 
-Napi::Object CfColorToJs(Napi::Env env, fm_cf_color_t color) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("r", Napi::Number::New(env, color.r));
-  out.Set("g", Napi::Number::New(env, color.g));
-  out.Set("b", Napi::Number::New(env, color.b));
-  out.Set("a", Napi::Number::New(env, color.a));
-  return out;
-}
-
 Napi::Object CfvoToJs(Napi::Env env, const fm_cfvo_t& cfvo) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("type", Napi::Number::New(env, static_cast<uint32_t>(cfvo.type)));
@@ -185,7 +176,7 @@ Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
       Napi::Array colors = Napi::Array::New(env, rule.color_scale_count);
       for (uint32_t j = 0; j < rule.color_scale_count; ++j) {
         thresholds.Set(j, CfvoToJs(env, rule.color_scale_thresholds[j]));
-        colors.Set(j, CfColorToJs(env, rule.color_scale_colors[j]));
+        colors.Set(j, TranslateCfColor(env, rule.color_scale_colors[j]));
       }
       color_scale.Set("thresholds", thresholds);
       color_scale.Set("colors", colors);
@@ -195,7 +186,7 @@ Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
       Napi::Object data_bar = Napi::Object::New(env);
       data_bar.Set("min", CfvoToJs(env, rule.data_bar_min));
       data_bar.Set("max", CfvoToJs(env, rule.data_bar_max));
-      data_bar.Set("fill", CfColorToJs(env, rule.data_bar_fill));
+      data_bar.Set("fill", TranslateCfColor(env, rule.data_bar_fill));
       data_bar.Set("showValue", Napi::Boolean::New(env, rule.data_bar_show_value != 0));
       data_bar.Set("minLengthPct", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_min_length_pct)));
       data_bar.Set("maxLengthPct", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_max_length_pct)));
@@ -210,16 +201,16 @@ Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
         data_bar.Set("axisPosition", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_axis_position)));
       }
       if (rule.data_bar_negative_fill_engaged != 0) {
-        data_bar.Set("negativeFill", CfColorToJs(env, rule.data_bar_negative_fill));
+        data_bar.Set("negativeFill", TranslateCfColor(env, rule.data_bar_negative_fill));
       }
       if (rule.data_bar_border_engaged != 0) {
-        data_bar.Set("border", CfColorToJs(env, rule.data_bar_border));
+        data_bar.Set("border", TranslateCfColor(env, rule.data_bar_border));
       }
       if (rule.data_bar_negative_border_engaged != 0) {
-        data_bar.Set("negativeBorder", CfColorToJs(env, rule.data_bar_negative_border));
+        data_bar.Set("negativeBorder", TranslateCfColor(env, rule.data_bar_negative_border));
       }
       if (rule.data_bar_axis_color_engaged != 0) {
-        data_bar.Set("axisColor", CfColorToJs(env, rule.data_bar_axis_color));
+        data_bar.Set("axisColor", TranslateCfColor(env, rule.data_bar_axis_color));
       }
       data_bar.Set("direction", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_direction)));
       item.Set("dataBar", data_bar);
