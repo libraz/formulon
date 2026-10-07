@@ -106,21 +106,8 @@ Napi::Value Workbook::ClearMerges(const Napi::CallbackInfo& info) {
   return InvokeSheetOp(info, handle_, &fm_sheet_clear_merges);
 }
 
-namespace {
-
-Napi::Object MergeToJs(Napi::Env env, const fm_merge_range& m) {
-  Napi::Object item = Napi::Object::New(env);
-  item.Set("firstRow", Napi::Number::New(env, m.first_row));
-  item.Set("lastRow", Napi::Number::New(env, m.last_row));
-  item.Set("firstCol", Napi::Number::New(env, m.first_col));
-  item.Set("lastCol", Napi::Number::New(env, m.last_col));
-  return item;
-}
-
-}  // namespace
-
 Napi::Value Workbook::GetMerges(const Napi::CallbackInfo& info) {
-  return SheetListResult(info, handle_, &fm_sheet_get_merge_count, &fm_sheet_get_merge_at, &MergeToJs);
+  return SheetListResult(info, handle_, &fm_sheet_get_merge_count, &fm_sheet_get_merge_at, &RangeToJs);
 }
 
 Napi::Value Workbook::GetMergesInRange(const Napi::CallbackInfo& info) {
@@ -147,7 +134,7 @@ Napi::Value Workbook::GetMergesInRange(const Napi::CallbackInfo& info) {
     return FinishListResult(env, arr, rc);
   }
   for (uint32_t i = 0; i < total; ++i) {
-    arr.Set(i, MergeToJs(env, merges[i]));
+    arr.Set(i, RangeToJs(env, merges[i]));
   }
   return FinishListResult(env, arr, 0);
 }
@@ -342,7 +329,7 @@ Napi::Object ValidationToJs(Napi::Env env, const fm_data_validation& v) {
   Napi::Object item = Napi::Object::New(env);
   Napi::Array ranges = Napi::Array::New(env);
   for (uint32_t r = 0; r < v.range_count; ++r) {
-    ranges.Set(r, MergeToJs(env, v.ranges[r]));
+    ranges.Set(r, RangeToJs(env, v.ranges[r]));
   }
   item.Set("ranges", ranges);
   item.Set("type", Napi::Number::New(env, v.type));
@@ -454,10 +441,6 @@ namespace {
 
 constexpr uint32_t kAbsentDxfId = UINT32_MAX;
 
-bool PullString(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, std::string* out) {
-  return reader.String(spec, key, out);
-}
-
 bool PullRange(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, fm_merge_range* out) {
   *out = fm_merge_range{};
   Napi::Object object;
@@ -467,73 +450,61 @@ bool PullRange(CheckedSpecReader& reader, const Napi::Object& spec, const char* 
   return ReadMergeRange(reader, object, out);
 }
 
-Napi::Value CStr(Napi::Env env, const char* s) {
-  return Napi::String::New(env, s != nullptr ? s : "");
-}
-
-Napi::Value Num(Napi::Env env, double v) {
-  return Napi::Number::New(env, v);
-}
-
-Napi::Value Bool(Napi::Env env, int32_t v) {
-  return Napi::Boolean::New(env, v != 0);
-}
-
 Napi::Object FilterColumnToJs(Napi::Env env, const fm_filter_column& c) {
   Napi::Object o = Napi::Object::New(env);
-  o.Set("colId", Num(env, c.col_id));
-  o.Set("hiddenButton", Bool(env, c.hidden_button));
-  o.Set("showButton", Bool(env, c.show_button));
-  o.Set("kind", Num(env, c.kind));
-  o.Set("filterBlank", Bool(env, c.filter_blank));
+  o.Set("colId", JsNumber(env, c.col_id));
+  o.Set("hiddenButton", JsBool(env, c.hidden_button));
+  o.Set("showButton", JsBool(env, c.show_button));
+  o.Set("kind", JsNumber(env, c.kind));
+  o.Set("filterBlank", JsBool(env, c.filter_blank));
   Napi::Array values = Napi::Array::New(env, c.value_count);
   for (uint32_t i = 0; i < c.value_count; ++i) {
-    values.Set(i, CStr(env, c.values[i]));
+    values.Set(i, JsString(env, c.values[i]));
   }
   o.Set("values", values);
   Napi::Array groups = Napi::Array::New(env, c.date_group_count);
   for (uint32_t i = 0; i < c.date_group_count; ++i) {
     const fm_date_group_item& g = c.date_groups[i];
     Napi::Object item = Napi::Object::New(env);
-    item.Set("year", Num(env, g.year));
-    item.Set("month", Num(env, g.month));
-    item.Set("day", Num(env, g.day));
-    item.Set("hour", Num(env, g.hour));
-    item.Set("minute", Num(env, g.minute));
-    item.Set("second", Num(env, g.second));
-    item.Set("grouping", Num(env, g.grouping));
+    item.Set("year", JsNumber(env, g.year));
+    item.Set("month", JsNumber(env, g.month));
+    item.Set("day", JsNumber(env, g.day));
+    item.Set("hour", JsNumber(env, g.hour));
+    item.Set("minute", JsNumber(env, g.minute));
+    item.Set("second", JsNumber(env, g.second));
+    item.Set("grouping", JsNumber(env, g.grouping));
     groups.Set(i, item);
   }
   o.Set("dateGroups", groups);
-  o.Set("customAnd", Bool(env, c.custom_and));
-  o.Set("customCount", Num(env, c.custom_count));
-  o.Set("op1", Num(env, c.op1));
-  o.Set("val1", CStr(env, c.val1));
-  o.Set("op2", Num(env, c.op2));
-  o.Set("val2", CStr(env, c.val2));
-  o.Set("top", Bool(env, c.top));
-  o.Set("percent", Bool(env, c.percent));
-  o.Set("hasFilterVal", Bool(env, c.has_filter_val));
-  o.Set("topVal", Num(env, c.top_val));
-  o.Set("filterVal", Num(env, c.filter_val));
-  o.Set("dynamicType", Num(env, c.dynamic_type));
-  o.Set("hasDynVal", Bool(env, c.has_dyn_val));
-  o.Set("hasDynMaxVal", Bool(env, c.has_dyn_max_val));
-  o.Set("dynVal", Num(env, c.dyn_val));
-  o.Set("dynMaxVal", Num(env, c.dyn_max_val));
-  o.Set("valIso", CStr(env, c.val_iso));
-  o.Set("maxValIso", CStr(env, c.max_val_iso));
-  o.Set("dxfId", Num(env, c.dxf_id));
-  o.Set("cellColor", Bool(env, c.cell_color));
-  o.Set("iconSet", Num(env, c.icon_set));
-  o.Set("iconId", Num(env, c.icon_id));
-  o.Set("hasIconId", Bool(env, c.has_icon_id));
+  o.Set("customAnd", JsBool(env, c.custom_and));
+  o.Set("customCount", JsNumber(env, c.custom_count));
+  o.Set("op1", JsNumber(env, c.op1));
+  o.Set("val1", JsString(env, c.val1));
+  o.Set("op2", JsNumber(env, c.op2));
+  o.Set("val2", JsString(env, c.val2));
+  o.Set("top", JsBool(env, c.top));
+  o.Set("percent", JsBool(env, c.percent));
+  o.Set("hasFilterVal", JsBool(env, c.has_filter_val));
+  o.Set("topVal", JsNumber(env, c.top_val));
+  o.Set("filterVal", JsNumber(env, c.filter_val));
+  o.Set("dynamicType", JsNumber(env, c.dynamic_type));
+  o.Set("hasDynVal", JsBool(env, c.has_dyn_val));
+  o.Set("hasDynMaxVal", JsBool(env, c.has_dyn_max_val));
+  o.Set("dynVal", JsNumber(env, c.dyn_val));
+  o.Set("dynMaxVal", JsNumber(env, c.dyn_max_val));
+  o.Set("valIso", JsString(env, c.val_iso));
+  o.Set("maxValIso", JsString(env, c.max_val_iso));
+  o.Set("dxfId", JsNumber(env, c.dxf_id));
+  o.Set("cellColor", JsBool(env, c.cell_color));
+  o.Set("iconSet", JsNumber(env, c.icon_set));
+  o.Set("iconId", JsNumber(env, c.icon_id));
+  o.Set("hasIconId", JsBool(env, c.has_icon_id));
   return o;
 }
 
 Napi::Object AutoFilterToJs(Napi::Env env, const fm_auto_filter& f) {
   Napi::Object o = Napi::Object::New(env);
-  o.Set("range", MergeToJs(env, f.range));
+  o.Set("range", RangeToJs(env, f.range));
   Napi::Array columns = Napi::Array::New(env, f.column_count);
   for (uint32_t i = 0; i < f.column_count; ++i) {
     columns.Set(i, FilterColumnToJs(env, f.columns[i]));
@@ -544,23 +515,23 @@ Napi::Object AutoFilterToJs(Napi::Env env, const fm_auto_filter& f) {
     return o;
   }
   Napi::Object sort = Napi::Object::New(env);
-  sort.Set("ref", MergeToJs(env, f.sort_ref));
-  sort.Set("columnSort", Bool(env, f.column_sort));
-  sort.Set("caseSensitive", Bool(env, f.case_sensitive));
-  sort.Set("sortMethod", Num(env, f.sort_method));
+  sort.Set("ref", RangeToJs(env, f.sort_ref));
+  sort.Set("columnSort", JsBool(env, f.column_sort));
+  sort.Set("caseSensitive", JsBool(env, f.case_sensitive));
+  sort.Set("sortMethod", JsNumber(env, f.sort_method));
   Napi::Array conditions = Napi::Array::New(env, f.condition_count);
   for (uint32_t i = 0; i < f.condition_count; ++i) {
     const fm_sort_condition& c = f.conditions[i];
     Napi::Object item = Napi::Object::New(env);
-    item.Set("ref", MergeToJs(env, c.ref));
-    item.Set("descending", Bool(env, c.descending));
-    item.Set("sortBy", Num(env, c.sort_by));
-    item.Set("customList", CStr(env, c.custom_list));
-    item.Set("dxfId", Num(env, c.dxf_id));
-    item.Set("hasDxfId", Bool(env, c.has_dxf_id));
-    item.Set("iconSet", Num(env, c.icon_set));
-    item.Set("iconId", Num(env, c.icon_id));
-    item.Set("hasIconId", Bool(env, c.has_icon_id));
+    item.Set("ref", RangeToJs(env, c.ref));
+    item.Set("descending", JsBool(env, c.descending));
+    item.Set("sortBy", JsNumber(env, c.sort_by));
+    item.Set("customList", JsString(env, c.custom_list));
+    item.Set("dxfId", JsNumber(env, c.dxf_id));
+    item.Set("hasDxfId", JsBool(env, c.has_dxf_id));
+    item.Set("iconSet", JsNumber(env, c.icon_set));
+    item.Set("iconId", JsNumber(env, c.icon_id));
+    item.Set("hasIconId", JsBool(env, c.has_icon_id));
     conditions.Set(i, item);
   }
   sort.Set("conditions", conditions);
@@ -643,11 +614,11 @@ void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoF
   c.custom_count = reader.I32(spec, "customCount", 0);
   c.op1 = reader.I32(spec, "op1", 0);
   std::string val1;
-  PullString(reader, spec, "val1", &val1);
+  reader.String(spec, "val1", &val1);
   c.val1 = in.Keep(std::move(val1));
   c.op2 = reader.I32(spec, "op2", 0);
   std::string val2;
-  PullString(reader, spec, "val2", &val2);
+  reader.String(spec, "val2", &val2);
   c.val2 = in.Keep(std::move(val2));
   c.top = reader.Bool(spec, "top", false) ? 1 : 0;
   c.percent = reader.Bool(spec, "percent", false) ? 1 : 0;
@@ -661,8 +632,8 @@ void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoF
   c.dyn_max_val = reader.Double(spec, "dynMaxVal", 0.0);
   std::string val_iso;
   std::string max_val_iso;
-  PullString(reader, spec, "valIso", &val_iso);
-  PullString(reader, spec, "maxValIso", &max_val_iso);
+  reader.String(spec, "valIso", &val_iso);
+  reader.String(spec, "maxValIso", &max_val_iso);
   c.val_iso = in.Keep(std::move(val_iso));
   c.max_val_iso = in.Keep(std::move(max_val_iso));
   c.dxf_id = reader.U32(spec, "dxfId", kAbsentDxfId);
@@ -678,7 +649,7 @@ void ReadSortCondition(CheckedSpecReader& reader, const Napi::Object& spec, Auto
   c.descending = reader.Bool(spec, "descending", false) ? 1 : 0;
   c.sort_by = reader.I32(spec, "sortBy", 0);
   std::string custom_list;
-  PullString(reader, spec, "customList", &custom_list);
+  reader.String(spec, "customList", &custom_list);
   c.custom_list = in.Keep(std::move(custom_list));
   c.dxf_id = reader.U32(spec, "dxfId", kAbsentDxfId);
   c.has_dxf_id = reader.Bool(spec, "hasDxfId", false) ? 1 : 0;
@@ -761,7 +732,7 @@ Napi::Value GetAutoFilterImpl(Napi::Env env, const fm_workbook_t* wb, bool table
 
 Napi::Value EvaluateAutoFilterImpl(Napi::Env env, const fm_workbook_t* wb, bool table, size_t idx) {
   Napi::Object out = Napi::Object::New(env);
-  out.Set("firstRow", Num(env, 0));
+  out.Set("firstRow", JsNumber(env, 0));
   out.Set("match", Napi::Array::New(env));
   auto call = [&](uint8_t* buf, size_t cap, size_t* len, uint32_t* first) {
     return table ? fm_table_evaluate_auto_filter(wb, idx, buf, cap, len, first)
@@ -783,7 +754,7 @@ Napi::Value EvaluateAutoFilterImpl(Napi::Env env, const fm_workbook_t* wb, bool 
     match.Set(static_cast<uint32_t>(i), Napi::Boolean::New(env, flags[i] != 0));
   }
   out.Set("status", MakeOkStatus(env));
-  out.Set("firstRow", Num(env, first));
+  out.Set("firstRow", JsNumber(env, first));
   out.Set("match", match);
   return out;
 }
@@ -792,7 +763,7 @@ Napi::Value EvaluateAutoFilterImpl(Napi::Env env, const fm_workbook_t* wb, bool 
 Napi::Object EmptyAutoFilterEvaluation(Napi::Env env, Napi::Object status) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("status", status);
-  out.Set("firstRow", Num(env, 0));
+  out.Set("firstRow", JsNumber(env, 0));
   out.Set("match", Napi::Array::New(env));
   return out;
 }
@@ -919,8 +890,8 @@ bool ReadMentions(CheckedSpecReader& reader, const Napi::Value& arr, std::vector
     }
     std::string person_id;
     std::string mention_id;
-    PullString(reader, m, "personId", &person_id);
-    PullString(reader, m, "mentionId", &mention_id);
+    reader.String(m, "personId", &person_id);
+    reader.String(m, "mentionId", &mention_id);
     ids.push_back(std::move(person_id));
     ids.push_back(std::move(mention_id));
     fm_mention c{};
@@ -954,21 +925,21 @@ Napi::Value Workbook::GetThreadedComments(const Napi::CallbackInfo& info) {
       break;
     }
     Napi::Object item = Napi::Object::New(env);
-    item.Set("id", CStr(env, c.id));
-    item.Set("row", Num(env, c.row));
-    item.Set("col", Num(env, c.col));
-    item.Set("personId", CStr(env, c.person_id));
-    item.Set("created", CStr(env, c.created));
-    item.Set("text", CStr(env, c.text));
-    item.Set("parentId", CStr(env, c.parent_id));
-    item.Set("done", Bool(env, c.done));
+    item.Set("id", JsString(env, c.id));
+    item.Set("row", JsNumber(env, c.row));
+    item.Set("col", JsNumber(env, c.col));
+    item.Set("personId", JsString(env, c.person_id));
+    item.Set("created", JsString(env, c.created));
+    item.Set("text", JsString(env, c.text));
+    item.Set("parentId", JsString(env, c.parent_id));
+    item.Set("done", JsBool(env, c.done));
     Napi::Array mentions = Napi::Array::New(env, c.mention_count);
     for (uint32_t m = 0; m < c.mention_count; ++m) {
       Napi::Object mention = Napi::Object::New(env);
-      mention.Set("personId", CStr(env, c.mentions[m].person_id));
-      mention.Set("mentionId", CStr(env, c.mentions[m].mention_id));
-      mention.Set("start", Num(env, c.mentions[m].start));
-      mention.Set("length", Num(env, c.mentions[m].length));
+      mention.Set("personId", JsString(env, c.mentions[m].person_id));
+      mention.Set("mentionId", JsString(env, c.mentions[m].mention_id));
+      mention.Set("start", JsNumber(env, c.mentions[m].start));
+      mention.Set("length", JsNumber(env, c.mentions[m].length));
       mentions.Set(m, mention);
     }
     item.Set("mentions", mentions);
@@ -992,11 +963,11 @@ Napi::Value Workbook::AddThreadedComment(const Napi::CallbackInfo& info) {
   std::string created;
   std::string text;
   std::string parent_id;
-  PullString(reader, spec, "id", &id);
-  PullString(reader, spec, "personId", &person_id);
-  PullString(reader, spec, "created", &created);
-  PullString(reader, spec, "text", &text);
-  PullString(reader, spec, "parentId", &parent_id);
+  reader.String(spec, "id", &id);
+  reader.String(spec, "personId", &person_id);
+  reader.String(spec, "created", &created);
+  reader.String(spec, "text", &text);
+  reader.String(spec, "parentId", &parent_id);
   std::vector<std::string> mention_ids;
   std::vector<fm_mention> mentions;
   Napi::Array mention_array;
@@ -1075,10 +1046,10 @@ Napi::Value Workbook::GetPersons(const Napi::CallbackInfo& info) {
       break;
     }
     Napi::Object item = Napi::Object::New(env);
-    item.Set("id", CStr(env, p.id));
-    item.Set("displayName", CStr(env, p.display_name));
-    item.Set("userId", CStr(env, p.user_id));
-    item.Set("providerId", CStr(env, p.provider_id));
+    item.Set("id", JsString(env, p.id));
+    item.Set("displayName", JsString(env, p.display_name));
+    item.Set("userId", JsString(env, p.user_id));
+    item.Set("providerId", JsString(env, p.provider_id));
     arr.Set(static_cast<uint32_t>(i), item);
   }
   return MakeFieldResult(env, MakeStatus(env, rc), "persons", arr);
@@ -1098,10 +1069,10 @@ Napi::Value Workbook::AddPerson(const Napi::CallbackInfo& info) {
   std::string display_name;
   std::string user_id;
   std::string provider_id;
-  PullString(reader, spec, "id", &id);
-  PullString(reader, spec, "displayName", &display_name);
-  PullString(reader, spec, "userId", &user_id);
-  PullString(reader, spec, "providerId", &provider_id);
+  reader.String(spec, "id", &id);
+  reader.String(spec, "displayName", &display_name);
+  reader.String(spec, "userId", &user_id);
+  reader.String(spec, "providerId", &provider_id);
   fm_person p{};
   p.id = id.c_str();
   p.display_name = display_name.c_str();
@@ -1143,9 +1114,9 @@ bool ReadImageBytes(const Napi::CallbackInfo& info, size_t idx, const uint8_t*& 
 Napi::Value Workbook::ProbeImage(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
-  out.Set("format", Num(env, 0));
-  out.Set("pxWidth", Num(env, 0));
-  out.Set("pxHeight", Num(env, 0));
+  out.Set("format", JsNumber(env, 0));
+  out.Set("pxWidth", JsNumber(env, 0));
+  out.Set("pxHeight", JsNumber(env, 0));
   const uint8_t* data = nullptr;
   size_t len = 0;
   if (handle_ == nullptr) {
@@ -1159,9 +1130,9 @@ Napi::Value Workbook::ProbeImage(const Napi::CallbackInfo& info) {
   fm_image_info img{};
   const fm_status_t rc = fm_workbook_probe_image(handle_, data, len, &img);
   if (rc == 0) {
-    out.Set("format", Num(env, img.format));
-    out.Set("pxWidth", Num(env, img.px_width));
-    out.Set("pxHeight", Num(env, img.px_height));
+    out.Set("format", JsNumber(env, img.format));
+    out.Set("pxWidth", JsNumber(env, img.px_width));
+    out.Set("pxHeight", JsNumber(env, img.px_height));
   }
   out.Set("status", MakeStatus(env, rc));
   return out;
@@ -1183,24 +1154,24 @@ Napi::Value Workbook::ListDrawingObjects(const Napi::CallbackInfo& info) {
       break;
     }
     Napi::Object item = Napi::Object::New(env);
-    item.Set("objectId", Num(env, o.object_id));
-    item.Set("kind", Num(env, o.kind));
-    item.Set("anchorKind", Num(env, o.anchor_kind));
-    item.Set("editAs", Num(env, o.edit_as));
-    item.Set("fromRow", Num(env, o.from_row));
-    item.Set("fromCol", Num(env, o.from_col));
-    item.Set("fromRowOff", Num(env, static_cast<double>(o.from_row_off)));
-    item.Set("fromColOff", Num(env, static_cast<double>(o.from_col_off)));
-    item.Set("toRow", Num(env, o.to_row));
-    item.Set("toCol", Num(env, o.to_col));
-    item.Set("toRowOff", Num(env, static_cast<double>(o.to_row_off)));
-    item.Set("toColOff", Num(env, static_cast<double>(o.to_col_off)));
-    item.Set("cx", Num(env, static_cast<double>(o.cx)));
-    item.Set("cy", Num(env, static_cast<double>(o.cy)));
-    item.Set("imageFormat", Num(env, o.image_format));
-    item.Set("name", CStr(env, o.name));
-    item.Set("descr", CStr(env, o.descr));
-    item.Set("mediaPath", CStr(env, o.media_path));
+    item.Set("objectId", JsNumber(env, o.object_id));
+    item.Set("kind", JsNumber(env, o.kind));
+    item.Set("anchorKind", JsNumber(env, o.anchor_kind));
+    item.Set("editAs", JsNumber(env, o.edit_as));
+    item.Set("fromRow", JsNumber(env, o.from_row));
+    item.Set("fromCol", JsNumber(env, o.from_col));
+    item.Set("fromRowOff", JsNumber(env, static_cast<double>(o.from_row_off)));
+    item.Set("fromColOff", JsNumber(env, static_cast<double>(o.from_col_off)));
+    item.Set("toRow", JsNumber(env, o.to_row));
+    item.Set("toCol", JsNumber(env, o.to_col));
+    item.Set("toRowOff", JsNumber(env, static_cast<double>(o.to_row_off)));
+    item.Set("toColOff", JsNumber(env, static_cast<double>(o.to_col_off)));
+    item.Set("cx", JsNumber(env, static_cast<double>(o.cx)));
+    item.Set("cy", JsNumber(env, static_cast<double>(o.cy)));
+    item.Set("imageFormat", JsNumber(env, o.image_format));
+    item.Set("name", JsString(env, o.name));
+    item.Set("descr", JsString(env, o.descr));
+    item.Set("mediaPath", JsString(env, o.media_path));
     arr.Set(static_cast<uint32_t>(i), item);
   }
   return FinishListResult(env, arr, rc);
@@ -1209,10 +1180,10 @@ Napi::Value Workbook::ListDrawingObjects(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
-  out.Set("format", Num(env, 0));
+  out.Set("format", JsNumber(env, 0));
   out.Set("bytes", Napi::Uint8Array::New(env, 0));
-  out.Set("pxWidth", Num(env, 0));
-  out.Set("pxHeight", Num(env, 0));
+  out.Set("pxWidth", JsNumber(env, 0));
+  out.Set("pxHeight", JsNumber(env, 0));
   if (handle_ == nullptr) {
     out.Set("status", NullHandleError(env));
     return out;
@@ -1227,10 +1198,10 @@ Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {
     if (len != 0) {
       std::memcpy(copy.Data(), bytes, len);
     }
-    out.Set("format", Num(env, img.format));
+    out.Set("format", JsNumber(env, img.format));
     out.Set("bytes", copy);
-    out.Set("pxWidth", Num(env, img.px_width));
-    out.Set("pxHeight", Num(env, img.px_height));
+    out.Set("pxWidth", JsNumber(env, img.px_width));
+    out.Set("pxHeight", JsNumber(env, img.px_height));
   }
   out.Set("status", MakeStatus(env, rc));
   return out;
@@ -1239,7 +1210,7 @@ Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
-  out.Set("objectId", Num(env, 0));
+  out.Set("objectId", JsNumber(env, 0));
   if (handle_ == nullptr) {
     out.Set("status", NullHandleError(env));
     return out;
@@ -1256,8 +1227,8 @@ Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
   const Napi::Object spec = has_opts ? info[2].As<Napi::Object>() : Napi::Object::New(env);
   std::string name;
   std::string descr;
-  PullString(reader, spec, "name", &name);
-  PullString(reader, spec, "descr", &descr);
+  reader.String(spec, "name", &name);
+  reader.String(spec, "descr", &descr);
   fm_image_insert opts{};
   opts.name = name.c_str();
   opts.descr = descr.c_str();
@@ -1274,7 +1245,7 @@ Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
   }
   uint32_t object_id = 0;
   const fm_status_t rc = fm_sheet_insert_image(handle_, ArgU32(info, 0), data, len, &opts, &object_id);
-  out.Set("objectId", Num(env, rc == 0 ? object_id : 0));
+  out.Set("objectId", JsNumber(env, rc == 0 ? object_id : 0));
   out.Set("status", MakeStatus(env, rc));
   return out;
 }
@@ -1346,7 +1317,7 @@ Napi::Value Workbook::SnapshotImage(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::RestoreImage(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
-  out.Set("objectId", Num(env, 0));
+  out.Set("objectId", JsNumber(env, 0));
   if (handle_ == nullptr) {
     out.Set("status", NullHandleError(env));
     return out;
@@ -1367,7 +1338,7 @@ Napi::Value Workbook::RestoreImage(const Napi::CallbackInfo& info) {
   }
   uint32_t object_id = 0;
   const fm_status_t rc = fm_sheet_restore_image(handle_, ArgU32(info, 0), data, len, flags, &object_id);
-  out.Set("objectId", Num(env, rc == 0 ? object_id : 0));
+  out.Set("objectId", JsNumber(env, rc == 0 ? object_id : 0));
   out.Set("status", MakeStatus(env, rc));
   return out;
 }

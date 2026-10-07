@@ -540,6 +540,27 @@ Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m) {
   return o;
 }
 
+Napi::Object RangeToJs(Napi::Env env, const fm_merge_range& r) {
+  Napi::Object item = Napi::Object::New(env);
+  item.Set("firstRow", Napi::Number::New(env, r.first_row));
+  item.Set("lastRow", Napi::Number::New(env, r.last_row));
+  item.Set("firstCol", Napi::Number::New(env, r.first_col));
+  item.Set("lastCol", Napi::Number::New(env, r.last_col));
+  return item;
+}
+
+Napi::Value JsString(Napi::Env env, const char* s) {
+  return Napi::String::New(env, s != nullptr ? s : "");
+}
+
+Napi::Value JsNumber(Napi::Env env, double v) {
+  return Napi::Number::New(env, v);
+}
+
+Napi::Value JsBool(Napi::Env env, int32_t v) {
+  return Napi::Boolean::New(env, v != 0);
+}
+
 void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_pivot_data_field_spec_t& out,
                         std::string& name_buf, std::string& nfmt_buf, bool& has_nfmt) {
   // `name` is required; an omitted key passes NULL through rather than

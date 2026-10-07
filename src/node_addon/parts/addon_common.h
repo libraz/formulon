@@ -169,6 +169,18 @@ Napi::Object TranslateCfColor(Napi::Env env, const fm_cf_color_t& c);
 /// Translates an `fm_cf_match_t` into the JS shape used by embind.
 Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m);
 
+/// Builds `{ firstRow, lastRow, firstCol, lastCol }` from a cell range.
+Napi::Object RangeToJs(Napi::Env env, const fm_merge_range& r);
+
+/// JS string from a C string; NULL becomes "".
+Napi::Value JsString(Napi::Env env, const char* s);
+
+/// JS number from a C numeric field.
+Napi::Value JsNumber(Napi::Env env, double v);
+
+/// JS boolean from a C `int32_t` flag (non-zero is true).
+Napi::Value JsBool(Napi::Env env, int32_t v);
+
 // ---------------------------------------------------------------------
 /// Per-call reader for nested binding object fields. It owns the pending-error
 /// bit for one binding invocation, so nested parsers stop touching JS objects
