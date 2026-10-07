@@ -216,6 +216,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/tail_array_test.cpp
   unit/eval/broadcast_tail_test.cpp
   unit/eval/whole_axis_shape_test.cpp
+  unit/eval/whole_axis_reduce_test.cpp
   unit/eval/countblank_countif_tail_test.cpp
   unit/eval/builtins_stats_test.cpp
   unit/eval/builtins_subtotal_test.cpp

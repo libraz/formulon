@@ -10,6 +10,7 @@
 
 #include "eval/shape_ops_lazy.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -26,6 +27,7 @@
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
 #include "eval/scalar_ops.h"
+#include "eval/tail_array.h"
 #include "eval/tree_walker/broadcast.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -140,7 +142,14 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
   // toward circularity: `=ROWS(A1#)` in A1 is not circular (measured on Mac
   // Excel 365).
   const bool extent_only = k == parser::NodeKind::SpillRef;
-  const Value v = eval_node(arg_node, arena, registry, extent_only ? ctx.without_read_observer() : ctx);
+  const Shaped shaped = eval_node_shaped(arg_node, arena, registry, extent_only ? ctx.without_read_observer() : ctx);
+  if (shaped.tail_array != nullptr) {
+    // A whole-axis array reports its declared size without being expanded.
+    *out_rows = shaped.tail_array->rows;
+    *out_cols = shaped.tail_array->cols;
+    return true;
+  }
+  const Value& v = shaped.value;
   if (v.is_error()) {
     *out_err = v;
     return false;
@@ -412,6 +421,9 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
     std::uint32_t rows;
     std::uint32_t cols;
     std::vector<Value> cells;
+    // Set for a whole-axis argument: the declared size plus a repeated tail,
+    // read in place (`cells` stays empty).
+    const TailArray* tail = nullptr;
   };
   std::vector<ArgArray> all_args;
   all_args.reserve(arity);
@@ -427,7 +439,39 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
     const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
     const parser::NodeKind k = arg_node.kind();
     ArgArray a{};
-    if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::Call) {
+    // A reference that names a whole column or row is read at its declared
+    // size; every other reference keeps the used-range expansion below.
+    bool spans_axis = false;
+    if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
+      parser::Reference lhs{};
+      parser::Reference rhs{};
+      if (declared_rect_endpoint_pair(arg_node, &lhs, &rhs)) {
+        const auto rect = ctx.declared_range_rect(lhs, rhs);
+        spans_axis = rect && (rect.value().rows() == Sheet::kMaxRows || rect.value().cols() == Sheet::kMaxCols);
+      }
+    }
+    if (spans_axis || k == parser::NodeKind::BinaryOp || k == parser::NodeKind::UnaryOp ||
+        k == parser::NodeKind::NameRef || k == parser::NodeKind::ExternalRef) {
+      // Operators broadcast cellwise, so `(A:A="k2")*B:B` stays a tail array
+      // and is never expanded to the declared size.
+      const Shaped shaped = eval_node_shaped(arg_node, arena, registry, ctx);
+      if (shaped.tail_array != nullptr) {
+        a.rows = shaped.tail_array->rows;
+        a.cols = shaped.tail_array->cols;
+        a.tail = shaped.tail_array;
+      } else if (shaped.value.is_error()) {
+        return shaped.value;
+      } else if (shaped.value.is_array()) {
+        const ArrayValue* arr = shaped.value.as_array();
+        a.rows = arr->rows;
+        a.cols = arr->cols;
+        a.cells.assign(arr->cells, arr->cells + static_cast<std::size_t>(arr->rows) * arr->cols);
+      } else {
+        a.rows = 1U;
+        a.cols = 1U;
+        a.cells.push_back(shaped.value);
+      }
+    } else if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::Call) {
       // A Call (OFFSET / CHOOSE / IF after LET passthrough) is expanded the
       // same way as a literal `RangeOp` argument, keeping its row/col shape.
       auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
@@ -443,28 +487,6 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
       if (!flatten_array_literal(arg_node, arena, registry, ctx, &a.cells, &a.rows, &a.cols, &err)) {
         return err;
       }
-    } else if (k == parser::NodeKind::BinaryOp || k == parser::NodeKind::UnaryOp) {
-      // Array-context evaluation: BinaryOp / UnaryOp args carry range-shaped
-      // subexpressions that must be broadcast cellwise. `eval_node_as_array`
-      // recurses through scalar_ops to produce an ArrayValue (or scalar error
-      // on shape mismatch / left-most-error short-circuit). This is what makes
-      // `=SUMPRODUCT((A1:A5>2)*1)` and `=SUMPRODUCT((A>2)*(B<10), C)` compute
-      // the cellwise product instead of collapsing to scalar.
-      const Value arr_v = eval_node_as_array(arg_node, arena, registry, ctx);
-      if (arr_v.is_error()) {
-        return arr_v;
-      }
-      // `eval_node_as_array` is contracted to return either an Array or a
-      // scalar Error; the is_array() check is defensive against future API
-      // drift.
-      if (!arr_v.is_array()) {
-        return Value::error(ErrorCode::Value);
-      }
-      const ArrayValue* arr = arr_v.as_array();
-      a.rows = arr->rows;
-      a.cols = arr->cols;
-      const std::size_t n = static_cast<std::size_t>(arr->rows) * static_cast<std::size_t>(arr->cols);
-      a.cells.assign(arr->cells, arr->cells + n);
     } else {
       // Scalar argument: evaluate and treat as 1x1.
       const Value v = eval_node(arg_node, arena, registry, ctx);
@@ -493,25 +515,98 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
   // (left-to-right), walk its cells in row-major order. The first
   // error encountered wins. This runs before the numeric accumulation
   // so the returned code matches Excel's leftmost-wins rule even if a
-  // later numeric overflow would otherwise upstage it.
+  // later numeric overflow would otherwise upstage it. A whole-axis
+  // argument is scanned over its dense head, then its repeated tail.
   for (const ArgArray& a : all_args) {
     for (const Value& v : a.cells) {
       if (v.is_error()) {
         return v;
       }
     }
+    if (a.tail != nullptr) {
+      const TailArray& ta = *a.tail;
+      const std::size_t head_cells =
+          static_cast<std::size_t>(ta.axis == TailAxis::kRows ? ta.head * ta.cols : ta.rows * ta.head);
+      const std::size_t tail_cells = ta.axis == TailAxis::kRows ? ta.cols : ta.rows;
+      for (std::size_t i = 0; i < head_cells; ++i) {
+        if (ta.cells[i].is_error()) {
+          return ta.cells[i];
+        }
+      }
+      for (std::size_t i = 0; i < tail_cells; ++i) {
+        if (ta.tail[i].is_error()) {
+          return ta.tail[i];
+        }
+      }
+    }
   }
 
-  // Element-wise product accumulated into total. The element index
-  // `idx` walks `ref_rows * ref_cols` positions in row-major order.
-  const std::size_t n = static_cast<std::size_t>(ref_rows) * static_cast<std::size_t>(ref_cols);
-  double total = 0.0;
-  for (std::size_t idx = 0; idx < n; ++idx) {
+  // Dense extent of the sum: rows [0, head_rows) and columns [0, head_cols)
+  // are walked cell by cell. Past a whole column's head the remaining rows
+  // repeat one row product; past a whole row's head the remaining columns
+  // repeat one column product.
+  std::uint32_t head_rows = 0;
+  std::uint32_t head_cols = 0;
+  bool any_tail = false;
+  for (const ArgArray& a : all_args) {
+    if (a.tail == nullptr) {
+      continue;
+    }
+    any_tail = true;
+    if (a.tail->axis == TailAxis::kRows) {
+      head_rows = std::max(head_rows, a.tail->head);
+      head_cols = ref_cols;
+    } else {
+      head_cols = std::max(head_cols, a.tail->head);
+      head_rows = ref_rows;
+    }
+  }
+  for (const ArgArray& a : all_args) {
+    // A dense argument spans the declared size, so it extends the walk.
+    if (!any_tail || a.tail == nullptr) {
+      head_rows = ref_rows;
+      head_cols = ref_cols;
+    }
+  }
+  head_rows = std::min(head_rows, ref_rows);
+  head_cols = std::min(head_cols, ref_cols);
+
+  const auto product_at = [&all_args](std::uint32_t r, std::uint32_t c) {
     double product = 1.0;
     for (const ArgArray& a : all_args) {
-      product *= sumproduct_coerce(a.cells[idx]);
+      const Value& v =
+          a.tail != nullptr ? tail_array_at(*a.tail, r, c) : a.cells[static_cast<std::size_t>(r) * a.cols + c];
+      product *= sumproduct_coerce(v);
     }
-    total += product;
+    return product;
+  };
+
+  // Element-wise product accumulated into total in row-major order. Tail
+  // rows are added one by one rather than as product x count: the
+  // sequential sum is what Excel produces for fractional tails.
+  double total = 0.0;
+  for (std::uint32_t r = 0; r < head_rows; ++r) {
+    for (std::uint32_t c = 0; c < head_cols; ++c) {
+      total += product_at(r, c);
+    }
+    if (head_cols < ref_cols) {
+      const double column_product = product_at(r, head_cols);
+      for (std::uint32_t c = head_cols; c < ref_cols; ++c) {
+        total += column_product;
+      }
+    }
+  }
+  if (head_rows < ref_rows) {
+    std::vector<double> tail_products;
+    tail_products.reserve(ref_cols);
+    for (std::uint32_t c = 0; c < ref_cols; ++c) {
+      tail_products.push_back(product_at(ref_rows - 1U, c));
+    }
+    for (std::uint32_t r = head_rows; r < ref_rows; ++r) {
+      for (const double p : tail_products) {
+        total += p;
+      }
+    }
   }
   if (std::isnan(total) || std::isinf(total)) {
     return Value::error(ErrorCode::Num);
