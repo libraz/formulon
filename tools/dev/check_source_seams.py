@@ -118,7 +118,17 @@ LAYER_NO_IO = frozenset({"value", "parser", "model", "pivot", "eval", "cf", "pri
 _VALUE_FILES = ("value.", "sheet_name", "phonetic.h", "value_sort_order.h")
 
 # Top-level files that implement the `Workbook` facade.
-_FACADE_FILES = frozenset({"workbook.cpp", "workbook_ref_rewrite.h", "workbook_ref_rewrite.cpp"})
+_FACADE_FILES = frozenset(
+    {
+        "workbook.cpp",
+        "workbook_formula_index.h",
+        "workbook_formula_index.cpp",
+        "workbook_ref_rewrite.h",
+        "workbook_ref_rewrite.cpp",
+        "workbook_row_col_edit.cpp",
+        "workbook_sheet_mutation.h",
+    }
+)
 
 # Headers under `pivot/` and `cf/` that are model types rather than engine.
 _MODEL_HEADERS = frozenset(
