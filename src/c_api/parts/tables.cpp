@@ -18,6 +18,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 
@@ -182,9 +183,8 @@ extern "C" fm_status_t fm_workbook_table_at(const fm_workbook_t* wb, size_t idx,
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_table_at: NULL argument");
   }
   const auto& tables = wb->workbook().tables();
-  if (idx >= tables.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_table_at: idx out of range",
-                             "idx=" + std::to_string(idx) + " count=" + std::to_string(tables.size()));
+  if (auto rc = check_index(idx, tables.size(), "fm_workbook_table_at", "idx"); rc != 0) {
+    return rc;
   }
   *out_name = tables[idx].name.c_str();
   *out_display_name = tables[idx].display_name.c_str();

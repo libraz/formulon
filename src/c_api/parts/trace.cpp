@@ -23,6 +23,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
@@ -144,9 +145,8 @@ extern "C" fm_status_t fm_cell_nodes_at(const fm_cell_nodes_t* nodes, std::size_
   if (nodes == nullptr || out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cell_nodes_at: NULL argument");
   }
-  if (idx >= nodes->nodes.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_cell_nodes_at: idx out of range",
-                             "idx=" + std::to_string(idx) + " count=" + std::to_string(nodes->nodes.size()));
+  if (auto rc = check_index(idx, nodes->nodes.size(), "fm_cell_nodes_at", "idx"); rc != 0) {
+    return rc;
   }
   out->sheet = static_cast<std::uint32_t>(nodes->nodes[idx].sheet_id);
   out->row = nodes->nodes[idx].row;

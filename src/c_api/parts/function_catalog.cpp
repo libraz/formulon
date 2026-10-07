@@ -43,6 +43,7 @@
 #include "utils/error.h"
 #include "utils/index_sort.h"
 
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 
@@ -158,9 +159,8 @@ extern "C" fm_status_t fm_function_name_at(std::size_t idx, const char** out_nam
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_function_name_at: out_name is NULL");
   }
   const auto& names = sorted_function_names();
-  if (idx >= names.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_name_at: idx out of range",
-                             "idx=" + std::to_string(idx) + " count=" + std::to_string(names.size()));
+  if (auto rc = check_index(idx, names.size(), "fm_function_name_at", "idx"); rc != 0) {
+    return rc;
   }
   *out_name = names[idx].c_str();
   return 0;

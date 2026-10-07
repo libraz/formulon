@@ -32,6 +32,7 @@ using formulon::c_api::parts::cell_range_page_size;
 using formulon::c_api::parts::check_cell_cursor;
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_formula_parses;
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_u32;
@@ -491,9 +492,8 @@ extern "C" fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet
   // enumeration revision changes. A `cell_count` / `cell_at(0..N)` pass
   // therefore pays the O(N log N) collection once rather than per cell.
   const auto& addrs = cached_cell_addresses(wb, sheet_index);
-  if (idx >= addrs.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_cell_at: idx out of range",
-                             "idx=" + std::to_string(idx) + " count=" + std::to_string(addrs.size()));
+  if (auto rc = check_index(idx, addrs.size(), "fm_workbook_cell_at", "idx"); rc != 0) {
+    return rc;
   }
   const auto [row, col] = addrs[idx];
   *out_row = row;
@@ -676,9 +676,8 @@ extern "C" fm_status_t fm_cell_range_at(const fm_cell_range_t* range, size_t idx
   if (range == nullptr || out_row == nullptr || out_col == nullptr || out_value == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cell_range_at: NULL argument");
   }
-  if (idx >= range->entries.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_cell_range_at: idx out of range",
-                             "idx=" + std::to_string(idx) + " count=" + std::to_string(range->entries.size()));
+  if (auto rc = check_index(idx, range->entries.size(), "fm_cell_range_at", "idx"); rc != 0) {
+    return rc;
   }
   const fm_cell_range_t::Entry& entry = range->entries[idx];
   *out_row = entry.row;

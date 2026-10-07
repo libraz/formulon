@@ -83,6 +83,38 @@ inline int print_version(std::ostream& out, std::ostream& err) {
   return flush_output(out, err, "version");
 }
 
+/// Outcome of `handle_common_option`.
+enum class CommonOption {
+  kNotCommon,  ///< The argument is not a shared option; the handler keeps parsing it.
+  kConsumed,   ///< The argument was a shared option with no further effect (`--`).
+  kExit,       ///< The invocation is finished; return `exit_code`.
+};
+
+/// Handles the options every subcommand shares: `--` (ends option parsing,
+/// recorded in `options_ended`), `-h | --help` (prints `print_usage_fn` to
+/// `out`) and `--version`. Once `options_ended` is set nothing is shared.
+inline CommonOption handle_common_option(std::string_view arg, bool& options_ended,
+                                         void (*print_usage_fn)(std::ostream&), std::string_view subcommand,
+                                         std::ostream& out, std::ostream& err, int& exit_code) {
+  if (options_ended) {
+    return CommonOption::kNotCommon;
+  }
+  if (arg == "--") {
+    options_ended = true;
+    return CommonOption::kConsumed;
+  }
+  if (arg == "-h" || arg == "--help") {
+    print_usage_fn(out);
+    exit_code = flush_output(out, err, subcommand);
+    return CommonOption::kExit;
+  }
+  if (arg == "--version") {
+    exit_code = print_version(out, err);
+    return CommonOption::kExit;
+  }
+  return CommonOption::kNotCommon;
+}
+
 /// `eval` handler: evaluate a single formula on a fresh empty workbook.
 ///
 /// `args` carries the post-`eval` arguments. The first non-flag argument

@@ -16,6 +16,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_formula_parses;
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
@@ -90,10 +91,8 @@ extern "C" fm_status_t fm_sheet_remove_hyperlink_at(fm_workbook_t* wb, std::uint
     return rc;
   }
   auto& hls = wb->workbook().sheet(sheet).mutable_hyperlinks();
-  if (static_cast<std::size_t>(index) >= hls.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_remove_hyperlink_at: index out of range",
-                             "index=" + std::to_string(index) + " count=" + std::to_string(hls.size()));
+  if (auto rc = check_index(index, hls.size(), "fm_sheet_remove_hyperlink_at", "index"); rc != 0) {
+    return rc;
   }
   hls.erase(hls.begin() + static_cast<std::ptrdiff_t>(index));
   return 0;
@@ -119,10 +118,8 @@ extern "C" fm_status_t fm_sheet_get_hyperlink_at(fm_workbook_t* wb, std::uint32_
     return rc;
   }
   const auto& hls = wb->workbook().sheet(sheet).hyperlinks();
-  if (static_cast<std::size_t>(index) >= hls.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_get_hyperlink_at: index out of range",
-                             "index=" + std::to_string(index) + " count=" + std::to_string(hls.size()));
+  if (auto rc = check_index(index, hls.size(), "fm_sheet_get_hyperlink_at", "index"); rc != 0) {
+    return rc;
   }
   const formulon::Hyperlink& h = hls[index];
   out->row = h.row;
@@ -216,9 +213,8 @@ extern "C" fm_status_t fm_sheet_get_merge_at(fm_workbook_t* wb, std::uint32_t sh
     return rc;
   }
   const auto& merges = wb->workbook().sheet(sheet).merges();
-  if (static_cast<std::size_t>(index) >= merges.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_get_merge_at: index out of range",
-                             "index=" + std::to_string(index) + " count=" + std::to_string(merges.size()));
+  if (auto rc = check_index(index, merges.size(), "fm_sheet_get_merge_at", "index"); rc != 0) {
+    return rc;
   }
   const formulon::MergeRange& m = merges[index];
   out->first_row = m.first_row;
@@ -319,10 +315,8 @@ extern "C" fm_status_t fm_sheet_get_comment_at_index(fm_workbook_t* wb, std::uin
     return rc;
   }
   const auto& comments = wb->workbook().sheet(sheet).comments();
-  if (static_cast<std::size_t>(index) >= comments.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_get_comment_at_index: index out of range",
-                             "index=" + std::to_string(index) + " count=" + std::to_string(comments.size()));
+  if (auto rc = check_index(index, comments.size(), "fm_sheet_get_comment_at_index", "index"); rc != 0) {
+    return rc;
   }
   const formulon::CellComment& c = comments[index];
   out->row = c.row;
@@ -427,10 +421,8 @@ extern "C" fm_status_t fm_sheet_get_validation_at(fm_workbook_t* wb, std::uint32
     return rc;
   }
   const auto& list = wb->workbook().sheet(sheet).validations();
-  if (static_cast<std::size_t>(index) >= list.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_get_validation_at: index out of range",
-                             "index=" + std::to_string(index) + " count=" + std::to_string(list.size()));
+  if (auto rc = check_index(index, list.size(), "fm_sheet_get_validation_at", "index"); rc != 0) {
+    return rc;
   }
   const formulon::DataValidation& v = list[index];
   // Ranges are layout-compatible (see static_asserts above), so we hand
@@ -512,10 +504,8 @@ extern "C" fm_status_t fm_sheet_remove_validation_at(fm_workbook_t* wb, std::uin
     return rc;
   }
   auto& list = wb->workbook().sheet(sheet).mutable_validations();
-  if (static_cast<std::size_t>(index) >= list.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_remove_validation_at: index out of range",
-                             "index=" + std::to_string(index) + " count=" + std::to_string(list.size()));
+  if (auto rc = check_index(index, list.size(), "fm_sheet_remove_validation_at", "index"); rc != 0) {
+    return rc;
   }
   list.erase(list.begin() + static_cast<std::ptrdiff_t>(index));
   return 0;

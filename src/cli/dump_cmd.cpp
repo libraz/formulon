@@ -172,6 +172,18 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
   return 0;
 }
 
+struct DumpModeFlag {
+  std::string_view flag;
+  DumpMode mode;
+};
+
+constexpr DumpModeFlag kDumpModeFlags[] = {
+    {"--formulas", DumpMode::kFormulas},
+    {"--values", DumpMode::kValues},
+    {"--sheets", DumpMode::kSheets},
+    {"--metadata", DumpMode::kMetadata},
+};
+
 }  // namespace
 
 int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
@@ -180,6 +192,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   std::string input_path;
   bool input_seen = false;
   bool options_ended = false;
+  int exit_code = 0;
 
   auto select_mode = [&](DumpMode m, std::string_view flag) -> bool {
     if (mode_set) {
@@ -193,37 +206,22 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
 
   for (std::size_t i = 0; i < args.size(); ++i) {
     const std::string_view a = args[i];
-    if (!options_ended && a == "--") {
-      options_ended = true;
-      continue;
+    switch (handle_common_option(a, options_ended, print_dump_usage, "dump", out, err, exit_code)) {
+      case CommonOption::kConsumed:
+        continue;
+      case CommonOption::kExit:
+        return exit_code;
+      case CommonOption::kNotCommon:
+        break;
     }
-    if (!options_ended && (a == "-h" || a == "--help")) {
-      print_dump_usage(out);
-      return flush_output(out, err, "dump");
-    }
-    if (!options_ended && a == "--version") {
-      return print_version(out, err);
-    }
-    if (!options_ended && a == "--formulas") {
-      if (!select_mode(DumpMode::kFormulas, a)) {
-        return kExitUsage;
+    const DumpModeFlag* mode_flag = nullptr;
+    for (const DumpModeFlag& candidate : kDumpModeFlags) {
+      if (!options_ended && a == candidate.flag) {
+        mode_flag = &candidate;
       }
-      continue;
     }
-    if (!options_ended && a == "--values") {
-      if (!select_mode(DumpMode::kValues, a)) {
-        return kExitUsage;
-      }
-      continue;
-    }
-    if (!options_ended && a == "--sheets") {
-      if (!select_mode(DumpMode::kSheets, a)) {
-        return kExitUsage;
-      }
-      continue;
-    }
-    if (!options_ended && a == "--metadata") {
-      if (!select_mode(DumpMode::kMetadata, a)) {
+    if (mode_flag != nullptr) {
+      if (!select_mode(mode_flag->mode, a)) {
         return kExitUsage;
       }
       continue;

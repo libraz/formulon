@@ -177,6 +177,35 @@ void set_attr_bool(pugi::xml_node node, const char* name, bool value) {
   set_attr(node, name, value ? "true" : "false");
 }
 
+/// One `(attribute, engaged, value)` triple of a partial boolean update.
+struct BoolAttr {
+  const char* attr;
+  std::int32_t engaged;
+  std::int32_t value;
+};
+
+/// Applies every engaged entry of `attrs` through `set_attr_bool`.
+void set_engaged_bools(pugi::xml_node node, const BoolAttr* attrs, std::size_t count) {
+  for (std::size_t i = 0; i < count; ++i) {
+    if (attrs[i].engaged != 0) {
+      set_attr_bool(node, attrs[i].attr, attrs[i].value != 0);
+    }
+  }
+}
+
+/// One `(attribute, engaged flag)` pair filled from attribute presence.
+struct EngagedAttr {
+  const char* attr;
+  std::int32_t* engaged;
+};
+
+/// Sets each flag to whether `node` carries its attribute.
+void read_engaged(pugi::xml_node node, const EngagedAttr* attrs, std::size_t count) {
+  for (std::size_t i = 0; i < count; ++i) {
+    *attrs[i].engaged = node.attribute(attrs[i].attr) ? 1 : 0;
+  }
+}
+
 void set_attr_double(pugi::xml_node node, const char* name, double value) {
   std::string text;
   formulon::format_double(text, value);
@@ -583,18 +612,13 @@ extern "C" fm_status_t fm_sheet_set_print_options(fm_workbook_t* wb, size_t shee
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
   pugi::xml_document doc;
   pugi::xml_node root = load_or_create_root(doc, print.print_options_xml, "printOptions");
-  if (options->grid_lines_engaged != 0) {
-    set_attr_bool(root, "gridLines", options->grid_lines != 0);
-  }
-  if (options->headings_engaged != 0) {
-    set_attr_bool(root, "headings", options->headings != 0);
-  }
-  if (options->horizontal_centered_engaged != 0) {
-    set_attr_bool(root, "horizontalCentered", options->horizontal_centered != 0);
-  }
-  if (options->vertical_centered_engaged != 0) {
-    set_attr_bool(root, "verticalCentered", options->vertical_centered != 0);
-  }
+  const BoolAttr attrs[] = {
+      {"gridLines", options->grid_lines_engaged, options->grid_lines},
+      {"headings", options->headings_engaged, options->headings},
+      {"horizontalCentered", options->horizontal_centered_engaged, options->horizontal_centered},
+      {"verticalCentered", options->vertical_centered_engaged, options->vertical_centered},
+  };
+  set_engaged_bools(root, attrs, std::size(attrs));
   print.print_options_xml = raw_xml(root);
   return 0;
 }
@@ -611,18 +635,13 @@ extern "C" fm_status_t fm_sheet_set_header_footer(fm_workbook_t* wb, size_t shee
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
   pugi::xml_document doc;
   pugi::xml_node root = load_or_create_root(doc, print.header_footer_xml, "headerFooter");
-  if (hf->different_odd_even_engaged != 0) {
-    set_attr_bool(root, "differentOddEven", hf->different_odd_even != 0);
-  }
-  if (hf->different_first_engaged != 0) {
-    set_attr_bool(root, "differentFirst", hf->different_first != 0);
-  }
-  if (hf->scale_with_doc_engaged != 0) {
-    set_attr_bool(root, "scaleWithDoc", hf->scale_with_doc != 0);
-  }
-  if (hf->align_with_margins_engaged != 0) {
-    set_attr_bool(root, "alignWithMargins", hf->align_with_margins != 0);
-  }
+  const BoolAttr attrs[] = {
+      {"differentOddEven", hf->different_odd_even_engaged, hf->different_odd_even},
+      {"differentFirst", hf->different_first_engaged, hf->different_first},
+      {"scaleWithDoc", hf->scale_with_doc_engaged, hf->scale_with_doc},
+      {"alignWithMargins", hf->align_with_margins_engaged, hf->align_with_margins},
+  };
+  set_engaged_bools(root, attrs, std::size(attrs));
   const char* const sections[] = {hf->odd_header,  hf->odd_footer,   hf->even_header,
                                   hf->even_footer, hf->first_header, hf->first_footer};
   for (std::size_t i = 0; i < std::size(sections); ++i) {
@@ -671,11 +690,14 @@ extern "C" fm_status_t fm_sheet_get_page_setup(const fm_workbook_t* wb, size_t s
   if (!print.page_setup_xml.empty() && doc.load_buffer(print.page_setup_xml.data(), print.page_setup_xml.size(),
                                                        pugi::parse_default, pugi::encoding_utf8)) {
     const pugi::xml_node root = doc.first_child();
-    out->orientation_engaged = root.attribute("orientation") ? 1 : 0;
-    out->paper_size_engaged = root.attribute("paperSize") ? 1 : 0;
-    out->scale_engaged = root.attribute("scale") ? 1 : 0;
-    out->fit_to_width_engaged = root.attribute("fitToWidth") ? 1 : 0;
-    out->fit_to_height_engaged = root.attribute("fitToHeight") ? 1 : 0;
+    const EngagedAttr attrs[] = {
+        {"orientation", &out->orientation_engaged},
+        {"paperSize", &out->paper_size_engaged},
+        {"scale", &out->scale_engaged},
+        {"fitToWidth", &out->fit_to_width_engaged},
+        {"fitToHeight", &out->fit_to_height_engaged},
+    };
+    read_engaged(root, attrs, std::size(attrs));
   }
   pugi::xml_document sheet_pr_doc;
   if (!print.sheet_pr_xml.empty() && sheet_pr_doc.load_buffer(print.sheet_pr_xml.data(), print.sheet_pr_xml.size(),
@@ -709,12 +731,11 @@ extern "C" fm_status_t fm_sheet_get_page_margins(const fm_workbook_t* wb, size_t
   if (!print.page_margins_xml.empty() && doc.load_buffer(print.page_margins_xml.data(), print.page_margins_xml.size(),
                                                          pugi::parse_default, pugi::encoding_utf8)) {
     const pugi::xml_node root = doc.first_child();
-    out->left_engaged = root.attribute("left") ? 1 : 0;
-    out->right_engaged = root.attribute("right") ? 1 : 0;
-    out->top_engaged = root.attribute("top") ? 1 : 0;
-    out->bottom_engaged = root.attribute("bottom") ? 1 : 0;
-    out->header_engaged = root.attribute("header") ? 1 : 0;
-    out->footer_engaged = root.attribute("footer") ? 1 : 0;
+    const EngagedAttr attrs[] = {
+        {"left", &out->left_engaged},     {"right", &out->right_engaged},   {"top", &out->top_engaged},
+        {"bottom", &out->bottom_engaged}, {"header", &out->header_engaged}, {"footer", &out->footer_engaged},
+    };
+    read_engaged(root, attrs, std::size(attrs));
   }
   return 0;
 }

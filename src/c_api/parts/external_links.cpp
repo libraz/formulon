@@ -10,6 +10,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 
@@ -30,10 +31,8 @@ extern "C" fm_status_t fm_workbook_external_link_at(fm_workbook_t* wb, uint32_t 
                              "fm_workbook_external_link_at: NULL argument");
   }
   const auto& links = wb->workbook().external_links();
-  if (index >= links.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_external_link_at: index out of range",
-                             "index=" + std::to_string(index) + " count=" + std::to_string(links.size()));
+  if (auto rc = check_index(index, links.size(), "fm_workbook_external_link_at", "index"); rc != 0) {
+    return rc;
   }
   const formulon::ExternalLinkRecord& rec = links[index];
   out->index = rec.index;

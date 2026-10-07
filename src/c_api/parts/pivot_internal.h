@@ -43,6 +43,12 @@ formulon::pivot::PivotTable* resolve_pivot_mut(formulon::Workbook& wb, std::size
 const formulon::pivot::PivotTable* resolve_pivot(const formulon::Workbook& wb, std::size_t sheet_index,
                                                  std::size_t pivot_index, const char* fn);
 
+// Mutable-handle variant for the table-level setters: rejects a NULL `wb`,
+// then resolves like `resolve_pivot_mut`. Returns 0 with `*out` set, or the
+// error status with the binding error populated.
+fm_status_t resolve_pivot_checked(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* fn,
+                                  formulon::pivot::PivotTable** out);
+
 // Invalidates the pivot's derived state so the next layout call
 // recomputes. Called after every mutation that could affect projection.
 //

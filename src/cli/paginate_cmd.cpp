@@ -60,18 +60,16 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   std::size_t sheet_index = 0;
   bool input_seen = false;
   bool options_ended = false;
+  int exit_code = 0;
   for (std::size_t i = 0; i < args.size(); ++i) {
     const std::string_view arg = args[i];
-    if (!options_ended && arg == "--") {
-      options_ended = true;
-      continue;
-    }
-    if (!options_ended && (arg == "-h" || arg == "--help")) {
-      print_paginate_usage(out);
-      return flush_output(out, err, "paginate");
-    }
-    if (!options_ended && arg == "--version") {
-      return print_version(out, err);
+    switch (handle_common_option(arg, options_ended, print_paginate_usage, "paginate", out, err, exit_code)) {
+      case CommonOption::kConsumed:
+        continue;
+      case CommonOption::kExit:
+        return exit_code;
+      case CommonOption::kNotCommon:
+        break;
     }
     if (!options_ended && arg == "--sheet") {
       if (i + 1 == args.size() || !parse_sheet_index(args[i + 1], sheet_index)) {

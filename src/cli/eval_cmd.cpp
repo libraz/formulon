@@ -142,19 +142,17 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
   std::string_view formula;
   bool formula_seen = false;
   bool options_ended = false;
+  int exit_code = 0;
 
   for (std::size_t i = 0; i < args.size(); ++i) {
     const std::string_view a = args[i];
-    if (!options_ended && a == "--") {
-      options_ended = true;
-      continue;
-    }
-    if (!options_ended && (a == "-h" || a == "--help")) {
-      print_eval_usage(out);
-      return flush_output(out, err, "eval");
-    }
-    if (!options_ended && a == "--version") {
-      return print_version(out, err);
+    switch (handle_common_option(a, options_ended, print_eval_usage, "eval", out, err, exit_code)) {
+      case CommonOption::kConsumed:
+        continue;
+      case CommonOption::kExit:
+        return exit_code;
+      case CommonOption::kNotCommon:
+        break;
     }
     if (!options_ended && a == "--json") {
       want_json = true;

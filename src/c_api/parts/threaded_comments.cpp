@@ -15,6 +15,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
@@ -89,10 +90,8 @@ extern "C" fm_status_t fm_sheet_threaded_comment_at(const fm_workbook_t* wb, siz
     return rc;
   }
   const auto& list = wb->workbook().sheet(sheet_index).threaded_comments();
-  if (idx >= list.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_threaded_comment_at: idx out of range",
-                             "idx=" + std::to_string(idx) + " count=" + std::to_string(list.size()));
+  if (auto rc = check_index(idx, list.size(), "fm_sheet_threaded_comment_at", "idx"); rc != 0) {
+    return rc;
   }
   const formulon::ThreadedComment& c = list[idx];
   fm_workbook_t* scratch = reset_scratch(wb);
@@ -201,9 +200,8 @@ extern "C" fm_status_t fm_workbook_person_at(const fm_workbook_t* wb, size_t idx
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_person_at: NULL argument");
   }
   const auto& persons = wb->workbook().persons();
-  if (idx >= persons.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_person_at: idx out of range",
-                             "idx=" + std::to_string(idx) + " count=" + std::to_string(persons.size()));
+  if (auto rc = check_index(idx, persons.size(), "fm_workbook_person_at", "idx"); rc != 0) {
+    return rc;
   }
   const formulon::Person& p = persons[idx];
   fm_workbook_t* scratch = reset_scratch(wb);

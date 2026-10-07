@@ -21,6 +21,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::AdhocArrayStash;
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
@@ -145,10 +146,8 @@ extern "C" fm_status_t fm_workbook_evaluate_formula_array_cell(const fm_workbook
                              "fm_workbook_evaluate_formula_array_cell: NULL argument");
   }
   const AdhocArrayStash& stash = wb->adhoc_array;
-  if (index >= stash.cells.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_evaluate_formula_array_cell: index out of range",
-                             "index=" + std::to_string(index) + " count=" + std::to_string(stash.cells.size()));
+  if (auto rc = check_index(index, stash.cells.size(), "fm_workbook_evaluate_formula_array_cell", "index"); rc != 0) {
+    return rc;
   }
   // Read-path scratch: cleared per call so returned text pointers stay valid
   // only until the next read (see `fm_workbook_evaluate_formula_array_cell`

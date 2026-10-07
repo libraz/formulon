@@ -27,6 +27,7 @@
 #include "value.h"
 
 using formulon::c_api::parts::check_formula_parses;
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -426,10 +427,8 @@ extern "C" fm_status_t fm_workbook_defined_name_at(const fm_workbook_t* wb, size
                              "fm_workbook_defined_name_at: NULL argument");
   }
   const auto& names = wb->workbook().defined_names();
-  if (idx >= names.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_defined_name_at: idx out of range",
-                             "idx=" + std::to_string(idx) + " count=" + std::to_string(names.size()));
+  if (auto rc = check_index(idx, names.size(), "fm_workbook_defined_name_at", "idx"); rc != 0) {
+    return rc;
   }
   *out_name = names[idx].name.c_str();
   *out_formula = names[idx].formula.c_str();
@@ -446,10 +445,8 @@ extern "C" fm_status_t fm_workbook_passthrough_at(const fm_workbook_t* wb, size_
                              "fm_workbook_passthrough_at: NULL argument");
   }
   const auto& parts = wb->workbook().passthrough_parts();
-  if (idx >= parts.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_passthrough_at: idx out of range",
-                             "idx=" + std::to_string(idx) + " count=" + std::to_string(parts.size()));
+  if (auto rc = check_index(idx, parts.size(), "fm_workbook_passthrough_at", "idx"); rc != 0) {
+    return rc;
   }
   *out_path = parts[idx].path.c_str();
   return 0;

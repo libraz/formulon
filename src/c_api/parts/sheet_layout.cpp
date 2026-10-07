@@ -28,6 +28,7 @@
 using formulon::c_api::parts::check_column_span;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_finite_non_negative;
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_row_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
@@ -186,9 +187,8 @@ extern "C" fm_status_t fm_sheet_get_column(const fm_workbook_t* wb, size_t sheet
     return rc;
   }
   const auto& cols = wb->workbook().sheet(sheet_index).layout().columns;
-  if (idx >= cols.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_get_column: idx out of range",
-                             "idx=" + std::to_string(idx) + " count=" + std::to_string(cols.size()));
+  if (auto rc = check_index(idx, cols.size(), "fm_sheet_get_column", "idx"); rc != 0) {
+    return rc;
   }
   *out = fm_column_layout_t{};
   out->first = cols[idx].first;
@@ -226,10 +226,8 @@ extern "C" fm_status_t fm_sheet_get_row_override(const fm_workbook_t* wb, size_t
     return rc;
   }
   const auto& rows = wb->workbook().sheet(sheet_index).layout().row_overrides;
-  if (idx >= rows.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_get_row_override: idx out of range",
-                             "idx=" + std::to_string(idx) + " count=" + std::to_string(rows.size()));
+  if (auto rc = check_index(idx, rows.size(), "fm_sheet_get_row_override", "idx"); rc != 0) {
+    return rc;
   }
   *out = fm_row_layout_t{};
   out->row = rows[idx].row;

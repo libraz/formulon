@@ -245,6 +245,11 @@ fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index, 
 // the same validator as the mutators.
 fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const char* fn);
 
+// Bounds-checks a caller-supplied element index against a collection of
+// `size` entries. On failure writes `"<fn>: <field> out of range"` with an
+// `<field>=<index> count=<size>` context and returns the error status.
+fm_status_t check_index(std::size_t index, std::size_t size, const char* fn, const char* field);
+
 }  // namespace parts
 }  // namespace c_api
 }  // namespace formulon

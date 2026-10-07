@@ -504,6 +504,15 @@ fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const 
   return 0;
 }
 
+fm_status_t check_index(std::size_t index, std::size_t size, const char* fn, const char* field) {
+  if (index < size) {
+    return 0;
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                           (std::string(fn) + ": " + field + " out of range").c_str(),
+                           std::string(field) + "=" + std::to_string(index) + " count=" + std::to_string(size));
+}
+
 fm_status_t check_formula_parses(const char* api, std::string_view formula, std::string context) {
   const std::string normalized = formulon::Workbook::normalize_formula_text(std::string(formula));
   std::string_view body = normalized;

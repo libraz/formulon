@@ -27,6 +27,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
@@ -188,9 +189,8 @@ extern "C" fm_status_t fm_pivot_cells_at(const fm_pivot_cells_t* cells, std::siz
   if (cells == nullptr || out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_pivot_cells_at: NULL argument");
   }
-  if (idx >= cells->cells.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_pivot_cells_at: idx out of range",
-                             "idx=" + std::to_string(idx) + " count=" + std::to_string(cells->cells.size()));
+  if (auto rc = check_index(idx, cells->cells.size(), "fm_pivot_cells_at", "idx"); rc != 0) {
+    return rc;
   }
   *out = cells->cells[idx];
   return 0;
