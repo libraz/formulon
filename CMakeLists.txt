@@ -189,6 +189,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/external_link_writer.cpp
   src/io/xlsb/feature_formula.cpp
   src/io/xlsb/func_id_table.cpp
+  src/io/xlsb/hyperlink_records.cpp
   src/io/xlsb/metadata_bin.cpp
   src/io/xlsb/ptg.cpp
   src/io/xlsb/ptg_declarations.cpp

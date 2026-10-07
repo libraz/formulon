@@ -15,6 +15,7 @@
 #include "io/xlsb/cf_records.h"
 #include "io/xlsb/dv_records.h"
 #include "io/xlsb/feature_formula.h"
+#include "io/xlsb/hyperlink_records.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
@@ -151,27 +152,6 @@ bool IsWriterRegeneratedSheetRecord(XlsbRecordType type) {
     default:
       return false;
   }
-}
-
-constexpr std::uint32_t kMaxHyperlinkRelIdUnits = 32767U;
-constexpr std::uint32_t kMaxHyperlinkLocationUnits = 2083U;
-constexpr std::uint32_t kMaxHyperlinkTooltipUnits = 255U;
-constexpr std::uint32_t kMaxHyperlinkDisplayUnits = 32767U;
-
-Expected<std::string, Error> ReadHyperlinkWideString(ByteSpan& cursor, const char* field, std::uint32_t max_units) {
-  if (cursor.size < 4U) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
-                      std::string("xlsb BrtHLink ") + field + " length truncated", "context=xlsb_reader");
-  }
-  const std::uint32_t cch =
-      static_cast<std::uint32_t>(cursor.data[0]) | (static_cast<std::uint32_t>(cursor.data[1]) << 8U) |
-      (static_cast<std::uint32_t>(cursor.data[2]) << 16U) | (static_cast<std::uint32_t>(cursor.data[3]) << 24U);
-  if (cch > max_units) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt,
-                      std::string("xlsb BrtHLink ") + field + " exceeds string limit",
-                      "context=xlsb_reader cch=" + std::to_string(cch));
-  }
-  return read_xlwidestring(cursor);
 }
 
 /// Decodes the fixed-width worksheet default-format record. The model only
@@ -760,67 +740,10 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       return RecordDisposition::kModelled;
     }
     case XlsbRecordType::BrtHLink: {
-      // BrtHLink ([MS-XLSB] §2.4.494): RfX followed by a non-null
-      // relationship id and three XLWideStrings (location, tooltip,
-      // display). A present-but-empty relationship id is the internal
-      // hyperlink form; external links must resolve that id through the
-      // sheet relationship part after the record stream is decoded.
-      ByteSpan p = rec.payload;
-      auto rfx_or = read_rfx(p);
-      if (!rfx_or) {
-        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtHLink range truncated",
-                          "context=xlsb_reader");
+      auto link_status = decode_hyperlink(rec, wb.sheet(sheet_index));
+      if (!link_status) {
+        return link_status.error();
       }
-      const MergeRange& rfx = rfx_or.value();
-      if (!Sheet::rect_in_grid(rfx.first_row, rfx.first_col, rfx.last_row, rfx.last_col)) {
-        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink range out of bounds",
-                          "context=xlsb_reader");
-      }
-      // `read_xlnullablewidestring` intentionally maps both a null value
-      // and a present empty value to `""`; inspect the sentinel first so a
-      // null RelID cannot be mistaken for the required internal form.
-      if (p.size < 4U) {
-        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtHLink relationship id truncated",
-                          "context=xlsb_reader");
-      }
-      const std::uint32_t rel_len =
-          static_cast<std::uint32_t>(p.data[0]) | (static_cast<std::uint32_t>(p.data[1]) << 8U) |
-          (static_cast<std::uint32_t>(p.data[2]) << 16U) | (static_cast<std::uint32_t>(p.data[3]) << 24U);
-      if (rel_len == 0xFFFFFFFFU) {
-        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink relationship id is null",
-                          "context=xlsb_reader");
-      }
-      if (rel_len > kMaxHyperlinkRelIdUnits) {
-        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink relationship id exceeds string limit",
-                          "context=xlsb_reader cch=" + std::to_string(rel_len));
-      }
-      ASSIGN_OR_RETURN(auto rid, read_xlnullablewidestring(p));
-      auto location_or = ReadHyperlinkWideString(p, "location", kMaxHyperlinkLocationUnits);
-      if (!location_or) {
-        return location_or.error();
-      }
-      auto tooltip_or = ReadHyperlinkWideString(p, "tooltip", kMaxHyperlinkTooltipUnits);
-      if (!tooltip_or) {
-        return tooltip_or.error();
-      }
-      auto display_or = ReadHyperlinkWideString(p, "display", kMaxHyperlinkDisplayUnits);
-      if (!display_or) {
-        return display_or.error();
-      }
-      if (p.size != 0U) {
-        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink has trailing bytes",
-                          "context=xlsb_reader trailing=" + std::to_string(p.size));
-      }
-      Hyperlink hyperlink;
-      hyperlink.row = rfx.first_row;
-      hyperlink.col = rfx.first_col;
-      hyperlink.last_row = rfx.last_row;
-      hyperlink.last_col = rfx.last_col;
-      hyperlink.rid = std::move(rid);
-      hyperlink.location = std::move(location_or.value());
-      hyperlink.tooltip = std::move(tooltip_or.value());
-      hyperlink.display = std::move(display_or.value());
-      wb.sheet(sheet_index).mutable_hyperlinks().push_back(std::move(hyperlink));
       return RecordDisposition::kModelled;
     }
     case XlsbRecordType::BrtCellBlank: {

@@ -8,7 +8,6 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -23,6 +22,7 @@
 #include "io/xlsb/cf_records.h"
 #include "io/xlsb/dv_records.h"
 #include "io/xlsb/feature_formula.h"
+#include "io/xlsb/hyperlink_records.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
@@ -288,64 +288,15 @@ void EmitMerges(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndMergeCells), ByteSpan{});
 }
 
-Expected<void, Error> EmitBoundedHyperlinkWideString(std::vector<std::uint8_t>& dst, std::string_view text,
-                                                     std::uint32_t max_units, const char* field) {
-  const std::size_t start = dst.size();
-  emit_xlwidestring(dst, text);
-  const std::uint32_t cch =
-      static_cast<std::uint32_t>(dst[start]) | (static_cast<std::uint32_t>(dst[start + 1U]) << 8U) |
-      (static_cast<std::uint32_t>(dst[start + 2U]) << 16U) | (static_cast<std::uint32_t>(dst[start + 3U]) << 24U);
-  if (cch > max_units) {
-    dst.resize(start);
-    return make_error(FormulonErrorCode::kInvalidArgument,
-                      std::string("xlsb BrtHLink ") + field + " exceeds string limit",
-                      "context=xlsb_sheet_writer cch=" + std::to_string(cch));
-  }
-  return Expected<void, Error>::Ok();
-}
-
 Expected<void, Error> EmitHyperlinks(std::vector<std::uint8_t>& dst, const Sheet& sheet,
                                      const std::vector<std::string>& relationship_ids) {
-  constexpr std::uint32_t kMaxRelIdUnits = 32767U;
-  constexpr std::uint32_t kMaxLocationUnits = 2083U;
-  constexpr std::uint32_t kMaxTooltipUnits = 255U;
-  constexpr std::uint32_t kMaxDisplayUnits = 32767U;
   for (std::size_t i = 0; i < sheet.hyperlinks().size(); ++i) {
     const Hyperlink& hyperlink = sheet.hyperlinks()[i];
-    if (!Sheet::rect_in_grid(hyperlink.row, hyperlink.col, hyperlink.last_row, hyperlink.last_col)) {
-      return make_error(
-          FormulonErrorCode::kInvalidArgument, "xlsb hyperlink rectangle out of grid",
-          "context=xlsb_sheet_writer row=" + std::to_string(hyperlink.row) + " col=" + std::to_string(hyperlink.col) +
-              " last_row=" + std::to_string(hyperlink.last_row) + " last_col=" + std::to_string(hyperlink.last_col));
-    }
-    std::vector<std::uint8_t> payload;
-    emit_rfx(payload, MergeRange{hyperlink.row, hyperlink.col, hyperlink.last_row, hyperlink.last_col});
     const std::string_view rid =
         i < relationship_ids.size() ? std::string_view(relationship_ids[i]) : std::string_view{};
-    // RelID is always present in BrtHLink. Empty-but-present is the internal
-    // hyperlink form; null would be malformed on read.
-    emit_xlnullablewidestring(payload, std::optional<std::string_view>(rid));
-    if (!rid.empty()) {
-      const std::size_t rid_start = 16U;
-      const std::uint32_t rid_units = static_cast<std::uint32_t>(payload[rid_start]) |
-                                      (static_cast<std::uint32_t>(payload[rid_start + 1U]) << 8U) |
-                                      (static_cast<std::uint32_t>(payload[rid_start + 2U]) << 16U) |
-                                      (static_cast<std::uint32_t>(payload[rid_start + 3U]) << 24U);
-      if (rid_units > kMaxRelIdUnits) {
-        return make_error(FormulonErrorCode::kInvalidArgument, "xlsb BrtHLink relationship id exceeds string limit",
-                          "context=xlsb_sheet_writer cch=" + std::to_string(rid_units));
-      }
+    if (auto s = emit_hyperlink(dst, hyperlink, rid); !s) {
+      return s;
     }
-    if (auto r = EmitBoundedHyperlinkWideString(payload, hyperlink.location, kMaxLocationUnits, "location"); !r) {
-      return r.error();
-    }
-    if (auto r = EmitBoundedHyperlinkWideString(payload, hyperlink.tooltip, kMaxTooltipUnits, "tooltip"); !r) {
-      return r.error();
-    }
-    if (auto r = EmitBoundedHyperlinkWideString(payload, hyperlink.display, kMaxDisplayUnits, "display"); !r) {
-      return r.error();
-    }
-    emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtHLink), payload);
   }
   return Expected<void, Error>::Ok();
 }
