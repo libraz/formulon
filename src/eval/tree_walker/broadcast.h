@@ -25,6 +25,7 @@
 
 #include <cstdint>
 
+#include "eval/tail_array.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -35,10 +36,15 @@ namespace eval {
 // A non-owning shape + cell view over a `Value`, used by the broadcast
 // helpers. For an Array it aliases the existing cells buffer (no copy);
 // for a scalar it aliases a caller-supplied 1-element backing slot.
+// For a `TailArray`, `rows` x `cols` is the declared size, `cells` is the dense
+// head (`head` along `axis`) and `tail` is the repeated row / column.
 struct ArrayView {
   std::uint32_t rows;
   std::uint32_t cols;
   const Value* cells;
+  std::uint32_t head = 0;
+  const Value* tail = nullptr;
+  TailAxis axis = TailAxis::kRows;
 };
 
 // Resolves `v` to an `ArrayView`. For an Array the view aliases the
@@ -46,6 +52,10 @@ struct ArrayView {
 // backing slot `scalar_slot` is populated and aliased. Lifetime: the view
 // is valid as long as either the source Array or `scalar_slot` outlives it.
 ArrayView as_array_view(const Value& v, Value* scalar_slot);
+
+// `Shaped` overload: a `TailArray` yields a tail-aware view, anything else
+// behaves like the `Value` overload on `s.value`.
+ArrayView as_array_view(const Shaped& s, Value* scalar_slot);
 
 // Fetches the operand cell contributing to output position `(r, c)` under
 // Excel broadcasting, or `nullptr` when the operand cannot supply that
@@ -71,6 +81,17 @@ Value broadcast_binop(parser::BinOp op, const Value& lhs, const Value& rhs, Aren
 // `Value::Array` of the same shape with `apply_unary` applied per cell
 // (errors are written through verbatim).
 Value broadcast_unary(parser::UnaryOp op, const Value& operand, Arena& arena);
+
+// `Shaped` overload of `broadcast_binop`. Without a `TailArray` operand it
+// delegates to the `Value` version. With `TailArray` operands on one axis the
+// result is a `TailArray` (never `from_reference`): head cells are computed
+// per cell and the tail row / column once. Operands on different axes are
+// densified first (`#NUM!` past the derived-array cap).
+Shaped broadcast_binop(parser::BinOp op, const Shaped& lhs, const Shaped& rhs, Arena& arena);
+
+// `Shaped` overload of `broadcast_unary`; a `TailArray` operand yields a
+// `TailArray` of the same declared size.
+Shaped broadcast_unary(parser::UnaryOp op, const Shaped& operand, Arena& arena);
 
 }  // namespace eval
 }  // namespace formulon
