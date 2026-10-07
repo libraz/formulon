@@ -123,6 +123,14 @@ Napi::Object MakeNumberFieldResult(Napi::Env env, Napi::Object status, const cha
 /// Builds `{ status, <field>: string }`. NULL `value` becomes "".
 Napi::Object MakeStringFieldResult(Napi::Env env, Napi::Object status, const char* field, const char* value);
 
+/// Builds `{ status, <field>: number }` from `code`; `value` is carried
+/// only on success and reads 0 otherwise.
+Napi::Object MakeNumberFieldResult(Napi::Env env, fm_status_t code, const char* field, double value);
+
+/// Builds `{ status, <field>: string }` from `code`; `value` is carried
+/// only on success and reads "" otherwise (as does a NULL `value`).
+Napi::Object MakeStringFieldResult(Napi::Env env, fm_status_t code, const char* field, const char* value);
+
 /// Builds the `{ status, value }` NumberResult from `code`; `value` is
 /// carried only on success and reads 0 otherwise.
 Napi::Object MakeNumberResult(Napi::Env env, fm_status_t code, double value);
@@ -143,6 +151,10 @@ Napi::Object MakeValueResult(Napi::Env env, fm_status_t code, const fm_value_t& 
 
 /// Builds `{ status, index }` (used by `*_create` / `*_add` style entries).
 Napi::Object MakeIndexResult(Napi::Env env, Napi::Object status, uint32_t index);
+
+/// Builds `{ status, index }` from `code`; `index` is carried only on
+/// success and reads 0 otherwise.
+Napi::Object MakeIndexResult(Napi::Env env, fm_status_t code, uint32_t index);
 
 /// Builds `{ status, top, left, rows, cols, cells: [] }` placeholder for
 /// failure paths in `PivotLayout`.

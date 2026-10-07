@@ -51,10 +51,7 @@ Napi::Value Workbook::PivotCacheIdAt(const Napi::CallbackInfo& info) {
   const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
   uint32_t out = 0;
   fm_status_t rc = fm_workbook_pivot_cache_id_at(handle_, idx, &out);
-  if (rc != 0) {
-    return MakeIndexResult(env, MakeErrorStatus(env, rc), 0);
-  }
-  return MakeIndexResult(env, MakeOkStatus(env), out);
+  return MakeIndexResult(env, rc, out);
 }
 
 Napi::Value Workbook::PivotCacheCreate(const Napi::CallbackInfo& info) {
@@ -65,10 +62,7 @@ Napi::Value Workbook::PivotCacheCreate(const Napi::CallbackInfo& info) {
   const uint32_t requested = ArgU32(info, 0);
   uint32_t out = 0;
   fm_status_t rc = fm_workbook_pivot_cache_create(handle_, requested, &out);
-  if (rc != 0) {
-    return MakeIndexResult(env, MakeErrorStatus(env, rc), 0);
-  }
-  return MakeIndexResult(env, MakeOkStatus(env), out);
+  return MakeIndexResult(env, rc, out);
 }
 
 Napi::Value Workbook::PivotCacheRemove(const Napi::CallbackInfo& info) {
@@ -138,24 +132,14 @@ Napi::Value Workbook::PivotCacheFieldCount(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::PivotCacheFieldName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("value", Napi::String::New(env, ""));
-    return out;
+    return MakeStringResult(env, kBindingInvalidHandle, nullptr);
   }
   const uint32_t cache_id = ArgU32(info, 0);
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const char* name = nullptr;
   fm_status_t rc = fm_workbook_pivot_cache_field_name(handle_, cache_id, field_idx, &name);
-  if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("value", Napi::String::New(env, ""));
-    return out;
-  }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("value", Napi::String::New(env, name != nullptr ? name : ""));
-  return out;
+  return MakeStringResult(env, rc, name);
 }
 
 Napi::Value Workbook::PivotCacheFieldAdd(const Napi::CallbackInfo& info) {
@@ -167,10 +151,7 @@ Napi::Value Workbook::PivotCacheFieldAdd(const Napi::CallbackInfo& info) {
   const std::string name = ArgString(info, 1);
   std::size_t out = 0;
   fm_status_t rc = fm_workbook_pivot_cache_field_add(handle_, cache_id, name.c_str(), &out);
-  if (rc != 0) {
-    return MakeIndexResult(env, MakeErrorStatus(env, rc), 0);
-  }
-  return MakeIndexResult(env, MakeOkStatus(env), static_cast<uint32_t>(out));
+  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
 }
 
 Napi::Value Workbook::PivotCacheFieldClear(const Napi::CallbackInfo& info) {
@@ -277,10 +258,7 @@ Napi::Value Workbook::PivotCacheRecordAdd(const Napi::CallbackInfo& info) {
   const uint32_t cache_id = ArgU32(info, 0);
   std::size_t out = 0;
   fm_status_t rc = fm_workbook_pivot_cache_record_add(handle_, cache_id, &out);
-  if (rc != 0) {
-    return MakeIndexResult(env, MakeErrorStatus(env, rc), 0);
-  }
-  return MakeIndexResult(env, MakeOkStatus(env), static_cast<uint32_t>(out));
+  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
 }
 
 Napi::Value Workbook::PivotCacheRecordClear(const Napi::CallbackInfo& info) {

@@ -36,10 +36,7 @@ Napi::Value Workbook::SheetStringGetter(const Napi::CallbackInfo& info, SheetStr
   }
   const char* text = nullptr;
   const fm_status_t rc = getter(handle_, ArgU32(info, 0), &text);
-  if (rc != 0) {
-    return MakeStringFieldResult(env, MakeErrorStatus(env, rc), field, nullptr);
-  }
-  return MakeStringFieldResult(env, MakeOkStatus(env), field, text);
+  return MakeStringFieldResult(env, rc, field, text);
 }
 
 Napi::Value Workbook::SheetStringSetter(const Napi::CallbackInfo& info, SheetStringSetFn setter) {
@@ -183,12 +180,9 @@ Napi::Value Workbook::ClearSheetBreaks(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::BreaksArray(const Napi::CallbackInfo& info, bool rows) {
   Napi::Env env = info.Env();
-  Napi::Object result = Napi::Object::New(env);
   Napi::Array items = Napi::Array::New(env);
   if (handle_ == nullptr) {
-    result.Set("status", NullHandleError(env));
-    result.Set("breaks", items);
-    return result;
+    return MakeFieldResult(env, NullHandleError(env), "breaks", items);
   }
   const uint32_t sheet = ArgU32(info, 0);
   const std::size_t count = rows ? fm_sheet_row_break_count(handle_, sheet) : fm_sheet_col_break_count(handle_, sheet);
@@ -197,9 +191,7 @@ Napi::Value Workbook::BreaksArray(const Napi::CallbackInfo& info, bool rows) {
     const fm_status_t rc =
         rows ? fm_sheet_row_break_at(handle_, sheet, i, &brk) : fm_sheet_col_break_at(handle_, sheet, i, &brk);
     if (rc != 0) {
-      result.Set("status", MakeErrorStatus(env, rc));
-      result.Set("breaks", Napi::Array::New(env));
-      return result;
+      return MakeFieldResult(env, MakeErrorStatus(env, rc), "breaks", Napi::Array::New(env));
     }
     Napi::Object item = Napi::Object::New(env);
     item.Set("id", Napi::Number::New(env, brk.id));
@@ -208,9 +200,7 @@ Napi::Value Workbook::BreaksArray(const Napi::CallbackInfo& info, bool rows) {
     item.Set("manual", Napi::Boolean::New(env, brk.manual != 0));
     items.Set(i, item);
   }
-  result.Set("status", MakeOkStatus(env));
-  result.Set("breaks", items);
-  return result;
+  return MakeFieldResult(env, MakeOkStatus(env), "breaks", items);
 }
 
 Napi::Value Workbook::GetSheetRowBreaks(const Napi::CallbackInfo& info) {

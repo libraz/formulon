@@ -58,11 +58,8 @@ Napi::Object CfvoToJs(Napi::Env env, const fm_cfvo_t& cfvo) {
 
 Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("cells", Napi::Array::New(env));
-    return out;
+    return MakeFieldResult(env, NullHandleError(env), "cells", Napi::Array::New(env));
   }
   const uint32_t sheet = ArgU32(info, 0);
   const uint32_t first_row = ArgU32(info, 1);
@@ -79,9 +76,7 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
   fm_status_t rc =
       fm_workbook_cf_evaluate_range(handle_, sheet, first_row, first_col, last_row, last_col, today_serial, &results);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("cells", Napi::Array::New(env));
-    return out;
+    return MakeFieldResult(env, MakeErrorStatus(env, rc), "cells", Napi::Array::New(env));
   }
   const std::size_t cell_count = fm_cf_results_cell_count(results);
   Napi::Array cells = Napi::Array::New(env, cell_count);
@@ -112,9 +107,7 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
     ++emitted;
   }
   fm_cf_results_destroy(results);
-  out.Set("status", MakeOkStatus(env));
-  out.Set("cells", cells);
-  return out;
+  return MakeFieldResult(env, MakeOkStatus(env), "cells", cells);
 }
 
 // ---- Conditional formatting (read / mutate) -------------------------
@@ -495,10 +488,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   }
   std::size_t new_index = 0;
   fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule, &new_index);
-  if (rc != 0) {
-    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "index", 0);
-  }
-  return MakeNumberFieldResult(env, MakeOkStatus(env), "index", static_cast<double>(new_index));
+  return MakeNumberFieldResult(env, rc, "index", static_cast<double>(new_index));
 }
 
 Napi::Value Workbook::RemoveConditionalFormatAt(const Napi::CallbackInfo& info) {

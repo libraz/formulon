@@ -226,10 +226,7 @@ Napi::Value Workbook::GetCellPhonetic(const Napi::CallbackInfo& info) {
   const uint32_t col = ArgU32(info, 2);
   const char* text = nullptr;
   fm_status_t rc = fm_workbook_get_cell_phonetic(handle_, sheet, row, col, &text);
-  if (rc != 0) {
-    return MakeStringFieldResult(env, MakeErrorStatus(env, rc), "value", "");
-  }
-  return MakeStringFieldResult(env, MakeOkStatus(env), "value", text);
+  return MakeStringResult(env, rc, text);
 }
 
 Napi::Value Workbook::GetCellPhoneticRuns(const Napi::CallbackInfo& info) {
@@ -384,10 +381,7 @@ Napi::Value Workbook::GetLambdaText(const Napi::CallbackInfo& info) {
   const uint32_t col = ArgU32(info, 2);
   const char* text = nullptr;
   fm_status_t rc = fm_workbook_lambda_text_at(handle_, sheet, row, col, &text);
-  if (rc != 0) {
-    return MakeStringFieldResult(env, MakeErrorStatus(env, rc), "text", "");
-  }
-  return MakeStringFieldResult(env, MakeOkStatus(env), "text", text);
+  return MakeStringFieldResult(env, rc, "text", text);
 }
 
 // ---- Formula text, range enumeration, display text ------------------

@@ -38,19 +38,14 @@ Napi::Object DefaultSheetView(Napi::Env env) {
 
 Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("view", DefaultSheetView(env));
-    return out;
+    return MakeFieldResult(env, NullHandleError(env), "view", DefaultSheetView(env));
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   fm_sheet_view_t v{};
   fm_status_t rc = fm_sheet_get_view(handle_, sheet, &v);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("view", DefaultSheetView(env));
-    return out;
+    return MakeFieldResult(env, MakeErrorStatus(env, rc), "view", DefaultSheetView(env));
   }
   Napi::Object view = Napi::Object::New(env);
   view.Set("zoomScale", Napi::Number::New(env, v.zoom_scale));
@@ -64,14 +59,11 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
   view.Set("rightToLeft", Napi::Number::New(env, v.right_to_left));
   view.Set("tabSelected", Napi::Number::New(env, v.tab_selected));
   view.Set("viewMode", Napi::String::New(env, v.view_mode != nullptr ? v.view_mode : ""));
-  out.Set("status", MakeOkStatus(env));
-  out.Set("view", view);
-  return out;
+  return MakeFieldResult(env, MakeOkStatus(env), "view", view);
 }
 
 Napi::Value Workbook::GetSheetProtection(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   // `protection` is emitted on every exit path, as `view` already is above
   // and as the WASM binding does for both -- a value object there cannot
   // omit a field. A caller that skips the status check then reads a
@@ -105,9 +97,7 @@ Napi::Value Workbook::GetSheetProtection(const Napi::CallbackInfo& info) {
   pr.Set("sort", Napi::Number::New(env, p.sort));
   pr.Set("autoFilter", Napi::Number::New(env, p.auto_filter));
   pr.Set("pivotTables", Napi::Number::New(env, p.pivot_tables));
-  out.Set("status", MakeStatus(env, rc));
-  out.Set("protection", pr);
-  return out;
+  return MakeFieldResult(env, MakeStatus(env, rc), "protection", pr);
 }
 
 Napi::Value Workbook::SetSheetProtection(const Napi::CallbackInfo& info) {
@@ -283,19 +273,14 @@ Napi::Value Workbook::SetSheetViewMode(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::GetSheetColumns(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("columns", Napi::Array::New(env));
-    return out;
+    return MakeFieldResult(env, NullHandleError(env), "columns", Napi::Array::New(env));
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   std::size_t count = 0;
   fm_status_t rc = fm_sheet_get_column_count(handle_, sheet, &count);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("columns", Napi::Array::New(env));
-    return out;
+    return MakeFieldResult(env, MakeErrorStatus(env, rc), "columns", Napi::Array::New(env));
   }
   Napi::Array arr = Napi::Array::New(env, count);
   std::size_t emitted = 0;
@@ -319,9 +304,7 @@ Napi::Value Workbook::GetSheetColumns(const Napi::CallbackInfo& info) {
     arr.Set(static_cast<uint32_t>(emitted), col);
     ++emitted;
   }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("columns", arr);
-  return out;
+  return MakeFieldResult(env, MakeOkStatus(env), "columns", arr);
 }
 
 Napi::Value Workbook::SetColumnWidth(const Napi::CallbackInfo& info) {
@@ -368,19 +351,14 @@ Napi::Value Workbook::SetColumnOutline(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::GetSheetRowOverrides(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("rows", Napi::Array::New(env));
-    return out;
+    return MakeFieldResult(env, NullHandleError(env), "rows", Napi::Array::New(env));
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   std::size_t count = 0;
   fm_status_t rc = fm_sheet_get_row_override_count(handle_, sheet, &count);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("rows", Napi::Array::New(env));
-    return out;
+    return MakeFieldResult(env, MakeErrorStatus(env, rc), "rows", Napi::Array::New(env));
   }
   Napi::Array arr = Napi::Array::New(env, count);
   std::size_t emitted = 0;
@@ -401,9 +379,7 @@ Napi::Value Workbook::GetSheetRowOverrides(const Napi::CallbackInfo& info) {
     arr.Set(static_cast<uint32_t>(emitted), row);
     ++emitted;
   }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("rows", arr);
-  return out;
+  return MakeFieldResult(env, MakeOkStatus(env), "rows", arr);
 }
 
 Napi::Value Workbook::SetRowHeight(const Napi::CallbackInfo& info) {

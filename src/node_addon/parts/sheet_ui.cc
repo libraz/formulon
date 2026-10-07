@@ -172,11 +172,8 @@ Napi::Value Workbook::GetComment(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::GetCommentResult(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("comment", env.Null());
-    return out;
+    return MakeFieldResult(env, NullHandleError(env), "comment", env.Null());
   }
   const uint32_t sheet = ArgU32(info, 0);
   const uint32_t row = ArgU32(info, 1);
@@ -184,16 +181,12 @@ Napi::Value Workbook::GetCommentResult(const Napi::CallbackInfo& info) {
   fm_comment c{};
   const fm_status_t rc = fm_sheet_get_comment_at(handle_, sheet, row, col, &c);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("comment", env.Null());
-    return out;
+    return MakeFieldResult(env, MakeErrorStatus(env, rc), "comment", env.Null());
   }
   Napi::Object comment = Napi::Object::New(env);
   comment.Set("author", Napi::String::New(env, c.author != nullptr ? c.author : ""));
   comment.Set("text", Napi::String::New(env, c.text != nullptr ? c.text : ""));
-  out.Set("status", MakeOkStatus(env));
-  out.Set("comment", comment);
-  return out;
+  return MakeFieldResult(env, MakeOkStatus(env), "comment", comment);
 }
 
 namespace {

@@ -44,16 +44,11 @@ Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* buf, std::size_t len) {
 
 // Builds `{ status, bytes }` for a save call; `bytes` is null on failure.
 Napi::Object MakeSaveResult(Napi::Env env, fm_status_t rc, uint8_t* buf, std::size_t len) {
-  Napi::Object out = Napi::Object::New(env);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("bytes", env.Null());
-    return out;
+    return MakeFieldResult(env, MakeErrorStatus(env, rc), "bytes", env.Null());
   }
   Napi::Uint8Array dst = TakeSavedBytes(env, buf, len);
-  out.Set("status", MakeOkStatus(env));
-  out.Set("bytes", dst);
-  return out;
+  return MakeFieldResult(env, MakeOkStatus(env), "bytes", dst);
 }
 
 bool ReadThreadCount(const Napi::CallbackInfo& info, uint32_t& thread_count) {

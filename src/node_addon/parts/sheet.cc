@@ -65,10 +65,7 @@ Napi::Value Workbook::SheetName(const Napi::CallbackInfo& info) {
   const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
   const char* name = nullptr;
   fm_status_t rc = fm_workbook_sheet_name(handle_, idx, &name);
-  if (rc != 0) {
-    return MakeStringFieldResult(env, MakeErrorStatus(env, rc), "value", "");
-  }
-  return MakeStringFieldResult(env, MakeOkStatus(env), "value", name);
+  return MakeStringResult(env, rc, name);
 }
 
 // ---- Row / column structural edits ----------------------------------

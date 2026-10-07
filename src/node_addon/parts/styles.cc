@@ -231,10 +231,7 @@ Napi::Value Workbook::GetCellXfIndex(const Napi::CallbackInfo& info) {
   const uint32_t col = ArgU32(info, 2);
   uint32_t xf = 0;
   fm_status_t rc = fm_cell_get_xf_index(handle_, sheet, row, col, &xf);
-  if (rc != 0) {
-    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "xfIndex", 0);
-  }
-  return MakeNumberFieldResult(env, MakeOkStatus(env), "xfIndex", xf);
+  return MakeNumberFieldResult(env, rc, "xfIndex", xf);
 }
 
 Napi::Value Workbook::SetCellXfIndex(const Napi::CallbackInfo& info) {
@@ -387,10 +384,7 @@ Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
   }
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_font(handle_, fr, &idx);
-  if (rc != 0) {
-    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "index", 0);
-  }
-  return MakeNumberFieldResult(env, MakeOkStatus(env), "index", idx);
+  return MakeNumberFieldResult(env, rc, "index", idx);
 }
 
 Napi::Value Workbook::SetFont(const Napi::CallbackInfo& info) {
@@ -443,10 +437,7 @@ Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
   }
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_fill(handle_, fr, &idx);
-  if (rc != 0) {
-    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "index", 0);
-  }
-  return MakeNumberFieldResult(env, MakeOkStatus(env), "index", idx);
+  return MakeNumberFieldResult(env, rc, "index", idx);
 }
 
 Napi::Value Workbook::AddBorder(const Napi::CallbackInfo& info) {
@@ -464,10 +455,7 @@ Napi::Value Workbook::AddBorder(const Napi::CallbackInfo& info) {
   }
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_border(handle_, br, &idx);
-  if (rc != 0) {
-    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "index", 0);
-  }
-  return MakeNumberFieldResult(env, MakeOkStatus(env), "index", idx);
+  return MakeNumberFieldResult(env, rc, "index", idx);
 }
 
 Napi::Value Workbook::AddNumFmt(const Napi::CallbackInfo& info) {
@@ -478,10 +466,7 @@ Napi::Value Workbook::AddNumFmt(const Napi::CallbackInfo& info) {
   const std::string code = ArgString(info, 0);
   uint16_t id = 0;
   fm_status_t rc = fm_styles_add_num_fmt(handle_, code.c_str(), &id);
-  if (rc != 0) {
-    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "numFmtId", 0);
-  }
-  return MakeNumberFieldResult(env, MakeOkStatus(env), "numFmtId", static_cast<uint32_t>(id));
+  return MakeNumberFieldResult(env, rc, "numFmtId", static_cast<uint32_t>(id));
 }
 
 Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
@@ -569,10 +554,7 @@ Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
   }
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_cell_xf(handle_, xf, &idx);
-  if (rc != 0) {
-    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "index", 0);
-  }
-  return MakeNumberFieldResult(env, MakeOkStatus(env), "index", idx);
+  return MakeNumberFieldResult(env, rc, "index", idx);
 }
 
 Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
@@ -627,10 +609,7 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
   }
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_dxf(handle_, dxf, &idx);
-  if (rc != 0) {
-    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "index", 0);
-  }
-  return MakeNumberFieldResult(env, MakeOkStatus(env), "index", idx);
+  return MakeNumberFieldResult(env, rc, "index", idx);
 }
 
 // ---- Style pool counts ----------------------------------------------

@@ -461,12 +461,20 @@ Napi::Object MakeStringFieldResult(Napi::Env env, Napi::Object status, const cha
   return MakeFieldResult(env, status, field, Napi::String::New(env, value != nullptr ? value : ""));
 }
 
+Napi::Object MakeNumberFieldResult(Napi::Env env, fm_status_t code, const char* field, double value) {
+  return MakeNumberFieldResult(env, MakeStatus(env, code), field, code == 0 ? value : 0.0);
+}
+
+Napi::Object MakeStringFieldResult(Napi::Env env, fm_status_t code, const char* field, const char* value) {
+  return MakeStringFieldResult(env, MakeStatus(env, code), field, code == 0 ? value : nullptr);
+}
+
 Napi::Object MakeNumberResult(Napi::Env env, fm_status_t code, double value) {
-  return MakeNumberFieldResult(env, MakeStatus(env, code), "value", code == 0 ? value : 0.0);
+  return MakeNumberFieldResult(env, code, "value", value);
 }
 
 Napi::Object MakeStringResult(Napi::Env env, fm_status_t code, const char* value) {
-  return MakeStringFieldResult(env, MakeStatus(env, code), "value", code == 0 ? value : nullptr);
+  return MakeStringFieldResult(env, code, "value", value);
 }
 
 Napi::Object MakeValueResult(Napi::Env env, Napi::Object status, const fm_value_t& value) {
@@ -484,10 +492,11 @@ Napi::Object MakeValueResult(Napi::Env env, fm_status_t code, const fm_value_t& 
 }
 
 Napi::Object MakeIndexResult(Napi::Env env, Napi::Object status, uint32_t index) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("status", status);
-  out.Set("index", Napi::Number::New(env, index));
-  return out;
+  return MakeNumberFieldResult(env, status, "index", index);
+}
+
+Napi::Object MakeIndexResult(Napi::Env env, fm_status_t code, uint32_t index) {
+  return MakeNumberFieldResult(env, code, "index", index);
 }
 
 Napi::Object EmptyPivotLayoutResult(Napi::Env env, Napi::Object status) {
