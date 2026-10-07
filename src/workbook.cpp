@@ -88,6 +88,29 @@ parser::AstNode* parse_stored_formula(std::string_view text, Arena& arena) {
   arena.reset();
   return parse_indexable_formula(text, arena);
 }
+
+// `op`-prefixed range check for a mutator addressing one sheet.
+Expected<void, Error> check_sheet_index(const char* op, std::size_t sheet_index, std::size_t sheet_count) {
+  if (sheet_index >= sheet_count) {
+    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op) + ": sheet_index out of range",
+                      "sheet_index=" + std::to_string(sheet_index));
+  }
+  return Expected<void, Error>::Ok();
+}
+
+// `op`-prefixed target check for a cell setter: the sheet index, then the grid coordinate.
+Expected<void, Error> check_cell_target(const char* op, std::size_t sheet_index, std::size_t sheet_count,
+                                        std::uint32_t row, std::uint32_t col) {
+  if (sheet_index >= sheet_count) {
+    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op) + ": sheet_index out of range",
+                      "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheet_count));
+  }
+  if (!Sheet::coord_in_grid(row, col)) {
+    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op) + ": coordinate out of grid",
+                      "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  }
+  return Expected<void, Error>::Ok();
+}
 }  // namespace
 
 Workbook::Workbook() : engine_(std::make_unique<eval::RecalcEngine>()), kind_(WorkbookKind::kXlsx) {}
@@ -234,6 +257,16 @@ Expected<void, Error> check_sheet_headroom(std::size_t current_count) {
   }
   return {};
 }
+
+// Appends a sheet and re-points formulas that already name it. The caller
+// holds the compound-mutation mutex.
+void append_sheet(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
+                  const Workbook& workbook, std::string name) {
+  sheets.emplace_back(Sheet{std::move(name)});
+  if (mutator.has_ever_registered_formula()) {
+    reindex_formulas_referencing_sheet(sheets, mutator, workbook, sheets.back().name());
+  }
+}
 }  // namespace
 
 std::size_t Workbook::add_sheet(std::string name) {
@@ -243,22 +276,14 @@ std::size_t Workbook::add_sheet(std::string name) {
   if (!check_sheet_headroom(sheets_.size()).has_value()) {
     return kMaxSheets;
   }
-  sheets_.emplace_back(Sheet{std::move(name)});
-  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  if (mutator.has_ever_registered_formula()) {
-    reindex_formulas_referencing_sheet(sheets_, mutator, *this, sheets_.back().name());
-  }
+  append_sheet(sheets_, engine_->locked_mutator(), *this, std::move(name));
   return sheets_.size() - 1U;
 }
 
 Expected<std::size_t, Error> Workbook::add_sheet_checked(std::string name) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   RETURN_IF_ERROR(check_sheet_headroom(sheets_.size()));
-  sheets_.emplace_back(Sheet{std::move(name)});
-  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  if (mutator.has_ever_registered_formula()) {
-    reindex_formulas_referencing_sheet(sheets_, mutator, *this, sheets_.back().name());
-  }
+  append_sheet(sheets_, engine_->locked_mutator(), *this, std::move(name));
   return sheets_.size() - 1U;
 }
 
@@ -272,11 +297,7 @@ Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
     }
   }
   RETURN_IF_ERROR(check_sheet_headroom(sheets_.size()));
-  sheets_.emplace_back(Sheet{std::move(name)});
-  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  if (mutator.has_ever_registered_formula()) {
-    reindex_formulas_referencing_sheet(sheets_, mutator, *this, sheets_.back().name());
-  }
+  append_sheet(sheets_, engine_->locked_mutator(), *this, std::move(name));
   return &sheets_.back();
 }
 
@@ -1073,10 +1094,7 @@ Expected<void, Error> Workbook::set_defined_name_hidden(std::string_view name, s
 
 Expected<void, Error> Workbook::set_sheet_auto_filter(std::size_t sheet_index, AutoFilter filter) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  if (sheet_index >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_sheet_auto_filter: sheet_index out of range",
-                      "sheet_index=" + std::to_string(sheet_index));
-  }
+  RETURN_IF_ERROR(check_sheet_index("set_sheet_auto_filter", sheet_index, sheets_.size()));
   RETURN_IF_ERROR(validate_auto_filter(filter));
   std::string formula = filter_database_formula(sheets_[sheet_index].name(), filter.range);
   sheets_[sheet_index].set_auto_filter(std::move(filter));
@@ -1103,10 +1121,7 @@ Expected<void, Error> Workbook::set_sheet_auto_filter(std::size_t sheet_index, A
 
 Expected<void, Error> Workbook::remove_sheet_auto_filter(std::size_t sheet_index) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  if (sheet_index >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "remove_sheet_auto_filter: sheet_index out of range",
-                      "sheet_index=" + std::to_string(sheet_index));
-  }
+  RETURN_IF_ERROR(check_sheet_index("remove_sheet_auto_filter", sheet_index, sheets_.size()));
   sheets_[sheet_index].clear_auto_filter_model();
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   if (erase_filter_database_name(defined_names_, sheet_index)) {
@@ -1125,10 +1140,7 @@ Expected<void, Error> Workbook::set_sheet_auto_filter_xml(std::size_t sheet_inde
     return set_sheet_auto_filter(sheet_index, std::move(parsed.value()));
   }
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  if (sheet_index >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_sheet_auto_filter_xml: sheet_index out of range",
-                      "sheet_index=" + std::to_string(sheet_index));
-  }
+  RETURN_IF_ERROR(check_sheet_index("set_sheet_auto_filter_xml", sheet_index, sheets_.size()));
   sheets_[sheet_index].set_auto_filter(io::auto_filter_from_xml(xml));
   mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator());
   return Expected<void, Error>::Ok();
@@ -1378,14 +1390,7 @@ void mark_spill_anchors_intersecting_merge(const eval::RecalcEngine::LockedMutat
 
 Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                                Value value) {
-  if (sheet_index >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_value: sheet_index out of range",
-                      "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheets_.size()));
-  }
-  if (!Sheet::coord_in_grid(row, col)) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_value: coordinate out of grid",
-                      "row=" + std::to_string(row) + " col=" + std::to_string(col));
-  }
+  RETURN_IF_ERROR(check_cell_target("set_cell_value", sheet_index, sheets_.size(), row, col));
 
   const eval::CellNodeId node = make_node(sheet_index, row, col);
 
@@ -1422,14 +1427,7 @@ Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uin
 
 Expected<void, Error> Workbook::set_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                               std::string_view text) {
-  if (sheet_index >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_text: sheet_index out of range",
-                      "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheets_.size()));
-  }
-  if (!Sheet::coord_in_grid(row, col)) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_text: coordinate out of grid",
-                      "row=" + std::to_string(row) + " col=" + std::to_string(col));
-  }
+  RETURN_IF_ERROR(check_cell_target("set_cell_text", sheet_index, sheets_.size(), row, col));
 
   const eval::CellNodeId node = make_node(sheet_index, row, col);
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
@@ -1754,14 +1752,7 @@ std::string Workbook::ingest_stored_formula(std::string_view stored) {
 
 Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                                  std::string formula) {
-  if (sheet_index >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_formula: sheet_index out of range",
-                      "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheets_.size()));
-  }
-  if (!Sheet::coord_in_grid(row, col)) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_formula: coordinate out of grid",
-                      "row=" + std::to_string(row) + " col=" + std::to_string(col));
-  }
+  RETURN_IF_ERROR(check_cell_target("set_cell_formula", sheet_index, sheets_.size(), row, col));
 
   // Normalize Excel's `_xlfn.` / `_xlfn._xlws.` / `_xlws.` / `_xlpm.`
   // storage prefixes to the canonical formula-bar form at the single
@@ -1840,10 +1831,7 @@ void Workbook::mark_cell_dependents_dirty(std::size_t sheet_index, std::uint32_t
 }
 
 Expected<void, Error> Workbook::add_merge(std::size_t sheet_index, MergeRange merge) {
-  if (sheet_index >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "add_merge: sheet_index out of range",
-                      "sheet_index=" + std::to_string(sheet_index));
-  }
+  RETURN_IF_ERROR(check_sheet_index("add_merge", sheet_index, sheets_.size()));
   merge = normalize_merge_range(merge);
   if (!Sheet::rect_in_grid(merge.first_row, merge.first_col, merge.last_row, merge.last_col)) {
     return make_error(FormulonErrorCode::kInvalidArgument, "add_merge: range out of grid",
@@ -1863,10 +1851,7 @@ Expected<void, Error> Workbook::add_merge(std::size_t sheet_index, MergeRange me
 }
 
 Expected<void, Error> Workbook::remove_merges_intersecting(std::size_t sheet_index, MergeRange merge) {
-  if (sheet_index >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "remove_merges_intersecting: sheet_index out of range",
-                      "sheet_index=" + std::to_string(sheet_index));
-  }
+  RETURN_IF_ERROR(check_sheet_index("remove_merges_intersecting", sheet_index, sheets_.size()));
   merge = normalize_merge_range(merge);
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
@@ -1879,10 +1864,7 @@ Expected<void, Error> Workbook::remove_merges_intersecting(std::size_t sheet_ind
 }
 
 Expected<void, Error> Workbook::remove_merge_at(std::size_t sheet_index, std::size_t index) {
-  if (sheet_index >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "remove_merge_at: sheet_index out of range",
-                      "sheet_index=" + std::to_string(sheet_index));
-  }
+  RETURN_IF_ERROR(check_sheet_index("remove_merge_at", sheet_index, sheets_.size()));
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   MergeRange removed;
@@ -1896,10 +1878,7 @@ Expected<void, Error> Workbook::remove_merge_at(std::size_t sheet_index, std::si
 }
 
 Expected<void, Error> Workbook::clear_merges(std::size_t sheet_index) {
-  if (sheet_index >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "clear_merges: sheet_index out of range",
-                      "sheet_index=" + std::to_string(sheet_index));
-  }
+  RETURN_IF_ERROR(check_sheet_index("clear_merges", sheet_index, sheets_.size()));
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   for (const CellAddress anchor : sheets_[sheet_index].blocked_spill_anchors()) {
@@ -2306,10 +2285,7 @@ std::vector<BlockedSpillFootprint> remap_blocked_spill_footprints(const std::vec
 Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, parser::RowColAxis axis,
                                          parser::RowColEdit edit, std::uint32_t origin, std::uint32_t count,
                                          const char* op_name) {
-  if (sheet_index >= wb.sheet_count()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": sheet_index out of range",
-                      "sheet_index=" + std::to_string(sheet_index));
-  }
+  RETURN_IF_ERROR(check_sheet_index(op_name, sheet_index, wb.sheet_count()));
   if (count == 0U) {
     return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": count must be >= 1");
   }
@@ -2530,14 +2506,7 @@ Expected<void, Error> Workbook::delete_cols(std::size_t sheet_index, std::uint32
 
 Expected<void, Error> Workbook::set_cell_xf_index(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                                   std::uint32_t xf_index) {
-  if (sheet_index >= sheets_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_xf_index: sheet_index out of range",
-                      "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheets_.size()));
-  }
-  if (!Sheet::coord_in_grid(row, col)) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_xf_index: coordinate out of grid",
-                      "row=" + std::to_string(row) + " col=" + std::to_string(col));
-  }
+  RETURN_IF_ERROR(check_cell_target("set_cell_xf_index", sheet_index, sheets_.size(), row, col));
   // A style write can grow the sheet's sparse row store, so serialize it
   // with recalc just like all other workbook-level cell mutations. The
   // sheet-level setter deliberately bypasses literal-write spill invalidation
