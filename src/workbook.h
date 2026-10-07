@@ -608,6 +608,13 @@ class Workbook {
   /// and failure rules as `set_theme_colors`.
   Expected<void, Error> set_theme_fonts(const ThemeFonts& fonts);
 
+  /// Returns the workbook to the default theme by removing the theme part, its
+  /// own rels part, the parts only it referenced and the workbook relationship
+  /// (an unparseable part is removed the same way). A workbook without a theme
+  /// part is left as is. `load_theme` then reports `ThemeSource::kDefault`.
+  /// Excel adds a theme part again when the book is saved again in Excel.
+  Expected<void, Error> reset_theme();
+
   // ---------------------------------------------------------------------------
   // Threaded comments and persons
   // ---------------------------------------------------------------------------

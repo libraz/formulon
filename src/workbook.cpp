@@ -131,6 +131,10 @@ Expected<void, Error> Workbook::set_theme_fonts(const ThemeFonts& fonts) {
   return io::set_theme_fonts(*this, fonts);
 }
 
+Expected<void, Error> Workbook::reset_theme() {
+  return io::reset_theme(*this);
+}
+
 namespace {
 
 /// OOXML pattern ordinal for `gray125`.

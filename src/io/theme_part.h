@@ -26,6 +26,9 @@ Expected<void, Error> set_theme_colors(Workbook& wb, const ThemeColors& colors);
 /// Implements `Workbook::set_theme_fonts`.
 Expected<void, Error> set_theme_fonts(Workbook& wb, const ThemeFonts& fonts);
 
+/// Implements `Workbook::reset_theme`.
+Expected<void, Error> reset_theme(Workbook& wb);
+
 }  // namespace io
 }  // namespace formulon
 

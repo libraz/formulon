@@ -150,6 +150,63 @@ TEST(Theme, UnparseablePartReportsSourceAndRefusesEdit) {
   EXPECT_EQ(std::string(part->bytes.begin(), part->bytes.end()), junk);
 }
 
+TEST(Theme, ResetRemovesPartAndRelationship) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_theme_colors(default_theme().colors)));
+  ASSERT_EQ(wb.load_theme().source, ThemeSource::kPart);
+
+  ASSERT_TRUE(static_cast<bool>(wb.reset_theme()));
+  EXPECT_EQ(wb.load_theme().source, ThemeSource::kDefault);
+  EXPECT_EQ(FindPart(wb, "xl/theme/theme1.xml"), nullptr);
+  EXPECT_TRUE(wb.unknown_workbook_rels().empty());
+}
+
+TEST(Theme, ResetWithoutThemeIsNoOp) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.reset_theme()));
+  EXPECT_EQ(wb.load_theme().source, ThemeSource::kDefault);
+  EXPECT_TRUE(wb.passthrough_parts().empty());
+}
+
+TEST(Theme, ResetRemovesUnparseablePart) {
+  Workbook wb = WorkbookWithTheme("<a:theme>not a colour scheme</a:theme>");
+  ASSERT_EQ(wb.load_theme().source, ThemeSource::kUnparseable);
+  ASSERT_TRUE(static_cast<bool>(wb.reset_theme()));
+  EXPECT_EQ(wb.load_theme().source, ThemeSource::kDefault);
+  EXPECT_EQ(FindPart(wb, "xl/theme/theme1.xml"), nullptr);
+  EXPECT_TRUE(wb.unknown_workbook_rels().empty());
+}
+
+TEST(Theme, ResetRemovesThemeRelsAndPartsOnlyItReferenced) {
+  Workbook wb = WorkbookWithTheme(kCustomTheme);
+  const std::string rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" "
+      "Target=\"../media/themeimg.png\"/></Relationships>";
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(
+      PassthroughPart("xl/theme/_rels/theme1.xml.rels", "", std::vector<std::uint8_t>(rels.begin(), rels.end())))));
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/media/themeimg.png", "", {1, 2, 3}))));
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/media/other.png", "", {4}))));
+
+  ASSERT_TRUE(static_cast<bool>(wb.reset_theme()));
+  EXPECT_EQ(FindPart(wb, "xl/theme/theme1.xml"), nullptr);
+  EXPECT_EQ(FindPart(wb, "xl/theme/_rels/theme1.xml.rels"), nullptr);
+  EXPECT_EQ(FindPart(wb, "xl/media/themeimg.png"), nullptr);
+  EXPECT_NE(FindPart(wb, "xl/media/other.png"), nullptr);
+}
+
+TEST(Theme, ResetSurvivesSaveAndLoad) {
+  Workbook wb = WorkbookWithTheme(kCustomTheme);
+  ASSERT_EQ(RoundTrip(wb).load_theme().source, ThemeSource::kPart);
+  ASSERT_TRUE(static_cast<bool>(wb.reset_theme()));
+
+  const Workbook reloaded = RoundTrip(wb);
+  EXPECT_EQ(reloaded.load_theme().source, ThemeSource::kDefault);
+  EXPECT_EQ(reloaded.load_theme().theme.colors, default_theme().colors);
+  EXPECT_EQ(FindPart(reloaded, "xl/theme/theme1.xml"), nullptr);
+}
+
 TEST(Theme, PassthroughPartApiRejectsDuplicatesAndMissing) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/x.bin", "", {1, 2}))));

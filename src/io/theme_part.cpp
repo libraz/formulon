@@ -1,5 +1,6 @@
 #include "io/theme_part.h"
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <string_view>
@@ -7,6 +8,7 @@
 #include <vector>
 
 #include "io/ooxml/part_dom.h"
+#include "io/ooxml/part_graph.h"
 #include "io/ooxml_defs.h"
 #include "io/xml_utils.h"
 #include "passthrough_part.h"
@@ -280,6 +282,24 @@ Expected<void, Error> set_theme_fonts(Workbook& wb, const ThemeFonts& fonts) {
   patch_font(major, fonts.major_latin, fonts.major_ea);
   patch_font(minor, fonts.minor_latin, fonts.minor_ea);
   return ooxml::store_part_dom(wb, path_or.value(), doc);
+}
+
+Expected<void, Error> reset_theme(Workbook& wb) {
+  // The rel is dropped after the path is read: without it the path falls back to the default.
+  const std::string path = theme_part_path(wb);
+  if (ooxml::find_passthrough_part(wb, path) == nullptr) {
+    return Expected<void, Error>();
+  }
+  std::vector<UnknownRelationship> rels = wb.unknown_workbook_rels();
+  rels.erase(std::remove_if(rels.begin(), rels.end(),
+                            [&path](const UnknownRelationship& rel) {
+                              return !rel.target_external && rel.type == kRelTheme &&
+                                     (rel.target == path || "xl/" + rel.target == path);
+                            }),
+             rels.end());
+  wb.set_unknown_workbook_rels(std::move(rels));
+  ooxml::remove_orphans(wb, {path});
+  return Expected<void, Error>();
 }
 
 }  // namespace formulon::io
