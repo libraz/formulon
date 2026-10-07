@@ -9,25 +9,17 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <string>
-#include <string_view>
 #include <unordered_set>
-#include <utility>
 #include <vector>
 
 #include "cell.h"
-#include "eval/builtin_names.h"
 #include "eval/cell_evaluator.h"
 #include "eval/dep_extractor.h"
 #include "eval/dep_graph.h"
-#include "eval/dirty_set.h"
 #include "eval/dynamic_read_log.h"
-#include "eval/eval_state.h"
 #include "eval/function_registry.h"
-#include "eval/iterative_solver.h"
 #include "eval/recalc_reentry.h"
 #include "eval/spill_release.h"
-#include "eval/volatile_tracker.h"
 #include "parser/ast.h"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -47,17 +39,6 @@ namespace {
 using detail::queue_spill_release;
 using detail::SpillReleaseQueue;
 using detail::SpillWaveBudget;
-
-void mark_spill_release_wave(const RecalcEngine::LockedMutator& mutator, const std::vector<CellNodeId>& anchors,
-                             const DepGraph& graph) {
-  for (const CellNodeId anchor : anchors) {
-    mutator.mark_dirty(anchor);
-    for (const CellNodeId dependent : graph.dependents_of_ref(anchor)) {
-      mutator.mark_dirty(dependent);
-    }
-    mutator.mark_range_dependents_dirty(anchor);
-  }
-}
 
 // Drops the virtual node of every compact rectangle that lost its last watcher.
 void remove_range_nodes(DepGraph& graph, const std::vector<std::uint32_t>& released_range_ids) {
@@ -367,6 +348,47 @@ std::vector<CellNodeId> RecalcEngine::reconcile_dynamic_reads_locked(
   }
   std::sort(stale.begin(), stale.end(), CellNodeIdOrder{});
   return stale;
+}
+
+void RecalcEngine::mark_spill_release_wave_locked(const std::vector<CellNodeId>& anchors) {
+  for (const CellNodeId anchor : anchors) {
+    mark_dirty_locked(anchor);
+    for (const CellNodeId dependent : graph_.dependents_of_ref(anchor)) {
+      mark_dirty_locked(dependent);
+    }
+    mark_range_dependents_dirty_locked(anchor);
+  }
+}
+
+Expected<void, Error> RecalcEngine::evaluate_dirty_components_locked(
+    const SerialEvalPass& pass, const std::vector<std::vector<CellNodeId>>& sccs,
+    const std::unordered_set<CellNodeId, CellNodeIdHash>* closure, const char* iterative_oom_message,
+    std::unordered_set<CellNodeId, CellNodeIdHash>& visited) {
+  for (const std::vector<CellNodeId>& component : sccs) {
+    // Skip components with no dirty member (inside the closure, when restricted): their cells are up to date or are
+    // left dirty for a later pass.
+    const bool any_dirty = std::any_of(component.begin(), component.end(), [&](CellNodeId c) {
+      return dirty_.contains(c) && (closure == nullptr || closure->count(c) != 0U);
+    });
+    if (!any_dirty) {
+      continue;
+    }
+
+    if (is_cyclic_component(component, graph_)) {
+      // A cycle the walk reaches is always surfaced as a cycle. Members are recorded as visited on every resolution
+      // path so the standalone-dirty sweep does not re-touch them.
+      for (CellNodeId c : component) {
+        visited.insert(c);
+      }
+      RETURN_IF_ERROR(evaluate_cyclic_component_locked(pass, component, iterative_oom_message));
+      continue;
+    }
+
+    const CellNodeId only = component.front();
+    visited.insert(only);
+    RETURN_IF_ERROR(evaluate_formula_cell_locked(pass, only));
+  }
+  return Expected<void, Error>::Ok();
 }
 
 void RecalcEngine::commit_unresolved_cycle_locked(const SerialEvalPass& pass,
@@ -764,38 +786,8 @@ recalc_next_wave:
   // appear in the forward / reverse adjacency maps; isolated formula
   // cells are absent from both.
   std::unordered_set<CellNodeId, CellNodeIdHash> visited_in_sccs;
-  for (const std::vector<CellNodeId>& component : sccs) {
-    // Skip components whose intersection with the dirty set is empty —
-    // their cells are already up to date.
-    bool any_dirty = false;
-    for (CellNodeId c : component) {
-      if (dirty_.contains(c)) {
-        any_dirty = true;
-        break;
-      }
-    }
-    if (!any_dirty) {
-      continue;
-    }
-
-    if (is_cyclic_component(component, graph_)) {
-      // Track which members the dispatcher visited regardless of the
-      // resolution path so the standalone-dirty sweep does not re-touch
-      // them.
-      for (CellNodeId c : component) {
-        visited_in_sccs.insert(c);
-      }
-
-      RETURN_IF_ERROR(
-          evaluate_cyclic_component_locked(pass, component, "evaluation arena exhausted during iterative recalc"));
-      continue;
-    }
-
-    // Plain singleton: evaluate the cell.
-    const CellNodeId only = component.front();
-    visited_in_sccs.insert(only);
-    RETURN_IF_ERROR(evaluate_formula_cell_locked(pass, only));
-  }
+  RETURN_IF_ERROR(evaluate_dirty_components_locked(
+      pass, sccs, nullptr, "evaluation arena exhausted during iterative recalc", visited_in_sccs));
 
   // ---- Phase 4b: defensive pickup for dirty cells not visited by Tarjan. ----
   // `tarjan_scc_subset` emits isolated selected nodes, so this normally
@@ -838,16 +830,14 @@ recalc_next_wave:
       // Do not recurse through an unbounded chain of release waves. Preserve
       // the existing dirty set (including unrelated work) and keep the
       // release targets dirty for a caller retry after an external mutation.
-      const LockedMutator mutator = locked_mutator();
-      mark_spill_release_wave(mutator, released, graph_);
+      mark_spill_release_wave_locked(released);
       return make_error(FormulonErrorCode::kGraphScheduleFailed, "recalc waves made no progress",
                         "spill recovery or dynamic-reference retries exceeded the bounded wave budget");
     }
     dirty_.clear();
-    const LockedMutator mutator = locked_mutator();
-    mark_spill_release_wave(mutator, released, graph_);
+    mark_spill_release_wave_locked(released);
     for (const DepGraph::Edge& edge : dependency_delta.added) {
-      mutator.mark_dirty(edge.first);
+      mark_dirty_locked(edge.first);
     }
     dynamic.mark_stale_dirty();
     goto recalc_next_wave;
@@ -1105,55 +1095,8 @@ partial_recalc_next_wave:
   std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc_subset(dirty_closure);
   dynamic.settle_sccs(sccs, dirty_closure);
   std::unordered_set<CellNodeId, CellNodeIdHash> visited_in_sccs;
-  for (const std::vector<CellNodeId>& component : sccs) {
-    // Skip components that have no overlap with the closure: their
-    // cells are not transitively read by the viewport.
-    bool any_in_closure = false;
-    for (CellNodeId c : component) {
-      if (closure.count(c) != 0U) {
-        any_in_closure = true;
-        break;
-      }
-    }
-    if (!any_in_closure) {
-      continue;
-    }
-
-    // Skip components that have no dirty member: nothing to do here.
-    bool any_dirty = false;
-    for (CellNodeId c : component) {
-      if (dirty_.contains(c) && closure.count(c) != 0U) {
-        any_dirty = true;
-        break;
-      }
-    }
-    if (!any_dirty) {
-      continue;
-    }
-
-    if (is_cyclic_component(component, graph_)) {
-      // A cycle that the viewport reaches must still be surfaced as a
-      // cycle: the closure restriction never hides a circular reference.
-      // Mirrors `recalc()`'s cycle handling exactly, with the iterative
-      // solver wired to the same progress callback.
-      for (CellNodeId c : component) {
-        visited_in_sccs.insert(c);
-      }
-
-      RETURN_IF_ERROR(
-          evaluate_cyclic_component_locked(pass, component, "evaluation arena exhausted during partial recalc"));
-      continue;
-    }
-
-    // Plain singleton: only evaluate if the cell is in the closure AND
-    // dirty. Cells outside the closure stay dirty for a later pass.
-    const CellNodeId only = component.front();
-    if (closure.count(only) == 0U || !dirty_.contains(only)) {
-      continue;
-    }
-    visited_in_sccs.insert(only);
-    RETURN_IF_ERROR(evaluate_formula_cell_locked(pass, only));
-  }
+  RETURN_IF_ERROR(evaluate_dirty_components_locked(
+      pass, sccs, &closure, "evaluation arena exhausted during partial recalc", visited_in_sccs));
 
   // ---- Phase 4b: standalone dirty cells inside the closure. ----
   // Isolated formula cells with no dep-graph entries do not appear in
@@ -1226,8 +1169,7 @@ partial_recalc_next_wave:
   // dependency-ordered next wave before this partial call returns.
   const std::vector<CellNodeId> released = release_queue.take();
   if (!released.empty() || dependency_retry_in_closure) {
-    const LockedMutator mutator = locked_mutator();
-    mark_spill_release_wave(mutator, released, graph_);
+    mark_spill_release_wave_locked(released);
     bool release_in_closure = false;
     for (const CellNodeId anchor : released) {
       if (closure.count(anchor) != 0U) {

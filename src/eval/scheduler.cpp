@@ -631,15 +631,6 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
   const auto observation = [&](std::size_t layer, std::size_t position) {
     return ReadObservation{&dynamic.log(), (static_cast<std::uint64_t>(layer) << 32U) | position};
   };
-  const auto mark_release_targets_dirty = [&](const std::vector<CellNodeId>& anchors) {
-    for (const CellNodeId anchor : anchors) {
-      engine.dirty_.mark(anchor);
-      for (const CellNodeId dependent : engine.graph_.dependents_of_ref(anchor)) {
-        engine.dirty_.mark(dependent);
-      }
-      engine.mark_range_dependents_dirty_locked(anchor);
-    }
-  };
 
   for (;;) {
     // Reconcile committed spill geometry before closure/SCC scheduling. A
@@ -906,12 +897,12 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
         // Keep the current dirty set, including unrelated work, while
         // retaining the release targets for a caller retry after an
         // external mutation.
-        mark_release_targets_dirty(released);
+        engine.mark_spill_release_wave_locked(released);
         return make_error(FormulonErrorCode::kGraphScheduleFailed, "recalc waves made no progress",
                           "parallel spill recovery or dynamic-reference retries exceeded the bounded wave budget");
       }
       engine.dirty_.clear();
-      mark_release_targets_dirty(released);
+      engine.mark_spill_release_wave_locked(released);
       for (const DepGraph::Edge& edge : dependency_delta.added) {
         engine.dirty_.mark(edge.first);
       }

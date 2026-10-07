@@ -5,37 +5,15 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
-#include <optional>
-#include <string>
-#include <string_view>
 #include <unordered_set>
-#include <utility>
 #include <vector>
 
-#include "cell.h"
-#include "eval/builtin_names.h"
-#include "eval/cell_evaluator.h"
-#include "eval/dep_extractor.h"
 #include "eval/dep_graph.h"
-#include "eval/dirty_set.h"
 #include "eval/dynamic_read_log.h"
-#include "eval/eval_state.h"
 #include "eval/function_registry.h"
-#include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
-#include "eval/recalc_reentry.h"
-#include "eval/spill_release.h"
-#include "eval/volatile_tracker.h"
-#include "parser/ast.h"
 #include "sheet.h"
 #include "utils/arena.h"
-#include "utils/error.h"
-#include "utils/expected.h"
-#include "utils/rect_iterator.h"
-#include "utils/resource_budget.h"
-#include "utils/status_macros.h"
-#include "value.h"
 #include "workbook.h"
 
 namespace formulon::eval {

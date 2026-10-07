@@ -528,6 +528,21 @@ class RecalcEngine {
                                                          const std::vector<CellNodeId>& component,
                                                          const char* iterative_oom_message);
 
+  /// Evaluates every component of `sccs` (reverse-topological order) that has
+  /// a dirty member, restricted to `closure` when non-null. Singletons go
+  /// through `evaluate_formula_cell_locked`, cycles through
+  /// `evaluate_cyclic_component_locked` with `iterative_oom_message`. Every
+  /// cyclic member and evaluated singleton is added to `visited`.
+  Expected<void, Error> evaluate_dirty_components_locked(const SerialEvalPass& pass,
+                                                         const std::vector<std::vector<CellNodeId>>& sccs,
+                                                         const std::unordered_set<CellNodeId, CellNodeIdHash>* closure,
+                                                         const char* iterative_oom_message,
+                                                         std::unordered_set<CellNodeId, CellNodeIdHash>& visited);
+
+  /// Dirties each release anchor, its direct dependents and the owners of
+  /// compact ranges covering it, so the next wave re-runs them in order.
+  void mark_spill_release_wave_locked(const std::vector<CellNodeId>& anchors);
+
   /// Commits a cyclic component iterative calc does not resolve: `#REF!` on
   /// every member, except that a cycle closing through an OFFSET / INDIRECT
   /// read restores each member's value from before this recalc, as Excel
