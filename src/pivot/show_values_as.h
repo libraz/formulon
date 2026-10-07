@@ -37,8 +37,8 @@
 // from `result.row_subtotals[i].values`, and `result.grand_total` is
 // re-synced from `result.grand_totals[0]`.
 
-#ifndef FORMULON_PIVOT_LAYOUT_GENERATOR_H_
-#define FORMULON_PIVOT_LAYOUT_GENERATOR_H_
+#ifndef FORMULON_PIVOT_SHOW_VALUES_AS_H_
+#define FORMULON_PIVOT_SHOW_VALUES_AS_H_
 
 #include <cstddef>
 #include <vector>
@@ -61,4 +61,4 @@ void apply_show_values_as_transforms(const PivotTable& table, const PivotCache& 
 
 }  // namespace formulon::pivot
 
-#endif  // FORMULON_PIVOT_LAYOUT_GENERATOR_H_
+#endif  // FORMULON_PIVOT_SHOW_VALUES_AS_H_

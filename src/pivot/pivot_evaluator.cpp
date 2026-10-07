@@ -16,7 +16,7 @@
 //   7. apply value-axis filters and show-values-as transforms.
 //
 // The heavy lifting lives in sibling TUs (`aggregator`, `filter_engine`,
-// `hierarchy_builder`, `layout_generator`); the routines here are just
+// `hierarchy_builder`, `show_values_as`); the routines here are just
 // glue.
 
 #include "pivot/pivot_evaluator.h"
@@ -38,13 +38,13 @@
 #include "pivot/field_lookup.h"
 #include "pivot/filter_engine.h"
 #include "pivot/hierarchy_builder.h"
-#include "pivot/layout_generator.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_index.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pivot/record_access.h"
+#include "pivot/show_values_as.h"
 #include "pivot/value_order.h"
 #include "utils/checked_mul.h"
 #include "utils/error.h"
