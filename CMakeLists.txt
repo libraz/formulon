@@ -153,6 +153,7 @@ set(FORMULON_CORE_SOURCES
   src/io/ooxml/print_settings_parse.cpp
   src/io/ooxml/sheet_aux_rels_reader.cpp
   src/io/ooxml/workbook_rels_reader.cpp
+  src/io/ooxml/worksheet_metadata_reader.cpp
   src/io/ooxml_writer.cpp
   src/io/ooxml_writer_cell.cpp
   src/io/ooxml/cell_ref_writer.cpp
