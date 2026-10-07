@@ -133,6 +133,7 @@ set(FORMULON_CORE_SOURCES
   src/workbook.cpp
   src/workbook_formula_index.cpp
   src/workbook_ref_rewrite.cpp
+  src/workbook_row_col_edit.cpp
   src/io/auto_filter_xml.cpp
   src/io/cell_parser.cpp
   src/io/cf_overlay.cpp
