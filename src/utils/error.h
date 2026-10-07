@@ -277,6 +277,12 @@ inline Error make_error(FormulonErrorCode code, std::string message, std::string
   return err;
 }
 
+/// Literal-text overloads, defined out of line so a call site passes two
+/// pointers instead of materialising both strings inline.
+Error make_error(FormulonErrorCode code, const char* message);
+Error make_error(FormulonErrorCode code, const char* message, const char* context);
+Error make_error(FormulonErrorCode code, const char* message, std::string context);
+
 /// Returns the textual name of an error code (e.g. `"kParserUnexpectedToken"`).
 ///
 /// Useful for structured logs and diagnostic assertions. The returned pointer
