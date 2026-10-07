@@ -119,6 +119,19 @@ extern "C" fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_t
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_reset_theme(fm_workbook_t* wb) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_reset_theme: NULL argument");
+  }
+  auto r = wb->workbook().reset_theme();
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, fm_color_spec spec, int32_t context,
                                                  uint32_t* out_argb, int32_t* out_resolution) {
   static constexpr const char* kFn = "fm_workbook_resolve_color";

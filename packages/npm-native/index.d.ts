@@ -1397,10 +1397,39 @@ export interface ImageResult extends ImageInfoResult {
   bytes: Uint8Array;
 }
 
-/** Result of `Workbook.insertImage`; `objectId` is zero on failure. */
+/** Result of `Workbook.insertImage` and `Workbook.restoreImage`; `objectId` is zero on failure. */
 export interface InsertImageResult {
   status: Status;
   objectId: number;
+}
+
+/** New placement of an existing picture, in the quantities `listDrawingObjects`
+ *  reports: `row` / `col` / `rowOffEmu` / `colOffEmu` are the top-left marker of the
+ *  anchor box (`fromRow` ...), `widthEmu` / `heightEmu` the picture's own unrotated
+ *  size (`cx` / `cy`); a zero size keeps the current one. `anchorKind` is `OneCell`
+ *  (default) or `TwoCell`; `editAs` applies to a two-cell anchor only. */
+export interface ImagePlacement {
+  anchorKind?: AnchorKind;
+  editAs?: AnchorEditAs;
+  row?: number;
+  col?: number;
+  rowOffEmu?: number;
+  colOffEmu?: number;
+  widthEmu?: number;
+  heightEmu?: number;
+}
+
+/** Result of `Workbook.snapshotImage`. `bytes` is an opaque, versioned capture to hand
+ *  to `restoreImage`; it is empty on failure. */
+export interface ImageSnapshotResult {
+  status: Status;
+  bytes: Uint8Array;
+}
+
+/** Options of `Workbook.restoreImage`. With `newId` the capture is added on top as a
+ *  copy with a fresh id; otherwise a picture with the same id is replaced. */
+export interface RestoreImageOptions {
+  newId?: boolean;
 }
 
 /** One anchored object of a sheet's drawing. An absolute anchor reports its position from A1 as
@@ -2977,6 +3006,8 @@ export interface Workbook {
   setThemeColors(colors: number[]): Status;
   /** Writes the theme's major / minor typefaces. */
   setThemeFonts(fonts: ThemeFonts): Status;
+  /** Removes the theme part so the workbook reports the default theme (`source` is `Default`). Excel adds a theme part again when it saves the file. */
+  resetTheme(): Status;
   /** Resolves a colour specification to the colour Excel renders. */
   resolveColor(spec: ColorSpec, context: ColorContext): ResolvedColorResult;
   /** Reads the formatting a cell shows: its xf with colours resolved against the theme and palette. */
@@ -3097,6 +3128,14 @@ export interface Workbook {
   insertImage(sheet: number, bytes: Uint8Array, opts?: ImageInsertOptions): InsertImageResult;
   /** Removes the picture `objectId`; other drawing content is kept. */
   removeImage(sheet: number, objectId: number): Status;
+  /** Moves and resizes the picture `objectId`, keeping its id, crop, rotation and every other element. */
+  setImageAnchor(sheet: number, objectId: number, placement: ImagePlacement): Status;
+  /** Makes the picture `objectId` item `index` of `listDrawingObjects`, whose order is the stacking order (0 is the back). */
+  setImageZOrder(sheet: number, objectId: number, index: number): Status;
+  /** Captures the picture `objectId` with its list position, element and media as opaque bytes for `restoreImage`. */
+  snapshotImage(sheet: number, objectId: number): ImageSnapshotResult;
+  /** Puts a `snapshotImage` capture back and returns the picture's id: in place of a picture with the same id at its recorded position, or as a copy on top with `newId`. */
+  restoreImage(sheet: number, bytes: Uint8Array, opts?: RestoreImageOptions): InsertImageResult;
 
   // Conditional formatting (read / mutate).
   /** Returns every CF rule on `sheet` in flattened priority order. The

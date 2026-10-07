@@ -785,6 +785,13 @@ JsStatus JsWorkbook::setThemeFonts(emscripten::val fonts) {
   return status_from_rc(fm_workbook_set_theme_fonts(handle_, &tf));
 }
 
+JsStatus JsWorkbook::resetTheme() {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  return status_from_rc(fm_workbook_reset_theme(handle_));
+}
+
 emscripten::val JsWorkbook::resolveColor(emscripten::val spec, int32_t context) const {
   uint32_t argb = 0;
   int32_t resolution = 0;

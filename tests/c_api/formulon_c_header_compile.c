@@ -90,6 +90,8 @@ int main(void) {
   _Static_assert(sizeof(fm_image_info) == 12, "fm_image_info ABI layout changed");
   _Static_assert(sizeof(fm_drawing_object) == (sizeof(void*) == 4 ? 96 : 112), "fm_drawing_object ABI layout changed");
   _Static_assert(sizeof(fm_image_insert) == (sizeof(void*) == 4 ? 56 : 64), "fm_image_insert ABI layout changed");
+  _Static_assert(sizeof(fm_image_anchor) == 48, "fm_image_anchor ABI layout changed");
+  _Static_assert(FM_IMAGE_RESTORE_NEW_ID == 1u, "FM_IMAGE_RESTORE_NEW_ID changed");
   fm_status_t (*get_auto_filter)(const fm_workbook_t*, size_t, fm_auto_filter*, int32_t*) = fm_sheet_get_auto_filter;
   fm_status_t (*set_table_auto_filter)(fm_workbook_t*, size_t, const fm_auto_filter*) = fm_table_set_auto_filter;
   fm_status_t (*evaluate_auto_filter)(const fm_workbook_t*, size_t, uint8_t*, size_t, size_t*, uint32_t*) =
@@ -107,6 +109,12 @@ int main(void) {
       fm_sheet_insert_image;
   fm_status_t (*get_image)(const fm_workbook_t*, size_t, uint32_t, const uint8_t**, size_t*, fm_image_info*) =
       fm_sheet_get_image;
+  fm_status_t (*set_image_anchor)(fm_workbook_t*, size_t, uint32_t, const fm_image_anchor*) = fm_sheet_set_image_anchor;
+  fm_status_t (*set_image_z_order)(fm_workbook_t*, size_t, uint32_t, uint32_t) = fm_sheet_set_image_z_order;
+  fm_status_t (*snapshot_image)(const fm_workbook_t*, size_t, uint32_t, uint8_t**, size_t*) = fm_sheet_snapshot_image;
+  fm_status_t (*restore_image)(fm_workbook_t*, size_t, const uint8_t*, size_t, uint32_t, uint32_t*) =
+      fm_sheet_restore_image;
+  fm_status_t (*reset_theme)(fm_workbook_t*) = fm_workbook_reset_theme;
   (void)cells_in_range;
   (void)format_value;
   (void)get_auto_filter;
@@ -119,6 +127,11 @@ int main(void) {
   (void)person_at;
   (void)insert_image;
   (void)get_image;
+  (void)set_image_anchor;
+  (void)set_image_z_order;
+  (void)snapshot_image;
+  (void)restore_image;
+  (void)reset_theme;
   (void)save_diagnostics;
   (void)read_diagnostics;
   (void)save_as;

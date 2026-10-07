@@ -1,9 +1,11 @@
 //
 // C ABI - images in a sheet's drawing: probing, listing the drawing's
-// objects, reading, inserting and removing pictures.
+// objects, reading, inserting, moving, reordering, capturing, restoring and
+// removing pictures.
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -197,4 +199,98 @@ extern "C" fm_status_t fm_sheet_remove_image(fm_workbook_t* wb, size_t sheet_ind
   }
   auto removed = formulon::remove_image(wb->workbook(), sheet_index, object_id);
   return removed ? 0 : set_last_error(removed.error());
+}
+
+extern "C" fm_status_t fm_sheet_set_image_anchor(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                                 const fm_image_anchor* anchor) {
+  clear_last_error();
+  constexpr const char* kApi = "fm_sheet_set_image_anchor";
+  if (anchor == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(kApi) + ": " + kNullPointer).c_str());
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_enum_domain(anchor->anchor_kind, static_cast<std::int64_t>(formulon::AnchorKind::kAbsolute), kApi,
+                                  "anchor_kind");
+      rc != 0) {
+    return rc;
+  }
+  if (auto rc =
+          check_enum_domain(anchor->edit_as, static_cast<std::int64_t>(formulon::EditAs::kAbsolute), kApi, "edit_as");
+      rc != 0) {
+    return rc;
+  }
+  formulon::ImageAnchor model;
+  model.anchor_kind = static_cast<formulon::AnchorKind>(anchor->anchor_kind);
+  model.edit_as = static_cast<formulon::EditAs>(anchor->edit_as);
+  model.row = anchor->row;
+  model.col = anchor->col;
+  model.row_off = anchor->row_off_emu;
+  model.col_off = anchor->col_off_emu;
+  model.width_emu = anchor->width_emu;
+  model.height_emu = anchor->height_emu;
+  auto moved = formulon::set_image_anchor(wb->workbook(), sheet_index, object_id, model);
+  return moved ? 0 : set_last_error(moved.error());
+}
+
+extern "C" fm_status_t fm_sheet_set_image_z_order(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                                  uint32_t index) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_image_z_order"); rc != 0) {
+    return rc;
+  }
+  auto moved = formulon::set_image_z_order(wb->workbook(), sheet_index, object_id, index);
+  return moved ? 0 : set_last_error(moved.error());
+}
+
+extern "C" fm_status_t fm_sheet_snapshot_image(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                               uint8_t** out_bytes, size_t* out_len) {
+  clear_last_error();
+  constexpr const char* kApi = "fm_sheet_snapshot_image";
+  if (out_bytes != nullptr) {
+    *out_bytes = nullptr;
+  }
+  if (out_len != nullptr) {
+    *out_len = 0;
+  }
+  if (out_bytes == nullptr || out_len == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(kApi) + ": " + kNullPointer).c_str());
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+    return rc;
+  }
+  auto snapshot = formulon::snapshot_image(wb->workbook(), sheet_index, object_id);
+  if (!snapshot) {
+    return set_last_error(snapshot.error());
+  }
+  const std::vector<std::uint8_t>& bytes = snapshot.value();
+  auto* buffer = new uint8_t[bytes.size()];
+  if (!bytes.empty()) {
+    std::memcpy(buffer, bytes.data(), bytes.size());
+  }
+  *out_bytes = buffer;
+  *out_len = bytes.size();
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_restore_image(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,
+                                              uint32_t flags, uint32_t* out_object_id) {
+  clear_last_error();
+  constexpr const char* kApi = "fm_sheet_restore_image";
+  if (bytes == nullptr || out_object_id == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(kApi) + ": " + kNullPointer).c_str());
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+    return rc;
+  }
+  auto id = formulon::restore_image(wb->workbook(), sheet_index, bytes, len, flags);
+  if (!id) {
+    return set_last_error(id.error());
+  }
+  *out_object_id = id.value();
+  return 0;
 }

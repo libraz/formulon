@@ -325,6 +325,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetTheme(const Napi::CallbackInfo& info);
   Napi::Value SetThemeColors(const Napi::CallbackInfo& info);
   Napi::Value SetThemeFonts(const Napi::CallbackInfo& info);
+  Napi::Value ResetTheme(const Napi::CallbackInfo& info);
   Napi::Value ResolveColor(const Napi::CallbackInfo& info);
   Napi::Value GetEffectiveStyle(const Napi::CallbackInfo& info);
 
@@ -384,6 +385,10 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetImage(const Napi::CallbackInfo& info);
   Napi::Value InsertImage(const Napi::CallbackInfo& info);
   Napi::Value RemoveImage(const Napi::CallbackInfo& info);
+  Napi::Value SetImageAnchor(const Napi::CallbackInfo& info);
+  Napi::Value SetImageZOrder(const Napi::CallbackInfo& info);
+  Napi::Value SnapshotImage(const Napi::CallbackInfo& info);
+  Napi::Value RestoreImage(const Napi::CallbackInfo& info);
 
   // ---- Argument helpers (visible to all part TUs) -------------------
   //

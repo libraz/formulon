@@ -1068,3 +1068,17 @@ IMAGE_INSERT = Struct(
         ("height_emu", I64),
     ],
 )
+
+IMAGE_ANCHOR = Struct(
+    "fm_image_anchor",
+    [
+        ("anchor_kind", I32),
+        ("edit_as", I32),
+        ("row", U32),
+        ("col", U32),
+        ("row_off_emu", I64),
+        ("col_off_emu", I64),
+        ("width_emu", I64),
+        ("height_emu", I64),
+    ],
+)

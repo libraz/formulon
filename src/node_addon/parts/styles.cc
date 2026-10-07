@@ -812,6 +812,14 @@ Napi::Value Workbook::SetThemeFonts(const Napi::CallbackInfo& info) {
   return MakeStatus(env, fm_workbook_set_theme_fonts(handle_, &fonts));
 }
 
+Napi::Value Workbook::ResetTheme(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  return MakeStatus(env, fm_workbook_reset_theme(handle_));
+}
+
 Napi::Value Workbook::ResolveColor(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   CheckedSpecReader reader(env);

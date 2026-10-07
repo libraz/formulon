@@ -87,6 +87,14 @@ Bytes ReplaceEntries(const Bytes& package, const std::map<std::string, std::stri
   return result;
 }
 
+/// Text of package entry `name`, or empty when the package has no such entry.
+std::string EntryText(const Bytes& package, const std::string& name) {
+  formulon::io::ZipReader input;
+  EXPECT_TRUE(static_cast<bool>(input.open(formulon::io::ByteSpan{package.data(), package.size()})));
+  auto body = input.read_entry(name);
+  return body ? std::string(body.value().begin(), body.value().end()) : std::string();
+}
+
 fm_color_spec ThemeSpec(uint32_t index, double tint) {
   fm_color_spec spec{};
   spec.kind = kFmColorTheme;
@@ -221,6 +229,77 @@ TEST(FormulonCApiTheme, UnparseablePartIsReportedAndRefusesEdits) {
   ASSERT_EQ(accent.status, 0);
   EXPECT_EQ(accent.argb, kDefaultScheme[4]);
   EXPECT_EQ(accent.resolution, FM_COLOR_RESOLUTION_THEME_UNPARSEABLE);
+}
+
+TEST(FormulonCApiTheme, ResetReturnsEditedThemeToDefault) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_theme_colors colors{};
+  for (uint32_t i = 0; i < 12U; ++i) {
+    colors.argb[i] = 0xFF303030U + i;
+  }
+  ASSERT_EQ(fm_workbook_set_theme_colors(wb.handle, &colors), 0);
+  fm_theme_fonts fonts{};
+  fonts.major_latin = fonts.major_east_asian = fonts.minor_latin = fonts.minor_east_asian = "Arial";
+  ASSERT_EQ(fm_workbook_set_theme_fonts(wb.handle, &fonts), 0);
+  int32_t source = -1;
+  ReadColors(wb.handle, &source);
+  ASSERT_EQ(source, kSourcePart);
+  const Bytes edited = Save(wb.handle);
+  ASSERT_FALSE(EntryText(edited, "xl/theme/theme1.xml").empty());
+
+  ASSERT_EQ(fm_workbook_reset_theme(wb.handle), 0) << fm_last_error_message();
+  const fm_theme_colors reset = ReadColors(wb.handle, &source);
+  EXPECT_EQ(source, kSourceDefault);
+  for (std::size_t i = 0; i < 12U; ++i) {
+    EXPECT_EQ(reset.argb[i], kDefaultScheme[i]) << i;
+  }
+  fm_theme_fonts reset_fonts{};
+  ASSERT_EQ(fm_workbook_get_theme_fonts(wb.handle, &reset_fonts), 0);
+  EXPECT_STREQ(reset_fonts.minor_latin, "Calibri");
+
+  const Bytes saved = Save(wb.handle);
+  EXPECT_TRUE(EntryText(saved, "xl/theme/theme1.xml").empty());
+  EXPECT_EQ(EntryText(saved, "[Content_Types].xml").find("theme"), std::string::npos);
+  EXPECT_EQ(EntryText(saved, "xl/_rels/workbook.xml.rels").find("theme"), std::string::npos);
+  WorkbookGuard loaded;
+  Load(saved, &loaded);
+  ReadColors(loaded.handle, &source);
+  EXPECT_EQ(source, kSourceDefault);
+
+  // The theme can be written again after a reset.
+  ASSERT_EQ(fm_workbook_set_theme_colors(wb.handle, &colors), 0);
+  ReadColors(wb.handle, &source);
+  EXPECT_EQ(source, kSourcePart);
+}
+
+TEST(FormulonCApiTheme, ResetOnWorkbookWithoutThemeSucceeds) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_reset_theme(wb.handle), 0) << fm_last_error_message();
+  int32_t source = -1;
+  ReadColors(wb.handle, &source);
+  EXPECT_EQ(source, kSourceDefault);
+}
+
+TEST(FormulonCApiTheme, ResetRemovesUnparseablePartAndRejectsNull) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_theme_colors colors{};
+  ASSERT_EQ(fm_workbook_set_theme_colors(wb.handle, &colors), 0);
+  const Bytes broken =
+      ReplaceEntries(Save(wb.handle), {{"xl/theme/theme1.xml", "<a:theme>not a colour scheme</a:theme>"}});
+  WorkbookGuard loaded;
+  Load(broken, &loaded);
+  int32_t source = -1;
+  ReadColors(loaded.handle, &source);
+  ASSERT_EQ(source, kSourceUnparseable);
+  ASSERT_EQ(fm_workbook_reset_theme(loaded.handle), 0) << fm_last_error_message();
+  ReadColors(loaded.handle, &source);
+  EXPECT_EQ(source, kSourceDefault);
+  EXPECT_TRUE(EntryText(Save(loaded.handle), "xl/theme/theme1.xml").empty());
+
+  EXPECT_EQ(fm_workbook_reset_theme(nullptr), kNullPointer);
 }
 
 TEST(FormulonCApiTheme, ThemeAccessorsRejectNullArguments) {

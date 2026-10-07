@@ -95,6 +95,7 @@ class StructLayoutTests(unittest.TestCase):
         "IMAGE_INFO": 12,
         "DRAWING_OBJECT": 96,
         "IMAGE_INSERT": 56,
+        "IMAGE_ANCHOR": 48,
     }
 
     def test_struct_sizes(self) -> None:

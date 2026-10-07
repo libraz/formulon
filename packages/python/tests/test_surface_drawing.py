@@ -1,4 +1,4 @@
-"""Drawing-image surface tests: probe, insert, list, get, round trip and remove."""
+"""Drawing-image surface tests: probe, insert, list, get, round trip, remove, move, reorder and restore."""
 
 from __future__ import annotations
 
@@ -111,6 +111,72 @@ class DrawingImageTests(unittest.TestCase):
                 wb.get_image(0, 12345)
         finally:
             wb.close()
+
+    def test_set_image_anchor_moves_and_resizes(self) -> None:
+        with Workbook.create_default() as wb:
+            oid = wb.insert_image(0, _png(4, 3), name="logo", row=1, col=1)
+            wb.set_image_anchor(
+                0,
+                oid,
+                anchor_kind=AnchorKind.TWO_CELL,
+                edit_as=AnchorEditAs.ONE_CELL,
+                row=5,
+                col=3,
+                row_off_emu=1000,
+                col_off_emu=2000,
+                width_emu=200_000,
+            )
+            obj = wb.list_drawing_objects(0)[0]
+            self.assertEqual((obj.object_id, obj.name), (oid, "logo"))
+            self.assertEqual((obj.anchor_kind, obj.edit_as), (AnchorKind.TWO_CELL, AnchorEditAs.ONE_CELL))
+            self.assertEqual((obj.from_row, obj.from_col, obj.from_row_off, obj.from_col_off), (5, 3, 1000, 2000))
+            self.assertEqual((obj.cx, obj.cy), (200_000, 3 * 9525))
+            with self.assertRaises(FormulonError):
+                wb.set_image_anchor(0, oid, anchor_kind=AnchorKind.ABSOLUTE)
+            with self.assertRaises(FormulonError):
+                wb.set_image_anchor(0, 9999)
+
+    def test_set_image_z_order_reorders_the_list(self) -> None:
+        with Workbook.create_default() as wb:
+            a = wb.insert_image(0, _png(2, 2), row=0)
+            b = wb.insert_image(0, _png(2, 2), row=3)
+            c = wb.insert_image(0, _png(2, 2), row=6)
+            self.assertEqual([o.object_id for o in wb.list_drawing_objects(0)], [a, b, c])
+            wb.set_image_z_order(0, c, 0)
+            self.assertEqual([o.object_id for o in wb.list_drawing_objects(0)], [c, a, b])
+            with self.assertRaises(FormulonError):
+                wb.set_image_z_order(0, c, 3)
+            with self.assertRaises(FormulonError):
+                wb.set_image_z_order(0, 9999, 0)
+
+    def test_snapshot_and_restore_image(self) -> None:
+        png = _png(4, 3)
+        with Workbook.create_default() as wb:
+            a = wb.insert_image(0, png, name="A", row=1)
+            b = wb.insert_image(0, _png(2, 2), name="B", row=4)
+            snap = wb.snapshot_image(0, a)
+            self.assertIsInstance(snap, bytes)
+            self.assertGreater(len(snap), 0)
+
+            wb.remove_image(0, a)
+            self.assertEqual(wb.restore_image(0, snap), a)
+            self.assertEqual([o.object_id for o in wb.list_drawing_objects(0)], [a, b])
+            self.assertEqual(wb.get_image(0, a), png)
+
+            wb.set_image_anchor(0, a, row=9)
+            wb.set_image_z_order(0, a, 1)
+            self.assertEqual(wb.restore_image(0, snap), a)
+            self.assertEqual([o.object_id for o in wb.list_drawing_objects(0)], [a, b])
+            self.assertEqual(wb.list_drawing_objects(0)[0].from_row, 1)
+
+            copy = wb.restore_image(0, snap, new_id=True)
+            self.assertNotIn(copy, (a, b))
+            self.assertEqual([o.object_id for o in wb.list_drawing_objects(0)], [a, b, copy])
+
+            with self.assertRaises(FormulonError):
+                wb.restore_image(0, b"junk")
+            with self.assertRaises(FormulonError):
+                wb.snapshot_image(0, 9999)
 
 
 if __name__ == "__main__":

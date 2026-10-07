@@ -59,6 +59,19 @@ class ThemeTests(unittest.TestCase):
             wb.set_theme_fonts(fonts)
             self.assertEqual(wb.get_theme().fonts, fonts)
 
+    def test_reset_theme_returns_to_default(self) -> None:
+        colors = [0xFF000000 | (0x112233 * (i + 1) & 0xFFFFFF) for i in range(12)]
+        with Workbook.create_default() as wb:
+            wb.reset_theme()
+            self.assertEqual(wb.get_theme().source, ThemeSource.DEFAULT)
+            wb.set_theme_colors(colors)
+            self.assertEqual(wb.get_theme().source, ThemeSource.PART)
+            wb.reset_theme()
+            theme = wb.get_theme()
+            self.assertEqual(theme.source, ThemeSource.DEFAULT)
+            self.assertNotEqual(theme.colors, colors)
+            self.assertNotIn(b"xl/theme/theme1.xml", wb.save())
+
     def test_resolve_color(self) -> None:
         with Workbook.create_default() as wb:
             rgb = wb.resolve_color(ColorSpec(kind=_RGB_KIND, rgb=0xFF123456))

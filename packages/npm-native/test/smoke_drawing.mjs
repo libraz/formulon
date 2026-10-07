@@ -122,3 +122,95 @@ test('images probe, insert, list, read back, survive save and load, and remove',
     wb.dispose();
   }
 });
+
+test('setImageAnchor moves and resizes a picture and keeps its id', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const ins = must(wb.insertImage(0, makePng(4), { name: 'logo', row: 1, col: 1 }), 'insertImage');
+    must(
+      wb.setImageAnchor(0, ins.objectId, {
+        anchorKind: mod.AnchorKind.TwoCell,
+        editAs: mod.AnchorEditAs.OneCell,
+        row: 5,
+        col: 3,
+        rowOffEmu: 1000,
+        colOffEmu: 2000,
+        widthEmu: 200000,
+      }),
+      'setImageAnchor',
+    );
+    const o = wb.listDrawingObjects(0)[0];
+    assert.equal(o.objectId, ins.objectId);
+    assert.equal(o.name, 'logo');
+    assert.equal(o.anchorKind, mod.AnchorKind.TwoCell);
+    assert.equal(o.editAs, mod.AnchorEditAs.OneCell);
+    assert.equal(o.fromRow, 5);
+    assert.equal(o.fromCol, 3);
+    assert.equal(o.fromRowOff, 1000);
+    assert.equal(o.fromColOff, 2000);
+    assert.equal(o.cx, 200000);
+    assert.equal(o.cy, 9525);
+    assert.equal(wb.setImageAnchor(0, ins.objectId, { anchorKind: mod.AnchorKind.Absolute }).ok, false);
+    assert.equal(wb.setImageAnchor(0, 9999, {}).ok, false);
+  } finally {
+    wb.dispose();
+  }
+});
+
+test('setImageZOrder reorders pictures in listDrawingObjects order', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const a = must(wb.insertImage(0, makePng(2), { row: 0 }), 'insertImage a');
+    const b = must(wb.insertImage(0, makePng(2), { row: 3 }), 'insertImage b');
+    const c = must(wb.insertImage(0, makePng(2), { row: 6 }), 'insertImage c');
+    const ids = () => Array.from(wb.listDrawingObjects(0), (o) => o.objectId);
+    assert.deepEqual(ids(), [a.objectId, b.objectId, c.objectId]);
+    must(wb.setImageZOrder(0, c.objectId, 0), 'setImageZOrder');
+    assert.deepEqual(ids(), [c.objectId, a.objectId, b.objectId]);
+    assert.equal(wb.setImageZOrder(0, c.objectId, 3).ok, false);
+    assert.equal(wb.setImageZOrder(0, 9999, 0).ok, false);
+  } finally {
+    wb.dispose();
+  }
+});
+
+test('snapshotImage and restoreImage bring back a removed, moved or copied picture', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const png = makePng(4);
+    const a = must(wb.insertImage(0, png, { name: 'A', row: 1 }), 'insertImage a');
+    const b = must(wb.insertImage(0, makePng(2), { name: 'B', row: 4 }), 'insertImage b');
+    const snap = must(wb.snapshotImage(0, a.objectId), 'snapshotImage');
+    assert.ok(snap.bytes instanceof Uint8Array);
+    assert.ok(snap.bytes.length > 0);
+    const ids = () => Array.from(wb.listDrawingObjects(0), (o) => o.objectId);
+
+    must(wb.removeImage(0, a.objectId), 'removeImage');
+    const restored = must(wb.restoreImage(0, snap.bytes), 'restoreImage');
+    assert.equal(restored.objectId, a.objectId);
+    assert.deepEqual(ids(), [a.objectId, b.objectId]);
+    assert.deepEqual([...wb.getImage(0, a.objectId).bytes], [...png]);
+
+    must(wb.setImageAnchor(0, a.objectId, { row: 9 }), 'setImageAnchor');
+    must(wb.setImageZOrder(0, a.objectId, 1), 'setImageZOrder');
+    must(wb.restoreImage(0, snap.bytes, {}), 'restoreImage over a moved picture');
+    assert.deepEqual(ids(), [a.objectId, b.objectId]);
+    assert.equal(wb.listDrawingObjects(0)[0].fromRow, 1);
+
+    const copy = must(wb.restoreImage(0, snap.bytes, { newId: true }), 'restoreImage newId');
+    assert.notEqual(copy.objectId, a.objectId);
+    assert.deepEqual(ids(), [a.objectId, b.objectId, copy.objectId]);
+
+    const bad = wb.restoreImage(0, new Uint8Array([1, 2, 3, 4]));
+    assert.equal(bad.status.ok, false);
+    assert.equal(bad.objectId, 0);
+    const missing = wb.snapshotImage(0, 9999);
+    assert.equal(missing.status.ok, false);
+    assert.equal(missing.bytes.length, 0);
+  } finally {
+    wb.dispose();
+  }
+});

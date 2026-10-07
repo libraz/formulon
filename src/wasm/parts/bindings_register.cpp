@@ -266,6 +266,14 @@ EMSCRIPTEN_BINDINGS(formulon) {
                   return self.insertImage(sheet, bytes, emscripten::val::object());
                 }))
       .function("removeImage", &JsWorkbook::removeImage)
+      .function("setImageAnchor", &JsWorkbook::setImageAnchor)
+      .function("setImageZOrder", &JsWorkbook::setImageZOrder)
+      .function("snapshotImage", &JsWorkbook::snapshotImage)
+      .function("restoreImage", &JsWorkbook::restoreImage)
+      .function("restoreImage",
+                emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, emscripten::val bytes) {
+                  return self.restoreImage(sheet, bytes, emscripten::val::object());
+                }))
       .function("getCellRectPt", &JsWorkbook::getCellRectPt)
       .function("getColumnWidthPt", &JsWorkbook::getColumnWidthPt)
       .function("getDisplayText", &JsWorkbook::getDisplayText)
@@ -415,6 +423,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getTheme", &JsWorkbook::getTheme)
       .function("setThemeColors", &JsWorkbook::setThemeColors)
       .function("setThemeFonts", &JsWorkbook::setThemeFonts)
+      .function("resetTheme", &JsWorkbook::resetTheme)
       .function("resolveColor", &JsWorkbook::resolveColor)
       .function("getEffectiveStyle", &JsWorkbook::getEffectiveStyle)
       .function("setCellPhonetic", &JsWorkbook::setCellPhonetic)

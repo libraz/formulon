@@ -359,6 +359,7 @@ class JsWorkbook {
   emscripten::val getTheme() const;
   JsStatus setThemeColors(emscripten::val colors);
   JsStatus setThemeFonts(emscripten::val fonts);
+  JsStatus resetTheme();
   /// `{ status, argb, resolution }` for a `ColorSpec` used in `context` (`ColorContext.*`).
   emscripten::val resolveColor(emscripten::val spec, int32_t context) const;
   /// `{ status, xfIndex, source, ..., font, borders, numFmtCode }`: the formatting a cell shows.
@@ -423,6 +424,10 @@ class JsWorkbook {
   emscripten::val getImage(uint32_t sheet, uint32_t objectId) const;
   emscripten::val insertImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts);
   JsStatus removeImage(uint32_t sheet, uint32_t objectId);
+  JsStatus setImageAnchor(uint32_t sheet, uint32_t objectId, emscripten::val placement);
+  JsStatus setImageZOrder(uint32_t sheet, uint32_t objectId, uint32_t index);
+  emscripten::val snapshotImage(uint32_t sheet, uint32_t objectId) const;
+  emscripten::val restoreImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts);
 
   emscripten::val getValidations(uint32_t sheet) const;
   JsStatus addValidation(uint32_t sheet, emscripten::val v);

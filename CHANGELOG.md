@@ -17,6 +17,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its link part, so the formula survives a save and reload.
 - Sheet names that look like a cell address (`S2`) or start with a digit
   (`2024`) are accepted unquoted before `!`, as Excel does.
+- `Src2!Name`, where no sheet is called `Src2` and the linked book `Src2`
+  has no file extension, binds to that book's name. It is written as
+  `[N]!Name` in XLSX and XLSB saves.
+- An external name that the link part lists without a body (no `refersTo` in
+  XLSX, a zero-length formula in XLSB) reads as `#NAME?` and is written back
+  the same way.
+- XLSB DDE and OLE links are recognised by their link type instead of being
+  read as supporting books.
+- An external whole column or row has its declared size: `ROWS`, `COLUMNS`,
+  `INDEX` and the lookup functions measure `[Book]Sheet!A:A` as the whole
+  column, and one entered as the formula spills at that size. Aggregates
+  still read the cached extent.
+- Pictures can be moved and resized in place (`setImageAnchor`,
+  `set_image_anchor`, `fm_sheet_set_image_anchor`) from the values
+  `listDrawingObjects` reports. The object id, name, crop, rotation, flips and
+  every other element are kept. A picture rotated a quarter turn gets an
+  anchor box with width and height swapped about the same centre, and setting
+  the values already in place writes nothing.
+- The stacking order of pictures is settable: `setImageZOrder` /
+  `set_image_z_order` / `fm_sheet_set_image_z_order` makes a picture item
+  `index` of `listDrawingObjects`, which lists objects back to front.
+- A picture can be captured with `snapshotImage` / `snapshot_image` /
+  `fm_sheet_snapshot_image` and put back with `restoreImage(sheet, bytes,
+  {newId})` / `restore_image(sheet, data, new_id=False)` /
+  `fm_sheet_restore_image`. The capture holds the picture's element, its
+  media and its position in the stacking order. Restoring replaces a picture
+  with the same id or returns a deleted one at its place; `newId` adds a copy
+  with a fresh id on top.
+- `resetTheme` / `reset_theme` / `fm_workbook_reset_theme` returns a workbook
+  to having no theme part, so `getTheme` reports the default theme again
+  after `setThemeColors` or `setThemeFonts`. Excel adds a theme part again
+  when it saves the file.
 
 ### Changed
 
@@ -24,6 +56,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`[Book.xlsx]Sheet1!A1`, or the quoted path form when the link has an
   absolute path) instead of `[N]`, and are written back with the original
   index.
+- `[Book]Name` without a `!` is read as a name, so it evaluates to `#NAME?`
+  when the book has no such name.
+- A 3-D reference (`Sheet1:Sheet3!A1`) read as a value is `#REF!`, local or
+  external. A selected 3-D arm of `IF` or `CHOOSE` gives `#VALUE!`, and
+  `ROWS`-style shape functions and `INDEX` reject one with `#VALUE!`.
+- The size of a picture in `listDrawingObjects` is read from its unrotated
+  `a:xfrm` extent first, then from the anchor's `xdr:ext`; the two differ for
+  a rotated one-cell picture or a part whose extents disagree.
 - A typed `[1]` names a book called `1`; it no longer addresses the first link.
 - `Sheet !A1`, with a space before `!`, is rejected.
 - Sheet names shaped like `R`, `C` or `R1C1` are quoted in formula text.
@@ -82,9 +122,9 @@ Everything below is available through the C ABI, WASM, native Node and Python.
   remove threads with their anchors.
 - Images: PNG, JPEG, GIF and BMP bytes are probed for format and pixel size,
   a sheet's drawing objects (pictures, charts, shapes, groups) are listed
-  with anchors, and pictures can be read, inserted with a one-cell, two-cell
-  or absolute anchor, and removed. Row and column edits move anchors the way
-  Excel does.
+  with anchors, and pictures can be read, inserted with a one-cell or
+  two-cell anchor (an absolute anchor is rejected), and removed. Row and
+  column edits move anchors the way Excel does.
 - Enum constants mirroring the C enums on every surface: `GeometryMode`,
   `DisplayStatus`, `ColorContext`, `ColorResolution`, `ThemeSource`,
   `EffectiveStyleSource`, `FilterKind`, `FilterOperator`,

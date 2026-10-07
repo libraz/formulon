@@ -4679,6 +4679,111 @@ class Workbook:
             "fm_sheet_remove_image",
         )
 
+    def set_image_anchor(
+        self,
+        sheet: int,
+        object_id: int,
+        *,
+        anchor_kind: Union[AnchorKind, int] = AnchorKind.ONE_CELL,
+        edit_as: Union[AnchorEditAs, int] = AnchorEditAs.TWO_CELL,
+        row: int = 0,
+        col: int = 0,
+        row_off_emu: int = 0,
+        col_off_emu: int = 0,
+        width_emu: int = 0,
+        height_emu: int = 0,
+    ) -> None:
+        """Move and resize the picture ``object_id``, keeping its id, crop, rotation and every other element.
+
+        The placement is in the quantities :meth:`list_drawing_objects`
+        reports: ``(row, col)`` and the offsets are the top-left marker of the
+        anchor box, ``width_emu`` and ``height_emu`` the picture's own unrotated
+        size (``cx`` and ``cy``); ``0`` keeps the current size. ``edit_as`` is
+        honoured for a two-cell anchor only.
+        """
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptr = _alloc_struct_array(S.IMAGE_ANCHOR, 1, owned)
+            S.IMAGE_ANCHOR.pack(
+                LIB,
+                ptr,
+                {
+                    "anchor_kind": _sint(anchor_kind, "anchor_kind"),
+                    "edit_as": _sint(edit_as, "edit_as"),
+                    "row": _uint(row, "row"),
+                    "col": _uint(col, "col"),
+                    "row_off_emu": int(row_off_emu),
+                    "col_off_emu": int(col_off_emu),
+                    "width_emu": int(width_emu),
+                    "height_emu": int(height_emu),
+                },
+            )
+            _check(
+                LIB.fm_sheet_set_image_anchor(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), ptr),
+                "fm_sheet_set_image_anchor",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def set_image_z_order(self, sheet: int, object_id: int, index: int) -> None:
+        """Make the picture ``object_id`` item ``index`` of :meth:`list_drawing_objects` (``0`` is the back)."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_image_z_order(
+                h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), _uint(index, "index")
+            ),
+            "fm_sheet_set_image_z_order",
+        )
+
+    def snapshot_image(self, sheet: int, object_id: int) -> bytes:
+        """Capture the picture ``object_id`` as opaque bytes for :meth:`restore_image`.
+
+        The capture holds the picture's list position, element and media.
+        """
+        h = self._require()
+        bytes_ptr = _alloc_out_ptr()
+        len_ptr = _alloc_out_ptr()
+        data_ptr = 0
+        try:
+            _check(
+                LIB.fm_sheet_snapshot_image(
+                    h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), bytes_ptr, len_ptr
+                ),
+                "fm_sheet_snapshot_image",
+            )
+            data_ptr = LIB.read_u32(bytes_ptr)
+            return LIB.read_bytes(data_ptr, LIB.read_u32(len_ptr))
+        finally:
+            if data_ptr:
+                LIB.fm_buffer_free(data_ptr)
+            LIB.free(len_ptr)
+            LIB.free(bytes_ptr)
+
+    def restore_image(self, sheet: int, data: Union[bytes, bytearray, memoryview], *, new_id: bool = False) -> int:
+        """Put a :meth:`snapshot_image` capture back and return the picture's id.
+
+        A picture with the same id is replaced and the capture returns to its
+        recorded list position. With ``new_id`` it is added on top as a copy
+        with a fresh id.
+        """
+        h = self._require()
+        raw = bytes(data)
+        buf = LIB.alloc_bytes(raw)
+        out = _alloc_out_ptr()
+        try:
+            _check(
+                LIB.fm_sheet_restore_image(
+                    h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len"), 1 if new_id else 0, out
+                ),
+                "fm_sheet_restore_image",
+            )
+            return LIB.read_u32(out)
+        finally:
+            LIB.free(out)
+            LIB.free(buf)
+
     def get_persons(self) -> List[Person]:
         """Return the workbook's person list in file order."""
         h = self._require()
@@ -6616,6 +6721,15 @@ class Workbook:
             LIB.free(ptr)
             for owned_ptr in owned:
                 LIB.free(owned_ptr)
+
+    def reset_theme(self) -> None:
+        """Remove the theme part so the workbook reports the default theme.
+
+        :meth:`get_theme` then reports ``ThemeSource.DEFAULT``. Excel adds a
+        theme part again when it saves the file.
+        """
+        h = self._require()
+        _check(LIB.fm_workbook_reset_theme(h), "fm_workbook_reset_theme")
 
     def resolve_color(self, spec: ColorSpec, context: Union[ColorContext, int] = ColorContext.FONT) -> ResolvedColor:
         """Resolve ``spec`` to the ``0xAARRGGBB`` Excel renders.

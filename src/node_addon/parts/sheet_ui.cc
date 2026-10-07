@@ -1341,4 +1341,89 @@ Napi::Value Workbook::RemoveImage(const Napi::CallbackInfo& info) {
   return MakeStatus(env, fm_sheet_remove_image(handle_, ArgU32(info, 0), ArgU32(info, 1)));
 }
 
+Napi::Value Workbook::SetImageAnchor(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  if (info.Length() < 3 || !info[2].IsObject()) {
+    return MakeBindingArgumentError(env, "setImageAnchor expects (sheet:number, objectId:number, placement:object)");
+  }
+  CheckedSpecReader reader(env);
+  const Napi::Object spec = info[2].As<Napi::Object>();
+  fm_image_anchor anchor{};
+  anchor.anchor_kind = reader.I32(spec, "anchorKind", FM_ANCHOR_KIND_ONE_CELL);
+  anchor.edit_as = reader.I32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
+  anchor.row = reader.U32(spec, "row", 0U);
+  anchor.col = reader.U32(spec, "col", 0U);
+  anchor.row_off_emu = reader.I64(spec, "rowOffEmu", 0);
+  anchor.col_off_emu = reader.I64(spec, "colOffEmu", 0);
+  anchor.width_emu = reader.I64(spec, "widthEmu", 0);
+  anchor.height_emu = reader.I64(spec, "heightEmu", 0);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  return MakeStatus(env, fm_sheet_set_image_anchor(handle_, ArgU32(info, 0), ArgU32(info, 1), &anchor));
+}
+
+Napi::Value Workbook::SetImageZOrder(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  return MakeStatus(env, fm_sheet_set_image_z_order(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2)));
+}
+
+Napi::Value Workbook::SnapshotImage(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("bytes", Napi::Uint8Array::New(env, 0));
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  uint8_t* bytes = nullptr;
+  size_t len = 0;
+  const fm_status_t rc = fm_sheet_snapshot_image(handle_, ArgU32(info, 0), ArgU32(info, 1), &bytes, &len);
+  if (rc == 0) {
+    Napi::Uint8Array copy = Napi::Uint8Array::New(env, len);
+    if (len != 0) {
+      std::memcpy(copy.Data(), bytes, len);
+    }
+    out.Set("bytes", copy);
+  }
+  fm_buffer_free(bytes);
+  out.Set("status", MakeStatus(env, rc));
+  return out;
+}
+
+Napi::Value Workbook::RestoreImage(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("objectId", Num(env, 0));
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const uint8_t* data = nullptr;
+  size_t len = 0;
+  const bool has_opts = info.Length() > 2 && info[2].IsObject();
+  if (!ReadImageBytes(info, 1, data, len) || (info.Length() > 2 && !info[2].IsUndefined() && !has_opts)) {
+    out.Set("status",
+            MakeBindingArgumentError(env, "restoreImage expects (sheet:number, bytes:Uint8Array, opts?:object)"));
+    return out;
+  }
+  CheckedSpecReader reader(env);
+  const Napi::Object spec = has_opts ? info[2].As<Napi::Object>() : Napi::Object::New(env);
+  const uint32_t flags = reader.Bool(spec, "newId", false) ? FM_IMAGE_RESTORE_NEW_ID : 0U;
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  uint32_t object_id = 0;
+  const fm_status_t rc = fm_sheet_restore_image(handle_, ArgU32(info, 0), data, len, flags, &object_id);
+  out.Set("objectId", Num(env, rc == 0 ? object_id : 0));
+  out.Set("status", MakeStatus(env, rc));
+  return out;
+}
+
 }  // namespace formulon_node

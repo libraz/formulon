@@ -68,6 +68,30 @@ export function registerThemeStyles(Module, test) {
     });
   });
 
+  test('resetTheme returns an edited theme to the default and drops the part', () => {
+    withWorkbook(Module, (wb) => {
+      assert.ok(wb.resetTheme().ok);
+      assert.equal(wb.getTheme().source, SOURCE_DEFAULT);
+      const colors = Array.from({ length: 12 }, (_, i) => 0xff101010 + i);
+      assert.ok(wb.setThemeColors(colors).ok);
+      assert.equal(wb.getTheme().source, SOURCE_PART);
+      assert.ok(wb.resetTheme().ok);
+      const t = wb.getTheme();
+      assert.equal(t.source, SOURCE_DEFAULT);
+      assert.equal(t.colors[4], ACCENT1_DEFAULT);
+
+      const saved = wb.save();
+      assert.ok(saved.status.ok);
+      assert.equal(Buffer.from(saved.bytes).includes('xl/theme/theme1.xml'), false);
+      const reloaded = Module.Workbook.loadBytes(saved.bytes);
+      try {
+        assert.equal(reloaded.getTheme().source, SOURCE_DEFAULT);
+      } finally {
+        reloaded.delete();
+      }
+    });
+  });
+
   test('setThemeColors rejects a malformed colour list', () => {
     withWorkbook(Module, (wb) => {
       assert.equal(wb.setThemeColors([1, 2, 3]).ok, false);

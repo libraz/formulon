@@ -249,6 +249,7 @@ fm_workbook_get_theme_colors
 fm_workbook_set_theme_colors
 fm_workbook_get_theme_fonts
 fm_workbook_set_theme_fonts
+fm_workbook_reset_theme
 fm_workbook_resolve_color
 fm_sheet_get_effective_style
 
@@ -402,6 +403,10 @@ fm_sheet_drawing_object_at
 fm_sheet_get_image
 fm_sheet_insert_image
 fm_sheet_remove_image
+fm_sheet_set_image_anchor
+fm_sheet_set_image_z_order
+fm_sheet_snapshot_image
+fm_sheet_restore_image
 
 # -- Version ---------------------------------------------------------------------
 fm_version_string

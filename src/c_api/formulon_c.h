@@ -59,9 +59,9 @@
  *   * Workbook-backed views are never allocated for the caller and must not
  *     be freed. Their exact invalidation boundary is part of each API's
  *     contract below; do not infer it from the C pointer type alone.
- *   * Buffers returned through `fm_workbook_save`, `fm_workbook_save_as`
- *     and `fm_workbook_save_with_diagnostics` are heap-allocated by the
- *     library with `new[]` and must be released by passing the same
+ *   * Buffers returned through `fm_workbook_save`, `fm_workbook_save_as`,
+ *     `fm_workbook_save_with_diagnostics` and `fm_sheet_snapshot_image` are
+ *     heap-allocated by the library with `new[]` and must be released by passing the same
  *     pointer to `fm_buffer_free`. Mixing `malloc`/`free` and
  *     `new[]`/`delete[]` across the boundary is undefined.
  *   * Every API that returns an owned opaque handle through an `out`
@@ -6363,6 +6363,23 @@ FM_API fm_status_t fm_workbook_get_theme_fonts(const fm_workbook_t* wb, fm_theme
 FM_API fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_theme_fonts* fonts);
 
 /**
+ * @brief Returns the workbook to the state of having no theme part, so
+ *        `fm_workbook_get_theme_colors` reports source 1 and the default
+ *        theme's colours and faces.
+ *
+ * The theme part, its relationships and anything only it referenced are
+ * removed, together with its content type and the workbook relationship; a
+ * theme part that cannot be parsed is removed the same way. A workbook
+ * without a theme part is left unchanged. The default theme is not Excel's
+ * current default look, and Excel adds a theme part again when it saves the
+ * file.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`.
+ */
+FM_API fm_status_t fm_workbook_reset_theme(fm_workbook_t* wb);
+
+/**
  * @brief Resolves a colour specification to the 0xAARRGGBB Excel renders.
  *
  * Theme colours take `spec.tint`; indexed colours read the workbook's
@@ -6565,6 +6582,30 @@ typedef struct {
 } fm_image_insert;
 
 /**
+ * @brief New placement of an existing picture, in the quantities
+ *        `fm_sheet_drawing_object_at` reports.
+ *
+ * `anchor_kind` is `FM_ANCHOR_KIND_ONE_CELL` or `FM_ANCHOR_KIND_TWO_CELL`;
+ * `edit_as` (an `fm_anchor_edit_as_t`) is honoured for a two-cell anchor
+ * only. `row`/`col`/`*_off_emu` are the top-left marker of the anchor box
+ * (`from_*`). `width_emu`/`height_emu` are the picture's own unrotated size
+ * (`cx`/`cy`); `0` keeps the current value.
+ */
+typedef struct {
+  int32_t anchor_kind;
+  int32_t edit_as;
+  uint32_t row;
+  uint32_t col;
+  int64_t row_off_emu;
+  int64_t col_off_emu;
+  int64_t width_emu;
+  int64_t height_emu;
+} fm_image_anchor;
+
+/** @brief `fm_sheet_restore_image` flag: restore as a copy with a fresh id, added on top. */
+#define FM_IMAGE_RESTORE_NEW_ID 1u
+
+/**
  * @brief Sniffs the format and pixel size of PNG, JPEG, GIF or BMP bytes
  *        from the header alone, without touching the workbook.
  *
@@ -6589,6 +6630,9 @@ FM_API fm_status_t fm_sheet_drawing_object_count(const fm_workbook_t* wb, size_t
 
 /**
  * @brief Reads object `idx` of the sheet's drawing, in document order.
+ *
+ * Document order is the stacking order: item 0 is at the back and the last
+ * item is on top.
  *
  * The three strings are read-scratch-backed views.
  *
@@ -6653,6 +6697,93 @@ FM_API fm_status_t fm_sheet_insert_image(fm_workbook_t* wb, size_t sheet_index, 
  *         or was retained from an `.xlsb` package.
  */
 FM_API fm_status_t fm_sheet_remove_image(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id);
+
+/**
+ * @brief Moves and resizes the picture `object_id` (the first one when ids
+ *        repeat), keeping its id, name, crop, rotation, flips and every
+ *        other element.
+ *
+ * Only the anchor markers, `editAs` when its value changes, and the
+ * picture's `a:off`/`a:ext` are rewritten. A picture rotated into [45, 135)
+ * or [225, 315) degrees gets an anchor box with width and height swapped
+ * about the same centre. A placement equal to the current one writes
+ * nothing. An absolute picture can be converted by naming a one-cell or
+ * two-cell kind.
+ *
+ * @return `kOk` on success;
+ *         `kInvalidArgument` when `sheet_index` is out of range, an enum
+ *         field is outside its domain, the anchor kind is absolute, an
+ *         offset or size is negative or 2^31 EMU or more, the anchor lies
+ *         outside the sheet, or the sheet has no picture with that id;
+ *         `kBindingNullPointer` if `anchor == NULL`;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         or was retained from an `.xlsb` package.
+ */
+FM_API fm_status_t fm_sheet_set_image_anchor(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                             const fm_image_anchor* anchor);
+
+/**
+ * @brief Moves the picture `object_id` so it becomes item `index` of the
+ *        drawing's object list (0 is the back).
+ *
+ * The unit moved is the picture's top-level element, a whole
+ * `mc:AlternateContent` included; other objects keep their relative order
+ * and ids. An unchanged order writes nothing.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range, the sheet
+ *         has no picture with that id, or `index` is not less than the
+ *         object count;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         or was retained from an `.xlsb` package.
+ */
+FM_API fm_status_t fm_sheet_set_image_z_order(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                              uint32_t index);
+
+/**
+ * @brief Captures the picture `object_id` as an opaque, versioned byte
+ *        string: its list position, its element, and the relationships and
+ *        media it references.
+ *
+ * On success `*out_bytes` is a heap-allocated buffer of `*out_len` bytes
+ * that MUST be released with `fm_buffer_free`. Both are zeroed before
+ * validation and stay zero on failure. Hand the bytes to
+ * `fm_sheet_restore_image` to put the picture back.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or the sheet
+ *         has no picture with that id;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         or a referenced part has relationships of its own.
+ */
+FM_API fm_status_t fm_sheet_snapshot_image(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                           uint8_t** out_bytes, size_t* out_len);
+
+/**
+ * @brief Puts a `fm_sheet_snapshot_image` capture into sheet `sheet_index`
+ *        and returns the picture's id.
+ *
+ * A picture with the same id is replaced and the capture returns to its
+ * recorded list position (capped at the object count); an id not present is
+ * added at that position. With `FM_IMAGE_RESTORE_NEW_ID` the capture is
+ * added on top as a copy with a fresh id and no `a16:creationId`. Existing
+ * relationships and media with the same content are reused. A sheet
+ * without a drawing gets a new one.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range, the bytes
+ *         are not a valid capture, `flags` has an unknown bit, the id is
+ *         held by a non-picture object, or the package would exceed the
+ *         reader's limits;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         or was retained from an `.xlsb` package. The workbook is then
+ *         unchanged.
+ */
+FM_API fm_status_t fm_sheet_restore_image(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,
+                                          uint32_t flags, uint32_t* out_object_id);
 
 /* -------------------------------------------------------------------------- */
 /* Version                                                                    */

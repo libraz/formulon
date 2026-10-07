@@ -1234,6 +1234,77 @@ JsStatus JsWorkbook::removeImage(uint32_t sheet, uint32_t objectId) {
   return status_from_rc(fm_sheet_remove_image(handle_, sheet, objectId));
 }
 
+JsStatus JsWorkbook::setImageAnchor(uint32_t sheet, uint32_t objectId, emscripten::val placement) {
+  if (handle_ == nullptr) {
+    return error_status(kBindingInvalidHandle);
+  }
+  JsNarrowNumericReader reader("setImageAnchor");
+  const emscripten::val options = placement.isUndefined() || placement.isNull() ? emscripten::val::object() : placement;
+  fm_image_anchor anchor{};
+  anchor.anchor_kind = reader.i32(options, "anchorKind", FM_ANCHOR_KIND_ONE_CELL, "placement.anchorKind");
+  anchor.edit_as = reader.i32(options, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL, "placement.editAs");
+  anchor.row = reader.u32(options, "row", 0U, "placement.row");
+  anchor.col = reader.u32(options, "col", 0U, "placement.col");
+  anchor.row_off_emu = reader.i64(options, "rowOffEmu", 0, "placement.rowOffEmu");
+  anchor.col_off_emu = reader.i64(options, "colOffEmu", 0, "placement.colOffEmu");
+  anchor.width_emu = reader.i64(options, "widthEmu", 0, "placement.widthEmu");
+  anchor.height_emu = reader.i64(options, "heightEmu", 0, "placement.heightEmu");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+  return status_from_rc(fm_sheet_set_image_anchor(handle_, sheet, objectId, &anchor));
+}
+
+JsStatus JsWorkbook::setImageZOrder(uint32_t sheet, uint32_t objectId, uint32_t index) {
+  if (handle_ == nullptr) {
+    return error_status(kBindingInvalidHandle);
+  }
+  return status_from_rc(fm_sheet_set_image_z_order(handle_, sheet, objectId, index));
+}
+
+emscripten::val JsWorkbook::snapshotImage(uint32_t sheet, uint32_t objectId) const {
+  emscripten::val o = emscripten::val::object();
+  if (handle_ == nullptr) {
+    o.set("status", error_status(kBindingInvalidHandle));
+    o.set("bytes", bytes_to_val(nullptr, 0));
+    return o;
+  }
+  uint8_t* data = nullptr;
+  size_t len = 0;
+  const fm_status_t rc = fm_sheet_snapshot_image(handle_, sheet, objectId, &data, &len);
+  o.set("status", status_from_rc(rc));
+  o.set("bytes", bytes_to_val(rc == 0 ? data : nullptr, rc == 0 ? len : 0));
+  fm_buffer_free(data);
+  return o;
+}
+
+emscripten::val JsWorkbook::restoreImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts) {
+  emscripten::val o = emscripten::val::object();
+  o.set("objectId", 0U);
+  if (handle_ == nullptr) {
+    o.set("status", error_status(kBindingInvalidHandle));
+    return o;
+  }
+  JsNarrowNumericReader reader("restoreImage");
+  const emscripten::val options = opts.isUndefined() || opts.isNull() ? emscripten::val::object() : opts;
+  const JsBytesReadResult bytes_result = val_to_bytes_checked(bytes);
+  if (!bytes_result.ok) {
+    o.set("status", binding_error_status(kInvalidArgument, bytes_result.message.c_str()));
+    return o;
+  }
+  const std::vector<uint8_t>& data = bytes_result.bytes;
+  const uint32_t flags = reader.boolean(options, "newId", false, "options.newId") ? FM_IMAGE_RESTORE_NEW_ID : 0U;
+  if (!reader.ok()) {
+    o.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
+    return o;
+  }
+  uint32_t id = 0;
+  const fm_status_t rc = fm_sheet_restore_image(handle_, sheet, data.data(), data.size(), flags, &id);
+  o.set("status", status_from_rc(rc));
+  o.set("objectId", rc == 0 ? id : 0U);
+  return o;
+}
+
 }  // namespace parts
 }  // namespace wasm
 }  // namespace formulon

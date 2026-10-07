@@ -50,6 +50,28 @@ test('setThemeColors and setThemeFonts round-trip through getTheme', async () =>
   }
 });
 
+test('resetTheme returns an edited theme to the default', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    assert.ok(wb.resetTheme().ok);
+    assert.equal(wb.getTheme().source, 1);
+    const colors = Array.from({ length: 12 }, (_, i) => (0xff000000 | (0x112233 + i * 0x010101)) >>> 0);
+    assert.ok(wb.setThemeColors(colors).ok);
+    assert.equal(wb.getTheme().source, 0);
+    assert.ok(wb.resetTheme().ok);
+    const theme = wb.getTheme();
+    assert.equal(theme.source, 1);
+    assert.equal(theme.colors[4] >>> 0, DEFAULT_ACCENT1 >>> 0);
+
+    const saved = wb.save();
+    assert.ok(saved.status.ok);
+    assert.equal(Buffer.from(saved.bytes).includes('xl/theme/theme1.xml'), false);
+  } finally {
+    wb.dispose();
+  }
+});
+
 test('resolveColor resolves literal, theme and automatic colours by context', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();

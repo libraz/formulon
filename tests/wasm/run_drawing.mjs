@@ -155,4 +155,86 @@ export function registerDrawing(Module, test) {
       assert.equal(img.bytes.length, 0);
     });
   });
+
+  test('setImageAnchor moves and resizes a picture and keeps its id', () => {
+    withWorkbook(Module, (wb) => {
+      const ins = wb.insertImage(0, makePng(4, 3), { name: 'Logo', row: 1, col: 1 });
+      assert.ok(ins.status.ok, JSON.stringify(ins.status));
+      const moved = wb.setImageAnchor(0, ins.objectId, {
+        anchorKind: AnchorKind.TwoCell,
+        editAs: AnchorEditAs.OneCell,
+        row: 5,
+        col: 3,
+        rowOffEmu: 1000,
+        colOffEmu: 2000,
+        widthEmu: 200000,
+      });
+      assert.ok(moved.ok, JSON.stringify(moved));
+      const o = wb.listDrawingObjects(0)[0];
+      assert.equal(o.objectId, ins.objectId);
+      assert.equal(o.name, 'Logo');
+      assert.equal(o.anchorKind, AnchorKind.TwoCell);
+      assert.equal(o.editAs, AnchorEditAs.OneCell);
+      assert.equal(o.fromRow, 5);
+      assert.equal(o.fromCol, 3);
+      assert.equal(o.fromRowOff, 1000);
+      assert.equal(o.fromColOff, 2000);
+      assert.equal(o.cx, 200000);
+      assert.equal(o.cy, 3 * EMU_PER_PX);
+      assert.equal(wb.setImageAnchor(0, ins.objectId, { anchorKind: AnchorKind.Absolute }).ok, false);
+      assert.equal(wb.setImageAnchor(0, 9999, {}).ok, false);
+      assert.throws(() => wb.setImageAnchor(0, ins.objectId, { row: 'x' }), TypeError);
+    });
+  });
+
+  test('setImageZOrder reorders pictures in listDrawingObjects order', () => {
+    withWorkbook(Module, (wb) => {
+      const a = wb.insertImage(0, makePng(2, 2), { row: 0 });
+      const b = wb.insertImage(0, makePng(2, 2), { row: 3 });
+      const c = wb.insertImage(0, makePng(2, 2), { row: 6 });
+      const ids = () => Array.from(wb.listDrawingObjects(0), (o) => o.objectId);
+      assert.deepEqual(ids(), [a.objectId, b.objectId, c.objectId]);
+      assert.ok(wb.setImageZOrder(0, c.objectId, 0).ok);
+      assert.deepEqual(ids(), [c.objectId, a.objectId, b.objectId]);
+      assert.equal(wb.setImageZOrder(0, c.objectId, 3).ok, false);
+      assert.equal(wb.setImageZOrder(0, 9999, 0).ok, false);
+      assert.deepEqual(ids(), [c.objectId, a.objectId, b.objectId]);
+    });
+  });
+
+  test('snapshotImage and restoreImage bring back a removed, moved or copied picture', () => {
+    withWorkbook(Module, (wb) => {
+      const png = makePng(4, 3);
+      const a = wb.insertImage(0, png, { name: 'A', row: 1 });
+      const b = wb.insertImage(0, makePng(2, 2), { name: 'B', row: 4 });
+      const snap = wb.snapshotImage(0, a.objectId);
+      assert.ok(snap.status.ok, JSON.stringify(snap.status));
+      assert.ok(snap.bytes instanceof Uint8Array);
+      assert.ok(snap.bytes.length > 0);
+      const ids = () => Array.from(wb.listDrawingObjects(0), (o) => o.objectId);
+
+      assert.ok(wb.removeImage(0, a.objectId).ok);
+      const restored = wb.restoreImage(0, snap.bytes);
+      assert.ok(restored.status.ok, JSON.stringify(restored.status));
+      assert.equal(restored.objectId, a.objectId);
+      assert.deepEqual(ids(), [a.objectId, b.objectId]);
+      assert.deepEqual(Buffer.from(wb.getImage(0, a.objectId).bytes), Buffer.from(png));
+
+      assert.ok(wb.setImageAnchor(0, a.objectId, { row: 9 }).ok);
+      assert.ok(wb.setImageZOrder(0, a.objectId, 1).ok);
+      assert.ok(wb.restoreImage(0, snap.bytes, {}).status.ok);
+      assert.deepEqual(ids(), [a.objectId, b.objectId]);
+      assert.equal(wb.listDrawingObjects(0)[0].fromRow, 1);
+
+      const copy = wb.restoreImage(0, snap.bytes, { newId: true });
+      assert.ok(copy.status.ok, JSON.stringify(copy.status));
+      assert.notEqual(copy.objectId, a.objectId);
+      assert.deepEqual(ids(), [a.objectId, b.objectId, copy.objectId]);
+
+      assert.equal(wb.restoreImage(0, new Uint8Array([1, 2, 3, 4])).status.ok, false);
+      assert.equal(wb.restoreImage(0, new Uint8Array([1, 2, 3, 4])).objectId, 0);
+      assert.equal(wb.snapshotImage(0, 9999).status.ok, false);
+      assert.equal(wb.snapshotImage(0, 9999).bytes.length, 0);
+    });
+  });
 }
