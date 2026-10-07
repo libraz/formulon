@@ -696,51 +696,10 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       }
       const Token& lparen = advance();
       std::vector<const AstNode*> args;
-      if (peek_kind() != TokenKind::RParen) {
-        while (true) {
-          if (bailed_) {
-            break;
-          }
-          AstNode* arg = nullptr;
-          const TokenKind here = peek_kind();
-          if (here == TokenKind::Comma || here == TokenKind::RParen) {
-            // Empty arg slot: treat as a Blank, mirroring the regular
-            // function-call argument loop in
-            // `parse_ident_or_call_or_full_col`.
-            arg = make_literal(arena_, Value::blank());
-            if (arg != nullptr) {
-              arg->set_range(peek().range);
-            }
-          } else {
-            arg = parse_expression(0, SyncContext::CallArg);
-          }
-          if (arg == nullptr) {
-            bailed_ = true;
-            --depth_;
-            return lhs;
-          }
-          args.push_back(arg);
-          if (peek_kind() == TokenKind::Comma) {
-            advance();
-            continue;
-          }
-          if (peek_kind() == TokenKind::RParen) {
-            break;
-          }
-          if (peek_kind() == TokenKind::Eof) {
-            record_error_with_token(ParseErrorCode::ExpectedCloseParen, lparen.range, lparen.lexeme);
-            break;
-          }
-          record_error_with_token(ParseErrorCode::ExpectedComma, peek().range, peek().lexeme);
-          skip_to_sync(SyncContext::CallArg);
-          if (peek_kind() == TokenKind::Comma) {
-            advance();
-            continue;
-          }
-          if (peek_kind() == TokenKind::RParen || peek_kind() == TokenKind::Eof) {
-            break;
-          }
-        }
+      if (!parse_call_args(&args, lparen.range, lparen.lexeme)) {
+        bailed_ = true;
+        --depth_;
+        return lhs;
       }
       TextRange end_range = lparen.range;
       if (peek_kind() == TokenKind::RParen) {

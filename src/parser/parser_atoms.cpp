@@ -421,6 +421,57 @@ AstNode* Parser::parse_cellref_atom() {
   return n;
 }
 
+bool Parser::parse_call_args(std::vector<const AstNode*>* args, TextRange open_range, std::string_view open_lexeme) {
+  if (peek_kind() == TokenKind::RParen) {
+    return true;
+  }
+  while (true) {
+    if (bailed_) {
+      break;
+    }
+    // Empty argument slot: Excel allows `FN(a,,b)` and treats the missing
+    // slot as blank / the function's documented default. Inject a Blank
+    // literal rather than invoking parse_expression (which has no grammar
+    // production for an empty arg).
+    AstNode* arg = nullptr;
+    const TokenKind here = peek_kind();
+    if (here == TokenKind::Comma || here == TokenKind::RParen) {
+      arg = make_literal(arena_, Value::blank());
+      if (arg != nullptr) {
+        arg->set_range(peek().range);
+      }
+    } else {
+      arg = parse_expression(0, SyncContext::CallArg);
+    }
+    if (arg == nullptr) {
+      return false;
+    }
+    args->push_back(arg);
+    if (peek_kind() == TokenKind::Comma) {
+      advance();
+      continue;
+    }
+    if (peek_kind() == TokenKind::RParen) {
+      break;
+    }
+    if (peek_kind() == TokenKind::Eof) {
+      record_error_with_token(ParseErrorCode::ExpectedCloseParen, open_range, open_lexeme);
+      break;
+    }
+    // Unexpected token between args - record and try to recover.
+    record_error_with_token(ParseErrorCode::ExpectedComma, peek().range, peek().lexeme);
+    skip_to_sync(SyncContext::CallArg);
+    if (peek_kind() == TokenKind::Comma) {
+      advance();
+      continue;
+    }
+    if (peek_kind() == TokenKind::RParen || peek_kind() == TokenKind::Eof) {
+      break;
+    }
+  }
+  return true;
+}
+
 AstNode* Parser::parse_ident_or_call_or_full_col() {
   // Ident followed by:
   //   `(`   -> function call (preserving Ident lexeme as the function name).
@@ -518,51 +569,8 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
     advance();  // Ident
     advance();  // LParen
     std::vector<const AstNode*> args;
-    if (peek_kind() != TokenKind::RParen) {
-      while (true) {
-        if (bailed_) {
-          break;
-        }
-        // Empty argument slot: Excel allows `FN(a,,b)` and treats the missing
-        // slot as blank / the function's documented default. Inject a Blank
-        // literal rather than invoking parse_expression (which has no grammar
-        // production for an empty arg).
-        AstNode* arg = nullptr;
-        const TokenKind here = peek_kind();
-        if (here == TokenKind::Comma || here == TokenKind::RParen) {
-          arg = make_literal(arena_, Value::blank());
-          if (arg != nullptr) {
-            arg->set_range(peek().range);
-          }
-        } else {
-          arg = parse_expression(0, SyncContext::CallArg);
-        }
-        if (arg == nullptr) {
-          return nullptr;
-        }
-        args.push_back(arg);
-        if (peek_kind() == TokenKind::Comma) {
-          advance();
-          continue;
-        }
-        if (peek_kind() == TokenKind::RParen) {
-          break;
-        }
-        if (peek_kind() == TokenKind::Eof) {
-          record_error_with_token(ParseErrorCode::ExpectedCloseParen, call_start, fn_name);
-          break;
-        }
-        // Unexpected token between args - record and try to recover.
-        record_error_with_token(ParseErrorCode::ExpectedComma, peek().range, peek().lexeme);
-        skip_to_sync(SyncContext::CallArg);
-        if (peek_kind() == TokenKind::Comma) {
-          advance();
-          continue;
-        }
-        if (peek_kind() == TokenKind::RParen || peek_kind() == TokenKind::Eof) {
-          break;
-        }
-      }
+    if (!parse_call_args(&args, call_start, fn_name)) {
+      return nullptr;
     }
     if (peek_kind() != TokenKind::RParen) {
       // Recovery already handled the diagnostic for the EOF case; only emit

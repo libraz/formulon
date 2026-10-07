@@ -188,6 +188,11 @@ class Parser {
   AstNode* parse_at_prefix_atom(SyncContext ctx);
   AstNode* parse_unary_prefix_atom(UnaryOp op, SyncContext ctx);
   AstNode* parse_ident_or_call_or_full_col();
+  // Parses the arguments of a call whose `(` is already consumed, stopping at
+  // the `)` without consuming it; an empty slot becomes a Blank literal. An
+  // unclosed list is reported against `open_range` / `open_lexeme`. Returns
+  // false when an argument parses to null.
+  bool parse_call_args(std::vector<const AstNode*>* args, TextRange open_range, std::string_view open_lexeme);
   AstNode* parse_sheet_qualified_ref(std::string_view sheet, bool quoted, TextRange sheet_range);
   // Parses the tail of a 3-D reference `<sheet1>:<sheet2>!<cellref>`. The
   // caller has identified `sheet1` (its name and source range) and verified
