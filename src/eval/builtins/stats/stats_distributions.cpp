@@ -83,9 +83,7 @@ Value NormInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!input) {
     return Value::error(input.error());
   }
-  const double p = input.value().first;
-  const double mean = input.value().second;
-  const double sd = input.value().third;
+  const auto [p, mean, sd] = input.value();
   if (p <= 0.0 || p >= 1.0 || sd <= 0.0) {
     return Value::error(ErrorCode::Num);
   }

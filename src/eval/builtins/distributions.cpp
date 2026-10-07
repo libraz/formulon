@@ -421,9 +421,7 @@ Value GammaInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  const double p = parsed.value().first;
-  const double alpha = parsed.value().second;
-  const double beta_scale = parsed.value().third;
+  const auto [p, alpha, beta_scale] = parsed.value();
   if (p < 0.0 || p >= 1.0 || alpha <= 0.0 || beta_scale <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -559,9 +557,7 @@ Value LognormInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  const double p = parsed.value().first;
-  const double mean = parsed.value().second;
-  const double sd = parsed.value().third;
+  const auto [p, mean, sd] = parsed.value();
   if (p <= 0.0 || p >= 1.0 || sd <= 0.0) {
     return Value::error(ErrorCode::Num);
   }

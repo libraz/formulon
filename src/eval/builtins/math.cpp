@@ -423,8 +423,7 @@ Value MRound(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!pair) {
     return Value::error(pair.error());
   }
-  const double n = pair.value().first;
-  const double m = pair.value().second;
+  const auto [n, m] = pair.value();
   if (m == 0.0) {
     return Value::number(0.0);
   }

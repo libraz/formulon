@@ -240,9 +240,7 @@ Value PDuration(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!input) {
     return Value::error(input.error());
   }
-  const double rate = input.value().first;
-  const double pv = input.value().second;
-  const double fv = input.value().third;
+  const auto [rate, pv, fv] = input.value();
   if (rate <= 0.0 || pv <= 0.0 || fv <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -264,9 +262,7 @@ Value Rri(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!input) {
     return Value::error(input.error());
   }
-  const double nper = input.value().first;
-  const double pv = input.value().second;
-  const double fv = input.value().third;
+  const auto [nper, pv, fv] = input.value();
   if (nper <= 0.0 || pv <= 0.0 || fv < 0.0) {
     return Value::error(ErrorCode::Num);
   }

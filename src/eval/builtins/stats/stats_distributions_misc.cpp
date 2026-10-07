@@ -40,9 +40,7 @@ static Expected<NumberTriple, ErrorCode> read_confidence_args(const Value* args)
   if (!input) {
     return input.error();
   }
-  const double alpha = input.value().first;
-  const double sd = input.value().second;
-  const double size_raw = input.value().third;
+  const auto [alpha, sd, size_raw] = input.value();
   // Reject negative / non-finite sizes before flooring. Excel truncates
   // toward zero for positives but does not silently convert negatives.
   if (std::isnan(size_raw) || std::isinf(size_raw) || size_raw < 1.0) {
@@ -66,9 +64,7 @@ Value ConfidenceNorm(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*
   if (!input) {
     return Value::error(input.error());
   }
-  const double alpha = input.value().first;
-  const double sd = input.value().second;
-  const double n = input.value().third;
+  const auto [alpha, sd, n] = input.value();
   const double z = InverseStandardNormal(1.0 - 0.5 * alpha);
   return finite_number_result(z * sd / std::sqrt(n));
 }
@@ -82,9 +78,7 @@ Value ConfidenceT(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   if (!input) {
     return Value::error(input.error());
   }
-  const double alpha = input.value().first;
-  const double sd = input.value().second;
-  const double n = input.value().third;
+  const auto [alpha, sd, n] = input.value();
   if (n == 1.0) {
     return Value::error(ErrorCode::Div0);
   }

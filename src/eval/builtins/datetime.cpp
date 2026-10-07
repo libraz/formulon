@@ -376,21 +376,38 @@ Value Second_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::number(static_cast<double>(hms.value().s));
 }
 
+// The `(serial, [return_type])` arguments of WEEKDAY / WEEKNUM; `return_type`
+// defaults to 1.
+struct DateAndReturnType {
+  CoercedDateArg serial;
+  int return_type;
+};
+
+Expected<DateAndReturnType, ErrorCode> read_date_and_return_type(const Value* args, std::uint32_t arity,
+                                                                 bool date1904) {
+  auto serial = coerce_bounded_date_arg(args[0], date1904);
+  if (!serial) {
+    return serial.error();
+  }
+  auto return_type = read_optional_truncated_int_arg(args, arity, 1, 1);
+  if (!return_type) {
+    return return_type.error();
+  }
+  return DateAndReturnType{serial.value(), return_type.value()};
+}
+
 /// WEEKDAY(serial, [return_type]). `return_type` selects between Excel's
 /// three original encodings (1, 2, 3) and the 2010+ additions (11..17),
 /// which simply rotate the week start. Anything else is `#NUM!`.
 Value Weekday_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto serial = coerce_bounded_date_arg(args[0], date1904);
-  if (!serial) {
-    return Value::error(serial.error());
+  auto in = read_date_and_return_type(args, arity, date1904);
+  if (!in) {
+    return Value::error(in.error());
   }
-  auto return_type_arg = read_optional_truncated_int_arg(args, arity, 1, 1);
-  if (!return_type_arg) {
-    return Value::error(return_type_arg.error());
-  }
-  const int return_type = return_type_arg.value();
-  const int sun0 = date_time::weekday_sun0(normal_date_serial(serial.value(), date1904));  // 0..6, Sun=0
-  const int mon0 = (sun0 + 6) % 7;                                                         // 0..6, Mon=0
+  const CoercedDateArg& serial = in.value().serial;
+  const int return_type = in.value().return_type;
+  const int sun0 = date_time::weekday_sun0(normal_date_serial(serial, date1904));  // 0..6, Sun=0
+  const int mon0 = (sun0 + 6) % 7;                                                 // 0..6, Mon=0
   // Excel types 11..17 start the week on Mon..Sun respectively and always
   // return 1..7.
   if (return_type >= 11 && return_type <= 17) {
@@ -592,15 +609,12 @@ long long completed_months(int y1, unsigned m1, unsigned d1, int y2, unsigned m2
 /// its week start, divide by 7" formulation but avoids two extra
 /// conversions through serial space.
 Value Weeknum_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto serial = coerce_bounded_date_arg(args[0], date1904);
-  if (!serial) {
-    return Value::error(serial.error());
+  auto in = read_date_and_return_type(args, arity, date1904);
+  if (!in) {
+    return Value::error(in.error());
   }
-  auto return_type_arg = read_optional_truncated_int_arg(args, arity, 1, 1);
-  if (!return_type_arg) {
-    return Value::error(return_type_arg.error());
-  }
-  const int return_type = return_type_arg.value();
+  const CoercedDateArg& serial = in.value().serial;
+  const int return_type = in.value().return_type;
   // Map return_type -> week-start weekday (Sun=0..Sat=6). -1 means invalid.
   int ws = -1;
   switch (return_type) {
@@ -629,12 +643,11 @@ Value Weeknum_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
       break;
     case 21:
       // ISO 8601.
-      return Value::number(
-          static_cast<double>(iso_week_number(std::floor(normal_date_serial(serial.value(), date1904)))));
+      return Value::number(static_cast<double>(iso_week_number(std::floor(normal_date_serial(serial, date1904)))));
     default:
       return Value::error(ErrorCode::Num);
   }
-  const double day_serial = std::floor(normal_date_serial(serial.value(), date1904));
+  const double day_serial = std::floor(normal_date_serial(serial, date1904));
   const double jan1 = date_time::serial_from_ymd(serial_year(day_serial), 1, 1);
   // Offset of Jan 1 from its week start (0..6). Adding this to the zero-
   // based day-of-year normalises Jan 1 so the first day of week 1 is day 0.

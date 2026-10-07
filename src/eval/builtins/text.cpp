@@ -116,47 +116,57 @@ Value Trim(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return Value::text(arena.intern(out));
 }
 
-// LEFT(text, [n]) - first `n` UTF-16 units. Default n=1. n<0 -> `#VALUE!`.
-Value Left(const Value* args, std::uint32_t arity, Arena& arena) {
+// The `(text, [n])` arguments of LEFT / RIGHT; `n` defaults to 1 and a
+// negative `n` is `#VALUE!`.
+struct TextAndCount {
+  std::string text;
+  int count;
+};
+
+Expected<TextAndCount, ErrorCode> read_text_and_count(const Value* args, std::uint32_t arity) {
   auto text = coerce_to_text(args[0]);
   if (!text) {
-    return Value::error(text.error());
+    return text.error();
   }
   auto parsed = read_optional_int_arg(args, arity, 1u, 1);
   if (!parsed) {
-    return Value::error(parsed.error());
+    return parsed.error();
   }
-  const int n = parsed.value();
-  if (n < 0) {
-    return Value::error(ErrorCode::Value);
+  if (parsed.value() < 0) {
+    return ErrorCode::Value;
   }
+  return TextAndCount{std::string(text.value()), parsed.value()};
+}
+
+// LEFT(text, [n]) - first `n` UTF-16 units. Default n=1. n<0 -> `#VALUE!`.
+Value Left(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto in = read_text_and_count(args, arity);
+  if (!in) {
+    return Value::error(in.error());
+  }
+  const std::string& text = in.value().text;
+  const int n = in.value().count;
   if (n == 0) {
     return Value::text({});
   }
-  return Value::text(arena.intern(utf16_substring(text.value(), 0u, static_cast<std::uint32_t>(n))));
+  return Value::text(arena.intern(utf16_substring(text, 0u, static_cast<std::uint32_t>(n))));
 }
 
 // RIGHT(text, [n]) - last `n` UTF-16 units. Default n=1. n<0 -> `#VALUE!`.
 Value Right(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return Value::error(text.error());
+  auto in = read_text_and_count(args, arity);
+  if (!in) {
+    return Value::error(in.error());
   }
-  auto parsed = read_optional_int_arg(args, arity, 1u, 1);
-  if (!parsed) {
-    return Value::error(parsed.error());
-  }
-  const int n = parsed.value();
-  if (n < 0) {
-    return Value::error(ErrorCode::Value);
-  }
+  const std::string& text = in.value().text;
+  const int n = in.value().count;
   if (n == 0) {
     return Value::text({});
   }
-  const std::uint32_t total = utf16_units_in(text.value());
+  const std::uint32_t total = utf16_units_in(text);
   const auto take = static_cast<std::uint32_t>(n);
   const std::uint32_t start = take >= total ? 0u : total - take;
-  return Value::text(arena.intern(utf16_substring(text.value(), start, take)));
+  return Value::text(arena.intern(utf16_substring(text, start, take)));
 }
 
 // MID(text, start_num, num_chars) - 1-based slice in UTF-16 units. Excel

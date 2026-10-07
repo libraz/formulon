@@ -186,21 +186,27 @@ Value PercentileExc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return percentile_of_data(args, data_count, k, /*exclusive=*/true);
 }
 
-// QUARTILE.INC(array, quart) / QUARTILE(array, quart) - quartile by
-// `PERCENTILE.INC(array, quart/4)`. `quart` must be in [0, 5);
-// Excel truncates a fractional `quart` toward zero, so `1.5` is `Q1`.
-Value QuartileInc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+// Shared body of QUARTILE.INC / QUARTILE.EXC: `quart` must lie in [lo, hi)
+// and is truncated toward zero before becoming the rank `quart / 4`.
+Value quartile_of_data(const Value* args, std::uint32_t arity, double lo, double hi, bool exclusive) {
   const std::uint32_t data_count = arity - 1u;
   auto q_raw = read_kth_arg(args[arity - 1u]);
   if (!q_raw) {
     return Value::error(q_raw.error());
   }
   const double q_in = q_raw.value();
-  if (q_in < 0.0 || q_in >= 5.0) {
+  if (q_in < lo || q_in >= hi) {
     return Value::error(ErrorCode::Num);
   }
   const double q = std::trunc(q_in);
-  return percentile_of_data(args, data_count, q / 4.0, /*exclusive=*/false);
+  return percentile_of_data(args, data_count, q / 4.0, exclusive);
+}
+
+// QUARTILE.INC(array, quart) / QUARTILE(array, quart) - quartile by
+// `PERCENTILE.INC(array, quart/4)`. `quart` must be in [0, 5);
+// Excel truncates a fractional `quart` toward zero, so `1.5` is `Q1`.
+Value QuartileInc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  return quartile_of_data(args, arity, 0.0, 5.0, /*exclusive=*/false);
 }
 
 // QUARTILE.EXC(array, quart) - exclusive quartile, equivalent to
@@ -209,17 +215,7 @@ Value QuartileInc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // yields `#NUM!`. Excel truncates a fractional `quart` toward zero, so
 // `quart = 1.5` is treated as `1`. Empty numeric slice yields `#NUM!`.
 Value QuartileExc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  const std::uint32_t data_count = arity - 1u;
-  auto q_raw = read_kth_arg(args[arity - 1u]);
-  if (!q_raw) {
-    return Value::error(q_raw.error());
-  }
-  const double q_in = q_raw.value();
-  if (q_in < 1.0 || q_in >= 4.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double q = std::trunc(q_in);
-  return percentile_of_data(args, data_count, q / 4.0, /*exclusive=*/true);
+  return quartile_of_data(args, arity, 1.0, 4.0, /*exclusive=*/true);
 }
 
 // TRIMMEAN(array, percent) - mean after trimming `percent / 2` from each

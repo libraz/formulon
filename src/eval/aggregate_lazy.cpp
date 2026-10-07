@@ -599,28 +599,27 @@ Value run_percentile_exc(std::vector<double> xs, double p) {
   return lift_kernel_result(numeric_aggregate_kernels::percentile_sorted_exc(xs, p));
 }
 
-// QUARTILE.INC delegates to PERCENTILE.INC at p ∈ {0, 0.25, 0.5, 0.75, 1.0}.
-// `quart` must be an integer in [0, 4]; truncated like the rest.
-Value run_quartile_inc(std::vector<double> xs, double quart_raw) {
+// Shared body of QUARTILE.INC / QUARTILE.EXC: `quart` is truncated, must lie
+// in [lo, hi], and selects the percentile `quart / 4` (exact in binary).
+Value run_quartile(std::vector<double> xs, double quart_raw, double lo, double hi, bool exclusive) {
   const double q_trunc = std::trunc(quart_raw);
-  if (!std::isfinite(q_trunc) || q_trunc < 0.0 || q_trunc > 4.0) {
+  if (!std::isfinite(q_trunc) || q_trunc < lo || q_trunc > hi) {
     return Value::error(ErrorCode::Num);
   }
-  static constexpr double kProb[] = {0.0, 0.25, 0.5, 0.75, 1.0};
-  const auto idx = static_cast<std::size_t>(q_trunc);
-  return run_percentile_inc(std::move(xs), kProb[idx]);
+  const double p = q_trunc / 4.0;
+  return exclusive ? run_percentile_exc(std::move(xs), p) : run_percentile_inc(std::move(xs), p);
 }
 
-// QUARTILE.EXC delegates to PERCENTILE.EXC at p ∈ {0.25, 0.5, 0.75}.
+// QUARTILE.INC delegates to PERCENTILE.INC at p in {0, 0.25, 0.5, 0.75, 1.0}.
+// `quart` must be an integer in [0, 4]; truncated like the rest.
+Value run_quartile_inc(std::vector<double> xs, double quart_raw) {
+  return run_quartile(std::move(xs), quart_raw, 0.0, 4.0, /*exclusive=*/false);
+}
+
+// QUARTILE.EXC delegates to PERCENTILE.EXC at p in {0.25, 0.5, 0.75}.
 // `quart` must be an integer in {1, 2, 3}; 0 and 4 are rejected.
 Value run_quartile_exc(std::vector<double> xs, double quart_raw) {
-  const double q_trunc = std::trunc(quart_raw);
-  if (!std::isfinite(q_trunc) || q_trunc < 1.0 || q_trunc > 3.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  static constexpr double kProb[] = {0.25, 0.5, 0.75};
-  const auto idx = static_cast<std::size_t>(q_trunc) - 1U;
-  return run_percentile_exc(std::move(xs), kProb[idx]);
+  return run_quartile(std::move(xs), quart_raw, 1.0, 3.0, /*exclusive=*/true);
 }
 
 // SUBTOTAL's function code selects the aggregator in 1..11 and repeats it in
