@@ -174,11 +174,7 @@ Value BinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     } else {
       // CDF: sum pmf(i) for i in [0, k]. The cast is safe because the
       // branch above bounds `k` well inside the integer range.
-      r = 0.0;
-      const auto k_int = static_cast<std::uint64_t>(k);
-      for (std::uint64_t i = 0; i <= k_int; ++i) {
-        r += BinomPmf(static_cast<double>(i), n, p);
-      }
+      r = sum_pmf(0.0, k, [&](double i) { return BinomPmf(i, n, p); });
     }
   } else {
     r = BinomPmf(k, n, p);
@@ -234,11 +230,7 @@ Value PoissonDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
     if (x >= kMaxCumulativeTerms) {
       r = PoissonCdf(x, mean);
     } else {
-      r = 0.0;
-      const auto x_int = static_cast<std::uint64_t>(x);
-      for (std::uint64_t i = 0; i <= x_int; ++i) {
-        r += PoissonPmf(static_cast<double>(i), mean);
-      }
+      r = sum_pmf(0.0, x, [&](double i) { return PoissonPmf(i, mean); });
     }
   } else {
     r = PoissonPmf(x, mean);

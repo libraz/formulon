@@ -134,6 +134,29 @@ LazyAggArg resolve_lazy_agg_arg(const parser::AstNode& raw_arg, Arena& arena, co
   return out;
 }
 
+// Folds one AND / OR operand into `*result`. Returns false with `*failure`
+// set when the operand is an error or fails the host-aware logical coercion.
+bool fold_logical_operand(const Value& v, const EvalContext& ctx, bool is_and, bool* result, bool* any_value,
+                          Value* failure) {
+  if (v.is_error()) {
+    *failure = v;
+    return false;
+  }
+  bool coerced = false;
+  ErrorCode err = ErrorCode::Value;
+  const LogicalCoerce lc = logical_coerce_for_host(v, ctx, &coerced, &err);
+  if (lc == LogicalCoerce::Error) {
+    *failure = Value::error(err);
+    return false;
+  }
+  if (lc == LogicalCoerce::Skip) {
+    return true;
+  }
+  *any_value = true;
+  *result = is_and ? (*result && coerced) : (*result || coerced);
+  return true;
+}
+
 Value eval_and_or_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx, bool is_and) {
   const std::uint32_t arity = call.as_call_arity();
@@ -142,6 +165,7 @@ Value eval_and_or_lazy(const parser::AstNode& call, Arena& arena, const Function
   }
   bool result = is_and;
   bool any_value = false;
+  Value failure = Value::blank();
   for (std::uint32_t i = 0; i < arity; ++i) {
     LazyAggArg resolved = resolve_lazy_agg_arg(call.as_call_arg(i), arena, registry, ctx);
     if (resolved.shape == LazyArgShape::Range) {
@@ -149,45 +173,22 @@ Value eval_and_or_lazy(const parser::AstNode& call, Arena& arena, const Function
         return Value::error(resolved.range_error);
       }
       for (const Value& v : resolved.cells) {
-        if (v.is_error()) {
-          return v;
-        }
         // Text / Blank cells arriving from a range or array are skipped
         // rather than coerced (Excel's range-provenance rule).
         if (v.is_text() || v.is_blank()) {
           continue;
         }
-        bool coerced = false;
-        ErrorCode err = ErrorCode::Value;
-        const LogicalCoerce lc = logical_coerce_for_host(v, ctx, &coerced, &err);
-        if (lc == LogicalCoerce::Error) {
-          return Value::error(err);
+        if (!fold_logical_operand(v, ctx, is_and, &result, &any_value, &failure)) {
+          return failure;
         }
-        if (lc == LogicalCoerce::Skip) {
-          continue;
-        }
-        any_value = true;
-        result = is_and ? (result && coerced) : (result || coerced);
       }
       continue;
     }
     // Direct scalar argument: coerce with the host-aware strict rule so
     // "TRUE" / "FALSE" text carries a bool and other text surfaces #VALUE!.
-    const Value& v = resolved.scalar;
-    if (v.is_error()) {
-      return v;
+    if (!fold_logical_operand(resolved.scalar, ctx, is_and, &result, &any_value, &failure)) {
+      return failure;
     }
-    bool coerced = false;
-    ErrorCode err = ErrorCode::Value;
-    const LogicalCoerce lc = logical_coerce_for_host(v, ctx, &coerced, &err);
-    if (lc == LogicalCoerce::Error) {
-      return Value::error(err);
-    }
-    if (lc == LogicalCoerce::Skip) {
-      continue;
-    }
-    any_value = true;
-    result = is_and ? (result && coerced) : (result || coerced);
   }
   if (!any_value) {
     return Value::error(ErrorCode::Value);

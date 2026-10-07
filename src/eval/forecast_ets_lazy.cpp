@@ -45,6 +45,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
 #include "eval/ets_series.h"
@@ -61,6 +62,8 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+using builtins_detail::to_finite_value;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -513,10 +516,7 @@ Value eval_forecast_ets_lazy(const parser::AstNode& call, Arena& arena, const Fu
   const double level_term = fit.level + static_cast<double>(h) * fit.trend;
   const double seasonal_term = seasonal_correction(fit.season, fit.m, h);
   const double forecast = level_term + seasonal_term;
-  if (!std::isfinite(forecast)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(forecast);
+  return to_finite_value(forecast);
 }
 
 Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -566,10 +566,7 @@ Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, 
   const double tail_prob = (1.0 + confidence) * 0.5;
   const double z = stats_detail::InverseStandardNormal(tail_prob);
   const double hw = z * fit.rmse * std::sqrt(static_cast<double>(h));
-  if (!std::isfinite(hw)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(hw);
+  return to_finite_value(hw);
 }
 
 Value eval_forecast_ets_seasonality_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -666,10 +663,7 @@ Value eval_forecast_ets_stat_lazy(const parser::AstNode& call, Arena& arena, con
     default:
       return Value::error(ErrorCode::Num);
   }
-  if (!std::isfinite(result)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(result);
+  return to_finite_value(result);
 }
 
 }  // namespace eval

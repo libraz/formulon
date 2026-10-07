@@ -36,6 +36,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
@@ -48,6 +49,8 @@
 namespace formulon {
 namespace eval {
 namespace stats_detail {
+
+using builtins_detail::to_finite_value;
 
 // --- Shared helpers (declared in `stats/stats_helpers.h`). ---------------
 //
@@ -161,10 +164,7 @@ static Value variance_or_stdev(const std::vector<double>& xs, bool sample, bool 
   const double divisor = sample ? static_cast<double>(xs.size() - 1u) : static_cast<double>(xs.size());
   const double variance = ms.ss / divisor;
   const double r = square_root ? std::sqrt(variance) : variance;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return to_finite_value(r);
 }
 
 // "A"-family dispatch onto `variance_or_stdev`: collects via `collect_a`

@@ -23,6 +23,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
@@ -457,7 +458,9 @@ Value ImArgument(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Arithmetic
 // ---------------------------------------------------------------------------
 
-Value ImSum(const Value* args, std::uint32_t arity, Arena& arena) {
+// Left fold of `combine` over every argument; the result's suffix is the
+// one reconciled across all operands.
+Value fold_complex(const Value* args, std::uint32_t arity, Arena& arena, Complex (*combine)(Complex, Complex)) {
   auto first = parse_complex_value(args[0]);
   if (!first) {
     return Value::error(first.error());
@@ -472,69 +475,65 @@ Value ImSum(const Value* args, std::uint32_t arity, Arena& arena) {
     if (!reconcile_suffix(acc, nxt.value(), &suffix)) {
       return Value::error(ErrorCode::Value);
     }
-    acc.re += nxt.value().re;
-    acc.im += nxt.value().im;
+    acc = combine(acc, nxt.value());
     acc.suffix = suffix;
   }
   return text_complex(acc, arena);
+}
+
+Complex add_complex(Complex a, Complex b) {
+  return Complex{a.re + b.re, a.im + b.im, a.suffix};
+}
+
+Value ImSum(const Value* args, std::uint32_t arity, Arena& arena) {
+  return fold_complex(args, arity, arena, add_complex);
+}
+
+// Parses the two operands of a binary complex function and reconciles their
+// suffix into `*suffix`.
+Expected<std::pair<Complex, Complex>, ErrorCode> parse_complex_pair(const Value* args, char* suffix) {
+  auto a = parse_complex_value(args[0]);
+  if (!a) {
+    return a.error();
+  }
+  auto b = parse_complex_value(args[1]);
+  if (!b) {
+    return b.error();
+  }
+  *suffix = 'i';
+  if (!reconcile_suffix(a.value(), b.value(), suffix)) {
+    return ErrorCode::Value;
+  }
+  return std::pair<Complex, Complex>{a.value(), b.value()};
 }
 
 Value ImSub(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto a = parse_complex_value(args[0]);
-  if (!a) {
-    return Value::error(a.error());
+  char suffix;
+  auto ab = parse_complex_pair(args, &suffix);
+  if (!ab) {
+    return Value::error(ab.error());
   }
-  auto b = parse_complex_value(args[1]);
-  if (!b) {
-    return Value::error(b.error());
-  }
-  char suffix = 'i';
-  if (!reconcile_suffix(a.value(), b.value(), &suffix)) {
-    return Value::error(ErrorCode::Value);
-  }
-  return text_complex(Complex{a.value().re - b.value().re, a.value().im - b.value().im, suffix}, arena);
+  const Complex& a = ab.value().first;
+  const Complex& b = ab.value().second;
+  return text_complex(Complex{a.re - b.re, a.im - b.im, suffix}, arena);
 }
 
 Value ImProduct(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto first = parse_complex_value(args[0]);
-  if (!first) {
-    return Value::error(first.error());
-  }
-  Complex acc = first.value();
-  for (std::uint32_t i = 1; i < arity; ++i) {
-    auto nxt = parse_complex_value(args[i]);
-    if (!nxt) {
-      return Value::error(nxt.error());
-    }
-    char suffix = acc.suffix;
-    if (!reconcile_suffix(acc, nxt.value(), &suffix)) {
-      return Value::error(ErrorCode::Value);
-    }
-    acc = cplx_mul(acc, nxt.value());
-    acc.suffix = suffix;
-  }
-  return text_complex(acc, arena);
+  return fold_complex(args, arity, arena, cplx_mul);
 }
 
 Value ImDiv(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto a = parse_complex_value(args[0]);
-  if (!a) {
-    return Value::error(a.error());
+  char suffix;
+  auto ab = parse_complex_pair(args, &suffix);
+  if (!ab) {
+    return Value::error(ab.error());
   }
-  auto b = parse_complex_value(args[1]);
-  if (!b) {
-    return Value::error(b.error());
-  }
-  char suffix = 'i';
-  if (!reconcile_suffix(a.value(), b.value(), &suffix)) {
-    return Value::error(ErrorCode::Value);
-  }
-  const Complex z2 = b.value();
+  const Complex z2 = ab.value().second;
   const double denom = z2.re * z2.re + z2.im * z2.im;
   if (denom == 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const Complex z1 = a.value();
+  const Complex z1 = ab.value().first;
   const double re = (z1.re * z2.re + z1.im * z2.im) / denom;
   const double im = (z1.im * z2.re - z1.re * z2.im) / denom;
   return text_complex(Complex{re, im, suffix}, arena);

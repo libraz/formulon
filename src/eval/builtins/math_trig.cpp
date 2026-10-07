@@ -56,6 +56,16 @@ inline Value apply_guarded_unary_math(DoubleFn fn, DomainPredicate domain, const
   return to_finite_value(fn(x.value()));
 }
 
+// Coerces the single argument and hands it to a kernel that produces the
+// final `Value` itself (for functions with extra guards or special results).
+inline Value apply_unary_value(const Value* args, Value (*kernel)(double)) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  return kernel(x.value());
+}
+
 bool positive_domain(double x) {
   return x > 0.0;
 }
@@ -103,14 +113,11 @@ Value Log(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (x.value() <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  double base = 10.0;
-  if (arity >= 2) {
-    auto parsed = coerce_to_number(args[1]);
-    if (!parsed) {
-      return Value::error(parsed.error());
-    }
-    base = parsed.value();
+  auto parsed = builtins_detail::read_optional_number(args, arity, 1, 10.0, /*check_finite=*/false);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
+  const double base = parsed.value();
   if (base <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -136,12 +143,7 @@ Value Pi(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // RADIANS(degrees) - degrees-to-radians conversion. RADIANS(0) == 0,
 // RADIANS(180) == pi.
 Value Radians(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double r = x.value() * kPi / 180.0;
-  return to_finite_value(r);
+  return apply_unary_value(args, [](double x) { return to_finite_value(x * kPi / 180.0); });
 }
 
 // DEGREES(radians) - radians-to-degrees conversion. DEGREES(pi) == 180.
@@ -149,12 +151,7 @@ Value Radians(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // multiply. The mathematically equivalent `x * 180.0 / kPi` form differs by
 // 1 ULP for some inputs (e.g. 12345678900); see Mac probe 2026-05-02.
 Value Degrees(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double r = x.value() / kPi * 180.0;
-  return to_finite_value(r);
+  return apply_unary_value(args, [](double x) { return to_finite_value(x / kPi * 180.0); });
 }
 
 // SIN(x) - sine in radians. Excel imposes no domain restriction; only
@@ -272,30 +269,24 @@ Value Atanh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // SEC(x) - secant, `1 / cos(x)`. `cos(x) == 0` -> `#DIV/0!`.
 Value Sec(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double c = std::cos(x.value());
-  if (c == 0.0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double r = 1.0 / c;
-  return to_finite_value(r);
+  return apply_unary_value(args, [](double x) {
+    const double c = std::cos(x);
+    if (c == 0.0) {
+      return Value::error(ErrorCode::Div0);
+    }
+    return to_finite_value(1.0 / c);
+  });
 }
 
 // CSC(x) - cosecant, `1 / sin(x)`. `sin(x) == 0` -> `#DIV/0!`.
 Value Csc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double s = std::sin(x.value());
-  if (s == 0.0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double r = 1.0 / s;
-  return to_finite_value(r);
+  return apply_unary_value(args, [](double x) {
+    const double s = std::sin(x);
+    if (s == 0.0) {
+      return Value::error(ErrorCode::Div0);
+    }
+    return to_finite_value(1.0 / s);
+  });
 }
 
 // COT(x) - cotangent, `cos(x) / sin(x)` (equivalently `1 / tan(x)`).
@@ -304,83 +295,66 @@ Value Csc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // even when `sin(x)` is non-zero on the same argument, which would miss
 // the divide-by-zero case.
 Value Cot(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double s = std::sin(x.value());
-  if (s == 0.0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double r = std::cos(x.value()) / s;
-  return to_finite_value(r);
+  return apply_unary_value(args, [](double x) {
+    const double s = std::sin(x);
+    if (s == 0.0) {
+      return Value::error(ErrorCode::Div0);
+    }
+    return to_finite_value(std::cos(x) / s);
+  });
 }
 
 // ACOT(x) - inverse cotangent, `PI/2 - atan(x)`. Range `(0, PI)`. No
 // domain restriction. Note Excel's ACOT does NOT follow the `atan(1/x)`
 // definition on `x < 0`; `PI/2 - atan(x)` is the correct formula.
 Value Acot(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double r = kPi / 2.0 - std::atan(x.value());
-  return to_finite_value(r);
+  return apply_unary_value(args, [](double x) { return to_finite_value(kPi / 2.0 - std::atan(x)); });
 }
 
 // SECH(x) - hyperbolic secant, `1 / cosh(x)`. `cosh` is always >= 1, so
 // the divisor never hits zero; very large `|x|` drives the quotient to 0
 // (not Inf), which is a valid return - Excel yields 0 for `SECH(1000)`.
 Value Sech(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double c = std::cosh(x.value());
-  if (std::isinf(c)) {
-    // Overflow in cosh: 1 / Inf == 0 in IEEE arithmetic, but we would
-    // rather surface an explicit zero to match Excel's observed output.
-    return Value::number(0.0);
-  }
-  const double r = 1.0 / c;
-  return to_finite_value(r);
+  return apply_unary_value(args, [](double x) {
+    const double c = std::cosh(x);
+    if (std::isinf(c)) {
+      // Overflow in cosh: 1 / Inf == 0 in IEEE arithmetic, but we would
+      // rather surface an explicit zero to match Excel's observed output.
+      return Value::number(0.0);
+    }
+    return to_finite_value(1.0 / c);
+  });
 }
 
 // CSCH(x) - hyperbolic cosecant, `1 / sinh(x)`. `sinh(0) == 0` -> `#DIV/0!`.
 // Large `|x|` drives sinh to +/-Inf, which yields 0 (matching Excel).
 Value Csch(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double s = std::sinh(x.value());
-  if (s == 0.0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  if (std::isinf(s)) {
-    return Value::number(0.0);
-  }
-  const double r = 1.0 / s;
-  return to_finite_value(r);
+  return apply_unary_value(args, [](double x) {
+    const double s = std::sinh(x);
+    if (s == 0.0) {
+      return Value::error(ErrorCode::Div0);
+    }
+    if (std::isinf(s)) {
+      return Value::number(0.0);
+    }
+    return to_finite_value(1.0 / s);
+  });
 }
 
 // COTH(x) - hyperbolic cotangent, `cosh(x) / sinh(x)`. `sinh(0) == 0`
 // -> `#DIV/0!`; asymptotic to +/-1 as `|x| -> inf`.
 Value Coth(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double s = std::sinh(x.value());
-  if (s == 0.0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  if (std::isinf(s)) {
-    // sinh and cosh overflow together; the ratio tends to +/-1.
-    return Value::number((x.value() > 0.0) ? 1.0 : -1.0);
-  }
-  const double r = std::cosh(x.value()) / s;
-  return to_finite_value(r);
+  return apply_unary_value(args, [](double x) {
+    const double s = std::sinh(x);
+    if (s == 0.0) {
+      return Value::error(ErrorCode::Div0);
+    }
+    if (std::isinf(s)) {
+      // sinh and cosh overflow together; the ratio tends to +/-1.
+      return Value::number((x > 0.0) ? 1.0 : -1.0);
+    }
+    return to_finite_value(std::cosh(x) / s);
+  });
 }
 
 // ACOTH(x) - inverse hyperbolic cotangent, `atanh(1 / x)`. Domain is
@@ -388,14 +362,12 @@ Value Coth(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // +/-Inf at the endpoints, so the explicit guard provides a cleaner
 // contract on the boundary.
 Value Acoth(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  if (!outside_closed_unit_domain(x.value())) {
-    return Value::error(ErrorCode::Num);
-  }
-  return to_finite_value(std::atanh(1.0 / x.value()));
+  return apply_unary_value(args, [](double x) {
+    if (!outside_closed_unit_domain(x)) {
+      return Value::error(ErrorCode::Num);
+    }
+    return to_finite_value(std::atanh(1.0 / x));
+  });
 }
 
 }  // namespace

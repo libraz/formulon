@@ -24,6 +24,7 @@
 #include "eval/builtins/financial_oddlyield.h"
 #include "eval/builtins/financial_price.h"
 #include "eval/builtins/financial_yield.h"
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
@@ -38,6 +39,8 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+using builtins_detail::to_finite_value;
 
 // Collects the numeric cash flows from IRR's first argument. Every shape
 // `resolve_range_arg` understands is accepted — `Ref` / `RangeOp` /
@@ -419,10 +422,7 @@ Value eval_mirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   }
 
   const double result = mirr_closed_form(flows, finance.value(), reinvest.value());
-  if (std::isnan(result) || std::isinf(result)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(result);
+  return to_finite_value(result);
 }
 
 // ---------------------------------------------------------------------------
@@ -749,10 +749,7 @@ Value eval_xnpv_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   }
 
   const double result = xnpv_sum(values, dates, rate.value());
-  if (std::isnan(result) || std::isinf(result)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(result);
+  return to_finite_value(result);
 }
 
 const FinancialDateEntry* find_financial_date_entry(std::string_view name) noexcept {

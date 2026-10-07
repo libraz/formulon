@@ -11,6 +11,7 @@
 
 #include "auto_filter.h"
 #include "eval/builtin_names.h"
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/subtotal.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
@@ -32,6 +33,8 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+using builtins_detail::to_finite_value;
 
 // 1..13 are the SUBTOTAL-aligned modes; 14..19 are the AGGREGATE-only "k-
 // arg" modes. Storing the integer code rather than an enum keeps the
@@ -577,10 +580,7 @@ Value run_large_small(std::vector<double> xs, double k_raw, bool want_large) {
   std::sort(xs.begin(), xs.end());
   // LARGE: k-th largest = xs[n - k]. SMALL: k-th smallest = xs[k - 1].
   const double picked = want_large ? xs[xs.size() - k] : xs[k - 1];
-  if (!std::isfinite(picked)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(picked);
+  return to_finite_value(picked);
 }
 
 // PERCENTILE.INC. Domain / position-formula logic lives in

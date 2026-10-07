@@ -48,6 +48,7 @@ using financial_detail::normalize_type;
 using financial_detail::pmt_scalar;
 using financial_detail::read_optional_number;
 using financial_detail::read_required_number;
+using financial_detail::read_required_numbers;
 
 struct TvmArgs {
   double first;
@@ -122,21 +123,9 @@ Expected<RateArgs, ErrorCode> read_rate_args(const Value* args, std::uint32_t ar
 }
 
 Expected<PaymentArgs, ErrorCode> read_payment_args(const Value* args, std::uint32_t arity) {
-  auto rate = read_required_number(args, 0);
-  if (!rate) {
-    return rate.error();
-  }
-  auto per = read_required_number(args, 1);
-  if (!per) {
-    return per.error();
-  }
-  auto nper = read_required_number(args, 2);
-  if (!nper) {
-    return nper.error();
-  }
-  auto pv = read_required_number(args, 3);
-  if (!pv) {
-    return pv.error();
+  double v[4];
+  if (auto read = read_required_numbers(args, "nnnn", v); !read) {
+    return read.error();
   }
   auto fv = read_optional_number(args, arity, 4, 0.0);
   if (!fv) {
@@ -146,7 +135,7 @@ Expected<PaymentArgs, ErrorCode> read_payment_args(const Value* args, std::uint3
   if (!type) {
     return type.error();
   }
-  return PaymentArgs{rate.value(), per.value(), nper.value(), pv.value(), fv.value(), normalize_type(type.value())};
+  return PaymentArgs{v[0], v[1], v[2], v[3], fv.value(), normalize_type(type.value())};
 }
 
 Expected<CumPaymentArgs, ErrorCode> read_cum_payment_args(const Value* args) {
@@ -155,35 +144,14 @@ Expected<CumPaymentArgs, ErrorCode> read_cum_payment_args(const Value* args) {
       return ErrorCode::Value;
     }
   }
-  auto rate = read_required_number(args, 0);
-  if (!rate) {
-    return rate.error();
+  double v[6];
+  if (auto read = read_required_numbers(args, "nnnnnn", v); !read) {
+    return read.error();
   }
-  auto nper = read_required_number(args, 1);
-  if (!nper) {
-    return nper.error();
-  }
-  auto pv = read_required_number(args, 2);
-  if (!pv) {
-    return pv.error();
-  }
-  auto start = read_required_number(args, 3);
-  if (!start) {
-    return start.error();
-  }
-  auto end = read_required_number(args, 4);
-  if (!end) {
-    return end.error();
-  }
-  auto type = read_required_number(args, 5);
-  if (!type) {
-    return type.error();
-  }
-  if (type.value() != 0.0 && type.value() != 1.0) {
+  if (v[5] != 0.0 && v[5] != 1.0) {
     return ErrorCode::Num;
   }
-  return CumPaymentArgs{rate.value(),  nper.value(), pv.value(),
-                        start.value(), end.value(),  normalize_type(type.value())};
+  return CumPaymentArgs{v[0], v[1], v[2], v[3], v[4], normalize_type(v[5])};
 }
 
 Expected<std::pair<std::int64_t, std::int64_t>, ErrorCode> cum_period_bounds(double start, double end, double nper) {
@@ -587,6 +555,43 @@ Value Ppmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return finalize(pmt - interest);
 }
 
+// Shared body of CUMIPMT / CUMPRINC: validates the common domain and sums
+// either the interest or the principal portion over [start, end].
+Value cum_payment_sum(const Value* args, bool principal) {
+  auto input = read_cum_payment_args(args);
+  if (!input) {
+    return Value::error(input.error());
+  }
+  const double rate = input.value().rate;
+  const double nper = input.value().nper;
+  const double pv = input.value().pv;
+  if (rate <= 0.0 || nper <= 0.0 || pv <= 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  auto bounds = cum_period_bounds(input.value().start, input.value().end, nper);
+  if (!bounds) {
+    return Value::error(bounds.error());
+  }
+  const std::int64_t start_i = bounds.value().first;
+  const std::int64_t end_i = bounds.value().second;
+  double pmt = 0.0;
+  if (principal) {
+    pmt = pmt_scalar(rate, nper, pv, 0.0, input.value().type);
+    if (std::isnan(pmt)) {
+      return Value::error(ErrorCode::Num);
+    }
+  }
+  double total = 0.0;
+  for (std::int64_t p = start_i; p <= end_i; ++p) {
+    const double interest = ipmt_scalar(rate, static_cast<double>(p), nper, pv, 0.0, input.value().type);
+    if (std::isnan(interest) || std::isinf(interest)) {
+      return Value::error(ErrorCode::Num);
+    }
+    total += principal ? pmt - interest : interest;
+  }
+  return finalize(total);
+}
+
 // --- CUMIPMT(rate, nper, pv, start, end, type) --------------------------
 //
 // Sum of interest paid from period `start` to `end` inclusive. Unlike the
@@ -600,31 +605,7 @@ Value Ppmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   - 1 <= start <= end <= nper
 // Violating any check returns `#NUM!`.
 Value Cumipmt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_cum_payment_args(args);
-  if (!input) {
-    return Value::error(input.error());
-  }
-  const double rate = input.value().rate;
-  const double nper = input.value().nper;
-  const double pv = input.value().pv;
-  if (rate <= 0.0 || nper <= 0.0 || pv <= 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  auto bounds = cum_period_bounds(input.value().start, input.value().end, nper);
-  if (!bounds) {
-    return Value::error(bounds.error());
-  }
-  const std::int64_t start_i = bounds.value().first;
-  const std::int64_t end_i = bounds.value().second;
-  double total = 0.0;
-  for (std::int64_t p = start_i; p <= end_i; ++p) {
-    const double interest = ipmt_scalar(rate, static_cast<double>(p), nper, pv, 0.0, input.value().type);
-    if (std::isnan(interest) || std::isinf(interest)) {
-      return Value::error(ErrorCode::Num);
-    }
-    total += interest;
-  }
-  return finalize(total);
+  return cum_payment_sum(args, /*principal=*/false);
 }
 
 // --- CUMPRINC(rate, nper, pv, start, end, type) -------------------------
@@ -632,35 +613,7 @@ Value Cumipmt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Sum of principal paid from period `start` to `end` inclusive. Same
 // domain contract as CUMIPMT.
 Value Cumprinc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_cum_payment_args(args);
-  if (!input) {
-    return Value::error(input.error());
-  }
-  const double rate = input.value().rate;
-  const double nper = input.value().nper;
-  const double pv = input.value().pv;
-  if (rate <= 0.0 || nper <= 0.0 || pv <= 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  auto bounds = cum_period_bounds(input.value().start, input.value().end, nper);
-  if (!bounds) {
-    return Value::error(bounds.error());
-  }
-  const std::int64_t start_i = bounds.value().first;
-  const std::int64_t end_i = bounds.value().second;
-  const double pmt = pmt_scalar(rate, nper, pv, 0.0, input.value().type);
-  if (std::isnan(pmt)) {
-    return Value::error(ErrorCode::Num);
-  }
-  double total = 0.0;
-  for (std::int64_t p = start_i; p <= end_i; ++p) {
-    const double interest = ipmt_scalar(rate, static_cast<double>(p), nper, pv, 0.0, input.value().type);
-    if (std::isnan(interest) || std::isinf(interest)) {
-      return Value::error(ErrorCode::Num);
-    }
-    total += pmt - interest;
-  }
-  return finalize(total);
+  return cum_payment_sum(args, /*principal=*/true);
 }
 
 }  // namespace

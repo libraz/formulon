@@ -71,32 +71,6 @@ namespace {
 // Calendar day-count helpers shared with the COUP* engine and the date
 // builtins; see `eval/date_time.h`.
 using date_time::basis_days_between;
-using date_time::days_in_month;
-
-// Constructs the serial for (y, m, anchor_day), clamping the day to the
-// target month's last day when shorter. Matches the COUP* engine's
-// month-end-preservation rule: if `first_coupon` is Aug-31 and we step
-// three months backward, we land on May-31; six months -> Feb-28 (or
-// Feb-29 in a leap year).
-double quasi_serial(int y, unsigned m, unsigned anchor_day, bool date1904) noexcept {
-  const unsigned last = days_in_month(y, m);
-  const unsigned d = anchor_day > last ? last : anchor_day;
-  return date_time::serial_from_ymd(y, m, d, date1904);
-}
-
-// Shifts (y, m) backward by `months` (always positive). Uses
-// floor-division so negative month remainders wrap correctly.
-void shift_months_back(int& y, unsigned& m, int months) noexcept {
-  long long mm0 = static_cast<long long>(m) - 1 - static_cast<long long>(months);
-  long long year_shift = mm0 / 12;
-  long long rem = mm0 % 12;
-  if (rem < 0) {
-    rem += 12;
-    year_shift -= 1;
-  }
-  y += static_cast<int>(year_shift);
-  m = static_cast<unsigned>(rem + 1);
-}
 
 // Period length E for the basis. Bases 0/2/4 use 360/freq; basis 3
 // uses 365/freq; basis 1 uses the actual length of the most-recent
@@ -126,7 +100,7 @@ double normal_period_days(int basis, int frequency, double first_coupon, bool da
       const date_time::YMD fc = date_time::ymd_from_serial(first_coupon, date1904);
       int y = fc.y;
       unsigned m = fc.m;
-      shift_months_back(y, m, 12 / frequency);
+      shift_months(y, m, -(12 / frequency));
       const double q_prev = quasi_serial(y, m, fc.d, date1904);
       return first_coupon - q_prev;
     }
@@ -175,7 +149,7 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
     if (count >= kMaxOddFirstQuasiPeriods) {
       return ErrorCode::Num;
     }
-    shift_months_back(y_walk, m_walk, step_months);
+    shift_months(y_walk, m_walk, -step_months);
     const double prev = quasi_serial(y_walk, m_walk, anchor_day, date1904);
     end_serials[count + 1] = prev;
     ++count;
@@ -320,22 +294,14 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
 Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::uint32_t arity,
                                                         bool slot5_must_be_positive, bool date1904,
                                                         OddFirstSchedule& sched_out) {
-  auto settlement = read_financial_date(args, 0);
-  if (!settlement) {
-    return settlement.error();
+  double dates[4];
+  if (auto read = read_required_numbers(args, "dddd", dates); !read) {
+    return read.error();
   }
-  auto maturity = read_financial_date(args, 1);
-  if (!maturity) {
-    return maturity.error();
-  }
-  auto issue = read_financial_date(args, 2);
-  if (!issue) {
-    return issue.error();
-  }
-  auto first_coupon = read_financial_date(args, 3);
-  if (!first_coupon) {
-    return first_coupon.error();
-  }
+  const double settlement = dates[0];
+  const double maturity = dates[1];
+  const double issue = dates[2];
+  const double first_coupon = dates[3];
   auto tail = read_coupon_bond_tail(args, arity, 4);
   if (!tail) {
     return tail.error();
@@ -349,21 +315,20 @@ Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::
   // means the first coupon yet to come), and first_coupon must
   // precede maturity (else there are no regular coupons after the
   // irregular first one).
-  if (issue.value() >= settlement.value()) {
+  if (issue >= settlement) {
     return ErrorCode::Num;
   }
-  if (settlement.value() >= first_coupon.value()) {
+  if (settlement >= first_coupon) {
     return ErrorCode::Num;
   }
-  if (first_coupon.value() >= maturity.value()) {
+  if (first_coupon >= maturity) {
     return ErrorCode::Num;
   }
   if (slot5_must_be_positive ? (slot5 <= 0.0) : (slot5 < 0.0)) {
     return ErrorCode::Num;
   }
 
-  auto sched_e = compute_odd_first_schedule(settlement.value(), maturity.value(), issue.value(), first_coupon.value(),
-                                            frequency, basis, date1904);
+  auto sched_e = compute_odd_first_schedule(settlement, maturity, issue, first_coupon, frequency, basis, date1904);
   if (!sched_e) {
     return sched_e.error();
   }

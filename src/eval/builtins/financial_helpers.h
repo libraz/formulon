@@ -71,6 +71,20 @@ inline Expected<double, ErrorCode> read_financial_date(const Value* args, std::u
   return t;
 }
 
+// Reads `args[0..n)` into `out`, where `kinds` holds one character per slot:
+// 'n' for a plain number, 'd' for a financial date. All slots are read before
+// the caller applies any domain check, and the left-most error wins.
+inline Expected<void, ErrorCode> read_required_numbers(const Value* args, const char* kinds, double* out) {
+  for (std::uint32_t i = 0; kinds[i] != '\0'; ++i) {
+    auto v = kinds[i] == 'd' ? read_financial_date(args, i) : read_required_number(args, i);
+    if (!v) {
+      return Expected<void, ErrorCode>::Err(v.error());
+    }
+    out[i] = v.value();
+  }
+  return Expected<void, ErrorCode>::Ok();
+}
+
 // Reads an optional day-count basis argument. Excel truncates numeric basis
 // values toward zero and accepts only {0, 1, 2, 3, 4}.
 inline Expected<int, ErrorCode> read_day_count_basis(const Value* args, std::uint32_t arity, std::uint32_t index) {
@@ -116,33 +130,21 @@ struct SecurityRateArgs {
 // Reads `SecurityRateArgs` from positions 0..4. `#NUM!` unless
 // `settlement < maturity` and both amounts are positive.
 inline Expected<SecurityRateArgs, ErrorCode> read_security_rate_args(const Value* args, std::uint32_t arity) {
-  auto settlement = read_financial_date(args, 0);
-  if (!settlement) {
-    return settlement.error();
-  }
-  auto maturity = read_financial_date(args, 1);
-  if (!maturity) {
-    return maturity.error();
-  }
-  auto amount1 = read_required_number(args, 2);
-  if (!amount1) {
-    return amount1.error();
-  }
-  auto amount2 = read_required_number(args, 3);
-  if (!amount2) {
-    return amount2.error();
+  double v[4];
+  if (auto read = read_required_numbers(args, "ddnn", v); !read) {
+    return read.error();
   }
   auto basis = read_day_count_basis(args, arity, 4);
   if (!basis) {
     return basis.error();
   }
-  if (settlement.value() >= maturity.value()) {
+  if (v[0] >= v[1]) {
     return ErrorCode::Num;
   }
-  if (amount1.value() <= 0.0 || amount2.value() <= 0.0) {
+  if (v[2] <= 0.0 || v[3] <= 0.0) {
     return ErrorCode::Num;
   }
-  return SecurityRateArgs{settlement.value(), maturity.value(), amount1.value(), amount2.value(), basis.value()};
+  return SecurityRateArgs{v[0], v[1], v[2], v[3], basis.value()};
 }
 
 // The `(rate, amount, redemption, frequency, [basis])` argument tail shared
@@ -161,17 +163,9 @@ struct CouponBondTail {
 // the caller's.
 inline Expected<CouponBondTail, ErrorCode> read_coupon_bond_tail(const Value* args, std::uint32_t arity,
                                                                  std::uint32_t rate_index) {
-  auto rate = read_required_number(args, rate_index);
-  if (!rate) {
-    return rate.error();
-  }
-  auto amount = read_required_number(args, rate_index + 1);
-  if (!amount) {
-    return amount.error();
-  }
-  auto redemption = read_required_number(args, rate_index + 2);
-  if (!redemption) {
-    return redemption.error();
+  double v[3];
+  if (auto read = read_required_numbers(args + rate_index, "nnn", v); !read) {
+    return read.error();
   }
   auto frequency = read_coupon_frequency(args, rate_index + 3);
   if (!frequency) {
@@ -181,10 +175,33 @@ inline Expected<CouponBondTail, ErrorCode> read_coupon_bond_tail(const Value* ar
   if (!basis) {
     return basis.error();
   }
-  if (rate.value() < 0.0 || redemption.value() <= 0.0) {
+  if (v[0] < 0.0 || v[2] <= 0.0) {
     return ErrorCode::Num;
   }
-  return CouponBondTail{rate.value(), amount.value(), redemption.value(), frequency.value(), basis.value()};
+  return CouponBondTail{v[0], v[1], v[2], frequency.value(), basis.value()};
+}
+
+// Constructs the serial for (y, m, anchor_day), clamping the day to the
+// target month's last day when shorter (month-end preservation: stepping
+// Aug-31 back three months lands on May-31, six months on Feb-28/29).
+inline double quasi_serial(int y, unsigned m, unsigned anchor_day, bool date1904) noexcept {
+  const unsigned last = date_time::days_in_month(y, m);
+  const unsigned d = anchor_day > last ? last : anchor_day;
+  return date_time::serial_from_ymd(y, m, d, date1904);
+}
+
+// Shifts (y, m) by `signed_months` (negative moves backward). Uses
+// floor-division so the month remainder wraps into the adjacent year.
+inline void shift_months(int& y, unsigned& m, int signed_months) noexcept {
+  long long mm0 = static_cast<long long>(m) - 1 + static_cast<long long>(signed_months);
+  long long year_shift = mm0 / 12;
+  long long rem = mm0 % 12;
+  if (rem < 0) {
+    rem += 12;
+    year_shift -= 1;
+  }
+  y += static_cast<int>(year_shift);
+  m = static_cast<unsigned>(rem + 1);
 }
 
 // Computes YEARFRAC(start, end, basis) under the same rules as the

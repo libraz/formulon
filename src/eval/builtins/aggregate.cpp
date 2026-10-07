@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
@@ -34,6 +35,8 @@ namespace formulon {
 namespace eval {
 namespace {
 
+using builtins_detail::to_finite_value;
+
 // SUM(value, ...) --------------------------------------------------------
 // Excel's SUM coerces each argument to a number; non-coercible text yields
 // #VALUE! and any error among the inputs propagates left-to-right.
@@ -46,10 +49,7 @@ Value Sum(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     }
     total += coerced.value();
   }
-  if (std::isnan(total) || std::isinf(total)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(total);
+  return to_finite_value(total);
 }
 
 // CONCAT(value, ...) / CONCATENATE(value, ...) ---------------------------
@@ -113,10 +113,7 @@ Value extreme(const Value* args, std::uint32_t arity) {
       best = coerced.value();
     }
   }
-  if (std::isnan(best) || std::isinf(best)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(best);
+  return to_finite_value(best);
 }
 
 // MIN(value, ...) - smallest of the coerced numbers.
@@ -146,10 +143,7 @@ Value Average(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     total += coerced.value();
   }
   const double r = total / static_cast<double>(arity);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return to_finite_value(r);
 }
 
 // PRODUCT(value, ...) - product of all args. Overflow to Inf -> `#NUM!`.
@@ -168,10 +162,7 @@ Value Product(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     }
     total *= coerced.value();
   }
-  if (std::isnan(total) || std::isinf(total)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(total);
+  return to_finite_value(total);
 }
 
 // SUMSQ(value, ...) - sum of squares. Follows the same provenance rule as
@@ -190,10 +181,7 @@ Value SumSq(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     const double x = coerced.value();
     total += x * x;
   }
-  if (std::isnan(total) || std::isinf(total)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(total);
+  return to_finite_value(total);
 }
 
 // --- Counting aggregators -----------------------------------------------
@@ -413,10 +401,7 @@ Value eval_percentof_lazy(const parser::AstNode& call, Arena& arena, const Funct
     return Value::error(ErrorCode::Div0);
   }
   const double r = numerator / denominator;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return to_finite_value(r);
 }
 
 void register_aggregate_builtins(FunctionRegistry& registry) {

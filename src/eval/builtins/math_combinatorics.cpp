@@ -669,14 +669,11 @@ inline Value precise_rounding(const Value* args, std::uint32_t arity, bool up) {
   if (!num_v) {
     return Value::error(num_v.error());
   }
-  double sig = 1.0;
-  if (arity >= 2) {
-    auto s_v = coerce_to_number(args[1]);
-    if (!s_v) {
-      return Value::error(s_v.error());
-    }
-    sig = s_v.value();
+  auto s_v = builtins_detail::read_optional_number(args, arity, 1, 1.0, /*check_finite=*/false);
+  if (!s_v) {
+    return Value::error(s_v.error());
   }
+  const double sig = s_v.value();
   const double n = num_v.value();
   if (sig == 0.0) {
     return Value::number(0.0);
@@ -685,10 +682,7 @@ inline Value precise_rounding(const Value* args, std::uint32_t arity, bool up) {
   const double scaled = snap_to_integer(n / abs_s);
   const double rounded = up ? std::ceil(scaled) : std::floor(scaled);
   const double r = rounded * abs_s;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return to_finite_value(r);
 }
 
 // CEILING.PRECISE(num, [sig]) - round up toward +infinity to the nearest

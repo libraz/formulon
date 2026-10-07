@@ -57,54 +57,26 @@ struct AmorArgs {
   int basis;
 };
 
-Expected<double, ErrorCode> read_dep_number(const Value* args, std::uint32_t index) {
-  auto value = read_required_number(args, index);
-  if (!value) {
-    return value.error();
-  }
-  return value.value();
-}
-
 Expected<DepreciationArgs3, ErrorCode> read_depreciation_args3(const Value* args) {
-  auto cost = read_dep_number(args, 0);
-  if (!cost) {
-    return cost.error();
+  double v[3];
+  if (auto read = read_required_numbers(args, "nnn", v); !read) {
+    return read.error();
   }
-  auto salvage = read_dep_number(args, 1);
-  if (!salvage) {
-    return salvage.error();
-  }
-  auto life = read_dep_number(args, 2);
-  if (!life) {
-    return life.error();
-  }
-  return DepreciationArgs3{cost.value(), salvage.value(), life.value()};
+  return DepreciationArgs3{v[0], v[1], v[2]};
 }
 
 Expected<DepreciationArgs4, ErrorCode> read_depreciation_args4(const Value* args) {
-  auto base = read_depreciation_args3(args);
-  if (!base) {
-    return base.error();
+  double v[4];
+  if (auto read = read_required_numbers(args, "nnnn", v); !read) {
+    return read.error();
   }
-  auto period = read_dep_number(args, 3);
-  if (!period) {
-    return period.error();
-  }
-  return DepreciationArgs4{base.value().cost, base.value().salvage, base.value().life, period.value()};
+  return DepreciationArgs4{v[0], v[1], v[2], v[3]};
 }
 
 Expected<VdbArgs, ErrorCode> read_vdb_args(const Value* args, std::uint32_t arity) {
-  auto base = read_depreciation_args3(args);
-  if (!base) {
-    return base.error();
-  }
-  auto start = read_dep_number(args, 3);
-  if (!start) {
-    return start.error();
-  }
-  auto end = read_dep_number(args, 4);
-  if (!end) {
-    return end.error();
+  double v[5];
+  if (auto read = read_required_numbers(args, "nnnnn", v); !read) {
+    return read.error();
   }
   auto factor = read_optional_number(args, arity, 5, 2.0);
   if (!factor) {
@@ -114,46 +86,27 @@ Expected<VdbArgs, ErrorCode> read_vdb_args(const Value* args, std::uint32_t arit
   if (!no_switch) {
     return no_switch.error();
   }
-  return VdbArgs{base.value().cost, base.value().salvage, base.value().life,       start.value(),
-                 end.value(),       factor.value(),       no_switch.value() != 0.0};
+  return VdbArgs{v[0], v[1], v[2], v[3], v[4], factor.value(), no_switch.value() != 0.0};
 }
 
 // Reads the AMORDEGRC / AMORLINC arguments and applies their shared domain checks.
 Expected<AmorArgs, ErrorCode> read_amor_args(const Value* args, std::uint32_t arity) {
-  auto cost = read_dep_number(args, 0);
-  if (!cost) {
-    return cost.error();
-  }
-  auto date_purchased = read_financial_date(args, 1);
-  if (!date_purchased) {
-    return date_purchased.error();
-  }
-  auto first_period = read_financial_date(args, 2);
-  if (!first_period) {
-    return first_period.error();
-  }
-  auto salvage = read_dep_number(args, 3);
-  if (!salvage) {
-    return salvage.error();
-  }
-  auto period = read_dep_number(args, 4);
-  if (!period) {
-    return period.error();
-  }
-  auto rate = read_dep_number(args, 5);
-  if (!rate) {
-    return rate.error();
+  double v[6];
+  if (auto read = read_required_numbers(args, "nddnnn", v); !read) {
+    return read.error();
   }
   auto basis = read_day_count_basis(args, arity, 6);
   if (!basis) {
     return basis.error();
   }
-  if (cost.value() <= 0.0 || rate.value() <= 0.0 || salvage.value() >= cost.value() || period.value() < 0.0 ||
-      period.value() > kMaxDepreciationPeriods) {
+  const double cost = v[0];
+  const double salvage = v[3];
+  const double period = v[4];
+  const double rate = v[5];
+  if (cost <= 0.0 || rate <= 0.0 || salvage >= cost || period < 0.0 || period > kMaxDepreciationPeriods) {
     return ErrorCode::Num;
   }
-  return AmorArgs{cost.value(),   date_purchased.value(), first_period.value(), salvage.value(),
-                  period.value(), rate.value(),           basis.value()};
+  return AmorArgs{cost, v[1], v[2], salvage, period, rate, basis.value()};
 }
 
 // Walks periods 0..floor(period), capping each charge from `period_dep(i, book)`

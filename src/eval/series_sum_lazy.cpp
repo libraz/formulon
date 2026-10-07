@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
@@ -23,6 +24,8 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+using builtins_detail::to_finite_value;
 
 // Evaluates a scalar numeric argument. Returns `true` and writes the
 // numeric value to `*out` on success; on failure writes the Excel error
@@ -136,10 +139,7 @@ Value eval_series_sum_lazy(const parser::AstNode& call, Arena& arena, const Func
     const double power = n + static_cast<double>(i) * m;
     total += v.as_number() * std::pow(x, power);
   }
-  if (std::isnan(total) || std::isinf(total)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(total);
+  return to_finite_value(total);
 }
 
 }  // namespace eval

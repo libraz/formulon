@@ -194,6 +194,18 @@ double InverseStandardNormal(double p);
 // `BINOM.DIST.RANGE` keeps agreeing exactly with `BinomPmf`.
 inline constexpr double kMaxCumulativeTerms = 1048576.0;
 
+/// Sums `pmf(k)` for every integer `k` in `[first, last]`, in ascending order.
+/// Both bounds must be non-negative and below `kMaxCumulativeTerms`.
+template <class Pmf>
+double sum_pmf(double first, double last, Pmf pmf) {
+  double total = 0.0;
+  const auto last_int = static_cast<std::uint64_t>(last);
+  for (auto i = static_cast<std::uint64_t>(first); i <= last_int; ++i) {
+    total += pmf(static_cast<double>(i));
+  }
+  return total;
+}
+
 // Largest value of `min(a, b)` for which the closed-form beta CDF is
 // accurate enough to answer with, rather than refuse.
 //

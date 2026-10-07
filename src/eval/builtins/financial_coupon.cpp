@@ -36,13 +36,9 @@ namespace {
 // `CouponDates`; on any validation failure a `#NUM!` error is
 // returned for the caller to forward to Excel.
 Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t arity, bool date1904) {
-  auto s_e = read_financial_date(args, 0);
-  if (!s_e) {
-    return s_e.error();
-  }
-  auto m_e = read_financial_date(args, 1);
-  if (!m_e) {
-    return m_e.error();
+  double dates[2];
+  if (auto read = read_required_numbers(args, "dd", dates); !read) {
+    return read.error();
   }
   auto f_e = read_coupon_frequency(args, 2);
   if (!f_e) {
@@ -53,8 +49,8 @@ Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t
     return b_e.error();
   }
 
-  const double s = s_e.value();
-  const double m = m_e.value();
+  const double s = dates[0];
+  const double m = dates[1];
   if (s >= m) {
     return ErrorCode::Num;
   }

@@ -49,32 +49,6 @@ namespace {
 // Calendar day-count helpers shared with the COUP* engine and the date
 // builtins; see `eval/date_time.h`.
 using date_time::basis_days_between;
-using date_time::days_in_month;
-
-// Constructs the serial for (y, m, anchor_day), clamping the day to the
-// target month's last day when shorter. Matches the COUP* engine's
-// month-end-preservation rule: if last_interest is Aug-31 and we step
-// three months forward, we land on Nov-30 (Nov has only 30 days).
-double quasi_serial(int y, unsigned m, unsigned anchor_day, bool date1904) noexcept {
-  const unsigned last = days_in_month(y, m);
-  const unsigned d = anchor_day > last ? last : anchor_day;
-  return date_time::serial_from_ymd(y, m, d, date1904);
-}
-
-// Shifts (y, m) forward by `months` (always positive). Uses
-// floor-division so positive month overflow wraps correctly into the
-// next year.
-void shift_months_forward(int& y, unsigned& m, int months) noexcept {
-  long long mm0 = static_cast<long long>(m) - 1 + static_cast<long long>(months);
-  long long year_shift = mm0 / 12;
-  long long rem = mm0 % 12;
-  if (rem < 0) {
-    rem += 12;
-    year_shift -= 1;
-  }
-  y += static_cast<int>(year_shift);
-  m = static_cast<unsigned>(rem + 1);
-}
 
 // Period length E for the basis.
 //   * Bases 0 / 4 (30/360 family): 360/freq — the formula's DC / A /
@@ -105,7 +79,7 @@ double normal_period_days(int basis, int frequency, double last_interest, bool d
       const date_time::YMD li = date_time::ymd_from_serial(last_interest, date1904);
       int y = li.y;
       unsigned m = li.m;
-      shift_months_forward(y, m, 12 / frequency);
+      shift_months(y, m, 12 / frequency);
       const double q2 = quasi_serial(y, m, li.d, date1904);
       return q2 - last_interest;
     }
@@ -157,18 +131,13 @@ Expected<OddLastSchedule, ErrorCode> compute_odd_last_schedule(double settlement
 
 Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::uint32_t arity,
                                                         bool slot4_must_be_positive, bool date1904) {
-  auto settlement = read_financial_date(args, 0);
-  if (!settlement) {
-    return settlement.error();
+  double dates[3];
+  if (auto read = read_required_numbers(args, "ddd", dates); !read) {
+    return read.error();
   }
-  auto maturity = read_financial_date(args, 1);
-  if (!maturity) {
-    return maturity.error();
-  }
-  auto last_interest = read_financial_date(args, 2);
-  if (!last_interest) {
-    return last_interest.error();
-  }
+  const double settlement = dates[0];
+  const double maturity = dates[1];
+  const double last_interest = dates[2];
   auto tail = read_coupon_bond_tail(args, arity, 3);
   if (!tail) {
     return tail.error();
@@ -178,18 +147,17 @@ Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::
   // Validation mirrors PRICE. The odd-last family adds the
   // ordering constraint `last_interest < settlement` (the bond's last
   // regular coupon must precede settlement).
-  if (last_interest.value() >= settlement.value()) {
+  if (last_interest >= settlement) {
     return ErrorCode::Num;
   }
-  if (settlement.value() >= maturity.value()) {
+  if (settlement >= maturity) {
     return ErrorCode::Num;
   }
   if (slot4_must_be_positive ? (slot4 <= 0.0) : (slot4 < 0.0)) {
     return ErrorCode::Num;
   }
 
-  auto sched = compute_odd_last_schedule(settlement.value(), maturity.value(), last_interest.value(), frequency, basis,
-                                         date1904);
+  auto sched = compute_odd_last_schedule(settlement, maturity, last_interest, frequency, basis, date1904);
   if (!sched) {
     return sched.error();
   }

@@ -251,8 +251,11 @@ RankCounts count_rank(const std::vector<double>& values, double number, bool des
 
 }  // namespace
 
-Value eval_rank_eq_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx) {
+namespace {
+
+// RANK.EQ and RANK.AVG share the lookup; they differ only in how ties rank.
+Value eval_rank_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, bool average_ties) {
   auto prepared = prepare_rank(call, arena, registry, ctx);
   if (std::holds_alternative<Value>(prepared)) {
     return std::get<Value>(prepared);
@@ -267,28 +270,26 @@ Value eval_rank_eq_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (c.equal == 0U) {
     return Value::error(ErrorCode::NA);
   }
-  return Value::number(static_cast<double>(c.greater + 1U));
-}
-
-Value eval_rank_avg_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx) {
-  auto prepared = prepare_rank(call, arena, registry, ctx);
-  if (std::holds_alternative<Value>(prepared)) {
-    return std::get<Value>(prepared);
-  }
-  const RankInputs& in = std::get<RankInputs>(prepared);
-  if (in.values.empty()) {
-    return Value::error(ErrorCode::NA);
-  }
-  const RankCounts c = count_rank(in.values, in.number, in.descending);
-  if (c.equal == 0U) {
-    return Value::error(ErrorCode::NA);
+  if (!average_ties) {
+    return Value::number(static_cast<double>(c.greater + 1U));
   }
   // Average of the `equal` contiguous rank slots starting at position
   // `greater + 1` (1-based). Closed-form: midpoint = greater + 1 +
   // (equal - 1) / 2 = greater + (equal + 1) / 2.
   const double avg = static_cast<double>(c.greater) + (static_cast<double>(c.equal) + 1.0) / 2.0;
   return Value::number(avg);
+}
+
+}  // namespace
+
+Value eval_rank_eq_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx) {
+  return eval_rank_lazy(call, arena, registry, ctx, /*average_ties=*/false);
+}
+
+Value eval_rank_avg_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx) {
+  return eval_rank_lazy(call, arena, registry, ctx, /*average_ties=*/true);
 }
 
 namespace {

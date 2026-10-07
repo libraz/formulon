@@ -24,6 +24,7 @@
 #include <variant>
 #include <vector>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/numeric_pairs.h"
@@ -37,6 +38,8 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+using builtins_detail::to_finite_value;
 
 // Paired collection for the shape-matched paths. The hypothesis family
 // requires both dimensions to agree, so the transpose the regression family
@@ -106,14 +109,6 @@ bool mean_and_sample_variance(const std::vector<double>& samples, double* out_me
   *out_mean = mean;
   *out_var = ss / (dn - 1.0);
   return true;
-}
-
-// Guards the final numeric result. Any NaN / infinity becomes `#NUM!`.
-Value finite_number(double r) {
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
 }
 
 // Collects the two independent samples T.TEST (types 2 and 3) and
@@ -259,7 +254,7 @@ Value eval_t_test_lazy(const parser::AstNode& call, Arena& arena, const Function
 
   const double half = t_half_tail(t, df);
   const double p = (tails == 1) ? half : 2.0 * half;
-  return finite_number(p);
+  return to_finite_value(p);
 }
 
 Value eval_f_test_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -286,7 +281,7 @@ Value eval_f_test_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::error(ErrorCode::Num);
   }
   const double lo = cdf < (1.0 - cdf) ? cdf : (1.0 - cdf);
-  return finite_number(2.0 * lo);
+  return to_finite_value(2.0 * lo);
 }
 
 Value eval_chisq_test_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -366,7 +361,7 @@ Value eval_chisq_test_lazy(const parser::AstNode& call, Arena& arena, const Func
   if (std::isnan(p)) {
     return Value::error(ErrorCode::Num);
   }
-  return finite_number(p);
+  return to_finite_value(p);
 }
 
 Value eval_z_test_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -433,7 +428,7 @@ Value eval_z_test_lazy(const parser::AstNode& call, Arena& arena, const Function
   const double z = (mean - x) / (sigma / std::sqrt(n));
   // One-tailed upper area: `1 - Φ(z) = 0.5 * erfc(z / sqrt(2))`.
   const double p = 0.5 * std::erfc(z / std::sqrt(2.0));
-  return finite_number(p);
+  return to_finite_value(p);
 }
 
 Value eval_prob_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -489,7 +484,7 @@ Value eval_prob_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
         total += pairs.second[i];
       }
     }
-    return finite_number(total);
+    return to_finite_value(total);
   }
 
   const Value upper_v = eval_node(call.as_call_arg(3), arena, registry, ctx);
@@ -512,7 +507,7 @@ Value eval_prob_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
       total += pairs.second[i];
     }
   }
-  return finite_number(total);
+  return to_finite_value(total);
 }
 
 }  // namespace eval

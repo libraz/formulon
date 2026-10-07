@@ -770,6 +770,14 @@ Value broadcast_over_text(const ArrayValue* in, Arena& arena, PerCell&& per_cell
   return Value::array(out);
 }
 
+// Resolves the leading (text, pattern) pair every REGEX* function takes, in
+// signature order so the leftmost error wins.
+bool resolve_text_and_pattern(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                              const EvalContext& ctx, TextArg& text_arg, std::string& pattern, Value& err) {
+  return resolve_text_arg(call.as_call_arg(0), arena, registry, ctx, text_arg, err) &&
+         resolve_pattern(call.as_call_arg(1), arena, registry, ctx, pattern, err);
+}
+
 }  // namespace
 
 std::uint64_t regex_compile_count() noexcept {
@@ -792,15 +800,10 @@ Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const Funct
   // evaluated last and cannot pre-empt an error in text or pattern.
   Value err = Value::error(ErrorCode::Value);
 
-  // Text (scalar or array). Array shape -> per-cell broadcast.
+  // Text may be an array (per-cell broadcast); the pattern is scalar text.
   TextArg text_arg;
-  if (!resolve_text_arg(call.as_call_arg(0), arena, registry, ctx, text_arg, err)) {
-    return err;
-  }
-
-  // Pattern (scalar text).
   std::string pattern;
-  if (!resolve_pattern(call.as_call_arg(1), arena, registry, ctx, pattern, err)) {
+  if (!resolve_text_and_pattern(call, arena, registry, ctx, text_arg, pattern, err)) {
     return err;
   }
 
@@ -844,12 +847,8 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
   Value err = Value::error(ErrorCode::Value);
 
   TextArg text_arg;
-  if (!resolve_text_arg(call.as_call_arg(0), arena, registry, ctx, text_arg, err)) {
-    return err;
-  }
-
   std::string pattern;
-  if (!resolve_pattern(call.as_call_arg(1), arena, registry, ctx, pattern, err)) {
+  if (!resolve_text_and_pattern(call, arena, registry, ctx, text_arg, pattern, err)) {
     return err;
   }
 
@@ -918,12 +917,8 @@ Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const Fu
   Value err = Value::error(ErrorCode::Value);
 
   TextArg text_arg;
-  if (!resolve_text_arg(call.as_call_arg(0), arena, registry, ctx, text_arg, err)) {
-    return err;
-  }
-
   std::string pattern;
-  if (!resolve_pattern(call.as_call_arg(1), arena, registry, ctx, pattern, err)) {
+  if (!resolve_text_and_pattern(call, arena, registry, ctx, text_arg, pattern, err)) {
     return err;
   }
   std::string replacement;

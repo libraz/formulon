@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "eval/array_alloc.h"
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/coerce.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
@@ -34,6 +35,8 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+using builtins_detail::to_finite_value;
 
 /// Per-cell numeric coercion. MMULT / MDETERM / MINVERSE require every
 /// matrix cell to be a `Number` (Booleans coerce to 1/0 via the standard
@@ -264,10 +267,7 @@ Value eval_mdeterm_lazy(const parser::AstNode& call, Arena& arena, const Functio
   for (std::uint32_t i = 0; i < n; ++i) {
     det *= m[static_cast<std::size_t>(i) * n + i];
   }
-  if (std::isnan(det) || std::isinf(det)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(det);
+  return to_finite_value(det);
 }
 
 void gauss_jordan_eliminate(std::vector<double>& aug, std::uint32_t n, std::uint32_t w, std::uint32_t k,

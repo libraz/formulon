@@ -181,10 +181,7 @@ Value Sqrt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double r = std::sqrt(x);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return to_finite_value(r);
 }
 
 // --- Two-argument numeric -----------------------------------------------
@@ -206,10 +203,7 @@ Value Mod(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   const double r = n.value() - d.value() * std::floor(n.value() / d.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return to_finite_value(r);
 }
 
 // POWER(base, exp) - shares the `apply_pow` helper with the `^` operator
@@ -437,10 +431,7 @@ Value MRound(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double rounded_quotient = integer_quotient + (round_up ? 1.0 : 0.0);
   // Restore the sign only after choosing the nearest magnitude quotient.
   const double r = signum(n) * rounded_quotient * abs_m;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return to_finite_value(r);
 }
 
 // --- CEILING.MATH / FLOOR.MATH ------------------------------------------
@@ -462,22 +453,16 @@ Value math_mode_rounding(const Value* args, std::uint32_t arity, bool ceiling) {
   if (!number) {
     return Value::error(number.error());
   }
-  double significance = 1.0;
-  if (arity >= 2) {
-    auto coerced = coerce_to_number(args[1]);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    significance = coerced.value();
+  auto sig = builtins_detail::read_optional_number(args, arity, 1, 1.0, /*check_finite=*/false);
+  if (!sig) {
+    return Value::error(sig.error());
   }
-  bool flip_negative = false;
-  if (arity >= 3) {
-    auto coerced = coerce_to_number(args[2]);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    flip_negative = coerced.value() != 0.0;
+  const double significance = sig.value();
+  auto flip = builtins_detail::read_optional_number(args, arity, 2, 0.0, /*check_finite=*/false);
+  if (!flip) {
+    return Value::error(flip.error());
   }
+  const bool flip_negative = flip.value() != 0.0;
   const double n = number.value();
   if (n == 0.0) {
     return Value::number(0.0);
@@ -494,10 +479,7 @@ Value math_mode_rounding(const Value* args, std::uint32_t arity, bool ceiling) {
   const bool use_ceil = (n > 0.0 || !flip_negative) ? ceiling : !ceiling;
   const double rounded = use_ceil ? std::ceil(scaled) : std::floor(scaled);
   const double r = rounded * abs_s;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return to_finite_value(r);
 }
 
 Value CeilingMath(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
@@ -535,10 +517,7 @@ Value Even(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   // Parity check via std::fmod: `|away| mod 2 == 0` -> already even.
   const double parity = std::fmod(std::fabs(away), 2.0);
   const double r = (parity == 0.0) ? away : away + ((x > 0.0) ? 1.0 : -1.0);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return to_finite_value(r);
 }
 
 // ODD(x) - nearest odd integer, rounded AWAY from zero. `ODD(0) = 1` is the
@@ -557,10 +536,7 @@ Value Odd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double parity = std::fmod(std::fabs(away), 2.0);
   // `|away| mod 2 == 1` -> already odd. Otherwise step one away from zero.
   const double r = (parity != 0.0) ? away : away + ((x > 0.0) ? 1.0 : -1.0);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return to_finite_value(r);
 }
 
 // QUOTIENT(numerator, denominator) - integer division, truncated TOWARD
@@ -585,10 +561,7 @@ Value Quotient(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   const double r = std::trunc(num.value() / den.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return to_finite_value(r);
 }
 
 }  // namespace

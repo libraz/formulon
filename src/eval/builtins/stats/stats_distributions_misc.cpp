@@ -33,16 +33,12 @@ namespace stats_detail {
 // Confidence-interval half-widths
 // ---------------------------------------------------------------------------
 
-// CONFIDENCE / CONFIDENCE.NORM(alpha, stdev, size) - half-width of the
-// (1 - alpha) confidence interval for a sample mean under the normal model:
-//   z_{1 - alpha/2} * stdev / sqrt(size).
-// `size` is truncated toward zero (Excel floors positive inputs; negative
-// inputs are rejected outright). Domain: alpha in (0, 1), stdev > 0,
-// size >= 1; any violation surfaces `#NUM!`.
-Value ConfidenceNorm(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+// Reads and validates the (alpha, stdev, size) triple shared by CONFIDENCE.NORM
+// and CONFIDENCE.T; yields {alpha, stdev, floor(size)}.
+static Expected<NumberTriple, ErrorCode> read_confidence_args(const Value* args) {
   auto input = read_number_triple(args, 0, 1, 2);
   if (!input) {
-    return Value::error(input.error());
+    return input.error();
   }
   const double alpha = input.value().first;
   const double sd = input.value().second;
@@ -50,12 +46,29 @@ Value ConfidenceNorm(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*
   // Reject negative / non-finite sizes before flooring. Excel truncates
   // toward zero for positives but does not silently convert negatives.
   if (std::isnan(size_raw) || std::isinf(size_raw) || size_raw < 1.0) {
-    return Value::error(ErrorCode::Num);
+    return ErrorCode::Num;
   }
   const double n = std::floor(size_raw);
   if (alpha <= 0.0 || alpha >= 1.0 || sd <= 0.0 || n < 1.0) {
-    return Value::error(ErrorCode::Num);
+    return ErrorCode::Num;
   }
+  return NumberTriple{alpha, sd, n};
+}
+
+// CONFIDENCE / CONFIDENCE.NORM(alpha, stdev, size) - half-width of the
+// (1 - alpha) confidence interval for a sample mean under the normal model:
+//   z_{1 - alpha/2} * stdev / sqrt(size).
+// `size` is truncated toward zero (Excel floors positive inputs; negative
+// inputs are rejected outright). Domain: alpha in (0, 1), stdev > 0,
+// size >= 1; any violation surfaces `#NUM!`.
+Value ConfidenceNorm(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto input = read_confidence_args(args);
+  if (!input) {
+    return Value::error(input.error());
+  }
+  const double alpha = input.value().first;
+  const double sd = input.value().second;
+  const double n = input.value().third;
   const double z = InverseStandardNormal(1.0 - 0.5 * alpha);
   return finite_number_result(z * sd / std::sqrt(n));
 }
@@ -65,20 +78,13 @@ Value ConfidenceNorm(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*
 // Domain matches CONFIDENCE.NORM plus `size >= 2` (df = size - 1 must be
 // >= 1). `size == 1` surfaces `#DIV/0!` per Excel because df collapses to 0.
 Value ConfidenceT(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_number_triple(args, 0, 1, 2);
+  auto input = read_confidence_args(args);
   if (!input) {
     return Value::error(input.error());
   }
   const double alpha = input.value().first;
   const double sd = input.value().second;
-  const double size_raw = input.value().third;
-  if (std::isnan(size_raw) || std::isinf(size_raw) || size_raw < 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double n = std::floor(size_raw);
-  if (alpha <= 0.0 || alpha >= 1.0 || sd <= 0.0 || n < 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
+  const double n = input.value().third;
   if (n == 1.0) {
     return Value::error(ErrorCode::Div0);
   }
@@ -280,11 +286,7 @@ Value NegBinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/)
       // P(F <= f) = I_p(s, f + 1).
       r = stats::regularized_incomplete_beta(s, f + 1.0, p);
     } else {
-      r = 0.0;
-      const auto f_int = static_cast<std::uint64_t>(f);
-      for (std::uint64_t i = 0; i <= f_int; ++i) {
-        r += std::exp(NegBinomLogPmf(static_cast<double>(i), s, p));
-      }
+      r = sum_pmf(0.0, f, [&](double i) { return std::exp(NegBinomLogPmf(i, s, p)); });
     }
   } else {
     r = std::exp(NegBinomLogPmf(f, s, p));
@@ -345,13 +347,7 @@ Value BinomDistRange(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     const double lower = (s1 == 0.0) ? 0.0 : BinomCdf(s1 - 1.0, n, p);
     return finite_number_result(upper - lower);
   }
-  const auto s1_int = static_cast<std::uint64_t>(s1);
-  const auto s2_int = static_cast<std::uint64_t>(s2);
-  double r = 0.0;
-  for (std::uint64_t k = s1_int; k <= s2_int; ++k) {
-    r += BinomPmf(static_cast<double>(k), n, p);
-  }
-  return finite_number_result(r);
+  return finite_number_result(sum_pmf(s1, s2, [&](double k) { return BinomPmf(k, n, p); }));
 }
 
 }  // namespace stats_detail

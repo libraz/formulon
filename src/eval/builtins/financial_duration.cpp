@@ -47,22 +47,14 @@ namespace {
 // validation or numerical failure. The caller (DURATION) returns this
 // value directly; MDURATION divides it by `(1 + yld/frequency)`.
 Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t arity, bool date1904) {
-  auto settlement = read_financial_date(args, 0);
-  if (!settlement) {
-    return settlement.error();
+  double v4[4];
+  if (auto read = read_required_numbers(args, "ddnn", v4); !read) {
+    return read.error();
   }
-  auto maturity = read_financial_date(args, 1);
-  if (!maturity) {
-    return maturity.error();
-  }
-  auto coupon = read_required_number(args, 2);
-  if (!coupon) {
-    return coupon.error();
-  }
-  auto yld = read_required_number(args, 3);
-  if (!yld) {
-    return yld.error();
-  }
+  const double settlement = v4[0];
+  const double maturity = v4[1];
+  const double coupon = v4[2];
+  const double yld = v4[3];
   auto frequency_e = read_coupon_frequency(args, 4);
   if (!frequency_e) {
     return frequency_e.error();
@@ -75,20 +67,20 @@ Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t ar
   // Validation order matches Microsoft's documented contract and the
   // sibling COUP* / PRICE* impls: date ordering -> frequency domain ->
   // basis domain -> coupon / yld sign checks.
-  if (settlement.value() >= maturity.value()) {
+  if (settlement >= maturity) {
     return ErrorCode::Num;
   }
   const int frequency = frequency_e.value();
   const int basis = basis_e.value();
-  if (coupon.value() < 0.0) {
+  if (coupon < 0.0) {
     return ErrorCode::Num;
   }
-  if (yld.value() < 0.0) {
+  if (yld < 0.0) {
     return ErrorCode::Num;
   }
 
   CouponDates cd{};
-  if (!compute_coupon_dates(settlement.value(), maturity.value(), frequency, basis, date1904, &cd)) {
+  if (!compute_coupon_dates(settlement, maturity, frequency, basis, date1904, &cd)) {
     return ErrorCode::Num;
   }
   if (cd.coupons_remaining <= 0 || cd.period_days <= 0.0) {
@@ -96,11 +88,11 @@ Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t ar
   }
 
   const double freq_d = static_cast<double>(frequency);
-  const double v = 1.0 / (1.0 + yld.value() / freq_d);
+  const double v = 1.0 / (1.0 + yld / freq_d);
   // `bond_dsc` (not the raw `days_nc`) keeps `A/E + DSC/E == 1` on
   // bases 2 / 3; see `coupon_schedule.h` for the rationale.
   const double t1 = cd.bond_dsc / cd.period_days;
-  const double cf_coupon = coupon.value() / freq_d;
+  const double cf_coupon = coupon / freq_d;
   const std::int32_t n = cd.coupons_remaining;
 
   double num = 0.0;

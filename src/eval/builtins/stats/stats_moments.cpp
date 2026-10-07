@@ -95,6 +95,16 @@ Value AveDev(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return finite_number_result(r);
 }
 
+// Sum of `((x - mean) / scale)^3` over `xs`, shared by SKEW and SKEW.P.
+static double cubed_z_sum(const CenteredScaled& stat) {
+  double cubed_sum = 0.0;
+  for (double x : stat.xs) {
+    const double z = (x - stat.mean) / stat.scale;
+    cubed_sum += z * z * z;
+  }
+  return cubed_sum;
+}
+
 // SKEW(value, ...) - sample skewness,
 // `(n / ((n - 1)(n - 2))) * sum(((x_i - mean) / s)^3)` where `s` is the
 // sample stdev. Requires at least 3 distinct non-zero deviations; fewer
@@ -104,11 +114,7 @@ Value Skew(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!stat) {
     return Value::error(stat.error());
   }
-  double cubed_sum = 0.0;
-  for (double x : stat.value().xs) {
-    const double z = (x - stat.value().mean) / stat.value().scale;
-    cubed_sum += z * z * z;
-  }
+  const double cubed_sum = cubed_z_sum(stat.value());
   const double n = stat.value().n;
   const double coeff = n / ((n - 1.0) * (n - 2.0));
   return finite_number_result(coeff * cubed_sum);
@@ -124,12 +130,7 @@ Value SkewP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!stat) {
     return Value::error(stat.error());
   }
-  double cubed_sum = 0.0;
-  for (double x : stat.value().xs) {
-    const double z = (x - stat.value().mean) / stat.value().scale;
-    cubed_sum += z * z * z;
-  }
-  return finite_number_result(cubed_sum / stat.value().n);
+  return finite_number_result(cubed_z_sum(stat.value()) / stat.value().n);
 }
 
 // KURT(value, ...) - excess kurtosis (Fisher's definition),

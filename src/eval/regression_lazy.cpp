@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "eval/array_alloc.h"
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/numeric_pairs.h"
@@ -41,6 +42,8 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+using builtins_detail::to_finite_value;
 
 // Paired collection for the regression family. Excel accepts a row-vs-column
 // pairing here (e.g. A1:A3 against `{1,2,3}`) as long as the total cell counts
@@ -90,15 +93,6 @@ RegressionStats compute_regression_stats(const NumericPairs& p) noexcept {
     s.sum_xy += dx * dy;
   }
   return s;
-}
-
-// Guards the final numeric result. Any NaN / infinity becomes `#NUM!`
-// so the caller never surfaces a non-finite value to the user.
-Value finite_number(double r) {
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
 }
 
 // Shared front-end for every 2-arity regression lazy impl: arity check
@@ -169,7 +163,7 @@ Value eval_pair_stat(const parser::AstNode& call, Arena& arena, const FunctionRe
       if (!compute_slope_intercept(prepared, &slope, &intercept, &err)) {
         return err;
       }
-      return finite_number(kind == PairStat::Slope ? slope : intercept);
+      return to_finite_value(kind == PairStat::Slope ? slope : intercept);
     }
     case PairStat::SumX2PY2:
     case PairStat::SumX2MY2:
@@ -191,7 +185,7 @@ Value eval_pair_stat(const parser::AstNode& call, Arena& arena, const FunctionRe
           total += d * d;
         }
       }
-      return finite_number(total);
+      return to_finite_value(total);
     }
     default:
       break;
@@ -208,17 +202,17 @@ Value eval_pair_stat(const parser::AstNode& call, Arena& arena, const FunctionRe
       if (s.sum_xx == 0.0 || s.sum_yy == 0.0) {
         return Value::error(ErrorCode::Div0);
       }
-      return finite_number(s.sum_xy / std::sqrt(s.sum_xx * s.sum_yy));
+      return to_finite_value(s.sum_xy / std::sqrt(s.sum_xx * s.sum_yy));
     case PairStat::CovarianceP:
-      return finite_number(s.sum_xy / static_cast<double>(n));
+      return to_finite_value(s.sum_xy / static_cast<double>(n));
     case PairStat::CovarianceS:
-      return finite_number(s.sum_xy / static_cast<double>(n - 1U));
+      return to_finite_value(s.sum_xy / static_cast<double>(n - 1U));
     case PairStat::Rsq:
       if (s.sum_xx == 0.0 || s.sum_yy == 0.0) {
         return Value::error(ErrorCode::Div0);
       }
       // CORREL^2 computed directly avoids the intermediate sqrt.
-      return finite_number((s.sum_xy * s.sum_xy) / (s.sum_xx * s.sum_yy));
+      return to_finite_value((s.sum_xy * s.sum_xy) / (s.sum_xx * s.sum_yy));
     default: {  // Steyx
       if (s.sum_xx == 0.0) {
         return Value::error(ErrorCode::Div0);
@@ -226,7 +220,7 @@ Value eval_pair_stat(const parser::AstNode& call, Arena& arena, const FunctionRe
       const double residual_ss = s.sum_yy - (s.sum_xy * s.sum_xy) / s.sum_xx;
       // Rounding can leave a tiny negative on an exact fit; clamp before the root.
       const double clamped = residual_ss < 0.0 ? 0.0 : residual_ss;
-      return finite_number(std::sqrt(clamped / static_cast<double>(n - 2U)));
+      return to_finite_value(std::sqrt(clamped / static_cast<double>(n - 2U)));
     }
   }
 }
@@ -310,7 +304,7 @@ Value eval_forecast_linear_lazy(const parser::AstNode& call, Arena& arena, const
   if (!compute_slope_intercept(prepared, &slope, &intercept, &err)) {
     return err;
   }
-  return finite_number(intercept + slope * x);
+  return to_finite_value(intercept + slope * x);
 }
 
 Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

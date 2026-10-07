@@ -19,6 +19,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/coerce.h"
 #include "eval/criteria.h"
 #include "eval/eval_context.h"
@@ -35,6 +36,8 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+using builtins_detail::to_finite_value;
 
 // ---------------------------------------------------------------------------
 // Shared resolution helpers
@@ -351,15 +354,6 @@ std::vector<double> collect_matching_numbers(const std::vector<Value>& field_val
   return out;
 }
 
-// Guards a final numeric result against NaN / infinity. Mirrors the
-// helper used in `hypothesis_lazy.cpp`.
-Value finite_number(double r) {
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
-}
-
 // Runs the argument shape every D-function shares — `database`,
 // `field`, `criteria` — and yields the field-column value of each
 // matching record. Returns `false` with the propagating error written to
@@ -382,6 +376,18 @@ bool resolve_field_values(const parser::AstNode& call, Arena& arena, const Funct
   return true;
 }
 
+// Resolves the D-function arguments and keeps only the numeric field values
+// of the matching records. Same failure contract as `resolve_field_values`.
+bool resolve_matching_numbers(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                              const EvalContext& ctx, std::vector<double>* out_nums, Value* out_err) {
+  std::vector<Value> vals;
+  if (!resolve_field_values(call, arena, registry, ctx, &vals, out_err)) {
+    return false;
+  }
+  *out_nums = collect_matching_numbers(vals);
+  return true;
+}
+
 // Sums the matched numbers left to right, which is the order Excel
 // accumulates a range in.
 double sum_of(const std::vector<double>& nums) {
@@ -400,22 +406,21 @@ double sum_of(const std::vector<double>& nums) {
 
 Value eval_dsum_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx) {
-  std::vector<Value> vals;
+  std::vector<double> nums;
   Value err = Value::blank();
-  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
+  if (!resolve_matching_numbers(call, arena, registry, ctx, &nums, &err)) {
     return err;
   }
-  return finite_number(sum_of(collect_matching_numbers(vals)));
+  return to_finite_value(sum_of(nums));
 }
 
 Value eval_dcount_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
-  std::vector<Value> vals;
+  std::vector<double> nums;
   Value err = Value::blank();
-  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
+  if (!resolve_matching_numbers(call, arena, registry, ctx, &nums, &err)) {
     return err;
   }
-  const std::vector<double> nums = collect_matching_numbers(vals);
   return Value::number(static_cast<double>(nums.size()));
 }
 
@@ -437,16 +442,15 @@ Value eval_dcounta_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
 Value eval_daverage_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
-  std::vector<Value> vals;
+  std::vector<double> nums;
   Value err = Value::blank();
-  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
+  if (!resolve_matching_numbers(call, arena, registry, ctx, &nums, &err)) {
     return err;
   }
-  const std::vector<double> nums = collect_matching_numbers(vals);
   if (nums.empty()) {
     return Value::error(ErrorCode::Div0);
   }
-  return finite_number(sum_of(nums) / static_cast<double>(nums.size()));
+  return to_finite_value(sum_of(nums) / static_cast<double>(nums.size()));
 }
 
 namespace {
@@ -455,12 +459,11 @@ namespace {
 // match set is 0 for both, as it is for the range-aware MAX / MIN.
 Value aggregate_extremum(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, bool want_max) {
-  std::vector<Value> vals;
+  std::vector<double> nums;
   Value err = Value::blank();
-  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
+  if (!resolve_matching_numbers(call, arena, registry, ctx, &nums, &err)) {
     return err;
   }
-  const std::vector<double> nums = collect_matching_numbers(vals);
   if (nums.empty()) {
     return Value::number(0.0);
   }
@@ -470,7 +473,7 @@ Value aggregate_extremum(const parser::AstNode& call, Arena& arena, const Functi
       best = nums[i];
     }
   }
-  return finite_number(best);
+  return to_finite_value(best);
 }
 
 }  // namespace
@@ -487,12 +490,11 @@ Value eval_dmin_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
 
 Value eval_dproduct_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
-  std::vector<Value> vals;
+  std::vector<double> nums;
   Value err = Value::blank();
-  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
+  if (!resolve_matching_numbers(call, arena, registry, ctx, &nums, &err)) {
     return err;
   }
-  const std::vector<double> nums = collect_matching_numbers(vals);
   if (nums.empty()) {
     return Value::number(0.0);
   }
@@ -500,7 +502,7 @@ Value eval_dproduct_lazy(const parser::AstNode& call, Arena& arena, const Functi
   for (double x : nums) {
     prod *= x;
   }
-  return finite_number(prod);
+  return to_finite_value(prod);
 }
 
 namespace {
@@ -541,12 +543,11 @@ bool compute_variance(const std::vector<double>& nums, bool sample, double* out_
 
 Value aggregate_variance(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, bool sample, bool stddev) {
-  std::vector<Value> vals;
+  std::vector<double> nums;
   Value err = Value::blank();
-  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
+  if (!resolve_matching_numbers(call, arena, registry, ctx, &nums, &err)) {
     return err;
   }
-  const std::vector<double> nums = collect_matching_numbers(vals);
   double var = 0.0;
   if (!compute_variance(nums, sample, &var, &err)) {
     return err;
@@ -556,9 +557,9 @@ Value aggregate_variance(const parser::AstNode& call, Arena& arena, const Functi
       // Numerical noise guard; mathematically variance is non-negative.
       return Value::error(ErrorCode::Num);
     }
-    return finite_number(std::sqrt(var));
+    return to_finite_value(std::sqrt(var));
   }
-  return finite_number(var);
+  return to_finite_value(var);
 }
 
 }  // namespace

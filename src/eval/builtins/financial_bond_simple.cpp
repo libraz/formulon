@@ -47,41 +47,24 @@ struct MaturityInterestArgs {
 // Reads `MaturityInterestArgs`; `#NUM!` unless issue < settlement < maturity
 // and rate >= 0. The amount's sign rule is the caller's.
 Expected<MaturityInterestArgs, ErrorCode> read_maturity_interest_args(const Value* args, std::uint32_t arity) {
-  auto settlement = read_financial_date(args, 0);
-  if (!settlement) {
-    return settlement.error();
-  }
-  auto maturity = read_financial_date(args, 1);
-  if (!maturity) {
-    return maturity.error();
-  }
-  auto issue = read_financial_date(args, 2);
-  if (!issue) {
-    return issue.error();
-  }
-  auto rate = read_required_number(args, 3);
-  if (!rate) {
-    return rate.error();
-  }
-  auto amount = read_required_number(args, 4);
-  if (!amount) {
-    return amount.error();
+  double v[5];
+  if (auto read = read_required_numbers(args, "dddnn", v); !read) {
+    return read.error();
   }
   auto basis = read_day_count_basis(args, arity, 5);
   if (!basis) {
     return basis.error();
   }
-  if (issue.value() >= settlement.value()) {
+  if (v[2] >= v[0]) {
     return ErrorCode::Num;
   }
-  if (settlement.value() >= maturity.value()) {
+  if (v[0] >= v[1]) {
     return ErrorCode::Num;
   }
-  if (rate.value() < 0.0) {
+  if (v[3] < 0.0) {
     return ErrorCode::Num;
   }
-  return MaturityInterestArgs{settlement.value(), maturity.value(), issue.value(),
-                              rate.value(),       amount.value(),   basis.value()};
+  return MaturityInterestArgs{v[0], v[1], v[2], v[3], v[4], basis.value()};
 }
 
 // The A / DSM / DIM year fractions of the PRICEMAT / YIELDMAT closed forms.

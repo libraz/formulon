@@ -48,6 +48,7 @@
 #include <cstdint>
 
 #include "eval/builtins/engineering.h"
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -58,6 +59,8 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+using builtins_detail::to_finite_value;
 
 // ---------------------------------------------------------------------------
 // Shared coercion helpers
@@ -451,10 +454,7 @@ Value BesselY(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double r = bessy(n.value(), xv);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return to_finite_value(r);
 }
 
 /// BESSELI(x, n) = I_n(x), defined on all real x. Computed via the NR2 6.6
@@ -475,10 +475,7 @@ Value BesselI(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double r = bessi(n.value(), xv);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return to_finite_value(r);
 }
 
 /// BESSELK(x, n) = K_n(x). Singular at x=0 and (by Excel) undefined for x<0.
@@ -498,10 +495,7 @@ Value BesselK(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double r = bessk(n.value(), xv);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return to_finite_value(r);
 }
 
 }  // namespace
