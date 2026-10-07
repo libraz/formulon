@@ -1104,6 +1104,14 @@ emscripten::val image_info_binding_error(JsStatus status) {
   return o;
 }
 
+/// Envelope for the calls that place a picture: `objectId`, zero unless the call succeeded.
+emscripten::val image_id_result(JsStatus status, uint32_t object_id) {
+  emscripten::val o = emscripten::val::object();
+  o.set("objectId", object_id);
+  o.set("status", status);
+  return o;
+}
+
 emscripten::val drawing_object_to_val(const fm_drawing_object& d) {
   emscripten::val o = emscripten::val::object();
   o.set("objectId", d.object_id);
@@ -1177,11 +1185,8 @@ emscripten::val JsWorkbook::getImage(uint32_t sheet, uint32_t objectId) const {
 }
 
 emscripten::val JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts) {
-  emscripten::val o = emscripten::val::object();
-  o.set("objectId", 0U);
   if (handle_ == nullptr) {
-    o.set("status", error_status(kBindingInvalidHandle));
-    return o;
+    return image_id_result(error_status(kBindingInvalidHandle), 0U);
   }
   std::string name_store;
   std::string descr_store;
@@ -1189,8 +1194,7 @@ emscripten::val JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, e
   const emscripten::val options = opts.isUndefined() || opts.isNull() ? emscripten::val::object() : opts;
   const JsBytesReadResult bytes_result = val_to_bytes_checked(bytes);
   if (!bytes_result.ok) {
-    o.set("status", binding_error_status(kInvalidArgument, bytes_result.message.c_str()));
-    return o;
+    return image_id_result(binding_error_status(kInvalidArgument, bytes_result.message.c_str()), 0U);
   }
   const std::vector<uint8_t>& data = bytes_result.bytes;
   fm_image_insert ins{};
@@ -1205,14 +1209,11 @@ emscripten::val JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, e
   ins.width_emu = reader.i64(options, "widthEmu", 0, "image.widthEmu");
   ins.height_emu = reader.i64(options, "heightEmu", 0, "image.heightEmu");
   if (!reader.ok()) {
-    o.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
-    return o;
+    return image_id_result(binding_error_status(kInvalidArgument, reader.message().c_str()), 0U);
   }
   uint32_t id = 0;
   const fm_status_t rc = fm_sheet_insert_image(handle_, sheet, data.data(), data.size(), &ins, &id);
-  o.set("status", status_from_rc(rc));
-  o.set("objectId", rc == 0 ? id : 0U);
-  return o;
+  return image_id_result(status_from_rc(rc), rc == 0 ? id : 0U);
 }
 
 JsStatus JsWorkbook::removeImage(uint32_t sheet, uint32_t objectId) {
@@ -1267,30 +1268,23 @@ emscripten::val JsWorkbook::snapshotImage(uint32_t sheet, uint32_t objectId) con
 }
 
 emscripten::val JsWorkbook::restoreImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts) {
-  emscripten::val o = emscripten::val::object();
-  o.set("objectId", 0U);
   if (handle_ == nullptr) {
-    o.set("status", error_status(kBindingInvalidHandle));
-    return o;
+    return image_id_result(error_status(kBindingInvalidHandle), 0U);
   }
   JsNarrowNumericReader reader("restoreImage");
   const emscripten::val options = opts.isUndefined() || opts.isNull() ? emscripten::val::object() : opts;
   const JsBytesReadResult bytes_result = val_to_bytes_checked(bytes);
   if (!bytes_result.ok) {
-    o.set("status", binding_error_status(kInvalidArgument, bytes_result.message.c_str()));
-    return o;
+    return image_id_result(binding_error_status(kInvalidArgument, bytes_result.message.c_str()), 0U);
   }
   const std::vector<uint8_t>& data = bytes_result.bytes;
   const uint32_t flags = reader.boolean(options, "newId", false, "options.newId") ? FM_IMAGE_RESTORE_NEW_ID : 0U;
   if (!reader.ok()) {
-    o.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
-    return o;
+    return image_id_result(binding_error_status(kInvalidArgument, reader.message().c_str()), 0U);
   }
   uint32_t id = 0;
   const fm_status_t rc = fm_sheet_restore_image(handle_, sheet, data.data(), data.size(), flags, &id);
-  o.set("status", status_from_rc(rc));
-  o.set("objectId", rc == 0 ? id : 0U);
-  return o;
+  return image_id_result(status_from_rc(rc), rc == 0 ? id : 0U);
 }
 
 }  // namespace parts
