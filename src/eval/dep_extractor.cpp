@@ -1058,16 +1058,9 @@ void walk(const parser::AstNode& node, WalkState& state) {
       // its body. Walking the binding initialisers is straightforward (they
       // live in the outer scope). The body is descended unconditionally so
       // that `=LET(x, A1, x + B1)` records B1 and `=LET(x, 1, x + RAND())`
-      // records the volatile call. Bound names reach the `NameRef` case;
-      // when no workbook-scoped defined name shares the identifier the
-      // resolver returns null and the binding contributes nothing. A LET
-      // binding whose name *does* collide with a workbook-scoped defined
-      // name will currently over-approximate (the defined-name body is
-      // walked instead of being shadowed). A scoped name-environment stack
-      // that short-circuits the `NameRef` resolver inside LET bodies is the
-      // proper fix and is deferred — collisions of this shape are rare in
-      // practice and over-approximating cell deps is conservative for the
-      // recalc engine.
+      // records the volatile call. Each binding is pushed onto the lexical
+      // stack, so a bound name reaching the `NameRef` case shadows a
+      // workbook-scoped defined name of the same identifier.
       const std::uint32_t binding_count = node.as_let_binding_count();
       const std::size_t saved_lexical_depth = state.lexical_stack.size();
       for (std::uint32_t i = 0; i < binding_count; ++i) {

@@ -266,9 +266,8 @@ std::vector<std::uint32_t> collect_included_rows(const std::vector<bool>& includ
 // Excel-canonical cell equality for GROUPBY group keys. Mirrors UNIQUE's
 // rules with one difference: Text comparison runs through `fold_jp_text`
 // first so `ｱ` (half-width katakana) folds to `ア` (full-width), matching
-// Mac Excel COUNTIF / VLOOKUP ja-JP behaviour. Numbers compare bit-exact
-// via `==` (so `0.0 == 0.0` and `1.0 == 1`, but the IEEE-754 `+0.0 != -0.0`
-// distinction is preserved). Cross-kind pairs are never equal — `Number 0`
+// Mac Excel COUNTIF / VLOOKUP ja-JP behaviour. Numbers compare with `==`,
+// so `+0.0` and `-0.0` fall in one group. Cross-kind pairs are never equal — `Number 0`
 // and `Bool FALSE` form distinct groups.
 bool group_cell_equal(const Value& a, const Value& b) {
   FoldCompareOptions opts;

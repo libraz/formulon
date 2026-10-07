@@ -8,7 +8,8 @@
 //   * PercentOfRow / PercentOfCol: cell / row-or-col sum (Div0 when 0).
 //   * PercentOfTotal: cell / table grand total.
 //   * RunningTotalInRow / RunningTotalInCol: cumulative sum along the
-//     axis (errors short-circuit later cells in that row / column).
+//     axis; a non-numeric cell (blank, text, error) is left as is and
+//     does not reset or stop the sum for later cells.
 //   * Index: (cell * total) / (row_sum * col_sum); Div0 if either
 //     partial is 0.
 //   * DifferenceFrom / PercentDifferenceFrom: per the base-field axis

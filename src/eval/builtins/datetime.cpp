@@ -1014,9 +1014,7 @@ Value Datevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, b
   }
   if (!parsed.value().has_date) {
     // DATEVALUE requires an explicit date component; time-only input is
-    // rejected as #VALUE! (Excel defaults to "today", which isn't
-    // reproducible without a clock — see the divergence note in the file
-    // banner comment).
+    // rejected as #VALUE!.
     return Value::error(ErrorCode::Value);
   }
   // `parse_date_time_text` always yields a 1900-system serial. Under the 1904

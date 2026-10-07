@@ -200,9 +200,7 @@ TEST(Datevalue, MixedAsciiSeparatorsAccepted) {
 }
 
 TEST(Datevalue, TimeOnlyInputIsValueError) {
-  // DATEVALUE with a time-only string: Excel would default to today's
-  // date. We reject without a clock; see datetime.cpp banner comment and
-  // the divergence note in tests/divergence.yaml.
+  // DATEVALUE with a time-only string has no date component to return.
   const Value v = EvalSource("=DATEVALUE(\"13:30\")");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
