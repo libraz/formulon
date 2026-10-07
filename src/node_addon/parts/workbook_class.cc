@@ -48,34 +48,28 @@ bool RejectArgumentRange(const Napi::CallbackInfo& info, std::size_t idx, const 
 }
 
 bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const PositionalArgSpec& spec) {
-  const auto validate_number = [&](std::size_t idx, bool integral, bool nonnegative, double max_value,
-                                   const char* type_message, const char* range_message) {
+  // A number that is an integer in [min_value, max_value]; absent passes.
+  const auto validate_integer = [&](std::size_t idx, double min_value, double max_value, const char* range_message) {
     if (idx >= info.Length()) {
       return true;
     }
     const Napi::Value value = info[idx];
     if (!value.IsNumber()) {
-      return RejectArgumentType(info, idx, type_message);
+      return RejectArgumentType(info, idx, "positional argument must be a number");
     }
     const double number = value.As<Napi::Number>().DoubleValue();
-    if (integral && (!std::isfinite(number) || std::trunc(number) != number)) {
-      return RejectArgumentRange(info, idx, range_message);
-    }
-    if (nonnegative && number < 0.0) {
-      return RejectArgumentRange(info, idx, range_message);
-    }
-    if (number > max_value) {
+    if (!std::isfinite(number) || std::trunc(number) != number || number < min_value || number > max_value) {
       return RejectArgumentRange(info, idx, range_message);
     }
     return true;
   };
+  constexpr double kU32Max = static_cast<double>(std::numeric_limits<std::uint32_t>::max());
 
   const std::size_t positional_count = info.Length() < 64 ? info.Length() : 64;
   for (std::size_t idx = 0; idx < positional_count; ++idx) {
     const std::uint64_t bit = std::uint64_t{1} << idx;
     if ((spec.u32_mask & bit) != 0 &&
-        !validate_number(idx, true, true, static_cast<double>(std::numeric_limits<std::uint32_t>::max()),
-                         "positional argument must be a number", "positional argument is outside uint32 range")) {
+        !validate_integer(idx, 0.0, kU32Max, "positional argument is outside uint32 range")) {
       return false;
     }
     if ((spec.optional_u32_mask & bit) != 0 && idx < info.Length()) {
@@ -84,52 +78,28 @@ bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const PositionalArgS
         return RejectArgumentType(info, idx, "positional argument must be a number");
       }
       if (!value.IsUndefined() && !value.IsNull() &&
-          !validate_number(idx, true, true, static_cast<double>(std::numeric_limits<std::uint32_t>::max()),
-                           "positional argument must be a number", "positional argument is outside uint32 range")) {
+          !validate_integer(idx, 0.0, kU32Max, "positional argument is outside uint32 range")) {
         return false;
       }
     }
-    if ((spec.i32_mask & bit) != 0) {
-      if (idx >= info.Length()) {
-        continue;
-      }
-      const Napi::Value value = info[idx];
-      if (!value.IsNumber()) {
-        return RejectArgumentType(info, idx, "positional argument must be a number");
-      }
-      const double number = value.As<Napi::Number>().DoubleValue();
-      if (!std::isfinite(number) || std::trunc(number) != number ||
-          number < static_cast<double>(std::numeric_limits<std::int32_t>::min()) ||
-          number > static_cast<double>(std::numeric_limits<std::int32_t>::max())) {
-        return RejectArgumentRange(info, idx, "positional argument is outside int32 range");
-      }
+    if ((spec.i32_mask & bit) != 0 &&
+        !validate_integer(idx, static_cast<double>(std::numeric_limits<std::int32_t>::min()),
+                          static_cast<double>(std::numeric_limits<std::int32_t>::max()),
+                          "positional argument is outside int32 range")) {
+      return false;
     }
-    if ((spec.u64_mask & bit) != 0) {
-      if (idx >= info.Length()) {
-        continue;
-      }
-      const Napi::Value value = info[idx];
-      if (!value.IsNumber()) {
-        return RejectArgumentType(info, idx, "positional argument must be a number");
-      }
-      const double number = value.As<Napi::Number>().DoubleValue();
-      if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 || number > kMaxSafeInteger) {
-        return RejectArgumentRange(info, idx, "positional argument is outside the safe-integer range");
-      }
+    if ((spec.u64_mask & bit) != 0 &&
+        !validate_integer(idx, 0.0, kMaxSafeInteger, "positional argument is outside the safe-integer range")) {
+      return false;
     }
     if ((spec.optional_u64_mask & bit) != 0 && idx < info.Length()) {
       const Napi::Value value = info[idx];
       if (value.IsNull() && (spec.optional_null_mask & bit) == 0) {
         return RejectArgumentType(info, idx, "positional argument must be a number");
       }
-      if (!value.IsUndefined() && !value.IsNull()) {
-        if (!value.IsNumber()) {
-          return RejectArgumentType(info, idx, "positional argument must be a number");
-        }
-        const double number = value.As<Napi::Number>().DoubleValue();
-        if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 || number > kMaxSafeInteger) {
-          return RejectArgumentRange(info, idx, "positional argument is outside the safe-integer range");
-        }
+      if (!value.IsUndefined() && !value.IsNull() &&
+          !validate_integer(idx, 0.0, kMaxSafeInteger, "positional argument is outside the safe-integer range")) {
+        return false;
       }
     }
     if ((spec.double_mask & bit) != 0 && idx < info.Length() && !info[idx].IsNumber()) {
