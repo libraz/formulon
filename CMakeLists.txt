@@ -258,6 +258,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/dirty_set.cpp
   src/eval/range_dep_index.cpp
   src/eval/iterative_solver.cpp
+  src/eval/recalc_dynamic_reads.cpp
   src/eval/recalc_engine.cpp
   src/eval/cell_evaluator.cpp
   src/eval/adhoc_eval.cpp
