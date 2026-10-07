@@ -34,6 +34,33 @@ Napi::Object DefaultSheetView(Napi::Env env) {
   return view;
 }
 
+// Shared body of the per-sheet boolean view setters.
+using SheetFlagFn = fm_status_t (*)(fm_workbook_t*, size_t, int32_t);
+
+Napi::Value InvokeSheetFlag(const Napi::CallbackInfo& info, fm_workbook_t* handle, SheetFlagFn fn) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return MakeErrorStatus(env, kBindingInvalidHandle);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
+  const bool flag = Workbook::ArgBool(info, 1);
+  fm_status_t rc = fn(handle, sheet, flag ? 1 : 0);
+  return MakeStatus(env, rc);
+}
+
+// Shared body of the column width unit converters (chars <-> points).
+using ColumnUnitFn = fm_status_t (*)(const fm_workbook_t*, size_t, int32_t, double, double*);
+
+Napi::Value ConvertColumnUnit(const Napi::CallbackInfo& info, const fm_workbook_t* handle, ColumnUnitFn fn) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+  }
+  double out = 0.0;
+  const fm_status_t rc = fn(handle, Workbook::ArgU32(info, 0), ArgMode(info, 1), Workbook::ArgDouble(info, 2), &out);
+  return MakeNumberResult(env, rc, out);
+}
+
 }  // namespace
 
 Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
@@ -182,14 +209,7 @@ Napi::Value Workbook::SetSheetFreeze(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetSheetTabHidden(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const bool hidden = ArgBool(info, 1);
-  fm_status_t rc = fm_sheet_set_tab_hidden(handle_, sheet, hidden ? 1 : 0);
-  return MakeStatus(env, rc);
+  return InvokeSheetFlag(info, handle_, &fm_sheet_set_tab_hidden);
 }
 
 Napi::Value Workbook::SetSheetVisibility(const Napi::CallbackInfo& info) {
@@ -206,58 +226,23 @@ Napi::Value Workbook::SetSheetVisibility(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetSheetShowGridLines(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const bool show = ArgBool(info, 1);
-  fm_status_t rc = fm_sheet_set_show_grid_lines(handle_, sheet, show ? 1 : 0);
-  return MakeStatus(env, rc);
+  return InvokeSheetFlag(info, handle_, &fm_sheet_set_show_grid_lines);
 }
 
 Napi::Value Workbook::SetSheetShowRowColHeaders(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const bool show = ArgBool(info, 1);
-  fm_status_t rc = fm_sheet_set_show_row_col_headers(handle_, sheet, show ? 1 : 0);
-  return MakeStatus(env, rc);
+  return InvokeSheetFlag(info, handle_, &fm_sheet_set_show_row_col_headers);
 }
 
 Napi::Value Workbook::SetSheetShowZeros(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const bool show = ArgBool(info, 1);
-  fm_status_t rc = fm_sheet_set_show_zeros(handle_, sheet, show ? 1 : 0);
-  return MakeStatus(env, rc);
+  return InvokeSheetFlag(info, handle_, &fm_sheet_set_show_zeros);
 }
 
 Napi::Value Workbook::SetSheetRightToLeft(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const bool right_to_left = ArgBool(info, 1);
-  fm_status_t rc = fm_sheet_set_right_to_left(handle_, sheet, right_to_left ? 1 : 0);
-  return MakeStatus(env, rc);
+  return InvokeSheetFlag(info, handle_, &fm_sheet_set_right_to_left);
 }
 
 Napi::Value Workbook::SetSheetTabSelected(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const bool selected = ArgBool(info, 1);
-  fm_status_t rc = fm_sheet_set_tab_selected(handle_, sheet, selected ? 1 : 0);
-  return MakeStatus(env, rc);
+  return InvokeSheetFlag(info, handle_, &fm_sheet_set_tab_selected);
 }
 
 Napi::Value Workbook::SetSheetViewMode(const Napi::CallbackInfo& info) {
@@ -532,25 +517,11 @@ Napi::Value Workbook::GetWidthModel(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::ColumnCharsToPt(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
-  }
-  double pt = 0.0;
-  const fm_status_t rc =
-      fm_sheet_column_chars_to_pt(handle_, ArgU32(info, 0), ArgMode(info, 1), ArgDouble(info, 2), &pt);
-  return MakeNumberResult(env, rc, pt);
+  return ConvertColumnUnit(info, handle_, &fm_sheet_column_chars_to_pt);
 }
 
 Napi::Value Workbook::ColumnPtToChars(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
-  }
-  double chars = 0.0;
-  const fm_status_t rc =
-      fm_sheet_column_pt_to_chars(handle_, ArgU32(info, 0), ArgMode(info, 1), ArgDouble(info, 2), &chars);
-  return MakeNumberResult(env, rc, chars);
+  return ConvertColumnUnit(info, handle_, &fm_sheet_column_pt_to_chars);
 }
 
 Napi::Value Workbook::SetRowHidden(const Napi::CallbackInfo& info) {
