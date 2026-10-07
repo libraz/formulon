@@ -31,6 +31,7 @@
 using formulon::c_api::parts::cell_range_page_size;
 using formulon::c_api::parts::check_cell_cursor;
 using formulon::c_api::parts::check_finite;
+using formulon::c_api::parts::check_formula_parses;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_u32;
@@ -247,6 +248,11 @@ extern "C" fm_status_t fm_workbook_set_formula(fm_workbook_t* wb, size_t sheet_i
   if (formula == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_formula: formula is NULL");
+  }
+  if (auto rc = check_formula_parses("fm_workbook_set_formula", formula,
+                                     "row=" + std::to_string(row) + " col=" + std::to_string(col));
+      rc != 0) {
+    return rc;
   }
   auto r = wb->workbook().set_cell_formula(sheet_index, row, col, std::string(formula));
   if (!r) {

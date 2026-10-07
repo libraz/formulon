@@ -18,6 +18,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_drawing_test.cpp
   formulon_c_evaluate_formula_test.cpp
   formulon_c_external_links_test.cpp
+  formulon_c_formula_entry_test.cpp
   formulon_c_function_metadata_test.cpp
   formulon_c_lambda_text_test.cpp
   formulon_c_logging_test.cpp

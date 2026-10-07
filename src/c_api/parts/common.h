@@ -75,6 +75,12 @@ fm_status_t set_last_error(const formulon::Error& err);
 // callers should keep it short and machine-friendly (key=value).
 fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message, std::string context = {});
 
+// Entry check for formula text a public setter is about to store: applies the
+// storage normalization `Workbook::set_cell_formula` applies, then requires
+// `eval::parse_formula_entry` to accept it. Returns 0, or sets
+// `kParserUnexpectedToken` ("<api>: formula does not parse") with `context`.
+fm_status_t check_formula_parses(const char* api, std::string_view formula, std::string context);
+
 // Returns the thread-local diagnostic message buffer (always non-null).
 const char* last_error_message();
 

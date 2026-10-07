@@ -621,11 +621,14 @@ FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, uint32_t index, c
  * `formula` is non-empty — a new entry is appended. Passing an empty
  * `formula` removes the existing entry, or is a no-op when no such
  * entry is present. Use `fm_workbook_set_defined_name_scoped` for
- * sheet-scoped names.
+ * sheet-scoped names. A non-empty `formula` that does not parse is
+ * rejected and leaves the name list unchanged.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `name` is empty.
+ *         `kInvalidArgument` when `name` is empty;
+ *         `kParserUnexpectedToken` (1000) when a non-empty `formula` does
+ *         not parse.
  */
 FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const char* name, const char* formula);
 
@@ -634,12 +637,15 @@ FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const char* n
  *
  * `local_sheet_id == -1` selects workbook scope. Values `>= 0` select
  * the corresponding 0-based sheet-local scope. An empty `formula`
- * removes the matching entry in that scope.
+ * removes the matching entry in that scope. A non-empty `formula` that
+ * does not parse is rejected and leaves the name list unchanged.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
  *         `kInvalidArgument` when `name` is empty or `local_sheet_id`
- *         is outside `[-1, sheet_count)`.
+ *         is outside `[-1, sheet_count)`;
+ *         `kParserUnexpectedToken` (1000) when a non-empty `formula` does
+ *         not parse.
  */
 FM_API fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, const char* name, const char* formula,
                                                        int32_t local_sheet_id);
@@ -889,11 +895,16 @@ FM_API fm_status_t fm_workbook_set_blank(fm_workbook_t* wb, size_t sheet_index, 
  *        dependencies.
  *
  * `formula` is the raw Excel-style formula text (with or without a
- * leading `=`); the parser controls the contract.
+ * leading `=`). Text the formula parser cannot parse is rejected without
+ * changing the workbook: a syntax error, or a built-in called through a
+ * sheet / workbook qualifier.
+ * Every formula accepted here can be read back through
+ * `fm_workbook_get_formula_r1c1`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kParserUnexpectedToken` (1000) when `formula` does not parse.
  */
 FM_API fm_status_t fm_workbook_set_formula(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                            const char* formula);
@@ -1239,6 +1250,10 @@ FM_API fm_status_t fm_workbook_get_formula(const fm_workbook_t* wb, size_t sheet
  * The text carries no leading `=`, and follows the A1 formatter's spacing
  * and case rules. A cell that holds no formula yields `""`. Lifetime as
  * `fm_workbook_get_formula`.
+ *
+ * A formula loaded from a file that does not parse is kept verbatim: it
+ * evaluates to `#NAME?` and fails here with `kParserUnexpectedToken`.
+ * `fm_workbook_set_formula` never produces that state.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -1799,7 +1814,9 @@ FM_API fm_status_t fm_sheet_get_validation_at(fm_workbook_t* wb, uint32_t sheet,
  *         `v.range_count > 0 && v.ranges == NULL` or `v.range_count`
  *         exceeds the per-call range cap, when any supplied range is
  *         outside the Excel grid, or when `v.type`, `v.op` or
- *         `v.error_style` is outside the domain listed above.
+ *         `v.error_style` is outside the domain listed above;
+ *         `kParserUnexpectedToken` (1000) when a non-empty `v.formula1` or
+ *         `v.formula2` does not parse (the rule is not stored).
  */
 FM_API fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, uint32_t sheet, fm_data_validation v);
 
@@ -3435,7 +3452,9 @@ FM_API fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, size_t sheet_inde
  *           `rule.data_bar_axis_position` or any engaged `fm_cfvo_t`
  *           `type` names no declared enumerator, when `rule.dxf_id` is
  *           engaged but past the end of the workbook's `<dxfs>` table,
- *           or when a visual payload is missing / malformed.
+ *           or when a visual payload is missing / malformed;
+ *         `kParserUnexpectedToken` (1000) when a non-empty `rule.formula1`
+ *           or `rule.formula2` does not parse (the rule is not stored).
  */
 FM_API fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, size_t sheet_index, fm_cf_rule_t rule, size_t* out_index);
 

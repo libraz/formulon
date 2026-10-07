@@ -34,6 +34,7 @@
 
 using formulon::c_api::BorrowedArrayArena;
 using formulon::c_api::BorrowedStringArena;
+using formulon::c_api::parts::check_formula_parses;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
@@ -427,9 +428,19 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
     out_rule.id = std::string("{FC000000-0000-0000-0000-") + buf + "}";
   }
   if (rule.formula1 != nullptr) {
+    if (rule.formula1[0] != '\0') {
+      if (auto rc = check_formula_parses("fm_sheet_cf_add_rule", rule.formula1, "field=formula1"); rc != 0) {
+        return rc;
+      }
+    }
     out_rule.formula1 = std::string(rule.formula1);
   }
   if (rule.formula2 != nullptr) {
+    if (rule.formula2[0] != '\0') {
+      if (auto rc = check_formula_parses("fm_sheet_cf_add_rule", rule.formula2, "field=formula2"); rc != 0) {
+        return rc;
+      }
+    }
     out_rule.formula2 = std::string(rule.formula2);
   }
   if (rule.op_engaged != 0) {

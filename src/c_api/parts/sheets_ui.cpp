@@ -15,6 +15,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_formula_parses;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
@@ -462,6 +463,16 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::uint32_t 
   }
   if (auto rc = validate(v, "fm_sheet_add_validation"); rc != 0) {
     return rc;
+  }
+  const char* const formula_fields[] = {v.formula1, v.formula2};
+  for (std::size_t i = 0; i < 2; ++i) {
+    if (formula_fields[i] != nullptr && formula_fields[i][0] != '\0') {
+      if (auto rc = check_formula_parses("fm_sheet_add_validation", formula_fields[i],
+                                         i == 0 ? "field=formula1" : "field=formula2");
+          rc != 0) {
+        return rc;
+      }
+    }
   }
   formulon::DataValidation out;
   out.ranges.reserve(v.range_count);

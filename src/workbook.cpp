@@ -1490,6 +1490,10 @@ void Workbook::apply_legacy_implicit_intersections() {
   }
 }
 
+std::string Workbook::normalize_formula_text(std::string formula) {
+  return parser::spell_storage_operators(parser::strip_storage_prefixes(formula, &io::has_storage_prefix));
+}
+
 Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                                  std::string formula) {
   if (sheet_index >= sheets_.size()) {
@@ -1512,13 +1516,7 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
   // re-applies the prefixes on save for Excel readability. The stored
   // `SINGLE(x)` / `ANCHORARRAY(x)` calls read back as the `@x` / `x#` the
   // formula bar shows.
-  {
-    std::string normalized =
-        parser::spell_storage_operators(parser::strip_storage_prefixes(formula, &io::has_storage_prefix));
-    if (normalized != formula) {
-      formula = std::move(normalized);
-    }
-  }
+  formula = normalize_formula_text(std::move(formula));
 
   const eval::CellNodeId node = make_node(sheet_index, row, col);
 

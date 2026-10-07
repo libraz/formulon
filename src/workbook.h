@@ -333,6 +333,13 @@ class Workbook {
   Expected<void, Error> set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                          std::string formula);
 
+  /// Canonical formula-bar spelling of stored formula text: Excel's
+  /// `_xlfn.` / `_xlws.` / `_xlpm.` storage prefixes stripped and the stored
+  /// `SINGLE` / `ANCHORARRAY` calls read back as `@x` / `x#`. This is the
+  /// normalization `set_cell_formula` applies, exposed so an entry check
+  /// judges exactly the text that would be stored.
+  static std::string normalize_formula_text(std::string formula);
+
   /// Spells every loaded formula without the dynamic-array mark as Excel 365
   /// shows it, with an `@` wherever the legacy formula intersects implicitly
   /// (`io::xlsb::legacy_intersections`), so it evaluates as Excel does. Run by

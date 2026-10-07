@@ -26,6 +26,7 @@
 #include "utils/error.h"
 #include "value.h"
 
+using formulon::c_api::parts::check_formula_parses;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -325,6 +326,11 @@ extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const cha
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_defined_name: NULL argument");
   }
+  if (formula[0] != '\0') {
+    if (auto rc = check_formula_parses("fm_workbook_set_defined_name", formula, "name=" + std::string(name)); rc != 0) {
+      return rc;
+    }
+  }
   auto r = wb->workbook().set_defined_name(std::string(name), std::string(formula));
   if (!r) {
     return set_last_error(r.error());
@@ -338,6 +344,12 @@ extern "C" fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, co
   if (wb == nullptr || name == nullptr || formula == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_defined_name_scoped: NULL argument");
+  }
+  if (formula[0] != '\0') {
+    if (auto rc = check_formula_parses("fm_workbook_set_defined_name_scoped", formula, "name=" + std::string(name));
+        rc != 0) {
+      return rc;
+    }
   }
   auto r = wb->workbook().set_defined_name_scoped(std::string(name), std::string(formula), local_sheet_id);
   if (!r) {

@@ -2344,13 +2344,17 @@ export interface Workbook {
    *  cell's text. */
   setCellPhoneticProperties(sheet: number, row: number, col: number, properties: PhoneticProperties): Status;
   setBlank(sheet: number, row: number, col: number): Status;
+  /** Stores a formula. Returns `kParserUnexpectedToken` and changes nothing when the text
+   *  does not parse: a syntax error, or a built-in called through a sheet / workbook qualifier. */
   setFormula(sheet: number, row: number, col: number, formula: string): Status;
 
   getValue(sheet: number, row: number, col: number): CellResult;
 
   /** The stored A1 formula (leading `=` included), or `formula: null` for a cell that holds none. */
   getFormula(sheet: number, row: number, col: number): FormulaResult;
-  /** The formula in R1C1 notation relative to the cell, without a leading `=`; `formula: null` when the cell holds none. */
+  /** The formula in R1C1 notation relative to the cell, without a leading `=`; `formula: null` when the cell holds none.
+   *  A formula loaded from a file that does not parse is kept verbatim, evaluates to `#NAME?`, and fails here with
+   *  `kParserUnexpectedToken`; `setFormula` never produces that state. */
   getFormulaR1C1(sheet: number, row: number, col: number): FormulaResult;
   /** One page of the populated cells (formula or non-blank value, spill phantoms included) inside
    *  `range`, row-major. `cursor` is the `nextCursor` of the previous page (omit for the first);
@@ -2526,10 +2530,12 @@ export interface Workbook {
   definedNameCount(): NumberResult;
   definedNameAt(idx: number): DefinedNameEntry;
   /** Adds, replaces, or (when `formula` is empty) removes a workbook-
-   *  scoped defined name. */
+   *  scoped defined name. A non-empty `formula` that does not parse is
+   *  rejected with `kParserUnexpectedToken`. */
   setDefinedName(name: string, formula: string): Status;
   /** Adds, replaces, or removes a defined name in workbook scope (-1)
-   *  or a sheet-local scope (0-based sheet index). */
+   *  or a sheet-local scope (0-based sheet index). A non-empty `formula`
+   *  that does not parse is rejected with `kParserUnexpectedToken`. */
   setDefinedNameScoped(name: string, formula: string, localSheetId: number): Status;
 
   tableCount(): NumberResult;
@@ -2943,6 +2949,8 @@ export interface Workbook {
   setRowOutline(sheet: number, row: number, level: number): Status;
   /** Removes the height override at `row`, returning it to the sheet default. */
   clearRowHeight(sheet: number, row: number): Status;
+  /** Removes the width override on columns `first..last`, returning them to the sheet default width. Hidden state, outline level and column style are kept. */
+  clearColumnWidth(sheet: number, first: number, last: number): Status;
 
   /** Reads the sheet's default column / row metrics. */
   getSheetFormatDefaults(sheet: number): SheetFormatDefaultsResult;
@@ -3144,7 +3152,8 @@ export interface Workbook {
    *  cell-range list; the rule itself surfaces its raw OOXML payload
    *  (the engine does not yet evaluate validation rules). */
   getValidations(sheet: number): ListResult<DataValidationEntry>;
-  /** Appends a data-validation rule to `sheet`. */
+  /** Appends a data-validation rule to `sheet`. A non-empty `formula1` / `formula2`
+   *  that does not parse is rejected with `kParserUnexpectedToken`. */
   addValidation(sheet: number, validation: DataValidationInput): Status;
   /** Removes the validation rule at `index`. Returns `kInvalidArgument`
    *  if `index` is out of range. */

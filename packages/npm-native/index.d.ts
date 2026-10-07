@@ -2336,6 +2336,8 @@ export interface Workbook {
    *  cell's text. */
   setCellPhoneticProperties(sheet: number, row: number, col: number, properties: PhoneticProperties): Status;
   setBlank(sheet: number, row: number, col: number): Status;
+  /** Stores a formula. Returns `kParserUnexpectedToken` and changes nothing when the text
+   *  does not parse: a syntax error, or a built-in called through a sheet / workbook qualifier. */
   setFormula(sheet: number, row: number, col: number, formula: string): Status;
 
   // Cell read.
@@ -2497,7 +2499,9 @@ export interface Workbook {
   cellAt(sheet: number, idx: number): CellEntry;
   /** Reads the cell's stored formula in A1 notation (leading `=` included); `formula` is `null` for a non-formula cell. */
   getFormula(sheet: number, row: number, col: number): FormulaResult;
-  /** Reads the cell's formula in R1C1 notation relative to the cell (no leading `=`); `null` for a non-formula cell. */
+  /** Reads the cell's formula in R1C1 notation relative to the cell (no leading `=`); `null` for a non-formula cell.
+   *  A formula loaded from a file that does not parse is kept verbatim, evaluates to `#NAME?`, and fails here with
+   *  `kParserUnexpectedToken`; `setFormula` never produces that state. */
   getFormulaR1C1(sheet: number, row: number, col: number): FormulaResult;
   /** Enumerates the populated cells of `range` row-major, one page at a time. Pass the previous `nextCursor` as `cursor` to resume; `limit` 0 / omitted means the maximum (65,536). */
   getCellsInRange(sheet: number, range: MergeRange, cursor?: number | null, limit?: number | null): CellsInRangeResult;
@@ -2699,10 +2703,12 @@ export interface Workbook {
   /** Removes the active filter at `filterIdx`. */
   pivotFilterRemoveAt(sheet: number, pivotIdx: number, filterIdx: number): Status;
 
-  // Defined names.
+  // Defined names. A non-empty `formula` that does not parse is rejected
+  // with `kParserUnexpectedToken`.
   setDefinedName(name: string, formula: string): Status;
   /** Adds, replaces, or removes a defined name in workbook scope (-1)
-   *  or a sheet-local scope (0-based sheet index). */
+   *  or a sheet-local scope (0-based sheet index). A non-empty `formula`
+   *  that does not parse is rejected with `kParserUnexpectedToken`. */
   setDefinedNameScoped(name: string, formula: string, localSheetId: number): Status;
 
   // Conditional formatting.
@@ -3030,7 +3036,8 @@ export interface Workbook {
   getHyperlinks(sheet: number): ListResult<HyperlinkEntry>;
   /** Returns every data-validation rule on `sheet` in storage order. */
   getValidations(sheet: number): ListResult<DataValidationEntry>;
-  /** Appends a data-validation rule to `sheet`. */
+  /** Appends a data-validation rule to `sheet`. A non-empty `formula1` / `formula2`
+   *  that does not parse is rejected with `kParserUnexpectedToken`. */
   addValidation(sheet: number, validation: DataValidationInput): Status;
   /** Removes the validation rule at `index`. Returns `kInvalidArgument`
    *  if `index` is out of range. */
@@ -3099,7 +3106,9 @@ export interface Workbook {
    *  `index` is the new rule's position in the sheet's flattened CF rule
    *  sequence (the same indexing `getConditionalFormats` and
    *  `removeConditionalFormatAt` use); it stays valid until a subsequent
-   *  add/remove/clear mutation on the same sheet renumbers the sequence. */
+   *  add/remove/clear mutation on the same sheet renumbers the sequence.
+   *  A non-empty `formula1` / `formula2` that does not parse is rejected
+   *  with `kParserUnexpectedToken`. */
   addConditionalFormat(sheet: number, rule: ConditionalFormatInput): AddStyleResult;
   /** Removes the CF rule at `index` (flattened order). When the
    *  containing block becomes empty it is removed too. */

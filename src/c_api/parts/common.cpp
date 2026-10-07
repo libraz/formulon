@@ -12,11 +12,14 @@
 
 #include "c_api/formulon_c.h"
 #include "cf/cf_types.h"
+#include "eval/builtin_names.h"
 #include "sheet.h"
 #include "styles.h"
+#include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/number_text.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace c_api {
@@ -499,6 +502,20 @@ fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const 
         "sheet=" + std::to_string(sheet) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
   }
   return 0;
+}
+
+fm_status_t check_formula_parses(const char* api, std::string_view formula, std::string context) {
+  const std::string normalized = formulon::Workbook::normalize_formula_text(std::string(formula));
+  std::string_view body = normalized;
+  if (!body.empty() && body.front() == '=') {
+    body.remove_prefix(1);
+  }
+  formulon::Arena arena;
+  if (formulon::eval::parse_formula_entry(body, arena) != nullptr) {
+    return 0;
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
+                           (std::string(api) + ": formula does not parse").c_str(), std::move(context));
 }
 
 }  // namespace parts
