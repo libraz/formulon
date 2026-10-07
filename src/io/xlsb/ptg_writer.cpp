@@ -169,23 +169,10 @@ std::uint8_t error_wire_code(ErrorCode e) {
   return static_cast<std::uint8_t>(code);
 }
 
-/// Emits the RgceLoc (u32 row + u16 col with relative-flag bits) for a
-/// single-cell reference. The relative bit is *set* when the coordinate
-/// is relative (i.e. not `$`-anchored), matching the decoder.
-void emit_loc(std::vector<std::uint8_t>& dst, const parser::Reference& ref) {
-  emit_u32(dst, ref.row);
-  std::uint16_t col = static_cast<std::uint16_t>(ref.col & 0x3FFF);
-  if (!ref.col_abs) {
-    col |= kColRelBit;
-  }
-  if (!ref.row_abs) {
-    col |= kRowRelBit;
-  }
-  emit_u16(dst, col);
-}
-
-/// Packs a single `RgceArea` corner's column field (14-bit column plus
-/// the two relative-flag bits), matching `emit_loc`'s bit layout.
+/// Packs a reference's column field (14-bit column plus the two
+/// relative-flag bits), shared by `RgceLoc` and each `RgceArea` corner.
+/// The relative bit is *set* when the coordinate is relative (i.e. not
+/// `$`-anchored), matching the decoder.
 std::uint16_t pack_area_col(const parser::Reference& ref) {
   std::uint16_t col = static_cast<std::uint16_t>(ref.col & 0x3FFF);
   if (!ref.col_abs) {
@@ -195,6 +182,13 @@ std::uint16_t pack_area_col(const parser::Reference& ref) {
     col |= kRowRelBit;
   }
   return col;
+}
+
+/// Emits the RgceLoc (u32 row + u16 col with relative-flag bits) for a
+/// single-cell reference.
+void emit_loc(std::vector<std::uint8_t>& dst, const parser::Reference& ref) {
+  emit_u32(dst, ref.row);
+  emit_u16(dst, pack_area_col(ref));
 }
 
 /// Emits the `RgceArea` two-corner range coordinate: rows first, then
@@ -207,6 +201,22 @@ void emit_area(std::vector<std::uint8_t>& dst, const parser::Reference& a, const
   emit_u32(dst, b.row);
   emit_u16(dst, pack_area_col(a));
   emit_u16(dst, pack_area_col(b));
+}
+
+/// Turns `first`:`last` over whole columns or rows (per `first`'s flags)
+/// into the grid-spanning area XLSB stores, its spanned axis absolute
+/// (measured: `A:A` -> 0x4000, `1:1` -> 0x8000..0xBFFF).
+void SpanGrid(parser::Reference& first, parser::Reference& last) {
+  if (first.is_full_col) {
+    first.row = 0;
+    last.row = 1048575U;
+    first.row_abs = last.row_abs = true;
+  } else if (first.is_full_row) {
+    first.col = 0;
+    last.col = 16383U;
+    first.col_abs = last.col_abs = true;
+  }
+  first.is_full_col = first.is_full_row = last.is_full_col = last.is_full_row = false;
 }
 
 /// True when either axis of `ref` is relative.
@@ -1052,9 +1062,9 @@ class Encoder {
   }
 
   /// Emits `PtgNameX` for record `ilbl` through the sheetless
-  /// `BrtExternSheet` entry this workbook's own names resolve through.
-  Expected<void, Error> emit_name_x(std::uint32_t ilbl, std::uint8_t cls) {
-    ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(kXtiNoSheet, kXtiNoSheet));
+  /// `BrtExternSheet` entry of `book` (0: this workbook's own names).
+  Expected<void, Error> emit_name_x(std::uint32_t ilbl, std::uint8_t cls, std::uint32_t book = 0U) {
+    ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(kXtiNoSheet, kXtiNoSheet, book));
     emit_u8(out_, ClassedPtg(0x39, cls));  // PtgNameX
     emit_u16(out_, ixti);
     emit_u32(out_, ilbl);
@@ -1176,14 +1186,7 @@ class Encoder {
     let_scope_.resize(let_scope_.size() - n);
     shapes_.unbind(n);
     RETURN_IF_ERROR(status);
-    const std::uint32_t cparams = 1U + (2U * n) + 1U;
-    if (cparams > 0xFF) {
-      return unsupported_node("LetBinding(too many bindings)");
-    }
-    emit_u8(out_, ClassedPtg(0x22, cls));  // PtgFuncVar result
-    emit_u8(out_, static_cast<std::uint8_t>(cparams));
-    emit_u16(out_, 255);
-    return Expected<void, Error>::Ok();
+    return emit_hidden_call_tail(1U + (2U * n) + 1U, "LetBinding(too many bindings)", cls);
   }
 
   /// `cls`: the class bits the reference takes where it sits (see
@@ -1196,20 +1199,7 @@ class Encoder {
       // unsupported formula from aborting the entire workbook save.
       parser::Reference first = ref;
       parser::Reference last = ref;
-      first.is_full_col = false;
-      first.is_full_row = false;
-      last.is_full_col = false;
-      last.is_full_row = false;
-      // The spanned axis is stored absolute (measured: `A:A` -> 0x4000, `1:1` -> 0x8000..0xBFFF).
-      if (ref.is_full_col) {
-        first.row = 0;
-        last.row = 1048575U;
-        first.row_abs = last.row_abs = true;
-      } else {
-        first.col = 0;
-        last.col = 16383U;
-        first.col_abs = last.col_abs = true;
-      }
+      SpanGrid(first, last);
       return emit_area_ref(first, last, ref.sheet, cls);
     }
     if (ref.sheet.empty() && base_ && IsRelative(ref)) {
@@ -1293,11 +1283,7 @@ class Encoder {
                           "xlsb encoder: external name not in its link's name list",
                           std::string("context=xlsb_ptg_writer name=") + std::string(name));
       }
-      ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(kXtiNoSheet, kXtiNoSheet, position));
-      emit_u8(out_, ClassedPtg(0x39, cls));  // PtgNameX
-      emit_u16(out_, ixti);
-      emit_u32(out_, ilbl);
-      return Expected<void, Error>::Ok();
+      return emit_name_x(ilbl, cls, position);
     }
     const std::string_view sheet_end = node.as_external_ref_sheet_end();
     const int first = external_sheet_index(link, node.as_external_ref_sheet());
@@ -1319,17 +1305,8 @@ class Encoder {
       emit_loc(out_, a);
       return Expected<void, Error>::Ok();
     }
-    // A whole column or row is the grid-spanning area, its spanned axis absolute.
-    if (a.is_full_col) {
-      a.row = 0;
-      b.row = 1048575U;
-      a.row_abs = b.row_abs = true;
-    } else if (a.is_full_row) {
-      a.col = 0;
-      b.col = 16383U;
-      a.col_abs = b.col_abs = true;
-    }
-    a.is_full_col = a.is_full_row = b.is_full_col = b.is_full_row = false;
+    // A whole column or row is the grid-spanning area.
+    SpanGrid(a, b);
     emit_u8(out_, ClassedPtg(0x3B, cls));  // PtgArea3d
     emit_u16(out_, ixti);
     emit_area(out_, a, b);
@@ -1470,16 +1447,7 @@ class Encoder {
       if (b.sheet.empty() && ((a.is_full_col && b.is_full_col) || (a.is_full_row && b.is_full_row))) {
         parser::Reference first = a;
         parser::Reference last = b;
-        first.is_full_col = first.is_full_row = last.is_full_col = last.is_full_row = false;
-        if (a.is_full_col) {
-          first.row = 0;
-          last.row = 1048575U;
-          first.row_abs = last.row_abs = true;
-        } else {
-          first.col = 0;
-          last.col = 16383U;
-          first.col_abs = last.col_abs = true;
-        }
+        SpanGrid(first, last);
         return emit_area_ref(first, last, a.sheet, cls);
       }
       if (!a.is_full_col && !a.is_full_row && !b.is_full_col && !b.is_full_row && b.sheet.empty()) {
@@ -1743,6 +1711,18 @@ class Encoder {
   /// `storage_function_name`.
   Expected<void, Error> emit_future_function_call(const parser::AstNode& node, std::string_view name,
                                                   std::uint8_t cls) {
+    RETURN_IF_ERROR(emit_hidden_callee(name));
+    const ArrayScope scope(in_array_operand_, measured_calls_ && cls == kPtgArrayClass);
+    const std::uint32_t arity = node.as_call_arity();
+    for (std::uint32_t i = 0; i < arity; ++i) {
+      RETURN_IF_ERROR(emit_call_arg(node, name, i));
+    }
+    // +1 for the name-ref operand.
+    return emit_hidden_call_tail(arity + 1, "Call(arity>254, future function)", cls);
+  }
+
+  /// Emits `PtgName` for the hidden `_xlfn.` name of the callee `name`.
+  Expected<void, Error> emit_hidden_callee(std::string_view name) {
     const auto it = name_table_.find(xlsb_hidden_function_name(name));
     if (it == name_table_.end()) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
@@ -1751,18 +1731,6 @@ class Encoder {
     }
     emit_u8(out_, 0x23);  // PtgName (reference-class): the callee name-ref
     emit_u32(out_, it->second);
-    const ArrayScope scope(in_array_operand_, measured_calls_ && cls == kPtgArrayClass);
-    const std::uint32_t arity = node.as_call_arity();
-    for (std::uint32_t i = 0; i < arity; ++i) {
-      RETURN_IF_ERROR(emit_call_arg(node, name, i));
-    }
-    const std::uint32_t cparams = arity + 1;  // +1 for the name-ref operand
-    if (cparams > 0xFF) {
-      return unsupported_node("Call(arity>254, future function)");
-    }
-    emit_u8(out_, ClassedPtg(0x22, cls));  // PtgFuncVar result
-    emit_u8(out_, static_cast<std::uint8_t>(cparams));
-    emit_u16(out_, 255);
     return Expected<void, Error>::Ok();
   }
 
@@ -1774,14 +1742,7 @@ class Encoder {
   /// from `as_spill_ref_anchor_expr`/`as_spill_ref`, not a `Call` node's
   /// argument list.
   Expected<void, Error> emit_spill_ref(const parser::AstNode& node, std::uint8_t cls) {
-    const auto it = name_table_.find(xlsb_hidden_function_name("ANCHORARRAY"));
-    if (it == name_table_.end()) {
-      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
-                        "xlsb encoder: hidden-name callee has no BrtName registered",
-                        "context=xlsb_ptg_writer fn=ANCHORARRAY");
-    }
-    emit_u8(out_, 0x23);  // PtgName (reference-class): the callee name-ref
-    emit_u32(out_, it->second);
+    RETURN_IF_ERROR(emit_hidden_callee("ANCHORARRAY"));
     if (const parser::AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
       RETURN_IF_ERROR(emit(*anchor));
     } else {
@@ -1800,14 +1761,7 @@ class Encoder {
   /// is a reference and the token one where its slot takes one (measured at
   /// the root: `@Sheet1!$A$1:$A$2` -> 0x3B, 0x22).
   Expected<void, Error> emit_implicit_intersection(const parser::AstNode& node, bool reference_result) {
-    const auto it = name_table_.find(xlsb_hidden_function_name("SINGLE"));
-    if (it == name_table_.end()) {
-      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
-                        "xlsb encoder: hidden-name callee has no BrtName registered",
-                        "context=xlsb_ptg_writer fn=SINGLE");
-    }
-    emit_u8(out_, 0x23);  // PtgName (reference-class): the callee name-ref
-    emit_u32(out_, it->second);
+    RETURN_IF_ERROR(emit_hidden_callee("SINGLE"));
     next_slot_ = Slot{name_body_ ? 'R' : xlsb_parameter_class("SINGLE", 0), false};
     RETURN_IF_ERROR(emit(node.as_implicit_intersection_operand()));
     emit_u8(out_, reference_result ? std::uint8_t{0x22} : ValueClassPtg(0x22));  // PtgFuncVar result
