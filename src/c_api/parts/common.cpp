@@ -78,6 +78,10 @@ fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* mess
   return set_last_error(err);
 }
 
+fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message) {
+  return set_binding_error(code, message, std::string());
+}
+
 const char* last_error_message() {
   return g_last_error_message.c_str();
 }

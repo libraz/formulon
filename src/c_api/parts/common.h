@@ -73,7 +73,8 @@ fm_status_t set_last_error(const formulon::Error& err);
 // Convenience wrapper for the very common "binding misuse" case (NULL
 // pointer argument, unknown handle, ...). `context` is appended verbatim;
 // callers should keep it short and machine-friendly (key=value).
-fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message, std::string context = {});
+fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message, std::string context);
+fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message);
 
 // Entry check for formula text a public setter is about to store: applies the
 // storage normalization `Workbook::set_cell_formula` applies, then requires
