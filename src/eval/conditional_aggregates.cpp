@@ -87,6 +87,37 @@ struct CriteriaShape {
   }
 };
 
+/// True when the range argument is a reference into a supporting workbook,
+/// which the range-taking conditional aggregates reject as a closed book.
+bool is_external_range_arg(const parser::AstNode& arg, const EvalContext& ctx) {
+  return resolve_range_binding(arg, ctx.name_env(), /*accept_ref=*/false).kind() == parser::NodeKind::ExternalRef;
+}
+
+/// True when any argument of `call` in `[first, arity)`, stepping by `step`,
+/// is an external range.
+bool any_external_range_arg(const parser::AstNode& call, std::uint32_t first, std::uint32_t step,
+                            const EvalContext& ctx) {
+  for (std::uint32_t i = first; i < call.as_call_arity(); i += step) {
+    if (is_external_range_arg(call.as_call_arg(i), ctx)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Cells a static reference declares beyond the ones `resolved` walked: the
+/// unpopulated tail of a whole-axis range. Zero for any other argument.
+double unpopulated_tail(const RangeResult& resolved, const parser::AstNode& arg, const EvalContext& ctx) {
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  if (!static_reference_shape(arg, ctx, &rows, &cols)) {
+    return 0.0;
+  }
+  const double declared = static_cast<double>(rows) * static_cast<double>(cols);
+  const double walked = static_cast<double>(resolved.cells.size());
+  return declared > walked ? declared - walked : 0.0;
+}
+
 /// Resolves `pair_count` consecutive (range, criterion) pairs starting at
 /// argument index `first_pair_index` in `call`. Each criteria range is
 /// resolved through `resolve_range_arg` and must agree with `expected`
@@ -330,6 +361,9 @@ Value eval_ifs_numeric_lazy(const parser::AstNode& call, Arena& arena, const Fun
   if (arity < 3 || (arity % 2) != 1) {
     return Value::error(ErrorCode::Value);
   }
+  if (is_external_range_arg(call.as_call_arg(0), ctx) || any_external_range_arg(call, 1, 2, ctx)) {
+    return Value::error(ErrorCode::Value);
+  }
   Value err = Value::number(0.0);
   IfsInputs inputs;
   if (!resolve_ifs_inputs(call, arena, registry, ctx, &inputs, &err)) {
@@ -411,6 +445,10 @@ Value eval_sum_or_average_if(const parser::AstNode& call, Arena& arena, const Fu
   if (arity != 2 && arity != 3) {
     return Value::error(ErrorCode::Value);
   }
+  if (is_external_range_arg(call.as_call_arg(0), ctx) ||
+      (arity == 3 && is_external_range_arg(call.as_call_arg(2), ctx))) {
+    return Value::error(ErrorCode::Value);
+  }
   IfInputs inputs;
   Value err = Value::blank();
   if (!resolve_if_inputs(call, arity, arena, registry, ctx, &inputs, &err)) {
@@ -458,11 +496,15 @@ Value eval_countif_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (call.as_call_arity() != 2) {
     return Value::error(ErrorCode::Value);
   }
+  if (is_external_range_arg(call.as_call_arg(0), ctx)) {
+    return Value::error(ErrorCode::Value);
+  }
   auto resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
   if (!resolved) {
     return Value::error(resolved.error());
   }
   const std::vector<Value>& cells = resolved.value().cells;
+  const double tail = unpopulated_tail(resolved.value(), call.as_call_arg(0), ctx);
   // An error-valued criterion (e.g. `COUNTIF(range, #N/A)`) is NOT
   // propagated: `parse_criterion` turns it into an error-match filter.
   const Value criterion = eval_node(call.as_call_arg(1), arena, registry, ctx);
@@ -472,6 +514,10 @@ Value eval_countif_lazy(const parser::AstNode& call, Arena& arena, const Functio
       if (matches_criterion(cell, *parsed[0], ctx.excel_profile())) {
         count += 1.0;
       }
+    }
+    // The cells past the used range are blank; count them when a blank matches.
+    if (tail > 0.0 && matches_criterion(Value::blank(), *parsed[0], ctx.excel_profile())) {
+      count += tail;
     }
     return Value::number(count);
   });
@@ -532,6 +578,9 @@ Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const Functi
   if (arity < 2 || (arity % 2) != 0) {
     return Value::error(ErrorCode::Value);
   }
+  if (any_external_range_arg(call, 0, 2, ctx)) {
+    return Value::error(ErrorCode::Value);
+  }
   // Resolve the first criteria range to fix the expected shape.
   std::vector<std::vector<Value>> criteria_cells;
   std::vector<Value> criteria;
@@ -540,6 +589,7 @@ Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const Functi
     return Value::error(first_resolved.error());
   }
   const CriteriaShape expected = CriteriaShape::of(first_resolved.value(), call.as_call_arg(0), ctx);
+  const double tail = unpopulated_tail(first_resolved.value(), call.as_call_arg(0), ctx);
   std::vector<Value> first_cells = std::move(first_resolved.value().cells);
   const std::size_t expected_size = expected.size;
   // Error criterion is NOT propagated; it filters error cells (see
@@ -561,6 +611,17 @@ Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const Functi
     for (std::size_t i = 0; i < expected_size; ++i) {
       if (all_criteria_match(criteria_cells, parsed, i, ctx.excel_profile())) {
         count += 1.0;
+      }
+    }
+    // The tail common to every range is blank; it counts only when every
+    // criterion matches a blank.
+    if (tail > 0.0) {
+      bool blank_matches_all = true;
+      for (const auto& criterion : parsed) {
+        blank_matches_all = blank_matches_all && matches_criterion(Value::blank(), *criterion, ctx.excel_profile());
+      }
+      if (blank_matches_all) {
+        count += tail;
       }
     }
     return Value::number(count);

@@ -61,9 +61,9 @@ inline FunctionDef::ResultShape infer_builtin_result_shape(std::string_view name
   static constexpr std::array<std::string_view, 17> kBroadcast = {
       "ABS",  "EXP",  "INT",   "LN",    "LOG", "N",        "ROUND",   "ROUNDDOWN", "ROUNDUP",
       "SIGN", "SQRT", "VALUE", "POWER", "MOD", "QUOTIENT", "CEILING", "FLOOR"};
-  static constexpr std::array<std::string_view, 16> kReduce = {
-      "SUM",        "SUMSQ",  "PRODUCT", "AVERAGE", "MIN",   "MAX",    "COUNT", "COUNTA",
-      "COUNTBLANK", "CONCAT", "ROWS",    "COLUMNS", "AREAS", "SHEETS", "GCD",   "LCM"};
+  static constexpr std::array<std::string_view, 15> kReduce = {"SUM",     "SUMSQ", "PRODUCT", "AVERAGE", "MIN",
+                                                               "MAX",     "COUNT", "COUNTA",  "CONCAT",  "ROWS",
+                                                               "COLUMNS", "AREAS", "SHEETS",  "GCD",     "LCM"};
   if (registration_name_in(name, kBroadcast)) {
     return FunctionDef::ResultShape::kBroadcast;
   }

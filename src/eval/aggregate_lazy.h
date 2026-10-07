@@ -125,6 +125,15 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
 Value eval_subtotal_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx);
 
+/// `COUNTBLANK(range, ...)` — blank cells plus cells holding `""`.
+///
+/// A static reference counts its declared cell count minus the cells that are
+/// neither blank nor empty text, so the unpopulated rest of `A:A` is counted
+/// without being walked. Any other argument counts the blank and `""` values
+/// it evaluates to. A reference into a supporting workbook is `#VALUE!`.
+Value eval_countblank_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx);
+
 // Compile-time guard: `eval_aggregate_lazy` must convert implicitly to
 // the shared `LazyImpl` function-pointer type published in
 // `eval/lazy_impls.h`, otherwise the dispatch table in `tree_walker.cpp`
@@ -132,6 +141,7 @@ Value eval_subtotal_lazy(const parser::AstNode& call, Arena& arena, const Functi
 // drift surfaces here, not five files away.
 inline constexpr LazyImpl kAggregateLazySignatureWitness = &eval_aggregate_lazy;
 inline constexpr LazyImpl kSubtotalLazySignatureWitness = &eval_subtotal_lazy;
+inline constexpr LazyImpl kCountBlankLazySignatureWitness = &eval_countblank_lazy;
 
 }  // namespace eval
 }  // namespace formulon

@@ -798,5 +798,55 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
   }
 }
 
+Value eval_countblank_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+  const auto is_empty = [](const Value& v) { return v.is_blank() || (v.is_text() && v.as_text().empty()); };
+  double total = 0.0;
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    const parser::AstNode& node = resolve_range_binding(call.as_call_arg(i), ctx.name_env(), /*accept_ref=*/true);
+    if (node.kind() == parser::NodeKind::ExternalRef) {
+      return Value::error(ErrorCode::Value);
+    }
+    if (node.kind() == parser::NodeKind::Ref || is_range_shaped_ast(node)) {
+      auto resolved = resolve_range_arg(node, arena, registry, ctx);
+      if (!resolved) {
+        return Value::error(resolved.error());
+      }
+      const std::vector<Value>& cells = resolved.value().cells;
+      std::uint32_t declared_rows = 0;
+      std::uint32_t declared_cols = 0;
+      double declared = static_cast<double>(cells.size());
+      if (static_reference_shape(node, ctx, &declared_rows, &declared_cols)) {
+        declared = std::max(declared, static_cast<double>(declared_rows) * static_cast<double>(declared_cols));
+      }
+      double occupied = 0.0;
+      for (const Value& cell : cells) {
+        if (!is_empty(cell)) {
+          occupied += 1.0;
+        }
+      }
+      total += declared - occupied;
+      continue;
+    }
+    const Value v = eval_node(node, arena, registry, ctx);
+    if (v.is_array()) {
+      const ArrayValue* array = v.as_array();
+      const std::size_t n = static_cast<std::size_t>(array->rows) * static_cast<std::size_t>(array->cols);
+      for (std::size_t k = 0; k < n; ++k) {
+        if (is_empty(array->cells[k])) {
+          total += 1.0;
+        }
+      }
+    } else if (is_empty(v)) {
+      total += 1.0;
+    }
+  }
+  return Value::number(total);
+}
+
 }  // namespace eval
 }  // namespace formulon

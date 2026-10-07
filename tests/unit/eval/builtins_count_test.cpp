@@ -58,24 +58,20 @@ Value CallDirect(std::string_view name, const Value* args, std::uint32_t arity) 
 // Registry pins
 // ---------------------------------------------------------------------------
 
-TEST(BuiltinsCountRegistry, CountaAndCountblankRegistered) {
-  // COUNTA / COUNTBLANK ride the eager registry path. COUNT is lazy and
+TEST(BuiltinsCountRegistry, CountaRegisteredCountblankLazy) {
+  // COUNTA rides the eager registry path. COUNT and COUNTBLANK are lazy and
   // therefore absent from the registry; the dispatch table in
-  // tree_walker.cpp routes it directly.
+  // tree_walker_lazy_table.cpp routes them directly.
   EXPECT_EQ(default_registry().lookup("COUNT"), nullptr);
   EXPECT_NE(default_registry().lookup("COUNTA"), nullptr);
-  EXPECT_NE(default_registry().lookup("COUNTBLANK"), nullptr);
+  EXPECT_EQ(default_registry().lookup("COUNTBLANK"), nullptr);
 }
 
-TEST(BuiltinsCountRegistry, CountaAndCountblankRangeAwareAndNonPropagating) {
+TEST(BuiltinsCountRegistry, CountaRangeAwareAndNonPropagating) {
   const FunctionDef* counta = default_registry().lookup("COUNTA");
-  const FunctionDef* countblank = default_registry().lookup("COUNTBLANK");
   ASSERT_NE(counta, nullptr);
-  ASSERT_NE(countblank, nullptr);
   EXPECT_TRUE(counta->accepts_ranges);
-  EXPECT_TRUE(countblank->accepts_ranges);
   EXPECT_FALSE(counta->propagate_errors);
-  EXPECT_FALSE(countblank->propagate_errors);
 }
 
 // ---------------------------------------------------------------------------
@@ -461,8 +457,12 @@ TEST(BuiltinsCountBlank, MixedDirectArgsOnlyEmptyStringsCounted) {
 }
 
 TEST(BuiltinsCountBlank, BlankArgCounts) {
-  const Value args[] = {Value::number(1.0), Value::blank(), Value::text(""), Value::number(0.0), Value::blank()};
-  const Value v = CallDirect("COUNTBLANK", args, 5u);
+  // Row 0 holds 1 and row 3 holds 0; rows 1, 2 and 4 are blank or "".
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::text(""));
+  wb.sheet(0).set_cell_value(3, 0, Value::number(0.0));
+  const Value v = EvalSourceIn("=COUNTBLANK(A1:A5)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }

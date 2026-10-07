@@ -1,6 +1,6 @@
 //
 // Implementation of Formulon's aggregate built-in functions:
-// SUM, SUMSQ, MIN, MAX, AVERAGE, PRODUCT, COUNT, COUNTA, COUNTBLANK, CONCAT,
+// SUM, SUMSQ, MIN, MAX, AVERAGE, PRODUCT, COUNT, COUNTA, CONCAT,
 // CONCATENATE, LEN, and PERCENTOF. Most impls follow the same recipe as the
 // rest of the builtin catalog: coerce arguments via `eval/coerce.h`,
 // propagate the left-most coercion error, and return a `Value`. PERCENTOF
@@ -186,18 +186,19 @@ Value SumSq(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 
 // --- Counting aggregators -----------------------------------------------
 //
-// COUNTA / COUNTBLANK. Both are registered with `propagate_errors = false`:
+// COUNTA is registered with `propagate_errors = false`:
 // Excel's COUNT family is specified in terms of which cells to "count"
 // rather than which values to coerce, so an error inside a range must not
-// short-circuit the whole call. That opt-out means the impls see
-// Error-typed values in their args array directly and must skip them
-// explicitly.
+// short-circuit the whole call. That opt-out means the impl sees
+// Error-typed values in its args array directly and must count them.
 //
-// COUNT itself is routed through the lazy dispatch table (see
-// `eval_count_lazy` in `special_forms_lazy.cpp`) because Excel counts Bool
-// values differently depending on whether they are direct arguments or
-// sourced from a range: `=COUNT(1, TRUE, 3)` is 3, but `=COUNT(A1:A3)`
-// where A2 holds TRUE is 2. That provenance distinction requires per-arg
+// COUNTBLANK needs a reference's declared size, so it is lazy too (see
+// `eval_countblank_lazy` in `aggregate_lazy.cpp`). COUNT itself is routed
+// through the lazy dispatch table (see `eval_count_lazy` in
+// `special_forms_lazy.cpp`) because Excel counts Bool values differently
+// depending on whether they are direct arguments or sourced from a range:
+// `=COUNT(1, TRUE, 3)` is 3, but `=COUNT(A1:A3)` where A2 holds TRUE is 2.
+// That provenance distinction requires per-arg
 // AST inspection that the eager dispatcher's flattened values vector has
 // already erased.
 
@@ -210,23 +211,6 @@ Value CountA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   double total = 0.0;
   for (std::uint32_t i = 0; i < arity; ++i) {
     if (!args[i].is_blank() || args[i].blank_counts_for_counta()) {
-      total += 1.0;
-    }
-  }
-  return Value::number(total);
-}
-
-// COUNTBLANK(value, ...) - count of Blank scalars and Text values whose
-// contents are exactly "". Numbers (including 0), booleans (including
-// FALSE), non-empty text, and errors are all skipped. The public Excel 365
-// signature accepts a single range; we accept variadic for symmetry with
-// the sibling aggregators - a single A1:B2 ref still expands to many
-// scalar args via the dispatcher.
-Value CountBlank(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  double total = 0.0;
-  for (std::uint32_t i = 0; i < arity; ++i) {
-    const Value& v = args[i];
-    if (v.is_blank() || (v.is_text() && v.as_text().empty())) {
       total += 1.0;
     }
   }
@@ -425,7 +409,6 @@ void register_aggregate_builtins(FunctionRegistry& registry) {
       {"PRODUCT", 1u, kVariadic, &Product, true, true, true},
       {"SUMSQ", 1u, kVariadic, &SumSq, true, true, true},
       {"COUNTA", 1u, kVariadic, &CountA, false, true},
-      {"COUNTBLANK", 1u, kVariadic, &CountBlank, false, true},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 

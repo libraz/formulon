@@ -101,6 +101,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"COLUMNS", &eval_columns_lazy, LazyResultShape::kReduce},
     {"CORREL", &eval_correl_lazy, LazyResultShape::kReduce},
     {"COUNT", &eval_count_lazy, LazyResultShape::kReduce},
+    {"COUNTBLANK", &eval_countblank_lazy, LazyResultShape::kReduce},
     {"COUNTIF", &eval_countif_lazy, LazyResultShape::kReduce},
     {"COUNTIFS", &eval_countifs_lazy, LazyResultShape::kReduce},
     {"COUPDAYBS", &eval_financial_date_lazy, LazyResultShape::kScalar},
