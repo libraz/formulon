@@ -232,3 +232,282 @@ cases:
     description: "=A1:C3 at E1; control for the case above -- same rectangle, anchor outside it, spills 3x3"
     formula: "=A1:C3"
     formula_cell: E1
+
+  # ------------------------------------------------------------------
+  # Operators, LET and scalar functions over a whole axis keep the declared
+  # shape. Data lives on Sheet2 (A1:A5 = k1,k2,k3,<blank>,k5; B1:B5 = 10..50);
+  # the formula sits on Sheet1.
+  # ------------------------------------------------------------------
+  - id: axis_sum_col_times_one
+    description: "SUM(L!B:B*1) = 150"
+    formula: '=SUM(Sheet2!B:B*1)'
+    formula_cell: Z1
+    setup: &axis_data
+      Sheet2!A1: k1
+      Sheet2!A2: k2
+      Sheet2!A3: k3
+      Sheet2!A5: k5
+      Sheet2!B1: 10
+      Sheet2!B2: 20
+      Sheet2!B3: 30
+      Sheet2!B4: 40
+      Sheet2!B5: 50
+    expect: 150
+  - id: axis_sum_cond_times_col
+    description: "SUM((L!A:A='k2')*L!B:B) = 20"
+    formula: '=SUM((Sheet2!A:A="k2")*Sheet2!B:B)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 20
+  - id: axis_sumproduct_cond_times_col
+    description: "SUMPRODUCT((L!A:A='k2')*L!B:B) = 20"
+    formula: '=SUMPRODUCT((Sheet2!A:A="k2")*Sheet2!B:B)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 20
+  - id: axis_col_plus_zero_spills_full_rectangle
+    description: "=L!B:B+0 at A1 spills 1048576x1; rows past the data are 0"
+    formula: '=Sheet2!B:B+0'
+    formula_cell: A1
+    capture: shape
+    samples: [A1, A2, A5, A6, A1048576]
+    setup: *axis_data
+  - id: axis_col_plus_zero_below_row_one_overflows
+    description: "=L!B:B+0 at A2; the 1048576-row result no longer fits"
+    formula: '=Sheet2!B:B+0'
+    formula_cell: A2
+    setup: *axis_data
+    expect: { kind: error, code: "#SPILL!" }
+  - id: axis_rows_of_col_plus_zero
+    description: "ROWS(L!B:B+0) = 1048576"
+    formula: '=ROWS(Sheet2!B:B+0)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048576
+  - id: axis_let_rows_of_col
+    description: "LET(x,L!B:B,ROWS(x)) = 1048576"
+    formula: '=LET(x,Sheet2!B:B,ROWS(x))'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048576
+  - id: axis_let_col_spills_full_rectangle
+    description: "=LET(x,L!B:B,x) at A1 spills 1048576x1"
+    formula: '=LET(x,Sheet2!B:B,x)'
+    formula_cell: A1
+    capture: shape
+    samples: [A1, A5, A6, A1048576]
+    setup: *axis_data
+
+  # ------------------------------------------------------------------
+  # COUNTBLANK counts the unused part of a whole axis.
+  # ------------------------------------------------------------------
+  - id: axis_countblank_col_c
+    description: "COUNTBLANK(L!C:C) = 1048576"
+    formula: '=COUNTBLANK(Sheet2!C:C)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048576
+  - id: axis_countblank_col_b
+    description: "COUNTBLANK(L!B:B) = 1048571"
+    formula: '=COUNTBLANK(Sheet2!B:B)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048571
+  - id: axis_countblank_bounded_a1_a5
+    description: "COUNTBLANK(L!A1:A5) = 1"
+    formula: '=COUNTBLANK(Sheet2!A1:A5)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1
+  - id: axis_countblank_col_a
+    description: "COUNTBLANK(L!A:A) = 1048572"
+    formula: '=COUNTBLANK(Sheet2!A:A)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048572
+  - id: axis_countblank_row_1
+    description: "COUNTBLANK(L!1:1) = 16382"
+    formula: '=COUNTBLANK(Sheet2!1:1)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 16382
+  - id: axis_countblank_cols_a_b
+    description: "COUNTBLANK(L!A:B) = 2097143"
+    formula: '=COUNTBLANK(Sheet2!A:B)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 2097143
+
+  # ------------------------------------------------------------------
+  # Reductions over derived whole-axis arrays.
+  # ------------------------------------------------------------------
+  - id: axis_max_col_minus_one
+    description: "MAX(L!B:B-1) = 49"
+    formula: '=MAX(Sheet2!B:B-1)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 49
+  - id: axis_count_col_plus_zero
+    description: "COUNT(L!B:B+0) = 1048576"
+    formula: '=COUNT(Sheet2!B:B+0)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048576
+  - id: axis_average_if_col_gt_15
+    description: "AVERAGE(IF(L!B:B>15,L!B:B)) = 35"
+    formula: '=AVERAGE(IF(Sheet2!B:B>15,Sheet2!B:B))'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 35
+
+  # ------------------------------------------------------------------
+  # Same-sheet spill: data in Sheet1 A/B, formula at D1.
+  # ------------------------------------------------------------------
+  - id: axis_same_sheet_col_times_two_spills
+    description: "=B:B*2 at D1 with data on the same sheet; D6 and the last row are 0"
+    formula: '=B:B*2'
+    formula_cell: D1
+    capture: shape
+    samples: [D1, D2, D5, D6, D1048576]
+    setup:
+      A1: k1
+      A2: k2
+      A3: k3
+      A5: k5
+      B1: 10
+      B2: 20
+      B3: 30
+      B4: 40
+      B5: 50
+
+  # ------------------------------------------------------------------
+  # COUNTIF / COUNTIFS count the unused part of the axis.
+  # ------------------------------------------------------------------
+  - id: axis_countif_col_a_not_k1
+    description: "COUNTIF(L!A:A,'<>k1') = 1048575"
+    formula: '=COUNTIF(Sheet2!A:A,"<>k1")'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048575
+  - id: axis_countif_col_a_empty
+    description: "COUNTIF(L!A:A,'') = 1048572"
+    formula: '=COUNTIF(Sheet2!A:A,"")'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048572
+  - id: axis_countif_col_a_nonblank
+    description: "COUNTIF(L!A:A,'<>') = 4"
+    formula: '=COUNTIF(Sheet2!A:A,"<>")'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 4
+  - id: axis_countifs_both_empty
+    description: "COUNTIFS(L!A:A,'',L!B:B,'') = 1048571"
+    formula: '=COUNTIFS(Sheet2!A:A,"",Sheet2!B:B,"")'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048571
+  - id: axis_countif_col_b_lt_20
+    description: "COUNTIF(L!B:B,'<20') = 1"
+    formula: '=COUNTIF(Sheet2!B:B,"<20")'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1
+  - id: axis_countif_col_b_ne_20
+    description: "COUNTIF(L!B:B,'<>20') = 1048575"
+    formula: '=COUNTIF(Sheet2!B:B,"<>20")'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048575
+  - id: axis_sumproduct_blank_cond
+    description: "SUMPRODUCT((L!A:A='')*1) = 1048572"
+    formula: '=SUMPRODUCT((Sheet2!A:A="")*1)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048572
+
+  # ------------------------------------------------------------------
+  # Broadcast and tail behaviour of whole-axis results.
+  # ------------------------------------------------------------------
+  - id: axis_multi_col_plus_one_spills
+    description: "=L!A:C+1 at A1 spills 1048576x3; rows past the data are 1,1,1"
+    formula: '=Sheet2!A:C+1'
+    formula_cell: A1
+    capture: shape
+    samples: [A1, B1, C1, A4, A6, B6, C6, A1048576, C1048576]
+    setup: *axis_data
+  - id: axis_col_plus_column_vector_tail_na
+    description: "=L!B:B+{1;2;3}; rows 4 onward are #N/A"
+    formula: '=Sheet2!B:B+{1;2;3}'
+    formula_cell: A1
+    capture: shape
+    samples: [A1, A2, A3, A4, A6, A1048576]
+    setup: *axis_data
+  - id: axis_col_plus_row_vector_two_cols
+    description: "=L!B:B+{1,2} spills 1048576x2; the tail rows are 1,2"
+    formula: '=Sheet2!B:B+{1,2}'
+    formula_cell: A1
+    capture: shape
+    samples: [A1, B1, A6, B6, A1048576, B1048576]
+    setup: *axis_data
+  - id: axis_row_plus_zero_spills
+    description: "=L!1:1+0 at A1 spills 1x16384"
+    formula: '=Sheet2!1:1+0'
+    formula_cell: A1
+    capture: shape
+    samples: [A1, B1, C1, XFD1]
+    setup: *axis_data
+  - id: axis_col_concat_text_tail
+    description: "=L!A:A&'x'; blanks and the tail read as empty text"
+    formula: '=Sheet2!A:A&"x"'
+    formula_cell: A1
+    capture: shape
+    samples: [A1, A4, A6, A1048576]
+    setup: *axis_data
+  - id: axis_isblank_col_tail
+    description: "=ISBLANK(L!A:A); A4, the unused rows and the last row are TRUE"
+    formula: '=ISBLANK(Sheet2!A:A)'
+    formula_cell: A1
+    capture: shape
+    samples: [A1, A4, A6, A1048576]
+    setup: *axis_data
+  - id: axis_rows_of_abs_col
+    description: "ROWS(ABS(L!B:B)) = 1048576"
+    formula: '=ROWS(ABS(Sheet2!B:B))'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048576
+  - id: axis_sum_col_times_zero_plus_one
+    description: "SUM(L!B:B*0+1) = 1048576"
+    formula: '=SUM(Sheet2!B:B*0+1)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048576
+  - id: axis_sum_col_plus_row_axis
+    description: "SUM(L!A:A+L!1:1); Excel answers 0 (reason unknown, measured)"
+    formula: '=SUM(Sheet2!A:A+Sheet2!1:1)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 0
+
+  # ------------------------------------------------------------------
+  # SUMPRODUCT argument shapes and accumulation order.
+  # ------------------------------------------------------------------
+  - id: axis_sumproduct_col_vs_bounded_mismatch
+    description: "SUMPRODUCT(L!A:A,L!B1:B5) -> #VALUE! (dimension mismatch)"
+    formula: '=SUMPRODUCT(Sheet2!A:A,Sheet2!B1:B5)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: { kind: error, code: "#VALUE!" }
+  - id: axis_sumproduct_col_b_squared
+    description: "SUMPRODUCT(L!B:B,L!B:B) = 5500"
+    formula: '=SUMPRODUCT(Sheet2!B:B,Sheet2!B:B)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 5500
+  - id: axis_sumproduct_tail_sequential_sum
+    description: "(L!A:A='')*0.1 summed row by row minus 104857.2 -> 1.6156118363142014e-06"
+    formula: '=SUMPRODUCT((Sheet2!A:A="")*0.1)-104857.2'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1.6156118363142014e-06

@@ -1301,6 +1301,14 @@ entries:
     prefer: formulon
     first_noted: 2026-08-15
     last_verified_excel_version: "16.112"
+  - id: axis_sum_col_plus_row_axis
+    applies_to: all
+    cause: accepted-divergence
+    mode: skip-oracle
+    reason: "SUM(Sheet2!A:A+Sheet2!1:1): a whole column plus a whole row broadcasts to the full 1,048,576 x 16,384 grid. Excel answers 0 for it (measured; the rule behind the 0 is not identified). Formulon has no single repeated tail for a two-axis result, so it would have to expand ~1.7e10 cells and refuses with #NUM! at the derived-array ceiling, as for any other oversized array."
+    prefer: formulon
+    first_noted: 2026-10-08
+    last_verified_excel_version: "16.113.3"
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
