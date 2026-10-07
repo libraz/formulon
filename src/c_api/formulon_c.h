@@ -6267,8 +6267,8 @@ typedef enum {
  *
  * `FM_COLOR_RESOLUTION_EXACT`: literal RGB, or a theme / palette colour
  * resolved from the workbook's own data. `DEFAULT_THEME` /
- * `THEME_UNPARSEABLE`: a theme colour resolved against the default
- * (Office 2013-2022) theme because the theme part is absent / unparseable.
+ * `THEME_UNPARSEABLE`: a theme colour resolved against the
+ * current Excel Office (Aptos) theme because the theme part is absent / unparseable.
  * `INDEX_OUT_OF_RANGE`: a theme or palette index beyond its table; the
  * colour is black. `AUTO_CONTEXT`: an automatic or system colour (or no
  * colour at all) chosen by context: black for font and border, white for

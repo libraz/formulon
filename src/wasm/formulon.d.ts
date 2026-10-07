@@ -1767,7 +1767,7 @@ export enum AnchorEditAs {
 }
 
 /** How a colour was resolved. Mirrors `fm_color_resolution_t`. `Exact` is a literal or workbook-supplied
- *  colour; `DefaultTheme` / `ThemeUnparseable` mean the default (Office 2013-2022) theme was used because
+ *  colour; `DefaultTheme` / `ThemeUnparseable` mean the current Excel Office (Aptos) theme was used because
  *  the theme part is absent / unparseable; `IndexOutOfRange` is black; `AutoContext` is an automatic colour
  *  (black for font and border, white for fills). */
 export enum ColorResolution {

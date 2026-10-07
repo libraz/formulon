@@ -52,6 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A workbook without a theme part now resolves theme colors and fonts with the
+  current Excel Office theme (Aptos Display / Aptos Narrow, accent1 `156082`),
+  as Excel does, instead of the Office 2013-2022 theme. A generated theme part
+  carries the same values.
 - Formulas loaded with cross-workbook references read back with the book name
   (`[Book.xlsx]Sheet1!A1`, or the quoted path form when the link has an
   absolute path) instead of `[N]`, and are written back with the original

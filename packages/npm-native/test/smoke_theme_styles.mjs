@@ -1,7 +1,7 @@
 import test from 'node:test';
 import { assert, getModule } from './smoke_support.mjs';
 
-const DEFAULT_ACCENT1 = 0xff4472c4;
+const DEFAULT_ACCENT1 = 0xff156082;
 
 test('getTheme reads the default theme of a fresh workbook', async () => {
   const mod = await getModule();

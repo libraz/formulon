@@ -39,8 +39,8 @@ constexpr int32_t kSourcePart = 0;
 constexpr int32_t kSourceDefault = 1;
 constexpr int32_t kSourceUnparseable = 2;
 
-constexpr uint32_t kDefaultScheme[12] = {0xFF000000U, 0xFFFFFFFFU, 0xFF44546AU, 0xFFE7E6E6U, 0xFF4472C4U, 0xFFED7D31U,
-                                         0xFFA5A5A5U, 0xFFFFC000U, 0xFF5B9BD5U, 0xFF70AD47U, 0xFF0563C1U, 0xFF954F72U};
+constexpr uint32_t kDefaultScheme[12] = {0xFF000000U, 0xFFFFFFFFU, 0xFF0E2841U, 0xFFE8E8E8U, 0xFF156082U, 0xFFE97132U,
+                                         0xFF196B24U, 0xFF0F9ED5U, 0xFFA02B93U, 0xFF4EA72EU, 0xFF467886U, 0xFF96607DU};
 constexpr const char* kYuGothic = "\xE6\xB8\xB8\xE3\x82\xB4\xE3\x82\xB7\xE3\x83\x83\xE3\x82\xAF";
 constexpr const char* kYuGothicLight = "\xE6\xB8\xB8\xE3\x82\xB4\xE3\x82\xB7\xE3\x83\x83\xE3\x82\xAF Light";
 
@@ -141,9 +141,9 @@ TEST(FormulonCApiTheme, WorkbookWithoutThemePartReportsDefaultTheme) {
   }
   fm_theme_fonts fonts{};
   ASSERT_EQ(fm_workbook_get_theme_fonts(wb.handle, &fonts), 0);
-  EXPECT_STREQ(fonts.major_latin, "Calibri Light");
+  EXPECT_STREQ(fonts.major_latin, "Aptos Display");
   EXPECT_STREQ(fonts.major_east_asian, kYuGothicLight);
-  EXPECT_STREQ(fonts.minor_latin, "Calibri");
+  EXPECT_STREQ(fonts.minor_latin, "Aptos Narrow");
   EXPECT_STREQ(fonts.minor_east_asian, kYuGothic);
 }
 
@@ -166,7 +166,7 @@ TEST(FormulonCApiTheme, SetColorsOnWorkbookWithoutThemeSurvivesSaveReload) {
   // The generated part carries the default fonts.
   fm_theme_fonts fonts{};
   ASSERT_EQ(fm_workbook_get_theme_fonts(wb.handle, &fonts), 0);
-  EXPECT_STREQ(fonts.minor_latin, "Calibri");
+  EXPECT_STREQ(fonts.minor_latin, "Aptos Narrow");
 
   WorkbookGuard loaded;
   Load(Save(wb.handle), &loaded);
@@ -256,7 +256,7 @@ TEST(FormulonCApiTheme, ResetReturnsEditedThemeToDefault) {
   }
   fm_theme_fonts reset_fonts{};
   ASSERT_EQ(fm_workbook_get_theme_fonts(wb.handle, &reset_fonts), 0);
-  EXPECT_STREQ(reset_fonts.minor_latin, "Calibri");
+  EXPECT_STREQ(reset_fonts.minor_latin, "Aptos Narrow");
 
   const Bytes saved = Save(wb.handle);
   EXPECT_TRUE(EntryText(saved, "xl/theme/theme1.xml").empty());
@@ -338,7 +338,7 @@ TEST(FormulonCApiTheme, ResolveColorReportsResolution) {
 
   // No theme part: theme colours resolve against the default theme.
   got = Resolve(wb.handle, ThemeSpec(4, 0.0), FM_COLOR_CONTEXT_FONT);
-  EXPECT_EQ(got.argb, 0xFF4472C4U);
+  EXPECT_EQ(got.argb, 0xFF156082U);
   EXPECT_EQ(got.resolution, FM_COLOR_RESOLUTION_DEFAULT_THEME);
   got = Resolve(wb.handle, ThemeSpec(12, 0.0), FM_COLOR_CONTEXT_FONT);
   EXPECT_EQ(got.argb, 0xFF000000U);
@@ -357,10 +357,10 @@ TEST(FormulonCApiTheme, ResolveColorReportsResolution) {
   EXPECT_EQ(got.argb, 0xFF000000U);
   // Excel's "Accent 1, Lighter 40%" and "Darker 25%".
   got = Resolve(wb.handle, ThemeSpec(4, 0.4), FM_COLOR_CONTEXT_FILL_FG);
-  EXPECT_EQ(got.argb, 0xFF8EA9DBU);
+  EXPECT_EQ(got.argb, 0xFF44B3E1U);
   EXPECT_EQ(got.resolution, FM_COLOR_RESOLUTION_EXACT);
   got = Resolve(wb.handle, ThemeSpec(4, -0.25), FM_COLOR_CONTEXT_FILL_FG);
-  EXPECT_EQ(got.argb, 0xFF305496U);
+  EXPECT_EQ(got.argb, 0xFF104861U);
 
   got = Resolve(wb.handle, IndexedSpec(2), FM_COLOR_CONTEXT_FONT);
   EXPECT_EQ(got.argb, 0xFFFF0000U);
@@ -534,7 +534,7 @@ TEST(FormulonCApiEffectiveStyle, ResolvesColorsFormatAndProtection) {
   EXPECT_EQ(style.fill_index, xf.fill_index);
   EXPECT_EQ(style.border_index, xf.border_index);
   // No theme part: the themed font resolves against the default theme.
-  EXPECT_EQ(style.font_argb, 0xFF8EA9DBU);
+  EXPECT_EQ(style.font_argb, 0xFF44B3E1U);
   EXPECT_EQ(style.font_resolution, FM_COLOR_RESOLUTION_DEFAULT_THEME);
   EXPECT_EQ(style.fill_fg_argb, 0xFFFF0000U);
   EXPECT_EQ(style.fill_fg_resolution, FM_COLOR_RESOLUTION_EXACT);

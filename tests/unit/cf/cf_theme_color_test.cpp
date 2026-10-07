@@ -23,8 +23,8 @@
 namespace formulon::cf {
 namespace {
 
-// Resolved RGB values come from the measured theme/tint table (Office 2013-2022
-// scheme): theme index 4 = accent1 etc.
+// Resolved RGB values are Excel's rendering of the default (Aptos) Office theme
+// with tints: theme index 4 = accent1 etc.
 constexpr Color Rgb(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
   return Color{r, g, b, 255, ColorSpec{}};
 }
@@ -100,8 +100,8 @@ TEST(CfThemeColor, ColorScaleThemeNotBlack) {
   ASSERT_NE(high, nullptr);
   ASSERT_TRUE(low->resolved_fill_color.has_value());
   ASSERT_TRUE(high->resolved_fill_color.has_value());
-  EXPECT_EQ(*low->resolved_fill_color, Rgb(0x8E, 0xA9, 0xDB));   // accent1, tint 0.4
-  EXPECT_EQ(*high->resolved_fill_color, Rgb(0xC6, 0x59, 0x11));  // accent2, tint -0.25
+  EXPECT_EQ(*low->resolved_fill_color, Rgb(0x44, 0xB3, 0xE1));   // accent1, tint 0.4
+  EXPECT_EQ(*high->resolved_fill_color, Rgb(0xBE, 0x50, 0x14));  // accent2, tint -0.25
 }
 
 TEST(CfThemeColor, DataBarThemeTintFill) {
@@ -110,7 +110,7 @@ TEST(CfThemeColor, DataBarThemeTintFill) {
   const CFMatch* match = MatchAt(results, 1, 1);
   ASSERT_NE(match, nullptr);
   ASSERT_TRUE(match->data_bar_render.has_value());
-  EXPECT_EQ(match->data_bar_render->fill, Rgb(0xBD, 0xD7, 0xEE));  // accent5, tint 0.6
+  EXPECT_EQ(match->data_bar_render->fill, Rgb(0xE4, 0x9E, 0xDD));  // accent5, tint 0.6
 }
 
 TEST(CfThemeColor, IndexedAndAutoColors) {
@@ -149,7 +149,7 @@ TEST(CfThemeColor, ThemeEditIsReflected) {
   ASSERT_TRUE(static_cast<bool>(f.wb.set_theme_colors(colors)));
   const auto results = f.Evaluate();
   const Color got = *MatchAt(results, 0, 0)->resolved_fill_color;
-  EXPECT_NE(got, Rgb(0x8E, 0xA9, 0xDB));
+  EXPECT_NE(got, Rgb(0x44, 0xB3, 0xE1));
   EXPECT_NE(got, Rgb(0, 0, 0));
   // A lighter tint of a dark accent is lighter than the accent itself.
   EXPECT_GT(got.b, 0x60);

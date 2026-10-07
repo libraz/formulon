@@ -64,9 +64,9 @@ TEST(Theme, ReportsDefaultThemeWhenPartAbsent) {
   const Workbook wb = Workbook::create();
   const LoadedTheme loaded = wb.load_theme();
   EXPECT_EQ(loaded.source, ThemeSource::kDefault);
-  EXPECT_EQ(loaded.theme.colors[4], 0xFF4472C4U);  // accent1 of the Office 2013-2022 theme
-  EXPECT_EQ(loaded.theme.fonts.minor_latin, "Calibri");
-  EXPECT_EQ(loaded.theme.fonts.major_latin, "Calibri Light");
+  EXPECT_EQ(loaded.theme.colors[4], 0xFF156082U);  // accent1 of the current Office theme
+  EXPECT_EQ(loaded.theme.fonts.minor_latin, "Aptos Narrow");
+  EXPECT_EQ(loaded.theme.fonts.major_latin, "Aptos Display");
 }
 
 TEST(Theme, GeneratesPartWhenAbsent) {

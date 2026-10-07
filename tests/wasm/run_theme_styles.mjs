@@ -8,7 +8,7 @@ const RESOLUTION_EXACT = 0;
 const RESOLUTION_DEFAULT_THEME = 1;
 const RESOLUTION_INDEX_OUT_OF_RANGE = 2;
 const RESOLUTION_AUTO_CONTEXT = 4;
-const ACCENT1_DEFAULT = 0xff4472c4;
+const ACCENT1_DEFAULT = 0xff156082;
 
 function withWorkbook(Module, fn) {
   const wb = Module.Workbook.createDefault();
@@ -29,8 +29,8 @@ export function registerThemeStyles(Module, test) {
       assert.equal(t.source, SOURCE_DEFAULT);
       assert.equal(t.colors.length, 12);
       assert.equal(t.colors[4], ACCENT1_DEFAULT);
-      assert.equal(t.fonts.majorLatin, 'Calibri Light');
-      assert.equal(t.fonts.minorLatin, 'Calibri');
+      assert.equal(t.fonts.majorLatin, 'Aptos Display');
+      assert.equal(t.fonts.minorLatin, 'Aptos Narrow');
       assert.equal(typeof t.fonts.minorEastAsian, 'string');
       assert.ok(t.fonts.minorEastAsian.length > 0);
     });
@@ -112,7 +112,7 @@ export function registerThemeStyles(Module, test) {
 
       assert.ok(wb.setThemeColors(wb.getTheme().colors).ok);
       const lighter = wb.resolveColor(themeSpec(4, 0.4), CONTEXT_FILL_FG);
-      assert.equal(lighter.argb, 0xff8ea9db);
+      assert.equal(lighter.argb, 0xff44b3e1);
       assert.equal(lighter.resolution, RESOLUTION_EXACT);
       assert.equal(wb.resolveColor(themeSpec(0, 0), CONTEXT_FONT).argb, 0xffffffff);
 

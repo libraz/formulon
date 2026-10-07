@@ -48,7 +48,7 @@ struct LoadedTheme {
   ThemeSource source = ThemeSource::kDefault;
 };
 
-/// The Office 2013-2022 theme (Calibri / Calibri Light, Yu Gothic for East Asian).
+/// The current Excel Office theme (Aptos Display / Aptos Narrow, Yu Gothic for East Asian).
 const Theme& default_theme();
 
 }  // namespace formulon
