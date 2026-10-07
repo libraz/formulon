@@ -89,15 +89,19 @@ Value lift_kernel_result(Expected<double, ErrorCode> result) {
   return Value::number(result.value());
 }
 
+// A non-finite aggregate is #NUM!, as Excel reports it.
+Value finite_number(double v) {
+  if (std::isnan(v) || std::isinf(v)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(v);
+}
+
 Value AggregateSum(const std::vector<Value>& values) {
   if (const Value* err = first_error(values); err != nullptr) {
     return *err;
   }
-  const double sum = summarize_arithmetic(values).sum;
-  if (std::isnan(sum) || std::isinf(sum)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(sum);
+  return finite_number(summarize_arithmetic(values).sum);
 }
 
 // Excel's pivot `Count` mirrors COUNTA: any non-blank cell counts,
@@ -144,11 +148,7 @@ Value AggregateMax(const std::vector<Value>& values) {
   }
   const ArithmeticSummary summary = summarize_arithmetic(values);
   // Excel's pivot MAX over an empty/all-text group returns 0.
-  const double max = summary.count > 0 ? summary.max : 0.0;
-  if (std::isnan(max) || std::isinf(max)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(max);
+  return finite_number(summary.count > 0 ? summary.max : 0.0);
 }
 
 Value AggregateMin(const std::vector<Value>& values) {
@@ -156,11 +156,7 @@ Value AggregateMin(const std::vector<Value>& values) {
     return *err;
   }
   const ArithmeticSummary summary = summarize_arithmetic(values);
-  const double min = summary.count > 0 ? summary.min : 0.0;
-  if (std::isnan(min) || std::isinf(min)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(min);
+  return finite_number(summary.count > 0 ? summary.min : 0.0);
 }
 
 Value variance_helper(const std::vector<Value>& values, bool population) {
@@ -200,11 +196,7 @@ Value AggregateProduct(const std::vector<Value>& values) {
   }
   const ArithmeticSummary summary = summarize_arithmetic(values);
   // Excel's pivot PRODUCT on an empty/all-text group returns 0.
-  const double product = summary.count > 0 ? summary.product : 0.0;
-  if (std::isnan(product) || std::isinf(product)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(product);
+  return finite_number(summary.count > 0 ? summary.product : 0.0);
 }
 
 // ---------------------------------------------------------------------------

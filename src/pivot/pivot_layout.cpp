@@ -349,8 +349,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   // adjacent columns), so the row-label side always occupies one
   // column regardless of `row_depth`. Tabular / Outline give each row
   // field its own column so they consume `row_depth` columns.
-  const std::size_t row_header_cols =
-      (compact || row_depth == 0) ? std::size_t{1} : (multi_col_layout ? row_depth : row_depth);
+  const std::size_t row_header_cols = (compact || row_depth == 0) ? std::size_t{1} : row_depth;
   const std::size_t col_header_rows = col_depth == 0 ? 1 : col_depth;
   const std::size_t data_field_header_rows = data_field_count > 1 ? 1 : 0;
   // Compact form folds the row-field-name row away: when there are no
@@ -439,6 +438,21 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
     }
   }
 
+  // Display name of the row / column field placed at `depth`, or empty when
+  // `depth` is past the axis or names no field.
+  auto row_field_label = [&](std::size_t depth) {
+    if (depth < row_depth && table.row_field_order()[depth] < table.fields().size()) {
+      return pivot_field_display_name(table.fields()[table.row_field_order()[depth]]);
+    }
+    return std::string();
+  };
+  auto col_field_label = [&](std::size_t depth) {
+    if (depth < col_depth && table.col_field_order()[depth] < table.fields().size()) {
+      return pivot_field_display_name(table.fields()[table.col_field_order()[depth]]);
+    }
+    return std::string();
+  };
+
   // Emits one column-hierarchy label row at `depth` (Q1/Q2/... under a
   // single-level Quarter axis, Store/Web under a nested one, etc.),
   // repeated across every data-field slot per leaf/subtotal column.
@@ -471,10 +485,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         prev_label = label;
         prev_filled = true;
       }
-      std::string field_name;
-      if (depth < col_depth && table.col_field_order()[depth] < table.fields().size()) {
-        field_name = pivot_field_display_name(table.fields()[table.col_field_order()[depth]]);
-      }
+      const std::string field_name = col_field_label(depth);
       for (std::size_t df = 0; df < data_field_count; ++df) {
         const std::uint32_t col = data_left + static_cast<std::uint32_t>(c_entry * data_field_count + df);
         append_cell(cells, row, col, emit_blank ? Value::blank() : text_value(cells, label),
@@ -499,10 +510,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
       // Row-only header: one row with the per-row-field display names
       // followed by the data-field display name(s).
       for (std::size_t d = 0; d < row_depth; ++d) {
-        std::string label;
-        if (table.row_field_order()[d] < table.fields().size()) {
-          label = pivot_field_display_name(table.fields()[table.row_field_order()[d]]);
-        }
+        std::string label = row_field_label(d);
         append_cell(cells, top, left + static_cast<std::uint32_t>(d), text_value(cells, std::move(label)),
                     PivotCellKind::Header, static_cast<std::uint32_t>(d));
       }
@@ -525,10 +533,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
       // same way they name the row fields, instead of Compact's single
       // "Column Labels" placeholder.
       for (std::size_t depth = 0; depth < col_depth; ++depth) {
-        std::string field_name;
-        if (table.col_field_order()[depth] < table.fields().size()) {
-          field_name = pivot_field_display_name(table.fields()[table.col_field_order()[depth]]);
-        }
+        std::string field_name = col_field_label(depth);
         append_cell(cells, top, data_left + static_cast<std::uint32_t>(depth), text_value(cells, std::move(field_name)),
                     PivotCellKind::Header, 0);
       }
@@ -544,10 +549,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         const std::uint32_t row = top + 1 + static_cast<std::uint32_t>(depth);
         if (depth + 1 == col_header_rows) {
           for (std::size_t d = 0; d < row_header_cols; ++d) {
-            std::string label;
-            if (d < row_depth && table.row_field_order()[d] < table.fields().size()) {
-              label = pivot_field_display_name(table.fields()[table.row_field_order()[d]]);
-            }
+            std::string label = row_field_label(d);
             append_cell(cells, row, left + static_cast<std::uint32_t>(d), text_value(cells, std::move(label)),
                         PivotCellKind::Header, static_cast<std::uint32_t>(d));
           }
@@ -627,10 +629,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
 
     // Row field headers.
     for (std::size_t depth = 0; depth < row_header_cols; ++depth) {
-      std::string label;
-      if (depth < row_depth && table.row_field_order()[depth] < table.fields().size()) {
-        label = pivot_field_display_name(table.fields()[table.row_field_order()[depth]]);
-      }
+      std::string label = row_field_label(depth);
       append_cell(cells, row_header_row, left + static_cast<std::uint32_t>(depth), text_value(cells, std::move(label)),
                   PivotCellKind::Header, static_cast<std::uint32_t>(depth));
     }
@@ -654,10 +653,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         } else if (col_depth == 0) {
           label = options.values_label;
         }
-        std::string field_name;
-        if (depth < col_depth && table.col_field_order()[depth] < table.fields().size()) {
-          field_name = pivot_field_display_name(table.fields()[table.col_field_order()[depth]]);
-        }
+        const std::string field_name = col_field_label(depth);
         for (std::size_t df = 0; df < data_field_count; ++df) {
           const std::uint32_t col = data_left + static_cast<std::uint32_t>(c_entry * data_field_count + df);
           append_cell(cells, row, col, text_value(cells, label),
@@ -764,10 +760,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
           label = data_field_name(table, 0);
         }
       }
-      std::string field_name;
-      if (depth < row_depth && table.row_field_order()[depth] < table.fields().size()) {
-        field_name = pivot_field_display_name(table.fields()[table.row_field_order()[depth]]);
-      }
+      std::string field_name = row_field_label(depth);
       if (emit_blank) {
         append_cell(cells, row, left + static_cast<std::uint32_t>(depth), Value::blank(),
                     entry.subtotal ? PivotCellKind::RowSubtotal : PivotCellKind::RowLabel,

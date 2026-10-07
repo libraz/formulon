@@ -315,10 +315,9 @@ bool resolve_sqref_rect(const CFCellRange& range, const Sheet& sheet, std::uint3
 static_assert(kCfMaxRows == Sheet::kMaxRows, "kCfMaxRows must match Sheet::kMaxRows");
 static_assert(kCfMaxCols == Sheet::kMaxCols, "kCfMaxCols must match Sheet::kMaxCols");
 
-}  // namespace
-
-std::size_t count_matches_in_sqref(const Value& target, const std::vector<CFCellRange>& sqref, const Sheet& sheet) {
-  std::size_t count = 0;
+// Calls `visit` with the resolved value of every in-grid cell of `sqref`.
+template <typename Visit>
+void for_each_sqref_value(const std::vector<CFCellRange>& sqref, const Sheet& sheet, Visit visit) {
   for (const CFCellRange& range : sqref) {
     std::uint32_t r0 = 0;
     std::uint32_t c0 = 0;
@@ -328,32 +327,30 @@ std::size_t count_matches_in_sqref(const Value& target, const std::vector<CFCell
       continue;
     }
     for (auto [row, col] : utils::RectRange(r0, c0, r1, c1)) {
-      const Value cell = sheet.resolve_cell_value(row, col);
-      if (cf_values_equal(target, cell)) {
-        ++count;
-      }
+      visit(sheet.resolve_cell_value(row, col));
     }
   }
+}
+
+}  // namespace
+
+std::size_t count_matches_in_sqref(const Value& target, const std::vector<CFCellRange>& sqref, const Sheet& sheet) {
+  std::size_t count = 0;
+  for_each_sqref_value(sqref, sheet, [&](const Value& cell) {
+    if (cf_values_equal(target, cell)) {
+      ++count;
+    }
+  });
   return count;
 }
 
 std::vector<double> collect_numeric_values(const std::vector<CFCellRange>& sqref, const Sheet& sheet) {
   std::vector<double> values;
-  for (const CFCellRange& range : sqref) {
-    std::uint32_t r0 = 0;
-    std::uint32_t c0 = 0;
-    std::uint32_t r1 = 0;
-    std::uint32_t c1 = 0;
-    if (!resolve_sqref_rect(range, sheet, &r0, &c0, &r1, &c1)) {
-      continue;
+  for_each_sqref_value(sqref, sheet, [&](const Value& cell) {
+    if (cell.is_number()) {
+      values.push_back(cell.as_number());
     }
-    for (auto [row, col] : utils::RectRange(r0, c0, r1, c1)) {
-      const Value cell = sheet.resolve_cell_value(row, col);
-      if (cell.is_number()) {
-        values.push_back(cell.as_number());
-      }
-    }
-  }
+  });
   return values;
 }
 
