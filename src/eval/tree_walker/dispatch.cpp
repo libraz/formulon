@@ -413,21 +413,23 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   // bound non-Lambda value is `#VALUE!`; a bound error propagates verbatim.
   // Unbound names fall through to the existing registry path.
   if (const NameEnv* env = ctx.name_env(); env != nullptr) {
-    if (const Value* bound = env->lookup(name); bound != nullptr) {
+    if (const auto* binding = env->lookup(name); binding != nullptr) {
       if (const parser::AstNode* ast = env->lookup_ast(name); ast != nullptr && is_reference_shape(*ast)) {
         return Value::error(ErrorCode::Ref);
       }
-      if (bound->is_lambda()) {
+      const auto read = [&](const parser::AstNode& ref) { return eval_node_shaped(ref, arena, registry, ctx); };
+      const Value bound = NameEnv::binding_value(*binding, arena, read);
+      if (bound.is_lambda()) {
         // Build a flat argv pointer array from the call's child slots.
         std::vector<const parser::AstNode*> argv;
         argv.reserve(arity);
         for (std::uint32_t i = 0; i < arity; ++i) {
           argv.push_back(&node.as_call_arg(i));
         }
-        return invoke_lambda(bound->as_lambda(), arity, argv.empty() ? nullptr : argv.data(), arena, registry, ctx);
+        return invoke_lambda(bound.as_lambda(), arity, argv.empty() ? nullptr : argv.data(), arena, registry, ctx);
       }
-      if (bound->is_error()) {
-        return *bound;
+      if (bound.is_error()) {
+        return bound;
       }
       return Value::error(ErrorCode::Value);
     }
@@ -1015,6 +1017,19 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       tails.resize(values.size() + 1U, nullptr);
       tails[values.size()] = shaped_arg.tail_array;
       values.push_back(Value::blank());
+      continue;
+    }
+    // A whole column / row read straight from a reference (a defined name
+    // over `A:A`) passes only its populated head, as `SUM(A:A)` does; a
+    // derived one (`A:A*1`) is expanded below.
+    if (shaped_arg.tail_array != nullptr && shaped_arg.tail_array->from_reference) {
+      had_range_shaped_arg = true;
+      const TailArray& ta = *shaped_arg.tail_array;
+      const std::size_t span = ta.axis == TailAxis::kRows ? ta.cols : ta.rows;
+      Value range_err = Value::blank();
+      if (!append_range_sourced_values(*def, ta.cells, static_cast<std::size_t>(ta.head) * span, &values, &range_err)) {
+        return range_err;
+      }
       continue;
     }
     Value v = densify(shaped_arg, arena);

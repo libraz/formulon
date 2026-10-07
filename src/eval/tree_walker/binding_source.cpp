@@ -134,6 +134,9 @@ const parser::AstNode* resolve_binding_reference(const parser::AstNode& expr, Ar
   switch (expr.kind()) {
     case parser::NodeKind::Ref:
       return &expr;
+    case parser::NodeKind::ExternalRef:
+      // The defined-name form (`[Book.xlsx]!Name`, `[0]!Name`) is not a cell.
+      return expr.as_external_ref_name().empty() ? &expr : nullptr;
     case parser::NodeKind::RangeOp:
       if (declared_rect_endpoint_pair(expr, &lhs, &rhs)) {
         return &expr;
@@ -143,7 +146,8 @@ const parser::AstNode* resolve_binding_reference(const parser::AstNode& expr, Ar
       const NameEnv* env = ctx.name_env();
       const parser::AstNode* bound =
           (env != nullptr && expr.as_name_sheet().empty()) ? env->lookup_ast(expr.as_name()) : nullptr;
-      if (bound != nullptr && (bound->kind() == parser::NodeKind::Ref || bound->kind() == parser::NodeKind::RangeOp)) {
+      if (bound != nullptr && (bound->kind() == parser::NodeKind::Ref || bound->kind() == parser::NodeKind::RangeOp ||
+                               bound->kind() == parser::NodeKind::ExternalRef)) {
         return bound;
       }
       return nullptr;

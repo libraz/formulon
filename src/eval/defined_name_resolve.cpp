@@ -9,16 +9,18 @@
 
 #include "defined_name.h"
 #include "eval/builtin_names.h"
+#include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/external_ref.h"
 #include "eval/formula_text_utils.h"
-#include "eval/lazy_impls.h"        // eval_node
+#include "eval/lazy_impls.h"        // eval_node, eval_node_shaped
 #include "eval/name_env_resolve.h"  // is_range_shaped_ast
 #include "eval/shape_ops_lazy.h"    // eval_node_as_array
 #include "external_book.h"
 #include "external_link.h"
 #include "parser/ast.h"
 #include "sheet.h"
+#include "utils/expected.h"
 #include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
@@ -169,6 +171,49 @@ Value evaluate_defined_name(const DefinedName* def, Arena& arena, const Function
   return eval_node(*root, arena, registry, def_ctx);
 }
 
+// `evaluate_defined_name` keeping a whole column / row at its declared size. A
+// reference or expression body reads through `eval_node_shaped`; the other
+// range-shaped bodies (reference-returning calls, array literals, spill
+// references) and a bounded rectangle keep the `Value` reading.
+Shaped evaluate_defined_name_shaped(const DefinedName* def, Arena& arena, const FunctionRegistry& registry,
+                                    const EvalContext& ctx) {
+  DefinedNameFrame frame;
+  EvalContext def_ctx = ctx;
+  ErrorCode err = ErrorCode::Name;
+  const parser::AstNode* root = prepare_defined_name_body(def, arena, ctx, &frame, &def_ctx, &err);
+  if (root == nullptr) {
+    return Shaped{Value::error(err), nullptr};
+  }
+  bool shaped = false;
+  switch (root->kind()) {
+    case parser::NodeKind::Ref:
+    case parser::NodeKind::ExternalRef:
+    case parser::NodeKind::BinaryOp:
+    case parser::NodeKind::UnaryOp:
+      shaped = true;
+      break;
+    case parser::NodeKind::RangeOp: {
+      // A bounded rectangle stays an array even when it is one cell.
+      parser::Reference lhs{};
+      parser::Reference rhs{};
+      if (declared_rect_endpoint_pair(*root, &lhs, &rhs)) {
+        const Expected<DeclaredRect, ErrorCode> rect = declared_rect(lhs, rhs);
+        shaped = rect && (rect.value().rows() == Sheet::kMaxRows || rect.value().cols() == Sheet::kMaxCols);
+      }
+      break;
+    }
+    default:
+      break;
+  }
+  if (shaped) {
+    return eval_node_shaped(*root, arena, registry, def_ctx);
+  }
+  if (is_range_shaped_ast(*root)) {
+    return Shaped{eval_node_as_array(*root, arena, registry, def_ctx), nullptr};
+  }
+  return Shaped{eval_node(*root, arena, registry, def_ctx), nullptr};
+}
+
 }  // namespace
 
 Value resolve_defined_name(std::string_view name, Arena& arena, const FunctionRegistry& registry,
@@ -203,6 +248,35 @@ Value resolve_sheet_defined_name(std::string_view sheet, std::string_view name, 
     return Value::error(ErrorCode::Ref);
   }
   return evaluate_defined_name(find_sheet_defined_name(*wb, sheet, name), arena, registry, ctx);
+}
+
+Shaped resolve_defined_name_shaped(std::string_view name, Arena& arena, const FunctionRegistry& registry,
+                                   const EvalContext& ctx) {
+  if (ctx.workbook() == nullptr) {
+    return Shaped{Value::error(ErrorCode::Name), nullptr};
+  }
+  return evaluate_defined_name_shaped(find_defined_name(ctx, name), arena, registry, ctx);
+}
+
+Shaped resolve_self_book_defined_name_shaped(std::string_view name, Arena& arena, const FunctionRegistry& registry,
+                                             const EvalContext& ctx) {
+  const Workbook* wb = ctx.workbook();
+  if (wb == nullptr) {
+    return Shaped{Value::error(ErrorCode::Name), nullptr};
+  }
+  return evaluate_defined_name_shaped(find_self_book_defined_name(*wb, name), arena, registry, ctx);
+}
+
+Shaped resolve_sheet_defined_name_shaped(std::string_view sheet, std::string_view name, Arena& arena,
+                                         const FunctionRegistry& registry, const EvalContext& ctx) {
+  const Workbook* wb = ctx.workbook();
+  if (wb == nullptr) {
+    return Shaped{Value::error(ErrorCode::Name), nullptr};
+  }
+  if (wb->sheet_index_by_name(sheet) >= wb->sheet_count()) {
+    return Shaped{resolve_sheet_defined_name(sheet, name, arena, registry, ctx), nullptr};
+  }
+  return evaluate_defined_name_shaped(find_sheet_defined_name(*wb, sheet, name), arena, registry, ctx);
 }
 
 }  // namespace eval

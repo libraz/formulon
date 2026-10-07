@@ -370,8 +370,10 @@ bool resolve_name_endpoint(const parser::AstNode& node, Arena& arena, const Func
     // `resolve_name_ast` already looked through a LET binding with a
     // reference; one reaching here is bound to a plain value.
     if (ctx.name_env() != nullptr) {
-      if (const Value* bound = ctx.name_env()->lookup(node.as_name()); bound != nullptr) {
-        *out_err = bound->is_error() ? bound->as_error() : ErrorCode::Value;
+      if (const auto* binding = ctx.name_env()->lookup(node.as_name()); binding != nullptr) {
+        const auto read = [&](const parser::AstNode& ref) { return eval_node_shaped(ref, arena, registry, ctx); };
+        const Value bound = NameEnv::binding_value(*binding, arena, read);
+        *out_err = bound.is_error() ? bound.as_error() : ErrorCode::Value;
         return false;
       }
     }

@@ -84,16 +84,16 @@ inline bool is_range_shaped_ast(const parser::AstNode& node) noexcept {
 }
 
 /// Returns the LET binding behind a `NameRef` `node` when that binding is
-/// range-shaped (or, with `accept_ref`, a single-cell `Ref`); otherwise
-/// returns `node` unchanged.
+/// range-shaped, a reference into another workbook (`ExternalRef`), or, with
+/// `accept_ref`, a single-cell `Ref`; otherwise returns `node` unchanged.
 inline const parser::AstNode& resolve_range_binding(const parser::AstNode& node, const NameEnv* env,
                                                     bool accept_ref) noexcept {
   if (node.kind() != parser::NodeKind::NameRef) {
     return node;
   }
   const parser::AstNode& resolved = resolve_name_ast(node, env);
-  if (&resolved != &node &&
-      (is_range_shaped_ast(resolved) || (accept_ref && resolved.kind() == parser::NodeKind::Ref))) {
+  if (&resolved != &node && (is_range_shaped_ast(resolved) || resolved.kind() == parser::NodeKind::ExternalRef ||
+                             (accept_ref && resolved.kind() == parser::NodeKind::Ref))) {
     return resolved;
   }
   return node;

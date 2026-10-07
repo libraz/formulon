@@ -775,16 +775,16 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
       // the name is undefined in scope. `Sheet1!Name` is never a lexical
       // binding and is looked up in Sheet1's scope.
       if (const std::string_view sheet = node.as_name_sheet(); !sheet.empty()) {
-        return Shaped{resolve_sheet_defined_name(sheet, node.as_name(), arena, registry, ctx), nullptr};
+        return resolve_sheet_defined_name_shaped(sheet, node.as_name(), arena, registry, ctx);
       }
       const NameEnv* env = ctx.name_env();
       if (env != nullptr) {
         const auto read = [&](const parser::AstNode& ref) { return eval_node_shaped(ref, arena, registry, ctx); };
-        if (const auto* binding = env->find(node.as_name()); binding != nullptr) {
+        if (const auto* binding = env->lookup(node.as_name()); binding != nullptr) {
           return NameEnv::read_shaped(*binding, read);
         }
       }
-      return Shaped{resolve_defined_name(node.as_name(), arena, registry, ctx), nullptr};
+      return resolve_defined_name_shaped(node.as_name(), arena, registry, ctx);
     }
 
     case parser::NodeKind::LetBinding: {
@@ -819,7 +819,7 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
     case parser::NodeKind::ExternalRef:
       // `[0]!Name` names a defined name of this workbook itself.
       if (parser::is_self_book_name_ref(node)) {
-        return Shaped{resolve_self_book_defined_name(node.as_external_ref_name(), arena, registry, ctx), nullptr};
+        return resolve_self_book_defined_name_shaped(node.as_external_ref_name(), arena, registry, ctx);
       }
       // Read straight out of the external-link cache. Unlike `Ref3D` this
       // needs no sheet resolution against the workbook: the target lives

@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <string_view>
 
+#include "eval/tail_array.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -126,6 +127,22 @@ Value resolve_self_book_defined_name(std::string_view name, Arena& arena, const 
 /// yields `#NAME?`.
 Value resolve_sheet_defined_name(std::string_view sheet, std::string_view name, Arena& arena,
                                  const FunctionRegistry& registry, const EvalContext& ctx);
+
+/// `resolve_defined_name` keeping a whole column / row body (`=L!$B:$B`, or
+/// an expression over one) at its declared size as a `TailArray`. A body that
+/// is a reference-returning call keeps the `Value` version's reading.
+Shaped resolve_defined_name_shaped(std::string_view name, Arena& arena, const FunctionRegistry& registry,
+                                   const EvalContext& ctx);
+
+/// `resolve_self_book_defined_name` with the body read as in
+/// `resolve_defined_name_shaped`.
+Shaped resolve_self_book_defined_name_shaped(std::string_view name, Arena& arena, const FunctionRegistry& registry,
+                                             const EvalContext& ctx);
+
+/// `resolve_sheet_defined_name` with the body read as in
+/// `resolve_defined_name_shaped`.
+Shaped resolve_sheet_defined_name_shaped(std::string_view sheet, std::string_view name, Arena& arena,
+                                         const FunctionRegistry& registry, const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon

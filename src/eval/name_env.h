@@ -49,35 +49,51 @@ class NameEnv {
   /// Builds an empty environment (no bindings).
   NameEnv() noexcept = default;
 
-  /// Returns a pointer to the bound Value for `name`, or `nullptr` when the
-  /// name is not in scope. Case-insensitive over ASCII letters; non-ASCII
-  /// bytes compare verbatim. Walks frames from head to tail so a freshly
-  /// extended binding shadows earlier ones with the same name. A reference
-  /// binding not read yet holds a blank; value reads go through
-  /// `lookup_or_read`.
-  const Value* lookup(std::string_view name) const noexcept {
-    for (const Binding* b = head_; b != nullptr; b = b->prev) {
-      if (strings::case_insensitive_eq(b->name, name)) {
-        return &b->value;
-      }
-    }
-    return nullptr;
-  }
+  /// One frame of the environment. The bound value is private: it is read
+  /// only through `read_shaped` / `binding_value`, so no reader can miss a
+  /// whole column / row held unexpanded in `tail_array`.
+  class Binding {
+   public:
+    // `Value`'s default constructor is private; initialise explicitly via
+    // `blank()` so this class is default-constructible for placement-new in
+    // `Arena::create<Binding>()`.
+    Binding() noexcept : value(Value::blank()) {}
+    std::string_view name;
+    /// Optional pointer to the AST node the name was bound to. Non-null only
+    /// for range-shaped initialisers; consumers must keep the parsing arena
+    /// alive for the duration of evaluation (the same invariant as for the
+    /// AST nodes themselves).
+    const parser::AstNode* expr = nullptr;
+    /// Set when the binding represents an "omitted" trailing-optional
+    /// LAMBDA parameter slot. ISOMITTED reports TRUE for these and FALSE
+    /// for everything else (regular LET / LAMBDA bindings, unbound names).
+    bool is_omitted = false;
+    const Binding* prev = nullptr;
 
-  /// Like `lookup`, but a name bound to a reference reads it on first use:
-  /// `read(ast)` evaluates the bound `Ref` / `RangeOp` and the result is kept
-  /// for later uses. Binding a reference reads nothing, as in Excel, where
-  /// `=LET(r,A1,5)` in A1 is not circular.
-  template <typename Read>
-  const Value* lookup_or_read(std::string_view name, Read&& read) const {
+   private:
+    friend class NameEnv;
+    /// Mutable so a reference binding can keep the value its first read
+    /// produced; the frame is otherwise immutable once linked.
+    mutable Value value;
+    /// Set for a `Ref` / `RangeOp` / `ExternalRef` binding whose cells are not
+    /// read yet; `value` holds nothing until `read_shaped` reads them.
+    mutable bool read_pending = false;
+    /// Set while a whole-axis read is held in `tail_array` and `value` has not
+    /// been expanded from it yet.
+    mutable bool dense_pending = false;
+    /// The declared-size array a reference binding read, kept unexpanded.
+    mutable const TailArray* tail_array = nullptr;
+  };
+
+  /// Returns the binding for `name`, or `nullptr` when the name is not in
+  /// scope. Case-insensitive over ASCII letters; non-ASCII bytes compare
+  /// verbatim. Walks frames from head to tail so a freshly extended binding
+  /// shadows earlier ones with the same name. The bound value is read only
+  /// through `read_shaped` / `binding_value`.
+  const Binding* lookup(std::string_view name) const noexcept {
     for (const Binding* b = head_; b != nullptr; b = b->prev) {
       if (strings::case_insensitive_eq(b->name, name)) {
-        if (b->read_pending || b->dense_pending) {
-          b->value = read(*b->expr);
-          b->read_pending = false;
-          b->dense_pending = false;
-        }
-        return &b->value;
+        return b;
       }
     }
     return nullptr;
@@ -162,7 +178,8 @@ class NameEnv {
     frame->value = value;
     frame->expr = expr;
     frame->read_pending =
-        expr != nullptr && (expr->kind() == parser::NodeKind::Ref || expr->kind() == parser::NodeKind::RangeOp);
+        expr != nullptr && (expr->kind() == parser::NodeKind::Ref || expr->kind() == parser::NodeKind::RangeOp ||
+                            expr->kind() == parser::NodeKind::ExternalRef);
     frame->is_omitted = omitted;
     frame->prev = head_;
     NameEnv next;
@@ -170,47 +187,7 @@ class NameEnv {
     return next;
   }
 
-  struct Binding {
-    // `Value`'s default constructor is private; initialise explicitly via
-    // `blank()` so this struct is default-constructible for placement-new in
-    // `Arena::create<Binding>()`.
-    Binding() noexcept : value(Value::blank()) {}
-    std::string_view name;
-    /// Mutable so a reference binding can keep the value its first read
-    /// produced; the frame is otherwise immutable once linked.
-    mutable Value value;
-    /// Optional pointer to the AST node the name was bound to. Non-null only
-    /// for range-shaped initialisers; consumers must keep the parsing arena
-    /// alive for the duration of evaluation (the same invariant as for the
-    /// AST nodes themselves).
-    const parser::AstNode* expr = nullptr;
-    /// Set when the binding represents an "omitted" trailing-optional
-    /// LAMBDA parameter slot. ISOMITTED reports TRUE for these and FALSE
-    /// for everything else (regular LET / LAMBDA bindings, unbound names).
-    bool is_omitted = false;
-    /// Set for a `Ref` / `RangeOp` binding whose cells are not read yet;
-    /// `value` holds nothing until `lookup_or_read` reads them.
-    mutable bool read_pending = false;
-    /// Set while a whole-axis read is held in `tail_array` and `value` has not
-    /// been expanded from it yet.
-    mutable bool dense_pending = false;
-    /// The declared-size array a reference binding read, kept unexpanded.
-    mutable const TailArray* tail_array = nullptr;
-    const Binding* prev = nullptr;
-  };
-
  public:
-  /// Returns the binding `name` resolves to (same lookup order as `lookup`),
-  /// or `nullptr` when it is not in scope.
-  const Binding* find(std::string_view name) const noexcept {
-    for (const Binding* b = head_; b != nullptr; b = b->prev) {
-      if (strings::case_insensitive_eq(b->name, name)) {
-        return b;
-      }
-    }
-    return nullptr;
-  }
-
   /// Reads `b` keeping a whole column / row at its declared size. A reference
   /// binding is read on first use through `read(ast)` (a `Shaped` evaluation
   /// of the bound reference) and the result is kept.

@@ -194,17 +194,18 @@ const LambdaValue* resolve_callable(const parser::AstNode& arg, std::uint32_t ca
     const std::string_view name = arg.as_name();
     const NameEnv* env = ctx.name_env();
     // A name bound in scope shadows any built-in of the same spelling.
-    const auto read = [&](const parser::AstNode& ref) { return eval_node(ref, arena, registry, ctx); };
-    if (const Value* bound = (env != nullptr) ? env->lookup_or_read(name, read) : nullptr; bound != nullptr) {
-      if (bound->is_error()) {
-        *out_err = *bound;
+    const auto read = [&](const parser::AstNode& ref) { return eval_node_shaped(ref, arena, registry, ctx); };
+    if (const auto* binding = (env != nullptr) ? env->lookup(name) : nullptr; binding != nullptr) {
+      const Value bound = NameEnv::binding_value(*binding, arena, read);
+      if (bound.is_error()) {
+        *out_err = bound;
         return nullptr;
       }
-      if (!bound->is_lambda()) {
+      if (!bound.is_lambda()) {
         *out_err = Value::error(ErrorCode::Value);
         return nullptr;
       }
-      return check_callable(bound->as_lambda(), call_arity, out_err);
+      return check_callable(bound.as_lambda(), call_arity, out_err);
     }
     // An unbound built-in name is an eta-reduced lambda. A miss falls through
     // to ordinary evaluation, which reports `#NAME?`.
