@@ -23,6 +23,7 @@
 #ifndef FORMULON_EVAL_LAZY_IMPLS_H_
 #define FORMULON_EVAL_LAZY_IMPLS_H_
 
+#include "eval/tail_array.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -41,6 +42,13 @@ class FunctionRegistry;
 /// `tree_walker.cpp`; published here so lazy-impl translation units can
 /// evaluate selected argument subtrees on demand.
 Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx);
+
+/// `eval_node` without the final densification: a whole column / row
+/// (`A:A`, `1:1`, `A:C`), an operator or scalar function applied to one, a
+/// LET-bound one, comes back as a `TailArray` of its declared size. Every other
+/// result is a plain `Shaped{value}`. `eval_node` is `densify` of this.
+Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx);
 
 /// Signature of every lazy (short-circuit / range-aware) function impl.
 /// The central dispatch table in `tree_walker.cpp` stores pointers of

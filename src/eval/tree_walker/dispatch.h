@@ -31,6 +31,8 @@
 #include <cstdint>
 #include <string_view>
 
+#include "eval/tail_array.h"
+#include "parser/reference.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -62,8 +64,15 @@ struct LambdaValue;
 /// one the registry and every name-keyed table know.
 std::string_view strip_future_prefix(std::string_view name) noexcept;
 
-Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                    const EvalContext& ctx);
+/// The result is a `TailArray` only for a scalar function applied element-wise
+/// over a whole column / row argument; every other call yields a plain value.
+Shaped dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx);
+
+/// True when the rectangle `[lhs : rhs]` spans a whole grid axis, whether spelled
+/// with whole-column / whole-row endpoints (`A:C`, `1:3`) or with bounded ones
+/// (`A1:A1048576`) that Excel rewrites into that form. Both axes whole is true.
+bool is_full_axis_range(const parser::Reference& lhs, const parser::Reference& rhs);
 
 /// True for an AST written as a reference -- a cell, a `:` range, a union, an
 /// intersection, a 3-D or spill reference -- which Excel refuses to call

@@ -537,15 +537,18 @@ TEST(TreeWalkerRefs, WholeRowStandingAloneSpillsDeclaredRectangle) {
   EXPECT_EQ(v.as_array_cells()[1].as_number(), 0.0);
 }
 
-TEST(TreeWalkerRefs, WholeColumnBehindAnOperatorKeepsAnchorProjection) {
-  // Only the spilling position materialises the grid-axis rectangle; an
-  // operand keeps the top-left anchor projection so an operator cannot
-  // conjure a million cells per side.
+TEST(TreeWalkerRefs, WholeColumnBehindAnOperatorKeepsDeclaredShape) {
+  // An operand keeps the declared rectangle too: `A:C+1` is 1048576x3, the
+  // unused cells being blank + 1 = 1.
   Sheet sheet("Sheet1");
   sheet.set_cell_value(0, 0, Value::number(7.0));
   const Value v = EvalInSheet(sheet, "=A:C+1");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 8.0);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), Sheet::kMaxRows);
+  EXPECT_EQ(v.as_array_cols(), 3U);
+  EXPECT_EQ(v.as_array_cells()[0].as_number(), 8.0);
+  EXPECT_EQ(v.as_array_cells()[1].as_number(), 1.0);
+  EXPECT_EQ(v.as_array_cells()[v.as_array_rows() * 3U - 1U].as_number(), 1.0);
 }
 
 TEST(TreeWalkerRefs, RefInIfBranch) {

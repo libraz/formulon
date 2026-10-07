@@ -394,15 +394,43 @@ TEST(WholeAxisSpill, RefusedFootprintIsRecordedAndRetriedWhenTheBlockerGoes) {
   EXPECT_EQ(sheet.resolve_cell_value(4U, 1U).as_number(), 30.0);
 }
 
-TEST(WholeAxisSpill, WholeAxisBehindAnOperatorKeepsAnchorProjection) {
+TEST(WholeAxisSpill, WholeAxisBehindAnOperatorSpillsDeclaredRectangle) {
+  // `=A:C+1` at Z1 spills the declared 1048576x3 rectangle; unused cells are
+  // blank + 1 = 1.
   Workbook wb = Workbook::create();
   SeedNumber(wb, 0U, 0U, 1.0);
   SeedNumber(wb, 1U, 0U, 2.0);
   const Sheet& sheet = RecalcWith(wb, 0U, 25U, "=A:C+1");
+  const SpillRegion* region = sheet.spill_region_at_anchor(0U, 25U);
+  ASSERT_NE(region, nullptr);
+  EXPECT_EQ(region->rows, Sheet::kMaxRows);
+  EXPECT_EQ(region->cols, 3U);
+  EXPECT_EQ(sheet.resolve_cell_value(0U, 25U).as_number(), 2.0);
+  EXPECT_EQ(sheet.resolve_cell_value(1U, 25U).as_number(), 3.0);
+  EXPECT_EQ(sheet.resolve_cell_value(2U, 25U).as_number(), 1.0);
+  EXPECT_EQ(sheet.resolve_cell_value(0U, 26U).as_number(), 1.0);
+  EXPECT_EQ(sheet.resolve_cell_value(Sheet::kMaxRows - 1U, 27U).as_number(), 1.0);
+}
+
+TEST(WholeAxisSpill, WholeAxisBehindAnOperatorBelowRowOneIsSpill) {
+  // The same rectangle no longer fits measured from row 2.
+  Workbook wb = Workbook::create();
+  SeedNumber(wb, 0U, 0U, 1.0);
+  const Sheet& sheet = RecalcWith(wb, 1U, 25U, "=A:C+1");
+  const Value v = sheet.resolve_cell_value(1U, 25U);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Spill);
+  EXPECT_EQ(sheet.spill_region_at_anchor(1U, 25U), nullptr);
+}
+
+TEST(WholeAxisSpill, WholeAxisBehindAnOperatorBlockedByAnOccupiedCellIsSpill) {
+  Workbook wb = Workbook::create();
+  SeedNumber(wb, 0U, 0U, 1.0);
+  SeedNumber(wb, 600000U, 26U, 9.0);
+  const Sheet& sheet = RecalcWith(wb, 0U, 25U, "=A:C+1");
   const Value v = sheet.resolve_cell_value(0U, 25U);
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 2.0);
-  EXPECT_EQ(sheet.spill_region_at_anchor(0U, 25U), nullptr);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Spill);
 }
 
 TEST(WholeAxisSpill, WholeAxisAsRangeAggregatorArgumentIsUnchanged) {

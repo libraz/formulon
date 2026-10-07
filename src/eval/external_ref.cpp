@@ -160,6 +160,12 @@ Value resolve_external_ref(const parser::AstNode& node, Arena& arena, const Eval
   return MaterializeRect(book, sheet, row_first, row_last, col_first, col_last, arena);
 }
 
+Shaped resolve_external_ref_shaped(const parser::AstNode& node, Arena& arena, const EvalContext& ctx) {
+  Shaped out;
+  out.value = resolve_external_ref(node, arena, ctx);
+  return out;
+}
+
 Expected<ExternalRect, ErrorCode> resolve_external_rect(const parser::AstNode& node, const EvalContext& ctx) {
   const parser::Reference* lhs = nullptr;
   const parser::Reference* rhs = nullptr;

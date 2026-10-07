@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "eval/declared_rect.h"
+#include "eval/tail_array.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -64,6 +65,10 @@ class FunctionRegistry;
 /// Text results are interned into `arena`, so the returned `Value` does
 /// not borrow the workbook's cache.
 Value resolve_external_ref(const parser::AstNode& node, Arena& arena, const EvalContext& ctx);
+
+/// `resolve_external_ref` in the evaluator's internal result type, which can
+/// carry a whole column or row at its declared size.
+Shaped resolve_external_ref_shaped(const parser::AstNode& node, Arena& arena, const EvalContext& ctx);
 
 /// A single-sheet cell-form `ExternalRef` read by coordinate rather than
 /// materialised: the cached sheet it reads, the rectangle it declares (a

@@ -29,6 +29,7 @@
 #include <cstddef>
 #include <string_view>
 
+#include "eval/tail_array.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/strings.h"
@@ -71,9 +72,10 @@ class NameEnv {
   const Value* lookup_or_read(std::string_view name, Read&& read) const {
     for (const Binding* b = head_; b != nullptr; b = b->prev) {
       if (strings::case_insensitive_eq(b->name, name)) {
-        if (b->read_pending) {
+        if (b->read_pending || b->dense_pending) {
           b->value = read(*b->expr);
           b->read_pending = false;
+          b->dense_pending = false;
         }
         return &b->value;
       }
@@ -189,9 +191,65 @@ class NameEnv {
     /// Set for a `Ref` / `RangeOp` binding whose cells are not read yet;
     /// `value` holds nothing until `lookup_or_read` reads them.
     mutable bool read_pending = false;
+    /// Set while a whole-axis read is held in `tail_array` and `value` has not
+    /// been expanded from it yet.
+    mutable bool dense_pending = false;
+    /// The declared-size array a reference binding read, kept unexpanded.
+    mutable const TailArray* tail_array = nullptr;
     const Binding* prev = nullptr;
   };
 
+ public:
+  /// Returns the binding `name` resolves to (same lookup order as `lookup`),
+  /// or `nullptr` when it is not in scope.
+  const Binding* find(std::string_view name) const noexcept {
+    for (const Binding* b = head_; b != nullptr; b = b->prev) {
+      if (strings::case_insensitive_eq(b->name, name)) {
+        return b;
+      }
+    }
+    return nullptr;
+  }
+
+  /// Reads `b` keeping a whole column / row at its declared size. A reference
+  /// binding is read on first use through `read(ast)` (a `Shaped` evaluation
+  /// of the bound reference) and the result is kept.
+  template <typename Read>
+  static Shaped read_shaped(const Binding& b, Read&& read) {
+    if (b.read_pending) {
+      const Shaped s = read(*b.expr);
+      b.read_pending = false;
+      if (s.tail_array != nullptr) {
+        b.tail_array = s.tail_array;
+        b.dense_pending = true;
+      } else {
+        b.value = s.value;
+      }
+    }
+    Shaped out;
+    if (b.tail_array != nullptr) {
+      out.tail_array = b.tail_array;
+    } else {
+      out.value = b.value;
+    }
+    return out;
+  }
+
+  /// Dense value of `b`: a whole column / row is expanded on the first call and
+  /// the expansion is kept.
+  template <typename Read>
+  static Value binding_value(const Binding& b, Arena& arena, Read&& read) {
+    (void)read_shaped(b, read);
+    if (b.dense_pending) {
+      Shaped s;
+      s.tail_array = b.tail_array;
+      b.value = densify(s, arena);
+      b.dense_pending = false;
+    }
+    return b.value;
+  }
+
+ private:
   const Binding* head_ = nullptr;
 };
 

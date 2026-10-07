@@ -165,6 +165,73 @@ bool bounded_declared_rect(const parser::AstNode& node, parser::Reference* top_l
   return true;
 }
 
+// Reads the rectangle `[lhs : rhs]`, which spans a whole grid axis, at its
+// declared size: the populated head as dense cells (the same walk
+// `expand_range` makes) and one repeated blank row / column for everything
+// past it. The endpoints may be whole-column / whole-row `Ref`s or bounded
+// corners that cover the full axis. A rectangle whole on both axes has no
+// compressed form and exceeds the range-expansion ceiling.
+Shaped read_whole_axis(const parser::Reference& lhs, const parser::Reference& rhs, Arena& arena,
+                       const FunctionRegistry& registry, const EvalContext& ctx) {
+  const Expected<DeclaredRect, ErrorCode> declared = ctx.declared_range_rect(lhs, rhs);
+  if (!declared) {
+    return Shaped{Value::error(declared.error()), nullptr};
+  }
+  const DeclaredRect& rect = declared.value();
+  const bool full_height = rect.rows() == Sheet::kMaxRows;
+  parser::Reference lo{};
+  parser::Reference hi{};
+  lo.sheet = lhs.sheet;
+  lo.sheet_quoted = lhs.sheet_quoted;
+  hi.sheet = rhs.sheet;
+  hi.sheet_quoted = rhs.sheet_quoted;
+  lo.row = rect.row_first;
+  hi.row = rect.row_last;
+  lo.col = rect.col_first;
+  hi.col = rect.col_last;
+  // `expand_range` narrows only a reference flagged whole-axis.
+  (full_height ? lo.is_full_col : lo.is_full_row) = true;
+  (full_height ? hi.is_full_col : hi.is_full_row) = true;
+  std::uint32_t walked_rows = 0;
+  std::uint32_t walked_cols = 0;
+  auto expanded = ctx.expand_range(lo, hi, arena, registry, &walked_rows, &walked_cols);
+  if (!expanded) {
+    return Shaped{Value::error(expanded.error()), nullptr};
+  }
+  const std::vector<Value>& walked = expanded.value();
+  const std::size_t tail_len = full_height ? rect.cols() : rect.rows();
+  Value* cells = walked.empty() ? nullptr : arena.create_array<Value>(walked.size());
+  Value* tail = arena.create_array<Value>(tail_len);
+  if ((!walked.empty() && cells == nullptr) || tail == nullptr) {
+    return Shaped{Value::error(ErrorCode::Num), nullptr};
+  }
+  for (std::size_t i = 0; i < walked.size(); ++i) {
+    cells[i] = walked[i];
+  }
+  for (std::size_t i = 0; i < tail_len; ++i) {
+    tail[i] = Value::blank(BlankGridProjection::kReferenceGridZero);
+  }
+  Shaped out;
+  out.tail_array = make_tail_array(arena, rect.rows(), rect.cols(), full_height ? walked_rows : walked_cols,
+                                   full_height ? TailAxis::kRows : TailAxis::kCols, cells, tail,
+                                   /*from_reference=*/true);
+  if (out.tail_array == nullptr) {
+    return Shaped{Value::error(ErrorCode::Num), nullptr};
+  }
+  return out;
+}
+
+// Builds the value of the bounded-corner rectangle a bare range declares: at
+// its declared size when it spans a whole grid axis (and `allow_tail`),
+// otherwise materialised.
+Shaped build_declared_rect(const parser::Reference& top_left, const parser::Reference& bottom_right, Arena& arena,
+                           const FunctionRegistry& registry, const EvalContext& ctx, bool allow_tail) {
+  if (allow_tail && is_full_axis_range(top_left, bottom_right)) {
+    return read_whole_axis(top_left, bottom_right, arena, registry, ctx);
+  }
+  return Shaped{materialize_rectangle(top_left, bottom_right, arena, registry, ctx), nullptr};
+}
+
 // Evaluates a bare range standing as the entire formula — the only position
 // in which a range spills, and so the only one where a footprint may be
 // consulted.
@@ -210,13 +277,19 @@ bool bounded_declared_rect(const parser::AstNode& node, parser::Reference* top_l
 // identical to one already covered by it.
 //
 // Without a formula cell to anchor against there is no footprint to
-// measure and nothing that could spill, so the rectangle is materialised
+// measure and nothing that could spill, so the rectangle is built
 // directly; that is the shape ad-hoc parser-level evaluation sees.
-Value evaluate_bare_range_spill(const parser::Reference& top_left, const parser::Reference& bottom_right, Arena& arena,
-                                const FunctionRegistry& registry, const EvalContext& ctx, bool settle_circularity) {
+//
+// A rectangle spanning a whole grid axis is built as a `TailArray` when
+// `allow_tail`, so only the populated head is read; the caller expands it once
+// the footprint is admitted. `*footprint_probed` is set when the footprint was
+// measured here, so the caller does not measure it again.
+Shaped evaluate_bare_range_spill(const parser::Reference& top_left, const parser::Reference& bottom_right, Arena& arena,
+                                 const FunctionRegistry& registry, const EvalContext& ctx, bool settle_circularity,
+                                 bool allow_tail, bool* footprint_probed) {
   const Sheet* sheet = ctx.current_sheet();
   if (sheet == nullptr || !ctx.has_formula_cell()) {
-    return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);
+    return build_declared_rect(top_left, bottom_right, arena, registry, ctx, allow_tail);
   }
   const std::uint32_t anchor_row = ctx.formula_row();
   const std::uint32_t anchor_col = ctx.formula_col();
@@ -238,9 +311,9 @@ Value evaluate_bare_range_spill(const parser::Reference& top_left, const parser:
     // leaves 0 in the cell, which Formulon deliberately does not match.
     const Workbook* workbook = ctx.workbook();
     if (workbook != nullptr && workbook->iterative_options().enabled) {
-      return sheet->resolve_cell_value(anchor_row, anchor_col);
+      return Shaped{sheet->resolve_cell_value(anchor_row, anchor_col), nullptr};
     }
-    return Value::error(ErrorCode::Ref);
+    return Shaped{Value::error(ErrorCode::Ref), nullptr};
   }
 
   const std::uint32_t rows = bottom_right.row - top_left.row + 1U;
@@ -253,9 +326,12 @@ Value evaluate_bare_range_spill(const parser::Reference& top_left, const parser:
     if (Sheet* target = ctx.mutable_sheet(); target == sheet) {
       target->reject_spill_footprint(anchor_row, anchor_col, rows, cols);
     }
-    return Value::error(ErrorCode::Spill);
+    return Shaped{Value::error(ErrorCode::Spill), nullptr};
   }
-  return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);
+  if (footprint_probed != nullptr) {
+    *footprint_probed = true;
+  }
+  return build_declared_rect(top_left, bottom_right, arena, registry, ctx, allow_tail);
 }
 
 // Evaluates the space-as-intersection operator: `A1:C3 B2:D4` denotes the
@@ -308,7 +384,9 @@ Value eval_intersect_op(const parser::AstNode& node, Arena& arena, const Functio
   bottom_right.row = r2;
   bottom_right.col = c2;
   if (spill_position) {
-    return evaluate_bare_range_spill(top_left, bottom_right, arena, registry, ctx, /*settle_circularity=*/false);
+    return evaluate_bare_range_spill(top_left, bottom_right, arena, registry, ctx, /*settle_circularity=*/false,
+                                     /*allow_tail=*/false, /*footprint_probed=*/nullptr)
+        .value;
   }
   return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);
 }
@@ -322,22 +400,12 @@ const char* const* lazy_form_names() {
   return lazy_table_names();
 }
 
-// Defined with external linkage (declared in `eval/lazy_impls.h`) so the
-// per-family lazy-impl TUs can recurse into the evaluator. The scalar
-// operator helpers it calls below — `apply_unary`, `apply_arithmetic`,
-// `apply_concat`, `apply_comparison` — live in `eval/scalar_ops.h` and are
-// reachable via ordinary unqualified lookup. `dispatch_call` lives in
-// `tree_walker/dispatch.cpp` and is declared in
-// `eval/tree_walker/dispatch.h`; the broadcast helpers live in
-// `tree_walker/broadcast.cpp` and are declared in
-// `eval/tree_walker/broadcast.h`.
-Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
-  // Bounds linear cell-chain recursion through `EvalContext::resolve_ref`
-  // and any other re-entrant evaluator path. See `kMaxEvalDepth`.
-  EvalDepthGuard depth_guard(ctx.eval_depth_counter(), kMaxEvalDepth);
-  if (depth_guard.exceeded()) {
-    return Value::error(ErrorCode::Calc);
-  }
+namespace {
+
+// Everything `eval_node_shaped` does not carry at declared size: the node
+// kinds whose value is never a whole column / row.
+Value eval_node_plain(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
   switch (node.kind()) {
     case parser::NodeKind::Literal:
       return node.as_literal();
@@ -349,168 +417,6 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       // Panic-mode skipped this subtree at parse time; we cannot do better
       // than #NAME? since the original tokens are unavailable.
       return Value::error(ErrorCode::Name);
-
-    case parser::NodeKind::RangeOp: {
-      // Excel 365 dynamic-array semantics: a bare bounded range used in a
-      // value context spills. It evaluates to the whole rectangle as a
-      // Value::Array, which bubbles up to the cell entry point (committing a
-      // spill) or to an enclosing operator's cellwise broadcast, rather than
-      // collapsing to a single implicit-intersection cell. Legacy implicit
-      // intersection is reached only through the explicit `@` / SINGLE
-      // wrapper (the ImplicitIntersection case below), never here.
-      //
-      // Two shapes keep the top-left anchor projection here:
-      //   * A whole-column / whole-row endpoint (`A:C`, `1:3`): its declared
-      //     rectangle spans a whole grid axis, which is only materialised
-      //     when the reference is the entire formula and can therefore
-      //     spill. `evaluate()` intercepts that position; every other value
-      //     context (an operand, a scalar function argument) keeps the
-      //     anchor projection so an unbounded rectangle is not conjured
-      //     behind an operator. See `whole_axis_declared_rect`.
-      //   * A single-cell (`A1:A1`) range: degrades to the scalar so the
-      //     degenerate surface is unchanged.
-      //
-      // A bounded rectangle reaches the materialisation below only from a
-      // nested position. In the spilling position `evaluate()` intercepts it
-      // too, so that the footprint refusing it is measured rather than
-      // discovered by building the rectangle; the rectangle it materialises
-      // when admitted is the one built here. See `bounded_declared_rect`.
-      //
-      // Verified Mac semantics: tests/oracle/cases/implicit_intersection.yaml.
-      const auto& lhs = node.as_range_lhs();
-      const auto& rhs = node.as_range_rhs();
-      if (lhs.kind() != parser::NodeKind::Ref || rhs.kind() != parser::NodeKind::Ref) {
-        // An endpoint that is a reference-returning call (`A1:INDEX(...)`,
-        // `A1:OFFSET(...)`) names its rectangle only once resolved; the
-        // union then spills like any bounded range.
-        std::string_view lhs_sheet;
-        std::string_view rhs_sheet;
-        std::uint32_t lt = 0;
-        std::uint32_t ll = 0;
-        std::uint32_t lb = 0;
-        std::uint32_t lr = 0;
-        std::uint32_t rt = 0;
-        std::uint32_t rl = 0;
-        std::uint32_t rb = 0;
-        std::uint32_t rr = 0;
-        ErrorCode err = ErrorCode::Value;
-        if (!resolve_range_endpoint(lhs, arena, registry, ctx, &lhs_sheet, &lt, &ll, &lb, &lr, &err) ||
-            !resolve_range_endpoint(rhs, arena, registry, ctx, &rhs_sheet, &rt, &rl, &rb, &rr, &err)) {
-          return Value::error(err);
-        }
-        parser::Reference top_left{};
-        if (!merge_range_endpoint_sheets(lhs, lhs_sheet, rhs, rhs_sheet, ctx, &top_left.sheet, &err)) {
-          return Value::error(err);
-        }
-        top_left.row = std::min(lt, rt);
-        top_left.col = std::min(ll, rl);
-        parser::Reference bottom_right{};
-        bottom_right.sheet = top_left.sheet;
-        bottom_right.row = std::max(lb, rb);
-        bottom_right.col = std::max(lr, rr);
-        if (top_left.row == bottom_right.row && top_left.col == bottom_right.col) {
-          return ctx.resolve_ref(top_left, arena, registry);
-        }
-        return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);
-      }
-      const auto& lhs_ref = lhs.as_ref();
-      const auto& rhs_ref = rhs.as_ref();
-      const std::uint32_t r1 = std::min(lhs_ref.row, rhs_ref.row);
-      const std::uint32_t r2 = std::max(lhs_ref.row, rhs_ref.row);
-      const std::uint32_t c1 = std::min(lhs_ref.col, rhs_ref.col);
-      const std::uint32_t c2 = std::max(lhs_ref.col, rhs_ref.col);
-
-      parser::Reference top_left{};
-      top_left.sheet = lhs_ref.sheet;
-      top_left.row = r1;
-      top_left.col = c1;
-
-      const bool whole = lhs_ref.is_full_col || lhs_ref.is_full_row || rhs_ref.is_full_col || rhs_ref.is_full_row;
-      if (whole || (r1 == r2 && c1 == c2)) {
-        return ctx.resolve_ref(top_left, arena, registry);
-      }
-
-      parser::Reference bottom_right{};
-      bottom_right.sheet = lhs_ref.sheet;
-      bottom_right.row = r2;
-      bottom_right.col = c2;
-      return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);
-    }
-
-    case parser::NodeKind::ImplicitIntersection: {
-      const auto& operand = node.as_implicit_intersection_operand();
-      // Implicit intersection on a reference: project the formula cell onto
-      // the declared rectangle. All three spellings that declare one —
-      // bounded `Ref:Ref`, full-axis `Ref:Ref`, and the single `Ref` the
-      // parser folds `A:A` / `1:1` into — go through the projection shared
-      // with `_xlfn.SINGLE`, so `=@A:B` and `=@A1:B3` agree wherever they
-      // denote the same rectangle.
-      if (ctx.has_formula_cell()) {
-        parser::Reference target{};
-        switch (project_implicit_intersection(operand, ctx.formula_row(), ctx.formula_col(), &target)) {
-          case IntersectionProjection::kCell:
-            return ctx.resolve_ref(target, arena, registry);
-          case IntersectionProjection::kNoCell:
-            return Value::error(ErrorCode::Value);
-          case IntersectionProjection::kNotStaticReference:
-            break;
-        }
-        if (Value projected = Value::blank(); project_reference_result(operand, arena, registry, ctx, &projected)) {
-          return projected;
-        }
-      } else if (operand.kind() == parser::NodeKind::RangeOp) {
-        // No formula-cell context (top-level evaluator entry) -> degrade to
-        // top-left, matching the bare-range fallback. Production calls
-        // through Workbook always supply a formula cell, so this branch
-        // only fires for parser-driven smoke tests.
-        return eval_node(operand, arena, registry, ctx);
-      }
-      // Dynamic arrays produced by a call, spill reference, or expression no
-      // longer retain static range coordinates. Excel's `@` takes their
-      // top-left element instead of allowing the value to spill.
-      return implicit_intersect_value(eval_node(operand, arena, registry, ctx));
-    }
-
-    case parser::NodeKind::UnaryOp: {
-      // Eager scalar unary; broadcast cellwise when the operand evaluates to
-      // a Value::Array (e.g. `=-A1#`). The Array result then bubbles up to
-      // the cell entry point where dispatch_array_result decides whether to
-      // commit a spill.
-      const Value operand = eval_node(node.as_unary_operand(), arena, registry, ctx);
-      if (operand.is_error()) {
-        return operand;
-      }
-      return broadcast_unary(node.as_unary_op(), operand, arena);
-    }
-
-    case parser::NodeKind::BinaryOp: {
-      const parser::BinOp op = node.as_binary_op();
-      // Evaluate left first so error propagation honours the documented
-      // left-most-wins rule.
-      const Value lhs = eval_node(node.as_binary_lhs(), arena, registry, ctx);
-      if (lhs.is_error()) {
-        return lhs;
-      }
-      const Value rhs = eval_node(node.as_binary_rhs(), arena, registry, ctx);
-      if (rhs.is_error()) {
-        return rhs;
-      }
-      // Cellwise broadcast when either operand is an Array (SpillRef #,
-      // TRANSPOSE, SEQUENCE, or any future array-producing builtin). Pure
-      // scalar operands take a 1x1 fast path inside `broadcast_binop` and
-      // return an Array of shape 1x1; we unwrap that to a scalar so the
-      // common case keeps the same surface.
-      if (lhs.is_array() || rhs.is_array()) {
-        return broadcast_binop(op, lhs, rhs, arena);
-      }
-      return apply_binop_per_cell(op, lhs, rhs, arena);
-    }
-
-    case parser::NodeKind::Call:
-      return dispatch_call(node, arena, registry, ctx);
-
-    case parser::NodeKind::Ref:
-      return ctx.resolve_ref(node.as_ref(), arena, registry);
 
     case parser::NodeKind::SpillRef: {
       // Excel's `=A1#` operator: yields the entire spill region anchored at
@@ -540,55 +446,6 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       return Value::array(arr);
     }
 
-    case parser::NodeKind::NameRef: {
-      // Resolution order: lexical scope (LET / LAMBDA bindings) wins over a
-      // workbook / sheet-scoped defined name, so `=LET(Rate, 2, Rate)` reads
-      // the binding, not a `Rate` defined name. When no binding matches, fall
-      // through to defined-name resolution, which returns `#NAME?` itself when
-      // the name is undefined in scope. `Sheet1!Name` is never a lexical
-      // binding and is looked up in Sheet1's scope.
-      if (const std::string_view sheet = node.as_name_sheet(); !sheet.empty()) {
-        return resolve_sheet_defined_name(sheet, node.as_name(), arena, registry, ctx);
-      }
-      const NameEnv* env = ctx.name_env();
-      if (env != nullptr) {
-        const auto read = [&](const parser::AstNode& ref) { return eval_node(ref, arena, registry, ctx); };
-        if (const Value* bound = env->lookup_or_read(node.as_name(), read); bound != nullptr) {
-          return *bound;
-        }
-      }
-      return resolve_defined_name(node.as_name(), arena, registry, ctx);
-    }
-
-    case parser::NodeKind::LetBinding: {
-      // Sequential (left-to-right) bind-then-body. Excel semantics:
-      //   * Each binding initialiser evaluates in the scope of previously
-      //     bound names, so `LET(x, 1, y, x+2, y)` returns 3.
-      //   * Error values DO flow into the environment -- downstream
-      //     expressions (including `IFERROR` inside the body) may catch
-      //     them: `LET(x, 1/0, IFERROR(x, 99))` returns 99.
-      //   * Names are ASCII-case-insensitive and a later binding with the
-      //     same name shadows earlier ones in subsequent expressions.
-      //   * A reference initialiser binds as a reference, by the rule every
-      //     LAMBDA argument follows too (see `eval_binding_source`).
-      NameEnv env;
-      const NameEnv* parent = ctx.name_env();
-      // Start from whatever the caller supplied; extending `NameEnv` makes
-      // `env` point at a new head frame while preserving the parent chain.
-      if (parent != nullptr) {
-        env = *parent;
-      }
-      const std::uint32_t count = node.as_let_binding_count();
-      for (std::uint32_t i = 0; i < count; ++i) {
-        const parser::AstNode* bound_ast = nullptr;
-        const Value v =
-            eval_binding_source(node.as_let_binding_expr(i), arena, registry, ctx.with_name_env(&env), &bound_ast);
-        env = env.extend(node.as_let_binding_name(i), v, bound_ast, arena);
-      }
-      const EvalContext body_ctx = ctx.with_name_env(&env);
-      return eval_node(node.as_let_body(), arena, registry, body_ctx);
-    }
-
     case parser::NodeKind::Ref3D:
       // A 3-D reference (`Sheet2:Sheet3!A1`) denotes one cell across a span
       // of sheets — a range shape. Read as a value, Excel answers `#REF!`
@@ -596,18 +453,6 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       // intercept this node in `dispatch_call` before reaching here, and
       // `IF` / `CHOOSE` turn a selected 3-D arm into `#VALUE!` themselves.
       return Value::error(ErrorCode::Ref);
-
-    case parser::NodeKind::ExternalRef:
-      // `[0]!Name` names a defined name of this workbook itself.
-      if (parser::is_self_book_name_ref(node)) {
-        return resolve_self_book_defined_name(node.as_external_ref_name(), arena, registry, ctx);
-      }
-      // Read straight out of the external-link cache. Unlike `Ref3D` this
-      // needs no sheet resolution against the workbook: the target lives
-      // in another file whose grid the cache already holds, so a
-      // rectangle materialises here rather than being routed through
-      // `expand_range`.
-      return resolve_external_ref(node, arena, ctx);
 
     case parser::NodeKind::StructuredRef: {
       // Resolve the table reference (`Table[Col]`, `Table[#All]`, ...) to
@@ -726,19 +571,275 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
     // -- Unsupported range-producing operator ------------------------------
     case parser::NodeKind::UnionOp:
       return Value::error(ErrorCode::Value);
+
+    default:
+      break;
   }
   return Value::error(ErrorCode::Value);
 }
 
-Value evaluate(const parser::AstNode& node, Arena& arena) {
-  return evaluate(node, arena, default_registry(), EvalContext{});
+// A `:` whose endpoint is a reference-returning call (`A1:INDEX(...)`,
+// `A1:OFFSET(...)`) names its rectangle only once resolved; the union then
+// spills like any bounded range.
+Value eval_range_of_calls(const parser::AstNode& lhs, const parser::AstNode& rhs, Arena& arena,
+                          const FunctionRegistry& registry, const EvalContext& ctx) {
+  std::string_view lhs_sheet;
+  std::string_view rhs_sheet;
+  std::uint32_t lt = 0;
+  std::uint32_t ll = 0;
+  std::uint32_t lb = 0;
+  std::uint32_t lr = 0;
+  std::uint32_t rt = 0;
+  std::uint32_t rl = 0;
+  std::uint32_t rb = 0;
+  std::uint32_t rr = 0;
+  ErrorCode err = ErrorCode::Value;
+  if (!resolve_range_endpoint(lhs, arena, registry, ctx, &lhs_sheet, &lt, &ll, &lb, &lr, &err) ||
+      !resolve_range_endpoint(rhs, arena, registry, ctx, &rhs_sheet, &rt, &rl, &rb, &rr, &err)) {
+    return Value::error(err);
+  }
+  parser::Reference top_left{};
+  if (!merge_range_endpoint_sheets(lhs, lhs_sheet, rhs, rhs_sheet, ctx, &top_left.sheet, &err)) {
+    return Value::error(err);
+  }
+  top_left.row = std::min(lt, rt);
+  top_left.col = std::min(ll, rl);
+  parser::Reference bottom_right{};
+  bottom_right.sheet = top_left.sheet;
+  bottom_right.row = std::max(lb, rb);
+  bottom_right.col = std::max(lr, rr);
+  if (top_left.row == bottom_right.row && top_left.col == bottom_right.col) {
+    return ctx.resolve_ref(top_left, arena, registry);
+  }
+  return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);
 }
 
-Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry) {
-  return evaluate(node, arena, registry, EvalContext{});
+// First element of a shaped result, read without expanding it.
+Value first_element(const Shaped& s) {
+  if (s.tail_array != nullptr) {
+    return tail_array_at(*s.tail_array, 0U, 0U);
+  }
+  return implicit_intersect_value(s.value);
 }
 
-Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
+}  // namespace
+
+// Defined with external linkage (declared in `eval/lazy_impls.h`) so the
+// per-family lazy-impl TUs can recurse into the evaluator. The scalar
+// operator helpers it calls below -- `apply_unary`, `apply_arithmetic`,
+// `apply_concat`, `apply_comparison` -- live in `eval/scalar_ops.h` and are
+// reachable via ordinary unqualified lookup. `dispatch_call` lives in
+// `tree_walker/dispatch.cpp` and is declared in
+// `eval/tree_walker/dispatch.h`; the broadcast helpers live in
+// `tree_walker/broadcast.cpp` and are declared in
+// `eval/tree_walker/broadcast.h`.
+Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
+  return densify(eval_node_shaped(node, arena, registry, ctx), arena);
+}
+
+Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx) {
+  // Bounds linear cell-chain recursion through `EvalContext::resolve_ref`
+  // and any other re-entrant evaluator path. See `kMaxEvalDepth`.
+  EvalDepthGuard depth_guard(ctx.eval_depth_counter(), kMaxEvalDepth);
+  if (depth_guard.exceeded()) {
+    return Shaped{Value::error(ErrorCode::Calc), nullptr};
+  }
+  switch (node.kind()) {
+    case parser::NodeKind::RangeOp: {
+      // Excel 365 dynamic-array semantics: a bare bounded range used in a
+      // value context spills. It evaluates to the whole rectangle as a
+      // Value::Array, which bubbles up to the cell entry point (committing a
+      // spill) or to an enclosing operator's cellwise broadcast, rather than
+      // collapsing to a single implicit-intersection cell. Legacy implicit
+      // intersection is reached only through the explicit `@` / SINGLE
+      // wrapper (the ImplicitIntersection case below), never here.
+      //
+      // A rectangle spanning a whole grid axis (`A:C`, `1:3`, `A1:A1048576`)
+      // is read at its declared size as a `TailArray`; a single-cell
+      // (`A1:A1`) range degrades to the scalar.
+      //
+      // Verified Mac semantics: tests/oracle/cases/implicit_intersection.yaml.
+      const auto& lhs = node.as_range_lhs();
+      const auto& rhs = node.as_range_rhs();
+      if (lhs.kind() != parser::NodeKind::Ref || rhs.kind() != parser::NodeKind::Ref) {
+        return Shaped{eval_range_of_calls(lhs, rhs, arena, registry, ctx), nullptr};
+      }
+      const auto& lhs_ref = lhs.as_ref();
+      const auto& rhs_ref = rhs.as_ref();
+      const bool whole = lhs_ref.is_full_col || lhs_ref.is_full_row || rhs_ref.is_full_col || rhs_ref.is_full_row;
+      if (whole || is_full_axis_range(lhs_ref, rhs_ref)) {
+        return read_whole_axis(lhs_ref, rhs_ref, arena, registry, ctx);
+      }
+      const std::uint32_t r1 = std::min(lhs_ref.row, rhs_ref.row);
+      const std::uint32_t r2 = std::max(lhs_ref.row, rhs_ref.row);
+      const std::uint32_t c1 = std::min(lhs_ref.col, rhs_ref.col);
+      const std::uint32_t c2 = std::max(lhs_ref.col, rhs_ref.col);
+
+      parser::Reference top_left{};
+      top_left.sheet = lhs_ref.sheet;
+      top_left.row = r1;
+      top_left.col = c1;
+      if (r1 == r2 && c1 == c2) {
+        return Shaped{ctx.resolve_ref(top_left, arena, registry), nullptr};
+      }
+
+      parser::Reference bottom_right{};
+      bottom_right.sheet = lhs_ref.sheet;
+      bottom_right.row = r2;
+      bottom_right.col = c2;
+      return Shaped{materialize_rectangle(top_left, bottom_right, arena, registry, ctx), nullptr};
+    }
+
+    case parser::NodeKind::ImplicitIntersection: {
+      const auto& operand = node.as_implicit_intersection_operand();
+      // Implicit intersection on a reference: project the formula cell onto
+      // the declared rectangle. All three spellings that declare one --
+      // bounded `Ref:Ref`, full-axis `Ref:Ref`, and the single `Ref` the
+      // parser folds `A:A` / `1:1` into -- go through the projection shared
+      // with `_xlfn.SINGLE`, so `=@A:B` and `=@A1:B3` agree wherever they
+      // denote the same rectangle.
+      if (ctx.has_formula_cell()) {
+        parser::Reference target{};
+        switch (project_implicit_intersection(operand, ctx.formula_row(), ctx.formula_col(), &target)) {
+          case IntersectionProjection::kCell:
+            return Shaped{ctx.resolve_ref(target, arena, registry), nullptr};
+          case IntersectionProjection::kNoCell:
+            return Shaped{Value::error(ErrorCode::Value), nullptr};
+          case IntersectionProjection::kNotStaticReference:
+            break;
+        }
+        if (Value projected = Value::blank(); project_reference_result(operand, arena, registry, ctx, &projected)) {
+          return Shaped{projected, nullptr};
+        }
+      } else if (operand.kind() == parser::NodeKind::RangeOp) {
+        // No formula-cell context (top-level evaluator entry) -> degrade to
+        // top-left, matching the bare-range fallback. Production calls
+        // through Workbook always supply a formula cell, so this branch
+        // only fires for parser-driven smoke tests.
+        const Shaped operand_value = eval_node_shaped(operand, arena, registry, ctx);
+        if (operand_value.tail_array != nullptr) {
+          return Shaped{first_element(operand_value), nullptr};
+        }
+        return operand_value;
+      }
+      // Dynamic arrays produced by a call, spill reference, or expression no
+      // longer retain static range coordinates. Excel's `@` takes their
+      // top-left element instead of allowing the value to spill.
+      return Shaped{first_element(eval_node_shaped(operand, arena, registry, ctx)), nullptr};
+    }
+
+    case parser::NodeKind::UnaryOp: {
+      // Eager scalar unary; broadcast cellwise when the operand evaluates to
+      // an array (e.g. `=-A1#`). The array result then bubbles up to the cell
+      // entry point where dispatch_array_result decides whether to commit a
+      // spill.
+      const Shaped operand = eval_node_shaped(node.as_unary_operand(), arena, registry, ctx);
+      return broadcast_unary(node.as_unary_op(), operand, arena);
+    }
+
+    case parser::NodeKind::BinaryOp: {
+      const parser::BinOp op = node.as_binary_op();
+      // Evaluate left first so error propagation honours the documented
+      // left-most-wins rule.
+      const Shaped lhs = eval_node_shaped(node.as_binary_lhs(), arena, registry, ctx);
+      if (lhs.tail_array == nullptr && lhs.value.is_error()) {
+        return lhs;
+      }
+      const Shaped rhs = eval_node_shaped(node.as_binary_rhs(), arena, registry, ctx);
+      if (rhs.tail_array == nullptr && rhs.value.is_error()) {
+        return rhs;
+      }
+      // Cellwise broadcast when either operand is an array (SpillRef #,
+      // TRANSPOSE, SEQUENCE, a whole column / row, ...); two scalars take
+      // the per-cell fast path.
+      return broadcast_binop(op, lhs, rhs, arena);
+    }
+
+    case parser::NodeKind::Call:
+      return dispatch_call(node, arena, registry, ctx);
+
+    case parser::NodeKind::Ref: {
+      const parser::Reference& ref = node.as_ref();
+      if (ref.is_full_col || ref.is_full_row) {
+        return read_whole_axis(ref, ref, arena, registry, ctx);
+      }
+      return Shaped{ctx.resolve_ref(ref, arena, registry), nullptr};
+    }
+
+    case parser::NodeKind::NameRef: {
+      // Resolution order: lexical scope (LET / LAMBDA bindings) wins over a
+      // workbook / sheet-scoped defined name, so `=LET(Rate, 2, Rate)` reads
+      // the binding, not a `Rate` defined name. When no binding matches, fall
+      // through to defined-name resolution, which returns `#NAME?` itself when
+      // the name is undefined in scope. `Sheet1!Name` is never a lexical
+      // binding and is looked up in Sheet1's scope.
+      if (const std::string_view sheet = node.as_name_sheet(); !sheet.empty()) {
+        return Shaped{resolve_sheet_defined_name(sheet, node.as_name(), arena, registry, ctx), nullptr};
+      }
+      const NameEnv* env = ctx.name_env();
+      if (env != nullptr) {
+        const auto read = [&](const parser::AstNode& ref) { return eval_node_shaped(ref, arena, registry, ctx); };
+        if (const auto* binding = env->find(node.as_name()); binding != nullptr) {
+          return NameEnv::read_shaped(*binding, read);
+        }
+      }
+      return Shaped{resolve_defined_name(node.as_name(), arena, registry, ctx), nullptr};
+    }
+
+    case parser::NodeKind::LetBinding: {
+      // Sequential (left-to-right) bind-then-body. Excel semantics:
+      //   * Each binding initialiser evaluates in the scope of previously
+      //     bound names, so `LET(x, 1, y, x+2, y)` returns 3.
+      //   * Error values DO flow into the environment -- downstream
+      //     expressions (including `IFERROR` inside the body) may catch
+      //     them: `LET(x, 1/0, IFERROR(x, 99))` returns 99.
+      //   * Names are ASCII-case-insensitive and a later binding with the
+      //     same name shadows earlier ones in subsequent expressions.
+      //   * A reference initialiser binds as a reference, by the rule every
+      //     LAMBDA argument follows too (see `eval_binding_source`).
+      NameEnv env;
+      const NameEnv* parent = ctx.name_env();
+      // Start from whatever the caller supplied; extending `NameEnv` makes
+      // `env` point at a new head frame while preserving the parent chain.
+      if (parent != nullptr) {
+        env = *parent;
+      }
+      const std::uint32_t count = node.as_let_binding_count();
+      for (std::uint32_t i = 0; i < count; ++i) {
+        const parser::AstNode* bound_ast = nullptr;
+        const Value v =
+            eval_binding_source(node.as_let_binding_expr(i), arena, registry, ctx.with_name_env(&env), &bound_ast);
+        env = env.extend(node.as_let_binding_name(i), v, bound_ast, arena);
+      }
+      const EvalContext body_ctx = ctx.with_name_env(&env);
+      return eval_node_shaped(node.as_let_body(), arena, registry, body_ctx);
+    }
+
+    case parser::NodeKind::ExternalRef:
+      // `[0]!Name` names a defined name of this workbook itself.
+      if (parser::is_self_book_name_ref(node)) {
+        return Shaped{resolve_self_book_defined_name(node.as_external_ref_name(), arena, registry, ctx), nullptr};
+      }
+      // Read straight out of the external-link cache. Unlike `Ref3D` this
+      // needs no sheet resolution against the workbook: the target lives
+      // in another file whose grid the cache already holds, so a
+      // rectangle materialises here rather than being routed through
+      // `expand_range`.
+      return resolve_external_ref_shaped(node, arena, ctx);
+
+    default:
+      return Shaped{eval_node_plain(node, arena, registry, ctx), nullptr};
+  }
+}
+
+namespace {
+
+// The one top-level evaluation behind `evaluate` and `evaluate_first_element`.
+// The two differ only in what an array result becomes: `evaluate` hands it to
+// spill handling, `first_element_only` reduces it to its first element.
+Value evaluate_top(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                   bool first_element_only) {
   // Allocate the depth counters on this stack frame iff the inbound
   // context does not already carry them. `EvalContext::resolve_ref`
   // recursively re-enters `evaluate()` when a referenced cell is a
@@ -754,33 +855,24 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
   if (is_top_level) {
     ctx_with_counters = ctx_with_counters.with_depth_counters(&eval_depth, &lambda_depth);
   }
+  const bool spill_position = is_top_level && !first_element_only;
 
   // The value of the whole formula is produced by exactly one of four
   // branches: the bare-range spilling position, the intersect operator's
   // spilling position, the iterative-calculation driver, or the ordinary
   // single-pass walk.
   //
-  // A bare range standing as the entire formula — whole-axis (`=A:A`,
-  // `=A:C`, `=1:2`) or bounded (`=A1:C10`) — is a spilling expression: its
+  // A bare range standing as the entire formula -- whole-axis (`=A:A`,
+  // `=A:C`, `=1:2`) or bounded (`=A1:C10`) -- is a spilling expression: its
   // value is the array of the declared rectangle, anchored at the formula
   // cell. Both spellings are intercepted here rather than in `eval_node`
   // because this is the only position where the result can actually spill,
   // and therefore the only one that may weigh the rectangle against the
-  // anchor's footprint. An operand or a scalar function argument reaches
-  // `eval_node` instead and is unaffected: the whole-axis form keeps its
-  // top-left anchor projection there, the bounded form its plain
-  // materialisation.
+  // anchor's footprint before building it.
   //
-  // Routing both through one place is what keeps them from disagreeing on
-  // cost. Two spellings of one rectangle already returned one answer, but
-  // only the whole-axis form measured the footprint before building it, so
-  // the bounded form paid a full materialisation — 3.1 million cells for
-  // `=A1:C1048576` — to arrive at the same `#SPILL!`. The rectangle is
-  // bounded by the same range-expansion ceiling either way.
-  //
-  // Excel's observed consequences — the rectangle must fit measured from
+  // Excel's observed consequences -- the rectangle must fit measured from
   // the anchor, an occupied cell anywhere inside the declared rectangle
-  // blocks it, and unpopulated cells spill as 0 — are pinned by
+  // blocks it, and unpopulated cells spill as 0 -- are pinned by
   // tests/oracle/cases/whole_axis_spill.yaml.
   //
   // One consequence in that suite is deliberately NOT matched. A formula
@@ -803,26 +895,28 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
   // on the second pass (zero delta). Only the top-level `evaluate()` call
   // drives the loop; nested re-entry (`resolve_ref`) keeps the ordinary
   // single-pass behaviour.
-  Value v = Value::blank();
+  Shaped sv;
+  bool footprint_probed = false;
   parser::Reference bare_range_top{};
   parser::Reference bare_range_bottom{};
-  if (is_top_level && whole_axis_declared_rect(node, &bare_range_top, &bare_range_bottom)) {
-    v = evaluate_bare_range_spill(bare_range_top, bare_range_bottom, arena, registry, ctx_with_counters,
-                                  /*settle_circularity=*/true);
-  } else if (is_top_level && bounded_declared_rect(node, &bare_range_top, &bare_range_bottom)) {
+  if (spill_position && whole_axis_declared_rect(node, &bare_range_top, &bare_range_bottom)) {
+    sv = evaluate_bare_range_spill(bare_range_top, bare_range_bottom, arena, registry, ctx_with_counters,
+                                   /*settle_circularity=*/true, /*allow_tail=*/true, &footprint_probed);
+  } else if (spill_position && bounded_declared_rect(node, &bare_range_top, &bare_range_bottom)) {
     // Excel rewrites a bounded range spanning a full grid axis into the
     // whole-axis spelling on entry, so exactly this set has a twin above
     // whose answer it must match. Anything narrower has no twin.
     const bool full_height = bare_range_top.row == 0U && bare_range_bottom.row == Sheet::kMaxRows - 1U;
     const bool full_width = bare_range_top.col == 0U && bare_range_bottom.col == Sheet::kMaxCols - 1U;
-    v = evaluate_bare_range_spill(bare_range_top, bare_range_bottom, arena, registry, ctx_with_counters,
-                                  /*settle_circularity=*/full_height || full_width);
-  } else if (is_top_level && node.kind() == parser::NodeKind::IntersectOp) {
+    sv = evaluate_bare_range_spill(bare_range_top, bare_range_bottom, arena, registry, ctx_with_counters,
+                                   /*settle_circularity=*/full_height || full_width, /*allow_tail=*/true,
+                                   &footprint_probed);
+  } else if (spill_position && node.kind() == parser::NodeKind::IntersectOp) {
     // The intersect operator names a rectangle just as `:` does, so the
     // spelling that produces one is intercepted here for the same reason:
     // this is the only position it can spill from, and therefore the only
     // one that may weigh the rectangle against the anchor's footprint.
-    v = eval_intersect_op(node, arena, registry, ctx_with_counters, /*spill_position=*/true);
+    sv.value = eval_intersect_op(node, arena, registry, ctx_with_counters, /*spill_position=*/true);
   } else if (is_top_level && !ctx.iterative_driver_suppressed() && ctx.has_formula_cell() &&
              ctx.current_sheet() != nullptr && ctx.workbook() != nullptr &&
              ctx.workbook()->iterative_options().enabled) {
@@ -866,51 +960,75 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
       }
     }
     // Fall through to the shared top-level surface contract below.
-    v = current;
+    sv.value = current;
   } else {
-    v = eval_node(node, arena, registry, ctx_with_counters);
+    sv = eval_node_shaped(node, arena, registry, ctx_with_counters);
   }
-  if (arena.exhausted()) {
+  const auto out_of_memory = [&]() {
     if (EvalState* state = ctx.state(); state != nullptr) {
       state->mark_out_of_memory();
     }
     return Value::error(ErrorCode::Num);
+  };
+  if (arena.exhausted()) {
+    return out_of_memory();
   }
-  // A supporting workbook's whole column or row spills at its declared size,
-  // as a local one does, though its value is clipped to the cached extent.
-  // The clipped array fits wherever the declared rectangle does, so only a
-  // refusal needs deciding here; it is recorded on the recalc path for the
-  // release machinery to retry, as `evaluate_bare_range_spill` records one.
-  std::uint32_t external_rows = 0;
-  std::uint32_t external_cols = 0;
-  if (v.is_array() && ctx.has_formula_cell() && ctx.current_sheet() != nullptr &&
-      external_whole_axis_footprint(node, &external_rows, &external_cols) &&
-      ctx.current_sheet()->probe_spill_footprint(ctx.formula_row(), ctx.formula_col(), external_rows, external_cols) !=
-          Sheet::SpillAdmission::kAdmissible) {
-    if (Sheet* target = ctx.mutable_sheet(); target == ctx.current_sheet()) {
-      target->reject_spill_footprint(ctx.formula_row(), ctx.formula_col(), external_rows, external_cols);
+
+  Value v = Value::blank();
+  if (first_element_only) {
+    v = first_element(sv);
+  } else {
+    // A whole column or row spills at its declared size, though only its
+    // populated head is stored. The footprint is decided before the array is
+    // expanded: a refusal is recorded on the recalc path for the release
+    // machinery to retry, as `evaluate_bare_range_spill` records one. A
+    // supporting workbook's whole column or row is still clipped to its cached
+    // extent and takes its declared size from the AST.
+    std::uint32_t footprint_rows = 0;
+    std::uint32_t footprint_cols = 0;
+    bool has_footprint = false;
+    if (sv.tail_array != nullptr) {
+      footprint_rows = sv.tail_array->rows;
+      footprint_cols = sv.tail_array->cols;
+      has_footprint = true;
+    } else if (sv.value.is_array()) {
+      has_footprint = external_whole_axis_footprint(node, &footprint_rows, &footprint_cols);
     }
-    return Value::error(ErrorCode::Spill);
-  }
-  // Dynamic-array spill-collision surface contract. When a 365-era formula
-  // produces a multi-cell array and is anchored at a known formula cell on
-  // a resolvable sheet, Excel reports `#SPILL!` at the anchor if any cell
-  // the result would occupy (other than the anchor) is already non-empty.
-  // The mutable-sheet recalc path commits through `Sheet::commit_spill`,
-  // which runs the authoritative collision scan (and clears stale phantom
-  // regions first); this read-only check covers the path where no spill is
-  // committed (ad-hoc evaluation, the oracle harness) so a blocked spill
-  // still surfaces `#SPILL!` rather than the bare anchor scalar.
-  if (v.is_array() && ctx.mutable_sheet() == nullptr && ctx.has_formula_cell() && ctx.current_sheet() != nullptr) {
-    const std::uint32_t rows = v.as_array_rows();
-    const std::uint32_t cols = v.as_array_cols();
-    // `probe_spill_footprint` gives the same verdict as the committing path
-    // at a cost proportional to what the sheet stores rather than to the
-    // rectangle's area, which matters now that a grid-axis result can reach
-    // here with 1,048,576 cells.
-    if (ctx.current_sheet()->probe_spill_footprint(ctx.formula_row(), ctx.formula_col(), rows, cols) !=
-        Sheet::SpillAdmission::kAdmissible) {
-      return Value::error(ErrorCode::Spill);
+    if (has_footprint && !footprint_probed && ctx.has_formula_cell() && ctx.current_sheet() != nullptr) {
+      if (ctx.current_sheet()->probe_spill_footprint(ctx.formula_row(), ctx.formula_col(), footprint_rows,
+                                                     footprint_cols) != Sheet::SpillAdmission::kAdmissible) {
+        if (Sheet* target = ctx.mutable_sheet(); target == ctx.current_sheet()) {
+          target->reject_spill_footprint(ctx.formula_row(), ctx.formula_col(), footprint_rows, footprint_cols);
+        }
+        return Value::error(ErrorCode::Spill);
+      }
+    }
+    v = densify(sv, arena);
+    if (arena.exhausted()) {
+      return out_of_memory();
+    }
+    // Dynamic-array spill-collision surface contract. When a 365-era formula
+    // produces a multi-cell array and is anchored at a known formula cell on
+    // a resolvable sheet, Excel reports `#SPILL!` at the anchor if any cell
+    // the result would occupy (other than the anchor) is already non-empty.
+    // The mutable-sheet recalc path commits through `Sheet::commit_spill`,
+    // which runs the authoritative collision scan (and clears stale phantom
+    // regions first); this read-only check covers the path where no spill is
+    // committed (ad-hoc evaluation, the oracle harness) so a blocked spill
+    // still surfaces `#SPILL!` rather than the bare anchor scalar. A
+    // footprint already measured above is not measured again.
+    if (v.is_array() && !footprint_probed && sv.tail_array == nullptr && ctx.mutable_sheet() == nullptr &&
+        ctx.has_formula_cell() && ctx.current_sheet() != nullptr) {
+      const std::uint32_t rows = v.as_array_rows();
+      const std::uint32_t cols = v.as_array_cols();
+      // `probe_spill_footprint` gives the same verdict as the committing path
+      // at a cost proportional to what the sheet stores rather than to the
+      // rectangle's area, which matters now that a grid-axis result can reach
+      // here with 1,048,576 cells.
+      if (ctx.current_sheet()->probe_spill_footprint(ctx.formula_row(), ctx.formula_col(), rows, cols) !=
+          Sheet::SpillAdmission::kAdmissible) {
+        return Value::error(ErrorCode::Spill);
+      }
     }
   }
   // Excel surfaces a non-IIFE LAMBDA expression sitting at the top of a cell
@@ -933,6 +1051,9 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
   // Blank node remains Blank to keep the variant inspectable from tests.
   if (v.is_blank() && node.kind() != parser::NodeKind::Literal) {
     return Value::number(0.0);
+  }
+  if (first_element_only) {
+    return v;
   }
   // The same blank -> 0 grid contract applies per cell to a spilled raw
   // range: Excel renders a blank source cell inside a spilled `=A1:A3` as
@@ -971,6 +1092,25 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
     }
   }
   return v;
+}
+
+}  // namespace
+
+Value evaluate(const parser::AstNode& node, Arena& arena) {
+  return evaluate(node, arena, default_registry(), EvalContext{});
+}
+
+Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry) {
+  return evaluate(node, arena, registry, EvalContext{});
+}
+
+Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
+  return evaluate_top(node, arena, registry, ctx, /*first_element_only=*/false);
+}
+
+Value evaluate_first_element(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                             const EvalContext& ctx) {
+  return evaluate_top(node, arena, registry, ctx, /*first_element_only=*/true);
 }
 
 }  // namespace eval

@@ -47,6 +47,7 @@
 #include "eval/range_args.h"
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
+#include "eval/tail_array.h"
 #include "eval/tree_walker/depth_guard.h"
 #include "eval/tree_walker_lazy_table.h"
 #include "parser/ast.h"
@@ -146,6 +147,11 @@ bool is_reference_shape(const parser::AstNode& node) noexcept {
   }
 }
 
+bool is_full_axis_range(const parser::Reference& lhs, const parser::Reference& rhs) {
+  const Expected<DeclaredRect, ErrorCode> rect = declared_rect(lhs, rhs);
+  return rect && (rect.value().rows() == Sheet::kMaxRows || rect.value().cols() == Sheet::kMaxCols);
+}
+
 namespace {
 
 // One argument slot for element-wise broadcasting of a scalar function
@@ -156,6 +162,7 @@ struct BroadcastArg {
   const ArrayValue* array;
   std::uint32_t rows;
   std::uint32_t cols;
+  const TailArray* tail = nullptr;  ///< Set instead of `array` for a whole column / row.
 };
 
 // Element of `arg` at output position (r, c) under Excel's 1xN / Nx1
@@ -170,6 +177,9 @@ Value broadcast_element(const BroadcastArg& arg, std::uint32_t r, std::uint32_t 
   const std::uint32_t ci = arg.cols == 1U ? 0U : c;
   if (ri >= arg.rows || ci >= arg.cols) {
     return Value::error(ErrorCode::NA);
+  }
+  if (arg.tail != nullptr) {
+    return tail_array_at(*arg.tail, ri, ci);
   }
   return arg.array->cells[static_cast<std::size_t>(ri) * arg.cols + ci];
 }
@@ -225,6 +235,124 @@ Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& ar
   return Value::array(out);
 }
 
+// `broadcast_scalar_call` for arguments of which `tails[i]` (when non-null) is
+// a whole column / row standing in for `args[i]`. Arguments on one axis give a
+// `TailArray`: the function is applied to the head cells and once to the tail
+// row / column. Whole columns mixed with whole rows are expanded and take the
+// dense route.
+Shaped broadcast_scalar_call_shaped(const FunctionDef& def, const std::vector<Value>& args,
+                                    const std::vector<const TailArray*>& tails, Arena& arena) {
+  bool by_rows = false;
+  bool by_cols = false;
+  for (const TailArray* ta : tails) {
+    if (ta != nullptr) {
+      (ta->axis == TailAxis::kRows ? by_rows : by_cols) = true;
+    }
+  }
+  std::vector<BroadcastArg> views;
+  views.reserve(args.size());
+  std::uint32_t out_rows = 1;
+  std::uint32_t out_cols = 1;
+  std::vector<Value> dense_args;
+  const bool mixed = by_rows && by_cols;
+  if (mixed) {
+    dense_args = args;
+    for (std::size_t i = 0; i < args.size(); ++i) {
+      if (tails[i] != nullptr) {
+        Shaped s;
+        s.tail_array = tails[i];
+        dense_args[i] = densify(s, arena);
+        if (dense_args[i].is_error()) {
+          return Shaped{dense_args[i], nullptr};
+        }
+      }
+    }
+  }
+  const std::vector<Value>& source = mixed ? dense_args : args;
+  for (std::size_t i = 0; i < source.size(); ++i) {
+    if (!mixed && tails[i] != nullptr) {
+      views.push_back({nullptr, nullptr, tails[i]->rows, tails[i]->cols, tails[i]});
+    } else if (source[i].is_array()) {
+      const ArrayValue* a = source[i].as_array();
+      views.push_back({nullptr, a, a->rows, a->cols});
+    } else {
+      views.push_back({&source[i], nullptr, 1U, 1U});
+    }
+    if (views.back().scalar == nullptr) {
+      out_rows = std::max(out_rows, views.back().rows);
+      out_cols = std::max(out_cols, views.back().cols);
+    }
+  }
+  const auto eval_cell = [&](std::vector<Value>& cell_args, std::uint32_t r, std::uint32_t c) {
+    for (std::size_t a = 0; a < views.size(); ++a) {
+      cell_args[a] = broadcast_element(views[a], r, c);
+      if (def.propagate_errors && cell_args[a].is_error()) {
+        return cell_args[a];
+      }
+    }
+    return def.impl(cell_args.data(), static_cast<std::uint32_t>(cell_args.size()), arena);
+  };
+  std::vector<Value> cell_args(views.size(), Value::blank());
+  if (mixed) {
+    Value* cells = nullptr;
+    ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, cells, kMaxDerivedArrayCells);
+    if (out == nullptr) {
+      return Shaped{Value::error(ErrorCode::Num), nullptr};
+    }
+    std::size_t idx = 0;
+    for (std::uint32_t r = 0; r < out_rows; ++r) {
+      for (std::uint32_t c = 0; c < out_cols; ++c, ++idx) {
+        cells[idx] = eval_cell(cell_args, r, c);
+      }
+    }
+    return Shaped{Value::array(out), nullptr};
+  }
+
+  // Positions past `head` read a constant from every argument: a tail, a
+  // stretched size-1 axis, or the `#N/A` beyond a shorter dense array.
+  const TailAxis axis = by_rows ? TailAxis::kRows : TailAxis::kCols;
+  const bool along_rows = axis == TailAxis::kRows;
+  const std::uint32_t extent = along_rows ? out_rows : out_cols;
+  std::uint32_t head = 0;
+  for (const BroadcastArg& v : views) {
+    if (v.tail != nullptr) {
+      head = std::max(head, v.tail->head);
+    } else if (v.scalar == nullptr) {
+      const std::uint32_t ext = along_rows ? v.rows : v.cols;
+      if (ext > 1U) {
+        head = std::max(head, ext);
+      }
+    }
+  }
+  head = std::min(head, extent);
+  const std::size_t line = along_rows ? out_cols : out_rows;
+  const std::uint64_t head_cells = static_cast<std::uint64_t>(head) * line;
+  if (head_cells > kMaxDerivedArrayCells) {
+    return Shaped{Value::error(ErrorCode::Num), nullptr};
+  }
+  Value* cells = head_cells == 0U ? nullptr : arena.create_array<Value>(static_cast<std::size_t>(head_cells));
+  Value* tail = arena.create_array<Value>(line);
+  if ((head_cells != 0U && cells == nullptr) || tail == nullptr) {
+    return Shaped{Value::error(ErrorCode::Num), nullptr};
+  }
+  std::size_t idx = 0;
+  for (std::uint32_t r = 0; r < (along_rows ? head : out_rows); ++r) {
+    for (std::uint32_t c = 0; c < (along_rows ? out_cols : head); ++c, ++idx) {
+      cells[idx] = eval_cell(cell_args, r, c);
+    }
+  }
+  const std::uint32_t tail_at = std::min(head, extent - 1U);
+  for (std::uint32_t k = 0; k < line; ++k) {
+    tail[k] = along_rows ? eval_cell(cell_args, tail_at, k) : eval_cell(cell_args, k, tail_at);
+  }
+  Shaped out;
+  out.tail_array = make_tail_array(arena, out_rows, out_cols, head, axis, cells, tail, /*from_reference=*/false);
+  if (out.tail_array == nullptr) {
+    return Shaped{Value::error(ErrorCode::Num), nullptr};
+  }
+  return out;
+}
+
 // Resolves a bounded `RangeOp`'s two endpoints and hands back the union
 // rectangle as the corner Refs `expand_range` takes. Endpoints may be
 // plain Refs (the simple `A1:B2` form), reference-producing calls
@@ -267,13 +395,12 @@ bool union_endpoint_refs(const parser::AstNode& lhs_ast, const parser::AstNode& 
 
 }  // namespace
 
-Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                    const EvalContext& ctx) {
-  // A whole-axis scope belongs to the arguments of the call that installed
-  // it; a nested call starts from its own references.
-  if (ctx.whole_axis_scope() != nullptr) {
-    return dispatch_call(node, arena, registry, ctx.with_whole_axis_scope(nullptr));
-  }
+namespace {
+
+// The body of `dispatch_call`. A scalar function applied over a whole column /
+// row returns through `*tail_out` (the returned value is then unused).
+Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, const TailArray** tail_out) {
   const std::string_view name = strip_future_prefix(node.as_call_name());
   const std::uint32_t arity = node.as_call_arity();
 
@@ -362,6 +489,9 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
   // in row-major order.
   std::vector<Value> values;
   values.reserve(arity);
+  // Parallel to `values`: the whole column / row a scalar function's argument
+  // evaluated to, whose `values` slot is then a placeholder.
+  std::vector<const TailArray*> tails;
   // Tracks whether any argument slot was range-shaped (RangeOp / OFFSET-call
   // / ArrayLiteral). Used by the deferred `RejectAnyScalar` blank-scalar
   // policy: Mac Excel only surfaces #VALUE! for `=GCD(A1,B1,C1)` (all blank
@@ -636,13 +766,18 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     // scalar `eval_node` path below) to avoid spilling an unbounded
     // rectangle through a scalar function. `@` / SINGLE-wrapped args are
     // Call nodes, not RangeOp, so they never reach this branch and retain
-    // implicit-intersection semantics.
+    // implicit-intersection semantics. A rectangle spanning a whole grid axis
+    // (`A:C`, `1:3`, `A1:A1048576`) is not expanded here: it falls through to
+    // `eval_node_shaped`, which reads it at its declared size without
+    // materialising the unused part.
     if (!def->accepts_ranges && arg_node.kind() == parser::NodeKind::RangeOp) {
       const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
       const parser::AstNode& rhs_ast = arg_node.as_range_rhs();
       const bool whole =
           (lhs_ast.kind() == parser::NodeKind::Ref && (lhs_ast.as_ref().is_full_col || lhs_ast.as_ref().is_full_row)) ||
-          (rhs_ast.kind() == parser::NodeKind::Ref && (rhs_ast.as_ref().is_full_col || rhs_ast.as_ref().is_full_row));
+          (rhs_ast.kind() == parser::NodeKind::Ref && (rhs_ast.as_ref().is_full_col || rhs_ast.as_ref().is_full_row)) ||
+          (lhs_ast.kind() == parser::NodeKind::Ref && rhs_ast.kind() == parser::NodeKind::Ref &&
+           is_full_axis_range(lhs_ast.as_ref(), rhs_ast.as_ref()));
       if (!whole) {
         parser::Reference union_lhs{};
         parser::Reference union_rhs{};
@@ -873,7 +1008,16 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       }
       continue;
     }
-    Value v = eval_node(arg_node, arena, registry, ctx);
+    // A scalar function keeps a whole column / row at its declared size for
+    // the element-wise broadcast below; a range-aware one takes it expanded.
+    const Shaped shaped_arg = eval_node_shaped(arg_node, arena, registry, ctx);
+    if (shaped_arg.tail_array != nullptr && !def->accepts_ranges) {
+      tails.resize(values.size() + 1U, nullptr);
+      tails[values.size()] = shaped_arg.tail_array;
+      values.push_back(Value::blank());
+      continue;
+    }
+    Value v = densify(shaped_arg, arena);
     if (def->propagate_errors && v.is_error()) {
       return v;
     }
@@ -956,6 +1100,12 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
   // spills the result. Range-aware aggregators already flattened their
   // array arguments into `values`, so they never take this path.
   if (!def->accepts_ranges) {
+    if (!tails.empty()) {
+      tails.resize(values.size(), nullptr);
+      const Shaped result = broadcast_scalar_call_shaped(*def, values, tails, arena);
+      *tail_out = result.tail_array;
+      return result.value;
+    }
     std::uint32_t out_rows = 1;
     std::uint32_t out_cols = 1;
     bool any_array = false;
@@ -974,6 +1124,20 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
   // Hand the post-expansion size to the impl; aggregator bodies walk the
   // flattened vector directly.
   return def->impl(values.data(), static_cast<std::uint32_t>(values.size()), arena);
+}
+
+}  // namespace
+
+Shaped dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  // A whole-axis scope belongs to the arguments of the call that installed
+  // it; a nested call starts from its own references.
+  if (ctx.whole_axis_scope() != nullptr) {
+    return dispatch_call(node, arena, registry, ctx.with_whole_axis_scope(nullptr));
+  }
+  Shaped out;
+  out.value = dispatch_call_impl(node, arena, registry, ctx, &out.tail_array);
+  return out;
 }
 
 }  // namespace eval

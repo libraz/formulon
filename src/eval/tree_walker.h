@@ -65,6 +65,13 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
 /// shorter overloads do.
 Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx);
 
+/// Evaluates `node` as `evaluate` does, but reduces an array result (dense or a
+/// whole-axis `TailArray`) to its first element without expanding it and
+/// performs no spill handling. This is the value a conditional-format or
+/// data-validation formula takes for every target cell.
+Value evaluate_first_element(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                             const EvalContext& ctx);
+
 /// Returns a pointer to an array of canonical UPPERCASE names for the
 /// evaluator's lazy / special-form dispatch table (IF, IFERROR, IFS,
 /// CHOOSE, SUMIF, VLOOKUP, OFFSET, INDIRECT, ...). These are routed by the
