@@ -131,6 +131,7 @@ set(FORMULON_CORE_SOURCES
   src/sheet_spill.cpp
   src/sheet_name_casefold_data.cpp
   src/workbook.cpp
+  src/workbook_formula_index.cpp
   src/workbook_ref_rewrite.cpp
   src/io/auto_filter_xml.cpp
   src/io/cell_parser.cpp
