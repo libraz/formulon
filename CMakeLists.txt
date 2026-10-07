@@ -183,6 +183,7 @@ set(FORMULON_CORE_SOURCES
   src/io/zip_reader.cpp
   src/io/xlsb/cell_writer.cpp
   src/io/xlsb/cf_records.cpp
+  src/io/xlsb/cf_x14_records.cpp
   src/io/xlsb/dv_records.cpp
   src/io/xlsb/external_link_reader.cpp
   src/io/xlsb/external_link_writer.cpp
