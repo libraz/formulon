@@ -75,6 +75,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/pivot_table_reader_attributes_test.cpp
   unit/io/pivot_table_writer_test.cpp
   unit/io/part_dom_test.cpp
+  unit/io/part_graph_test.cpp
   unit/io/color_spec_xml_test.cpp
   unit/io/row_custom_height_test.cpp
   unit/io/threaded_comments_test.cpp
@@ -347,6 +348,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/drawing/drawing_xml_test.cpp
   unit/drawing/image_header_test.cpp
   unit/drawing/drawing_edit_test.cpp
+  unit/drawing/drawing_snapshot_test.cpp
   unit/registry_catalog_test.cpp
 )
 

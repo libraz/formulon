@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "drawing/image_header.h"
+#include "io/ooxml/part_graph.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -69,23 +70,16 @@ struct DrawingObject {
   AnchorKind anchor_kind = AnchorKind::kTwoCell;
   EditAs edit_as = EditAs::kTwoCell;
   AnchorPoint from;
-  AnchorPoint to;       ///< Two-cell anchors only.
-  std::int64_t cx = 0;  ///< Width in EMU (`xdr:ext`, else the object's `a:xfrm/a:ext`).
+  AnchorPoint to;  ///< Two-cell anchors only.
+  /// Width in EMU: a picture's unrotated `a:xfrm/a:ext`, else `xdr:ext`; other
+  /// objects read `xdr:ext` first.
+  std::int64_t cx = 0;
   std::int64_t cy = 0;
   std::string name;
   std::string descr;
   std::string image_rel_id;                          ///< Picture `a:blip/@r:embed`.
   std::string media_path;                            ///< Package path the blip resolves to, or empty.
   ImageFormat image_format = ImageFormat::kUnknown;  ///< Filled by callers that hold the media bytes.
-};
-
-/// One relationship of a drawing part's rels part. `target` is the resolved
-/// package path for an internal target and the raw value for an external one.
-struct DrawingRel {
-  std::string id;
-  std::string type;
-  std::string target;
-  bool external = false;
 };
 
 /// `Target=` value reaching package path `target` from a part in directory
@@ -96,11 +90,6 @@ std::string relative_target(std::string_view from_dir, std::string_view target);
 /// Parses drawing part bytes. Fails with `kIoDrawingUnparseable` when they
 /// are not well-formed XML or the root is not `wsDr`.
 Expected<void, Error> parse_drawing_part(const std::vector<std::uint8_t>& bytes, pugi::xml_document& doc);
-
-/// Parses the rels part of a part in directory `owner_dir` (no trailing slash). Fails with
-/// `kIoDrawingUnparseable` on malformed XML or a target that cannot resolve.
-Expected<std::vector<DrawingRel>, Error> parse_part_rels(const std::vector<std::uint8_t>& bytes,
-                                                         std::string_view owner_dir);
 
 /// Local name of `node` (the part after any `prefix:`).
 std::string_view local_name(const pugi::xml_node& node);
@@ -113,14 +102,19 @@ pugi::xml_node child_local(const pugi::xml_node& parent, std::string_view name);
 /// row/column edit must move along with the `mc:Choice` ones.
 std::vector<pugi::xml_node> drawing_anchors(const pugi::xml_node& root, bool include_fallback);
 
+/// The element `anchor` positions (its first child that is not a marker),
+/// looking through a nested `mc:AlternateContent` to its first `mc:Choice`.
+pugi::xml_node anchor_content(const pugi::xml_node& anchor);
+
 /// The `cNvPr` element naming the object `anchor` holds, or a null node.
 pugi::xml_node anchor_cnvpr(const pugi::xml_node& anchor);
 
 /// Reads one anchor element.
-DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vector<DrawingRel>& rels);
+DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vector<io::ooxml::DrawingRel>& rels);
 
 /// Reads every anchored object of a parsed drawing part.
-std::vector<DrawingObject> read_drawing_objects(const pugi::xml_document& doc, const std::vector<DrawingRel>& rels);
+std::vector<DrawingObject> read_drawing_objects(const pugi::xml_document& doc,
+                                                const std::vector<io::ooxml::DrawingRel>& rels);
 
 /// Reads an `xdr:from` / `xdr:to` marker.
 AnchorPoint read_anchor_point(const pugi::xml_node& marker);

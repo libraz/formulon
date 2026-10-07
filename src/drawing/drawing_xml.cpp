@@ -1,9 +1,7 @@
 #include "drawing/drawing_xml.h"
 
 #include <cstring>
-#include <utility>
 
-#include "io/ooxml/package_validator.h"
 #include "io/xml_utils.h"
 
 namespace formulon {
@@ -17,24 +15,6 @@ Error unparseable(std::string_view what, std::string_view detail) {
 bool is_anchor(const pugi::xml_node& node) {
   const std::string_view name = local_name(node);
   return name == "twoCellAnchor" || name == "oneCellAnchor" || name == "absoluteAnchor";
-}
-
-// The element an anchor positions: its first child that is not a marker.
-pugi::xml_node anchor_content(const pugi::xml_node& anchor) {
-  for (pugi::xml_node child = anchor.first_child(); child; child = child.next_sibling()) {
-    if (child.type() != pugi::node_element) {
-      continue;
-    }
-    const std::string_view name = local_name(child);
-    if (name == "from" || name == "to" || name == "ext" || name == "pos" || name == "clientData") {
-      continue;
-    }
-    if (name == "AlternateContent") {
-      return child_local(child_local(child, "Choice"), "");
-    }
-    return child;
-  }
-  return {};
 }
 
 DrawingObjectKind classify(const pugi::xml_node& content) {
@@ -131,32 +111,6 @@ Expected<void, Error> parse_drawing_part(const std::vector<std::uint8_t>& bytes,
   return Expected<void, Error>::Ok();
 }
 
-Expected<std::vector<DrawingRel>, Error> parse_part_rels(const std::vector<std::uint8_t>& bytes,
-                                                         std::string_view owner_dir) {
-  pugi::xml_document doc;
-  if (!io::load_xml_buffer(doc, bytes, "drawing", "rels")) {
-    return unparseable("rels part is not well-formed XML", owner_dir);
-  }
-  std::vector<DrawingRel> rels;
-  for (pugi::xml_node rel = doc.child("Relationships").child("Relationship"); rel;
-       rel = rel.next_sibling("Relationship")) {
-    DrawingRel entry;
-    entry.id = rel.attribute("Id").value();
-    entry.type = rel.attribute("Type").value();
-    entry.external = std::strcmp(rel.attribute("TargetMode").value(), "External") == 0;
-    entry.target = rel.attribute("Target").value();
-    if (!entry.external) {
-      auto resolved = io::ooxml::resolve_relative_path(owner_dir, entry.target);
-      if (!resolved) {
-        return unparseable("rels target does not resolve", entry.target);
-      }
-      entry.target = std::move(resolved.value());
-    }
-    rels.push_back(std::move(entry));
-  }
-  return rels;
-}
-
 std::string_view local_name(const pugi::xml_node& node) {
   const char* name = node.name();
   const char* colon = std::strchr(name, ':');
@@ -200,6 +154,23 @@ std::vector<pugi::xml_node> drawing_anchors(const pugi::xml_node& root, bool inc
   return anchors;
 }
 
+pugi::xml_node anchor_content(const pugi::xml_node& anchor) {
+  for (pugi::xml_node child = anchor.first_child(); child; child = child.next_sibling()) {
+    if (child.type() != pugi::node_element) {
+      continue;
+    }
+    const std::string_view name = local_name(child);
+    if (name == "from" || name == "to" || name == "ext" || name == "pos" || name == "clientData") {
+      continue;
+    }
+    if (name == "AlternateContent") {
+      return child_local(child_local(child, "Choice"), "");
+    }
+    return child;
+  }
+  return {};
+}
+
 pugi::xml_node anchor_cnvpr(const pugi::xml_node& anchor) {
   const pugi::xml_node content = anchor_content(anchor);
   for (pugi::xml_node child = content.first_child(); child; child = child.next_sibling()) {
@@ -211,7 +182,7 @@ pugi::xml_node anchor_cnvpr(const pugi::xml_node& anchor) {
   return {};
 }
 
-DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vector<DrawingRel>& rels) {
+DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vector<io::ooxml::DrawingRel>& rels) {
   DrawingObject obj;
   const std::string_view anchor_name = local_name(anchor);
   if (anchor_name == "oneCellAnchor") {
@@ -235,9 +206,11 @@ DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vecto
   }
   const pugi::xml_node content = anchor_content(anchor);
   obj.kind = classify(content);
-  pugi::xml_node ext = child_local(anchor, "ext");
+  // A picture's own size is its unrotated `a:xfrm/a:ext`; the anchor box may be rotated.
+  const pugi::xml_node xfrm_ext = child_local(content_xfrm(content), "ext");
+  pugi::xml_node ext = obj.kind == DrawingObjectKind::kPicture && xfrm_ext ? xfrm_ext : child_local(anchor, "ext");
   if (!ext) {
-    ext = child_local(content_xfrm(content), "ext");
+    ext = xfrm_ext;
   }
   obj.cx = ext.attribute("cx").as_llong();
   obj.cy = ext.attribute("cy").as_llong();
@@ -247,7 +220,7 @@ DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vecto
   obj.descr = cnvpr.attribute("descr").value();
   if (obj.kind == DrawingObjectKind::kPicture) {
     obj.image_rel_id = attr_local(find_descendant(content, "blip"), "embed").value();
-    for (const DrawingRel& rel : rels) {
+    for (const io::ooxml::DrawingRel& rel : rels) {
       if (!rel.external && !obj.image_rel_id.empty() && rel.id == obj.image_rel_id) {
         obj.media_path = rel.target;
       }
@@ -256,7 +229,8 @@ DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vecto
   return obj;
 }
 
-std::vector<DrawingObject> read_drawing_objects(const pugi::xml_document& doc, const std::vector<DrawingRel>& rels) {
+std::vector<DrawingObject> read_drawing_objects(const pugi::xml_document& doc,
+                                                const std::vector<io::ooxml::DrawingRel>& rels) {
   std::vector<DrawingObject> objects;
   for (const pugi::xml_node& anchor : drawing_anchors(doc.document_element(), false)) {
     objects.push_back(read_drawing_object(anchor, rels));

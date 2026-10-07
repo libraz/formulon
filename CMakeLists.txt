@@ -150,6 +150,7 @@ set(FORMULON_CORE_SOURCES
   src/io/ooxml/package_validator.cpp
   src/io/ooxml/pivot_target_reader.cpp
   src/io/ooxml/part_dom.cpp
+  src/io/ooxml/part_graph.cpp
   src/io/ooxml/print_settings_parse.cpp
   src/io/ooxml/sheet_aux_rels_reader.cpp
   src/io/ooxml/workbook_part_reader.cpp

@@ -9,6 +9,7 @@
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "passthrough_part.h"
+#include "pugixml.hpp"
 #include "sheet.h"
 #include "unknown_relationship.h"
 #include "value.h"
@@ -628,6 +629,569 @@ TEST(DrawingEdit, RejectsInvalidInsertions) {
   // Nothing was added by the refused insertions.
   EXPECT_TRUE(wb.passthrough_parts().empty());
   EXPECT_TRUE(wb.sheet(0).drawing_rel_target().empty());
+}
+
+// ---------------------------------------------------------------------------
+// set_image_anchor / set_image_z_order
+
+constexpr const char* kNsMc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+
+struct StringWriter : pugi::xml_writer {
+  std::string out;
+  void write(const void* data, std::size_t size) override { out.append(static_cast<const char*>(data), size); }
+};
+
+std::string Raw(const pugi::xml_node& node) {
+  StringWriter writer;
+  node.print(writer, "", pugi::format_raw);
+  return writer.out;
+}
+
+std::vector<Bytes> AllBytes(const Workbook& wb) {
+  std::vector<Bytes> out;
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    out.push_back(part.bytes);
+  }
+  return out;
+}
+
+void ParseDrawing(const Workbook& wb, pugi::xml_document& doc) {
+  ASSERT_NE(Part(wb, kDrawingPath), nullptr);
+  ASSERT_TRUE(static_cast<bool>(parse_drawing_part(Part(wb, kDrawingPath)->bytes, doc)));
+}
+
+pugi::xml_node PicXfrm(const pugi::xml_node& anchor) {
+  return child_local(child_local(anchor_content(anchor), "spPr"), "xfrm");
+}
+
+// The anchor with every marker, `xdr:ext`/`xdr:pos` and `a:off`/`a:ext`
+// removed: what `set_image_anchor` must leave untouched.
+std::string Skeleton(const pugi::xml_node& top) {
+  pugi::xml_document copy;
+  copy.append_copy(top);
+  for (pugi::xml_node anchor : drawing_anchors(copy, true)) {
+    for (const char* name : {"from", "to", "ext", "pos"}) {
+      anchor.remove_child(child_local(anchor, name));
+    }
+    pugi::xml_node xfrm = PicXfrm(anchor);
+    xfrm.remove_child(child_local(xfrm, "off"));
+    xfrm.remove_child(child_local(xfrm, "ext"));
+  }
+  return Raw(copy.document_element());
+}
+
+// Moves a marker `extent` EMU along one axis of sheet 0, whose lines all have
+// the default size `sheet_offset_emu` gives line 0.
+void Advance(const Workbook& wb, bool row_axis, std::uint32_t& line, std::int64_t& off, std::int64_t extent) {
+  const std::int64_t size = sheet_offset_emu(wb, 0, row_axis, 1);
+  off += extent;
+  while (off >= size) {
+    off -= size;
+    ++line;
+  }
+}
+
+struct Box {
+  AnchorPoint from, to;
+  std::int64_t box_w = 0, box_h = 0;
+  std::int64_t off_x = 0, off_y = 0;
+};
+
+// The anchor box and `a:off` for a `cx` x `cy` picture rotated `deg` degrees
+// placed at `a`'s in-cell marker, computed from line offsets alone.
+Box ExpectedBox(const Workbook& wb, const ImageAnchor& a, std::int64_t cx, std::int64_t cy, int deg) {
+  const bool swap = (deg >= 45 && deg < 135) || (deg >= 225 && deg < 315);
+  Box box;
+  box.box_w = swap ? cy : cx;
+  box.box_h = swap ? cx : cy;
+  box.from = AnchorPoint{a.row, a.col, a.row_off, a.col_off};
+  box.to = box.from;
+  Advance(wb, false, box.to.col, box.to.col_off, box.box_w);
+  Advance(wb, true, box.to.row, box.to.row_off, box.box_h);
+  box.off_x = sheet_offset_emu(wb, 0, false, a.col) + a.col_off + (box.box_w - cx) / 2;
+  box.off_y = sheet_offset_emu(wb, 0, true, a.row) + a.row_off + (box.box_h - cy) / 2;
+  return box;
+}
+
+void ExpectPoint(const AnchorPoint& got, const AnchorPoint& want) {
+  EXPECT_EQ(got.row, want.row);
+  EXPECT_EQ(got.row_off, want.row_off);
+  EXPECT_EQ(got.col, want.col);
+  EXPECT_EQ(got.col_off, want.col_off);
+}
+
+// Checks one anchor element against `box` for a `cx` x `cy` picture.
+void ExpectPlaced(const pugi::xml_node& anchor, AnchorKind kind, const Box& box, std::int64_t cx, std::int64_t cy) {
+  const DrawingObject obj = read_drawing_object(anchor, {});
+  EXPECT_EQ(obj.anchor_kind, kind);
+  ExpectPoint(obj.from, box.from);
+  if (kind == AnchorKind::kTwoCell) {
+    ExpectPoint(obj.to, box.to);
+    EXPECT_FALSE(child_local(anchor, "ext"));
+  } else {
+    EXPECT_FALSE(child_local(anchor, "to"));
+    EXPECT_EQ(child_local(anchor, "ext").attribute("cx").as_llong(), box.box_w);
+    EXPECT_EQ(child_local(anchor, "ext").attribute("cy").as_llong(), box.box_h);
+  }
+  EXPECT_FALSE(child_local(anchor, "pos"));
+  EXPECT_EQ(local_name(child_local(anchor, "")), "from");
+  const pugi::xml_node xfrm = PicXfrm(anchor);
+  EXPECT_EQ(child_local(xfrm, "off").attribute("x").as_llong(), box.off_x);
+  EXPECT_EQ(child_local(xfrm, "off").attribute("y").as_llong(), box.off_y);
+  EXPECT_EQ(child_local(xfrm, "ext").attribute("cx").as_llong(), cx);
+  EXPECT_EQ(child_local(xfrm, "ext").attribute("cy").as_llong(), cy);
+}
+
+// A picture carrying the measured Excel extras (creationId, useLocalDpi, an
+// empty picLocks) plus a crop and a horizontal flip.
+std::string RichPic(std::uint32_t id, const std::string& rot_attr) {
+  return "<xdr:pic><xdr:nvPicPr><xdr:cNvPr id=\"" + std::to_string(id) +
+         "\" name=\"PicA\"><a:extLst><a:ext uri=\"{FF2B5EF4-FFF2-40B4-BE49-F238E27FC236}\"><a16:creationId "
+         "xmlns:a16=\"http://schemas.microsoft.com/office/drawing/2014/main\" "
+         "id=\"{916FAF09-56A5-F8BE-D4D0-73AC940BFF01}\"/></a:ext></a:extLst></xdr:cNvPr><xdr:cNvPicPr><a:picLocks/>"
+         "</xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip "
+         "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" r:embed=\"rId1\">"
+         "<a:extLst><a:ext uri=\"{28A0092B-C50C-407E-A947-70E740481C1C}\"><a14:useLocalDpi "
+         "xmlns:a14=\"http://schemas.microsoft.com/office/drawing/2010/main\" val=\"0\"/></a:ext></a:extLst>"
+         "</a:blip><a:srcRect l=\"1000\" t=\"2000\"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>"
+         "<xdr:spPr><a:xfrm" +
+         rot_attr +
+         " flipH=\"1\"><a:off x=\"0\" y=\"0\"/><a:ext cx=\"381000\" cy=\"762000\"/></a:xfrm><a:prstGeom "
+         "prst=\"rect\"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/>";
+}
+
+// `RichPic` under a `kind` ("one", "two" or "absolute") anchor.
+std::string RichAnchor(const std::string& kind, std::uint32_t id, int rot_deg, const std::string& edit_as_attr = "") {
+  const std::string rot = rot_deg == 0 ? "" : " rot=\"" + std::to_string(std::int64_t{rot_deg} * 60000) + "\"";
+  if (kind == "one") {
+    return "<xdr:oneCellAnchor>" + Marker("from", 1, 38100, 4, 50800) + "<xdr:ext cx=\"381000\" cy=\"762000\"/>" +
+           RichPic(id, rot) + "</xdr:oneCellAnchor>";
+  }
+  if (kind == "absolute") {
+    return "<xdr:absoluteAnchor><xdr:pos x=\"5000\" y=\"6000\"/><xdr:ext cx=\"381000\" cy=\"762000\"/>" +
+           RichPic(id, rot) + "</xdr:absoluteAnchor>";
+  }
+  return "<xdr:twoCellAnchor" + edit_as_attr + ">" + Marker("from", 1, 38100, 4, 50800) +
+         Marker("to", 1, 419100, 7, 127000) + RichPic(id, rot) + "</xdr:twoCellAnchor>";
+}
+
+std::string Wrapped(const std::string& anchor) {
+  return std::string("<mc:AlternateContent xmlns:mc=\"") + kNsMc +
+         "\"><mc:Choice xmlns:a14=\"http://schemas.microsoft.com/office/drawing/2010/main\" Requires=\"a14\">" +
+         anchor + "</mc:Choice><mc:Fallback>" + anchor + "</mc:Fallback></mc:AlternateContent>";
+}
+
+Workbook OnePicture(const std::string& top) {
+  return WithDrawing(std::string(kWsDrOpen) + top + "</xdr:wsDr>",
+                     std::string(kRelsOpen) + Rel("rId1", kImageRel, "../media/image1.png") + "</Relationships>",
+                     {"xl/media/image1.png"});
+}
+
+ImageAnchor Placement(AnchorKind kind, EditAs edit_as, std::int64_t width, std::int64_t height) {
+  ImageAnchor a;
+  a.anchor_kind = kind;
+  a.edit_as = edit_as;
+  a.row = 3;
+  a.col = 2;
+  a.row_off = 1000;
+  a.col_off = 2000;
+  a.width_emu = width;
+  a.height_emu = height;
+  return a;
+}
+
+ImageAnchor FromListed(const DrawingObject& obj) {
+  ImageAnchor a;
+  a.anchor_kind = obj.anchor_kind;
+  a.edit_as = obj.edit_as;
+  a.row = obj.from.row;
+  a.col = obj.from.col;
+  a.row_off = obj.from.row_off;
+  a.col_off = obj.from.col_off;
+  a.width_emu = obj.cx;
+  a.height_emu = obj.cy;
+  return a;
+}
+
+FormulonErrorCode Code(const Expected<void, Error>& result) {
+  return result ? FormulonErrorCode::kOk : result.error().code;
+}
+
+TEST(DrawingAnchorUpdate, SheetOffsetFollowsLineSizes) {
+  Workbook wb = ThreePlacements();
+  EXPECT_EQ(sheet_offset_emu(wb, 0, true, 0), 0);
+  EXPECT_EQ(sheet_offset_emu(wb, 0, true, 6), 6 * 228600);  // 18 pt rows.
+  // Columns sum unrounded point widths, so the total drifts from 4 x one width.
+  const std::int64_t col = sheet_offset_emu(wb, 0, false, 1);
+  EXPECT_GT(col, 0);
+  EXPECT_NEAR(static_cast<double>(sheet_offset_emu(wb, 0, false, 4)), 4.0 * static_cast<double>(col), 2.0);
+}
+
+TEST(DrawingAnchorUpdate, ListedPlacementWritesNothing) {
+  Workbook wb = WithDrawing(std::string(kWsDrOpen) + "</xdr:wsDr>", std::string(kRelsOpen) + "</Relationships>", {});
+  const Bytes png = Png(40, 80);
+  ImageInsertOptions one;
+  one.row = 2;
+  one.col = 1;
+  one.row_off = 1000;
+  one.col_off = 2000;
+  ASSERT_TRUE(static_cast<bool>(insert_image(wb, 0, png.data(), png.size(), one)));
+  ImageInsertOptions two = one;
+  two.anchor_kind = AnchorKind::kTwoCell;
+  two.edit_as = EditAs::kOneCell;
+  ASSERT_TRUE(static_cast<bool>(insert_image(wb, 0, png.data(), png.size(), two)));
+  ImageInsertOptions plain = two;
+  plain.edit_as = EditAs::kTwoCell;
+  ASSERT_TRUE(static_cast<bool>(insert_image(wb, 0, png.data(), png.size(), plain)));
+  const std::vector<Bytes> before = AllBytes(wb);
+  for (const DrawingObject& obj : List(wb)) {
+    ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, obj.object_id, FromListed(obj))));
+    ImageAnchor kept_size = FromListed(obj);
+    kept_size.width_emu = 0;
+    kept_size.height_emu = 0;
+    ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, obj.object_id, kept_size)));
+  }
+  EXPECT_EQ(AllBytes(wb), before);
+}
+
+TEST(DrawingAnchorUpdate, MoveAndResizeRewriteMarkersAndXfrm) {
+  Workbook wb = WithDrawing(std::string(kWsDrOpen) + "</xdr:wsDr>", std::string(kRelsOpen) + "</Relationships>", {});
+  const Bytes png = Png(40, 80);
+  ImageInsertOptions options;
+  options.anchor_kind = AnchorKind::kTwoCell;
+  auto id = insert_image(wb, 0, png.data(), png.size(), options);
+  ASSERT_TRUE(static_cast<bool>(id));
+  const ImageAnchor a = Placement(AnchorKind::kTwoCell, EditAs::kTwoCell, 3048000, 762000);
+  ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, id.value(), a)));
+  const Box box = ExpectedBox(wb, a, 3048000, 762000, 0);
+  EXPECT_EQ(box.off_y, 3 * 228600 + 1000);
+  pugi::xml_document doc;
+  ParseDrawing(wb, doc);
+  ExpectPlaced(drawing_anchors(doc.document_element(), false)[0], AnchorKind::kTwoCell, box, 3048000, 762000);
+  const std::vector<DrawingObject> objects = List(wb);
+  ASSERT_EQ(objects.size(), 1U);
+  EXPECT_EQ(objects[0].object_id, id.value());
+  EXPECT_EQ(objects[0].cx, 3048000);
+  EXPECT_EQ(objects[0].cy, 762000);
+
+  // A zero size keeps the current one; only the marker moves.
+  ImageAnchor moved = a;
+  moved.row = 9;
+  moved.width_emu = 0;
+  moved.height_emu = 0;
+  ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, id.value(), moved)));
+  pugi::xml_document again;
+  ParseDrawing(wb, again);
+  ExpectPlaced(drawing_anchors(again.document_element(), false)[0], AnchorKind::kTwoCell,
+               ExpectedBox(wb, moved, 3048000, 762000, 0), 3048000, 762000);
+}
+
+TEST(DrawingAnchorUpdate, MeasuredExcelPictureKeepsEverythingElse) {
+  // Excel's own picture XML (measured): editAs="oneCell", creationId,
+  // useLocalDpi and an empty picLocks.
+  const std::string excel =
+      "<xdr:twoCellAnchor editAs=\"oneCell\"><xdr:from><xdr:col>1</xdr:col><xdr:colOff>317500</xdr:colOff>"
+      "<xdr:row>2</xdr:row><xdr:rowOff>127000</xdr:rowOff></xdr:from><xdr:to><xdr:col>3</xdr:col>"
+      "<xdr:colOff>444500</xdr:colOff><xdr:row>6</xdr:row><xdr:rowOff>127000</xdr:rowOff></xdr:to><xdr:pic>"
+      "<xdr:nvPicPr><xdr:cNvPr id=\"3\" name=\"PicA\"><a:extLst><a:ext uri=\"{FF2B5EF4-FFF2-40B4-BE49-F238E27FC236}\">"
+      "<a16:creationId xmlns:a16=\"http://schemas.microsoft.com/office/drawing/2014/main\" "
+      "id=\"{916FAF09-56A5-F8BE-D4D0-73AC940BFF01}\"/></a:ext></a:extLst></xdr:cNvPr><xdr:cNvPicPr><a:picLocks/>"
+      "</xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" r:embed=\"rId1\"><a:extLst>"
+      "<a:ext uri=\"{28A0092B-C50C-407E-A947-70E740481C1C}\"><a14:useLocalDpi "
+      "xmlns:a14=\"http://schemas.microsoft.com/office/drawing/2010/main\" val=\"0\"/></a:ext></a:extLst></a:blip>"
+      "<a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x=\"1270000\" y=\"635000\"/>"
+      "<a:ext cx=\"2032000\" cy=\"1016000\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></xdr:spPr>"
+      "</xdr:pic><xdr:clientData/></xdr:twoCellAnchor>";
+  Workbook wb = OnePicture(excel);
+  pugi::xml_document before;
+  ParseDrawing(wb, before);
+  const std::string skeleton = Skeleton(before.document_element().first_child());
+
+  const ImageAnchor a = Placement(AnchorKind::kTwoCell, EditAs::kOneCell, 3048000, 762000);
+  ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, 3, a)));
+  pugi::xml_document after;
+  ParseDrawing(wb, after);
+  const pugi::xml_node anchor = after.document_element().first_child();
+  EXPECT_EQ(Skeleton(anchor), skeleton);
+  EXPECT_STREQ(anchor.attribute("editAs").value(), "oneCell");
+  ExpectPlaced(anchor, AnchorKind::kTwoCell, ExpectedBox(wb, a, 3048000, 762000, 0), 3048000, 762000);
+}
+
+TEST(DrawingAnchorUpdate, RotatedPictureSwapsTheBox) {
+  // An odd width/height difference exercises the truncation toward zero.
+  struct Case {
+    int deg;
+    bool swapped;
+  };
+  for (const Case& c : {Case{90, true}, Case{30, false}, Case{45, true}, Case{135, false}, Case{-90, true},
+                        Case{180, false}, Case{314, true}, Case{315, false}}) {
+    SCOPED_TRACE(c.deg);
+    Workbook wb = OnePicture(RichAnchor("two", 2, c.deg));
+    pugi::xml_document before;
+    ParseDrawing(wb, before);
+    const std::string skeleton = Skeleton(before.document_element().first_child());
+    const ImageAnchor a = Placement(AnchorKind::kTwoCell, EditAs::kTwoCell, 381000, 762001);
+    ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, 2, a)));
+    const Box box = ExpectedBox(wb, a, 381000, 762001, c.deg < 0 ? c.deg + 360 : c.deg);
+    EXPECT_EQ(box.box_w, c.swapped ? 762001 : 381000);
+    if (c.swapped) {
+      EXPECT_EQ(box.off_x - (sheet_offset_emu(wb, 0, false, 2) + 2000), 190500);
+      EXPECT_EQ(box.off_y - (3 * 228600 + 1000), -190500);
+    }
+    pugi::xml_document after;
+    ParseDrawing(wb, after);
+    const pugi::xml_node anchor = after.document_element().first_child();
+    ExpectPlaced(anchor, AnchorKind::kTwoCell, box, 381000, 762001);
+    EXPECT_EQ(Skeleton(anchor), skeleton);
+    // The listed size is the unrotated one, so the list round-trips.
+    const std::vector<DrawingObject> objects = List(wb);
+    ASSERT_EQ(objects.size(), 1U);
+    EXPECT_EQ(objects[0].cx, 381000);
+    EXPECT_EQ(objects[0].cy, 762001);
+    const std::vector<Bytes> placed = AllBytes(wb);
+    ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, 2, FromListed(objects[0]))));
+    EXPECT_EQ(AllBytes(wb), placed);
+  }
+}
+
+TEST(DrawingAnchorUpdate, ConvertsBetweenAnchorKinds) {
+  Workbook one = OnePicture(RichAnchor("one", 2, 0));
+  const ImageAnchor to_two = Placement(AnchorKind::kTwoCell, EditAs::kTwoCell, 0, 0);
+  ASSERT_TRUE(static_cast<bool>(set_image_anchor(one, 0, 2, to_two)));
+  pugi::xml_document doc;
+  ParseDrawing(one, doc);
+  pugi::xml_node anchor = doc.document_element().first_child();
+  EXPECT_STREQ(anchor.name(), "xdr:twoCellAnchor");
+  EXPECT_FALSE(anchor.attribute("editAs"));
+  ExpectPlaced(anchor, AnchorKind::kTwoCell, ExpectedBox(one, to_two, 381000, 762000, 0), 381000, 762000);
+  EXPECT_EQ(local_name(child_local(anchor, "to").next_sibling()), "pic");
+
+  const ImageAnchor back = Placement(AnchorKind::kOneCell, EditAs::kTwoCell, 0, 0);
+  ASSERT_TRUE(static_cast<bool>(set_image_anchor(one, 0, 2, back)));
+  pugi::xml_document doc2;
+  ParseDrawing(one, doc2);
+  anchor = doc2.document_element().first_child();
+  EXPECT_STREQ(anchor.name(), "xdr:oneCellAnchor");
+  ExpectPlaced(anchor, AnchorKind::kOneCell, ExpectedBox(one, back, 381000, 762000, 0), 381000, 762000);
+  EXPECT_EQ(local_name(child_local(anchor, "ext").next_sibling()), "pic");
+  EXPECT_EQ(local_name(anchor.last_child()), "clientData");
+
+  Workbook absolute = OnePicture(RichAnchor("absolute", 2, 0));
+  const ImageAnchor pinned = Placement(AnchorKind::kTwoCell, EditAs::kAbsolute, 0, 0);
+  ASSERT_TRUE(static_cast<bool>(set_image_anchor(absolute, 0, 2, pinned)));
+  pugi::xml_document doc3;
+  ParseDrawing(absolute, doc3);
+  anchor = doc3.document_element().first_child();
+  EXPECT_STREQ(anchor.name(), "xdr:twoCellAnchor");
+  EXPECT_STREQ(anchor.attribute("editAs").value(), "absolute");
+  ExpectPlaced(anchor, AnchorKind::kTwoCell, ExpectedBox(absolute, pinned, 381000, 762000, 0), 381000, 762000);
+}
+
+TEST(DrawingAnchorUpdate, EditAsChangesOnlyWithItsValue) {
+  struct Case {
+    const char* attr;
+    EditAs input;
+    const char* expected;  // nullptr: no attribute.
+  };
+  for (const Case& c : {Case{" editAs=\"twoCell\"", EditAs::kTwoCell, "twoCell"}, Case{"", EditAs::kTwoCell, nullptr},
+                        Case{" editAs=\"oneCell\"", EditAs::kTwoCell, nullptr}, Case{"", EditAs::kAbsolute, "absolute"},
+                        Case{" editAs=\"oneCell\"", EditAs::kOneCell, "oneCell"}}) {
+    SCOPED_TRACE(std::string(c.attr) + " -> " + std::to_string(static_cast<int>(c.input)));
+    Workbook wb = OnePicture(RichAnchor("two", 2, 0, c.attr));
+    ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, 2, Placement(AnchorKind::kTwoCell, c.input, 0, 0))));
+    pugi::xml_document doc;
+    ParseDrawing(wb, doc);
+    const pugi::xml_attribute attr = doc.document_element().first_child().attribute("editAs");
+    if (c.expected == nullptr) {
+      EXPECT_FALSE(attr);
+    } else {
+      EXPECT_STREQ(attr.value(), c.expected);
+    }
+    EXPECT_EQ(List(wb)[0].edit_as, c.input);
+  }
+}
+
+TEST(DrawingAnchorUpdate, AlternateContentMovesBothBranches) {
+  Workbook wb = OnePicture(Wrapped(RichAnchor("two", 2, 90)));
+  const ImageAnchor a = Placement(AnchorKind::kOneCell, EditAs::kTwoCell, 500000, 0);
+  ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, 2, a)));
+  pugi::xml_document doc;
+  ParseDrawing(wb, doc);
+  const std::vector<pugi::xml_node> anchors = drawing_anchors(doc.document_element(), true);
+  ASSERT_EQ(anchors.size(), 2U);
+  const Box box = ExpectedBox(wb, a, 500000, 762000, 90);
+  for (const pugi::xml_node& anchor : anchors) {
+    ExpectPlaced(anchor, AnchorKind::kOneCell, box, 500000, 762000);
+  }
+  EXPECT_EQ(local_name(doc.document_element().first_child()), "AlternateContent");
+}
+
+TEST(DrawingAnchorUpdate, RefusesBadPlacements) {
+  Workbook wb = ThreePlacements();
+  const Bytes before = Part(wb, kDrawingPath)->bytes;
+  const ImageAnchor ok = Placement(AnchorKind::kTwoCell, EditAs::kTwoCell, 0, 0);
+  ImageAnchor absolute = ok;
+  absolute.anchor_kind = AnchorKind::kAbsolute;
+  EXPECT_EQ(Code(set_image_anchor(wb, 0, 2, absolute)), FormulonErrorCode::kInvalidArgument);
+  ImageAnchor negative = ok;
+  negative.col_off = -1;
+  EXPECT_EQ(Code(set_image_anchor(wb, 0, 2, negative)), FormulonErrorCode::kInvalidArgument);
+  ImageAnchor huge = ok;
+  huge.height_emu = std::int64_t{1} << 31;
+  EXPECT_EQ(Code(set_image_anchor(wb, 0, 2, huge)), FormulonErrorCode::kInvalidArgument);
+  ImageAnchor off_sheet = ok;
+  off_sheet.col = Sheet::kMaxCols;
+  EXPECT_EQ(Code(set_image_anchor(wb, 0, 2, off_sheet)), FormulonErrorCode::kInvalidArgument);
+  ImageAnchor past_end = ok;
+  past_end.row = Sheet::kMaxRows - 1;
+  EXPECT_EQ(Code(set_image_anchor(wb, 0, 2, past_end)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_image_anchor(wb, 0, 9, ok)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_image_anchor(wb, 5, 2, ok)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Part(wb, kDrawingPath)->bytes, before);
+
+  // Only pictures move: the chart with id 2 is refused.
+  const std::string chart =
+      std::string(kWsDrOpen) + "<xdr:twoCellAnchor>" + Marker("from", 0, 0, 0, 0) + Marker("to", 6, 0, 14, 0) +
+      "<xdr:graphicFrame macro=\"\"><xdr:nvGraphicFramePr><xdr:cNvPr id=\"2\" name=\"Chart 1\"/>"
+      "<xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm/><a:graphic><a:graphicData "
+      "uri=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"/></a:graphic></xdr:graphicFrame>"
+      "<xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>";
+  Workbook charted = WithDrawing(chart, std::string(kRelsOpen) + "</Relationships>", {});
+  EXPECT_EQ(Code(set_image_anchor(charted, 0, 2, ok)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_image_z_order(charted, 0, 2, 0)), FormulonErrorCode::kInvalidArgument);
+
+  Workbook xlsb = Workbook::create();
+  const Bytes drawing = ToBytes(std::string(kWsDrOpen) + RichAnchor("two", 2, 0) + "</xdr:wsDr>");
+  ASSERT_TRUE(static_cast<bool>(xlsb.add_passthrough_part(PassthroughPart(kDrawingPath, kCtDrawing, drawing))));
+  xlsb.sheet(0).set_unknown_relationships({UnknownRelationship{"rId1", kRelDrawing, kDrawingPath, false}});
+  EXPECT_EQ(Code(set_image_anchor(xlsb, 0, 2, ok)), FormulonErrorCode::kIoDrawingUnparseable);
+  EXPECT_EQ(Code(set_image_z_order(xlsb, 0, 2, 0)), FormulonErrorCode::kIoDrawingUnparseable);
+  EXPECT_EQ(Part(xlsb, kDrawingPath)->bytes, drawing);
+}
+
+// Pairwise rows (coverwise, strength 2, seed 1) over input kind x current kind
+// x edit_as x rotation x AlternateContent x size; see the T-01 model.
+struct PairRow {
+  AnchorKind input;
+  const char* current;
+  EditAs edit_as;
+  int deg;
+  bool wrapped;
+  bool sized;
+};
+
+TEST(DrawingAnchorUpdate, PairwiseCombinations) {
+  constexpr AnchorKind kOne = AnchorKind::kOneCell;
+  constexpr AnchorKind kTwo = AnchorKind::kTwoCell;
+  const PairRow rows[] = {
+      {kOne, "absolute", EditAs::kTwoCell, 90, false, true},  {kTwo, "two", EditAs::kAbsolute, 180, true, true},
+      {kTwo, "one", EditAs::kOneCell, 90, false, false},      {kOne, "two", EditAs::kOneCell, 180, true, false},
+      {kTwo, "absolute", EditAs::kTwoCell, 0, true, false},   {kOne, "one", EditAs::kAbsolute, 0, false, true},
+      {kOne, "absolute", EditAs::kAbsolute, 90, true, false}, {kTwo, "two", EditAs::kTwoCell, 0, false, false},
+      {kTwo, "one", EditAs::kTwoCell, 180, false, true},      {kTwo, "one", EditAs::kOneCell, 0, true, true},
+      {kTwo, "absolute", EditAs::kOneCell, 0, false, true},   {kTwo, "absolute", EditAs::kOneCell, 180, false, false},
+      {kOne, "two", EditAs::kTwoCell, 90, true, false},
+  };
+  for (const PairRow& row : rows) {
+    SCOPED_TRACE(std::string(row.current) + " -> " + (row.input == kOne ? "one" : "two") + " editAs " +
+                 std::to_string(static_cast<int>(row.edit_as)) + " rot " + std::to_string(row.deg) +
+                 (row.wrapped ? " wrapped" : "") + (row.sized ? " sized" : ""));
+    const std::string anchor = RichAnchor(row.current, 2, row.deg);
+    Workbook wb = OnePicture(row.wrapped ? Wrapped(anchor) : anchor);
+    pugi::xml_document before;
+    ParseDrawing(wb, before);
+    const std::int64_t cx = row.sized ? 500000 : 381000;
+    const std::int64_t cy = row.sized ? 250001 : 762000;
+    const ImageAnchor a = Placement(row.input, row.edit_as, row.sized ? cx : 0, row.sized ? cy : 0);
+    ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, 2, a)));
+
+    const std::vector<DrawingObject> objects = List(wb);
+    ASSERT_EQ(objects.size(), 1U);
+    EXPECT_EQ(objects[0].object_id, 2U);
+    EXPECT_EQ(objects[0].name, "PicA");
+    EXPECT_EQ(objects[0].edit_as, row.input == kTwo ? row.edit_as : EditAs::kOneCell);
+    EXPECT_EQ(objects[0].media_path, "xl/media/image1.png");
+    pugi::xml_document doc;
+    ParseDrawing(wb, doc);
+    const std::vector<pugi::xml_node> anchors = drawing_anchors(doc.document_element(), true);
+    ASSERT_EQ(anchors.size(), row.wrapped ? 2U : 1U);
+    const Box box = ExpectedBox(wb, a, cx, cy, row.deg);
+    for (const pugi::xml_node& node : anchors) {
+      ExpectPlaced(node, row.input, box, cx, cy);
+      const pugi::xml_node xfrm = PicXfrm(node);
+      EXPECT_EQ(xfrm.attribute("rot").as_llong(), std::int64_t{row.deg} * 60000);
+      EXPECT_STREQ(xfrm.attribute("flipH").value(), "1");
+      const bool attr_expected = row.input == kTwo && row.edit_as != EditAs::kTwoCell;
+      EXPECT_EQ(static_cast<bool>(node.attribute("editAs")), attr_expected);
+    }
+    // Everything below the anchor element is the picture as it was.
+    const pugi::xml_node old_pic = anchor_content(drawing_anchors(before.document_element(), false)[0]);
+    EXPECT_NE(Skeleton(anchors[0]).find(Raw(child_local(old_pic, "nvPicPr"))), std::string::npos);
+    EXPECT_NE(Raw(anchor_content(anchors[0])).find(Raw(child_local(old_pic, "blipFill"))), std::string::npos);
+  }
+}
+
+// Picture 2, shape 3 and picture 4 wrapped in mc:AlternateContent.
+Workbook ZOrderFixture() {
+  const std::string shape = "<xdr:oneCellAnchor>" + Marker("from", 8, 0, 1, 0) +
+                            "<xdr:ext cx=\"914400\" cy=\"457200\"/><xdr:sp macro=\"\" textlink=\"\"><xdr:nvSpPr>"
+                            "<xdr:cNvPr id=\"3\" name=\"Oval 2\"/><xdr:cNvSpPr/></xdr:nvSpPr><xdr:spPr/></xdr:sp>"
+                            "<xdr:clientData/></xdr:oneCellAnchor>";
+  return OnePicture(RichAnchor("two", 2, 0) + shape + Wrapped(RichAnchor("one", 4, 0)));
+}
+
+std::vector<std::uint32_t> Ids(const Workbook& wb) {
+  std::vector<std::uint32_t> ids;
+  for (const DrawingObject& obj : List(wb)) {
+    ids.push_back(obj.object_id);
+  }
+  return ids;
+}
+
+TEST(DrawingZOrder, MovesTopLevelElements) {
+  using Ids3 = std::vector<std::uint32_t>;
+  struct Case {
+    std::uint32_t id;
+    std::uint32_t index;
+    Ids3 expected;
+  };
+  for (const Case& c :
+       {Case{4, 0, Ids3{4, 2, 3}}, Case{2, 2, Ids3{3, 4, 2}}, Case{2, 1, Ids3{3, 2, 4}}, Case{4, 1, Ids3{2, 4, 3}}}) {
+    SCOPED_TRACE(std::to_string(c.id) + " -> " + std::to_string(c.index));
+    Workbook wb = ZOrderFixture();
+    ASSERT_TRUE(static_cast<bool>(set_image_z_order(wb, 0, c.id, c.index)));
+    EXPECT_EQ(Ids(wb), c.expected);
+    pugi::xml_document doc;
+    ParseDrawing(wb, doc);
+    std::size_t tops = 0;
+    for (pugi::xml_node top = doc.document_element().first_child(); top; top = top.next_sibling()) {
+      ++tops;
+    }
+    EXPECT_EQ(tops, 3U);
+    // The wrapper travels whole, so its fallback stays with it.
+    EXPECT_EQ(drawing_anchors(doc.document_element(), true).size(), 4U);
+  }
+}
+
+TEST(DrawingZOrder, UnchangedOrderWritesNothing) {
+  Workbook wb = ZOrderFixture();
+  const std::vector<Bytes> before = AllBytes(wb);
+  ASSERT_TRUE(static_cast<bool>(set_image_z_order(wb, 0, 2, 0)));
+  ASSERT_TRUE(static_cast<bool>(set_image_z_order(wb, 0, 4, 2)));
+  EXPECT_EQ(AllBytes(wb), before);
+}
+
+TEST(DrawingZOrder, RefusesOutOfRangeAndNonPictures) {
+  Workbook wb = ZOrderFixture();
+  const std::vector<Bytes> before = AllBytes(wb);
+  EXPECT_EQ(Code(set_image_z_order(wb, 0, 2, 3)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_image_z_order(wb, 0, 3, 0)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_image_z_order(wb, 0, 7, 0)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_image_z_order(wb, 2, 2, 0)), FormulonErrorCode::kInvalidArgument);
+  Workbook empty = Workbook::create();
+  EXPECT_EQ(Code(set_image_z_order(empty, 0, 2, 0)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(AllBytes(wb), before);
 }
 
 }  // namespace

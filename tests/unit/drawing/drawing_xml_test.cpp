@@ -87,14 +87,14 @@ constexpr const char* kRels =
     "Target=\"https://example.com/a\" TargetMode=\"External\"/>"
     "</Relationships>";
 
-std::vector<DrawingObject> ReadObjects(const std::string& xml, const std::vector<DrawingRel>& rels) {
+std::vector<DrawingObject> ReadObjects(const std::string& xml, const std::vector<io::ooxml::DrawingRel>& rels) {
   pugi::xml_document doc;
   EXPECT_TRUE(static_cast<bool>(parse_drawing_part(ToBytes(xml), doc)));
   return read_drawing_objects(doc, rels);
 }
 
 TEST(DrawingXml, ReadsEveryObjectKindAndAnchor) {
-  auto rels = parse_part_rels(ToBytes(kRels), "xl/drawings");
+  auto rels = io::ooxml::parse_part_rels(ToBytes(kRels), "xl/drawings");
   ASSERT_TRUE(static_cast<bool>(rels));
   const std::vector<DrawingObject> objects = ReadObjects(kDrawing, rels.value());
   ASSERT_EQ(objects.size(), 6U);
@@ -183,19 +183,34 @@ TEST(DrawingXml, UnparseablePartIsRefused) {
   auto wrong_root = parse_drawing_part(ToBytes("<c:chartSpace xmlns:c=\"urn:x\"/>"), doc);
   ASSERT_FALSE(static_cast<bool>(wrong_root));
   EXPECT_EQ(wrong_root.error().code, FormulonErrorCode::kIoDrawingUnparseable);
-  auto bad_rels = parse_part_rels(ToBytes("<Relationships><Relationship"), "xl/drawings");
-  ASSERT_FALSE(static_cast<bool>(bad_rels));
-  EXPECT_EQ(bad_rels.error().code, FormulonErrorCode::kIoDrawingUnparseable);
 }
 
-TEST(DrawingXml, RelsResolveAgainstOwnerDirectory) {
-  auto rels = parse_part_rels(ToBytes(kRels), "xl/drawings");
-  ASSERT_TRUE(static_cast<bool>(rels));
-  ASSERT_EQ(rels.value().size(), 3U);
-  EXPECT_EQ(rels.value()[0].target, "xl/charts/chart1.xml");
-  EXPECT_FALSE(rels.value()[0].external);
-  EXPECT_EQ(rels.value()[2].target, "https://example.com/a");
-  EXPECT_TRUE(rels.value()[2].external);
+TEST(DrawingXml, PictureSizeReadsXfrmBeforeAnchorExt) {
+  // A rotated one-cell picture: `xdr:ext` holds the swapped box, `a:xfrm`
+  // the picture's own size. A shape keeps reading `xdr:ext`.
+  const std::string xml =
+      "<xdr:wsDr xmlns:xdr=\"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing\" "
+      "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><xdr:oneCellAnchor>"
+      "<xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff>"
+      "</xdr:from><xdr:ext cx=\"200\" cy=\"100\"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id=\"2\" name=\"P\"/>"
+      "</xdr:nvPicPr><xdr:spPr><a:xfrm rot=\"5400000\"><a:off x=\"50\" y=\"-50\"/><a:ext cx=\"100\" cy=\"200\"/>"
+      "</a:xfrm></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor><xdr:oneCellAnchor><xdr:from>"
+      "<xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>"
+      "<xdr:ext cx=\"300\" cy=\"400\"/><xdr:sp><xdr:nvSpPr><xdr:cNvPr id=\"3\" name=\"S\"/></xdr:nvSpPr>"
+      "<xdr:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"1\" cy=\"2\"/></a:xfrm></xdr:spPr></xdr:sp>"
+      "<xdr:clientData/></xdr:oneCellAnchor><xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col>"
+      "<xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>"
+      "<xdr:ext cx=\"500\" cy=\"600\"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id=\"4\" name=\"Q\"/></xdr:nvPicPr>"
+      "<xdr:spPr/></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>";
+  const std::vector<DrawingObject> objects = ReadObjects(xml, {});
+  ASSERT_EQ(objects.size(), 3U);
+  EXPECT_EQ(objects[0].cx, 100);
+  EXPECT_EQ(objects[0].cy, 200);
+  EXPECT_EQ(objects[1].cx, 300);
+  EXPECT_EQ(objects[1].cy, 400);
+  // A picture without `a:xfrm/a:ext` falls back to `xdr:ext`.
+  EXPECT_EQ(objects[2].cx, 500);
+  EXPECT_EQ(objects[2].cy, 600);
 }
 
 TEST(DrawingXml, RelativeTargets) {

@@ -1,5 +1,6 @@
 //
-// Typed drawing edits: insert and remove images in a sheet's drawing part.
+// Typed drawing edits: insert, place, reorder, snapshot, restore and remove
+// images in a sheet's drawing part.
 //
 // Every edit parses the drawing part, patches the DOM and re-serialises it,
 // so charts, shapes and anything else the part holds stay intact; a part no
@@ -48,6 +49,23 @@ struct ImageInsertOptions {
   std::int64_t height_emu = 0;  ///< 0 means pixel height x 9525.
 };
 
+/// Placement `set_image_anchor` applies, in the quantities
+/// `list_drawing_objects` reports: the anchor box's top-left marker and the
+/// picture's unrotated size.
+struct ImageAnchor {
+  AnchorKind anchor_kind = AnchorKind::kOneCell;  ///< `kOneCell` or `kTwoCell`.
+  EditAs edit_as = EditAs::kTwoCell;              ///< Honoured for `kTwoCell` only.
+  std::uint32_t row = 0;                          ///< 0-based top-left cell of the anchor box.
+  std::uint32_t col = 0;
+  std::int64_t row_off = 0;  ///< EMU offset inside the cell.
+  std::int64_t col_off = 0;
+  std::int64_t width_emu = 0;   ///< 0 keeps the current width.
+  std::int64_t height_emu = 0;  ///< 0 keeps the current height.
+};
+
+/// `restore_image` flag: restore as a copy with a fresh id, appended on top.
+inline constexpr std::uint32_t kImageRestoreNewId = 1U;
+
 /// Largest image `insert_image` accepts, in bytes.
 inline constexpr std::size_t kMaxImageBytes = 32U * 1024U * 1024U;
 
@@ -63,6 +81,46 @@ Expected<std::vector<DrawingObject>, Error> list_drawing_objects(const Workbook&
 /// that would exceed the reader's part or size limits.
 Expected<std::uint32_t, Error> insert_image(Workbook& wb, std::size_t sheet, const std::uint8_t* bytes, std::size_t len,
                                             const ImageInsertOptions& options);
+
+/// Distance in EMU from the sheet's top (`row_axis`) or left edge to `line`
+/// under the display geometry anchors are laid out with. `sheet` must exist.
+std::int64_t sheet_offset_emu(const Workbook& wb, std::size_t sheet, bool row_axis, std::uint32_t line);
+
+/// Moves and resizes the first picture with `object_id`, rewriting only its
+/// anchor markers, `editAs` when its value changes, and the `a:off`/`a:ext`
+/// of its `a:xfrm`; every other attribute and child is kept, and both
+/// branches of an `mc:AlternateContent` move together. A picture rotated into
+/// [45, 135) or [225, 315) degrees gets an anchor box with width and height
+/// swapped about the same centre. A placement equal to the current one
+/// writes nothing. Fails like `insert_image` for bad input, and with
+/// `kInvalidArgument` when the sheet has no picture with that id.
+Expected<void, Error> set_image_anchor(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
+                                       const ImageAnchor& anchor);
+
+/// Moves the first picture with `object_id` so it becomes item `index` of
+/// `list_drawing_objects`, whose order is the z-order (0 is the back). The
+/// unit moved is the picture's top-level element, a whole
+/// `mc:AlternateContent` included. Fails with `kInvalidArgument` for an
+/// unknown id or an `index` past the last item; an unchanged order writes
+/// nothing.
+Expected<void, Error> set_image_z_order(Workbook& wb, std::size_t sheet, std::uint32_t object_id, std::uint32_t index);
+
+/// Captures the first picture with `object_id` as opaque versioned bytes:
+/// its list position, its top-level element and the relationships and parts
+/// it references. Fails with `kInvalidArgument` for an unknown id and with
+/// `kIoDrawingUnparseable` when a referenced part has its own rels part.
+Expected<std::vector<std::uint8_t>, Error> snapshot_image(const Workbook& wb, std::size_t sheet,
+                                                          std::uint32_t object_id);
+
+/// Puts a `snapshot_image` capture back and returns the picture's id. A
+/// picture with the same id is replaced and the capture returns to its
+/// recorded list position; with `kImageRestoreNewId` it is added as a copy
+/// with a fresh id (and no `a16:creationId`) on top. Relationships and media
+/// are reused when identical and added otherwise. Fails with
+/// `kInvalidArgument` for malformed bytes, unknown flags or an id held by a
+/// non-picture, and with the package limits of `insert_image`.
+Expected<std::uint32_t, Error> restore_image(Workbook& wb, std::size_t sheet, const std::uint8_t* bytes,
+                                             std::size_t len, std::uint32_t flags);
 
 /// Removes the picture with `object_id`, plus its image relationship and
 /// media part once nothing else references them. Fails with
