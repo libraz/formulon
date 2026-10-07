@@ -8,6 +8,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -137,17 +138,22 @@ void ShiftColRange(MergeRange& range, std::uint32_t col, std::uint32_t count, bo
   ShiftSpan(range.first_col, range.last_col, col, count, is_delete, Sheet::kMaxCols, out_drop);
 }
 
+void ShiftAxisRange(MergeRange& range, std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis,
+                    bool* out_drop) {
+  if (row_axis) {
+    ShiftRowRange(range, index, count, is_delete, out_drop);
+  } else {
+    ShiftColRange(range, index, count, is_delete, out_drop);
+  }
+}
+
 void ShiftRangeList(std::vector<MergeRange>& ranges, std::uint32_t index, std::uint32_t count, bool is_delete,
                     bool row_axis) {
   std::vector<MergeRange> retained;
   retained.reserve(ranges.size());
   for (MergeRange& range : ranges) {
     bool drop = false;
-    if (row_axis) {
-      ShiftRowRange(range, index, count, is_delete, &drop);
-    } else {
-      ShiftColRange(range, index, count, is_delete, &drop);
-    }
+    ShiftAxisRange(range, index, count, is_delete, row_axis, &drop);
     if (drop) {
       continue;
     }
@@ -167,11 +173,7 @@ void ShiftHyperlinkList(std::vector<Hyperlink>& hyperlinks, std::uint32_t index,
   for (Hyperlink& hyperlink : hyperlinks) {
     MergeRange range{hyperlink.row, hyperlink.col, hyperlink.last_row, hyperlink.last_col};
     bool drop = false;
-    if (row_axis) {
-      ShiftRowRange(range, index, count, is_delete, &drop);
-    } else {
-      ShiftColRange(range, index, count, is_delete, &drop);
-    }
+    ShiftAxisRange(range, index, count, is_delete, row_axis, &drop);
     if (drop) {
       continue;
     }
@@ -263,6 +265,17 @@ void ShiftPivotAnchors(std::vector<std::unique_ptr<pivot::PivotTable>>& pivots, 
   pivots.erase(std::remove(pivots.begin(), pivots.end(), nullptr), pivots.end());
 }
 
+// Populated row keys of `rows`, ascending.
+std::vector<std::uint32_t> SortedRowKeys(const std::unordered_map<std::uint32_t, RowCells>& rows) {
+  std::vector<std::uint32_t> keys;
+  keys.reserve(rows.size());
+  for (const auto& kv : rows) {
+    keys.push_back(kv.first);
+  }
+  sort_ascending(keys);
+  return keys;
+}
+
 }  // namespace
 
 // Beyond the per-range rules, a delete joins the two ranges it brings edge to
@@ -303,32 +316,20 @@ bool shift_auto_filter(AutoFilter& filter, std::uint32_t index, std::uint32_t co
     return false;
   }
   bool drop = false;
-  if (row_axis) {
-    ShiftRowRange(filter.range, index, count, is_delete, &drop);
-  } else {
-    ShiftColRange(filter.range, index, count, is_delete, &drop);
-  }
+  ShiftAxisRange(filter.range, index, count, is_delete, row_axis, &drop);
   if (drop) {
     return false;
   }
   if (filter.sort) {
     bool sort_drop = false;
-    if (row_axis) {
-      ShiftRowRange(filter.sort->ref, index, count, is_delete, &sort_drop);
-    } else {
-      ShiftColRange(filter.sort->ref, index, count, is_delete, &sort_drop);
-    }
+    ShiftAxisRange(filter.sort->ref, index, count, is_delete, row_axis, &sort_drop);
     if (sort_drop) {
       filter.sort.reset();
     } else {
       std::vector<SortCondition> kept;
       for (SortCondition& cond : filter.sort->conditions) {
         bool cond_drop = false;
-        if (row_axis) {
-          ShiftRowRange(cond.ref, index, count, is_delete, &cond_drop);
-        } else {
-          ShiftColRange(cond.ref, index, count, is_delete, &cond_drop);
-        }
+        ShiftAxisRange(cond.ref, index, count, is_delete, row_axis, &cond_drop);
         if (!cond_drop) {
           kept.push_back(std::move(cond));
         }
@@ -414,14 +415,9 @@ void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   // Walk populated rows in descending key order so a moved row never
   // collides with an existing row that still needs to move.
-  std::vector<std::uint32_t> keys;
-  keys.reserve(rows_.size());
-  for (const auto& kv : rows_) {
-    keys.push_back(kv.first);
-  }
-  // Ascending sort, walked backwards, so the shared ascending sort serves this
+  // Ascending keys, walked backwards, so the shared ascending sort serves this
   // direction too.
-  sort_ascending(keys);
+  const std::vector<std::uint32_t> keys = SortedRowKeys(rows_);
   for (auto it = keys.rbegin(); it != keys.rend(); ++it) {
     const std::uint32_t key = *it;
     if (key < row) {
@@ -451,12 +447,7 @@ void Sheet::delete_rows(std::uint32_t row, std::uint32_t count) {
   // Drop cells inside the deletion interval, then shift trailing rows
   // up. Walk in ascending key order — every shifted destination key is
   // strictly less than its source so no collision can occur.
-  std::vector<std::uint32_t> keys;
-  keys.reserve(rows_.size());
-  for (const auto& kv : rows_) {
-    keys.push_back(kv.first);
-  }
-  sort_ascending(keys);
+  const std::vector<std::uint32_t> keys = SortedRowKeys(rows_);
   for (std::uint32_t key : keys) {
     if (key < row) {
       continue;

@@ -58,6 +58,16 @@ void reset_to_literal(Cell& slot) {
   slot.phonetic_props = PhoneticProperties{};
 }
 
+/// The stored cell at `(row, col)` when it holds a formula, else null.
+Cell* find_formula_cell(std::unordered_map<std::uint32_t, RowCells>& rows, std::uint32_t row, std::uint32_t col) {
+  const auto row_it = rows.find(row);
+  if (row_it == rows.end()) {
+    return nullptr;
+  }
+  Cell* cell = row_it->second.find(col);
+  return cell != nullptr && !cell->formula_text.empty() ? cell : nullptr;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -222,24 +232,14 @@ void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string f
 
 void Sheet::set_cell_dynamic_array(std::uint32_t row, std::uint32_t col, bool dynamic) {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  const auto row_it = rows_.find(row);
-  if (row_it == rows_.end()) {
-    return;
-  }
-  Cell* cell = row_it->second.find(col);
-  if (cell != nullptr && !cell->formula_text.empty()) {
+  if (Cell* cell = find_formula_cell(rows_, row, col); cell != nullptr) {
     cell->dynamic_array = dynamic;
   }
 }
 
 void Sheet::set_cell_formula_text(std::uint32_t row, std::uint32_t col, std::string formula) {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  const auto row_it = rows_.find(row);
-  if (row_it == rows_.end()) {
-    return;
-  }
-  Cell* cell = row_it->second.find(col);
-  if (cell != nullptr && !cell->formula_text.empty() && !formula.empty()) {
+  if (Cell* cell = find_formula_cell(rows_, row, col); cell != nullptr && !formula.empty()) {
     cell->formula_text = std::move(formula);
   }
 }

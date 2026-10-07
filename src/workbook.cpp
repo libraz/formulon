@@ -82,6 +82,15 @@ Expected<void, Error> check_sheet_index(const char* op, std::size_t sheet_index,
 
 namespace {
 
+// `op`-prefixed range check for a mutator addressing one table.
+Expected<void, Error> check_table_index(const char* op, std::size_t table_index, std::size_t table_count) {
+  if (table_index >= table_count) {
+    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op) + ": table_index out of range",
+                      "table_index=" + std::to_string(table_index));
+  }
+  return Expected<void, Error>::Ok();
+}
+
 // `op`-prefixed target check for a cell setter: the sheet index, then the grid coordinate.
 Expected<void, Error> check_cell_target(const char* op, std::size_t sheet_index, std::size_t sheet_count,
                                         std::uint32_t row, std::uint32_t col) {
@@ -818,10 +827,7 @@ Expected<void, Error> Workbook::set_sheet_auto_filter_xml(std::size_t sheet_inde
 
 Expected<void, Error> Workbook::set_table_auto_filter(std::size_t table_index, AutoFilter filter) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  if (table_index >= tables_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_table_auto_filter: table_index out of range",
-                      "table_index=" + std::to_string(table_index));
-  }
+  RETURN_IF_ERROR(check_table_index("set_table_auto_filter", table_index, tables_.size()));
   RETURN_IF_ERROR(validate_auto_filter(filter));
   tables_[table_index].auto_filter_xml.set(std::move(filter));
   mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator());
@@ -830,10 +836,7 @@ Expected<void, Error> Workbook::set_table_auto_filter(std::size_t table_index, A
 
 Expected<void, Error> Workbook::remove_table_auto_filter(std::size_t table_index) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  if (table_index >= tables_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "remove_table_auto_filter: table_index out of range",
-                      "table_index=" + std::to_string(table_index));
-  }
+  RETURN_IF_ERROR(check_table_index("remove_table_auto_filter", table_index, tables_.size()));
   tables_[table_index].auto_filter_xml.reset();
   mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator());
   return Expected<void, Error>::Ok();
@@ -994,18 +997,16 @@ void mark_spill_anchor_dirty_if_covered(const eval::RecalcEngine::LockedMutator&
 // own lock; marking happens after that lock is released, preserving the
 // workbook's engine-mutex -> sheet/spill-mutex order.
 void mark_blocked_spill_anchors_intersecting(const eval::RecalcEngine::LockedMutator& mutator, std::size_t sheet_index,
-                                             const std::vector<Sheet>& sheets, std::uint32_t row, std::uint32_t col) {
-  for (const CellAddress anchor : sheets[sheet_index].blocked_spill_anchors_intersecting(row, col, 1U, 1U)) {
-    mutator.mark_dirty(make_node(sheet_index, anchor.row, anchor.col));
-  }
-}
-
-void mark_blocked_spill_anchors_intersecting(const eval::RecalcEngine::LockedMutator& mutator, std::size_t sheet_index,
                                              const std::vector<Sheet>& sheets, const BlockedSpillFootprint& rectangle) {
   for (const CellAddress anchor : sheets[sheet_index].blocked_spill_anchors_intersecting(
            rectangle.anchor_row, rectangle.anchor_col, rectangle.rows, rectangle.cols)) {
     mutator.mark_dirty(make_node(sheet_index, anchor.row, anchor.col));
   }
+}
+
+void mark_blocked_spill_anchors_intersecting(const eval::RecalcEngine::LockedMutator& mutator, std::size_t sheet_index,
+                                             const std::vector<Sheet>& sheets, std::uint32_t row, std::uint32_t col) {
+  mark_blocked_spill_anchors_intersecting(mutator, sheet_index, sheets, BlockedSpillFootprint{row, col, 1U, 1U});
 }
 
 void mark_blocked_spill_anchors_released_by_cell(const eval::RecalcEngine::LockedMutator& mutator,
