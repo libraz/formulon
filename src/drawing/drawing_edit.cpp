@@ -125,6 +125,46 @@ Expected<std::string, Error> editable_drawing_path(const Workbook& wb, std::size
   return wb.sheet(sheet).drawing_rel_target();
 }
 
+// Loads sheet `sheet`'s editable drawing into `doc` and returns its path; a
+// sheet with no drawing holds no picture.
+Expected<std::string, Error> load_picture_drawing(const Workbook& wb, std::size_t sheet, pugi::xml_document& doc) {
+  ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
+  if (path.empty()) {
+    return invalid("drawing: no picture with that id");
+  }
+  RETURN_IF_ERROR(load_drawing(wb, path, doc));
+  return path;
+}
+
+// The id for a new object: one past the largest `cNvPr/@id` in `doc`, and at
+// least 2 (Excel numbers drawing objects from 2).
+std::uint32_t next_object_id(const pugi::xml_document& doc) {
+  std::uint32_t id = 0;
+  for_each_element(doc, [&id](const pugi::xml_node& node) {
+    if (local_name(node) == "cNvPr") {
+      id = std::max(id, node.attribute("id").as_uint());
+    }
+  });
+  return std::max(id, 1U) + 1U;
+}
+
+// Values of the prefixed, non-`xmlns:` attributes of `node` and its subtree:
+// the relationship ids it may name.
+std::vector<std::string> relationship_refs(const pugi::xml_node& node) {
+  std::vector<std::string> used;
+  const auto collect = [&used](const pugi::xml_node& element) {
+    for (pugi::xml_attribute attr = element.first_attribute(); attr; attr = attr.next_attribute()) {
+      const std::string_view name = attr.name();
+      if (name.find(':') != std::string_view::npos && name.rfind("xmlns:", 0) != 0) {
+        used.emplace_back(attr.value());
+      }
+    }
+  };
+  collect(node);
+  for_each_element(node, collect);
+  return used;
+}
+
 // First `<stem><N>.<suffix>` with no part named `<stem><N>.*`.
 std::string unused_part_path(const Workbook& wb, const std::string& stem, const char* suffix) {
   for (std::uint32_t n = 1;; ++n) {
@@ -145,15 +185,7 @@ Expected<void, Error> drop_objects(Workbook& wb, const std::string& path, pugi::
   for (const pugi::xml_node& top : tops) {
     top.parent().remove_child(top);
   }
-  std::vector<std::string> used;
-  for_each_element(doc, [&used](const pugi::xml_node& node) {
-    for (pugi::xml_attribute attr = node.first_attribute(); attr; attr = attr.next_attribute()) {
-      const std::string_view name = attr.name();
-      if (name.find(':') != std::string_view::npos && name.rfind("xmlns:", 0) != 0) {
-        used.emplace_back(attr.value());
-      }
-    }
-  });
+  const std::vector<std::string> used = relationship_refs(doc);
   RETURN_IF_ERROR(io::ooxml::store_part_dom(wb, path, doc));
   const std::string rels_path = io::ooxml::rels_path_for_part(path);
   pugi::xml_document rels_doc;
@@ -367,23 +399,6 @@ void place_anchor(pugi::xml_node anchor, const Placement& p) {
     set_llong(ext, "cx", p.cx);
     set_llong(ext, "cy", p.cy);
   }
-}
-
-// Values of the prefixed, non-`xmlns:` attributes of `node` and its subtree:
-// the relationship ids it may name.
-std::vector<std::string> relationship_refs(const pugi::xml_node& node) {
-  std::vector<std::string> used;
-  const auto collect = [&used](const pugi::xml_node& element) {
-    for (pugi::xml_attribute attr = element.first_attribute(); attr; attr = attr.next_attribute()) {
-      const std::string_view name = attr.name();
-      if (name.find(':') != std::string_view::npos && name.rfind("xmlns:", 0) != 0) {
-        used.emplace_back(attr.value());
-      }
-    }
-  };
-  collect(node);
-  for_each_element(node, collect);
-  return used;
 }
 
 // Copies onto `element` the root's declarations of every prefix its subtree
@@ -647,13 +662,7 @@ Expected<std::uint32_t, Error> insert_image(Workbook& wb, std::size_t sheet, con
     RETURN_IF_ERROR(load_drawing(wb, path, doc));
   }
   ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_rels(wb.passthrough_parts(), path));
-  std::uint32_t id = 0;
-  for_each_element(doc, [&id](const pugi::xml_node& node) {
-    if (local_name(node) == "cNvPr") {
-      id = std::max(id, node.attribute("id").as_uint());
-    }
-  });
-  id = std::max(id, 1U) + 1U;  // Excel numbers drawing objects from 2.
+  const std::uint32_t id = next_object_id(doc);
   std::string rid;
   for (std::uint32_t n = 1; rid.empty(); ++n) {
     const std::string candidate = "rId" + std::to_string(n);
@@ -724,24 +733,14 @@ Expected<std::uint32_t, Error> insert_image(Workbook& wb, std::size_t sheet, con
 }
 
 Expected<void, Error> remove_image(Workbook& wb, std::size_t sheet, std::uint32_t object_id) {
-  ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
-  if (path.empty()) {
+  pugi::xml_document doc;
+  ASSIGN_OR_RETURN(std::string path, load_picture_drawing(wb, sheet, doc));
+  const pugi::xml_node root = doc.document_element();
+  const pugi::xml_node target = find_picture(root, object_id);
+  if (!target) {
     return invalid("drawing: no picture with that id");
   }
-  pugi::xml_document doc;
-  RETURN_IF_ERROR(load_drawing(wb, path, doc));
-  const pugi::xml_node root = doc.document_element();
-  for (const pugi::xml_node& anchor : drawing_anchors(root, false)) {
-    const DrawingObject obj = read_drawing_object(anchor, {});
-    if (obj.kind == DrawingObjectKind::kPicture && obj.object_id == object_id) {
-      pugi::xml_node top = anchor;
-      while (top.parent() != root) {
-        top = top.parent();
-      }
-      return drop_objects(wb, path, doc, {top});
-    }
-  }
-  return invalid("drawing: no picture with that id");
+  return drop_objects(wb, path, doc, {top_of(root, target)});
 }
 
 void shift_drawing_anchors(Workbook& wb, std::size_t sheet, std::uint32_t index, std::uint32_t count, bool is_delete,
@@ -769,10 +768,7 @@ void shift_drawing_anchors(Workbook& wb, std::size_t sheet, std::uint32_t index,
       continue;  // The edit lies wholly after the object.
     }
     if (obj.edit_as == EditAs::kTwoCell && deleted(obj.from) && deleted(obj.to)) {
-      pugi::xml_node top = anchor;
-      while (top.parent() != root) {
-        top = top.parent();
-      }
+      const pugi::xml_node top = top_of(root, anchor);
       if (std::find(removed.begin(), removed.end(), top) == removed.end()) {
         removed.push_back(top);
       }
@@ -868,12 +864,8 @@ Expected<void, Error> set_image_anchor(Workbook& wb, std::size_t sheet, std::uin
 }
 
 Expected<void, Error> set_image_z_order(Workbook& wb, std::size_t sheet, std::uint32_t object_id, std::uint32_t index) {
-  ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
-  if (path.empty()) {
-    return invalid("drawing: no picture with that id");
-  }
   pugi::xml_document doc;
-  RETURN_IF_ERROR(load_drawing(wb, path, doc));
+  ASSIGN_OR_RETURN(std::string path, load_picture_drawing(wb, sheet, doc));
   pugi::xml_node root = doc.document_element();
   const pugi::xml_node target = find_picture(root, object_id);
   if (!target) {
@@ -902,12 +894,8 @@ Expected<void, Error> set_image_z_order(Workbook& wb, std::size_t sheet, std::ui
 
 Expected<std::vector<std::uint8_t>, Error> snapshot_image(const Workbook& wb, std::size_t sheet,
                                                           std::uint32_t object_id) {
-  ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
-  if (path.empty()) {
-    return invalid("drawing: no picture with that id");
-  }
   pugi::xml_document doc;
-  RETURN_IF_ERROR(load_drawing(wb, path, doc));
+  ASSIGN_OR_RETURN(std::string path, load_picture_drawing(wb, sheet, doc));
   const pugi::xml_node root = doc.document_element();
   const pugi::xml_node target = find_picture(root, object_id);
   if (!target) {
@@ -1024,13 +1012,7 @@ Expected<std::uint32_t, Error> restore_image(Workbook& wb, std::size_t sheet, co
 
   pugi::xml_node replaced;
   if (new_id) {
-    std::uint32_t next = 0;
-    for_each_element(doc, [&next](const pugi::xml_node& node) {
-      if (local_name(node) == "cNvPr") {
-        next = std::max(next, node.attribute("id").as_uint());
-      }
-    });
-    next = std::max(next, 1U) + 1U;
+    const std::uint32_t next = next_object_id(doc);
     const std::uint32_t old_id = id;
     for_each_element(fragment, [old_id, next](const pugi::xml_node& node) {
       if (local_name(node) == "cNvPr" && node.attribute("id").as_uint() == old_id) {
