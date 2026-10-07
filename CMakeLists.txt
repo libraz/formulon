@@ -265,6 +265,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/numeric_pairs.cpp
   src/eval/spill_release.cpp
   src/eval/spill_potential.cpp
+  src/eval/spill_producer_index.cpp
   src/eval/volatile_tracker.cpp
   src/eval/function_registry.cpp
   src/eval/special_forms_catalog.cpp

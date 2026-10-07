@@ -52,6 +52,7 @@
 #include "eval/range_dep_index.h"
 #include "eval/spill_committer.h"
 #include "eval/spill_potential.h"
+#include "eval/spill_producer_index.h"
 #include "eval/volatile_tracker.h"
 #include "parser/ast.h"
 #include "utils/error.h"
@@ -420,10 +421,6 @@ class RecalcEngine {
   void mark_dirty_locked(CellNodeId cell);
   void mark_range_dependents_dirty_locked(CellNodeId cell);
   void reset_graph_locked();
-  bool is_admissible_potential_spill_producer_locked(const Workbook& workbook, const FunctionRegistry& registry,
-                                                     CellNodeId producer, SpillPotential static_potential,
-                                                     Arena& potential_arena) const;
-  void update_potential_spill_producer_locked(CellNodeId cell, SpillPotential potential);
   Expected<RecalcStats, Error> recalc_locked(Workbook& workbook, const FunctionRegistry& registry);
   Expected<RecalcStats, Error> partial_recalc_locked(Workbook& workbook, const FunctionRegistry& registry,
                                                      const SheetCellRange& viewport);
@@ -605,10 +602,7 @@ class RecalcEngine {
   // edits can wake every owner whose shared coordinates read the edited
   // sheet, including spans reached through defined-name expansion.
   std::vector<RegisteredThreeDSpan> three_d_span_dependencies_;
-  // Formula anchors grouped by sheet whose AST may produce an array. This is
-  // the bounded candidate source for partial range expansion; unlike the
-  // Sheet row map it never scans unrelated stored cells per wave.
-  std::vector<std::unordered_map<CellNodeId, SpillPotential, CellNodeIdHash>> potential_spill_producers_by_sheet_;
+  SpillProducerIndex potential_spill_producers_;
   VolatileTracker volatiles_;
   DirtySet dirty_;
   // Reused across `recalc()` calls so the bump-allocator's largest chunk

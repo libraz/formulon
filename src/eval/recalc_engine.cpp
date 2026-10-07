@@ -81,54 +81,8 @@ bool spill_intersects_range(const SpillFootprint& footprint, const CellRangeDepe
          static_cast<std::uint64_t>(range.col_first) < spill_col_end;
 }
 
-// Cells probed straight above and straight left of a spill target for a blocker; none found admits conservatively.
-constexpr std::uint32_t kSpillBlockerProbeCells = 64U;
-
 // Largest runtime read rectangle whose open cells are checked one by one before admitting a producer.
 constexpr std::uint64_t kMaxCheckedSpillReadCells = 256U;
-
-// A stored formula or non-blank literal blocks every spill covering it. A phantom does not: its producer may shrink.
-bool blocks_spill(const Cell* cell) noexcept {
-  return cell != nullptr && (!cell->formula_text.empty() || !cell->cached_value.is_blank());
-}
-
-// A coordinate a not-yet-committed spill might fill, with the nearest stored blocker straight above and left of it.
-struct SpillTarget {
-  std::uint32_t row = 0;
-  std::uint32_t col = 0;
-  std::int64_t blocker_row = -1;
-  std::int64_t blocker_col = -1;
-
-  SpillTarget(const Sheet& sheet, std::uint32_t target_row, std::uint32_t target_col) noexcept
-      : row(target_row), col(target_col) {
-    for (std::uint32_t step = 1U; step <= kSpillBlockerProbeCells && step <= row; ++step) {
-      if (blocks_spill(sheet.cell_at(row - step, col))) {
-        blocker_row = static_cast<std::int64_t>(row - step);
-        break;
-      }
-    }
-    for (std::uint32_t step = 1U; step <= kSpillBlockerProbeCells && step <= col; ++step) {
-      if (blocks_spill(sheet.cell_at(row, col - step))) {
-        blocker_col = static_cast<std::int64_t>(col - step);
-        break;
-      }
-    }
-  }
-
-  // A spill covering the target covers the whole producer-to-target rectangle, so a blocker inside it rules the
-  // producer out unless the blocker is the producer's own cell.
-  bool reachable_from(CellNodeId producer) const noexcept {
-    if (producer.row > row || producer.col > col) {
-      return false;
-    }
-    const auto producer_row = static_cast<std::int64_t>(producer.row);
-    const auto producer_col = static_cast<std::int64_t>(producer.col);
-    if (producer_row <= blocker_row && !(producer_row == blocker_row && producer.col == col)) {
-      return false;
-    }
-    return !(producer_col <= blocker_col && !(producer_col == blocker_col && producer.row == row));
-  }
-};
 
 }  // namespace
 
@@ -451,8 +405,7 @@ void RecalcEngine::DynamicReadPass::discover_pending_candidates(
     const FunctionRegistry& registry, const std::unordered_set<CellNodeId, CellNodeIdHash>& closure) {
   Arena potential_arena;
   for (const DynamicRead& read : log_.reads()) {
-    if (read.sheet_id >= workbook_.sheet_count() ||
-        read.sheet_id >= engine_.potential_spill_producers_by_sheet_.size()) {
+    if (read.sheet_id >= workbook_.sheet_count() || !engine_.potential_spill_producers_.has_sheet(read.sheet_id)) {
       continue;
     }
 
@@ -483,7 +436,7 @@ void RecalcEngine::DynamicReadPass::discover_pending_candidates(
     if (attempted_it != attempted_candidates_.end()) {
       attempted = &attempted_it->second;
     }
-    for (const auto& [producer, static_potential] : engine_.potential_spill_producers_by_sheet_[read.sheet_id]) {
+    for (const auto& [producer, static_potential] : engine_.potential_spill_producers_.on_sheet(read.sheet_id)) {
       // A spill extends only down and right, so an anchor past either last coordinate cannot intersect the read.
       if (producer.row > read.rect.row_last || producer.col > read.rect.col_last) {
         continue;
@@ -504,8 +457,7 @@ void RecalcEngine::DynamicReadPass::discover_pending_candidates(
       if (attempted != nullptr && attempted->count(producer) != 0U) {
         continue;
       }
-      if (!engine_.is_admissible_potential_spill_producer_locked(workbook_, registry, producer, static_potential,
-                                                                 potential_arena)) {
+      if (!SpillProducerIndex::admissible(workbook_, registry, producer, static_potential, potential_arena)) {
         continue;
       }
       if (pending == nullptr) {
@@ -536,15 +488,11 @@ bool RecalcEngine::DynamicReadPass::seed_pending_candidates(const FunctionRegist
     CandidateSet& attempted = attempted_candidates_[reader];
     for (const CellNodeId producer : pending_it->second) {
       attempted.insert(producer);
-      if (producer.sheet_id >= engine_.potential_spill_producers_by_sheet_.size()) {
+      const SpillPotential* candidate_potential = engine_.potential_spill_producers_.find(producer);
+      if (candidate_potential == nullptr) {
         continue;
       }
-      const auto candidate_it = engine_.potential_spill_producers_by_sheet_[producer.sheet_id].find(producer);
-      if (candidate_it == engine_.potential_spill_producers_by_sheet_[producer.sheet_id].end()) {
-        continue;
-      }
-      if (!engine_.is_admissible_potential_spill_producer_locked(workbook_, registry, producer, candidate_it->second,
-                                                                 potential_arena)) {
+      if (!SpillProducerIndex::admissible(workbook_, registry, producer, *candidate_potential, potential_arena)) {
         continue;
       }
       if (closure.insert(producer).second) {
@@ -569,14 +517,9 @@ bool RecalcEngine::DynamicReadPass::seed_pending_candidates(const FunctionRegist
     CandidateSet& attempted = attempted_it->second;
     for (auto producer_it = attempted.begin(); producer_it != attempted.end();) {
       const CellNodeId producer = *producer_it;
-      if (producer.sheet_id >= engine_.potential_spill_producers_by_sheet_.size()) {
-        producer_it = attempted.erase(producer_it);
-        continue;
-      }
-      const auto candidate_it = engine_.potential_spill_producers_by_sheet_[producer.sheet_id].find(producer);
-      if (candidate_it == engine_.potential_spill_producers_by_sheet_[producer.sheet_id].end() ||
-          !engine_.is_admissible_potential_spill_producer_locked(workbook_, registry, producer, candidate_it->second,
-                                                                 potential_arena)) {
+      const SpillPotential* candidate_potential = engine_.potential_spill_producers_.find(producer);
+      if (candidate_potential == nullptr ||
+          !SpillProducerIndex::admissible(workbook_, registry, producer, *candidate_potential, potential_arena)) {
         producer_it = attempted.erase(producer_it);
         continue;
       }
@@ -802,7 +745,7 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
 
   // A rewrite can change a producer's result shape. Remove its previous
   // candidate-index membership before replacing graph/volatile metadata.
-  update_potential_spill_producer_locked(cell, SpillPotential::kNever);
+  potential_spill_producers_.update(cell, SpillPotential::kNever);
 
   // Drop the cell's previous outgoing edges so re-registration is a clean
   // rewrite (the new dependency set may differ from the old one).
@@ -860,7 +803,7 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
   if (deps.is_volatile) {
     volatiles_.register_cell(cell, deps.has_dynamic_reference ? VolatileKind::kDynamicReference : VolatileKind::kValue);
   }
-  update_potential_spill_producer_locked(cell, spill_potential(ast));
+  potential_spill_producers_.update(cell, spill_potential(ast));
 }
 
 void RecalcEngine::unregister_formula(CellNodeId cell) {
@@ -900,7 +843,7 @@ void RecalcEngine::drop_cell_registrations_locked(CellNodeId cell) {
                      [cell](const RegisteredThreeDSpan& entry) { return entry.owner == cell; }),
       three_d_span_dependencies_.end());
   volatiles_.unregister_cell(cell);
-  update_potential_spill_producer_locked(cell, SpillPotential::kNever);
+  potential_spill_producers_.update(cell, SpillPotential::kNever);
 }
 
 void RecalcEngine::mark_dirty(CellNodeId cell) {
@@ -922,54 +865,9 @@ void RecalcEngine::reset_graph_locked() {
   range_dependencies_.clear();
   referenced_cells_.clear();
   three_d_span_dependencies_.clear();
-  potential_spill_producers_by_sheet_.clear();
+  potential_spill_producers_.clear();
   volatiles_.clear();
   dirty_.clear();
-}
-
-void RecalcEngine::update_potential_spill_producer_locked(CellNodeId cell, SpillPotential potential) {
-  if (cell.sheet_id >= potential_spill_producers_by_sheet_.size()) {
-    if (potential == SpillPotential::kNever) {
-      return;
-    }
-    potential_spill_producers_by_sheet_.resize(static_cast<std::size_t>(cell.sheet_id) + 1U);
-  }
-  auto& producers = potential_spill_producers_by_sheet_[cell.sheet_id];
-  if (potential == SpillPotential::kNever) {
-    producers.erase(cell);
-  } else {
-    producers.insert_or_assign(cell, potential);
-  }
-}
-
-bool RecalcEngine::is_admissible_potential_spill_producer_locked(const Workbook& workbook,
-                                                                 const FunctionRegistry& registry, CellNodeId producer,
-                                                                 SpillPotential static_potential,
-                                                                 Arena& potential_arena) const {
-  if (producer.sheet_id >= workbook.sheet_count()) {
-    return false;
-  }
-  SpillPotential candidate = static_potential;
-  if (candidate == SpillPotential::kNeedsRegistry) {
-    const Sheet& producer_sheet = workbook.sheet(producer.sheet_id);
-    const Cell* producer_cell = producer_sheet.cell_at(producer.row, producer.col);
-    if (producer_cell == nullptr || producer_cell->formula_text.empty()) {
-      return false;
-    }
-    std::string_view formula = producer_cell->formula_text;
-    if (!formula.empty() && formula.front() == '=') {
-      formula.remove_prefix(1);
-    }
-    potential_arena.reset();
-    parser::AstNode* producer_ast = parse_formula_entry(formula, potential_arena);
-    if (producer_ast == nullptr) {
-      // A stale/unparseable candidate cannot commit a spill; its cell will
-      // surface the ordinary formula error if it is dirty.
-      return false;
-    }
-    candidate = spill_potential(*producer_ast, registry);
-  }
-  return candidate != SpillPotential::kNever;
 }
 
 Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const FunctionRegistry& registry) {
@@ -1273,8 +1171,7 @@ partial_recalc_next_wave:
 
   // The potential-producer index ignores the registry, so re-classify each candidate against it.
   const auto is_admissible_potential_producer = [&](CellNodeId producer, SpillPotential static_potential) {
-    return is_admissible_potential_spill_producer_locked(workbook, registry, producer, static_potential,
-                                                         potential_arena);
+    return SpillProducerIndex::admissible(workbook, registry, producer, static_potential, potential_arena);
   };
 
   const auto enqueue_potential_producer = [&](CellNodeId producer, SpillPotential static_potential) {
@@ -1296,7 +1193,7 @@ partial_recalc_next_wave:
     }
     while (potential_coordinate_head < bfs_queue.size()) {
       const CellNodeId current = bfs_queue[potential_coordinate_head++];
-      if (current.sheet_id >= sheet_count || current.sheet_id >= potential_spill_producers_by_sheet_.size()) {
+      if (current.sheet_id >= sheet_count || !potential_spill_producers_.has_sheet(current.sheet_id)) {
         continue;
       }
       const Cell* current_cell = workbook.sheet(current.sheet_id).cell_at(current.row, current.col);
@@ -1304,7 +1201,7 @@ partial_recalc_next_wave:
         continue;
       }
       const SpillTarget target(workbook.sheet(current.sheet_id), current.row, current.col);
-      for (const auto& [producer, static_potential] : potential_spill_producers_by_sheet_[current.sheet_id]) {
+      for (const auto& [producer, static_potential] : potential_spill_producers_.on_sheet(current.sheet_id)) {
         if (producer.sheet_id != current.sheet_id || !target.reachable_from(producer)) {
           continue;
         }
@@ -1313,7 +1210,7 @@ partial_recalc_next_wave:
     }
     range_dependencies_.for_each_distinct_range(
         [&](std::uint32_t range_id, const CellRangeDependency& range, const std::vector<CellNodeId>& owners) {
-          if (range.sheet_id >= sheet_count || range.sheet_id >= potential_spill_producers_by_sheet_.size()) {
+          if (range.sheet_id >= sheet_count || !potential_spill_producers_.has_sheet(range.sheet_id)) {
             return;
           }
           if (processed_range_entries.count(range_id) != 0U) {
@@ -1325,7 +1222,7 @@ partial_recalc_next_wave:
             return;
           }
           processed_range_entries.insert(range_id);
-          for (const auto& [producer, static_potential] : potential_spill_producers_by_sheet_[range.sheet_id]) {
+          for (const auto& [producer, static_potential] : potential_spill_producers_.on_sheet(range.sheet_id)) {
             // A spill extends only down and right, so an anchor past either last bound cannot reach the range.
             if (producer.row > range.row_last || producer.col > range.col_last) {
               continue;
