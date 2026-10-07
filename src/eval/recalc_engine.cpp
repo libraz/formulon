@@ -226,21 +226,18 @@ DepGraph::DependencyDelta RecalcEngine::reconcile_spill_dependencies_locked(cons
   // keeps the lock order engine -> sheet/spill and ensures graph replacement
   // never holds a Sheet spill mutex while another graph operation runs.
   std::vector<std::vector<SpillFootprint>> committed(workbook.sheet_count());
-  std::unordered_set<std::uint16_t> referenced_sheets;
-  referenced_sheets.reserve(range_dependencies_.distinct_range_count());
+  std::vector<bool> referenced_sheets(workbook.sheet_count(), false);
   range_dependencies_.for_each_distinct_range(
       [&](std::uint32_t, const CellRangeDependency& range, const std::vector<CellNodeId>&) {
         if (range.sheet_id < workbook.sheet_count()) {
-          referenced_sheets.insert(range.sheet_id);
+          referenced_sheets[range.sheet_id] = true;
         }
       });
-  for (std::uint16_t sheet_id = 0; sheet_id < workbook.sheet_count(); ++sheet_id) {
-    if (referenced_cells_.references_sheet(sheet_id)) {
-      referenced_sheets.insert(sheet_id);
-    }
-  }
   bool any_spill = false;
-  for (std::uint16_t sheet_id : referenced_sheets) {
+  for (std::uint16_t sheet_id = 0; sheet_id < workbook.sheet_count(); ++sheet_id) {
+    if (!referenced_sheets[sheet_id] && !referenced_cells_.references_sheet(sheet_id)) {
+      continue;
+    }
     committed[sheet_id] = workbook.sheet(sheet_id).committed_spill_footprints();
     any_spill = any_spill || !committed[sheet_id].empty();
   }
