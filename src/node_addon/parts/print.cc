@@ -27,6 +27,27 @@ const char* PullOptionalString(CheckedSpecReader& reader, const Napi::Object& sp
   return storage.c_str();
 }
 
+// Shared bodies of the row / column page-break add and remove entries.
+using BreakAddFn = fm_status_t (*)(fm_workbook_t*, size_t, uint32_t, int32_t);
+using BreakRemoveFn = fm_status_t (*)(fm_workbook_t*, size_t, uint32_t);
+
+Napi::Value InvokeBreakAdd(const Napi::CallbackInfo& info, fm_workbook_t* handle, BreakAddFn fn) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return MakeErrorStatus(env, kBindingInvalidHandle);
+  }
+  return MakeStatus(
+      env, fn(handle, Workbook::ArgU32(info, 0), Workbook::ArgU32(info, 1), Workbook::ArgBool(info, 2) ? 1 : 0));
+}
+
+Napi::Value InvokeBreakRemove(const Napi::CallbackInfo& info, fm_workbook_t* handle, BreakRemoveFn fn) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return MakeErrorStatus(env, kBindingInvalidHandle);
+  }
+  return MakeStatus(env, fn(handle, Workbook::ArgU32(info, 0), Workbook::ArgU32(info, 1)));
+}
+
 }  // namespace
 
 Napi::Value Workbook::SheetStringGetter(const Napi::CallbackInfo& info, SheetStringGetFn getter, const char* field) {
@@ -107,22 +128,15 @@ Napi::Value Workbook::SetSheetPrintArea(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::GetSheetPrintTitles(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object result = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    result.Set("status", NullHandleError(env));
-    result.Set("repeatRows", Napi::String::New(env, ""));
-    result.Set("repeatCols", Napi::String::New(env, ""));
-    return result;
-  }
   const char* rows = nullptr;
   const char* cols = nullptr;
-  const fm_status_t rc = fm_sheet_get_print_titles(handle_, ArgU32(info, 0), &rows, &cols);
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_print_titles(handle_, ArgU32(info, 0), &rows, &cols) : kBindingInvalidHandle;
   if (rc != 0) {
-    result.Set("status", MakeErrorStatus(env, rc));
-    result.Set("repeatRows", Napi::String::New(env, ""));
-    result.Set("repeatCols", Napi::String::New(env, ""));
-    return result;
+    rows = nullptr;
+    cols = nullptr;
   }
-  result.Set("status", MakeOkStatus(env));
+  result.Set("status", MakeStatus(env, rc));
   result.Set("repeatRows", Napi::String::New(env, rows != nullptr ? rows : ""));
   result.Set("repeatCols", Napi::String::New(env, cols != nullptr ? cols : ""));
   return result;
@@ -139,35 +153,19 @@ Napi::Value Workbook::SetSheetPrintTitles(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::AddSheetRowBreak(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  return MakeStatus(env, fm_sheet_add_row_break(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgBool(info, 2) ? 1 : 0));
+  return InvokeBreakAdd(info, handle_, &fm_sheet_add_row_break);
 }
 
 Napi::Value Workbook::AddSheetColBreak(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  return MakeStatus(env, fm_sheet_add_col_break(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgBool(info, 2) ? 1 : 0));
+  return InvokeBreakAdd(info, handle_, &fm_sheet_add_col_break);
 }
 
 Napi::Value Workbook::RemoveSheetRowBreak(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  return MakeStatus(env, fm_sheet_remove_row_break(handle_, ArgU32(info, 0), ArgU32(info, 1)));
+  return InvokeBreakRemove(info, handle_, &fm_sheet_remove_row_break);
 }
 
 Napi::Value Workbook::RemoveSheetColBreak(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  return MakeStatus(env, fm_sheet_remove_col_break(handle_, ArgU32(info, 0), ArgU32(info, 1)));
+  return InvokeBreakRemove(info, handle_, &fm_sheet_remove_col_break);
 }
 
 Napi::Value Workbook::ClearSheetBreaks(const Napi::CallbackInfo& info) {
