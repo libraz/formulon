@@ -1,6 +1,7 @@
 //
 // The static judgements behind a formula record's flags: the dynamic-array
-// mark, `fCalcExp`, always-calculate, and where a legacy formula shows `@`.
+// mark, `fCalcExp`, always-calculate, a volatile call, and where a legacy
+// formula shows `@`.
 // Declared in `io/xlsb/ptg_writer.h`.
 
 #include <algorithm>
@@ -314,12 +315,29 @@ bool AlwaysCalculates(const parser::AstNode& node, const NameShapes& names, std:
   return false;
 }
 
+/// True when `node` calls one of Excel's volatile functions anywhere.
+bool ContainsVolatileCall(const parser::AstNode& node) {
+  if (node.kind() == parser::NodeKind::Call && parser::is_volatile_function_name(node.as_call_name())) {
+    return true;
+  }
+  for (const parser::AstNode* child : parser::child_nodes(node)) {
+    if (ContainsVolatileCall(*child)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 bool name_sets_calc_exp(const parser::AstNode& root, const NameShapes& names) {
   std::unordered_map<const parser::AstNode*, std::uint8_t> parens;
   parser::collect_parenthesized_nodes(root, parens);
   return ValueSetsCalcExp(root, parens) || RefersToCalcExpName(root, names);
+}
+
+bool formula_calls_volatile(const parser::AstNode& root) {
+  return ContainsVolatileCall(root);
 }
 
 bool formula_always_calculates(const parser::AstNode& root, const NameShapes& names) {

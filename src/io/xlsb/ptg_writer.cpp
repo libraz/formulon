@@ -256,19 +256,6 @@ bool StaticRects(const parser::AstNode& node, std::vector<Rect>& out) {
   }
 }
 
-/// True when `node` calls one of Excel's volatile functions anywhere.
-bool ContainsVolatileCall(const parser::AstNode& node) {
-  if (node.kind() == parser::NodeKind::Call && parser::is_volatile_function_name(node.as_call_name())) {
-    return true;
-  }
-  for (const parser::AstNode* child : parser::child_nodes(node)) {
-    if (ContainsVolatileCall(*child)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 class Encoder {
  public:
   Encoder(const parser::AstNode& root, const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
@@ -1374,10 +1361,6 @@ class Encoder {
 
 }  // namespace
 
-bool formula_calls_volatile(const parser::AstNode& root) {
-  return ContainsVolatileCall(root);
-}
-
 Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                                             const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                             PtgRootClass root_class, std::optional<PtgBaseCell> base,
@@ -1386,7 +1369,7 @@ Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const s
   // A formula calling a volatile function itself (not through a name) opens
   // with `PtgAttrSemi`, without which Excel does not recalculate it
   // (measured for cells and name bodies; the u16 is unused).
-  if (ContainsVolatileCall(node)) {
+  if (formula_calls_volatile(node)) {
     enc.emit_attr_semi();
   }
   auto status = enc.emit(node);
