@@ -772,6 +772,13 @@ void js_set_cstr(emscripten::val& o, const char* key, const char* s) {
   o.set(key, s != nullptr ? std::string(s) : std::string());
 }
 
+emscripten::val js_text_result(fm_status_t rc, const char* key, const char* text) {
+  emscripten::val out = emscripten::val::object();
+  out.set("status", status_from_rc(rc));
+  js_set_cstr(out, key, rc == 0 ? text : nullptr);
+  return out;
+}
+
 void js_set_cstr_fields(emscripten::val& o, const JsStrField* fields, std::size_t n) {
   for (std::size_t i = 0; i < n; ++i) {
     js_set_cstr(o, fields[i].key, fields[i].value);

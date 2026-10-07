@@ -40,22 +40,9 @@ bool value_present(const emscripten::val& value) {
 }
 
 emscripten::val xml_result(const fm_workbook_t* handle, uint32_t sheet, XmlGetter getter, const char* key = "xml") {
-  emscripten::val out = emscripten::val::object();
-  if (handle == nullptr) {
-    out.set("status", error_status(7000));
-    out.set(key, std::string());
-    return out;
-  }
   const char* xml = nullptr;
-  const fm_status_t rc = getter(handle, sheet, &xml);
-  if (rc != 0) {
-    out.set("status", error_status(rc));
-    out.set(key, std::string());
-    return out;
-  }
-  out.set("status", ok_status());
-  js_set_cstr(out, key, xml);
-  return out;
+  const fm_status_t rc = handle != nullptr ? getter(handle, sheet, &xml) : kBindingInvalidHandle;
+  return js_text_result(rc, key, xml);
 }
 
 JsStatus xml_set(fm_workbook_t* handle, uint32_t sheet, const std::string& xml, XmlSetter setter) {

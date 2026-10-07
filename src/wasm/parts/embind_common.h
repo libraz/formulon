@@ -470,6 +470,10 @@ struct JsStrField {
 /// Sets `o[key]` to `s`, or to the empty string when `s` is NULL.
 void js_set_cstr(emscripten::val& o, const char* key, const char* s);
 
+/// Builds `{status, [key]: text}` from `rc`; `text` is emitted only on
+/// success and the empty string otherwise.
+emscripten::val js_text_result(fm_status_t rc, const char* key, const char* text);
+
 /// Sets every field of `fields` on `o` as `js_set_cstr` would.
 void js_set_cstr_fields(emscripten::val& o, const JsStrField* fields, std::size_t n);
 

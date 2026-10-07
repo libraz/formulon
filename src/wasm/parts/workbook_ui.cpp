@@ -21,22 +21,10 @@ namespace parts {
 // ---- AutoFilter --------------------------------------------------------
 
 emscripten::val JsWorkbook::getSheetAutoFilterXml(uint32_t sheet) const {
-  emscripten::val out = emscripten::val::object();
-  if (handle_ == nullptr) {
-    out.set("status", error_status(7000));
-    out.set("xml", std::string());
-    return out;
-  }
   const char* xml = nullptr;
-  fm_status_t rc = fm_sheet_get_auto_filter_xml(handle_, sheet, &xml);
-  if (rc != 0) {
-    out.set("status", error_status(rc));
-    out.set("xml", std::string());
-    return out;
-  }
-  out.set("status", ok_status());
-  js_set_cstr(out, "xml", xml);
-  return out;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_auto_filter_xml(handle_, sheet, &xml) : kBindingInvalidHandle;
+  return js_text_result(rc, "xml", xml);
 }
 
 JsStatus JsWorkbook::setSheetAutoFilterXml(uint32_t sheet, const std::string& xml) {

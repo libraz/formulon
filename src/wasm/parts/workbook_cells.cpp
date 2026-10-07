@@ -170,22 +170,10 @@ JsCellResult JsWorkbook::getValue(uint32_t sheet, uint32_t row, uint32_t col) co
 }
 
 emscripten::val JsWorkbook::getCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const {
-  emscripten::val o = emscripten::val::object();
-  if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
-    o.set("value", std::string());
-    return o;
-  }
   const char* text = nullptr;
-  fm_status_t rc = fm_workbook_get_cell_phonetic(handle_, sheet, row, col, &text);
-  if (rc != 0) {
-    o.set("status", error_status(rc));
-    o.set("value", std::string());
-    return o;
-  }
-  o.set("status", ok_status());
-  js_set_cstr(o, "value", text);
-  return o;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_cell_phonetic(handle_, sheet, row, col, &text) : kBindingInvalidHandle;
+  return js_text_result(rc, "value", text);
 }
 
 emscripten::val JsWorkbook::getCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col) const {
@@ -312,22 +300,10 @@ emscripten::val JsWorkbook::evaluateFormulaArray(uint32_t sheet, uint32_t row, u
 }
 
 emscripten::val JsWorkbook::getLambdaText(uint32_t sheet, uint32_t row, uint32_t col) const {
-  emscripten::val o = emscripten::val::object();
-  if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
-    o.set("text", std::string());
-    return o;
-  }
   const char* text = nullptr;
-  fm_status_t rc = fm_workbook_lambda_text_at(handle_, sheet, row, col, &text);
-  if (rc != 0) {
-    o.set("status", error_status(rc));
-    o.set("text", std::string());
-    return o;
-  }
-  o.set("status", ok_status());
-  js_set_cstr(o, "text", text);
-  return o;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_lambda_text_at(handle_, sheet, row, col, &text) : kBindingInvalidHandle;
+  return js_text_result(rc, "text", text);
 }
 
 // ---- Iteration / metadata accessors -------------------------------------
