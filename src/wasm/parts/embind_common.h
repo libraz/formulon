@@ -321,6 +321,13 @@ class JsNarrowNumericReader {
   const std::string& message() const;
 
  private:
+  /// Reads `owner[key]`; `*fetched` is false when the reader already failed or the access threw.
+  emscripten::val fetch(const emscripten::val& owner, const char* key, const char* field, bool* fetched);
+  /// Reads `value` as an integer in [lower, upper]: absent yields `dflt`, a rejected value 0.
+  double integer_value(const emscripten::val& value, double dflt, const char* field, double lower, double upper,
+                       const char* range);
+  bool safe_predicate(const emscripten::val& owner, const emscripten::val& key, int32_t operation, const char* key_name,
+                      const char* field);
   bool read_integer(const emscripten::val& value, const char* key, const char* field, double lower, double upper,
                     const char* range, double* number);
   bool read_number(const emscripten::val& value, const char* key, const char* field, double* number);

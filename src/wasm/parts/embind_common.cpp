@@ -273,121 +273,72 @@ bool JsNarrowNumericReader::read_number(const emscripten::val& value, const char
   return true;
 }
 
-uint32_t JsNarrowNumericReader::u32(const emscripten::val& owner, const char* key, uint32_t dflt, const char* field) {
+emscripten::val JsNarrowNumericReader::fetch(const emscripten::val& owner, const char* key, const char* field,
+                                             bool* fetched) {
+  *fetched = false;
+  if (!ok()) {
+    return emscripten::val::undefined();
+  }
+  return safe_get(owner, emscripten::val(key), field != nullptr ? field : key, fetched);
+}
+
+double JsNarrowNumericReader::integer_value(const emscripten::val& value, double dflt, const char* field, double lower,
+                                            double upper, const char* range) {
   if (!ok()) {
     return dflt;
   }
-  bool completed = false;
-  const emscripten::val value = safe_get(owner, emscripten::val(key), field != nullptr ? field : key, &completed);
-  if (!completed) {
-    return dflt;
-  }
   double number = 0.0;
-  if (!read_integer(value, key, field, 0.0, 4294967295.0, "[0, 4294967295]", &number)) {
-    return (value.isUndefined() || value.isNull()) ? dflt : 0U;
+  if (!read_integer(value, field, field, lower, upper, range, &number)) {
+    return (value.isUndefined() || value.isNull()) ? dflt : 0.0;
   }
-  return static_cast<uint32_t>(number);
+  return number;
+}
+
+uint32_t JsNarrowNumericReader::u32(const emscripten::val& owner, const char* key, uint32_t dflt, const char* field) {
+  bool fetched = false;
+  const emscripten::val value = fetch(owner, key, field, &fetched);
+  return fetched ? u32_value(value, dflt, field != nullptr ? field : key) : dflt;
 }
 
 int32_t JsNarrowNumericReader::i32(const emscripten::val& owner, const char* key, int32_t dflt, const char* field) {
-  if (!ok()) {
-    return dflt;
-  }
-  bool completed = false;
-  const emscripten::val value = safe_get(owner, emscripten::val(key), field != nullptr ? field : key, &completed);
-  if (!completed) {
-    return dflt;
-  }
-  double number = 0.0;
-  if (!read_integer(value, key, field, -2147483648.0, 2147483647.0, "[-2147483648, 2147483647]", &number)) {
-    return (value.isUndefined() || value.isNull()) ? dflt : 0;
-  }
-  return static_cast<int32_t>(number);
+  bool fetched = false;
+  const emscripten::val value = fetch(owner, key, field, &fetched);
+  return fetched ? i32_value(value, dflt, field != nullptr ? field : key) : dflt;
 }
 
 uint8_t JsNarrowNumericReader::u8(const emscripten::val& owner, const char* key, uint8_t dflt, const char* field) {
-  if (!ok()) {
-    return dflt;
-  }
-  bool completed = false;
-  const emscripten::val value = safe_get(owner, emscripten::val(key), field != nullptr ? field : key, &completed);
-  if (!completed) {
-    return dflt;
-  }
-  double number = 0.0;
-  if (!read_integer(value, key, field, 0.0, 255.0, "[0, 255]", &number)) {
-    return (value.isUndefined() || value.isNull()) ? dflt : 0U;
-  }
-  return static_cast<uint8_t>(number);
+  bool fetched = false;
+  const emscripten::val value = fetch(owner, key, field, &fetched);
+  return fetched ? u8_value(value, dflt, field != nullptr ? field : key) : dflt;
 }
 
 uint16_t JsNarrowNumericReader::u16(const emscripten::val& owner, const char* key, uint16_t dflt, const char* field) {
-  if (!ok()) {
-    return dflt;
-  }
-  bool completed = false;
-  const emscripten::val value = safe_get(owner, emscripten::val(key), field != nullptr ? field : key, &completed);
-  if (!completed) {
-    return dflt;
-  }
-  double number = 0.0;
-  if (!read_integer(value, key, field, 0.0, 65535.0, "[0, 65535]", &number)) {
-    return (value.isUndefined() || value.isNull()) ? dflt : 0U;
-  }
-  return static_cast<uint16_t>(number);
+  bool fetched = false;
+  const emscripten::val value = fetch(owner, key, field, &fetched);
+  return fetched ? u16_value(value, dflt, field != nullptr ? field : key) : dflt;
 }
 
 uint8_t JsNarrowNumericReader::u8_value(const emscripten::val& value, uint8_t dflt, const char* field) {
-  if (!ok()) {
-    return dflt;
-  }
-  double number = 0.0;
-  if (!read_integer(value, field, field, 0.0, 255.0, "[0, 255]", &number)) {
-    return (value.isUndefined() || value.isNull()) ? dflt : 0U;
-  }
-  return static_cast<uint8_t>(number);
+  return static_cast<uint8_t>(integer_value(value, dflt, field, 0.0, 255.0, "[0, 255]"));
 }
 
 uint16_t JsNarrowNumericReader::u16_value(const emscripten::val& value, uint16_t dflt, const char* field) {
-  if (!ok()) {
-    return dflt;
-  }
-  double number = 0.0;
-  if (!read_integer(value, field, field, 0.0, 65535.0, "[0, 65535]", &number)) {
-    return (value.isUndefined() || value.isNull()) ? dflt : 0U;
-  }
-  return static_cast<uint16_t>(number);
+  return static_cast<uint16_t>(integer_value(value, dflt, field, 0.0, 65535.0, "[0, 65535]"));
 }
 
 uint32_t JsNarrowNumericReader::u32_value(const emscripten::val& value, uint32_t dflt, const char* field) {
-  if (!ok()) {
-    return dflt;
-  }
-  double number = 0.0;
-  if (!read_integer(value, field, field, 0.0, 4294967295.0, "[0, 4294967295]", &number)) {
-    return (value.isUndefined() || value.isNull()) ? dflt : 0U;
-  }
-  return static_cast<uint32_t>(number);
+  return static_cast<uint32_t>(integer_value(value, dflt, field, 0.0, 4294967295.0, "[0, 4294967295]"));
 }
 
 int32_t JsNarrowNumericReader::i32_value(const emscripten::val& value, int32_t dflt, const char* field) {
-  if (!ok()) {
-    return dflt;
-  }
-  double number = 0.0;
-  if (!read_integer(value, field, field, -2147483648.0, 2147483647.0, "[-2147483648, 2147483647]", &number)) {
-    return (value.isUndefined() || value.isNull()) ? dflt : 0;
-  }
-  return static_cast<int32_t>(number);
+  return static_cast<int32_t>(
+      integer_value(value, dflt, field, -2147483648.0, 2147483647.0, "[-2147483648, 2147483647]"));
 }
 
 int64_t JsNarrowNumericReader::i64(const emscripten::val& owner, const char* key, int64_t dflt, const char* field) {
-  if (!ok()) {
-    return dflt;
-  }
-  bool completed = false;
-  const emscripten::val value = safe_get(owner, emscripten::val(key), field != nullptr ? field : key, &completed);
-  if (!completed) {
+  bool fetched = false;
+  const emscripten::val value = fetch(owner, key, field, &fetched);
+  if (!fetched) {
     return dflt;
   }
   double number = 0.0;
@@ -408,12 +359,9 @@ int64_t JsNarrowNumericReader::i64(const emscripten::val& owner, const char* key
 }
 
 double JsNarrowNumericReader::number(const emscripten::val& owner, const char* key, double dflt, const char* field) {
-  if (!ok()) {
-    return dflt;
-  }
-  bool completed = false;
-  const emscripten::val value = safe_get(owner, emscripten::val(key), field != nullptr ? field : key, &completed);
-  if (!completed) {
+  bool fetched = false;
+  const emscripten::val value = fetch(owner, key, field, &fetched);
+  if (!fetched) {
     return dflt;
   }
   return number_value(value, dflt, field != nullptr ? field : key);
@@ -431,12 +379,9 @@ double JsNarrowNumericReader::number_value(const emscripten::val& value, double 
 }
 
 bool JsNarrowNumericReader::boolean(const emscripten::val& owner, const char* key, bool dflt, const char* field) {
-  if (!ok()) {
-    return dflt;
-  }
-  bool completed = false;
-  const emscripten::val value = safe_get(owner, emscripten::val(key), field != nullptr ? field : key, &completed);
-  if (!completed) {
+  bool fetched = false;
+  const emscripten::val value = fetch(owner, key, field, &fetched);
+  if (!fetched) {
     return dflt;
   }
   return boolean_value(value, dflt, field != nullptr ? field : key);
@@ -456,12 +401,9 @@ bool JsNarrowNumericReader::boolean_value(const emscripten::val& value, bool dfl
 }
 
 std::string JsNarrowNumericReader::string(const emscripten::val& owner, const char* key, const char* field) {
-  if (!ok()) {
-    return std::string();
-  }
-  bool completed = false;
-  const emscripten::val value = safe_get(owner, emscripten::val(key), field != nullptr ? field : key, &completed);
-  if (!completed) {
+  bool fetched = false;
+  const emscripten::val value = fetch(owner, key, field, &fetched);
+  if (!fetched) {
     return std::string();
   }
   return string_value(value, field != nullptr ? field : key);
@@ -487,12 +429,12 @@ std::string JsNarrowNumericReader::string_value(const emscripten::val& value, co
 
 const char* JsNarrowNumericReader::optional_string(const emscripten::val& owner, const char* key, std::string& storage,
                                                    const char* field) {
-  if (!ok() || owner.isUndefined() || owner.isNull()) {
+  if (owner.isUndefined() || owner.isNull()) {
     return nullptr;
   }
-  bool completed = false;
-  const emscripten::val value = safe_get(owner, emscripten::val(key), field != nullptr ? field : key, &completed);
-  if (!completed) {
+  bool fetched = false;
+  const emscripten::val value = fetch(owner, key, field, &fetched);
+  if (!fetched) {
     return nullptr;
   }
   return optional_string_value(value, storage, field != nullptr ? field : key);
@@ -525,30 +467,26 @@ emscripten::val JsNarrowNumericReader::value(const emscripten::val& owner, const
   return safe_get(owner, emscripten::val(key), field != nullptr ? field : key, &completed);
 }
 
-bool JsNarrowNumericReader::has_own(const emscripten::val& owner, const char* key, const char* field) {
+bool JsNarrowNumericReader::safe_predicate(const emscripten::val& owner, const emscripten::val& key, int32_t operation,
+                                           const char* key_name, const char* field) {
   if (!ok() || owner.isUndefined() || owner.isNull()) {
     return false;
   }
   bool completed = false;
-  const emscripten::val result = safe_operation(owner, emscripten::val(key), kSafeHasOwn, &completed);
+  const emscripten::val result = safe_operation(owner, key, operation, &completed);
   if (!completed) {
-    reject_access(key, field);
+    reject_access(key_name, field);
     return false;
   }
   return result.isTrue();
 }
 
+bool JsNarrowNumericReader::has_own(const emscripten::val& owner, const char* key, const char* field) {
+  return safe_predicate(owner, emscripten::val(key), kSafeHasOwn, key, field);
+}
+
 bool JsNarrowNumericReader::is_array(const emscripten::val& value, const char* field) {
-  if (!ok() || value.isUndefined() || value.isNull()) {
-    return false;
-  }
-  bool completed = false;
-  const emscripten::val result = safe_operation(value, emscripten::val::undefined(), kSafeIsArray, &completed);
-  if (!completed) {
-    reject_access(nullptr, field);
-    return false;
-  }
-  return result.isTrue();
+  return safe_predicate(value, emscripten::val::undefined(), kSafeIsArray, nullptr, field);
 }
 
 uint32_t JsNarrowNumericReader::length(const emscripten::val& array, const char* field) {
