@@ -180,6 +180,22 @@ export function registerCellGeometryDisplay(Module, test) {
     });
   });
 
+  test('formatValue picks fraction candidates in binary64, as native does', () => {
+    withWorkbook(Module, (wb) => {
+      // A wider long double keeps 0.015 * 100 below 1.5 and picks 1/100, 4/1000 and 3/5.
+      const cases = [
+        [0.015, '?/100', '2/100'],
+        [0.0045, '?/1000', '5/1000'],
+        [0.6125, '?/?', '5/8'],
+      ];
+      for (const [number, format, expected] of cases) {
+        const out = wb.formatValue({ kind: 1, number, boolean: 0, text: '', errorCode: 0 }, format);
+        assert.ok(out.status.ok);
+        assert.equal(out.text, expected, `${number} "${format}"`);
+      }
+    });
+  });
+
   test('nested SUBTOTAL skips inner subtotal cells in value, formula and display text', () => {
     withWorkbook(Module, (wb) => {
       assert.ok(wb.setNumber(0, 0, 0, 1).ok);

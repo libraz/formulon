@@ -887,6 +887,14 @@ TEST(NumberFormatFraction, NearEqualApproximationsPreferSmallerDenominator) {
   }
 }
 
+TEST(NumberFormatFraction, CandidatesUseBinary64Arithmetic) {
+  // A wider long double (WASM, x86-64 Linux) keeps 0.015 * 100 below 1.5
+  // and picks 1/100, 4/1000 and 3/5 here.
+  EXPECT_EQ(Render(0.015, "?/100"), "2/100");
+  EXPECT_EQ(Render(0.0045, "?/1000"), "5/1000");
+  EXPECT_EQ(Render(0.6125, "?/?"), "5/8");
+}
+
 TEST(NumberFormatFraction, VariableDenominatorSearchCapsAtSevenDigits) {
   const std::string format = "?/" + std::string(18, '?');
   EXPECT_EQ(Render(1.0 / 9999999.0, format), "1/9999999" + std::string(11, ' '));
