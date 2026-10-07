@@ -391,6 +391,24 @@ Value Floor(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return legacy_significance_round(args, Value::error(ErrorCode::Div0), [](double q) { return std::floor(q); });
 }
 
+// Coerces two numeric arguments, rejecting a Bool in either slot with
+// `#VALUE!` (MROUND and QUOTIENT, unlike the arithmetic operators, do not
+// accept direct Bool operands).
+Expected<builtins_detail::NumberPair, ErrorCode> coerce_non_bool_pair(const Value* args) {
+  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool) {
+    return ErrorCode::Value;
+  }
+  auto first = coerce_to_number(args[0]);
+  if (!first) {
+    return first.error();
+  }
+  auto second = coerce_to_number(args[1]);
+  if (!second) {
+    return second.error();
+  }
+  return builtins_detail::NumberPair{first.value(), second.value()};
+}
+
 // MROUND(number, multiple) - nearest multiple of `|multiple|` to `number`,
 // with ties rounded away from zero. Opposite-signed inputs yield #NUM!;
 // `multiple = 0` returns 0 (Excel's documented quirk).
@@ -401,19 +419,12 @@ Value MRound(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   // Excel 365 rejects direct Bool arguments to MROUND with #VALUE!
   // (mirrors the strict-Bool rejection in BIN2*/OCT2*/HEX2*). Number
   // and Text arguments still coerce normally.
-  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool) {
-    return Value::error(ErrorCode::Value);
+  auto pair = coerce_non_bool_pair(args);
+  if (!pair) {
+    return Value::error(pair.error());
   }
-  auto number = coerce_to_number(args[0]);
-  if (!number) {
-    return Value::error(number.error());
-  }
-  auto multiple = coerce_to_number(args[1]);
-  if (!multiple) {
-    return Value::error(multiple.error());
-  }
-  const double n = number.value();
-  const double m = multiple.value();
+  const double n = pair.value().first;
+  const double m = pair.value().second;
   if (m == 0.0) {
     return Value::number(0.0);
   }
@@ -498,45 +509,36 @@ Value FloorMath(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // promotes it to +1). All other zero / non-integer inputs behave as a
 // normal away-from-zero rounding followed by a parity fix-up.
 
-// EVEN(x) - nearest even integer, rounded AWAY from zero.
-//   `EVEN(1.5) = 2`, `EVEN(3) = 4`, `EVEN(-1.5) = -2`, `EVEN(-2.1) = -4`,
-//   `EVEN(0) = 0`.
-Value Even(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+// Shared body of EVEN / ODD: rounds away from zero to the nearest integer,
+// then steps one further away when that integer has the wrong parity.
+Value round_away_to_parity(const Value* args, bool want_odd) {
   auto coerced = coerce_to_number(args[0]);
   if (!coerced) {
     return Value::error(coerced.error());
   }
   const double x = coerced.value();
   if (x == 0.0) {
-    return Value::number(0.0);
+    return Value::number(want_odd ? 1.0 : 0.0);
   }
-  // Round AWAY from zero to the nearest integer first, then step one away
-  // again if that integer happens to be odd. `std::ceil / std::floor` on
-  // the signed value implements the away-from-zero step.
+  // `std::ceil / std::floor` on the signed value is the away-from-zero step.
   const double away = (x > 0.0) ? std::ceil(x) : std::floor(x);
-  // Parity check via std::fmod: `|away| mod 2 == 0` -> already even.
-  const double parity = std::fmod(std::fabs(away), 2.0);
-  const double r = (parity == 0.0) ? away : away + ((x > 0.0) ? 1.0 : -1.0);
+  const bool is_odd = std::fmod(std::fabs(away), 2.0) != 0.0;
+  const double r = (is_odd == want_odd) ? away : away + ((x > 0.0) ? 1.0 : -1.0);
   return to_finite_value(r);
+}
+
+// EVEN(x) - nearest even integer, rounded AWAY from zero.
+//   `EVEN(1.5) = 2`, `EVEN(3) = 4`, `EVEN(-1.5) = -2`, `EVEN(-2.1) = -4`,
+//   `EVEN(0) = 0`.
+Value Even(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return round_away_to_parity(args, /*want_odd=*/false);
 }
 
 // ODD(x) - nearest odd integer, rounded AWAY from zero. `ODD(0) = 1` is the
 // documented quirk; otherwise symmetric to EVEN.
 //   `ODD(1.5) = 3`, `ODD(2) = 3`, `ODD(-1.5) = -3`, `ODD(-2) = -3`.
 Value Odd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto coerced = coerce_to_number(args[0]);
-  if (!coerced) {
-    return Value::error(coerced.error());
-  }
-  const double x = coerced.value();
-  if (x == 0.0) {
-    return Value::number(1.0);
-  }
-  const double away = (x > 0.0) ? std::ceil(x) : std::floor(x);
-  const double parity = std::fmod(std::fabs(away), 2.0);
-  // `|away| mod 2 == 1` -> already odd. Otherwise step one away from zero.
-  const double r = (parity != 0.0) ? away : away + ((x > 0.0) ? 1.0 : -1.0);
-  return to_finite_value(r);
+  return round_away_to_parity(args, /*want_odd=*/true);
 }
 
 // QUOTIENT(numerator, denominator) - integer division, truncated TOWARD
@@ -546,21 +548,14 @@ Value Odd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 Value Quotient(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   // Excel's QUOTIENT rejects boolean operands (#VALUE!) even though MOD and
   // arithmetic operators accept them. Verified against Mac Excel 365 / IronCalc.
-  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool) {
-    return Value::error(ErrorCode::Value);
+  auto pair = coerce_non_bool_pair(args);
+  if (!pair) {
+    return Value::error(pair.error());
   }
-  auto num = coerce_to_number(args[0]);
-  if (!num) {
-    return Value::error(num.error());
-  }
-  auto den = coerce_to_number(args[1]);
-  if (!den) {
-    return Value::error(den.error());
-  }
-  if (den.value() == 0.0) {
+  if (pair.value().second == 0.0) {
     return Value::error(ErrorCode::Div0);
   }
-  const double r = std::trunc(num.value() / den.value());
+  const double r = std::trunc(pair.value().first / pair.value().second);
   return to_finite_value(r);
 }
 

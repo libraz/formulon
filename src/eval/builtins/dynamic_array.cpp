@@ -61,6 +61,29 @@ Expected<bool, ErrorCode> read_optional_bool_arg(const Value* args, std::uint32_
   return coerce_to_bool(args[index]);
 }
 
+struct GridShape {
+  std::uint32_t rows;
+  std::uint32_t cols;
+};
+
+// Truncates the requested dimensions toward zero and validates them: a
+// non-positive dimension is `#VALUE!` (`#CALC!` when `zero_is_calc` and one
+// truncates to exactly zero), an over-sheet dimension is `#NUM!`.
+Expected<GridShape, ErrorCode> validate_grid_shape(double rows_d, double cols_d, bool zero_is_calc) {
+  const double rows_t = std::trunc(rows_d);
+  const double cols_t = std::trunc(cols_d);
+  if (zero_is_calc && (rows_t == 0.0 || cols_t == 0.0)) {
+    return ErrorCode::Calc;
+  }
+  if (!(rows_t > 0.0) || !(cols_t > 0.0)) {
+    return ErrorCode::Value;
+  }
+  if (rows_t > static_cast<double>(Sheet::kMaxRows) || cols_t > static_cast<double>(Sheet::kMaxCols)) {
+    return ErrorCode::Num;
+  }
+  return GridShape{static_cast<std::uint32_t>(rows_t), static_cast<std::uint32_t>(cols_t)};
+}
+
 /// SEQUENCE(rows, [cols=1], [start=1], [step=1]).
 ///
 /// Returns a `rows x cols` row-major numeric grid where the cell at
@@ -100,23 +123,15 @@ Value Sequence(const Value* args, std::uint32_t arity, Arena& arena) {
   const double start = start_c.value();
   const double step = step_c.value();
 
-  // Truncate-toward-zero is Excel's behaviour for the row/col dimensions.
   // A value that truncates to zero yields #CALC!, while a strictly negative
   // dimension yields #VALUE!. This distinction is observable for
   // SEQUENCE(0) versus SEQUENCE(-1).
-  const double rows_t = std::trunc(rows_c.value());
-  const double cols_t = std::trunc(cols_d);
-  if (rows_t == 0.0 || cols_t == 0.0) {
-    return Value::error(ErrorCode::Calc);
+  auto shape = validate_grid_shape(rows_c.value(), cols_d, /*zero_is_calc=*/true);
+  if (!shape) {
+    return Value::error(shape.error());
   }
-  if (!(rows_t > 0.0) || !(cols_t > 0.0)) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (rows_t > static_cast<double>(Sheet::kMaxRows) || cols_t > static_cast<double>(Sheet::kMaxCols)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const auto rows = static_cast<std::uint32_t>(rows_t);
-  const auto cols = static_cast<std::uint32_t>(cols_t);
+  const std::uint32_t rows = shape.value().rows;
+  const std::uint32_t cols = shape.value().cols;
   Value* buffer = nullptr;
   ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxSequenceCells);
   if (arr == nullptr) {
@@ -187,16 +202,12 @@ Value RandArray(const Value* args, std::uint32_t arity, Arena& arena) {
 
   // Shape validation. SEQUENCE precedent: truncate-toward-zero, reject
   // <= 0 with #VALUE!, reject oversize with #NUM!.
-  const double rows_t = std::trunc(rows_d);
-  const double cols_t = std::trunc(cols_d);
-  if (!(rows_t > 0.0) || !(cols_t > 0.0)) {
-    return Value::error(ErrorCode::Value);
+  auto shape = validate_grid_shape(rows_d, cols_d, /*zero_is_calc=*/false);
+  if (!shape) {
+    return Value::error(shape.error());
   }
-  if (rows_t > static_cast<double>(Sheet::kMaxRows) || cols_t > static_cast<double>(Sheet::kMaxCols)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const auto rows = static_cast<std::uint32_t>(rows_t);
-  const auto cols = static_cast<std::uint32_t>(cols_t);
+  const std::uint32_t rows = shape.value().rows;
+  const std::uint32_t cols = shape.value().cols;
   const auto n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
 
   // Bounds validation.

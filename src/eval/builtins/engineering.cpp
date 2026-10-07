@@ -211,24 +211,19 @@ Expected<std::string, ErrorCode> input_digit_string(const Value& v) {
   }
 }
 
-// Dispatches a *2* conversion. Decodes the input from `src` and encodes the
-// result to `dst`, honouring an optional `places` argument. The decoded
-// signed value must fit in the destination's signed range; otherwise
-// surface #NUM!, matching Excel's behaviour for e.g. HEX2BIN("200").
-Value convert_bases(const Value* args, std::uint32_t arity, Arena& arena, const BaseSpec& src, const BaseSpec& dst,
-                    bool allow_places) {
-  auto s = input_digit_string(args[0]);
+// Parses a source-side digit argument and decodes it to a signed value.
+Expected<std::int64_t, ErrorCode> decode_source_arg(const Value& arg, const BaseSpec& src) {
+  auto s = input_digit_string(arg);
   if (!s) {
-    return Value::error(s.error());
+    return s.error();
   }
-  auto decoded = decode_digit_string(s.value(), src);
-  if (!decoded) {
-    return Value::error(decoded.error());
-  }
-  const std::int64_t value = decoded.value();
-  if (value < dst.min_signed || value > dst.max_signed) {
-    return Value::error(ErrorCode::Num);
-  }
+  return decode_digit_string(s.value(), src);
+}
+
+// Encodes `value` in `dst`, honouring the optional `places` argument at
+// `args[1]` when `allow_places` and present.
+Value encode_with_places(std::int64_t value, const Value* args, std::uint32_t arity, Arena& arena, const BaseSpec& dst,
+                         bool allow_places) {
   int places = 0;
   const int* places_ptr = nullptr;
   if (allow_places && arity >= 2) {
@@ -246,6 +241,23 @@ Value convert_bases(const Value* args, std::uint32_t arity, Arena& arena, const 
   return Value::text(arena.intern(out.value()));
 }
 
+// Dispatches a *2* conversion. Decodes the input from `src` and encodes the
+// result to `dst`, honouring an optional `places` argument. The decoded
+// signed value must fit in the destination's signed range; otherwise
+// surface #NUM!, matching Excel's behaviour for e.g. HEX2BIN("200").
+Value convert_bases(const Value* args, std::uint32_t arity, Arena& arena, const BaseSpec& src, const BaseSpec& dst,
+                    bool allow_places) {
+  auto decoded = decode_source_arg(args[0], src);
+  if (!decoded) {
+    return Value::error(decoded.error());
+  }
+  const std::int64_t value = decoded.value();
+  if (value < dst.min_signed || value > dst.max_signed) {
+    return Value::error(ErrorCode::Num);
+  }
+  return encode_with_places(value, args, arity, arena, dst, allow_places);
+}
+
 // Dispatches a DEC -> * conversion. Takes a numeric input (truncated toward
 // zero), range-checks against `dst`, and encodes.
 Value convert_from_dec(const Value* args, std::uint32_t arity, Arena& arena, const BaseSpec& dst) {
@@ -258,31 +270,12 @@ Value convert_from_dec(const Value* args, std::uint32_t arity, Arena& arena, con
   if (!t) {
     return Value::error(t.error());
   }
-  const auto value = static_cast<std::int64_t>(t.value());
-  int places = 0;
-  const int* places_ptr = nullptr;
-  if (arity >= 2) {
-    auto p = coerce_places(args[1]);
-    if (!p) {
-      return Value::error(p.error());
-    }
-    places = p.value();
-    places_ptr = &places;
-  }
-  auto out = encode_base_string(value, dst, places_ptr);
-  if (!out) {
-    return Value::error(out.error());
-  }
-  return Value::text(arena.intern(out.value()));
+  return encode_with_places(static_cast<std::int64_t>(t.value()), args, arity, arena, dst, /*allow_places=*/true);
 }
 
 // Dispatches a * -> DEC conversion. Returns the signed integer as a Number.
 Value convert_to_dec(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, const BaseSpec& src) {
-  auto s = input_digit_string(args[0]);
-  if (!s) {
-    return Value::error(s.error());
-  }
-  auto decoded = decode_digit_string(s.value(), src);
+  auto decoded = decode_source_arg(args[0], src);
   if (!decoded) {
     return Value::error(decoded.error());
   }

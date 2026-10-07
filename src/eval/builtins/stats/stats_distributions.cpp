@@ -52,18 +52,14 @@ static Value NormDistCompute(double x, double mean, double sd, bool cumulative) 
 // NORM.DIST(x, mean, sd, cumulative) - normal distribution PDF or CDF.
 // `sd <= 0` yields `#NUM!`; all other finite inputs are accepted.
 Value NormDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_number_triple(args, 0, 1, 2);
+  auto input = read_triple_cumulative(args);
   if (!input) {
     return Value::error(input.error());
-  }
-  auto cum = read_bool_arg(args, 3);
-  if (!cum) {
-    return Value::error(cum.error());
   }
   if (input.value().third <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  return NormDistCompute(input.value().first, input.value().second, input.value().third, cum.value());
+  return NormDistCompute(input.value().first, input.value().second, input.value().third, input.value().cumulative);
 }
 
 // NORM.S.DIST(z, cumulative) - thin wrapper over NORM.DIST with
@@ -150,13 +146,9 @@ double BinomCdf(double k, double n, double prob) noexcept {
 // cost never tracks the value of the input; shapes the closed form cannot
 // resolve to the family's tolerance are refused with `#NUM!`.
 Value BinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_number_triple(args, 0, 1, 2);
+  auto input = read_triple_cumulative(args);
   if (!input) {
     return Value::error(input.error());
-  }
-  auto cum = read_bool_arg(args, 3);
-  if (!cum) {
-    return Value::error(cum.error());
   }
   const double k = std::floor(input.value().first);
   const double n = std::floor(input.value().second);
@@ -165,7 +157,7 @@ Value BinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   double r;
-  if (cum.value()) {
+  if (input.value().cumulative) {
     if (k >= kMaxCumulativeTerms) {
       if (!beta_shapes_are_resolvable(n - k, k + 1.0)) {
         return Value::error(ErrorCode::Num);
@@ -203,13 +195,9 @@ double PoissonCdf(double k, double mean) noexcept {
 // closed form beyond it, so the cost never tracks the value of `x`. The
 // two agree to well within Excel's reported precision at the switch-over.
 Value PoissonDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_number_pair(args, 0, 1);
+  auto input = read_pair_cumulative(args);
   if (!input) {
     return Value::error(input.error());
-  }
-  auto cum = read_bool_arg(args, 2);
-  if (!cum) {
-    return Value::error(cum.error());
   }
   const double x = std::floor(input.value().first);
   const double mean = input.value().second;
@@ -220,13 +208,13 @@ Value PoissonDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
     // Degenerate distribution: all mass at k = 0. CDF is 1 at any x >= 0;
     // PMF is 1 at k == 0 and 0 elsewhere. Handled explicitly so the log-
     // space PoissonPmf doesn't hit log(0) = -inf.
-    if (cum.value()) {
+    if (input.value().cumulative) {
       return Value::number(1.0);
     }
     return Value::number(x == 0.0 ? 1.0 : 0.0);
   }
   double r;
-  if (cum.value()) {
+  if (input.value().cumulative) {
     if (x >= kMaxCumulativeTerms) {
       r = PoissonCdf(x, mean);
     } else {
@@ -286,13 +274,9 @@ static double ChisqCdfWilsonHilferty(double x, double df) noexcept {
 // 1e10, and negative `x` with `#NUM!`. The PDF singularity at `x == 0`
 // with `df == 1` also surfaces `#NUM!`.
 Value ChisqDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_number_pair(args, 0, 1);
+  auto input = read_pair_cumulative(args);
   if (!input) {
     return Value::error(input.error());
-  }
-  auto cum = read_bool_arg(args, 2);
-  if (!cum) {
-    return Value::error(cum.error());
   }
   const double x = input.value().first;
   const double df = std::floor(input.value().second);
@@ -300,7 +284,7 @@ Value ChisqDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   double r;
-  if (cum.value()) {
+  if (input.value().cumulative) {
     if (x == 0.0) {
       r = 0.0;
     } else if (df >= kChisqWilsonHilfertyDf) {
@@ -440,20 +424,16 @@ Value ChisqInvRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // `x < 0` or `lambda <= 0` yields `#NUM!`. PDF: lambda * exp(-lambda*x);
 // CDF: 1 - exp(-lambda*x).
 Value ExponDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_number_pair(args, 0, 1);
+  auto input = read_pair_cumulative(args);
   if (!input) {
     return Value::error(input.error());
-  }
-  auto cum = read_bool_arg(args, 2);
-  if (!cum) {
-    return Value::error(cum.error());
   }
   const double x = input.value().first;
   const double lambda = input.value().second;
   if (x < 0.0 || lambda <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = cum.value() ? 1.0 - std::exp(-lambda * x) : lambda * std::exp(-lambda * x);
+  const double r = input.value().cumulative ? 1.0 - std::exp(-lambda * x) : lambda * std::exp(-lambda * x);
   return finite_number_result(r);
 }
 
@@ -534,20 +514,16 @@ static double TDistPdf(double x, double df) noexcept {
 // unrestricted (the distribution is symmetric around 0). The PDF uses
 // lgamma to avoid overflow at large df.
 Value TDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_number_pair(args, 0, 1);
+  auto input = read_pair_cumulative(args);
   if (!input) {
     return Value::error(input.error());
-  }
-  auto cum = read_bool_arg(args, 2);
-  if (!cum) {
-    return Value::error(cum.error());
   }
   const double x = input.value().first;
   const double df = std::floor(input.value().second);
   if (df < 1.0 || df > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
-  return finite_number_result(cum.value() ? TDistCdf(x, df) : TDistPdf(x, df));
+  return finite_number_result(input.value().cumulative ? TDistCdf(x, df) : TDistPdf(x, df));
 }
 
 // T.DIST.2T(x, deg_freedom) - two-tailed Student's t probability. Excel
@@ -696,13 +672,9 @@ static double FDistPdf(double x, double d1, double d2) noexcept {
 // yields `#NUM!`. At `x == 0` the PDF is divergent for `d1 == 1` (Excel
 // surfaces `#NUM!`), equals 1 for `d1 == 2`, and 0 for `d1 > 2`.
 Value FDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_number_triple(args, 0, 1, 2);
+  auto input = read_triple_cumulative(args);
   if (!input) {
     return Value::error(input.error());
-  }
-  auto cum = read_bool_arg(args, 3);
-  if (!cum) {
-    return Value::error(cum.error());
   }
   const double x = input.value().first;
   const double d1 = std::floor(input.value().second);
@@ -711,7 +683,7 @@ Value FDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   double r;
-  if (cum.value()) {
+  if (input.value().cumulative) {
     r = FDistCdf(x, d1, d2);
   } else {
     if (x == 0.0) {

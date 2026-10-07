@@ -179,9 +179,7 @@ Value Sln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  const double cost = parsed.value().cost;
-  const double salvage = parsed.value().salvage;
-  const double life = parsed.value().life;
+  const auto [cost, salvage, life] = parsed.value();
   if (life == 0.0) {
     return Value::error(ErrorCode::Div0);
   }
@@ -207,10 +205,7 @@ Value Syd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  const double cost = parsed.value().cost;
-  const double salvage = parsed.value().salvage;
-  const double life = parsed.value().life;
-  const double period = parsed.value().period;
+  const auto [cost, salvage, life, period] = parsed.value();
   if (life <= 0.0 || period <= 0.0 || period > life) {
     return Value::error(ErrorCode::Num);
   }
@@ -261,10 +256,7 @@ Value Ddb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!factor_e) {
     return Value::error(factor_e.error());
   }
-  const double cost = parsed.value().cost;
-  const double salvage = parsed.value().salvage;
-  const double life = parsed.value().life;
-  const double period = parsed.value().period;
+  const auto [cost, salvage, life, period] = parsed.value();
   const double factor = factor_e.value();
   if (cost < 0.0 || salvage < 0.0 || life <= 0.0 || period < 1.0 || period > life || factor <= 0.0) {
     return Value::error(ErrorCode::Num);
@@ -365,10 +357,7 @@ Value Db(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!month_e) {
     return Value::error(month_e.error());
   }
-  const double cost = parsed.value().cost;
-  const double salvage = parsed.value().salvage;
-  const double life = parsed.value().life;
-  const double period = parsed.value().period;
+  const auto [cost, salvage, life, period] = parsed.value();
   // Excel 365 Mac floors `month` before every downstream use (domain
   // checks, first-period proration, and the partial-last-year factor).
   const double month_int = std::floor(month_e.value());
@@ -456,13 +445,7 @@ Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  const double cost = parsed.value().cost;
-  const double salvage = parsed.value().salvage;
-  const double life = parsed.value().life;
-  const double start_period = parsed.value().start_period;
-  const double end_period = parsed.value().end_period;
-  const double factor = parsed.value().factor;
-  const bool no_switch = parsed.value().no_switch;
+  const auto [cost, salvage, life, start_period, end_period, factor, no_switch] = parsed.value();
   if (cost < 0.0 || salvage < 0.0 || life <= 0.0 || factor < 0.0) {
     return Value::error(ErrorCode::Num);
   }

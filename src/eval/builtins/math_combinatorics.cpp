@@ -99,7 +99,9 @@ struct UIntPair {
   std::uint64_t second;
 };
 
-Expected<UIntPair, ErrorCode> read_nonneg_uint_pair(const Value* args, std::uint64_t max) {
+// Reads the (n, k) pair of COMBIN / COMBINA / PERMUT / PERMUTATIONA.
+Expected<UIntPair, ErrorCode> read_nonneg_uint_pair(const Value* args) {
+  constexpr std::uint64_t max = static_cast<std::uint64_t>(1) << 53u;
   auto first = read_nonneg_uint_arg(args, 0, max);
   if (!first) {
     return first.error();
@@ -193,7 +195,7 @@ inline double combin_exact(std::uint64_t n, std::uint64_t k) {
 // COMBIN(n, k) - n choose k. Fractional inputs truncated toward zero.
 // Negative n, negative k, or k > n yields #NUM!. Overflow yields #NUM!.
 Value Combin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto pair = read_nonneg_uint_pair(args, static_cast<std::uint64_t>(1) << 53u);
+  auto pair = read_nonneg_uint_pair(args);
   if (!pair) {
     return Value::error(pair.error());
   }
@@ -209,7 +211,7 @@ Value Combin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // COMBIN (after the k <= n check — which does NOT apply to COMBINA;
 // COMBINA allows k > n since order-with-repetition has no such cap).
 Value CombinA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto pair = read_nonneg_uint_pair(args, static_cast<std::uint64_t>(1) << 53u);
+  auto pair = read_nonneg_uint_pair(args);
   if (!pair) {
     return Value::error(pair.error());
   }
@@ -235,7 +237,7 @@ Value CombinA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // non-negative integer; `k > n` yields `#NUM!`, as does overflow.
 // Edge cases: `PERMUT(n, 0) = 1` for any n >= 0.
 Value Permut(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto pair = read_nonneg_uint_pair(args, static_cast<std::uint64_t>(1) << 53u);
+  auto pair = read_nonneg_uint_pair(args);
   if (!pair) {
     return Value::error(pair.error());
   }
@@ -260,7 +262,7 @@ Value Permut(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // n^k. Both arguments floor to non-negative integer. `PERMUTATIONA(0, 0) = 1`
 // by Excel convention; `PERMUTATIONA(0, k>0) = 0`. Overflow yields `#NUM!`.
 Value PermutationA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto pair = read_nonneg_uint_pair(args, static_cast<std::uint64_t>(1) << 53u);
+  auto pair = read_nonneg_uint_pair(args);
   if (!pair) {
     return Value::error(pair.error());
   }

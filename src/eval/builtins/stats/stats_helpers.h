@@ -97,6 +97,45 @@ inline Expected<bool, ErrorCode> read_bool_arg(const Value* args, std::uint32_t 
   return value.value();
 }
 
+// Leading numeric arguments followed by a trailing `cumulative` flag, as the
+// `*.DIST` family takes them. Numbers are read before the flag so the
+// left-most error wins.
+struct PairCumulative {
+  double first;
+  double second;
+  bool cumulative;
+};
+struct TripleCumulative {
+  double first;
+  double second;
+  double third;
+  bool cumulative;
+};
+
+inline Expected<PairCumulative, ErrorCode> read_pair_cumulative(const Value* args) {
+  auto input = read_number_pair(args, 0, 1);
+  if (!input) {
+    return input.error();
+  }
+  auto cum = read_bool_arg(args, 2);
+  if (!cum) {
+    return cum.error();
+  }
+  return PairCumulative{input.value().first, input.value().second, cum.value()};
+}
+
+inline Expected<TripleCumulative, ErrorCode> read_triple_cumulative(const Value* args) {
+  auto input = read_number_triple(args, 0, 1, 2);
+  if (!input) {
+    return input.error();
+  }
+  auto cum = read_bool_arg(args, 3);
+  if (!cum) {
+    return cum.error();
+  }
+  return TripleCumulative{input.value().first, input.value().second, input.value().third, cum.value()};
+}
+
 inline Value finite_number_result(double value) {
   return builtins_detail::to_finite_value(value);
 }

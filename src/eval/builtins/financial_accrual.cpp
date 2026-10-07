@@ -70,26 +70,15 @@ Expected<bool, ErrorCode> read_calc_method(const Value* args, std::uint32_t arit
 //   - frequency not in {1, 2, 4}     ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}   ->  #NUM!
 Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto issue = read_financial_date(args, 0);
-  if (!issue) {
-    return Value::error(issue.error());
+  double v[5];
+  if (auto read = read_required_numbers(args, "dddnn", v); !read) {
+    return Value::error(read.error());
   }
-  auto first_interest = read_financial_date(args, 1);
-  if (!first_interest) {
-    return Value::error(first_interest.error());
-  }
-  auto settlement = read_financial_date(args, 2);
-  if (!settlement) {
-    return Value::error(settlement.error());
-  }
-  auto rate = read_required_number(args, 3);
-  if (!rate) {
-    return Value::error(rate.error());
-  }
-  auto par = read_required_number(args, 4);
-  if (!par) {
-    return Value::error(par.error());
-  }
+  const double issue = v[0];
+  const double first_interest = v[1];
+  const double settlement = v[2];
+  const double rate = v[3];
+  const double par = v[4];
   auto frequency = read_coupon_frequency(args, 5);
   if (!frequency) {
     return Value::error(frequency.error());
@@ -102,10 +91,10 @@ Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
   if (!calc_method) {
     return Value::error(calc_method.error());
   }
-  if (issue.value() >= settlement.value()) {
+  if (issue >= settlement) {
     return Value::error(ErrorCode::Num);
   }
-  if (rate.value() <= 0.0 || par.value() <= 0.0) {
+  if (rate <= 0.0 || par <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
   // Mac Excel 365 always accrues from `issue` to `settlement`, ignoring
@@ -116,12 +105,11 @@ Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
   // calc_method argument is still validated for type correctness above.
   (void)calc_method;
   (void)first_interest;
-  const double start = issue.value();
-  auto yf = yearfrac_for_basis(start, settlement.value(), basis.value(), date1904);
+  auto yf = yearfrac_for_basis(issue, settlement, basis.value(), date1904);
   if (!yf) {
     return Value::error(yf.error());
   }
-  return finalize(par.value() * rate.value() * yf.value());
+  return finalize(par * rate * yf.value());
 }
 
 // --- ACCRINTM(issue, settlement, rate, par, [basis=0]) -----------------

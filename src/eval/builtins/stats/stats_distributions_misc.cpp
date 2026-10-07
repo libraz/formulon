@@ -263,13 +263,9 @@ static double NegBinomLogPmf(double f, double s, double p) noexcept {
 // closed form resolves exactly at any magnitude; a large `number_s` makes
 // the pair balanced and is refused past the shape bound.
 Value NegBinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_number_triple(args, 0, 1, 2);
+  auto input = read_triple_cumulative(args);
   if (!input) {
     return Value::error(input.error());
-  }
-  auto cum = read_bool_arg(args, 3);
-  if (!cum) {
-    return Value::error(cum.error());
   }
   const double f = std::floor(input.value().first);
   const double s = std::floor(input.value().second);
@@ -278,7 +274,7 @@ Value NegBinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/)
     return Value::error(ErrorCode::Num);
   }
   double r;
-  if (cum.value()) {
+  if (input.value().cumulative) {
     if (f >= kMaxCumulativeTerms) {
       if (!beta_shapes_are_resolvable(s, f + 1.0)) {
         return Value::error(ErrorCode::Num);

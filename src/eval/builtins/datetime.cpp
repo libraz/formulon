@@ -173,6 +173,18 @@ Expected<double, ErrorCode> read_truncated_number_arg(const Value* args, std::ui
   return std::trunc(n.value());
 }
 
+// Reads `args[0..3)` as truncated numbers (DATE / TIME components), left-most error first.
+Expected<void, ErrorCode> read_truncated_triple(const Value* args, double* out) {
+  for (std::uint32_t i = 0; i < 3U; ++i) {
+    auto n = read_truncated_number_arg(args, i);
+    if (!n) {
+      return Expected<void, ErrorCode>::Err(n.error());
+    }
+    out[i] = n.value();
+  }
+  return Expected<void, ErrorCode>::Ok();
+}
+
 Expected<int, ErrorCode> read_optional_truncated_int_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
                                                          int default_value) {
   if (arity <= index) {
@@ -216,21 +228,13 @@ Expected<date_time::HMS, ErrorCode> coerce_serial_hms(const Value& v) {
 /// through the normalisation baked into `days_from_civil`, so rolls like
 /// `DATE(2026, 13, 1) = 2027-01-01` fall out naturally.
 Value Date_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  auto year = read_truncated_number_arg(args, 0);
-  if (!year) {
-    return Value::error(year.error());
+  double ymd_args[3];
+  if (auto read = read_truncated_triple(args, ymd_args); !read) {
+    return Value::error(read.error());
   }
-  auto month = read_truncated_number_arg(args, 1);
-  if (!month) {
-    return Value::error(month.error());
-  }
-  auto day = read_truncated_number_arg(args, 2);
-  if (!day) {
-    return Value::error(day.error());
-  }
-  double y = year.value();
-  const double m = month.value();
-  const double d = day.value();
+  double y = ymd_args[0];
+  const double m = ymd_args[1];
+  const double d = ymd_args[2];
   // Excel's two-digit-year convention: `0 <= year < 1900` expands by 1900.
   if (y >= 0.0 && y < 1900.0) {
     y += 1900.0;
@@ -295,22 +299,17 @@ Value Date_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool d
 /// inputs are normalised modulo 24/60/60. A negative result (e.g.
 /// `TIME(-1, 0, 0)`) yields `#NUM!` per Excel.
 Value Time_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto hours = read_truncated_number_arg(args, 0);
-  if (!hours) {
-    return Value::error(hours.error());
+  double hms[3];
+  if (auto read = read_truncated_triple(args, hms); !read) {
+    return Value::error(read.error());
   }
-  auto minutes = read_truncated_number_arg(args, 1);
-  if (!minutes) {
-    return Value::error(minutes.error());
-  }
-  auto seconds = read_truncated_number_arg(args, 2);
-  if (!seconds) {
-    return Value::error(seconds.error());
-  }
-  if (hours.value() > 32767.0 || minutes.value() > 32767.0 || seconds.value() > 32767.0) {
+  const double hours = hms[0];
+  const double minutes = hms[1];
+  const double seconds = hms[2];
+  if (hours > 32767.0 || minutes > 32767.0 || seconds > 32767.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double total = hours.value() * 3600.0 + minutes.value() * 60.0 + seconds.value();
+  const double total = hours * 3600.0 + minutes * 60.0 + seconds;
   if (!std::isfinite(total) || total < 0.0) {
     return Value::error(ErrorCode::Num);
   }

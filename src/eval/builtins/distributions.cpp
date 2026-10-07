@@ -106,6 +106,20 @@ Expected<CumulativeTriple, ErrorCode> read_cumulative_triple(const Value* args) 
   return CumulativeTriple{parsed.value(), cum_e.value()};
 }
 
+// Reads the (x, alpha, beta, cumulative) arguments of GAMMA.DIST / WEIBULL.DIST
+// and applies their shared domain check: x >= 0, alpha > 0, beta > 0.
+Expected<CumulativeTriple, ErrorCode> read_scaled_cumulative_triple(const Value* args) {
+  auto parsed = read_cumulative_triple(args);
+  if (!parsed) {
+    return parsed.error();
+  }
+  const NumberTriple& p = parsed.value().params;
+  if (p.first < 0.0 || p.second <= 0.0 || p.third <= 0.0) {
+    return ErrorCode::Num;
+  }
+  return parsed.value();
+}
+
 // Shared bracket-then-Newton inverter for CDF surfaces on a half-open
 // interval. The caller supplies `cdf(x)` and its derivative `pdf(x)`
 // along with a bracket `[lo, hi]` known to contain the root (i.e.
@@ -372,16 +386,13 @@ double GammaPdf(double x, double alpha, double beta_scale) noexcept {
 //   alpha > 1: 0
 // The CDF at x == 0 is 0 by definition.
 Value GammaDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto parsed = read_cumulative_triple(args);
+  auto parsed = read_scaled_cumulative_triple(args);
   if (!parsed) {
     return Value::error(parsed.error());
   }
   const double x = parsed.value().params.first;
   const double alpha = parsed.value().params.second;
   const double beta_scale = parsed.value().params.third;
-  if (x < 0.0 || alpha <= 0.0 || beta_scale <= 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
   if (parsed.value().cumulative) {
     if (x == 0.0) {
       return finalize(0.0);
@@ -489,16 +500,13 @@ Value GammaInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // contract for this entry is "density at the boundary is zero"; verified
 // against the golden oracle. The CDF at x == 0 is 0 as expected.
 Value WeibullDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto parsed = read_cumulative_triple(args);
+  auto parsed = read_scaled_cumulative_triple(args);
   if (!parsed) {
     return Value::error(parsed.error());
   }
   const double x = parsed.value().params.first;
   const double alpha = parsed.value().params.second;
   const double beta_scale = parsed.value().params.third;
-  if (x < 0.0 || alpha <= 0.0 || beta_scale <= 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
   const double t = x / beta_scale;
   const double t_pow = std::pow(t, alpha);
   if (parsed.value().cumulative) {
@@ -595,30 +603,22 @@ double HypgeomPmf(double k, double n, double K, double N) noexcept {
 //     treats the infeasible-but-non-negative branch as measure-zero
 //     rather than malformed input.
 Value HypgeomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto k_e = read_number(args, 0);
-  if (!k_e) {
-    return Value::error(k_e.error());
-  }
-  auto n_e = read_number(args, 1);
-  if (!n_e) {
-    return Value::error(n_e.error());
-  }
-  auto big_k_e = read_number(args, 2);
-  if (!big_k_e) {
-    return Value::error(big_k_e.error());
-  }
-  auto big_n_e = read_number(args, 3);
-  if (!big_n_e) {
-    return Value::error(big_n_e.error());
+  double counts[4];
+  for (std::uint32_t i = 0; i < 4U; ++i) {
+    auto count_e = read_number(args, i);
+    if (!count_e) {
+      return Value::error(count_e.error());
+    }
+    counts[i] = count_e.value();
   }
   auto cum_e = coerce_to_bool(args[4]);
   if (!cum_e) {
     return Value::error(cum_e.error());
   }
-  const double k = std::floor(k_e.value());
-  const double n = std::floor(n_e.value());
-  const double big_k = std::floor(big_k_e.value());
-  const double big_n = std::floor(big_n_e.value());
+  const double k = std::floor(counts[0]);
+  const double n = std::floor(counts[1]);
+  const double big_k = std::floor(counts[2]);
+  const double big_n = std::floor(counts[3]);
   // Malformed-input check. Mac Excel rejects any negative count
   // (including `k < 0`) with #NUM!, alongside the containment checks
   // `n <= N` and `K <= N`. Per-oracle: `=HYPGEOM.DIST(-1, 4, 8, 20, FALSE)`

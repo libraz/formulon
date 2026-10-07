@@ -184,11 +184,7 @@ Value Pv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!input) {
     return Value::error(input.error());
   }
-  const double r = input.value().first;
-  const double n = input.value().second;
-  const double p = input.value().third;
-  const double f = input.value().fourth;
-  const double t = input.value().type;
+  const auto [r, n, p, f, t] = input.value();
   if (r == -1.0) {
     // (1+r)^n is 0 for n>0 (yields division by 0 inside the closed form)
     // or infinite for n<=0; Excel collapses both to #DIV/0!.
@@ -215,11 +211,7 @@ Value Fv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!input) {
     return Value::error(input.error());
   }
-  const double r = input.value().first;
-  const double n = input.value().second;
-  const double p = input.value().third;
-  const double v = input.value().fourth;
-  const double t = input.value().type;
+  const auto [r, n, p, v, t] = input.value();
   if (r == -1.0) {
     // (1+r)^n is 0 for n>0 (zero payment discount factor) or infinite for
     // n<=0; Excel collapses both to #DIV/0!.
@@ -246,11 +238,7 @@ Value Pmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!input) {
     return Value::error(input.error());
   }
-  const double r = input.value().first;
-  const double n = input.value().second;
-  const double v = input.value().third;
-  const double f = input.value().fourth;
-  const double t = input.value().type;
+  const auto [r, n, v, f, t] = input.value();
   if (r <= -1.0) {
     // Mac Excel 365 rejects rate <= -1 for PMT outright with #NUM!, even
     // when the closed form would evaluate to a finite value (e.g. rate=-3
@@ -296,11 +284,7 @@ Value Nper(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!input) {
     return Value::error(input.error());
   }
-  const double r = input.value().first;
-  const double p = input.value().second;
-  const double v = input.value().third;
-  const double f = input.value().fourth;
-  const double t = input.value().type;
+  const auto [r, p, v, f, t] = input.value();
   if (r == 0.0) {
     if (p == 0.0) {
       return Value::error(ErrorCode::Num);
