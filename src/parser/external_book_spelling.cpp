@@ -229,6 +229,23 @@ std::size_t ParseQuotedQualifier(std::string_view s, std::size_t pos, std::strin
   return after + 1;
 }
 
+// The index just past the `quote`-delimited run opening at `pos`, in which a
+// doubled quote is literal; the end of `s` when the run is unterminated.
+std::size_t QuotedRunEnd(std::string_view s, std::size_t pos, char quote) noexcept {
+  std::size_t j = pos + 1;
+  while (j < s.size()) {
+    if (s[j] == quote) {
+      if (j + 1 < s.size() && s[j + 1] == quote) {
+        ++j;
+      } else {
+        break;
+      }
+    }
+    ++j;
+  }
+  return j < s.size() ? j + 1 : s.size();
+}
+
 }  // namespace
 
 std::string percent_decode(std::string_view s) {
@@ -257,18 +274,7 @@ std::string spell_external_books(std::string_view stored, const ExternalBookReso
   while (i < stored.size()) {
     const char c = stored[i];
     if (c == '"') {
-      std::size_t j = i + 1;
-      while (j < stored.size()) {
-        if (stored[j] == '"') {
-          if (j + 1 < stored.size() && stored[j + 1] == '"') {
-            ++j;
-          } else {
-            break;
-          }
-        }
-        ++j;
-      }
-      j = j < stored.size() ? j + 1 : stored.size();
+      const std::size_t j = QuotedRunEnd(stored, i, '"');
       out.append(stored.substr(i, j - i));
       i = j;
       continue;
@@ -282,18 +288,7 @@ std::string spell_external_books(std::string_view stored, const ExternalBookReso
         continue;
       }
       // Copy the quoted name whole so brackets inside it are not scanned.
-      std::size_t j = i + 1;
-      while (j < stored.size()) {
-        if (stored[j] == '\'') {
-          if (j + 1 < stored.size() && stored[j + 1] == '\'') {
-            ++j;
-          } else {
-            break;
-          }
-        }
-        ++j;
-      }
-      j = j < stored.size() ? j + 1 : stored.size();
+      const std::size_t j = QuotedRunEnd(stored, i, '\'');
       out.append(stored.substr(i, j - i));
       i = j;
       continue;
