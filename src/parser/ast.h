@@ -314,6 +314,14 @@ class AstNode final {
   friend AstNode* make_error_literal(Arena&, ErrorCode);
   friend AstNode* make_error_placeholder(Arena&);
 
+  // Arena-allocates a node of `kind` for a factory to fill; null on
+  // allocation failure.
+  static AstNode* make_node(Arena& arena, NodeKind kind);
+  // The Ref3D node behind `make_ref3d` (`cell_end` == `cell`) and
+  // `make_ref3d_range`.
+  static AstNode* make_ref3d_node(Arena& arena, std::string_view sheet_begin, std::string_view sheet_end,
+                                  const Reference& cell, const Reference& cell_end, bool is_range);
+
   // --- Per-kind payload structs --------------------------------------------
   // Each is trivially destructible; pointer arrays are arena-owned.
   //

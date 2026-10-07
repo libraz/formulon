@@ -173,12 +173,19 @@ bool ast_depth_within_limit(const AstNode& root, std::uint32_t max_depth) {
 // Factories
 // ---------------------------------------------------------------------------
 
-AstNode* make_literal(Arena& arena, Value v) {
+AstNode* AstNode::make_node(Arena& arena, NodeKind kind) {
   AstNode* n = arena.create<AstNode>();
+  if (n != nullptr) {
+    n->kind_ = kind;
+  }
+  return n;
+}
+
+AstNode* make_literal(Arena& arena, Value v) {
+  AstNode* n = AstNode::make_node(arena, NodeKind::Literal);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::Literal;
   // Re-intern Text payloads so the AST owns the byte storage independently of
   // the caller's source (e.g. a Tokenizer arena scoped to Parser::parse()).
   // This matches the pattern used by every other factory below
@@ -191,22 +198,20 @@ AstNode* make_literal(Arena& arena, Value v) {
 }
 
 AstNode* make_ref(Arena& arena, const Reference& r) {
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::Ref);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::Ref;
   n->data_.ref = r;
   n->data_.ref.sheet = arena.intern(r.sheet);
   return n;
 }
 
 AstNode* make_spill_ref(Arena& arena, const Reference& r) {
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::SpillRef);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::SpillRef;
   // The anchor reference is structurally a single cell — `is_full_col` /
   // `is_full_row` are rejected at parse time before this factory runs.
   n->data_.spill_ref.anchor = r;
@@ -216,63 +221,49 @@ AstNode* make_spill_ref(Arena& arena, const Reference& r) {
 }
 
 AstNode* make_spill_ref_expr(Arena& arena, const AstNode* anchor_expr) {
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::SpillRef);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::SpillRef;
   n->data_.spill_ref.anchor = Reference{};
   n->data_.spill_ref.anchor_expr = anchor_expr;
   return n;
 }
 
-AstNode* make_ref3d(Arena& arena, std::string_view sheet_begin, std::string_view sheet_end, const Reference& cell) {
+AstNode* AstNode::make_ref3d_node(Arena& arena, std::string_view sheet_begin, std::string_view sheet_end,
+                                  const Reference& cell, const Reference& cell_end, bool is_range) {
   // Heap-allocate the payload so the AstNode union stays within its size
   // budget (see the size budget asserted in ast.h).
-  auto* payload = arena.create<AstNode::Ref3DPayload>();
+  auto* payload = arena.create<Ref3DPayload>();
   if (payload == nullptr) {
     return nullptr;
   }
   payload->sheet_begin = arena.intern(sheet_begin);
   payload->sheet_end = arena.intern(sheet_end);
   payload->cell = cell;
-  // The span endpoints carry the sheet identity; the inner cell ref is
+  // The span endpoints carry the sheet identity; the inner cell refs are
   // always sheet-less.
-  payload->cell.sheet = {};
-  payload->cell.sheet_quoted = false;
-  payload->cell_end = payload->cell;
-  payload->is_range = false;
-  AstNode* n = arena.create<AstNode>();
-  if (n == nullptr) {
-    return nullptr;
-  }
-  n->kind_ = NodeKind::Ref3D;
-  n->data_.ref3d = payload;
-  return n;
-}
-
-AstNode* make_ref3d_range(Arena& arena, std::string_view sheet_begin, std::string_view sheet_end, const Reference& cell,
-                          const Reference& cell_end) {
-  auto* payload = arena.create<AstNode::Ref3DPayload>();
-  if (payload == nullptr) {
-    return nullptr;
-  }
-  payload->sheet_begin = arena.intern(sheet_begin);
-  payload->sheet_end = arena.intern(sheet_end);
-  payload->cell = cell;
   payload->cell.sheet = {};
   payload->cell.sheet_quoted = false;
   payload->cell_end = cell_end;
   payload->cell_end.sheet = {};
   payload->cell_end.sheet_quoted = false;
-  payload->is_range = true;
-  AstNode* n = arena.create<AstNode>();
+  payload->is_range = is_range;
+  AstNode* n = make_node(arena, NodeKind::Ref3D);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::Ref3D;
   n->data_.ref3d = payload;
   return n;
+}
+
+AstNode* make_ref3d(Arena& arena, std::string_view sheet_begin, std::string_view sheet_end, const Reference& cell) {
+  return AstNode::make_ref3d_node(arena, sheet_begin, sheet_end, cell, cell, /*is_range=*/false);
+}
+
+AstNode* make_ref3d_range(Arena& arena, std::string_view sheet_begin, std::string_view sheet_end, const Reference& cell,
+                          const Reference& cell_end) {
+  return AstNode::make_ref3d_node(arena, sheet_begin, sheet_end, cell, cell_end, /*is_range=*/true);
 }
 
 AstNode* make_external_ref(Arena& arena, std::string_view path, std::string_view book, std::string_view sheet,
@@ -298,11 +289,10 @@ AstNode* make_external_ref(Arena& arena, std::string_view path, std::string_view
   payload->cell_end.sheet = {};
   payload->cell_end.sheet_quoted = false;
   payload->is_range = is_range;
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::ExternalRef);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::ExternalRef;
   n->data_.external_ref = payload;
   return n;
 }
@@ -319,22 +309,20 @@ AstNode* make_external_name_ref(Arena& arena, std::string_view path, std::string
   payload->sheet_end = {};
   payload->name = arena.intern(name);
   payload->is_range = false;
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::ExternalRef);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::ExternalRef;
   n->data_.external_ref = payload;
   return n;
 }
 
 AstNode* make_structured_ref(Arena& arena, std::string_view table, std::string_view column,
                              StructuredRefModifier modifier) {
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::StructuredRef);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::StructuredRef;
   n->data_.structured_ref.table = arena.intern(table);
   n->data_.structured_ref.column = arena.intern(column);
   n->data_.structured_ref.modifier = modifier;
@@ -342,11 +330,10 @@ AstNode* make_structured_ref(Arena& arena, std::string_view table, std::string_v
 }
 
 AstNode* make_name_ref(Arena& arena, std::string_view name) {
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::NameRef);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::NameRef;
   n->data_.name.name = arena.intern(name);
   n->data_.name.sheet = {};
   n->data_.name.sheet_quoted = false;
@@ -377,11 +364,10 @@ AstNode* make_sheet_name_ref(Arena& arena, std::string_view sheet, std::string_v
 
 AstNode* make_unary_op(Arena& arena, UnaryOp op, AstNode* operand) {
   FM_CHECK(operand != nullptr, "make_unary_op: operand must be non-null");
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::UnaryOp);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::UnaryOp;
   n->data_.unary.op = op;
   n->data_.unary.operand = operand;
   return n;
@@ -389,11 +375,10 @@ AstNode* make_unary_op(Arena& arena, UnaryOp op, AstNode* operand) {
 
 AstNode* make_binary_op(Arena& arena, BinOp op, AstNode* lhs, AstNode* rhs) {
   FM_CHECK(lhs != nullptr && rhs != nullptr, "make_binary_op: lhs/rhs must be non-null");
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::BinaryOp);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::BinaryOp;
   n->data_.binary.op = op;
   n->data_.binary.lhs = lhs;
   n->data_.binary.rhs = rhs;
@@ -402,11 +387,10 @@ AstNode* make_binary_op(Arena& arena, BinOp op, AstNode* lhs, AstNode* rhs) {
 
 AstNode* make_range_op(Arena& arena, AstNode* lhs, AstNode* rhs) {
   FM_CHECK(lhs != nullptr && rhs != nullptr, "make_range_op: lhs/rhs must be non-null");
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::RangeOp);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::RangeOp;
   n->data_.range.lhs = lhs;
   n->data_.range.rhs = rhs;
   return n;
@@ -419,11 +403,10 @@ AstNode* make_union_op(Arena& arena, const AstNode* const* children, std::uint32
   if (copied == nullptr) {
     return nullptr;
   }
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::UnionOp);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::UnionOp;
   n->data_.variadic.children = copied;
   n->data_.variadic.count = count;
   return n;
@@ -431,11 +414,10 @@ AstNode* make_union_op(Arena& arena, const AstNode* const* children, std::uint32
 
 AstNode* make_intersect_op(Arena& arena, AstNode* lhs, AstNode* rhs) {
   FM_CHECK(lhs != nullptr && rhs != nullptr, "make_intersect_op: lhs/rhs must be non-null");
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::IntersectOp);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::IntersectOp;
   // Reuse the binary RangePayload slot (same shape: two children).
   n->data_.range.lhs = lhs;
   n->data_.range.rhs = rhs;
@@ -444,11 +426,10 @@ AstNode* make_intersect_op(Arena& arena, AstNode* lhs, AstNode* rhs) {
 
 AstNode* make_implicit_intersection(Arena& arena, AstNode* operand) {
   FM_CHECK(operand != nullptr, "make_implicit_intersection: operand must be non-null");
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::ImplicitIntersection);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::ImplicitIntersection;
   // Reuse the unary slot; UnaryOp::Plus is just a placeholder discriminator
   // never read by the implicit-intersection accessor.
   n->data_.unary.op = UnaryOp::Plus;
@@ -465,11 +446,10 @@ AstNode* make_call(Arena& arena, std::string_view name, const AstNode* const* ar
       return nullptr;
     }
   }
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::Call);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::Call;
   n->data_.call.name = arena.intern(name);
   // A call always names a function, so an empty interned name for a
   // non-empty source name signals arena allocation failure (see
@@ -493,11 +473,10 @@ AstNode* make_array_literal(Arena& arena, std::uint32_t rows, std::uint32_t cols
   if (copied == nullptr) {
     return nullptr;
   }
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::ArrayLiteral);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::ArrayLiteral;
   n->data_.array.elements = copied;
   n->data_.array.rows = rows;
   n->data_.array.cols = cols;
@@ -516,11 +495,10 @@ AstNode* make_lambda(Arena& arena, const std::string_view* params, std::uint32_t
       return nullptr;
     }
   }
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::Lambda);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::Lambda;
   n->data_.lambda.params = copied_params;
   n->data_.lambda.param_count = param_count;
   n->data_.lambda.optional_count = optional_count;
@@ -541,11 +519,10 @@ AstNode* make_let_binding(Arena& arena, const std::string_view* names, const Ast
   if (copied_exprs == nullptr) {
     return nullptr;
   }
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::LetBinding);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::LetBinding;
   n->data_.let.names = copied_names;
   n->data_.let.exprs = copied_exprs;
   n->data_.let.binding_count = binding_count;
@@ -563,11 +540,10 @@ AstNode* make_lambda_call(Arena& arena, AstNode* callee, const AstNode* const* a
       return nullptr;
     }
   }
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::LambdaCall);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::LambdaCall;
   n->data_.lambda_call.callee = callee;
   n->data_.lambda_call.args = copied;
   n->data_.lambda_call.arity = arity;
@@ -575,21 +551,19 @@ AstNode* make_lambda_call(Arena& arena, AstNode* callee, const AstNode* const* a
 }
 
 AstNode* make_error_literal(Arena& arena, ErrorCode code) {
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::ErrorLiteral);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::ErrorLiteral;
   n->data_.error_literal = code;
   return n;
 }
 
 AstNode* make_error_placeholder(Arena& arena) {
-  AstNode* n = arena.create<AstNode>();
+  AstNode* n = AstNode::make_node(arena, NodeKind::ErrorPlaceholder);
   if (n == nullptr) {
     return nullptr;
   }
-  n->kind_ = NodeKind::ErrorPlaceholder;
   // No payload: every accessor on this kind is an invariant violation.
   return n;
 }
