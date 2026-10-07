@@ -43,12 +43,6 @@ bool starts_with_utf8(std::string_view s, const char (&expected)[4]) noexcept {
   return s.size() >= 3 && s[0] == expected[0] && s[1] == expected[1] && s[2] == expected[2];
 }
 
-// Returns true iff `s` begins with the given 6-byte UTF-8 sequence.
-bool starts_with_utf8_6(std::string_view s, const char (&expected)[7]) noexcept {
-  return s.size() >= 6 && s[0] == expected[0] && s[1] == expected[1] && s[2] == expected[2] && s[3] == expected[3] &&
-         s[4] == expected[4] && s[5] == expected[5];
-}
-
 // Folds full-width Arabic digits (U+FF10..U+FF19, encoded as `EF BC 90`..
 // `EF BC 99` in UTF-8) into ASCII `0`..`9`. All other bytes — including
 // the multi-byte kanji terminators `年/月/日/時/分/秒` and era characters
@@ -256,11 +250,33 @@ bool serial_from_era_ymd(Era era, int era_year, int month, int day, double* out_
   return true;
 }
 
-// After an era prefix has been consumed, parses the year/month/day tail in
-// the kanji form `<digits>年<digits>月<digits>日`. Mac Excel rejects 元
-// (gannen) and dot/slash separators when a *full-name* era prefix is used,
-// so we accept only the strict kanji form here.
-bool parse_era_kanji_ymd_tail(Era era, std::string_view s, double* out_serial, std::string_view* rest) noexcept {
+// Separators that follow the era year, month and day. An empty `day` means
+// the day digits end the token.
+struct EraTailSeparators {
+  std::string_view year;
+  std::string_view month;
+  std::string_view day;
+};
+
+// Mac Excel rejects 元 (gannen) and dot/slash separators when a *full-name*
+// era prefix is used, so the full-name form takes only the kanji separators.
+constexpr EraTailSeparators kEraKanjiSeparators = {std::string_view(kKanjiNen, 3), std::string_view(kKanjiGatsu, 3),
+                                                   std::string_view(kKanjiNichi, 3)};
+// Single-letter abbreviations (`R6.4.1`) take dots with no day terminator.
+constexpr EraTailSeparators kEraDotSeparators = {".", ".", ""};
+
+bool consume_sep(std::string_view* s, std::string_view sep) noexcept {
+  if (s->substr(0, sep.size()) != sep) {
+    return false;
+  }
+  s->remove_prefix(sep.size());
+  return true;
+}
+
+// After an era prefix has been consumed, parses the
+// `<digits><year-sep><digits><month-sep><digits><day-sep>` tail.
+bool parse_era_ymd_tail(Era era, std::string_view s, const EraTailSeparators& seps, double* out_serial,
+                        std::string_view* rest) noexcept {
   int era_year = 0;
   if (scan_digits(s, 4, &era_year) == 0) {
     return false;
@@ -268,26 +284,23 @@ bool parse_era_kanji_ymd_tail(Era era, std::string_view s, double* out_serial, s
   if (era_year <= 0) {
     return false;
   }
-  if (!starts_with_utf8(s, kKanjiNen)) {
+  if (!consume_sep(&s, seps.year)) {
     return false;
   }
-  s.remove_prefix(3);
   int month = 0;
   if (scan_digits(s, 2, &month) == 0) {
     return false;
   }
-  if (!starts_with_utf8(s, kKanjiGatsu)) {
+  if (!consume_sep(&s, seps.month)) {
     return false;
   }
-  s.remove_prefix(3);
   int day = 0;
   if (scan_digits(s, 2, &day) == 0) {
     return false;
   }
-  if (!starts_with_utf8(s, kKanjiNichi)) {
+  if (!consume_sep(&s, seps.day)) {
     return false;
   }
-  s.remove_prefix(3);
   if (!serial_from_era_ymd(era, era_year, month, day, out_serial)) {
     return false;
   }
@@ -295,81 +308,34 @@ bool parse_era_kanji_ymd_tail(Era era, std::string_view s, double* out_serial, s
   return true;
 }
 
-// After an abbreviation letter has been consumed, parses the dot-separated
-// `<digits>.<digits>.<digits>` tail used by `R6.4.1` etc.
-bool parse_era_dot_ymd_tail(Era era, std::string_view s, double* out_serial, std::string_view* rest) noexcept {
-  int era_year = 0;
-  if (scan_digits(s, 4, &era_year) == 0) {
-    return false;
-  }
-  if (era_year <= 0) {
-    return false;
-  }
-  if (s.empty() || s[0] != '.') {
-    return false;
-  }
-  s.remove_prefix(1);
-  int month = 0;
-  if (scan_digits(s, 2, &month) == 0) {
-    return false;
-  }
-  if (s.empty() || s[0] != '.') {
-    return false;
-  }
-  s.remove_prefix(1);
-  int day = 0;
-  if (scan_digits(s, 2, &day) == 0) {
-    return false;
-  }
-  if (!serial_from_era_ymd(era, era_year, month, day, out_serial)) {
-    return false;
-  }
-  *rest = s;
-  return true;
-}
+struct EraName {
+  std::string_view kanji;
+  char letter;  // upper-case abbreviation; the lower-case form is accepted too
+  Era era;
+};
+
+constexpr EraName kEraNames[] = {
+    {std::string_view(kEraReiwa, 6), 'R', Era::Reiwa}, {std::string_view(kEraHeisei, 6), 'H', Era::Heisei},
+    {std::string_view(kEraShowa, 6), 'S', Era::Showa}, {std::string_view(kEraTaisho, 6), 'T', Era::Taisho},
+    {std::string_view(kEraMeiji, 6), 'M', Era::Meiji},
+};
 
 // Recognises `<full-era-name><digits>年<digits>月<digits>日` and
 // `<single-letter-era>.<digits>.<digits>.<digits>`. Returns false if the
 // input does not start with one of the five recognised eras; in that case
 // the caller falls back to the regular Gregorian date forms.
 bool parse_era_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
-  // Full-name eras require the strict 年/月/日 grammar.
-  if (starts_with_utf8_6(s, kEraReiwa)) {
-    return parse_era_kanji_ymd_tail(Era::Reiwa, s.substr(6), out_serial, rest);
+  for (const EraName& name : kEraNames) {
+    if (s.substr(0, name.kanji.size()) == name.kanji) {
+      return parse_era_ymd_tail(name.era, s.substr(name.kanji.size()), kEraKanjiSeparators, out_serial, rest);
+    }
   }
-  if (starts_with_utf8_6(s, kEraHeisei)) {
-    return parse_era_kanji_ymd_tail(Era::Heisei, s.substr(6), out_serial, rest);
-  }
-  if (starts_with_utf8_6(s, kEraShowa)) {
-    return parse_era_kanji_ymd_tail(Era::Showa, s.substr(6), out_serial, rest);
-  }
-  if (starts_with_utf8_6(s, kEraTaisho)) {
-    return parse_era_kanji_ymd_tail(Era::Taisho, s.substr(6), out_serial, rest);
-  }
-  if (starts_with_utf8_6(s, kEraMeiji)) {
-    return parse_era_kanji_ymd_tail(Era::Meiji, s.substr(6), out_serial, rest);
-  }
-  // Single-letter abbreviations require the ASCII dot-separated grammar and
-  // a digit immediately after the letter (so `Mar` etc. don't get hijacked).
+  // A digit must follow the letter so `Mar` etc. don't get hijacked.
   if (s.size() >= 2 && s[1] >= '0' && s[1] <= '9') {
-    switch (s[0]) {
-      case 'R':
-      case 'r':
-        return parse_era_dot_ymd_tail(Era::Reiwa, s.substr(1), out_serial, rest);
-      case 'H':
-      case 'h':
-        return parse_era_dot_ymd_tail(Era::Heisei, s.substr(1), out_serial, rest);
-      case 'S':
-      case 's':
-        return parse_era_dot_ymd_tail(Era::Showa, s.substr(1), out_serial, rest);
-      case 'T':
-      case 't':
-        return parse_era_dot_ymd_tail(Era::Taisho, s.substr(1), out_serial, rest);
-      case 'M':
-      case 'm':
-        return parse_era_dot_ymd_tail(Era::Meiji, s.substr(1), out_serial, rest);
-      default:
-        break;
+    for (const EraName& name : kEraNames) {
+      if (s[0] == name.letter || s[0] == name.letter + ('a' - 'A')) {
+        return parse_era_ymd_tail(name.era, s.substr(1), kEraDotSeparators, out_serial, rest);
+      }
     }
   }
   return false;
@@ -392,6 +358,20 @@ bool parse_date_text(std::string_view s, int current_year, double* out_serial, s
     return true;
   }
   return parse_md_text(s, current_year, out_serial, rest);
+}
+
+// Scans the 1..2 day digits and, in the kanji form, the closing 日.
+bool scan_day_tail(std::string_view* s, bool kanji_form, int* day) noexcept {
+  if (scan_digits(*s, 2, day) == 0) {
+    return false;
+  }
+  if (kanji_form) {
+    if (!starts_with_utf8(*s, kKanjiNichi)) {
+      return false;
+    }
+    s->remove_prefix(3);
+  }
+  return true;
 }
 
 bool parse_ymd_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
@@ -426,14 +406,8 @@ bool parse_ymd_text(std::string_view s, double* out_serial, std::string_view* re
     s.remove_prefix(1);
   }
   int day = 0;
-  if (scan_digits(s, 2, &day) == 0) {
+  if (!scan_day_tail(&s, kanji_form, &day)) {
     return false;
-  }
-  if (kanji_form) {
-    if (!starts_with_utf8(s, kKanjiNichi)) {
-      return false;
-    }
-    s.remove_prefix(3);
   }
   if (!serial_from_parsed_ymd(year, year_digits, month, day, out_serial)) {
     return false;
@@ -467,14 +441,8 @@ bool parse_md_text(std::string_view s, int current_year, double* out_serial, std
     return false;
   }
   int day = 0;
-  if (scan_digits(s, 2, &day) == 0) {
+  if (!scan_day_tail(&s, kanji_form, &day)) {
     return false;
-  }
-  if (kanji_form) {
-    if (!starts_with_utf8(s, kKanjiNichi)) {
-      return false;
-    }
-    s.remove_prefix(3);
   }
   // `year_digits = 4` bypasses the two-digit pivot unconditionally: a
   // caller-supplied current year is already a real four-digit year.
@@ -573,6 +541,18 @@ bool parse_mmm_d_yyyy_text(std::string_view s, double* out_serial, std::string_v
   return true;
 }
 
+// Scans up to `max_digits` digits followed by the kanji unit `unit`.
+bool scan_digits_with_unit(std::string_view* s, int max_digits, const char (&unit)[4], int* out) noexcept {
+  if (scan_digits(*s, max_digits, out) == 0) {
+    return false;
+  }
+  if (!starts_with_utf8(*s, unit)) {
+    return false;
+  }
+  s->remove_prefix(3);
+  return true;
+}
+
 // Parses the kanji time form `<digits>時<digits>分[<digits>秒]`. The `分`
 // segment is required (Mac Excel rejects bare `8時` as #VALUE!), and `秒`,
 // when present, must follow `分`. Returns false if the input does not
@@ -580,30 +560,18 @@ bool parse_mmm_d_yyyy_text(std::string_view s, double* out_serial, std::string_v
 // `秒` terminator.
 bool parse_kanji_time_text(std::string_view s, double* out_frac, std::string_view* rest) noexcept {
   int hour = 0;
-  if (scan_digits(s, 3, &hour) == 0) {
+  if (!scan_digits_with_unit(&s, 3, kKanjiJi, &hour)) {
     return false;
   }
-  if (!starts_with_utf8(s, kKanjiJi)) {
-    return false;
-  }
-  s.remove_prefix(3);
   int minute = 0;
-  if (scan_digits(s, 3, &minute) == 0) {
+  if (!scan_digits_with_unit(&s, 3, kKanjiFun, &minute)) {
     return false;
   }
-  if (!starts_with_utf8(s, kKanjiFun)) {
-    return false;
-  }
-  s.remove_prefix(3);
   int second = 0;
   if (!s.empty() && s[0] >= '0' && s[0] <= '9') {
-    if (scan_digits(s, 3, &second) == 0) {
+    if (!scan_digits_with_unit(&s, 3, kKanjiByou, &second)) {
       return false;
     }
-    if (!starts_with_utf8(s, kKanjiByou)) {
-      return false;
-    }
-    s.remove_prefix(3);
   }
   if (hour < 0 || minute < 0 || second < 0) {
     return false;

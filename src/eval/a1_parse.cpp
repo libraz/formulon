@@ -109,42 +109,31 @@ bool parse_full_axis_span(std::string_view text, std::size_t start,
 }
 
 // Attempts to parse `text[start..]` as a full-column shape
-// `[$]?<letters>:[$]?<letters>` consuming the entire remainder. On
-// success sets `out->is_full_col` / `out->is_range`, populates
-// `col`/`col2` with the min/max 0-based columns, and fills
-// `row`/`row2` with the full-column row span, then returns true. On
-// failure leaves `*out` untouched and returns false.
-bool try_parse_full_col(std::string_view text, std::size_t start, A1Parse* out) {
+// `[$]?<letters>:[$]?<letters>` (`full_col`) or a full-row shape
+// `[$]?<digits>:[$]?<digits>`, consuming the entire remainder. On success
+// sets `out->is_full_col` / `out->is_full_row` and `out->is_range`,
+// populates the spanned axis with the min/max 0-based indices, and fills the
+// other axis with its full extent, then returns true. On failure leaves
+// `*out` untouched and returns false.
+bool try_parse_full_axis(std::string_view text, std::size_t start, bool full_col, A1Parse* out) {
   std::uint32_t lo = 0;
   std::uint32_t hi = 0;
-  if (!parse_full_axis_span(text, start, parse_column_letters, &lo, &hi)) {
+  if (!parse_full_axis_span(text, start, full_col ? parse_column_letters : parse_row_digits, &lo, &hi)) {
     return false;
   }
-  out->col = lo;
-  out->col2 = hi;
-  out->row = 0;
-  out->row2 = Sheet::kMaxRows - 1U;
-  out->is_full_col = true;
-  out->is_range = true;
-  return true;
-}
-
-// Attempts to parse `text[start..]` as a full-row shape
-// `[$]?<digits>:[$]?<digits>` consuming the entire remainder. On
-// success sets `out->is_full_row` / `out->is_range`, populates
-// `row`/`row2` with the min/max 0-based rows, and fills `col`/`col2`
-// with the full-row column span, then returns true.
-bool try_parse_full_row(std::string_view text, std::size_t start, A1Parse* out) {
-  std::uint32_t lo = 0;
-  std::uint32_t hi = 0;
-  if (!parse_full_axis_span(text, start, parse_row_digits, &lo, &hi)) {
-    return false;
+  if (full_col) {
+    out->col = lo;
+    out->col2 = hi;
+    out->row = 0;
+    out->row2 = Sheet::kMaxRows - 1U;
+    out->is_full_col = true;
+  } else {
+    out->row = lo;
+    out->row2 = hi;
+    out->col = 0;
+    out->col2 = Sheet::kMaxCols - 1U;
+    out->is_full_row = true;
   }
-  out->row = lo;
-  out->row2 = hi;
-  out->col = 0;
-  out->col2 = Sheet::kMaxCols - 1U;
-  out->is_full_row = true;
   out->is_range = true;
   return true;
 }
@@ -282,11 +271,11 @@ A1Parse parse_a1_ref(std::string_view text) {
   // are tried before the single-endpoint path because they never share a
   // prefix with a valid single-cell reference (the latter always has a
   // digit immediately after the letter run, never a `:`).
-  if (try_parse_full_col(text, i, &out)) {
+  if (try_parse_full_axis(text, i, /*full_col=*/true, &out)) {
     out.valid = true;
     return out;
   }
-  if (try_parse_full_row(text, i, &out)) {
+  if (try_parse_full_axis(text, i, /*full_col=*/false, &out)) {
     out.valid = true;
     return out;
   }

@@ -171,10 +171,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // PIVOTBY's default differs from GROUPBY's (0): pivot output typically
   // wants both the input row to be treated as a header AND a header to be
   // emitted on the output's left/top edges.
-  static constexpr int kFieldHeaders[] = {0, 1, 2, 3};
   int field_headers = 3;
-  if (!read_optional_int_in_set(call, 4, arity, 3, arena, registry, ctx, kFieldHeaders,
-                                sizeof(kFieldHeaders) / sizeof(kFieldHeaders[0]), &field_headers, &err)) {
+  if (!read_field_headers(call, 4, arity, 3, arena, registry, ctx, &field_headers, &err)) {
     return err;
   }
 
@@ -183,10 +181,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // the result. ±2 adds one subtotal row per outer row group; with a single
   // row-key column there is no outer level to roll up, so that shape stays
   // on the ±1 grand-total-only layout.
-  static constexpr int kTotalDepths[] = {-2, -1, 0, 1, 2};
   int row_total_depth = 1;
-  if (!read_optional_int_in_set(call, 5, arity, 1, arena, registry, ctx, kTotalDepths,
-                                sizeof(kTotalDepths) / sizeof(kTotalDepths[0]), &row_total_depth, &err)) {
+  if (!read_total_depth(call, 5, arity, 1, arena, registry, ctx, &row_total_depth, &err)) {
     return err;
   }
 
@@ -205,8 +201,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // column axis has at least two levels; a one-level column axis retains the
   // ordinary ±1 layout because there is no inner level to roll up.
   int col_total_depth = 1;
-  if (!read_optional_int_in_set(call, 7, arity, 1, arena, registry, ctx, kTotalDepths,
-                                sizeof(kTotalDepths) / sizeof(kTotalDepths[0]), &col_total_depth, &err)) {
+  if (!read_total_depth(call, 7, arity, 1, arena, registry, ctx, &col_total_depth, &err)) {
     return err;
   }
 
@@ -223,21 +218,15 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // Determine header row layout. Same as GROUPBY but the header / output
   // emission flags drive both the row-axis labels (left edge) and the
   // col-axis labels (top edge).
-  auto layout_result = resolve_header_layout(field_headers, row_fields->rows);
-  if (!layout_result) {
-    return Value::error(layout_result.error());
+  // -- arg 9: filter_array --------------------------------------------------
+  HeaderLayout layout;
+  std::vector<bool> include_row;
+  if (!read_layout_and_mask(call, 9, arity, field_headers, row_fields->rows, arena, registry, ctx, &layout,
+                            &include_row, &err)) {
+    return err;
   }
-  const HeaderLayout layout = layout_result.take();
   const std::uint32_t data_start_row = layout.data_start_row;
   const std::uint32_t data_row_count = layout.data_row_count;
-
-  // -- arg 9: filter_array --------------------------------------------------
-  std::vector<bool> include_row(data_row_count, true);
-  if (arity == 10U) {
-    if (!read_filter_mask(call.as_call_arg(9), arena, registry, ctx, data_row_count, &include_row, &err)) {
-      return err;
-    }
-  }
 
   // -- Build row and column groups ----------------------------------------
   // For each filtered data row: assign the row to one row-group (by

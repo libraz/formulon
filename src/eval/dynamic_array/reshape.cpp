@@ -118,39 +118,34 @@ Value materialise_stacked_arrays(const std::vector<const ArrayValue*>& arrays, b
   return Value::array(out);
 }
 
+Value eval_stack(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                 bool horizontal) {
+  const std::uint32_t arity = call.as_call_arity();
+  // Excel's documented HSTACK / VSTACK accept up to 254 array references;
+  // reject 0-arg explicitly (no array context to spill into) and use 254
+  // as the safety ceiling.
+  if (arity < 1U || arity > 254U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  std::vector<const ArrayValue*> arrays;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_stack_args(call, arity, arena, registry, ctx, arrays, err)) {
+    return err;
+  }
+  return materialise_stacked_arrays(arrays, horizontal, arena);
+}
+
 }  // namespace
 
 Value eval_hstack_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  // Excel's documented HSTACK accepts up to 254 array references; reject
-  // 0-arg explicitly (no array context to spill into) and use 254 as the
-  // safety ceiling.
-  if (arity < 1U || arity > 254U) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  std::vector<const ArrayValue*> arrays;
-  Value err = Value::error(ErrorCode::Value);
-  if (!resolve_stack_args(call, arity, arena, registry, ctx, arrays, err)) {
-    return err;
-  }
-  return materialise_stacked_arrays(arrays, /*horizontal=*/true, arena);
+  return eval_stack(call, arena, registry, ctx, /*horizontal=*/true);
 }
 
 Value eval_vstack_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 1U || arity > 254U) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  std::vector<const ArrayValue*> arrays;
-  Value err = Value::error(ErrorCode::Value);
-  if (!resolve_stack_args(call, arity, arena, registry, ctx, arrays, err)) {
-    return err;
-  }
-  return materialise_stacked_arrays(arrays, /*horizontal=*/false, arena);
+  return eval_stack(call, arena, registry, ctx, /*horizontal=*/false);
 }
 
 Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

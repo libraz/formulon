@@ -58,18 +58,14 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
 
   // -- arg 3: field_headers ∈ {0,1,2,3} ------------------------------------
-  static constexpr int kFieldHeaders[] = {0, 1, 2, 3};
   int field_headers = 0;
-  if (!read_optional_int_in_set(call, 3, arity, 0, arena, registry, ctx, kFieldHeaders,
-                                sizeof(kFieldHeaders) / sizeof(kFieldHeaders[0]), &field_headers, &err)) {
+  if (!read_field_headers(call, 3, arity, 0, arena, registry, ctx, &field_headers, &err)) {
     return err;
   }
 
   // -- arg 4: total_depth ∈ {-2,-1,0,1,2} ----------------------------------
-  static constexpr int kTotalDepths[] = {-2, -1, 0, 1, 2};
   int total_depth = -1;
-  if (!read_optional_int_in_set(call, 4, arity, -1, arena, registry, ctx, kTotalDepths,
-                                sizeof(kTotalDepths) / sizeof(kTotalDepths[0]), &total_depth, &err)) {
+  if (!read_total_depth(call, 4, arity, -1, arena, registry, ctx, &total_depth, &err)) {
     return err;
   }
 
@@ -82,21 +78,15 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // Determine header row layout. Inputs have a header row when
   // field_headers ∈ {1, 3}; outputs emit a header row when
   // field_headers ∈ {1, 2, 3}.
-  auto layout_result = resolve_header_layout(field_headers, row_fields->rows);
-  if (!layout_result) {
-    return Value::error(layout_result.error());
+  // -- arg 6: filter_array --------------------------------------------------
+  HeaderLayout layout;
+  std::vector<bool> include_row;
+  if (!read_layout_and_mask(call, 6, arity, field_headers, row_fields->rows, arena, registry, ctx, &layout,
+                            &include_row, &err)) {
+    return err;
   }
-  const HeaderLayout layout = layout_result.take();
   const std::uint32_t data_start_row = layout.data_start_row;
   const std::uint32_t data_row_count = layout.data_row_count;
-
-  // -- arg 6: filter_array --------------------------------------------------
-  std::vector<bool> include_row(data_row_count, true);
-  if (arity == 7U) {
-    if (!read_filter_mask(call.as_call_arg(6), arena, registry, ctx, data_row_count, &include_row, &err)) {
-      return err;
-    }
-  }
 
   // -- Build groups --------------------------------------------------------
   // Walk filtered data rows in input order. The canonical key folds each

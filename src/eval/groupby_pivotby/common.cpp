@@ -13,6 +13,7 @@
 
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
+#include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/jp_fold.h"
@@ -93,31 +94,16 @@ const LambdaValue* resolve_aggregator(const parser::AstNode& arg, Arena& arena, 
 
 const ArrayValue* read_array_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                                  const EvalContext& ctx, Value* out_err) {
-  const Value v = eval_node_as_array(node, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
-    return nullptr;
-  }
-  if (!v.is_array()) {
-    *out_err = Value::error(ErrorCode::Value);
-    return nullptr;
-  }
-  return v.as_array();
+  const ArrayValue* out = nullptr;
+  return resolve_array_value(node, arena, registry, ctx, &out, out_err) ? out : nullptr;
 }
 
 bool read_int(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
               int* out, Value* out_err) {
-  const Value v = eval_node(node, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
+  double n = 0.0;
+  if (!dynamic_array::eval_number_arg(node, arena, registry, ctx, n, *out_err)) {
     return false;
   }
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    *out_err = Value::error(coerced.error());
-    return false;
-  }
-  const double n = coerced.value();
   if (std::isnan(n) || std::isinf(n)) {
     *out_err = Value::error(ErrorCode::Value);
     return false;
@@ -150,6 +136,22 @@ bool read_optional_int_in_set(const parser::AstNode& call, std::uint32_t arg_ind
     return true;
   }
   return read_int_in_set(call.as_call_arg(arg_index), arena, registry, ctx, allowed, count, out, out_err);
+}
+
+bool read_field_headers(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, int default_value,
+                        Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx, int* out,
+                        Value* out_err) {
+  static constexpr int kFieldHeaders[] = {0, 1, 2, 3};
+  return read_optional_int_in_set(call, arg_index, arity, default_value, arena, registry, ctx, kFieldHeaders,
+                                  sizeof(kFieldHeaders) / sizeof(kFieldHeaders[0]), out, out_err);
+}
+
+bool read_total_depth(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, int default_value,
+                      Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx, int* out,
+                      Value* out_err) {
+  static constexpr int kTotalDepths[] = {-2, -1, 0, 1, 2};
+  return read_optional_int_in_set(call, arg_index, arity, default_value, arena, registry, ctx, kTotalDepths,
+                                  sizeof(kTotalDepths) / sizeof(kTotalDepths[0]), out, out_err);
 }
 
 bool read_optional_sort_order(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, Arena& arena,
@@ -232,6 +234,24 @@ bool read_filter_mask(const parser::AstNode& node, Arena& arena, const FunctionR
   return true;
 }
 
+bool read_layout_and_mask(const parser::AstNode& call, std::uint32_t filter_arg_index, std::uint32_t arity,
+                          int field_headers, std::uint32_t input_rows, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx, HeaderLayout* layout, std::vector<bool>* include_row,
+                          Value* out_err) {
+  auto layout_result = resolve_header_layout(field_headers, input_rows);
+  if (!layout_result) {
+    *out_err = Value::error(layout_result.error());
+    return false;
+  }
+  *layout = layout_result.take();
+  include_row->assign(layout->data_row_count, true);
+  if (arity == filter_arg_index + 1U) {
+    return read_filter_mask(call.as_call_arg(filter_arg_index), arena, registry, ctx, layout->data_row_count,
+                            include_row, out_err);
+  }
+  return true;
+}
+
 std::vector<std::uint32_t> collect_included_rows(const std::vector<bool>& include_row, std::uint32_t data_start_row) {
   std::vector<std::uint32_t> rows;
   rows.reserve(include_row.size());
@@ -251,25 +271,9 @@ std::vector<std::uint32_t> collect_included_rows(const std::vector<bool>& includ
 // distinction is preserved). Cross-kind pairs are never equal — `Number 0`
 // and `Bool FALSE` form distinct groups.
 bool group_cell_equal(const Value& a, const Value& b) {
-  if (a.kind() != b.kind()) {
-    return false;
-  }
-  switch (a.kind()) {
-    case ValueKind::Blank:
-      return true;
-    case ValueKind::Number:
-      return a.as_number() == b.as_number();
-    case ValueKind::Bool:
-      return a.as_boolean() == b.as_boolean();
-    case ValueKind::Error:
-      return a.as_error() == b.as_error();
-    case ValueKind::Text:
-      return fold_jp_text(a.as_text()) == fold_jp_text(b.as_text());
-    default:
-      // Array / Ref / Lambda are not produced by cell reads; treat as
-      // not-equal defensively to avoid silent dedup of complex values.
-      return false;
-  }
+  FoldCompareOptions opts;
+  opts.case_insensitive = false;
+  return value_equal_folded_text(a, b, opts);
 }
 
 bool group_key_equal(const ArrayValue& keys, std::uint32_t row_a, std::uint32_t row_b) {
@@ -454,51 +458,9 @@ int cmp_value_asc(const Value& a, const Value& b) {
   if (ba != bb) {
     return ba < bb ? -1 : 1;
   }
-  switch (a.kind()) {
-    case ValueKind::Number: {
-      const double na = a.as_number();
-      const double nb = b.as_number();
-      if (na < nb) {
-        return -1;
-      }
-      if (na > nb) {
-        return 1;
-      }
-      return 0;
-    }
-    case ValueKind::Text: {
-      const std::string ta = fold_jp_text(a.as_text());
-      const std::string tb = fold_jp_text(b.as_text());
-      if (ta < tb) {
-        return -1;
-      }
-      if (ta > tb) {
-        return 1;
-      }
-      return 0;
-    }
-    case ValueKind::Bool: {
-      const bool ba2 = a.as_boolean();
-      const bool bb2 = b.as_boolean();
-      if (ba2 == bb2) {
-        return 0;
-      }
-      return ba2 ? 1 : -1;
-    }
-    case ValueKind::Error: {
-      const auto ea = static_cast<int>(a.as_error());
-      const auto eb = static_cast<int>(b.as_error());
-      if (ea < eb) {
-        return -1;
-      }
-      if (ea > eb) {
-        return 1;
-      }
-      return 0;
-    }
-    default:
-      return 0;
-  }
+  FoldCompareOptions opts;
+  opts.case_insensitive = false;
+  return value_compare_folded_text(a, b, opts);
 }
 
 int cmp_keys_asc(const ArrayValue& keys, std::uint32_t a_row, std::uint32_t b_row) {

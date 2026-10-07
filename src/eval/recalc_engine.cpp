@@ -879,13 +879,7 @@ void RecalcEngine::unregister_formula_locked(CellNodeId cell) {
   mark_range_dependents_dirty_locked(cell);
   forget_referenced_cells_locked(cell);
   graph_.remove_node(cell);
-  remove_range_nodes(graph_, range_dependencies_.erase_owner(cell));
-  three_d_span_dependencies_.erase(
-      std::remove_if(three_d_span_dependencies_.begin(), three_d_span_dependencies_.end(),
-                     [cell](const RegisteredThreeDSpan& entry) { return entry.owner == cell; }),
-      three_d_span_dependencies_.end());
-  volatiles_.unregister_cell(cell);
-  update_potential_spill_producer_locked(cell, SpillPotential::kNever);
+  drop_cell_registrations_locked(cell);
 }
 
 void RecalcEngine::clear_cell_dependencies(CellNodeId cell) {
@@ -896,6 +890,10 @@ void RecalcEngine::clear_cell_dependencies(CellNodeId cell) {
 void RecalcEngine::clear_cell_dependencies_locked(CellNodeId cell) {
   forget_referenced_cells_locked(cell);
   graph_.clear_dependencies_of(cell);
+  drop_cell_registrations_locked(cell);
+}
+
+void RecalcEngine::drop_cell_registrations_locked(CellNodeId cell) {
   remove_range_nodes(graph_, range_dependencies_.erase_owner(cell));
   three_d_span_dependencies_.erase(
       std::remove_if(three_d_span_dependencies_.begin(), three_d_span_dependencies_.end(),
@@ -1368,13 +1366,16 @@ partial_recalc_next_wave:
   // adding any newly-discovered dependents that themselves live inside
   // the closure (a dependent outside the closure is by definition
   // unreachable from the viewport, so we do not need to visit it).
+  const auto for_each_dirty_in_closure = [&](auto&& visit) {
+    dirty_.for_each([&](CellNodeId c) {
+      if (closure.count(c) != 0U) {
+        visit(c);
+      }
+    });
+  };
   std::vector<CellNodeId> propagation_queue;
   propagation_queue.reserve(dirty_.size());
-  dirty_.for_each([&](CellNodeId c) {
-    if (closure.count(c) != 0U) {
-      propagation_queue.push_back(c);
-    }
-  });
+  for_each_dirty_in_closure([&](CellNodeId c) { propagation_queue.push_back(c); });
   std::size_t prop_head = 0;
   while (prop_head < propagation_queue.size()) {
     const CellNodeId current = propagation_queue[prop_head++];
@@ -1395,11 +1396,7 @@ partial_recalc_next_wave:
   // full / overlapping partial recalc.
   std::unordered_set<CellNodeId, CellNodeIdHash> dirty_closure;
   dirty_closure.reserve(propagation_queue.size());
-  dirty_.for_each([&](CellNodeId c) {
-    if (closure.count(c) != 0U) {
-      dirty_closure.insert(c);
-    }
-  });
+  for_each_dirty_in_closure([&](CellNodeId c) { dirty_closure.insert(c); });
   std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc_subset(dirty_closure);
   dynamic.settle_sccs(sccs, dirty_closure);
   std::unordered_set<CellNodeId, CellNodeIdHash> visited_in_sccs;
@@ -1495,11 +1492,7 @@ partial_recalc_next_wave:
   // underlying container during iteration.
   std::vector<CellNodeId> to_unmark;
   to_unmark.reserve(closure.size());
-  dirty_.for_each([&](CellNodeId c) {
-    if (closure.count(c) != 0U) {
-      to_unmark.push_back(c);
-    }
-  });
+  for_each_dirty_in_closure([&](CellNodeId c) { to_unmark.push_back(c); });
   // Hand dirtiness on to dependents outside the closure so a later pass still reaches them.
   const auto mark_outside_closure = [&](CellNodeId dependent) {
     if (closure.count(dependent) == 0U) {

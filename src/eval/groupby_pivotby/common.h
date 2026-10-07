@@ -108,6 +108,15 @@ bool read_optional_int_in_set(const parser::AstNode& call, std::uint32_t arg_ind
                               int default_value, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                               const int* allowed, std::size_t count, int* out, Value* out_err);
 
+/// Optional `field_headers` slot, a member of {0,1,2,3}.
+bool read_field_headers(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, int default_value,
+                        Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx, int* out,
+                        Value* out_err);
+
+/// Optional `total_depth` slot, a member of {-2,-1,0,1,2}.
+bool read_total_depth(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, int default_value,
+                      Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx, int* out, Value* out_err);
+
 /// Reads an optional `sort_order` slot, defaulting to 0.
 ///
 /// Excel reads the argument as a signed column index, and that domain has no
@@ -130,6 +139,13 @@ Expected<HeaderLayout, ErrorCode> resolve_header_layout(int field_headers, std::
 bool read_filter_mask(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx, std::uint32_t data_row_count, std::vector<bool>* include_row,
                       Value* out_err);
+
+/// Resolves the header layout for `field_headers` and, when the call carries
+/// the trailing filter argument (`arity == filter_arg_index + 1`), reads its
+/// mask. `*include_row` is sized to the layout's data row count.
+bool read_layout_and_mask(const parser::AstNode& call, std::uint32_t filter_arg_index, std::uint32_t arity,
+                          int field_headers, std::uint32_t input_rows, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx, HeaderLayout* layout, std::vector<bool>* include_row, Value* out_err);
 
 /// Returns the list of absolute row indices included by `include_row`,
 /// offset by `data_start_row`.

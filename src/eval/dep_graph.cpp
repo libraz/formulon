@@ -228,6 +228,13 @@ void DepGraph::remove_all_sources(CellNodeId dependent, CellNodeId dependency, s
   }
 }
 
+void DepGraph::remove_edge_sources(CellNodeId dependent, CellNodeId dependency) {
+  const auto pos = edge_sources_.find(Edge{dependent, dependency});
+  if (pos != edge_sources_.end()) {
+    remove_all_sources(dependent, dependency, pos->second);
+  }
+}
+
 void DepGraph::clear_dependencies_of(CellNodeId dependent) {
   auto fwd = forward_.find(dependent);
   if (fwd == forward_.end()) {
@@ -235,12 +242,7 @@ void DepGraph::clear_dependencies_of(CellNodeId dependent) {
   }
   const std::vector<CellNodeId> dependencies = fwd->second;
   for (CellNodeId dependency : dependencies) {
-    const Edge edge{dependent, dependency};
-    const auto pos = edge_sources_.find(edge);
-    if (pos == edge_sources_.end()) {
-      continue;
-    }
-    remove_all_sources(dependent, dependency, pos->second);
+    remove_edge_sources(dependent, dependency);
   }
 }
 
@@ -255,12 +257,7 @@ void DepGraph::remove_node(CellNodeId node) {
   }
   const std::vector<CellNodeId> dependents = rev->second;
   for (CellNodeId dependent : dependents) {
-    const Edge edge{dependent, node};
-    const auto pos = edge_sources_.find(edge);
-    if (pos == edge_sources_.end()) {
-      continue;
-    }
-    remove_all_sources(dependent, node, pos->second);
+    remove_edge_sources(dependent, node);
   }
 }
 
@@ -272,22 +269,23 @@ std::vector<CellNodeId> DepGraph::dependencies_of(CellNodeId node) const {
   return dependencies_of_ref(node);
 }
 
+namespace {
+
+template <typename Map>
+const std::vector<CellNodeId>& adjacency_or_empty(const Map& adjacency, CellNodeId node) noexcept {
+  static const std::vector<CellNodeId> kEmpty;
+  const auto pos = adjacency.find(node);
+  return pos == adjacency.end() ? kEmpty : pos->second;
+}
+
+}  // namespace
+
 const std::vector<CellNodeId>& DepGraph::dependencies_of_ref(CellNodeId node) const noexcept {
-  static const std::vector<CellNodeId> kEmptyDependencies;
-  auto pos = forward_.find(node);
-  if (pos == forward_.end()) {
-    return kEmptyDependencies;
-  }
-  return pos->second;
+  return adjacency_or_empty(forward_, node);
 }
 
 const std::vector<CellNodeId>& DepGraph::dependents_of_ref(CellNodeId node) const noexcept {
-  static const std::vector<CellNodeId> kEmptyDependents;
-  auto pos = reverse_.find(node);
-  if (pos == reverse_.end()) {
-    return kEmptyDependents;
-  }
-  return pos->second;
+  return adjacency_or_empty(reverse_, node);
 }
 
 bool is_cyclic_component(const std::vector<CellNodeId>& component, const DepGraph& graph) noexcept {

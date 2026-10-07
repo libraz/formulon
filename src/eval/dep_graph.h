@@ -278,6 +278,8 @@ class DepGraph {
   bool remove_dependency_source(CellNodeId dependent, CellNodeId dependency, DependencySource source);
   /// Removes every provenance bit in `mask` from the pair.
   void remove_all_sources(CellNodeId dependent, CellNodeId dependency, std::uint8_t mask);
+  /// Removes every provenance bit of the `dependent -> dependency` edge, if present.
+  void remove_edge_sources(CellNodeId dependent, CellNodeId dependency);
 
   /// Hash for an ordered pair of `CellNodeId`s. Used to dedupe directed
   /// edges in O(1) on `add_dependency`. Combines the two component

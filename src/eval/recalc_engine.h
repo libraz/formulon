@@ -594,6 +594,9 @@ class RecalcEngine {
   /// Drops `cell`'s authored single-cell edges from `referenced_cells_`;
   /// called before those edges are removed from the graph.
   void forget_referenced_cells_locked(CellNodeId cell);
+  /// Drops `cell`'s range, 3-D span, volatile and spill-producer registrations
+  /// once its graph edges have been handled.
+  void drop_cell_registrations_locked(CellNodeId cell);
   struct RegisteredThreeDSpan {
     CellNodeId owner;
     ThreeDSheetSpanDependency span;

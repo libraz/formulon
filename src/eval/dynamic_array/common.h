@@ -45,6 +45,11 @@ namespace dynamic_array {
 /// of their own namespace. See `eval/array_alloc.h` for the contract.
 using formulon::eval::allocate_array_value;
 
+/// Evaluate `node` and coerce it to a number. On error or coercion failure
+/// writes the caller-visible error to `error_out` and returns `false`.
+bool eval_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, double& out, Value& error_out);
+
 /// Evaluate `node`, coerce to a finite number, and truncate toward zero.
 /// On error or coercion failure writes the caller-visible error to
 /// `error_out` and returns `false`. Shared by every helper that takes a

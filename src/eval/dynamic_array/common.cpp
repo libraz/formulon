@@ -24,8 +24,8 @@ namespace formulon {
 namespace eval {
 namespace dynamic_array {
 
-bool eval_truncated_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                               const EvalContext& ctx, double& out, Value& error_out) {
+bool eval_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, double& out, Value& error_out) {
   const Value v = eval_node(node, arena, registry, ctx);
   if (v.is_error()) {
     error_out = v;
@@ -36,7 +36,17 @@ bool eval_truncated_number_arg(const parser::AstNode& node, Arena& arena, const 
     error_out = Value::error(coerced.error());
     return false;
   }
-  out = std::trunc(coerced.value());
+  out = coerced.value();
+  return true;
+}
+
+bool eval_truncated_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                               const EvalContext& ctx, double& out, Value& error_out) {
+  double n = 0.0;
+  if (!eval_number_arg(node, arena, registry, ctx, n, error_out)) {
+    return false;
+  }
+  out = std::trunc(n);
   return true;
 }
 
@@ -230,17 +240,10 @@ bool resolve_sort_order_arg(const parser::AstNode& node, Arena& arena, const Fun
     descending = false;
     return true;
   }
-  const Value v = eval_node(node, arena, registry, ctx);
-  if (v.is_error()) {
-    error_out = v;
+  double n = 0.0;
+  if (!eval_number_arg(node, arena, registry, ctx, n, error_out)) {
     return false;
   }
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    error_out = Value::error(coerced.error());
-    return false;
-  }
-  const double n = coerced.value();
   if (n == 1.0) {
     descending = false;
     return true;

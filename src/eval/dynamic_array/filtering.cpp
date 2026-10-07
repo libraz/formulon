@@ -226,15 +226,10 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   const std::uint32_t key_max = by_col ? array->rows : array->cols;
   std::uint32_t sort_index = 1U;
   if (arity >= 2U && !is_omitted_arg(call.as_call_arg(1))) {
-    const Value v = eval_node(call.as_call_arg(1), arena, registry, ctx);
-    if (v.is_error()) {
-      return v;
+    double n = 0.0;
+    if (!dynamic_array::eval_number_arg(call.as_call_arg(1), arena, registry, ctx, n, err)) {
+      return err;
     }
-    auto coerced = coerce_to_number(v);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    const double n = coerced.value();
     // Validate the floating input before converting to uint32_t. A huge or
     // non-finite value has no valid lane index and casting it first is
     // undefined behaviour on some targets.
