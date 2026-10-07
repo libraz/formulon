@@ -74,6 +74,20 @@ void reindex_formulas_referencing_sheet(std::vector<Sheet>& sheets, const eval::
 parser::AstNode* parse_indexable_formula(std::string_view body, Arena& arena) {
   return eval::parse_formula_entry(body, arena);
 }
+
+// Parses stored formula text (leading '=' optional) into `arena`, resetting it
+// first. Null when the body is empty (the arena is then left untouched) or
+// does not parse.
+parser::AstNode* parse_stored_formula(std::string_view text, Arena& arena) {
+  if (!text.empty() && text.front() == '=') {
+    text.remove_prefix(1);
+  }
+  if (text.empty()) {
+    return nullptr;
+  }
+  arena.reset();
+  return parse_indexable_formula(text, arena);
+}
 }  // namespace
 
 Workbook::Workbook() : engine_(std::make_unique<eval::RecalcEngine>()), kind_(WorkbookKind::kXlsx) {}
@@ -303,17 +317,9 @@ void reindex_all_formulas(std::vector<Sheet>& sheets, const eval::RecalcEngine::
         if (cell.formula_text.empty()) {
           continue;
         }
-        std::string_view body = cell.formula_text;
-        if (!body.empty() && body.front() == '=') {
-          body.remove_prefix(1);
-        }
         const eval::CellNodeId node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
-        if (!body.empty()) {
-          parser_arena.reset();
-          parser::AstNode* root = parse_indexable_formula(body, parser_arena);
-          if (root != nullptr) {
-            mutator.register_formula(node, *root, workbook);
-          }
+        if (parser::AstNode* root = parse_stored_formula(cell.formula_text, parser_arena); root != nullptr) {
+          mutator.register_formula(node, *root, workbook);
         }
         // Every formula cell recomputes after a rearrangement, regardless
         // of whether its refs changed.
@@ -456,15 +462,7 @@ std::vector<std::string> close_affected_names(const std::vector<DefinedName>& de
       if (contains_affected_name(affected, entry.name)) {
         continue;
       }
-      std::string_view body = entry.formula;
-      if (!body.empty() && body.front() == '=') {
-        body.remove_prefix(1);
-      }
-      if (body.empty()) {
-        continue;
-      }
-      arena.reset();
-      const parser::AstNode* root = parse_indexable_formula(body, arena);
+      const parser::AstNode* root = parse_stored_formula(entry.formula, arena);
       if (root != nullptr && references_any_name(*root, affected)) {
         affected.emplace_back(entry.name);
         grew = true;
@@ -495,15 +493,7 @@ std::vector<std::string> collect_affected_names_referencing_sheet(const std::vec
   const std::vector<std::string> sheet_candidates{std::string(changed_sheet)};
   Arena arena;
   for (const DefinedName& entry : defined_names) {
-    std::string_view body = entry.formula;
-    if (!body.empty() && body.front() == '=') {
-      body.remove_prefix(1);
-    }
-    if (body.empty()) {
-      continue;
-    }
-    arena.reset();
-    const parser::AstNode* root = parse_indexable_formula(body, arena);
+    const parser::AstNode* root = parse_stored_formula(entry.formula, arena);
     if (root != nullptr && references_any_sheet(*root, sheet_candidates) &&
         !contains_affected_name(affected, entry.name)) {
       affected.emplace_back(entry.name);
@@ -538,15 +528,7 @@ void reindex_formulas_if(std::vector<Sheet>& sheets, const eval::RecalcEngine::L
         if (cell.formula_text.empty()) {
           continue;
         }
-        std::string_view body = cell.formula_text;
-        if (!body.empty() && body.front() == '=') {
-          body.remove_prefix(1);
-        }
-        if (body.empty()) {
-          continue;
-        }
-        parser_arena.reset();
-        parser::AstNode* root = parse_indexable_formula(body, parser_arena);
+        parser::AstNode* root = parse_stored_formula(cell.formula_text, parser_arena);
         if (root == nullptr || !affected(*root)) {
           continue;
         }
@@ -2293,15 +2275,7 @@ void reregister_three_d_span_owners_after_row_col_edit(const std::vector<eval::C
     if (formula_cell == nullptr || formula_cell->formula_text.empty()) {
       continue;
     }
-    std::string_view body = formula_cell->formula_text;
-    if (!body.empty() && body.front() == '=') {
-      body.remove_prefix(1);
-    }
-    if (body.empty()) {
-      continue;
-    }
-    parser_arena.reset();
-    parser::AstNode* root = parse_indexable_formula(body, parser_arena);
+    parser::AstNode* root = parse_stored_formula(formula_cell->formula_text, parser_arena);
     if (root == nullptr) {
       continue;
     }
