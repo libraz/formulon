@@ -35,6 +35,11 @@ constexpr std::uint16_t kDefaultWsPropFlags = 0x04C9U;
 constexpr std::uint8_t kDefaultWsPropFlags2 = 0x02U;
 constexpr std::uint32_t kWsPropSyncUnused = 0xFFFFFFFFU;
 
+/// BrtWsFmtInfo: the dxGCol sentinel for "no default column width" and the
+/// row height Excel writes when no default is set.
+constexpr std::uint32_t kAbsentDefaultColumnWidth = 0xFFFFFFFFU;
+constexpr std::uint16_t kCanonicalDefaultRowHeightTwips = 300U;
+
 /// Appends `<tabColor .../>` for the decoded `BrtColor`, or nothing when
 /// the colour is automatic -- Excel writes no `<tabColor>` for the
 /// default tab, and an explicit `auto="1"` would make the two containers
@@ -262,8 +267,6 @@ void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
 /// is surfaced as a structured warning while the representable fields still
 /// round-trip.
 Expected<void, Error> decode_ws_fmt_info(const XlsbRecord& rec, Sheet& sheet, std::size_t sheet_index) {
-  constexpr std::uint32_t kAbsentDefaultColumnWidth = 0xFFFFFFFFU;
-  constexpr std::uint16_t kCanonicalDefaultRowHeightTwips = 300U;
   if (rec.payload.size < 12U) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtWsFmtInfo payload truncated",
                       "context=xlsb_reader sheet_index=" + std::to_string(sheet_index));
@@ -355,9 +358,7 @@ void emit_ws_fmt_info(std::vector<std::uint8_t>& dst, const SheetFormatDefaults&
   // BrtWsFmtInfo stores the default column width as 1/256 character units,
   // while the OOXML model stores it in character units. The sentinel is the
   // only absent marker; zero is a valid explicit width.
-  constexpr std::uint32_t kAbsentDefaultColumnWidth = 0xFFFFFFFFU;
   constexpr std::uint16_t kCanonicalDefaultColumnWidth = 8U;
-  constexpr std::uint16_t kCanonicalDefaultRowHeightTwips = 300U;
   constexpr double kMaxDefaultColumnWidth = 65535.0 / 256.0;
   constexpr double kMaxDefaultRowHeight = 65535.0 / 20.0;
 
