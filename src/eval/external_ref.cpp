@@ -8,6 +8,7 @@
 
 #include "eval/array_alloc.h"
 #include "eval/eval_context.h"
+#include "eval/lazy_impls.h"
 #include "external_book.h"
 #include "external_link.h"
 #include "parser/ast.h"
@@ -82,8 +83,7 @@ bool TailRect(const ExternalBook& book, std::uint32_t sheet, const parser::Refer
 
 /// Whether every sheet of the 3-D span `node` names is listed and cached,
 /// with the span's first and last sheet in `*lo` / `*hi`.
-bool SpanReadable(const ExternalBook& book, const parser::AstNode& node, std::uint32_t* lo = nullptr,
-                  std::uint32_t* hi = nullptr) {
+bool SpanReadable(const ExternalBook& book, const parser::AstNode& node, std::uint32_t* lo, std::uint32_t* hi) {
   const std::uint32_t begin = book.sheet_index(node.as_external_ref_sheet());
   const std::uint32_t end = book.sheet_index(node.as_external_ref_sheet_end());
   if (begin == ExternalBook::kNoSheet || end == ExternalBook::kNoSheet) {
@@ -96,10 +96,8 @@ bool SpanReadable(const ExternalBook& book, const parser::AstNode& node, std::ui
       return false;
     }
   }
-  if (lo != nullptr) {
-    *lo = first;
-    *hi = last;
-  }
+  *lo = first;
+  *hi = last;
   return true;
 }
 
@@ -132,23 +130,12 @@ Value resolve_external_ref(const parser::AstNode& node, Arena& arena, const Eval
         return Value::error(ErrorCode::Name);
       }
     }
-    const ExternalBookName* entry = book.find_name(name, scope);
-    if (entry == nullptr) {
-      return Value::error(ErrorCode::Name);
-    }
-    if (!entry->resolvable || !book.sheet_has_data(entry->sheet)) {
-      return Value::error(ErrorCode::Ref);
-    }
-    if (!entry->is_range) {
-      return ReifyCached(book.cached_cell(entry->sheet, entry->row, entry->col), arena);
-    }
-    return MaterializeRect(book, entry->sheet, entry->row, entry->row_end, entry->col, entry->col_end, arena);
+    return resolve_external_book_name(book, scope, name, arena);
   }
 
   if (!node.as_external_ref_sheet_end().empty()) {
-    // Scalar context, as a local 3-D reference: a span of sheets collapses
-    // to no single value, and a span it cannot read at all is #REF!.
-    return Value::error(SpanReadable(book, node) ? ErrorCode::Value : ErrorCode::Ref);
+    // Scalar context, as a local 3-D reference: a span of sheets is #REF!.
+    return Value::error(ErrorCode::Ref);
   }
   const std::uint32_t sheet = book.sheet_index(sheet_name);
   if (sheet == ExternalBook::kNoSheet || !book.sheet_has_data(sheet)) {
@@ -168,6 +155,34 @@ Value resolve_external_ref(const parser::AstNode& node, Arena& arena, const Eval
     col_last = col_first;
   }
   return MaterializeRect(book, sheet, row_first, row_last, col_first, col_last, arena);
+}
+
+Value resolve_external_book_name(const ExternalBook& book, std::uint32_t scope_sheet, std::string_view name,
+                                 Arena& arena) {
+  const ExternalBookName* entry = book.find_name(name, scope_sheet);
+  if (entry == nullptr || !entry->exists) {
+    return Value::error(ErrorCode::Name);
+  }
+  if (!entry->resolvable || !book.sheet_has_data(entry->sheet)) {
+    return Value::error(ErrorCode::Ref);
+  }
+  if (!entry->is_range) {
+    return ReifyCached(book.cached_cell(entry->sheet, entry->row, entry->col), arena);
+  }
+  return MaterializeRect(book, entry->sheet, entry->row, entry->row_end, entry->col, entry->col_end, arena);
+}
+
+bool is_three_d_reference(const parser::AstNode& node) noexcept {
+  return node.kind() == parser::NodeKind::Ref3D ||
+         (node.kind() == parser::NodeKind::ExternalRef && !node.as_external_ref_sheet_end().empty());
+}
+
+Value eval_selected_arm(const parser::AstNode& arm, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx) {
+  if (is_three_d_reference(arm)) {
+    return Value::error(ErrorCode::Value);
+  }
+  return eval_node(arm, arena, registry, ctx);
 }
 
 bool collect_external_ref3d_cells(const parser::AstNode& node, Arena& arena, const EvalContext& ctx,

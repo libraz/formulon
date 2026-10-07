@@ -16,6 +16,7 @@
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
+#include "eval/external_ref.h"
 #include "eval/lazy_impls.h"
 #include "eval/logical_coerce.h"
 #include "eval/name_env.h"
@@ -217,9 +218,9 @@ std::vector<ArrayView> view_arms(const std::vector<Value>& values, std::vector<V
 
 Value eval_if_array_cond_lazy(const parser::AstNode& call, const Value& cond, Arena& arena,
                               const FunctionRegistry& registry, const EvalContext& ctx) {
-  const Value then_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  const Value then_val = eval_selected_arm(call.as_call_arg(1), arena, registry, ctx);
   const Value else_val =
-      call.as_call_arity() == 3 ? eval_node(call.as_call_arg(2), arena, registry, ctx) : Value::boolean(false);
+      call.as_call_arity() == 3 ? eval_selected_arm(call.as_call_arg(2), arena, registry, ctx) : Value::boolean(false);
   Value cond_slot = Value::blank();
   Value then_slot = Value::blank();
   Value else_slot = Value::blank();
@@ -283,10 +284,10 @@ Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegi
     return Value::error(coerced.error());
   }
   if (coerced.value()) {
-    return eval_node(call.as_call_arg(1), arena, registry, ctx);
+    return eval_selected_arm(call.as_call_arg(1), arena, registry, ctx);
   }
   if (arity == 3) {
-    return eval_node(call.as_call_arg(2), arena, registry, ctx);
+    return eval_selected_arm(call.as_call_arg(2), arena, registry, ctx);
   }
   return Value::boolean(false);
 }

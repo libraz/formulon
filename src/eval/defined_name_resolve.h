@@ -120,8 +120,10 @@ Value resolve_self_book_defined_name(std::string_view name, Arena& arena, const 
                                      const EvalContext& ctx);
 
 /// `resolve_defined_name` for the sheet-qualified spelling `sheet!name`
-/// (see `find_sheet_defined_name`). A `sheet` naming no sheet yields
-/// `#REF!`, as `NoSuchSheet!A1` does; an undefined name yields `#NAME?`.
+/// (see `find_sheet_defined_name`). A `sheet` naming no sheet resolves as
+/// the book-scope name of the linked book `Workbook::link_for_sheet_qualifier`
+/// finds, else yields `#REF!` as `NoSuchSheet!A1` does; an undefined name
+/// yields `#NAME?`.
 Value resolve_sheet_defined_name(std::string_view sheet, std::string_view name, Arena& arena,
                                  const FunctionRegistry& registry, const EvalContext& ctx);
 

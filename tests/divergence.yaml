@@ -1140,21 +1140,8 @@ entries:
     cause: accepted-divergence
     mode: skip-oracle
     scope: unit-test
-    evidence: [tests/unit/eval/local_sheet_qualifier_eval_test.cpp]
-    reason: "A sheet qualifier that names no sheet of the workbook is bound by Mac Excel 365 ja-JP as a link to an external book of that name: `=Nope!A1` is recorded in link_sources and reads #REF!, `=SUM(Data:S2!A1)` with S2 absent is no 3-D reference (it reads back `Data:'S2'!A1`) and gives #NAME?, and `=S2!LocalName` gives #NAME?. Formulon keeps the qualifier local and creates no link: `=Nope!A1` and `=SUM(Data:S2!A1)` give #REF!, so only the first agrees in value, and `=S2!LocalName` is not a reference Formulon binds to any book. A link needs the bracketed or path-qualified spelling, which Formulon accepts and binds."
-    prefer: formulon
-    first_noted: 2026-10-07
-    last_verified_excel_version: "16.113.3"
-
-  # A scalar 3-D reference with both sheets present. The local and the
-  # external form share one rule, so they move together if this is closed.
-  - id: scalar_3d_reference_value_error
-    applies_to: [mac-365-ja_JP]
-    cause: accepted-divergence
-    mode: skip-oracle
-    scope: unit-test
-    evidence: [tests/unit/eval/cross_sheet_test.cpp]
-    reason: "A 3-D reference used where a single value is wanted, `=Sa:Sb!A1` with both sheets present, is #REF! in Mac Excel 365 ja-JP (`=SUM(Sa:Sb!A1)` is the sum, 7 over the probe's 3 and 4) and #VALUE! in Formulon. The external form `=[Book.xlsx]Sa:Sb!A1` is #REF! in Excel and follows the same rule as the local one in Formulon."
+    evidence: [tests/unit/eval/local_sheet_qualifier_eval_test.cpp, tests/unit/eval/external_ref_eval_test.cpp]
+    reason: "A sheet qualifier that names no sheet of the workbook is bound by Mac Excel 365 ja-JP as a link to an external book of that name: `=Nope!A1` is recorded in link_sources and reads #REF!, `=SUM(Data:S2!A1)` with S2 absent is no 3-D reference (it reads back `Data:'S2'!A1`) and gives #NAME?, and `=S2!LocalName` gives #NAME?. Formulon creates no link from such a qualifier: `=Nope!A1` and `=SUM(Data:S2!A1)` give #REF!, so only the first agrees in value, and `=S2!LocalName` gives #REF!. A qualifier that matches a link the workbook already holds -- a book written without an extension, whose `[1]!Name` reads back as `'Src2'!Name` -- does bind: `Src2!Name` reads that link's book-scope name, as in Excel. A new link needs the bracketed or path-qualified spelling, which Formulon accepts and binds."
     prefer: formulon
     first_noted: 2026-10-07
     last_verified_excel_version: "16.113.3"

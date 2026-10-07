@@ -74,6 +74,11 @@ struct ExternalBookName {
   /// this cache cannot do. Such a name reads as `#REF!` rather than
   /// being silently resolved against the wrong coordinates.
   bool resolvable = false;
+  /// False for a name the link part lists without a body (an OOXML
+  /// `<definedName>` with no `refersTo`, an XLSB `BrtSupNameFmla` of cce 0):
+  /// the supporting workbook declares no such name, so it reads as `#NAME?`.
+  /// The entry is kept so later names keep their position.
+  bool exists = true;
 };
 
 /// The cached state of one supporting workbook.

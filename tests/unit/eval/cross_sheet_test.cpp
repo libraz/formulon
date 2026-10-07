@@ -447,8 +447,8 @@ TEST(EvalContextCrossSheetRange, ThreeDRangeTailSpanIncludesIntermediateSheets) 
   }
 }
 
-TEST(EvalContextCrossSheetRange, ThreeDRangeTailUnaryIsValueError) {
-  // A 3-D range used as a bare (non-aggregated) scalar surfaces #VALUE! —
+TEST(EvalContextCrossSheetRange, ThreeDRangeTailUnaryIsRefError) {
+  // A 3-D range used as a bare (non-aggregated) scalar surfaces #REF! —
   // Excel does not spill it.
   Workbook wb = MakeTwoSheetWorkbook();
   wb.add_sheet("Sheet3");
@@ -461,7 +461,104 @@ TEST(EvalContextCrossSheetRange, ThreeDRangeTailUnaryIsValueError) {
   const EvalContext ctx(wb, wb.sheet(0), state);
   const Value v = evaluate(*root, arena, default_registry(), ctx);
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+// The measured probe: Host, Sa (A1=13), Sb (A1=23), evaluated on Host.
+struct ThreeDProbe {
+  ThreeDProbe() {
+    wb.add_sheet("Host");
+    wb.add_sheet("Sa");
+    wb.add_sheet("Sb");
+    wb.sheet(1).set_cell_value(0, 0, Value::number(13.0));
+    wb.sheet(2).set_cell_value(0, 0, Value::number(23.0));
+  }
+
+  Value Eval(const char* formula) {
+    parser::Parser p(formula, arena);
+    parser::AstNode* root = p.parse();
+    EXPECT_NE(root, nullptr) << formula;
+    if (root == nullptr) {
+      return Value::blank();
+    }
+    const EvalContext ctx(wb, wb.sheet(0), state);
+    return evaluate(*root, arena, default_registry(), ctx);
+  }
+
+  void ExpectError(const char* formula, ErrorCode expected) {
+    const Value v = Eval(formula);
+    ASSERT_TRUE(v.is_error()) << formula << " -> " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), expected) << formula;
+  }
+
+  Workbook wb = Workbook::create_empty();
+  EvalState state;
+  Arena arena;
+};
+
+TEST(EvalContextCrossSheetRange, ThreeDScalarReadIsRef) {
+  ThreeDProbe probe;
+  probe.ExpectError("=Sa:Sb!A1", ErrorCode::Ref);
+  probe.ExpectError("=Sa:Sb!A1+1", ErrorCode::Ref);
+  probe.ExpectError("=@Sa:Sb!A1", ErrorCode::Ref);
+  probe.ExpectError("=Sa:Sb!A1:B2", ErrorCode::Ref);
+  probe.ExpectError("=-Sa:Sb!A1", ErrorCode::Ref);
+  probe.ExpectError("=Sa:Nowhere!A1", ErrorCode::Ref);
+}
+
+TEST(EvalContextCrossSheetRange, ThreeDScalarThroughIfOrChooseIsValue) {
+  ThreeDProbe probe;
+  probe.ExpectError("=IF(TRUE,Sa:Sb!A1)", ErrorCode::Value);
+  probe.ExpectError("=IF(TRUE,Sa:Sb!A1)+1", ErrorCode::Value);
+  probe.ExpectError("=IF(FALSE,1,Sa:Sb!A1)", ErrorCode::Value);
+  probe.ExpectError("=CHOOSE(1,Sa:Sb!A1)", ErrorCode::Value);
+  // The unselected arm is not consulted.
+  const Value v = probe.Eval("=IF(FALSE,Sa:Sb!A1,5)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 5.0);
+}
+
+TEST(EvalContextCrossSheetRange, ThreeDScalarThroughArrayIfOrChooseIsValue) {
+  ThreeDProbe probe;
+  for (const char* formula : {"=IF({TRUE,FALSE},Sa:Sb!A1,7)", "=CHOOSE({1,2},Sa:Sb!A1,7)"}) {
+    const Value v = probe.Eval(formula);
+    ASSERT_TRUE(v.is_array()) << formula << " -> " << v.debug_to_string();
+    ASSERT_EQ(v.as_array()->rows, 1U) << formula;
+    ASSERT_EQ(v.as_array()->cols, 2U) << formula;
+    const Value& first = v.as_array()->cells[0];
+    const Value& second = v.as_array()->cells[1];
+    ASSERT_TRUE(first.is_error()) << formula << " -> " << first.debug_to_string();
+    EXPECT_EQ(first.as_error(), ErrorCode::Value) << formula;
+    ASSERT_TRUE(second.is_number()) << formula << " -> " << second.debug_to_string();
+    EXPECT_EQ(second.as_number(), 7.0) << formula;
+  }
+}
+
+TEST(EvalContextCrossSheetRange, ThreeDScalarShapeFunctionsAreValue) {
+  ThreeDProbe probe;
+  probe.ExpectError("=ROWS(Sa:Sb!A1:B2)", ErrorCode::Value);
+  probe.ExpectError("=COLUMNS(Sa:Sb!A1)", ErrorCode::Value);
+  probe.ExpectError("=INDEX(Sa:Sb!A1:B2,1,1)", ErrorCode::Value);
+  probe.ExpectError("=OFFSET(Sa:Sb!A1,0,0)", ErrorCode::Value);
+}
+
+TEST(EvalContextCrossSheetRange, ThreeDScalarErrorConsumers) {
+  ThreeDProbe probe;
+  const Value sum = probe.Eval("=SUM(Sa:Sb!A1)");
+  ASSERT_TRUE(sum.is_number()) << sum.debug_to_string();
+  EXPECT_EQ(sum.as_number(), 36.0);
+  const Value fallback = probe.Eval("=IFERROR(Sa:Sb!A1,\"x\")");
+  ASSERT_TRUE(fallback.is_text()) << fallback.debug_to_string();
+  EXPECT_EQ(fallback.as_text(), "x");
+  const Value isref = probe.Eval("=ISREF(Sa:Sb!A1)");
+  ASSERT_TRUE(isref.is_boolean()) << isref.debug_to_string();
+  EXPECT_FALSE(isref.as_boolean());
+  const Value iserror = probe.Eval("=ISERROR(Sa:Sb!A1)");
+  ASSERT_TRUE(iserror.is_boolean()) << iserror.debug_to_string();
+  EXPECT_TRUE(iserror.as_boolean());
+  const Value type = probe.Eval("=ERROR.TYPE(Sa:Sb!A1)");
+  ASSERT_TRUE(type.is_number()) << type.debug_to_string();
+  EXPECT_EQ(type.as_number(), 4.0);
 }
 
 TEST(EvalContextCrossSheetRange, CrossSheetCycleViaRangeReturnsRef) {

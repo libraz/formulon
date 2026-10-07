@@ -589,24 +589,13 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       return eval_node(node.as_let_body(), arena, registry, body_ctx);
     }
 
-    case parser::NodeKind::Ref3D: {
+    case parser::NodeKind::Ref3D:
       // A 3-D reference (`Sheet2:Sheet3!A1`) denotes one cell across a span
-      // of sheets — a range shape. In scalar context Excel cannot collapse
-      // it to a single value, so it surfaces `#VALUE!`. A span endpoint that
-      // names a missing sheet is `#REF!`, which takes priority. Range-aware
-      // aggregators intercept this node in `dispatch_call` before reaching
-      // here, so this branch only fires for true scalar context.
-      const Workbook* wb = ctx.workbook();
-      if (wb == nullptr) {
-        return Value::error(ErrorCode::Ref);
-      }
-      const std::size_t begin_idx = wb->sheet_index_by_name(node.as_ref3d_sheet_begin());
-      const std::size_t end_idx = wb->sheet_index_by_name(node.as_ref3d_sheet_end());
-      if (begin_idx == static_cast<std::size_t>(-1) || end_idx == static_cast<std::size_t>(-1)) {
-        return Value::error(ErrorCode::Ref);
-      }
-      return Value::error(ErrorCode::Value);
-    }
+      // of sheets — a range shape. Read as a value, Excel answers `#REF!`
+      // whether or not the endpoint sheets exist. Range-aware aggregators
+      // intercept this node in `dispatch_call` before reaching here, and
+      // `IF` / `CHOOSE` turn a selected 3-D arm into `#VALUE!` themselves.
+      return Value::error(ErrorCode::Ref);
 
     case parser::NodeKind::ExternalRef:
       // `[0]!Name` names a defined name of this workbook itself.

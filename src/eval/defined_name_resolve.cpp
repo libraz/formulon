@@ -10,10 +10,13 @@
 #include "defined_name.h"
 #include "eval/builtin_names.h"
 #include "eval/eval_context.h"
+#include "eval/external_ref.h"
 #include "eval/formula_text_utils.h"
 #include "eval/lazy_impls.h"        // eval_node
 #include "eval/name_env_resolve.h"  // is_range_shaped_ast
 #include "eval/shape_ops_lazy.h"    // eval_node_as_array
+#include "external_book.h"
+#include "external_link.h"
 #include "parser/ast.h"
 #include "sheet.h"
 #include "utils/strings.h"
@@ -192,6 +195,11 @@ Value resolve_sheet_defined_name(std::string_view sheet, std::string_view name, 
     return Value::error(ErrorCode::Name);
   }
   if (wb->sheet_index_by_name(sheet) >= wb->sheet_count()) {
+    // `Src2!Name` with no sheet `Src2` is the book-scope name of a linked
+    // book written without an extension, when such a link exists.
+    if (const ExternalLinkRecord* link = wb->link_for_sheet_qualifier(sheet); link != nullptr) {
+      return resolve_external_book_name(link->book, ExternalBook::kNoSheet, name, arena);
+    }
     return Value::error(ErrorCode::Ref);
   }
   return evaluate_defined_name(find_sheet_defined_name(*wb, sheet, name), arena, registry, ctx);

@@ -19,6 +19,7 @@
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
+#include "eval/external_ref.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
@@ -64,6 +65,10 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
   // `=ROWS(A1:C3)`. Single-cell Refs and scalar bindings are left as-is
   // (the scalar fallback already returns 1x1 for them).
   const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
+  if (is_three_d_reference(arg_node)) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
   const parser::NodeKind k = arg_node.kind();
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
     parser::Reference lhs{};

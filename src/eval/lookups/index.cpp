@@ -18,6 +18,7 @@
 #include "eval/declared_rect.h"
 #include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
+#include "eval/external_ref.h"
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
 #include "eval/lookups/classic.h"
@@ -717,7 +718,7 @@ Value eval_choose_array_index_lazy(const parser::AstNode& call, const Value& ind
   std::vector<Value> branches;
   branches.reserve(arity - 1U);
   for (std::uint32_t i = 1U; i < arity; ++i) {
-    branches.push_back(eval_node(call.as_call_arg(i), arena, registry, ctx));
+    branches.push_back(eval_selected_arm(call.as_call_arg(i), arena, registry, ctx));
   }
 
   std::uint32_t out_rows = index_selector.rows;
@@ -805,7 +806,7 @@ Value eval_choose_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::error(ErrorCode::Value);
   }
   const auto n = static_cast<std::uint32_t>(raw);
-  return eval_node(call.as_call_arg(n), arena, registry, ctx);
+  return eval_selected_arm(call.as_call_arg(n), arena, registry, ctx);
 }
 
 // INDEX(array, row_num, [column_num])
@@ -839,6 +840,9 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     return Value::error(area.error());
   }
   const parser::AstNode& source_node = *area.value();
+  if (is_three_d_reference(source_node)) {
+    return Value::error(ErrorCode::Value);
+  }
   ReferenceTable table;
   const auto by_reference = resolve_reference_table(source_node, ctx, &table);
   ErrorCode source_error = ErrorCode::Value;
