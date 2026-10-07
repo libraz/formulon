@@ -146,7 +146,7 @@ struct SpillTable {
 
 /// True when two half-open rectangles share at least one coordinate.
 ///
-/// Every rectangle in this file arrives as an origin plus an extent, and the
+/// Every rectangle in the cell store arrives as an origin plus an extent, and the
 /// ends are widened to 64 bits so a rectangle touching the last row or column
 /// cannot wrap. Written once because the spill table, the merge list, the
 /// blocked-footprint table and the bulk read all need the same test, and a
