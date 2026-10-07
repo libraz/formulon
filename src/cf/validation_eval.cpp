@@ -85,14 +85,8 @@ struct Evaluator {
     return cf::helpers::parse_shift_evaluate(source, ctx);
   }
 
-  /// Evaluates `source` to a scalar; a 1x1 array collapses to its element.
-  Value scalar(const std::string& source) {
-    Value v = run(source);
-    if (v.is_array() && v.as_array_rows() == 1U && v.as_array_cols() == 1U) {
-      return v.as_array()->cells[0];
-    }
-    return v;
-  }
+  /// Evaluates `source` to a scalar; an array result is already reduced to its first element.
+  Value scalar(const std::string& source) { return run(source); }
 };
 
 std::optional<double> as_bound(const Value& v) {

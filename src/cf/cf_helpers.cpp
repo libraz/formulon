@@ -205,7 +205,7 @@ Value parse_shift_evaluate(const std::string& source, const CFEvalContext& ctx) 
   }
 
   const eval::EvalContext target_ctx = ctx.eval_ctx->with_formula_cell(ctx.target.row, ctx.target.col);
-  return eval::evaluate(*shifted, *ctx.arena, *ctx.registry, target_ctx);
+  return eval::evaluate_first_element(*shifted, *ctx.arena, *ctx.registry, target_ctx);
 }
 
 std::optional<LiteralOperand> cell_is_operand(const std::string& source, const CFEvalContext& ctx) {
