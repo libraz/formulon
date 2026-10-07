@@ -89,6 +89,24 @@ bool probe(const std::uint8_t* b, std::size_t len, ImageInfo& out) {
   return false;
 }
 
+struct MediaType {
+  const char* extension;
+  const char* content_type;
+};
+
+// Indexed by `ImageFormat` value; `kUnknown` and out-of-range values map to
+// the empty entry.
+constexpr MediaType kMediaTypes[] = {
+    {"", ""}, {"png", "image/png"}, {"jpeg", "image/jpeg"}, {"gif", "image/gif"}, {"bmp", "image/bmp"},
+};
+constexpr std::size_t kMediaTypeCount = sizeof(kMediaTypes) / sizeof(kMediaTypes[0]);
+static_assert(kMediaTypeCount == static_cast<std::size_t>(ImageFormat::kBmp) + 1, "one entry per ImageFormat");
+
+const MediaType& media_type(ImageFormat format) {
+  const auto index = static_cast<std::size_t>(format);
+  return index < kMediaTypeCount ? kMediaTypes[index] : kMediaTypes[0];
+}
+
 }  // namespace
 
 Expected<ImageInfo, Error> probe_image(const std::uint8_t* bytes, std::size_t len) {
@@ -100,35 +118,11 @@ Expected<ImageInfo, Error> probe_image(const std::uint8_t* bytes, std::size_t le
 }
 
 const char* image_extension(ImageFormat format) {
-  switch (format) {
-    case ImageFormat::kPng:
-      return "png";
-    case ImageFormat::kJpeg:
-      return "jpeg";
-    case ImageFormat::kGif:
-      return "gif";
-    case ImageFormat::kBmp:
-      return "bmp";
-    case ImageFormat::kUnknown:
-      break;
-  }
-  return "";
+  return media_type(format).extension;
 }
 
 const char* image_content_type(ImageFormat format) {
-  switch (format) {
-    case ImageFormat::kPng:
-      return "image/png";
-    case ImageFormat::kJpeg:
-      return "image/jpeg";
-    case ImageFormat::kGif:
-      return "image/gif";
-    case ImageFormat::kBmp:
-      return "image/bmp";
-    case ImageFormat::kUnknown:
-      break;
-  }
-  return "";
+  return media_type(format).content_type;
 }
 
 }  // namespace formulon

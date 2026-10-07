@@ -63,6 +63,21 @@ AstNode* MakeRefError(Arena& arena) {
 // allocation.
 const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransform& transform);
 
+// Appends the transform of `child` to `out`, setting `*changed` when it was
+// rewritten. Returns false when the transform failed.
+bool AppendTransformed(const AstNode& child, Arena& arena, const RefTransform& transform,
+                       std::vector<const AstNode*>* out, bool* changed) {
+  const AstNode* updated = TransformNode(child, arena, transform);
+  if (updated == nullptr) {
+    return false;
+  }
+  if (updated != &child) {
+    *changed = true;
+  }
+  out->push_back(updated);
+  return true;
+}
+
 const AstNode* TransformRef(const AstNode& node, Arena& arena, const RefTransform& transform) {
   std::optional<Reference> rewritten = transform.apply(node.as_ref());
   if (!rewritten.has_value()) {
@@ -313,15 +328,9 @@ const AstNode* TransformUnion(const AstNode& node, Arena& arena, const RefTransf
   kids.reserve(n);
   bool changed = false;
   for (std::uint32_t i = 0; i < n; ++i) {
-    const AstNode& child = node.as_union_child(i);
-    const AstNode* updated = TransformNode(child, arena, transform);
-    if (updated == nullptr) {
+    if (!AppendTransformed(node.as_union_child(i), arena, transform, &kids, &changed)) {
       return nullptr;
     }
-    if (updated != &child) {
-      changed = true;
-    }
-    kids.push_back(updated);
   }
   if (!changed) {
     return &node;
@@ -335,15 +344,9 @@ const AstNode* TransformCall(const AstNode& node, Arena& arena, const RefTransfo
   args.reserve(n);
   bool changed = false;
   for (std::uint32_t i = 0; i < n; ++i) {
-    const AstNode& child = node.as_call_arg(i);
-    const AstNode* updated = TransformNode(child, arena, transform);
-    if (updated == nullptr) {
+    if (!AppendTransformed(node.as_call_arg(i), arena, transform, &args, &changed)) {
       return nullptr;
     }
-    if (updated != &child) {
-      changed = true;
-    }
-    args.push_back(updated);
   }
   if (!changed) {
     return &node;
@@ -360,15 +363,9 @@ const AstNode* TransformArrayLiteral(const AstNode& node, Arena& arena, const Re
   bool changed = false;
   for (std::uint32_t r = 0; r < rows; ++r) {
     for (std::uint32_t c = 0; c < cols; ++c) {
-      const AstNode& child = node.as_array_element(r, c);
-      const AstNode* updated = TransformNode(child, arena, transform);
-      if (updated == nullptr) {
+      if (!AppendTransformed(node.as_array_element(r, c), arena, transform, &elems, &changed)) {
         return nullptr;
       }
-      if (updated != &child) {
-        changed = true;
-      }
-      elems.push_back(updated);
     }
   }
   if (!changed) {
@@ -405,16 +402,10 @@ const AstNode* TransformLet(const AstNode& node, Arena& arena, const RefTransfor
   exprs.reserve(n);
   bool changed = false;
   for (std::uint32_t i = 0; i < n; ++i) {
-    const AstNode& expr = node.as_let_binding_expr(i);
-    const AstNode* updated = TransformNode(expr, arena, transform);
-    if (updated == nullptr) {
+    if (!AppendTransformed(node.as_let_binding_expr(i), arena, transform, &exprs, &changed)) {
       return nullptr;
     }
-    if (updated != &expr) {
-      changed = true;
-    }
     names.push_back(node.as_let_binding_name(i));
-    exprs.push_back(updated);
   }
   const AstNode* body = TransformNode(node.as_let_body(), arena, transform);
   if (body == nullptr) {
@@ -441,15 +432,9 @@ const AstNode* TransformLambdaCall(const AstNode& node, Arena& arena, const RefT
   args.reserve(n);
   bool changed = (callee != &node.as_lambda_call_callee());
   for (std::uint32_t i = 0; i < n; ++i) {
-    const AstNode& child = node.as_lambda_call_arg(i);
-    const AstNode* updated = TransformNode(child, arena, transform);
-    if (updated == nullptr) {
+    if (!AppendTransformed(node.as_lambda_call_arg(i), arena, transform, &args, &changed)) {
       return nullptr;
     }
-    if (updated != &child) {
-      changed = true;
-    }
-    args.push_back(updated);
   }
   if (!changed) {
     return &node;

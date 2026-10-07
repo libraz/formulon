@@ -40,6 +40,15 @@ bool is_special_form(std::string_view lexeme, std::string_view form) noexcept {
   return strings::case_insensitive_eq(lexeme, form);
 }
 
+// A literal node spanning `range`; null on allocation failure.
+AstNode* make_literal_at(Arena& arena, Value v, TextRange range) {
+  AstNode* n = make_literal(arena, v);
+  if (n != nullptr) {
+    n->set_range(range);
+  }
+  return n;
+}
+
 }  // namespace
 
 AstNode* Parser::parse_number_atom() {
@@ -60,12 +69,7 @@ AstNode* Parser::parse_number_atom() {
     return make_recovery_placeholder(tok.range);
   }
   advance();
-  AstNode* n = make_literal(arena_, Value::number(tok.number));
-  if (n == nullptr) {
-    return nullptr;
-  }
-  n->set_range(tok.range);
-  return n;
+  return make_literal_at(arena_, Value::number(tok.number), tok.range);
 }
 
 AstNode* Parser::parse_full_row_or_number(const Token& first) {
@@ -86,12 +90,7 @@ AstNode* Parser::parse_full_row_or_number(const Token& first) {
     // Not a valid full-row form; fall back to a plain number literal and let
     // the binary `:` rule glue it to whatever follows.
     advance();
-    AstNode* n = make_literal(arena_, Value::number(first.number));
-    if (n == nullptr) {
-      return nullptr;
-    }
-    n->set_range(first.range);
-    return n;
+    return make_literal_at(arena_, Value::number(first.number), first.range);
   }
   // Consume Number, Colon, Number: `1:1` is a single whole-row Ref, `1:3`
   // a range spanning two.
@@ -103,12 +102,7 @@ AstNode* Parser::parse_full_row_or_number(const Token& first) {
 
 AstNode* Parser::parse_bool_atom() {
   const Token& tok = advance();
-  AstNode* n = make_literal(arena_, Value::boolean(tok.boolean));
-  if (n == nullptr) {
-    return nullptr;
-  }
-  n->set_range(tok.range);
-  return n;
+  return make_literal_at(arena_, Value::boolean(tok.boolean), tok.range);
 }
 
 AstNode* Parser::parse_string_atom() {
@@ -116,12 +110,7 @@ AstNode* Parser::parse_string_atom() {
   // in the tokenizer arena, so we can hand it straight to `Value::text`
   // without copying.
   const Token& tok = advance();
-  AstNode* n = make_literal(arena_, Value::text(tok.text));
-  if (n == nullptr) {
-    return nullptr;
-  }
-  n->set_range(tok.range);
-  return n;
+  return make_literal_at(arena_, Value::text(tok.text), tok.range);
 }
 
 TextRange Parser::consume_ref_error_glued_tail(TextRange base_range) {
@@ -237,19 +226,11 @@ AstNode* Parser::parse_array_literal_atom() {
       case TokenKind::Number: {
         const Token& nt = advance();
         const double signed_val = (have_prefix && prefix_op == UnaryOp::Minus) ? -nt.number : nt.number;
-        node = make_literal(arena_, Value::number(signed_val));
-        if (node != nullptr) {
-          node->set_range(nt.range);
-        }
-        return node;
+        return make_literal_at(arena_, Value::number(signed_val), nt.range);
       }
       case TokenKind::Bool: {
         const Token& bt = advance();
-        node = make_literal(arena_, Value::boolean(bt.boolean));
-        if (node != nullptr) {
-          node->set_range(bt.range);
-        }
-        return node;
+        return make_literal_at(arena_, Value::boolean(bt.boolean), bt.range);
       }
       case TokenKind::ErrorLiteral: {
         const Token& et = advance();
@@ -274,11 +255,7 @@ AstNode* Parser::parse_array_literal_atom() {
         // straight to `Value::text` without copying — same pattern as
         // `parse_string_atom` for the top-level grammar.
         const Token& st = advance();
-        node = make_literal(arena_, Value::text(st.text));
-        if (node != nullptr) {
-          node->set_range(st.range);
-        }
-        return node;
+        return make_literal_at(arena_, Value::text(st.text), st.range);
       }
       default: {
         const Token& tok = peek();
@@ -436,10 +413,7 @@ bool Parser::parse_call_args(std::vector<const AstNode*>* args, TextRange open_r
     AstNode* arg = nullptr;
     const TokenKind here = peek_kind();
     if (here == TokenKind::Comma || here == TokenKind::RParen) {
-      arg = make_literal(arena_, Value::blank());
-      if (arg != nullptr) {
-        arg->set_range(peek().range);
-      }
+      arg = make_literal_at(arena_, Value::blank(), peek().range);
     } else {
       arg = parse_expression(0, SyncContext::CallArg);
     }
