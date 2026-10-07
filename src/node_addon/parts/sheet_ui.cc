@@ -46,57 +46,64 @@ Napi::Value SheetListResult(const Napi::CallbackInfo& info, fm_workbook_t* handl
   return FinishListResult(env, arr, 0);
 }
 
+// Shared bodies of the per-sheet Status entries taking `(sheet)`,
+// `(sheet, index)` and `(sheet, range)`.
+using SheetOpFn = fm_status_t (*)(fm_workbook_t*, uint32_t);
+using SheetIndexOpFn = fm_status_t (*)(fm_workbook_t*, uint32_t, uint32_t);
+using MergeEditFn = fm_status_t (*)(fm_workbook_t*, uint32_t, fm_merge_range);
+
+Napi::Value InvokeSheetOp(const Napi::CallbackInfo& info, fm_workbook_t* handle, SheetOpFn fn) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return MakeErrorStatus(env, kBindingInvalidHandle);
+  }
+  const uint32_t sheet = Workbook::ArgU32(info, 0);
+  fm_status_t rc = fn(handle, sheet);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value InvokeSheetIndexOp(const Napi::CallbackInfo& info, fm_workbook_t* handle, SheetIndexOpFn fn) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return MakeErrorStatus(env, kBindingInvalidHandle);
+  }
+  const uint32_t sheet = Workbook::ArgU32(info, 0);
+  const uint32_t index = Workbook::ArgU32(info, 1);
+  fm_status_t rc = fn(handle, sheet, index);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value InvokeMergeEdit(const Napi::CallbackInfo& info, fm_workbook_t* handle, MergeEditFn fn) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return MakeErrorStatus(env, kBindingInvalidHandle);
+  }
+  CheckedSpecReader reader(env);
+  fm_merge_range range{};
+  if (!MergeRangeArg(reader, info, 1, &range)) {
+    return env.Undefined();
+  }
+  const uint32_t sheet = Workbook::ArgU32(info, 0);
+  fm_status_t rc = fn(handle, sheet, range);
+  return MakeStatus(env, rc);
+}
+
 }  // namespace
 
 Napi::Value Workbook::AddMerge(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  CheckedSpecReader reader(env);
-  fm_merge_range range{};
-  if (!MergeRangeArg(reader, info, 1, &range)) {
-    return env.Undefined();
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  fm_status_t rc = fm_sheet_add_merge(handle_, sheet, range);
-  return MakeStatus(env, rc);
+  return InvokeMergeEdit(info, handle_, &fm_sheet_add_merge);
 }
 
 Napi::Value Workbook::RemoveMerge(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  CheckedSpecReader reader(env);
-  fm_merge_range range{};
-  if (!MergeRangeArg(reader, info, 1, &range)) {
-    return env.Undefined();
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  fm_status_t rc = fm_sheet_remove_merge(handle_, sheet, range);
-  return MakeStatus(env, rc);
+  return InvokeMergeEdit(info, handle_, &fm_sheet_remove_merge);
 }
 
 Napi::Value Workbook::RemoveMergeAt(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t index = ArgU32(info, 1);
-  fm_status_t rc = fm_sheet_remove_merge_at(handle_, sheet, index);
-  return MakeStatus(env, rc);
+  return InvokeSheetIndexOp(info, handle_, &fm_sheet_remove_merge_at);
 }
 
 Napi::Value Workbook::ClearMerges(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  fm_status_t rc = fm_sheet_clear_merges(handle_, sheet);
-  return MakeStatus(env, rc);
+  return InvokeSheetOp(info, handle_, &fm_sheet_clear_merges);
 }
 
 namespace {
@@ -140,12 +147,7 @@ Napi::Value Workbook::GetMergesInRange(const Napi::CallbackInfo& info) {
     return FinishListResult(env, arr, rc);
   }
   for (uint32_t i = 0; i < total; ++i) {
-    Napi::Object item = Napi::Object::New(env);
-    item.Set("firstRow", Napi::Number::New(env, merges[i].first_row));
-    item.Set("lastRow", Napi::Number::New(env, merges[i].last_row));
-    item.Set("firstCol", Napi::Number::New(env, merges[i].first_col));
-    item.Set("lastCol", Napi::Number::New(env, merges[i].last_col));
-    arr.Set(i, item);
+    arr.Set(i, MergeToJs(env, merges[i]));
   }
   return FinishListResult(env, arr, 0);
 }
@@ -325,24 +327,11 @@ Napi::Value Workbook::RemoveHyperlink(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::RemoveHyperlinkAt(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t index = ArgU32(info, 1);
-  fm_status_t rc = fm_sheet_remove_hyperlink_at(handle_, sheet, index);
-  return MakeStatus(env, rc);
+  return InvokeSheetIndexOp(info, handle_, &fm_sheet_remove_hyperlink_at);
 }
 
 Napi::Value Workbook::ClearHyperlinks(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  fm_status_t rc = fm_sheet_clear_hyperlinks(handle_, sheet);
-  return MakeStatus(env, rc);
+  return InvokeSheetOp(info, handle_, &fm_sheet_clear_hyperlinks);
 }
 
 // ---- Validations ----------------------------------------------------
@@ -353,12 +342,7 @@ Napi::Object ValidationToJs(Napi::Env env, const fm_data_validation& v) {
   Napi::Object item = Napi::Object::New(env);
   Napi::Array ranges = Napi::Array::New(env);
   for (uint32_t r = 0; r < v.range_count; ++r) {
-    Napi::Object rng = Napi::Object::New(env);
-    rng.Set("firstRow", Napi::Number::New(env, v.ranges[r].first_row));
-    rng.Set("lastRow", Napi::Number::New(env, v.ranges[r].last_row));
-    rng.Set("firstCol", Napi::Number::New(env, v.ranges[r].first_col));
-    rng.Set("lastCol", Napi::Number::New(env, v.ranges[r].last_col));
-    ranges.Set(r, rng);
+    ranges.Set(r, MergeToJs(env, v.ranges[r]));
   }
   item.Set("ranges", ranges);
   item.Set("type", Napi::Number::New(env, v.type));
@@ -457,24 +441,11 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::RemoveValidationAt(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t index = ArgU32(info, 1);
-  fm_status_t rc = fm_sheet_remove_validation_at(handle_, sheet, index);
-  return MakeStatus(env, rc);
+  return InvokeSheetIndexOp(info, handle_, &fm_sheet_remove_validation_at);
 }
 
 Napi::Value Workbook::ClearValidations(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  fm_status_t rc = fm_sheet_clear_validations(handle_, sheet);
-  return MakeStatus(env, rc);
+  return InvokeSheetOp(info, handle_, &fm_sheet_clear_validations);
 }
 
 // ---- Typed AutoFilter -----------------------------------------------
@@ -485,15 +456,6 @@ constexpr uint32_t kAbsentDxfId = UINT32_MAX;
 
 bool PullString(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, std::string* out) {
   return reader.String(spec, key, out);
-}
-
-Napi::Value MergeRangeToJs(Napi::Env env, const fm_merge_range& r) {
-  Napi::Object o = Napi::Object::New(env);
-  o.Set("firstRow", Napi::Number::New(env, r.first_row));
-  o.Set("lastRow", Napi::Number::New(env, r.last_row));
-  o.Set("firstCol", Napi::Number::New(env, r.first_col));
-  o.Set("lastCol", Napi::Number::New(env, r.last_col));
-  return o;
 }
 
 bool PullRange(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, fm_merge_range* out) {
@@ -571,7 +533,7 @@ Napi::Object FilterColumnToJs(Napi::Env env, const fm_filter_column& c) {
 
 Napi::Object AutoFilterToJs(Napi::Env env, const fm_auto_filter& f) {
   Napi::Object o = Napi::Object::New(env);
-  o.Set("range", MergeRangeToJs(env, f.range));
+  o.Set("range", MergeToJs(env, f.range));
   Napi::Array columns = Napi::Array::New(env, f.column_count);
   for (uint32_t i = 0; i < f.column_count; ++i) {
     columns.Set(i, FilterColumnToJs(env, f.columns[i]));
@@ -582,7 +544,7 @@ Napi::Object AutoFilterToJs(Napi::Env env, const fm_auto_filter& f) {
     return o;
   }
   Napi::Object sort = Napi::Object::New(env);
-  sort.Set("ref", MergeRangeToJs(env, f.sort_ref));
+  sort.Set("ref", MergeToJs(env, f.sort_ref));
   sort.Set("columnSort", Bool(env, f.column_sort));
   sort.Set("caseSensitive", Bool(env, f.case_sensitive));
   sort.Set("sortMethod", Num(env, f.sort_method));
@@ -590,7 +552,7 @@ Napi::Object AutoFilterToJs(Napi::Env env, const fm_auto_filter& f) {
   for (uint32_t i = 0; i < f.condition_count; ++i) {
     const fm_sort_condition& c = f.conditions[i];
     Napi::Object item = Napi::Object::New(env);
-    item.Set("ref", MergeRangeToJs(env, c.ref));
+    item.Set("ref", MergeToJs(env, c.ref));
     item.Set("descending", Bool(env, c.descending));
     item.Set("sortBy", Num(env, c.sort_by));
     item.Set("customList", CStr(env, c.custom_list));
@@ -826,6 +788,45 @@ Napi::Value EvaluateAutoFilterImpl(Napi::Env env, const fm_workbook_t* wb, bool 
   return out;
 }
 
+// Builds the `{ status, firstRow: 0, match: [] }` result for a dead handle.
+Napi::Object EmptyAutoFilterEvaluation(Napi::Env env, Napi::Object status) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", status);
+  out.Set("firstRow", Num(env, 0));
+  out.Set("match", Napi::Array::New(env));
+  return out;
+}
+
+// Shared bodies of the sheet / table AutoFilter mutators.
+using AutoFilterSetFn = fm_status_t (*)(fm_workbook_t*, size_t, const fm_auto_filter*);
+using AutoFilterOpFn = fm_status_t (*)(fm_workbook_t*, size_t);
+
+Napi::Value SetAutoFilterImpl(const Napi::CallbackInfo& info, fm_workbook_t* handle, AutoFilterSetFn fn,
+                              const char* usage) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return MakeErrorStatus(env, kBindingInvalidHandle);
+  }
+  CheckedSpecReader reader(env);
+  AutoFilterInput in;
+  if (!ReadAutoFilter(reader, info, 1, in)) {
+    if (!reader.ok()) {
+      return env.Undefined();
+    }
+    return MakeBindingArgumentError(env, usage);
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  return MakeStatus(env, fn(handle, Workbook::ArgU32(info, 0), &in.filter));
+}
+
+Napi::Value InvokeAutoFilterOp(const Napi::CallbackInfo& info, fm_workbook_t* handle, AutoFilterOpFn fn) {
+  Napi::Env env = info.Env();
+  return handle == nullptr ? MakeErrorStatus(env, kBindingInvalidHandle)
+                           : MakeStatus(env, fn(handle, Workbook::ArgU32(info, 0)));
+}
+
 }  // namespace
 
 Napi::Value Workbook::GetAutoFilter(const Napi::CallbackInfo& info) {
@@ -845,87 +846,43 @@ Napi::Value Workbook::GetTableAutoFilter(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetAutoFilter(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  CheckedSpecReader reader(env);
-  AutoFilterInput in;
-  if (!ReadAutoFilter(reader, info, 1, in)) {
-    if (!reader.ok()) {
-      return env.Undefined();
-    }
-    return MakeBindingArgumentError(env, "setAutoFilter expects (sheet:number, autoFilter:object)");
-  }
-  if (!reader.ok()) {
-    return env.Undefined();
-  }
-  return MakeStatus(env, fm_sheet_set_auto_filter(handle_, ArgU32(info, 0), &in.filter));
+  return SetAutoFilterImpl(info, handle_, &fm_sheet_set_auto_filter,
+                           "setAutoFilter expects (sheet:number, autoFilter:object)");
 }
 
 Napi::Value Workbook::SetTableAutoFilter(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  CheckedSpecReader reader(env);
-  AutoFilterInput in;
-  if (!ReadAutoFilter(reader, info, 1, in)) {
-    if (!reader.ok()) {
-      return env.Undefined();
-    }
-    return MakeBindingArgumentError(env, "setTableAutoFilter expects (tableIdx:number, autoFilter:object)");
-  }
-  if (!reader.ok()) {
-    return env.Undefined();
-  }
-  return MakeStatus(env, fm_table_set_auto_filter(handle_, ArgU32(info, 0), &in.filter));
+  return SetAutoFilterImpl(info, handle_, &fm_table_set_auto_filter,
+                           "setTableAutoFilter expects (tableIdx:number, autoFilter:object)");
 }
 
 Napi::Value Workbook::RemoveAutoFilter(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  return handle_ == nullptr ? NullHandleError(env)
-                            : MakeStatus(env, fm_sheet_remove_auto_filter(handle_, ArgU32(info, 0)));
+  return InvokeAutoFilterOp(info, handle_, &fm_sheet_remove_auto_filter);
 }
 
 Napi::Value Workbook::RemoveTableAutoFilter(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  return handle_ == nullptr ? NullHandleError(env)
-                            : MakeStatus(env, fm_table_remove_auto_filter(handle_, ArgU32(info, 0)));
+  return InvokeAutoFilterOp(info, handle_, &fm_table_remove_auto_filter);
 }
 
 Napi::Value Workbook::ApplyAutoFilter(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  return handle_ == nullptr ? NullHandleError(env)
-                            : MakeStatus(env, fm_sheet_apply_auto_filter(handle_, ArgU32(info, 0)));
+  return InvokeAutoFilterOp(info, handle_, &fm_sheet_apply_auto_filter);
 }
 
 Napi::Value Workbook::ApplyTableAutoFilter(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  return handle_ == nullptr ? NullHandleError(env)
-                            : MakeStatus(env, fm_table_apply_auto_filter(handle_, ArgU32(info, 0)));
+  return InvokeAutoFilterOp(info, handle_, &fm_table_apply_auto_filter);
 }
 
 Napi::Value Workbook::ClearAutoFilter(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  return handle_ == nullptr ? NullHandleError(env)
-                            : MakeStatus(env, fm_sheet_clear_auto_filter(handle_, ArgU32(info, 0)));
+  return InvokeAutoFilterOp(info, handle_, &fm_sheet_clear_auto_filter);
 }
 
 Napi::Value Workbook::ClearTableAutoFilter(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  return handle_ == nullptr ? NullHandleError(env)
-                            : MakeStatus(env, fm_table_clear_auto_filter(handle_, ArgU32(info, 0)));
+  return InvokeAutoFilterOp(info, handle_, &fm_table_clear_auto_filter);
 }
 
 Napi::Value Workbook::EvaluateAutoFilter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    Napi::Object out = Napi::Object::New(env);
-    out.Set("status", NullHandleError(env));
-    out.Set("firstRow", Num(env, 0));
-    out.Set("match", Napi::Array::New(env));
-    return out;
+    return EmptyAutoFilterEvaluation(env, NullHandleError(env));
   }
   return EvaluateAutoFilterImpl(env, handle_, false, ArgU32(info, 0));
 }
@@ -933,11 +890,7 @@ Napi::Value Workbook::EvaluateAutoFilter(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::EvaluateTableAutoFilter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    Napi::Object out = Napi::Object::New(env);
-    out.Set("status", NullHandleError(env));
-    out.Set("firstRow", Num(env, 0));
-    out.Set("match", Napi::Array::New(env));
-    return out;
+    return EmptyAutoFilterEvaluation(env, NullHandleError(env));
   }
   return EvaluateAutoFilterImpl(env, handle_, true, ArgU32(info, 0));
 }
