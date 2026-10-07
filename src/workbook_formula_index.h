@@ -44,7 +44,7 @@ std::vector<std::string> close_affected_names(const std::vector<DefinedName>& de
 // edges, cached value, and spill geometry untouched, so setting a print
 // area/print titles/unrelated name no longer wipes spills workbook-wide or
 // forces every formula to recompute. Shared by every scoped-reindex caller
-// below (defined names, table structure) via `affected`, which tests the
+// (defined names, table structure) via `affected`, which tests the
 // already-parsed AST; the parse itself cannot be skipped for the unaffected
 // majority (no per-name/per-table dependent index exists in the recalc
 // engine to look this up directly), so cost is proportional to the
