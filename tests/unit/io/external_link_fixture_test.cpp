@@ -29,7 +29,7 @@
 //       A2  =SUM([1]!SecondRange)      (name -> a rectangle)
 //       A3  =[1]Second!B5              (cached boolean)
 //       A4  =[1]Second!B6              (cached error)
-//       A5  =[1]Second!B4              (never cached -> Excel reads 0)
+//       A5  =[1]Second!B4              (never cached -> blank, shown as 0)
 //       A6  =[1]Second!B7              (cached text)
 //
 // A5 is the case worth stating twice: Excel caches only the cells the
@@ -183,16 +183,16 @@ TEST_P(ExternalLinkFixture, SupportingWorkbookCachesReachTheModel) {
   EXPECT_DOUBLE_EQ(second.cached_cell(0, 6, 3).as_number(), 77.0);
 }
 
-TEST_P(ExternalLinkFixture, AnUncachedAddressReadsAsZeroNotBlank) {
+TEST_P(ExternalLinkFixture, AnUncachedAddressReadsAsBlank) {
   Workbook wb = LoadFixture("external_link_cell_kinds", GetParam());
   ASSERT_EQ(wb.external_links().size(), 1U);
   const ExternalBook& book = wb.external_links()[0].book;
   const std::uint32_t second = book.sheet_index("Second");
   ASSERT_NE(second, ExternalBook::kNoSheet);
-  // B4 (row index 3) was never cached; B5 was.
-  const Value uncached = book.cached_cell(second, 3, 1);
-  ASSERT_TRUE(uncached.is_number());
-  EXPECT_DOUBLE_EQ(uncached.as_number(), 0.0);
+  // B4 (row index 3) was never cached; B5 was. In a closed book Excel reads
+  // an uncached cell as blank (`&"x"` gives "x", ISBLANK is TRUE); only the
+  // top-level display shows it as 0.
+  EXPECT_TRUE(book.cached_cell(second, 3, 1).is_blank());
   EXPECT_TRUE(book.cached_cell(second, 4, 1).is_boolean());
 }
 

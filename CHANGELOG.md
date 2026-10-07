@@ -27,8 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read as supporting books.
 - An external whole column or row has its declared size: `ROWS`, `COLUMNS`,
   `INDEX` and the lookup functions measure `[Book]Sheet!A:A` as the whole
-  column, and one entered as the formula spills at that size. Aggregates
-  still read the cached extent.
+  column, and one entered as the formula spills at that size, with blank
+  cells past the cached extent. Aggregates still read the cached extent.
 - Pictures can be moved and resized in place (`setImageAnchor`,
   `set_image_anchor`, `fm_sheet_set_image_anchor`) from the values
   `listDrawingObjects` reports. The object id, name, crop, rotation, flips and
@@ -73,6 +73,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sheet names shaped like `R`, `C` or `R1C1` are quoted in formula text.
 - The XLSB writer encodes cross-workbook references as formulas instead of
   keeping only their cached values.
+- A whole column or row inside an operator, a scalar function, `LET` or a
+  defined name keeps its declared size (1,048,576 rows or 16,384 columns) with
+  blank cells past the data, as Excel does, instead of being reduced to the
+  cell in the formula's row or column: `SUM((A:A="x")*B:B)` and
+  `SUMPRODUCT((A:A>1)*B:B)` sum the matching rows, `ROWS(B:B+0)` is 1048576,
+  and `=B:B+0` spills the whole column. Only the populated part is stored.
+- `COUNTBLANK` counts the empty cells of the whole declared range, and
+  `COUNTIF` / `COUNTIFS` with a criterion that matches blank count the cells
+  past the used range.
+- `COUNTBLANK` and the `SUMIF`, `COUNTIF`, `AVERAGEIF`, `MAXIFS` and `MINIFS`
+  families return `#VALUE!` for a range in another workbook, as Excel does
+  while that workbook is closed. A cell missing from a linked workbook's
+  cached values reads as blank instead of 0.
+- A conditional-format or data-validation formula whose result is an array
+  uses the array's first element for every cell it applies to.
 
 ## [0.13.0] - 2026-10-06
 
