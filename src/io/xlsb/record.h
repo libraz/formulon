@@ -120,7 +120,7 @@ enum class XlsbRecordType : std::uint16_t {
   BrtBeginExternals = 353,  ///< Start of the supporting-book list.
   BrtEndExternals = 354,    ///< End of the supporting-book list.
   BrtSupBookSrc = 355,      ///< Another workbook, named by its externalLink rel id.
-  BrtSupAddin = 356,        ///< An add-in function library.
+  BrtSupAddin = 667,        ///< An add-in function library.
   BrtSupSelf = 357,         ///< This workbook.
   BrtSupSame = 358,         ///< The same book as the preceding entry.
   /// Sheet-name table of the preceding supporting book: `count(u32)`

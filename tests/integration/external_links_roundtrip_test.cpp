@@ -521,13 +521,12 @@ void ExpectAuthoredReferencesSurvive(WorkbookFormat format) {
   EXPECT_TRUE(name_found);
 
   // The links carry no sheetData, so every reference reads #REF!. The one
-  // exception is the name `Total`, which reads #NAME? after an xlsx round trip
-  // and #REF! after an xlsb one.
+  // exception is the name `Total`, which the supporting book does not declare.
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   for (std::uint32_t row = 0; row < 6U; ++row) {
     const Value v = ValueAt(wb, 0, row, 0);
     ASSERT_TRUE(v.is_error()) << "row " << row;
-    const ErrorCode expected = (row == 3U && format == WorkbookFormat::Ooxml) ? ErrorCode::Name : ErrorCode::Ref;
+    const ErrorCode expected = row == 3U ? ErrorCode::Name : ErrorCode::Ref;
     EXPECT_EQ(v.as_error(), expected) << "row " << row;
   }
 
@@ -563,6 +562,52 @@ TEST(ExternalLinksAuthoring, NumericBracketIsABookNamedByTheNumber) {
   EXPECT_EQ(wb.external_links().size(), 1U);
   EXPECT_EQ(FormulaAt(wb, 0, 0, 0), "=[1]Sheet1!A1");
   EXPECT_LE(MaxBracketIndex(EntryText(package, "xl/worksheets/sheet1.xml")), 1U);
+}
+
+// An extensionless book's book-scope name is `'Src2'!Name` in the formula bar and
+// `[N]!Name` in both containers.
+void ExpectExtensionlessBookScopeSurvives(WorkbookFormat format) {
+  Workbook src = Workbook::create();
+  std::vector<ExternalLinkRecord> links(1);
+  links[0].index = 1;
+  links[0].target = "Src2";
+  links[0].kind = ExternalLinkRecord::Kind::kExternalBook;
+  links[0].book.sheet_names = {"Data"};
+  links[0].book.sheet_data = {true};
+  ExternalBookName total;
+  total.name = "Total";
+  total.resolvable = true;
+  links[0].book.names = {total};
+  links[0].book.cells[ExternalBook::cell_key(0, 0, 0)].value = Value::number(42.0);
+  src.set_external_links(std::move(links));
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_formula(0, 0, 0, "='Src2'!Total")));
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_formula(0, 1, 0, "='Src2'!NoSuch")));
+
+  std::vector<std::uint8_t> package;
+  Workbook wb = ReloadAs(src, format, &package);
+  ASSERT_EQ(wb.external_links().size(), 1U);
+  EXPECT_EQ(FormulaAt(wb, 0, 0, 0), "='Src2'!Total");
+  EXPECT_EQ(FormulaAt(wb, 0, 1, 0), "='Src2'!NoSuch");
+  if (format == WorkbookFormat::Ooxml) {
+    const std::string sheet_xml = EntryText(package, "xl/worksheets/sheet1.xml");
+    EXPECT_NE(sheet_xml.find("[1]!Total"), std::string::npos) << sheet_xml;
+    EXPECT_NE(sheet_xml.find("[1]!NoSuch"), std::string::npos) << sheet_xml;
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value total_value = ValueAt(wb, 0, 0, 0);
+  ASSERT_TRUE(total_value.is_number());
+  EXPECT_DOUBLE_EQ(total_value.as_number(), 42.0);
+  const Value missing = ValueAt(wb, 0, 1, 0);
+  ASSERT_TRUE(missing.is_error());
+  EXPECT_EQ(missing.as_error(), ErrorCode::Name);
+}
+
+TEST(ExternalLinksRoundTrip, ExtensionlessBookScopeSurvivesXlsx) {
+  ExpectExtensionlessBookScopeSurvives(WorkbookFormat::Ooxml);
+}
+
+TEST(ExternalLinksRoundTrip, ExtensionlessBookScopeSurvivesXlsb) {
+  ExpectExtensionlessBookScopeSurvives(WorkbookFormat::Xlsb);
 }
 
 // ---------------------------------------------------------------------------

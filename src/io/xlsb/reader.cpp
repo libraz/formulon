@@ -517,6 +517,22 @@ void ReadExternalLinkTargets(const ZipReader& zip, ExternalLinkRecord& record) {
   (void)status;
 }
 
+/// `BrtBeginExternalBook` `sbt` values other than a workbook (0).
+constexpr std::uint16_t kSbtDde = 1;
+constexpr std::uint16_t kSbtOle = 2;
+
+/// The `sbt` of the part's opening `BrtBeginExternalBook`; 0 when the part
+/// does not open with one.
+std::uint16_t ExternalLinkSbt(ByteSpan part) {
+  auto rec_or = read_record(part);
+  if (!rec_or || rec_or.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtBeginExternalBook)) {
+    return 0;
+  }
+  ByteSpan payload = rec_or.value().payload;
+  auto sbt_or = read_u16(payload);
+  return sbt_or ? sbt_or.value() : std::uint16_t{0};
+}
+
 /// Loads every external link part the supporting-book list names, in
 /// `[N]` order, so `external_links()[N - 1]` is the book a formula's
 /// `[N]` prefix selects.
@@ -527,9 +543,10 @@ void ReadExternalLinkTargets(const ZipReader& zip, ExternalLinkRecord& record) {
 /// one and resolve against the wrong workbook. A reference into an empty
 /// cache reads `#REF!`, which is the behaviour before this existed.
 ///
-/// The parts stay out of `consumed_parts` for the same reason the pivot
-/// parts do -- the XLSB writer has no external-link output, so they must
-/// continue to round-trip verbatim through passthrough.
+/// A link whose `BrtBeginExternalBook` carries `sbt` 1 (DDE) or 2 (OLE) is
+/// recorded as that kind and its body is not read as a supporting book. The
+/// XLSB writer regenerates the parts of external-book links only, so a DDE
+/// or OLE part keeps round-tripping verbatim through passthrough.
 void LoadExternalLinkParts(const ZipReader& zip, Workbook& wb, const std::vector<XlsbSupBook>& books) {
   std::vector<ExternalLinkRecord> links;
   for (const XlsbSupBook& sup : books) {
@@ -545,8 +562,10 @@ void LoadExternalLinkParts(const ZipReader& zip, Workbook& wb, const std::vector
       auto bytes_or = zip.read_entry(record.part_path);
       if (bytes_or) {
         const std::vector<std::uint8_t>& bytes = bytes_or.value();
-        auto book_or = read_external_link_bin(ByteSpan{bytes.data(), bytes.size()}, &record.body_rel_id);
-        if (book_or) {
+        const std::uint16_t sbt = ExternalLinkSbt(ByteSpan{bytes.data(), bytes.size()});
+        if (sbt == kSbtDde || sbt == kSbtOle) {
+          record.kind = sbt == kSbtDde ? ExternalLinkRecord::Kind::kDdeLink : ExternalLinkRecord::Kind::kOleLink;
+        } else if (auto book_or = read_external_link_bin(ByteSpan{bytes.data(), bytes.size()}, &record.body_rel_id)) {
           record.kind = ExternalLinkRecord::Kind::kExternalBook;
           record.book = std::move(book_or.value());
         } else {

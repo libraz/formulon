@@ -155,6 +155,8 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
           return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb external name formula truncated",
                             "context=xlsb_external_link_reader");
         }
+        // No body at all: the supporting book declares no such name.
+        book.names.back().exists = cce_or.value() != 0U;
         DecodeNameFormula(ByteSpan{payload.data, cce_or.value()}, &book.names.back());
         break;
       }

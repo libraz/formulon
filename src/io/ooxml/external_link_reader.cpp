@@ -119,7 +119,9 @@ void DecodeExternalBook(const pugi::xml_node& book_node, ExternalBook* out) {
     // difference between `#REF!` (the name exists, its target is not
     // reachable) and `#NAME?` (no such name), and Excel distinguishes
     // the two.
-    ParseExternalRefersTo(name.attribute("refersTo").value(), *out, &entry);
+    const pugi::xml_attribute refers_to = name.attribute("refersTo");
+    entry.exists = static_cast<bool>(refers_to);
+    ParseExternalRefersTo(refers_to.value(), *out, &entry);
     // `sheetId` makes the name local to that sheet of the supporting book.
     if (pugi::xml_attribute scope = name.attribute("sheetId"); scope) {
       const std::uint32_t sheet_id = scope.as_uint(ExternalBook::kNoSheet);

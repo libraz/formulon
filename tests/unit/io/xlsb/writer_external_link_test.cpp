@@ -520,6 +520,106 @@ TEST(XlsbWriterExternalLink, ARetainedEntryOfAnUnknownLinkFailsTheSave) {
   EXPECT_EQ(result_or.error().code, FormulonErrorCode::kIoXlsbRetainedPartStale);
 }
 
+// ---------------------------------------------------------------------------
+// Names the book does not declare, and an extensionless book's names
+// ---------------------------------------------------------------------------
+
+ExternalBookName CachedCellName(const char* name, std::uint32_t row) {
+  ExternalBookName n;
+  n.name = name;
+  n.row = row;
+  n.row_end = row;
+  n.resolvable = true;
+  return n;
+}
+
+/// A host sheet with one link whose first sheet caches `A1 = value`.
+Workbook HostWithLink(const char* target, std::vector<ExternalBookName> names, double value) {
+  Workbook wb = Host();
+  std::vector<ExternalLinkRecord> links(1);
+  links[0].index = 1;
+  links[0].target = target;
+  links[0].kind = ExternalLinkRecord::Kind::kExternalBook;
+  links[0].book.sheet_names = {"Data"};
+  links[0].book.sheet_data = {true};
+  links[0].book.names = std::move(names);
+  links[0].book.cells[ExternalBook::cell_key(0, 0, 0)].value = Value::number(value);
+  wb.set_external_links(std::move(links));
+  return wb;
+}
+
+TEST(XlsbWriterExternalLink, AbsentNameIsWrittenWithoutABodyAndKeepsLaterNamesInPlace) {
+  ExternalBookName gone = CachedCellName("Gone", 0);
+  gone.exists = false;
+  Workbook wb = HostWithLink("Book.xlsx", {gone, CachedCellName("After", 0)}, 10.0);
+  SetFormula(wb, 0, "=Book.xlsx!Gone");
+  SetFormula(wb, 1, "=Book.xlsx!After");
+  SetFormula(wb, 2, "=Book.xlsx!NoSuch");
+  const std::vector<std::uint8_t> bytes = Save(wb);
+
+  // Excel's payload for a name with no body: cce = 0, nothing after it.
+  const std::vector<Rec> recs = Records(Entry(bytes, "xl/externalLinks/externalLink1.bin"));
+  std::vector<std::string> bodies;
+  for (const Rec& rec : recs) {
+    if (rec.type == 585) {
+      bodies.push_back(rec.payload);
+    }
+  }
+  ASSERT_EQ(bodies.size(), 3U);
+  EXPECT_EQ(bodies[0], std::string("\0\0\0\0", 4));
+  EXPECT_EQ(bodies[1].size(), 4U + 9U);
+  EXPECT_EQ(bodies[2], std::string("\0\0\0\0", 4));
+
+  Workbook reloaded = Load(bytes);
+  const ExternalBook& book = reloaded.external_links()[0].book;
+  ASSERT_EQ(book.names.size(), 3U);
+  EXPECT_FALSE(book.names[0].exists);
+  EXPECT_TRUE(book.names[1].exists);
+  EXPECT_TRUE(book.names[1].resolvable);
+  EXPECT_FALSE(book.names[2].exists);
+  EXPECT_EQ(book.names[2].name, "NoSuch");
+  for (const std::uint32_t row : {0U, 2U}) {
+    const Value missing = Recalculated(reloaded, 0, row, 0);
+    ASSERT_TRUE(missing.is_error()) << row;
+    EXPECT_EQ(missing.as_error(), ErrorCode::Name) << row;
+  }
+  const Value after = Recalculated(reloaded, 0, 1, 0);
+  ASSERT_TRUE(after.is_number());
+  EXPECT_DOUBLE_EQ(after.as_number(), 10.0);
+}
+
+TEST(XlsbWriterExternalLink, UnresolvableNameKeepsItsRefErrorBody) {
+  ExternalBookName constant;
+  constant.name = "Rate";
+  Workbook wb = HostWithLink("Book.xlsx", {constant}, 1.0);
+  SetFormula(wb, 0, "=Book.xlsx!Rate");
+  const std::vector<Rec> recs = Records(Entry(Save(wb), "xl/externalLinks/externalLink1.bin"));
+  const auto fmla = std::find_if(recs.begin(), recs.end(), [](const Rec& r) { return r.type == 585; });
+  ASSERT_NE(fmla, recs.end());
+  EXPECT_EQ(fmla->payload, std::string("\x02\0\0\0\x1c\x17", 6));
+}
+
+TEST(XlsbWriterExternalLink, ExtensionlessBookScopeNameIsWrittenAsPtgNameX) {
+  Workbook wb = HostWithLink("Src2", {CachedCellName("Other", 1), CachedCellName("Total", 0)}, 7.0);
+  SetFormula(wb, 0, "=SUM('Src2'!Total)");
+  const std::vector<std::uint8_t> bytes = Save(wb);
+
+  const std::vector<std::string> tokens = FormulaTokens(Entry(bytes, "xl/worksheets/sheet1.bin"));
+  ASSERT_EQ(tokens.size(), 1U);
+  ASSERT_GE(tokens[0].size(), 7U);
+  EXPECT_EQ(static_cast<unsigned>(static_cast<std::uint8_t>(tokens[0][0]) & 0x1FU), 0x19U);  // PtgNameX
+  EXPECT_EQ(U32At(tokens[0], 3), 2U);  // Total is the second name of the link
+  const std::vector<Xti> xti = XtiTable(ExternalsBlock(bytes));
+  ASSERT_EQ(xti.size(), 1U);
+  EXPECT_EQ(xti[0].sup_book, 0U);
+
+  Workbook reloaded = Load(bytes);
+  EXPECT_EQ(FormulaAt(reloaded, 0, 0, 0), "=SUM('Src2'!Total)");
+  const Value value = Recalculated(reloaded, 0, 0, 0);
+  ASSERT_TRUE(value.is_number());
+  EXPECT_DOUBLE_EQ(value.as_number(), 7.0);
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io

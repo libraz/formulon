@@ -459,6 +459,88 @@ TEST(OoxmlExternalLinkWriter, ABareCellShapedSheetIsQuotedOnSave) {
 }
 
 // ---------------------------------------------------------------------------
+// Names the cache cannot resolve, and names the book does not declare
+// ---------------------------------------------------------------------------
+
+ExternalBookName CellName(const char* name, std::uint32_t row) {
+  ExternalBookName n;
+  n.name = name;
+  n.row = row;
+  n.row_end = row;
+  n.resolvable = true;
+  return n;
+}
+
+TEST(OoxmlExternalLinkWriter, UnresolvableNameIsStoredAsARefError) {
+  Workbook wb = HostBook();
+  ExternalLinkRecord rec = NewLink(1, "Book.xlsx");
+  ExternalBookName constant;
+  constant.name = "Rate";
+  constant.resolvable = false;
+  rec.book.names = {constant};
+  wb.set_external_links({rec});
+  const std::string body = Part(Save(wb), "xl/externalLinks/externalLink1.xml");
+  EXPECT_NE(body.find("<definedName name=\"Rate\" refersTo=\"#REF!\"/>"), std::string::npos) << body;
+
+  const Workbook reloaded = Load(Save(wb));
+  const ExternalBookName* back = reloaded.external_links()[0].book.find_name("Rate");
+  ASSERT_NE(back, nullptr);
+  EXPECT_TRUE(back->exists);
+  EXPECT_FALSE(back->resolvable);
+}
+
+TEST(OoxmlExternalLinkWriter, AbsentNameIsStoredWithoutATargetAndReadsAsNoSuchName) {
+  Workbook wb = HostBook();
+  ExternalLinkRecord rec = NewLink(1, "Book.xlsx");
+  ExternalBookName gone = CellName("NoSuch", 0);
+  gone.exists = false;
+  rec.book.names = {gone, CellName("After", 0)};
+  rec.book.sheet_data = {true};
+  rec.book.cells[ExternalBook::cell_key(0, 0, 0)].value = Value::number(10.0);
+  wb.set_external_links({rec});
+  SetFormula(wb, 0, 0, "=Book.xlsx!NoSuch");
+  SetFormula(wb, 1, 0, "=Book.xlsx!After");
+
+  const std::vector<std::uint8_t> pkg = Save(wb);
+  const std::string body = Part(pkg, "xl/externalLinks/externalLink1.xml");
+  EXPECT_NE(body.find("<definedName name=\"NoSuch\"/>"), std::string::npos) << body;
+  EXPECT_EQ(body.find("NoSuch\" refersTo"), std::string::npos) << body;
+
+  Workbook reloaded = Load(pkg);
+  const ExternalBook& book = reloaded.external_links()[0].book;
+  ASSERT_EQ(book.names.size(), 2U);
+  EXPECT_FALSE(book.names[0].exists);
+  EXPECT_TRUE(book.names[1].exists);
+  EXPECT_TRUE(book.names[1].resolvable);
+  const Value missing = ValueAt(reloaded, 0, 0, 0);
+  ASSERT_TRUE(missing.is_error());
+  EXPECT_EQ(missing.as_error(), ErrorCode::Name);
+  const Cell* after = reloaded.sheet(0).cell_at(1, 0);
+  ASSERT_NE(after, nullptr);
+  ASSERT_TRUE(after->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(after->cached_value.as_number(), 10.0);
+}
+
+TEST(OoxmlExternalLinkWriter, ExtensionlessBookScopeNameIsStoredWithItsLinkOrdinal) {
+  Workbook wb = HostBook();
+  ExternalLinkRecord first = NewLink(1, "Book.xlsx");
+  ExternalLinkRecord second = NewLink(2, "Src2");
+  second.book.names = {CellName("Total", 0)};
+  second.book.sheet_data = {true};
+  second.book.cells[ExternalBook::cell_key(0, 0, 0)].value = Value::number(7.0);
+  wb.set_external_links({first, second});
+  SetFormula(wb, 0, 0, "='Src2'!Total");
+
+  const std::vector<std::uint8_t> pkg = Save(wb);
+  EXPECT_EQ(FormulaTexts(Part(pkg, "xl/worksheets/sheet1.xml")), (std::vector<std::string>{"[2]!Total"}));
+  Workbook reloaded = Load(pkg);
+  EXPECT_EQ(FormulaAt(reloaded, 0, 0, 0), "='Src2'!Total");
+  const Value value = ValueAt(reloaded, 0, 0, 0);
+  ASSERT_TRUE(value.is_number());
+  EXPECT_DOUBLE_EQ(value.as_number(), 7.0);
+}
+
+// ---------------------------------------------------------------------------
 // Excel-produced fixture
 // ---------------------------------------------------------------------------
 

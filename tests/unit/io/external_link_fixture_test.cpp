@@ -403,6 +403,38 @@ TEST(ExternalLinkFixtureEdited, ASheetIdScopesAnExternalName) {
   EXPECT_EQ(b6->cached_value.as_error(), ErrorCode::Name);
 }
 
+TEST(ExternalLinkFixtureEdited, AbsentNameIsRecordedInPlaceAndReadsAsNoSuchName) {
+  Workbook wb = LoadBytes(EditedFixture(
+      "external_link_mixed", {{kLink1, Replace("</definedNames>",
+                                               "<definedName name=\"NoSuch\"/>"
+                                               "<definedName name=\"Dead\" refersTo=\"#REF!\"/>"
+                                               "<definedName name=\"AfterGap\" refersTo=\"='Data'!$A$1\"/>"
+                                               "</definedNames>")},
+                              {kSheet1, AddRow6("<c r=\"A6\"><f>[1]!NoSuch</f></c><c r=\"B6\"><f>[1]!Dead</f></c>"
+                                                "<c r=\"C6\"><f>[1]!AfterGap</f></c>")}}));
+  const ExternalBook& book = wb.external_links()[0].book;
+  const ExternalBookName* absent = book.find_name("NoSuch");
+  const ExternalBookName* dead = book.find_name("Dead");
+  const ExternalBookName* after = book.find_name("AfterGap");
+  ASSERT_NE(absent, nullptr);
+  ASSERT_NE(dead, nullptr);
+  ASSERT_NE(after, nullptr);
+  EXPECT_FALSE(absent->exists);
+  EXPECT_TRUE(dead->exists);
+  EXPECT_FALSE(dead->resolvable);
+  EXPECT_TRUE(after->exists);
+  EXPECT_TRUE(after->resolvable);
+  ExpectSameAsExcel(OurAnswer(wb, 6), Value::error(ErrorCode::Name), "[1]!NoSuch");
+  const Cell* b6 = wb.sheet(0).cell_at(5, 1);
+  const Cell* c6 = wb.sheet(0).cell_at(5, 2);
+  ASSERT_NE(b6, nullptr);
+  ASSERT_NE(c6, nullptr);
+  ASSERT_TRUE(b6->cached_value.is_error());
+  EXPECT_EQ(b6->cached_value.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(c6->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(c6->cached_value.as_number(), 10.0);
+}
+
 TEST(ExternalLinkFixtureEdited, NamesFeatureFormulasAndValidationsAreSpelledToo) {
   Workbook wb = LoadBytes(EditedFixture(
       "external_link_mixed",

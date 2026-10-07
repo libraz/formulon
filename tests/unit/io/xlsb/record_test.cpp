@@ -209,6 +209,13 @@ TEST(XlsbRecord, XLWideStringDecodesAsciiPayload) {
   EXPECT_EQ(cursor.size, 0U);
 }
 
+TEST(XlsbRecord, SupportingBookRecordNumbers) {
+  EXPECT_EQ(static_cast<std::uint16_t>(XlsbRecordType::BrtSupBookSrc), 355U);
+  EXPECT_EQ(static_cast<std::uint16_t>(XlsbRecordType::BrtSupSelf), 357U);
+  EXPECT_EQ(static_cast<std::uint16_t>(XlsbRecordType::BrtSupSame), 358U);
+  EXPECT_EQ(static_cast<std::uint16_t>(XlsbRecordType::BrtSupAddin), 667U);
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io

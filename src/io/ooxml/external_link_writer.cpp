@@ -58,10 +58,10 @@ void AppendAbsoluteCell(std::string& out, std::uint32_t row, std::uint32_t col) 
 }
 
 /// `='Sheet'!$A$1` / `='Sheet'!$A$1:$B$2`, the form the reader resolves;
-/// a name the cache could not resolve keeps no target.
+/// a name the cache could not resolve is `#REF!`.
 std::string RefersTo(const ExternalBook& book, const ExternalBookName& name) {
   if (!name.resolvable || name.sheet >= book.sheet_names.size()) {
-    return "=#REF!";
+    return "#REF!";
   }
   std::string out("='");
   for (const char c : book.sheet_names[name.sheet]) {
@@ -166,17 +166,28 @@ bool ContainsExternalRef(const parser::AstNode& root) {
 ExternalLinkOrdinals::ExternalLinkOrdinals(const Workbook& wb, std::vector<std::uint32_t> written_indices)
     : links_(wb.external_book_indexer()), written_indices_(std::move(written_indices)) {}
 
+std::uint32_t ExternalLinkOrdinals::OrdinalOfIndex(std::uint32_t index) const noexcept {
+  const auto it = std::find(written_indices_.begin(), written_indices_.end(), index);
+  if (it == written_indices_.end()) {
+    return 0U;
+  }
+  return static_cast<std::uint32_t>(it - written_indices_.begin()) + 1U;
+}
+
 std::uint32_t ExternalLinkOrdinals::Ordinal(const void* ctx, std::string_view path, std::string_view book) {
   const auto* self = static_cast<const ExternalLinkOrdinals*>(ctx);
   if (self->links_.index == nullptr) {
     return 0U;
   }
-  const std::uint32_t index = self->links_.index(self->links_.ctx, path, book);
-  const auto it = std::find(self->written_indices_.begin(), self->written_indices_.end(), index);
-  if (it == self->written_indices_.end()) {
+  return self->OrdinalOfIndex(self->links_.index(self->links_.ctx, path, book));
+}
+
+std::uint32_t ExternalLinkOrdinals::QualifierOrdinal(const void* ctx, std::string_view qualifier) {
+  const auto* self = static_cast<const ExternalLinkOrdinals*>(ctx);
+  if (self->links_.qualifier_index == nullptr) {
     return 0U;
   }
-  return static_cast<std::uint32_t>(it - self->written_indices_.begin()) + 1U;
+  return self->OrdinalOfIndex(self->links_.qualifier_index(self->links_.ctx, qualifier));
 }
 
 std::string BuildExternalLinkXml(const ExternalLinkRecord& rec) {
@@ -206,9 +217,12 @@ std::string BuildExternalLinkXml(const ExternalLinkRecord& rec) {
     for (const ExternalBookName& name : book.names) {
       out.append("<definedName name=\"");
       AppendXmlAttrEscaped(out, name.name);
-      out.append("\" refersTo=\"");
-      AppendXmlAttrEscaped(out, RefersTo(book, name));
       out.push_back('"');
+      if (name.exists) {
+        out.append(" refersTo=\"");
+        AppendXmlAttrEscaped(out, RefersTo(book, name));
+        out.push_back('"');
+      }
       if (name.scope_sheet != ExternalBook::kNoSheet) {
         out.append(" sheetId=\"");
         out.append(std::to_string(name.scope_sheet));

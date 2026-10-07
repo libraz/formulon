@@ -58,11 +58,17 @@ LinkRelIds RelIdsOf(const ExternalLinkRecord& link) {
 }
 
 /// A name's stored target: an absolute cell or rectangle on one sheet of the
-/// supporting workbook, in the part's 16-bit-row layout, else `#REF!`.
+/// supporting workbook, in the part's 16-bit-row layout, `#REF!` when the
+/// cache cannot resolve it, and no body (cce 0) for a name the book does not
+/// declare.
 void EmitNameFormula(std::vector<std::uint8_t>& p, const ExternalBookName* name) {
   constexpr std::uint32_t kMaxField = 0xFFFFU;
-  const bool encodable = name != nullptr && name->resolvable && name->sheet <= kMaxField &&
-                         name->row_end <= kMaxField && name->col_end <= kMaxField;
+  if (name == nullptr || !name->exists) {
+    emit_u32(p, 0U);  // cce
+    return;
+  }
+  const bool encodable =
+      name->resolvable && name->sheet <= kMaxField && name->row_end <= kMaxField && name->col_end <= kMaxField;
   if (!encodable) {
     emit_u32(p, 2U);  // cce
     emit_u8(p, kPtgErr);
@@ -90,7 +96,8 @@ void EmitNameFormula(std::vector<std::uint8_t>& p, const ExternalBookName* name)
 }
 
 /// The cached name `tables.names[i]` stands for: the `i`-th cache entry, or
-/// none for a name appended because a formula names it.
+/// none for a name appended because a formula names it (the book declares
+/// no such name).
 const ExternalBookName* CachedName(const ExternalBook& book, std::size_t i) {
   return i < book.names.size() ? &book.names[i] : nullptr;
 }

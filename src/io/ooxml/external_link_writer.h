@@ -35,10 +35,14 @@ class ExternalLinkOrdinals {
   ExternalLinkOrdinals(const Workbook& wb, std::vector<std::uint32_t> written_indices);
 
   /// An indexer over this object; valid while it is neither moved nor destroyed.
-  parser::ExternalBookIndexer indexer() const noexcept { return parser::ExternalBookIndexer{&Ordinal, this}; }
+  parser::ExternalBookIndexer indexer() const noexcept {
+    return parser::ExternalBookIndexer{&Ordinal, this, &QualifierOrdinal};
+  }
 
  private:
   static std::uint32_t Ordinal(const void* ctx, std::string_view path, std::string_view book);
+  static std::uint32_t QualifierOrdinal(const void* ctx, std::string_view qualifier);
+  std::uint32_t OrdinalOfIndex(std::uint32_t index) const noexcept;
 
   parser::ExternalBookIndexer links_{nullptr, nullptr};
   std::vector<std::uint32_t> written_indices_;

@@ -11,6 +11,7 @@
 
 #include "cell.h"
 #include "defined_name.h"
+#include "external_link.h"
 #include "gtest/gtest.h"
 #include "miniz.h"
 #include "reader_test_helpers.h"
@@ -182,6 +183,107 @@ TEST(XlsbReader, RowStylePresenceUsesFGhostDirtyFlag) {
   EXPECT_TRUE(style_one->has_style);
   EXPECT_EQ(style_one->style_xf, 1U);
   EXPECT_EQ(find_row(2U), nullptr);
+}
+
+/// `BrtBeginExternalBook` payload: `sbt`, then a rel id (a DDE or OLE link's
+/// body is not one, so its bytes are arbitrary).
+std::vector<std::uint8_t> LinkPart(std::uint16_t sbt, std::string_view body) {
+  std::vector<std::uint8_t> p;
+  p.push_back(static_cast<std::uint8_t>(sbt & 0xFFU));
+  p.push_back(static_cast<std::uint8_t>(sbt >> 8U));
+  p.insert(p.end(), body.begin(), body.end());
+  std::vector<std::uint8_t> part;
+  AppendRecord(part, 360, p);
+  return part;
+}
+
+std::vector<std::uint8_t> WorkbookCarryingBooks(const std::vector<std::vector<std::uint8_t>>& books) {
+  std::vector<std::uint8_t> bin = WorkbookBin();
+  bin.resize(bin.size() - 3U);  // BrtEndBook: 2-byte type, 1-byte size.
+  AppendRecord(bin, 353, {});
+  for (const std::vector<std::uint8_t>& book : books) {
+    bin.insert(bin.end(), book.begin(), book.end());
+  }
+  AppendRecord(bin, 354, {});
+  AppendRecord(bin, 132, {});
+  return bin;
+}
+
+std::vector<std::uint8_t> SupBookSrc(std::string_view rel_id) {
+  std::vector<std::uint8_t> p;
+  AppendXLWideString(p, rel_id);
+  std::vector<std::uint8_t> rec;
+  AppendRecord(rec, 355, p);
+  return rec;
+}
+
+std::string WorkbookRelsWithLinks(std::size_t count) {
+  std::string rels = WorkbookRelsXml();
+  std::string links;
+  for (std::size_t i = 1; i <= count; ++i) {
+    links += "<Relationship Id=\"rIdL" + std::to_string(i) +
+             "\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink\" "
+             "Target=\"externalLinks/externalLink" +
+             std::to_string(i) + ".bin\"/>";
+  }
+  rels.insert(rels.rfind("</Relationships>"), links);
+  return rels;
+}
+
+Workbook ReadWithLinks(const std::vector<std::vector<std::uint8_t>>& books,
+                       const std::vector<std::vector<std::uint8_t>>& link_parts) {
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsWithLinks(link_parts.size()))});
+  parts.push_back({"xl/workbook.bin", WorkbookCarryingBooks(books)});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinReal(1.0)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinIsst(0)});
+  parts.push_back({"xl/sharedStrings.bin", SharedStringsBin("x")});
+  for (std::size_t i = 0; i < link_parts.size(); ++i) {
+    parts.push_back({"xl/externalLinks/externalLink" + std::to_string(i + 1U) + ".bin", link_parts[i]});
+  }
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  EXPECT_TRUE(static_cast<bool>(result)) << (result ? "" : result.error().message);
+  return result ? std::move(result.value().workbook) : Workbook::create_empty();
+}
+
+/// An external-book link part: `sbt` 0, a rel id, one sheet named `Data`.
+std::vector<std::uint8_t> BookLinkPart() {
+  std::vector<std::uint8_t> p;
+  p.push_back(0);
+  p.push_back(0);
+  AppendXLWideString(p, "rId1");
+  std::vector<std::uint8_t> part;
+  AppendRecord(part, 360, p);
+  std::vector<std::uint8_t> tabs;
+  AppendU32(tabs, 1);
+  AppendXLWideString(tabs, "Data");
+  AppendRecord(part, 359, tabs);
+  return part;
+}
+
+TEST(XlsbReader, SupBookKindOneIsDdeAndTwoIsOle) {
+  const Workbook wb = ReadWithLinks({SupBookSrc("rIdL1"), SupBookSrc("rIdL2"), SupBookSrc("rIdL3")},
+                                    {LinkPart(1, "dde-topic"), LinkPart(2, "ole-progid"), BookLinkPart()});
+  ASSERT_EQ(wb.external_links().size(), 3U);
+  EXPECT_EQ(wb.external_links()[0].kind, ExternalLinkRecord::Kind::kDdeLink);
+  EXPECT_EQ(wb.external_links()[1].kind, ExternalLinkRecord::Kind::kOleLink);
+  EXPECT_EQ(wb.external_links()[2].kind, ExternalLinkRecord::Kind::kExternalBook);
+  EXPECT_EQ(wb.external_links()[2].book.sheet_names, (std::vector<std::string>{"Data"}));
+  EXPECT_TRUE(wb.external_links()[0].book.sheet_names.empty());
+  EXPECT_TRUE(wb.external_links()[0].body_rel_id.empty());
+}
+
+TEST(XlsbReader, SupBookKindAddinEntryKeepsLaterLinkNumbers) {
+  std::vector<std::uint8_t> addin;
+  AppendRecord(addin, 667, {});
+  const Workbook wb = ReadWithLinks({addin, SupBookSrc("rIdL1")}, {BookLinkPart()});
+  ASSERT_EQ(wb.external_links().size(), 2U);
+  EXPECT_EQ(wb.external_links()[0].index, 1U);
+  EXPECT_EQ(wb.external_links()[1].index, 2U);
+  EXPECT_EQ(wb.external_links()[1].book.sheet_names, (std::vector<std::string>{"Data"}));
 }
 
 }  // namespace
