@@ -244,13 +244,67 @@ TEST(ExternalRefParse, RejectedSpellings) {
   for (const char* src : {
            "=[Book.xlsx]!Name",             // a book-scope name is spelled without brackets
            "=/tmp/x/[Book.xlsx]Sheet!A1",   // a path must be quoted
-           "=[Book.xlsx]Sheet",             // no `!`
+           "=[1]Sheet",                     // a decimal book with no `!`
+           "='[Book 1.xlsx]Sheet'",         // a quoted qualifier with no `!`
            "=[Book 1.xlsx]Sheet!A1",        // the book needs quoting
            "='/tmp/x/Sheet'!A1",            // a directory with no bracketed book
            "='[Book.xlsx]'!A1",             // no sheet
            "=SUM([Book.xlsx]S1:S2!LName)",  // no name across a span
            "=[0]Sheet!A1",                  // `[0]` only names the own workbook's names
        }) {
+    Arena arena;
+    Parser p(src, arena);
+    (void)p.parse();
+    EXPECT_FALSE(p.errors().empty()) << src;
+  }
+}
+
+// Excel stores `[Book]Sheet` with no `!` as a name spelled with its
+// brackets: it reads back verbatim in A1 and R1C1 and evaluates to #NAME?.
+TEST(ExternalRefParse, BracketNameWithoutBangIsAName) {
+  struct Row {
+    const char* entered;
+    const char* name;  // the NameRef the formula holds
+  };
+  constexpr Row kRows[] = {
+      {"=[Book.xlsx]Sheet", "[Book.xlsx]Sheet"},
+      {"=[Book.xlsx]Sheet+1", "[Book.xlsx]Sheet"},
+      {"=ISREF([Src.xlsx]Data)", "[Src.xlsx]Data"},
+      {"=[Src2]Data", "[Src2]Data"},
+  };
+  for (const Row& row : kRows) {
+    Arena arena;
+    Parser p(row.entered, arena);
+    const AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << row.entered;
+    ASSERT_TRUE(p.errors().empty()) << row.entered;
+    const AstNode* name = root;
+    if (root->kind() == NodeKind::BinaryOp) {
+      name = &root->as_binary_lhs();
+    } else if (root->kind() == NodeKind::Call) {
+      name = &root->as_call_arg(0);
+    }
+    ASSERT_EQ(name->kind(), NodeKind::NameRef) << row.entered;
+    EXPECT_EQ(name->as_name(), row.name) << row.entered;
+    EXPECT_TRUE(name->as_name_sheet().empty()) << row.entered;
+    const std::string_view text = std::string_view(row.entered).substr(1);
+    EXPECT_EQ(format_formula(*root), text) << row.entered;
+    EXPECT_EQ(format_formula_r1c1(*root, 0, 0), text) << row.entered;
+  }
+}
+
+// The name token only takes what no qualifier scan claims.
+TEST(ExternalRefParse, BracketNameWithoutBangLeavesQualifiersAlone) {
+  for (const char* src : {"=[Book.xlsx]Sheet!A1", "=[Book.xlsx]S1:S2!A1", "=[0]!Name"}) {
+    Arena arena;
+    Parser p(src, arena);
+    const AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << src;
+    ASSERT_TRUE(p.errors().empty()) << src;
+    EXPECT_EQ(root->kind(), NodeKind::ExternalRef) << src;
+  }
+  // Followed by `(` or `:` it is no name and stays rejected.
+  for (const char* src : {"=[Book.xlsx]Sheet(1)", "=[Book.xlsx]Sheet:A1"}) {
     Arena arena;
     Parser p(src, arena);
     (void)p.parse();

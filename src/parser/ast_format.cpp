@@ -873,9 +873,21 @@ struct StorageEmitter {
         return;
       case NodeKind::NameRef: {
         const std::string_view name = node.as_name();
+        const std::string_view sheet = node.as_name_sheet();
+        // An extensionless book's book-scope name, written as a sheet.
+        if (!sheet.empty() && indexer != nullptr && indexer->qualifier_index != nullptr) {
+          const std::uint32_t index = indexer->qualifier_index(indexer->ctx, sheet);
+          if (index != 0U) {
+            out.push_back('[');
+            out.append(std::to_string(index));
+            out.append("]!");
+            out.append(name);
+            return;
+          }
+        }
         // A sheet-qualified name is a workbook name, never a LET / LAMBDA
         // parameter.
-        if (node.as_name_sheet().empty() && in_scope(name)) {
+        if (sheet.empty() && in_scope(name)) {
           out.append("_xlpm.");
         }
         AppendNameSheetQualifier(node, out);

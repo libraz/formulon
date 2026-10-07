@@ -715,8 +715,15 @@ class Workbook {
   /// of the lowest-index link. Null when none matches.
   const ExternalLinkRecord* find_external_link(std::string_view path, std::string_view book) const noexcept;
 
+  /// The link whose book-scope names a sheet-qualified name `qualifier!Name`
+  /// denotes: the external-book link `find_external_link("", qualifier)`
+  /// returns, when no sheet is named `qualifier` (compared as
+  /// `sheet_by_name` does). Null otherwise, including for OLE and DDE links.
+  const ExternalLinkRecord* link_for_sheet_qualifier(std::string_view qualifier) const noexcept;
+
   /// The `[N]` mapping a storage formatter writes cross-workbook references
-  /// with, backed by `find_external_link`. Valid while this workbook lives.
+  /// with, backed by `find_external_link`, and sheet-qualified names with,
+  /// backed by `link_for_sheet_qualifier`. Valid while this workbook lives.
   parser::ExternalBookIndexer external_book_indexer() const noexcept;
 
   // ---------------------------------------------------------------------------

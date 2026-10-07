@@ -31,6 +31,14 @@ bool Resolve(const void* /*ctx*/, std::uint32_t index, ExternalBookDisplay* out)
       out->path = "C:\\a b\\";
       out->book = "It's.xlsx";
       return true;
+    case 5:
+      out->path.clear();
+      out->book = "Src2";
+      return true;
+    case 6:
+      out->path.clear();
+      out->book = "Src";
+      return true;
     default:
       return false;
   }
@@ -77,7 +85,16 @@ TEST(ExternalBookSpellingRewrite, EmbeddedQuotesAreDoubled) {
 
 TEST(ExternalBookSpellingRewrite, UnmatchedIndexIsSpelledDecimal) {
   EXPECT_EQ(Spell("[7]Data!A1"), "[7]Data!A1");
-  EXPECT_EQ(Spell("[7]!Name"), "7!Name");
+  EXPECT_EQ(Spell("[7]!Name"), "'7'!Name");
+}
+
+// A book-scope name of an extensionless book is quoted by the local sheet
+// rule, as Excel displays `[1]!Name` of a link to `Src2`.
+TEST(ExternalBookSpellingRewrite, ExtensionlessBookScopeNameQuotesLikeASheet) {
+  EXPECT_EQ(Spell("[5]!Name"), "'Src2'!Name");
+  EXPECT_EQ(Spell("[6]!Name"), "Src!Name");
+  EXPECT_EQ(Spell("[5]Data!A1"), "[Src2]Data!A1");
+  EXPECT_EQ(Spell("[5]!Name+[2]!N"), "'Src2'!Name+ExtSource.xlsx!N");
 }
 
 TEST(ExternalBookSpellingRewrite, SpacesAndCaseOutsideQualifiersSurvive) {

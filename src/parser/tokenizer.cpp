@@ -182,6 +182,30 @@ std::string truncate_to_excel_precision(std::string_view lex) {
   return result;
 }
 
+// Byte length of a `[Book]Name` written with no `!` at the `[` at `pos`, a
+// name Excel stores verbatim; 0 when the text there is not that shape. A
+// decimal book, and a name followed by `!`, `(` or `:`, are excluded.
+std::size_t BracketNameLength(std::string_view source, std::size_t pos) noexcept {
+  const std::size_t book_len = detail::BareQualifierRunLength(source, pos + 1);
+  std::size_t end = pos + 1 + book_len;
+  if (book_len == 0 || end >= source.size() || source[end] != ']') {
+    return 0;
+  }
+  bool decimal = true;
+  for (std::size_t i = pos + 1; i < end; ++i) {
+    decimal = decimal && detail::IsAsciiDigit(source[i]);
+  }
+  const std::size_t name_len = detail::BareQualifierRunLength(source, end + 1);
+  end += 1 + name_len;
+  if (decimal || name_len == 0) {
+    return 0;
+  }
+  if (end < source.size() && (source[end] == '!' || source[end] == '(' || source[end] == ':')) {
+    return 0;
+  }
+  return end - pos;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -429,8 +453,20 @@ const std::vector<Token>& Tokenizer::tokens() {
         emit_single_char(TokenKind::RBrace);
         continue;
       case '[':
-        if (bracket_depth_ == 0 && at_operand_start() && try_scan_external_qualifier()) {
-          continue;
+        if (bracket_depth_ == 0 && at_operand_start()) {
+          if (try_scan_external_qualifier()) {
+            continue;
+          }
+          if (const std::size_t len = BracketNameLength(source_, byte_pos_); len != 0) {
+            const std::size_t start = byte_pos_;
+            mark_start();
+            while (byte_pos_ < start + len) {
+              advance_one();
+            }
+            emit(TokenKind::Ident, start);
+            last_anchor_tail_end_byte_ = byte_pos_;
+            continue;
+          }
         }
         emit_single_char(TokenKind::LBracket);
         ++bracket_depth_;

@@ -90,8 +90,12 @@ void AppendSpelled(std::string* out, const Qualifier& q, const ExternalBookResol
     link.book = DecimalText(q.index);
   }
   const bool book_scope = q.sheet.empty();
-  const bool quote = !link.path.empty() || external_book_needs_quoting(link.book) ||
-                     (!book_scope && (external_sheet_needs_quoting(q.sheet) || !q.sheet_end.empty()));
+  bool quote = !link.path.empty() || external_book_needs_quoting(link.book) ||
+               (!book_scope && (external_sheet_needs_quoting(q.sheet) || !q.sheet_end.empty()));
+  // `Src2!Name` reads as a local sheet's name, so it takes that quoting.
+  if (book_scope && !quote) {
+    quote = local_sheet_needs_quoting_a1(link.book);
+  }
   if (quote) {
     out->push_back('\'');
     AppendQuoted(out, link.path);

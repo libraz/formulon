@@ -63,10 +63,13 @@ void append_external_qualifier(const AstNode& node, bool r1c1, std::string& out)
 
 /// Maps a cross-workbook reference's directory and book to the 1-based
 /// index of its external link, for the `[N]` a stored formula carries.
-/// `index` returns 0 when no link matches.
+/// `index` returns 0 when no link matches. `qualifier_index` maps the
+/// qualifier of a sheet-qualified name (`Src2!Name`) to the link whose
+/// book-scope name it is, or 0 when it is a local sheet; null maps none.
 struct ExternalBookIndexer {
   std::uint32_t (*index)(const void* ctx, std::string_view path, std::string_view book);
   const void* ctx;
+  std::uint32_t (*qualifier_index)(const void* ctx, std::string_view qualifier) = nullptr;
 };
 
 /// Fills `out` with the parenthesis pairs each node of `root` prints with:
@@ -112,6 +115,7 @@ using StorageFunctionNameSpeller = std::string (*)(std::string_view name);
 /// With an `indexer`, each cross-workbook reference names its book by link
 /// index and drops the directory (`[1]Sheet!A1`, `'[1]My Sheet'!A1`,
 /// `'[1]S1:S2'!A1`, `[1]!Name`); every reference must bind to a link.
+/// A sheet-qualified name its `qualifier_index` maps is written `[N]!Name`.
 /// Without one, the book is spelled as `format_formula` spells it.
 std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpeller spell,
                                    const std::vector<const AstNode*>* omitted_at = nullptr,

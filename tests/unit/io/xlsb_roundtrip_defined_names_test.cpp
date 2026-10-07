@@ -384,5 +384,46 @@ TEST(XlsbWriteReadSymmetry, SheetQualifiedWorkbookNameReadsBackAsSelfBook) {
   EXPECT_EQ(after.sheet(0).resolve_cell_value(0U, 0U).as_number(), 5.0);
 }
 
+// `[Book]Sheet` with no `!` is a name with no definition: #NAME?, no link,
+// and the same text after either format's round trip.
+void ExpectBracketNames(Workbook& wb, const char* label) {
+  SCOPED_TRACE(label);
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_TRUE(wb.external_links().empty());
+  EXPECT_TRUE(wb.defined_names().empty());
+  for (std::uint32_t row : {0U, 1U}) {
+    const Value v = wb.sheet(0).resolve_cell_value(row, 0U);
+    ASSERT_TRUE(v.is_error()) << row;
+    EXPECT_EQ(v.as_error(), ErrorCode::Name) << row;
+  }
+  const Value isref = wb.sheet(0).resolve_cell_value(2U, 0U);
+  ASSERT_TRUE(isref.is_boolean());
+  EXPECT_FALSE(isref.as_boolean());
+  EXPECT_EQ(wb.sheet(0).cell_at(0U, 0U)->formula_text, "=[Book.xlsx]Sheet");
+  EXPECT_EQ(wb.sheet(0).cell_at(1U, 0U)->formula_text, "=[Book.xlsx]Sheet+1");
+  EXPECT_EQ(wb.sheet(0).cell_at(2U, 0U)->formula_text, "=ISREF([Src.xlsx]Data)");
+}
+
+TEST(XlsbRoundTripDefinedNames, BracketNameWithoutBangRoundTripsAsAnUndefinedName) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=[Book.xlsx]Sheet")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=[Book.xlsx]Sheet+1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 0U, "=ISREF([Src.xlsx]Data)")));
+  ExpectBracketNames(wb, "entered");
+
+  auto saved_xlsb = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved_xlsb)) << saved_xlsb.error().message;
+  auto from_xlsb = io::xlsb::read_xlsb(test::span_of(saved_xlsb.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  EXPECT_EQ(from_xlsb.value().undecoded_formula_count, 0U);
+  ExpectBracketNames(from_xlsb.value().workbook, "xlsb round trip");
+
+  auto saved_xlsx = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(saved_xlsx)) << saved_xlsx.error().message;
+  auto from_xlsx = io::read_ooxml(test::span_of(saved_xlsx.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  ExpectBracketNames(from_xlsx.value().workbook, "xlsx round trip");
+}
+
 }  // namespace
 }  // namespace formulon

@@ -1616,6 +1616,11 @@ std::uint32_t IndexForBook(const void* ctx, std::string_view path, std::string_v
   return rec == nullptr ? 0U : rec->index;
 }
 
+std::uint32_t IndexForSheetQualifier(const void* ctx, std::string_view qualifier) {
+  const ExternalLinkRecord* rec = static_cast<const Workbook*>(ctx)->link_for_sheet_qualifier(qualifier);
+  return rec == nullptr ? 0U : rec->index;
+}
+
 bool ResolveLinkIndex(const void* ctx, std::uint32_t index, parser::ExternalBookDisplay* out) {
   for (const ExternalLinkRecord& rec : *static_cast<const std::vector<ExternalLinkRecord>*>(ctx)) {
     if (rec.index != index) {
@@ -1657,8 +1662,20 @@ const ExternalLinkRecord* Workbook::find_external_link(std::string_view path, st
   return at == external_links_.size() ? nullptr : &external_links_[at];
 }
 
+const ExternalLinkRecord* Workbook::link_for_sheet_qualifier(std::string_view qualifier) const noexcept {
+  if (sheet_by_name(qualifier) != nullptr) {
+    return nullptr;
+  }
+  const ExternalLinkRecord* rec = find_external_link({}, qualifier);
+  if (rec == nullptr || rec->kind == ExternalLinkRecord::Kind::kOleLink ||
+      rec->kind == ExternalLinkRecord::Kind::kDdeLink) {
+    return nullptr;
+  }
+  return rec;
+}
+
 parser::ExternalBookIndexer Workbook::external_book_indexer() const noexcept {
-  return parser::ExternalBookIndexer{&IndexForBook, this};
+  return parser::ExternalBookIndexer{&IndexForBook, this, &IndexForSheetQualifier};
 }
 
 void Workbook::bind_external_books(const parser::AstNode& root) {

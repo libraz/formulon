@@ -113,6 +113,37 @@ TEST(FormulonCApiFormulaEntry, SetFormulaAcceptedTextAlwaysHasAnR1C1) {
   }
 }
 
+// `[Book]Sheet` with no `!` is accepted as a name: verbatim in A1 and R1C1,
+// #NAME? (ISREF FALSE), and no external link.
+TEST(FormulonCApiFormulaEntry, BracketNameWithoutBangIsAcceptedAsAName) {
+  WorkbookGuard wb;
+  MakeWorkbook(&wb);
+  constexpr const char* kFormulas[] = {"=[Book.xlsx]Sheet", "=[Book.xlsx]Sheet+1", "=ISREF([Src.xlsx]Data)"};
+  for (std::uint32_t row = 0; row < 3U; ++row) {
+    ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, row, 0, kFormulas[row]), 0) << fm_last_error_message();
+  }
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  for (std::uint32_t row = 0; row < 3U; ++row) {
+    SCOPED_TRACE(kFormulas[row]);
+    EXPECT_EQ(GetFormula(wb.handle, row, 0), kFormulas[row]);
+    const char* r1c1 = nullptr;
+    ASSERT_EQ(fm_workbook_get_formula_r1c1(wb.handle, 0, row, 0, &r1c1), 0) << fm_last_error_message();
+    EXPECT_STREQ(r1c1, kFormulas[row] + 1);  // the R1C1 text carries no `=`
+    fm_value_t value{};
+    ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, row, 0, &value), 0);
+    if (row < 2U) {
+      ASSERT_EQ(value.kind, FM_VAL_ERROR);
+      EXPECT_EQ(value.u.error_code, 4);  // #NAME?
+    } else {
+      ASSERT_EQ(value.kind, FM_VAL_BOOL);
+      EXPECT_EQ(value.u.boolean, 0);
+    }
+  }
+  std::uint32_t links = 1;
+  ASSERT_EQ(fm_workbook_external_link_count(wb.handle, &links), 0);
+  EXPECT_EQ(links, 0U);
+}
+
 TEST(FormulonCApiFormulaEntry, DefinedNameRejectsUnparseableTextAndKeepsState) {
   WorkbookGuard wb;
   MakeWorkbook(&wb);
