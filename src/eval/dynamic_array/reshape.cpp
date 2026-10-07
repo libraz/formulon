@@ -9,7 +9,6 @@
 #include "eval/dynamic_array/common.h"
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
-#include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "sheet.h"
@@ -151,13 +150,10 @@ Value eval_vstack_lazy(const parser::AstNode& call, Arena& arena, const Function
 Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
-  if (arity < 2U || arity > 4U) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
+  const ArrayValue* array =
+      dynamic_array::resolve_array_prelude(call, 2U, 4U, /*reject_empty=*/false, arena, registry, ctx, err);
+  if (array == nullptr) {
     return err;
   }
 

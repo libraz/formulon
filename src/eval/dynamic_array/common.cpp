@@ -11,6 +11,7 @@
 #include "eval/coerce.h"
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
+#include "eval/range_args.h"
 #include "parser/ast.h"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -23,6 +24,25 @@
 namespace formulon {
 namespace eval {
 namespace dynamic_array {
+
+const ArrayValue* resolve_array_prelude(const parser::AstNode& call, std::uint32_t min_arity, std::uint32_t max_arity,
+                                        bool reject_empty, Arena& arena, const FunctionRegistry& registry,
+                                        const EvalContext& ctx, Value& error_out) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < min_arity || arity > max_arity) {
+    error_out = Value::error(ErrorCode::Value);
+    return nullptr;
+  }
+  const ArrayValue* array = nullptr;
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &error_out)) {
+    return nullptr;
+  }
+  if (reject_empty && (array->rows == 0U || array->cols == 0U)) {
+    error_out = Value::error(ErrorCode::Calc);
+    return nullptr;
+  }
+  return array;
+}
 
 bool eval_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx, double& out, Value& error_out) {

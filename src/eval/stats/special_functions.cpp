@@ -96,6 +96,11 @@ constexpr double kEps = 1e-15;
 // by zero when a continued-fraction term vanishes exactly.
 constexpr double kFpMin = 1e-300;
 
+// Keeps a Lentz continued-fraction term away from zero.
+double clamp_fp_min(double v) noexcept {
+  return std::abs(v) < kFpMin ? kFpMin : v;
+}
+
 // Result of one series / continued-fraction evaluation. `converged` is
 // what keeps a truncated run identifiable at the call site: every
 // recursion here reports it, and no caller may read `value` without it.
@@ -136,13 +141,9 @@ CfResult q_gamma_cf(double a, double x) noexcept {
     const double an = -static_cast<double>(i) * (static_cast<double>(i) - a);
     b += 2.0;
     d = an * d + b;
-    if (std::abs(d) < kFpMin) {
-      d = kFpMin;
-    }
+    d = clamp_fp_min(d);
     c = b + an / c;
-    if (std::abs(c) < kFpMin) {
-      c = kFpMin;
-    }
+    c = clamp_fp_min(c);
     d = 1.0 / d;
     const double del = d * c;
     h *= del;
@@ -169,9 +170,7 @@ CfResult beta_cf(double a, double b, double x) noexcept {
   const double qam = a - 1.0;
   double c = 1.0;
   double d = 1.0 - qab * x / qap;
-  if (std::abs(d) < kFpMin) {
-    d = kFpMin;
-  }
+  d = clamp_fp_min(d);
   d = 1.0 / d;
   double h = d;
   const int max_iterations = max_beta_iterations(a, b);
@@ -181,25 +180,17 @@ CfResult beta_cf(double a, double b, double x) noexcept {
     // Even step of Lentz's recursion.
     double aa = dm * (b - dm) * x / ((qam + m2) * (a + m2));
     d = 1.0 + aa * d;
-    if (std::abs(d) < kFpMin) {
-      d = kFpMin;
-    }
+    d = clamp_fp_min(d);
     c = 1.0 + aa / c;
-    if (std::abs(c) < kFpMin) {
-      c = kFpMin;
-    }
+    c = clamp_fp_min(c);
     d = 1.0 / d;
     h *= d * c;
     // Odd step.
     aa = -(a + dm) * (qab + dm) * x / ((a + m2) * (qap + m2));
     d = 1.0 + aa * d;
-    if (std::abs(d) < kFpMin) {
-      d = kFpMin;
-    }
+    d = clamp_fp_min(d);
     c = 1.0 + aa / c;
-    if (std::abs(c) < kFpMin) {
-      c = kFpMin;
-    }
+    c = clamp_fp_min(c);
     d = 1.0 / d;
     const double del = d * c;
     h *= del;

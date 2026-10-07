@@ -148,6 +148,7 @@ struct ParsedCriterion {
   bool rhs_text_owns_storage_ = false;
 
   void rebind_rhs_text() noexcept;
+  void copy_parsed_fields_except_storage(const ParsedCriterion& other);
 
   mutable bool rhs_fold_cached_ = false;
   mutable bool rhs_fold_cache_unescape_first_ = false;

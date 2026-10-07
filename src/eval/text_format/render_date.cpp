@@ -23,43 +23,37 @@ namespace text_format {
 namespace number_format_detail {
 namespace {
 
+// Entry `index` of `table`, or "" when `index` is out of range.
+const char* table_entry(const char* const* table, long long count, long long index) noexcept {
+  return (index < 0 || index >= count) ? "" : table[index];
+}
+
 const char* month_short(unsigned m) noexcept {
   // Mac Excel ja-JP surprisingly renders `mmm` in English (Jan/Feb/...).
   // The Japanese `N月` form is reserved for `[DBNum2]` and friends, which
   // are out of scope here.
-  static const char* kTable[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-  if (m < 1u || m > 12u) {
-    return "";
-  }
-  return kTable[m - 1u];
+  static const char* const kTable[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+  return table_entry(kTable, 12, static_cast<long long>(m) - 1);
 }
 
 const char* month_long(unsigned m) noexcept {
   // Matches Mac Excel ja-JP: `mmmm` renders as the English full name.
-  static const char* kTable[12] = {"January", "February", "March",     "April",   "May",      "June",
-                                   "July",    "August",   "September", "October", "November", "December"};
-  if (m < 1u || m > 12u) {
-    return "";
-  }
-  return kTable[m - 1u];
+  static const char* const kTable[12] = {"January", "February", "March",     "April",   "May",      "June",
+                                         "July",    "August",   "September", "October", "November", "December"};
+  return table_entry(kTable, 12, static_cast<long long>(m) - 1);
 }
 
 const char* weekday_short(int sun0) noexcept {
   // Mac Excel ja-JP `ddd` returns English 3-letter weekday abbreviations.
-  static const char* kTable[7] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-  if (sun0 < 0 || sun0 > 6) {
-    return "";
-  }
-  return kTable[sun0];
+  static const char* const kTable[7] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+  return table_entry(kTable, 7, sun0);
 }
 
 const char* weekday_long(int sun0) noexcept {
   // Mac Excel ja-JP `dddd` renders the English full weekday name.
-  static const char* kTable[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-  if (sun0 < 0 || sun0 > 6) {
-    return "";
-  }
-  return kTable[sun0];
+  static const char* const kTable[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+  return table_entry(kTable, 7, sun0);
 }
 
 void append_elapsed_int_dbnum(std::string& out, long long value, std::size_t width, DbNumMode mode) {
@@ -85,17 +79,14 @@ std::uint64_t power10(std::size_t exponent) noexcept {
 // `sun0` index used elsewhere in this file.
 const char* weekday_ja_short(int sun0) noexcept {
   // 日, 月, 火, 水, 木, 金, 土 (each is a 3-byte UTF-8 code point).
-  static const char* kTable[7] = {"\xE6\x97\xA5", "\xE6\x9C\x88", "\xE7\x81\xAB", "\xE6\xB0\xB4",
-                                  "\xE6\x9C\xA8", "\xE9\x87\x91", "\xE5\x9C\x9F"};
-  if (sun0 < 0 || sun0 > 6) {
-    return "";
-  }
-  return kTable[sun0];
+  static const char* const kTable[7] = {"\xE6\x97\xA5", "\xE6\x9C\x88", "\xE7\x81\xAB", "\xE6\xB0\xB4",
+                                        "\xE6\x9C\xA8", "\xE9\x87\x91", "\xE5\x9C\x9F"};
+  return table_entry(kTable, 7, sun0);
 }
 
 const char* weekday_ja_long(int sun0) noexcept {
   // <weekday>曜日 — the suffix is `\xE6\x9B\x9C\xE6\x97\xA5` (曜日).
-  static const char* kTable[7] = {
+  static const char* const kTable[7] = {
       "\xE6\x97\xA5\xE6\x9B\x9C\xE6\x97\xA5",  // 日曜日
       "\xE6\x9C\x88\xE6\x9B\x9C\xE6\x97\xA5",  // 月曜日
       "\xE7\x81\xAB\xE6\x9B\x9C\xE6\x97\xA5",  // 火曜日
@@ -104,10 +95,7 @@ const char* weekday_ja_long(int sun0) noexcept {
       "\xE9\x87\x91\xE6\x9B\x9C\xE6\x97\xA5",  // 金曜日
       "\xE5\x9C\x9F\xE6\x9B\x9C\xE6\x97\xA5",  // 土曜日
   };
-  if (sun0 < 0 || sun0 > 6) {
-    return "";
-  }
-  return kTable[sun0];
+  return table_entry(kTable, 7, sun0);
 }
 
 // Japanese era classification. The boundary table and classifier live in

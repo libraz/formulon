@@ -54,59 +54,38 @@ namespace {
 //     since 4=四 sets that precedent).
 //   * DBNum3: U+FF10..U+FF19 (full-width Arabic digits).
 
-const char* dbnum1_digit(char ascii_digit) noexcept {
-  // 〇一二三四五六七八九 (each is a 3-byte UTF-8 code point).
-  static const char* kDigits[10] = {
-      "\xE3\x80\x87",  // 〇
-      "\xE4\xB8\x80",  // 一
-      "\xE4\xBA\x8C",  // 二
-      "\xE4\xB8\x89",  // 三
-      "\xE5\x9B\x9B",  // 四
-      "\xE4\xBA\x94",  // 五
-      "\xE5\x85\xAD",  // 六
-      "\xE4\xB8\x83",  // 七
-      "\xE5\x85\xAB",  // 八
-      "\xE4\xB9\x9D",  // 九
-  };
-  if (ascii_digit < '0' || ascii_digit > '9') {
-    return "";
-  }
-  return kDigits[static_cast<std::size_t>(ascii_digit - '0')];
-}
-
-const char* dbnum2_digit(char ascii_digit) noexcept {
-  // Mac Excel-observed 大字 mapping: ones digits = 零壱弐参四伍六七捌玖.
-  // (Note 4=四 not 肆, 7=七 not 漆, per Mac Excel's empirical output.)
-  static const char* kDigits[10] = {
-      "\xE9\x9B\xB6",  // 零
-      "\xE5\xA3\xB1",  // 壱
-      "\xE5\xBC\x90",  // 弐
-      "\xE5\x8F\x82",  // 参
-      "\xE5\x9B\x9B",  // 四 (everyday, matches Mac Excel oracle)
-      "\xE4\xBC\x8D",  // 伍
-      "\xE5\x85\xAD",  // 六 (everyday, matches Mac Excel oracle)
-      "\xE4\xB8\x83",  // 七 (everyday, matches Mac Excel oracle)
-      "\xE6\x8D\x8C",  // 捌
-      "\xE7\x8E\x96",  // 玖
-  };
-  if (ascii_digit < '0' || ascii_digit > '9') {
-    return "";
-  }
-  return kDigits[static_cast<std::size_t>(ascii_digit - '0')];
-}
-
-// Full-width Arabic digits U+FF10..U+FF19 (each is a 3-byte UTF-8 sequence
-// `EF BC 9X` for X in 0..9).
-const char* dbnum3_digit(char ascii_digit) noexcept {
-  static const char* kDigits[10] = {
-      "\xEF\xBC\x90", "\xEF\xBC\x91", "\xEF\xBC\x92", "\xEF\xBC\x93", "\xEF\xBC\x94",
-      "\xEF\xBC\x95", "\xEF\xBC\x96", "\xEF\xBC\x97", "\xEF\xBC\x98", "\xEF\xBC\x99",
-  };
-  if (ascii_digit < '0' || ascii_digit > '9') {
-    return "";
-  }
-  return kDigits[static_cast<std::size_t>(ascii_digit - '0')];
-}
+// Indexed by mode (DBNum1..DBNum3), then by ASCII digit.
+const char* const kDbnumDigits[3][10] = {
+    {
+        "\xE3\x80\x87",  // 〇
+        "\xE4\xB8\x80",  // 一
+        "\xE4\xBA\x8C",  // 二
+        "\xE4\xB8\x89",  // 三
+        "\xE5\x9B\x9B",  // 四
+        "\xE4\xBA\x94",  // 五
+        "\xE5\x85\xAD",  // 六
+        "\xE4\xB8\x83",  // 七
+        "\xE5\x85\xAB",  // 八
+        "\xE4\xB9\x9D",  // 九
+    },
+    // Mac Excel-observed 大字 mapping: 4, 6 and 7 stay everyday forms (四 / 六
+    // / 七), matching the oracle.
+    {
+        "\xE9\x9B\xB6",  // 零
+        "\xE5\xA3\xB1",  // 壱
+        "\xE5\xBC\x90",  // 弐
+        "\xE5\x8F\x82",  // 参
+        "\xE5\x9B\x9B",  // 四
+        "\xE4\xBC\x8D",  // 伍
+        "\xE5\x85\xAD",  // 六
+        "\xE4\xB8\x83",  // 七
+        "\xE6\x8D\x8C",  // 捌
+        "\xE7\x8E\x96",  // 玖
+    },
+    // Full-width Arabic digits U+FF10..U+FF19.
+    {"\xEF\xBC\x90", "\xEF\xBC\x91", "\xEF\xBC\x92", "\xEF\xBC\x93", "\xEF\xBC\x94", "\xEF\xBC\x95", "\xEF\xBC\x96",
+     "\xEF\xBC\x97", "\xEF\xBC\x98", "\xEF\xBC\x99"},
+};
 
 }  // namespace
 
@@ -118,11 +97,11 @@ std::string_view dbnum_digit_subst(DbNumMode mode, char c) noexcept {
   }
   switch (mode) {
     case DbNumMode::kDBNum1:
-      return dbnum1_digit(c);
+      return kDbnumDigits[0][c - '0'];
     case DbNumMode::kDBNum2:
-      return dbnum2_digit(c);
+      return kDbnumDigits[1][c - '0'];
     case DbNumMode::kDBNum3:
-      return dbnum3_digit(c);
+      return kDbnumDigits[2][c - '0'];
     case DbNumMode::kNone:
     default:
       return {};

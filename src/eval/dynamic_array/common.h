@@ -45,6 +45,14 @@ namespace dynamic_array {
 /// of their own namespace. See `eval/array_alloc.h` for the contract.
 using formulon::eval::allocate_array_value;
 
+/// Shared prologue of the array-first dynamic-array functions: checks the
+/// call arity against `[min_arity, max_arity]`, resolves argument 0 as an
+/// array and, when `reject_empty`, maps a zero-sized array to `#CALC!`.
+/// Returns nullptr with the error in `error_out` on any failure.
+const ArrayValue* resolve_array_prelude(const parser::AstNode& call, std::uint32_t min_arity, std::uint32_t max_arity,
+                                        bool reject_empty, Arena& arena, const FunctionRegistry& registry,
+                                        const EvalContext& ctx, Value& error_out);
+
 /// Evaluate `node` and coerce it to a number. On error or coercion failure
 /// writes the caller-visible error to `error_out` and returns `false`.
 bool eval_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,

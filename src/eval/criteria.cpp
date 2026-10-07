@@ -184,21 +184,25 @@ ParsedCriterion::ParsedCriterion(ParsedCriterion&& other) noexcept {
   *this = std::move(other);
 }
 
+void ParsedCriterion::copy_parsed_fields_except_storage(const ParsedCriterion& other) {
+  op = other.op;
+  rhs_is_number = other.rhs_is_number;
+  rhs_number = other.rhs_number;
+  has_wildcard = other.has_wildcard;
+  rhs_from_bool = other.rhs_from_bool;
+  rhs_is_error = other.rhs_is_error;
+  rhs_error_code = other.rhs_error_code;
+  prefix_match = other.prefix_match;
+  rhs_invalid_wildcard = other.rhs_invalid_wildcard;
+  rhs_bare_comparator = other.rhs_bare_comparator;
+  rhs_text_owns_storage_ = other.rhs_text_owns_storage_;
+  rhs_text = other.rhs_text;
+}
+
 ParsedCriterion& ParsedCriterion::operator=(const ParsedCriterion& other) {
   if (this != &other) {
-    op = other.op;
-    rhs_is_number = other.rhs_is_number;
-    rhs_number = other.rhs_number;
-    has_wildcard = other.has_wildcard;
-    rhs_from_bool = other.rhs_from_bool;
-    rhs_is_error = other.rhs_is_error;
-    rhs_error_code = other.rhs_error_code;
-    prefix_match = other.prefix_match;
-    rhs_invalid_wildcard = other.rhs_invalid_wildcard;
-    rhs_bare_comparator = other.rhs_bare_comparator;
+    copy_parsed_fields_except_storage(other);
     rhs_storage = other.rhs_storage;
-    rhs_text_owns_storage_ = other.rhs_text_owns_storage_;
-    rhs_text = other.rhs_text;
     rebind_rhs_text();
     rhs_fold_cached_ = false;
     rhs_fold_cache_.clear();
@@ -208,19 +212,8 @@ ParsedCriterion& ParsedCriterion::operator=(const ParsedCriterion& other) {
 
 ParsedCriterion& ParsedCriterion::operator=(ParsedCriterion&& other) noexcept {
   if (this != &other) {
-    op = other.op;
-    rhs_is_number = other.rhs_is_number;
-    rhs_number = other.rhs_number;
-    has_wildcard = other.has_wildcard;
-    rhs_from_bool = other.rhs_from_bool;
-    rhs_is_error = other.rhs_is_error;
-    rhs_error_code = other.rhs_error_code;
-    prefix_match = other.prefix_match;
-    rhs_invalid_wildcard = other.rhs_invalid_wildcard;
-    rhs_bare_comparator = other.rhs_bare_comparator;
+    copy_parsed_fields_except_storage(other);
     rhs_storage = std::move(other.rhs_storage);
-    rhs_text_owns_storage_ = other.rhs_text_owns_storage_;
-    rhs_text = other.rhs_text;
     rebind_rhs_text();
     rhs_fold_cached_ = false;
     rhs_fold_cache_.clear();

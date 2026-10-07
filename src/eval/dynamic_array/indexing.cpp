@@ -6,7 +6,6 @@
 
 #include "eval/dynamic_array/common.h"
 #include "eval/omitted_arg.h"
-#include "eval/range_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -25,13 +24,10 @@ Value eval_choose_lanes(const parser::AstNode& call, Arena& arena, const Functio
   const std::uint32_t arity = call.as_call_arity();
   // Need `(array, index1, ...)`; cap at 254 indices (Excel ceiling) +
   // 1 array slot = 255 args.
-  if (arity < 2U || arity > 255U) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
+  const ArrayValue* array =
+      dynamic_array::resolve_array_prelude(call, 2U, 255U, /*reject_empty=*/false, arena, registry, ctx, err);
+  if (array == nullptr) {
     return err;
   }
 
@@ -62,13 +58,10 @@ Value eval_choose_lanes(const parser::AstNode& call, Arena& arena, const Functio
 Value eval_take_drop(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx, bool take) {
   const std::uint32_t arity = call.as_call_arity();
-  if (arity < 2U || arity > 3U) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
+  const ArrayValue* array =
+      dynamic_array::resolve_array_prelude(call, 2U, 3U, /*reject_empty=*/false, arena, registry, ctx, err);
+  if (array == nullptr) {
     return err;
   }
 

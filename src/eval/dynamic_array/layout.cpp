@@ -168,12 +168,10 @@ bool resolve_wrap_args(const parser::AstNode& call, std::uint32_t arity, Arena& 
 Value eval_to_vector(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx, bool as_column) {
   const std::uint32_t arity = call.as_call_arity();
-  if (arity < 1U || arity > 3U) {
-    return Value::error(ErrorCode::Value);
-  }
-  const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
+  const ArrayValue* array =
+      dynamic_array::resolve_array_prelude(call, 1U, 3U, /*reject_empty=*/false, arena, registry, ctx, err);
+  if (array == nullptr) {
     return err;
   }
 

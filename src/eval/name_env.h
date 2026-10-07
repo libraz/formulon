@@ -124,24 +124,7 @@ class NameEnv {
   /// / OFFSET-call shape. Pass `nullptr` for `expr` to opt back into the
   /// Value-only behaviour (equivalent to the 3-argument overload).
   NameEnv extend(std::string_view name, Value value, const parser::AstNode* expr, Arena& arena) const noexcept {
-    auto* frame = arena.create<Binding>();
-    if (frame == nullptr) {
-      return *this;
-    }
-    // Intern the name so the environment owns the byte storage independently
-    // of the AST node that produced it. LET binding names already live in
-    // the parser arena for the duration of evaluation, but interning keeps
-    // the invariant explicit for future callers (e.g. LAMBDA).
-    frame->name = arena.intern(name);
-    frame->value = value;
-    frame->expr = expr;
-    frame->read_pending =
-        expr != nullptr && (expr->kind() == parser::NodeKind::Ref || expr->kind() == parser::NodeKind::RangeOp);
-    frame->is_omitted = false;
-    frame->prev = head_;
-    NameEnv next;
-    next.head_ = frame;
-    return next;
+    return push_binding(name, value, expr, /*omitted=*/false, arena);
   }
 
   /// Pushes a frame marking `name` as an omitted optional LAMBDA parameter.
@@ -149,18 +132,7 @@ class NameEnv {
   /// reads through the omitted name); ISOMITTED detects the omitted flag via
   /// `lookup_omitted`.
   NameEnv extend_omitted(std::string_view name, Arena& arena) const noexcept {
-    auto* frame = arena.create<Binding>();
-    if (frame == nullptr) {
-      return *this;
-    }
-    frame->name = arena.intern(name);
-    frame->value = Value::blank();
-    frame->expr = nullptr;
-    frame->is_omitted = true;
-    frame->prev = head_;
-    NameEnv next;
-    next.head_ = frame;
-    return next;
+    return push_binding(name, Value::blank(), nullptr, /*omitted=*/true, arena);
   }
 
   /// Returns the number of bindings currently visible. O(depth); intended
@@ -174,6 +146,28 @@ class NameEnv {
   }
 
  private:
+  NameEnv push_binding(std::string_view name, Value value, const parser::AstNode* expr, bool omitted,
+                       Arena& arena) const noexcept {
+    auto* frame = arena.create<Binding>();
+    if (frame == nullptr) {
+      return *this;
+    }
+    // Intern the name so the environment owns the byte storage independently
+    // of the AST node that produced it. LET binding names already live in
+    // the parser arena for the duration of evaluation, but interning keeps
+    // the invariant explicit for future callers (e.g. LAMBDA).
+    frame->name = arena.intern(name);
+    frame->value = value;
+    frame->expr = expr;
+    frame->read_pending =
+        expr != nullptr && (expr->kind() == parser::NodeKind::Ref || expr->kind() == parser::NodeKind::RangeOp);
+    frame->is_omitted = omitted;
+    frame->prev = head_;
+    NameEnv next;
+    next.head_ = frame;
+    return next;
+  }
+
   struct Binding {
     // `Value`'s default constructor is private; initialise explicitly via
     // `blank()` so this struct is default-constructible for placement-new in

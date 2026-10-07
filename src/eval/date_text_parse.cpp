@@ -360,6 +360,21 @@ bool parse_date_text(std::string_view s, int current_year, double* out_serial, s
   return parse_md_text(s, current_year, out_serial, rest);
 }
 
+// Scans the trailing 1..4 digit year token and resolves the date.
+bool finish_with_year_token(std::string_view s, int month, int day, double* out_serial,
+                            std::string_view* rest) noexcept {
+  int year = 0;
+  const std::size_t year_digits = scan_digits(s, 4, &year);
+  if (year_digits == 0) {
+    return false;
+  }
+  if (!serial_from_parsed_ymd(year, year_digits, month, day, out_serial)) {
+    return false;
+  }
+  *rest = s;
+  return true;
+}
+
 // Scans the 1..2 day digits and, in the kanji form, the closing 日.
 bool scan_day_tail(std::string_view* s, bool kanji_form, int* day) noexcept {
   if (scan_digits(*s, 2, day) == 0) {
@@ -483,16 +498,7 @@ bool parse_dmy_mmm_text(std::string_view s, double* out_serial, std::string_view
   s.remove_prefix(1);
   // Year token: 1..4 ASCII digits. Two-digit values go through the same
   // Excel 1900/2000 pivot as the yyyy-first path.
-  int year = 0;
-  const std::size_t year_digits = scan_digits(s, 4, &year);
-  if (year_digits == 0) {
-    return false;
-  }
-  if (!serial_from_parsed_ymd(year, year_digits, month, day, out_serial)) {
-    return false;
-  }
-  *rest = s;
-  return true;
+  return finish_with_year_token(s, month, day, out_serial, rest);
 }
 
 bool parse_mmm_d_yyyy_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
@@ -529,16 +535,7 @@ bool parse_mmm_d_yyyy_text(std::string_view s, double* out_serial, std::string_v
     s.remove_prefix(1);
   }
   // Year: 1..4 ASCII digits.
-  int year = 0;
-  const std::size_t year_digits = scan_digits(s, 4, &year);
-  if (year_digits == 0) {
-    return false;
-  }
-  if (!serial_from_parsed_ymd(year, year_digits, month, day, out_serial)) {
-    return false;
-  }
-  *rest = s;
-  return true;
+  return finish_with_year_token(s, month, day, out_serial, rest);
 }
 
 // Scans up to `max_digits` digits followed by the kanji unit `unit`.

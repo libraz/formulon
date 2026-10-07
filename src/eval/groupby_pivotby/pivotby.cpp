@@ -547,6 +547,22 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return row;
   };
 
+  // Helper: write the per-slot cells of one row; `leaf` / `subtotal` are
+  // indexed by col group / outer group, then value column.
+  const auto fill_slot_cells = [&](std::vector<Value>& row, const auto& leaf, const auto& subtotal) {
+    for (std::size_t ci = 0; ci < col_slots.size(); ++ci) {
+      const ColSlot& slot = col_slots[ci];
+      const std::uint32_t base = body_block_start + static_cast<std::uint32_t>(ci) * val_cols;
+      for (std::uint32_t v = 0; v < val_cols; ++v) {
+        if (slot.kind == ColSlotKind::Leaf) {
+          row[base + v] = leaf[slot.col_group][v];
+        } else if (slot.kind == ColSlotKind::OuterSubtotal) {
+          row[base + v] = subtotal[slot.outer_group][v];
+        }
+      }
+    }
+  };
+
   // Helper: render one body row (per row-group rg).
   auto render_body_row = [&](std::size_t rg) {
     std::vector<Value> row(out_cols, Value::blank());
@@ -555,17 +571,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       row[c] = row_fields->cells[static_cast<std::size_t>(row_repr[rg]) * key_cols + c];
     }
     // Body cells: per physical column slot, value column.
-    for (std::size_t ci = 0; ci < col_slots.size(); ++ci) {
-      const ColSlot& slot = col_slots[ci];
-      const std::uint32_t base = body_block_start + static_cast<std::uint32_t>(ci) * val_cols;
-      for (std::uint32_t v = 0; v < val_cols; ++v) {
-        if (slot.kind == ColSlotKind::Leaf) {
-          row[base + v] = body[rg][slot.col_group][v];
-        } else if (slot.kind == ColSlotKind::OuterSubtotal) {
-          row[base + v] = col_subtotal_body[rg][slot.outer_group][v];
-        }
-      }
-    }
+    fill_slot_cells(row, body[rg], col_subtotal_body[rg]);
     // Grand-total block: row totals per value column. Mac Excel ja-JP only
     // populates this strip for the single-value-column layout; with
     // val_cols > 1 the grand-total columns carry headers but blank values.
@@ -588,17 +594,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     std::vector<Value> row(out_cols, Value::blank());
     row[0] = Value::text(arena.intern(emit_row_subtotals ? hierarchy_grand_total_label(ctx) : grand_total_label(ctx)));
     // Cells [1..K-1] stay blank (the rest of the row-keys columns).
-    for (std::size_t ci = 0; ci < col_slots.size(); ++ci) {
-      const ColSlot& slot = col_slots[ci];
-      const std::uint32_t base = body_block_start + static_cast<std::uint32_t>(ci) * val_cols;
-      for (std::uint32_t v = 0; v < val_cols; ++v) {
-        if (slot.kind == ColSlotKind::Leaf) {
-          row[base + v] = col_totals[slot.col_group][v];
-        } else if (slot.kind == ColSlotKind::OuterSubtotal) {
-          row[base + v] = col_subtotal_totals[slot.outer_group][v];
-        }
-      }
-    }
+    fill_slot_cells(row, col_totals, col_subtotal_totals);
     // Grand-total block: the bottom-right grand total, populated only for
     // the single-value-column layout (see render_body_row note).
     if (emit_row_totals_col && val_cols == 1U) {

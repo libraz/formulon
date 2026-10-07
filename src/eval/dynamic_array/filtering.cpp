@@ -115,19 +115,12 @@ Value eval_filter_lazy(const parser::AstNode& call, Arena& arena, const Function
 Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
-  if (arity < 1U || arity > 3U) {
-    return Value::error(ErrorCode::Value);
-  }
 
-  // Resolve `array` via the array-context seam so range-shaped args
-  // (Ref / RangeOp / OFFSET / CHOOSE / IF / SpillRef) keep their 2D shape.
-  const ArrayValue* array = nullptr;
+  // The array keeps its 2D shape through the array-context seam.
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
+  const ArrayValue* array = dynamic_array::resolve_array_prelude(call, 1U, 3U, true, arena, registry, ctx, err);
+  if (array == nullptr) {
     return err;
-  }
-  if (array->rows == 0U || array->cols == 0U) {
-    return Value::error(ErrorCode::Calc);
   }
 
   // Optional flags. Both default to FALSE; both go through `coerce_to_bool`
@@ -196,19 +189,11 @@ Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const Function
 Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
-  if (arity < 1U || arity > 4U) {
-    return Value::error(ErrorCode::Value);
-  }
 
-  // Resolve `array` via the array-context seam so range-shaped args keep
-  // their 2D shape (matches FILTER / UNIQUE).
-  const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
+  const ArrayValue* array = dynamic_array::resolve_array_prelude(call, 1U, 4U, true, arena, registry, ctx, err);
+  if (array == nullptr) {
     return err;
-  }
-  if (array->rows == 0U || array->cols == 0U) {
-    return Value::error(ErrorCode::Calc);
   }
 
   // Optional args. by_col is parsed first because it determines the valid
@@ -280,17 +265,10 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
   // Need at least `(array, by_array1)`. Cap at 13 (six keys) -- a safety
   // ceiling that comfortably exceeds any realistic SORTBY usage and keeps
   // the small-vectors local.
-  if (arity < 2U || arity > 13U) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
+  const ArrayValue* array = dynamic_array::resolve_array_prelude(call, 2U, 13U, true, arena, registry, ctx, err);
+  if (array == nullptr) {
     return err;
-  }
-  if (array->rows == 0U || array->cols == 0U) {
-    return Value::error(ErrorCode::Calc);
   }
 
   // Axis inference + per-key collection. The first by_array picks the axis;
