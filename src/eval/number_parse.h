@@ -18,12 +18,14 @@ namespace eval {
 /// Parses a numeric string using `decimal_sep` and `group_sep`. `group_sep`
 /// may appear only in the integer part and must form valid 3-digit groups
 /// (the first group being 1-3 digits); pass `'\0'` to disable grouping.
-/// A leading sign, the profile's accepted currency symbols (`$` / `€` for
-/// every profile and `¥` / `￥` for Japanese), a trailing Euro suffix, and
-/// any number of trailing `%` signs (each dividing the result by 100) are
-/// accepted. Surrounding ASCII whitespace is trimmed. Returns true and
-/// writes the value into `*out` on success.
-bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double* out) noexcept;
+/// With `strict_groups` false (NUMBERVALUE) group separators are dropped
+/// wherever they appear in the integer part.
+/// A leading sign, the profile's accepted currency symbols, a trailing Euro
+/// suffix, and any number of trailing `%` signs (each dividing the result by
+/// 100) are accepted. Surrounding ASCII whitespace is trimmed. Returns true
+/// and writes the value into `*out` on success.
+bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double* out,
+                   bool strict_groups = true) noexcept;
 
 /// Locale-input pre-pass shared by VALUE / NUMBERVALUE. Japanese profiles
 /// fold full-width ASCII forms (U+FF01..U+FF5E) and the ideographic space
@@ -34,8 +36,8 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
 std::string normalize_locale_numeric(std::string_view raw, bool* paren_negated);
 
 /// Convenience wrapper reproducing the VALUE() function's numeric phase:
-/// `normalize_locale_numeric` followed by `parse_numeric` with the en-US
-/// separators (`.` decimal, `,` grouping) and accounting-paren negation.
+/// `normalize_locale_numeric` followed by `parse_numeric` with the active
+/// profile's separators and accounting-paren negation.
 /// Does NOT handle date/time strings — callers that need the DATEVALUE-style
 /// fallback layer it separately. Returns true and writes `*out` on success.
 bool parse_excel_number(std::string_view text, double* out);

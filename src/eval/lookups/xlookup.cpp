@@ -118,6 +118,45 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, i
   return true;
 }
 
+// Width-only fold for profiles without kana folding (zh-CN): full-width and
+// half-width variants compare equal, hiragana stays distinct from katakana.
+std::string fold_width_keep_hiragana(std::string_view s) {
+  std::string out;
+  out.reserve(s.size());
+  std::size_t run_start = 0;
+  std::size_t i = 0;
+  while (i < s.size()) {
+    // Hiragana U+3041..U+3096 is E3 81 81 .. E3 82 96.
+    const bool hiragana =
+        i + 2 < s.size() && static_cast<unsigned char>(s[i]) == 0xE3u &&
+        ((static_cast<unsigned char>(s[i + 1]) == 0x81u && static_cast<unsigned char>(s[i + 2]) >= 0x81u) ||
+         (static_cast<unsigned char>(s[i + 1]) == 0x82u && static_cast<unsigned char>(s[i + 2]) <= 0x96u));
+    if (!hiragana) {
+      ++i;
+      continue;
+    }
+    out += fold_jp_text(s.substr(run_start, i - run_start));
+    out.append(s.substr(i, 3));
+    i += 3;
+    run_start = i;
+  }
+  out += fold_jp_text(s.substr(run_start));
+  return out;
+}
+
+// Lower-cased comparison key of exact-match text under the profile's folding.
+std::string xlookup_exact_key(std::string_view text, ExcelProfile profile) {
+  switch (width_folding(profile)) {
+    case WidthFolding::kMac:
+      return fold_and_lower(text, /*fold_fullwidth_digits=*/true);
+    case WidthFolding::kNone:
+      return strings::to_ascii_lower(fold_width_keep_hiragana(text));
+    case WidthFolding::kWin:
+      break;
+  }
+  return strings::to_ascii_lower(compose_jp_halfwidth_voicing(text));
+}
+
 // Exact-equality test with optional DOS-style wildcard expansion on Text vs
 // Text pairs. For non-text / cross-type kinds this is a literal equality
 // compare with the same "Blank acts as numeric 0" rule VLOOKUP / HLOOKUP use
@@ -137,19 +176,11 @@ bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards, Ex
       return false;
     }
     // Mac Excel folds kana, width variants, and full-width digits before
-    // lower-casing in exact mode. Windows retains its narrower comparison.
-    //
-    // The Windows path keeps the broad kana fold OFF (Windows Excel does
-    // not fold hiragana<->katakana or plain half/full width in lookups —
-    // see lookup_kana_folding_probes) but still composes a half-width
-    // voicing mark onto its base (`ｶﾞ` -> `ガ`): a base + standalone ﾞ /
-    // ﾟ is a malformed encoding both Windows and Mac compose before the
-    // exact-match compare.
-    const bool jp_fold = width_folding(profile) == WidthFolding::kMac;
-    const std::string pat_lower = jp_fold ? fold_and_lower(lookup.as_text(), /*fold_fullwidth_digits=*/true)
-                                          : strings::to_ascii_lower(compose_jp_halfwidth_voicing(lookup.as_text()));
-    const std::string cell_lower = jp_fold ? fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/true)
-                                           : strings::to_ascii_lower(compose_jp_halfwidth_voicing(cell.as_text()));
+    // lower-casing in exact mode; zh-CN folds width only. Windows keeps the
+    // broad kana fold OFF (see lookup_kana_folding_probes) but still composes
+    // a half-width voicing mark onto its base (`ｶﾞ` -> `ガ`).
+    const std::string pat_lower = xlookup_exact_key(lookup.as_text(), profile);
+    const std::string cell_lower = xlookup_exact_key(cell.as_text(), profile);
     if (wildcards) {
       return wildcard_match(pat_lower, cell_lower);
     }

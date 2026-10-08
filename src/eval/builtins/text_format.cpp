@@ -20,6 +20,7 @@
 #include "eval/date_text_parse.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
+#include "eval/locale_text.h"
 #include "eval/number_parse.h"
 #include "eval/shape_ops_lazy.h"
 #include "eval/text_format/number_format.h"
@@ -62,7 +63,7 @@ Value text_builtin_impl(const Value* args, std::uint32_t /*arity*/, Arena& arena
   // FALSE spelling while still applying a text placeholder and validating
   // malformed sections in the format.
   if (v.is_boolean()) {
-    const std::string_view boolean_text = v.as_boolean() ? "TRUE" : "FALSE";
+    const std::string_view boolean_text = locale_bool_text(v.as_boolean());
     std::string out;
     const auto status = ::formulon::text_format::apply_text_format(boolean_text, format_text, out);
     if (status != ::formulon::text_format::FormatStatus::kOk) {
@@ -175,7 +176,9 @@ Expected<int, ErrorCode> read_optional_fixed_decimals(const Value* args, std::ui
 Value apply_text_number_format(double value, std::string_view format, Arena& arena) {
   std::string out;
   out.reserve(32);
-  const auto status = ::formulon::text_format::apply_format(value, format, out);
+  // FIXED / DOLLAR build their format in the invariant stored syntax.
+  const auto status = ::formulon::text_format::apply_format(value, format, out, /*date1904=*/false,
+                                                            ::formulon::text_format::FormatDialect::kStored);
   if (status != ::formulon::text_format::FormatStatus::kOk) {
     return Value::error(ErrorCode::Value);
   }
@@ -220,20 +223,29 @@ Value Fixed_(const Value* args, std::uint32_t arity, Arena& arena) {
 // the symbol, the default `decimals` and the negative section (measured on
 // Mac Excel 365 ja-JP):
 //   DOLLAR   `¥1,235`,   `¥-1,235`     (locale currency, default 0 decimals)
-//   USDOLLAR `$1,234.50`, `($1,234.50)` (always US dollars, default 2)
+//   USDOLLAR `$1,234.50`, `($1,234.50)` (US dollars, default 2)
+// Symbol placement and the negative form follow the locale `Currency` fact.
 // The chosen section formats the magnitude, so its literal `-` or
 // parentheses carry the sign. Negative `decimals` rounds left of the decimal
 // point (same rule as FIXED); `|decimals| > 127` -> `#VALUE!`.
 
 struct CurrencyStyle {
-  std::string_view symbol;
+  Currency currency;
   int default_decimals;
-  bool negative_in_parentheses;
 };
 
 CurrencyStyle locale_dollar_style() {
   const Currency& currency = locale_facts(current_eval_profile()).currency;
-  return CurrencyStyle{currency.symbol, static_cast<int>(currency.default_decimals), currency.negative_parens};
+  return CurrencyStyle{currency, static_cast<int>(currency.default_decimals)};
+}
+
+// USDOLLAR is the dollar-formatting twin of DOLLAR only where DOLLAR carries
+// the national currency (DBCS locales); elsewhere it is DOLLAR itself.
+CurrencyStyle locale_usdollar_style() {
+  if (locale_facts(current_eval_profile()).dbcs_codepage == DbcsCodepage::kNone) {
+    return locale_dollar_style();
+  }
+  return CurrencyStyle{Currency{"$", false, false, true, true, 2U}, 2};
 }
 
 Value format_currency(const Value* args, std::uint32_t arity, Arena& arena, const CurrencyStyle& style) {
@@ -258,20 +270,34 @@ Value format_currency(const Value* args, std::uint32_t arity, Arena& arena, cons
   // USDOLLAR(-4,-1) is `$0`. So the section is picked here, and the chosen
   // one formats the magnitude.
   const bool negative = decimals < 0 ? value < 0.0 : num.value() < 0.0;
+  const Currency& currency = style.currency;
   std::string fmt;
-  fmt.reserve(body.size() + style.symbol.size() + 3u);
-  if (!negative) {
-    fmt.append(style.symbol);
-    fmt.append(body);
-  } else if (style.negative_in_parentheses) {
+  fmt.reserve(body.size() + currency.symbol.size() + 4u);
+  const bool parens = negative && currency.negative_parens;
+  if (parens) {
     fmt.push_back('(');
-    fmt.append(style.symbol);
-    fmt.append(body);
-    fmt.push_back(')');
-  } else {
-    fmt.append(style.symbol);
+  }
+  if (negative && !parens && currency.suffix) {
     fmt.push_back('-');
-    fmt.append(body);
+  }
+  if (!currency.suffix) {
+    fmt.append(currency.symbol);
+    if (currency.space) {
+      fmt.push_back(' ');
+    }
+    if (negative && !parens) {
+      fmt.push_back('-');
+    }
+  }
+  fmt.append(body);
+  if (currency.suffix) {
+    if (currency.space) {
+      fmt.push_back(' ');
+    }
+    fmt.append(currency.symbol);
+  }
+  if (parens) {
+    fmt.push_back(')');
   }
   return apply_text_number_format(std::fabs(value), fmt, arena);
 }
@@ -281,7 +307,7 @@ Value Dollar_(const Value* args, std::uint32_t arity, Arena& arena) {
 }
 
 Value UsDollar_(const Value* args, std::uint32_t arity, Arena& arena) {
-  return format_currency(args, arity, arena, CurrencyStyle{"$", 2, true});
+  return format_currency(args, arity, arena, locale_usdollar_style());
 }
 
 // ---------------------------------------------------------------------------
@@ -316,7 +342,8 @@ Value Value_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, int c
       bool paren_negated = false;
       const std::string normalized = normalize_locale_numeric(raw, &paren_negated);
       double numeric = 0.0;
-      if (parse_numeric(normalized, '.', ',', &numeric)) {
+      const LocaleFacts& facts = locale_facts(current_eval_profile());
+      if (parse_numeric(normalized, facts.decimal_separator, facts.group_separator, &numeric)) {
         return Value::number(paren_negated ? -numeric : numeric);
       }
       // Phase 2: date / time parse. Leading whitespace is trimmed (the
@@ -352,12 +379,13 @@ Value NumberValue_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!text) {
     return Value::error(text.error());
   }
-  char decimal_sep = '.';
-  char group_sep = ',';
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  char decimal_sep = facts.decimal_separator;
+  char group_sep = facts.group_separator;
   // Track whether the caller supplied an explicit group separator; when
   // they only passed `decimal_sep`, we silently disable grouping so the
   // 2-arity call `NUMBERVALUE("3,14", ",")` cannot collide with the
-  // en-US default group sep of `,`.
+  // locale's default group sep.
   bool group_sep_supplied = false;
   if (arity >= 2) {
     auto dsep = coerce_to_text(args[1]);
@@ -402,7 +430,7 @@ Value NumberValue_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   bool paren_negated = false;
   const std::string normalized = normalize_locale_numeric(text.value(), &paren_negated);
   double parsed = 0.0;
-  if (parse_numeric(normalized, decimal_sep, group_sep, &parsed)) {
+  if (parse_numeric(normalized, decimal_sep, group_sep, &parsed, /*strict_groups=*/false)) {
     return Value::number(paren_negated ? -parsed : parsed);
   }
   // Mac Excel ja-JP NUMBERVALUE accepts date / time strings in addition
@@ -499,7 +527,7 @@ void append_quoted_text(std::string_view src, std::string& out) {
 
 bool append_arraytotext_cell(const Value& v, bool strict, std::string& out, ErrorCode* error) {
   if (v.is_error()) {
-    out.append(display_name(v.as_error()));
+    out.append(locale_error_text(v.as_error()));
     return true;
   }
   if (strict && v.is_text()) {
@@ -541,6 +569,7 @@ Value parse_arraytotext_format(const parser::AstNode& call, Arena& arena, const 
 }
 
 Value arraytotext_from_array(const ArrayValue& arr, bool strict, Arena& arena) {
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
   std::string out;
   if (strict) {
     out.push_back('{');
@@ -550,9 +579,10 @@ Value arraytotext_from_array(const ArrayValue& arr, bool strict, Arena& arena) {
     for (std::uint32_t c = 0; c < arr.cols; ++c) {
       if (r != 0U || c != 0U) {
         if (strict) {
-          out.push_back(c == 0U ? ';' : ',');
+          out.push_back(c == 0U ? facts.array_row_separator : facts.array_column_separator);
         } else {
-          out.append(", ");
+          out.push_back(facts.list_separator);
+          out.push_back(' ');
         }
       }
       const Value& cell = arr.cells[static_cast<std::size_t>(r) * arr.cols + c];
@@ -569,6 +599,7 @@ Value arraytotext_from_array(const ArrayValue& arr, bool strict, Arena& arena) {
 
 Value arraytotext_from_array_literal(const parser::AstNode& literal, bool strict, Arena& arena,
                                      const FunctionRegistry& registry, const EvalContext& ctx) {
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
   std::string out;
   if (strict) {
     out.push_back('{');
@@ -580,9 +611,10 @@ Value arraytotext_from_array_literal(const parser::AstNode& literal, bool strict
     for (std::uint32_t c = 0; c < cols; ++c) {
       if (r != 0U || c != 0U) {
         if (strict) {
-          out.push_back(c == 0U ? ';' : ',');
+          out.push_back(c == 0U ? facts.array_row_separator : facts.array_column_separator);
         } else {
-          out.append(", ");
+          out.push_back(facts.list_separator);
+          out.push_back(' ');
         }
       }
       const Value cell = eval_node(literal.as_array_element(r, c), arena, registry, ctx);

@@ -56,13 +56,16 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* f
   // runs against the raw, untrimmed text so padded date strings stay #VALUE!
   // (see WhitespacePaddedDate rejection test).
   double parsed = 0.0;
-  if (parse_double_exact(trimmed, &parsed)) {
+  // The two invariant fast paths read `.` as the decimal point, so they only
+  // stand in for the locale parse where that is the profile's separator.
+  const bool invariant_decimal = locale_facts(current_eval_profile()).decimal_separator == '.';
+  if (invariant_decimal && parse_double_exact(trimmed, &parsed)) {
     if (std::isinf(parsed)) {
       return ErrorCode::Num;
     }
     return parsed;
   }
-  if (trimmed.back() == '%') {
+  if (invariant_decimal && trimmed.back() == '%') {
     const std::string_view body = trimmed.substr(0, trimmed.size() - 1);
     if (parse_double_exact(body, &parsed)) {
       const double scaled = parsed / 100.0;

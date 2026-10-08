@@ -31,47 +31,40 @@ std::string_view trim_ascii(std::string_view s) noexcept {
   return s;
 }
 
-// Strips a leading currency prefix. Dollar and Euro are shared by the
-// profiles; the two yen spellings belong to the Japanese locale fact. `£` /
-// `¢` / `₩` / the kanji `円` remain outside the bounded vocabulary.
+// Strips a leading currency prefix from the active locale's accepted set.
 // Returns the input unchanged when no accepted symbol is present.
 std::string_view strip_currency(std::string_view s) noexcept {
-  if (s.empty()) {
-    return s;
-  }
-  if (s.front() == '$') {
-    return s.substr(1);
-  }
-  const bool japanese_currency = locale_facts(current_eval_profile()).currency.symbol == "¥";
-  if (japanese_currency && s.size() >= 2 && static_cast<unsigned char>(s[0]) == 0xC2u &&
-      static_cast<unsigned char>(s[1]) == 0xA5u) {
-    return s.substr(2);
-  }
-  if (japanese_currency && s.size() >= 3 && static_cast<unsigned char>(s[0]) == 0xEFu &&
-      static_cast<unsigned char>(s[1]) == 0xBFu && static_cast<unsigned char>(s[2]) == 0xA5u) {
-    return s.substr(3);
-  }
-  if (s.size() >= 3 && static_cast<unsigned char>(s[0]) == 0xE2u && static_cast<unsigned char>(s[1]) == 0x82u &&
-      static_cast<unsigned char>(s[2]) == 0xACu) {
-    return s.substr(3);
+  for (const std::string_view symbol : locale_facts(current_eval_profile()).accepted_currency) {
+    if (!symbol.empty() && s.substr(0, symbol.size()) == symbol) {
+      return s.substr(symbol.size());
+    }
   }
   return s;
 }
 
 // Strips a trailing Euro suffix (`23€` -> `23`). Mac Excel 365 accepts Euro
-// both as prefix and suffix; the dollar sign and the yen kanji (`円`) are
-// NOT accepted as suffix, so this is deliberately Euro-only.
+// both as prefix and suffix; no other symbol is accepted as a suffix. A
+// suffix-currency locale also allows the blank before the symbol.
 std::string_view strip_trailing_euro(std::string_view s) noexcept {
-  if (s.size() >= 3 && static_cast<unsigned char>(s[s.size() - 3]) == 0xE2u &&
-      static_cast<unsigned char>(s[s.size() - 2]) == 0x82u && static_cast<unsigned char>(s[s.size() - 1]) == 0xACu) {
-    return s.substr(0, s.size() - 3);
+  constexpr std::string_view kEuro = "\xE2\x82\xAC";
+  if (s.size() < kEuro.size() || s.substr(s.size() - kEuro.size()) != kEuro) {
+    return s;
   }
-  return s;
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  bool accepted = false;
+  for (const std::string_view symbol : facts.accepted_currency) {
+    accepted = accepted || symbol == kEuro;
+  }
+  if (!accepted) {
+    return s;
+  }
+  s.remove_suffix(kEuro.size());
+  return facts.currency.suffix ? trim_ascii(s) : s;
 }
 
 }  // namespace
 
-bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double* out) noexcept {
+bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double* out, bool strict_groups) noexcept {
   // Trim ASCII whitespace first.
   s = trim_ascii(s);
   if (s.empty()) {
@@ -164,6 +157,9 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
       }
       canonical.push_back('.');
       seen_point = true;
+      continue;
+    }
+    if (group_sep != '\0' && c == group_sep && !seen_point && !seen_exp && !strict_groups) {
       continue;
     }
     if (group_sep != '\0' && c == group_sep && !seen_point && !seen_exp) {
@@ -294,7 +290,8 @@ bool parse_excel_number(std::string_view text, double* out) {
   bool paren_negated = false;
   const std::string normalized = normalize_locale_numeric(text, &paren_negated);
   double value = 0.0;
-  if (!parse_numeric(normalized, '.', ',', &value)) {
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  if (!parse_numeric(normalized, facts.decimal_separator, facts.group_separator, &value)) {
     return false;
   }
   *out = paren_negated ? -value : value;

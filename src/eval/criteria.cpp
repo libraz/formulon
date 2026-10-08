@@ -11,6 +11,7 @@
 
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/jp_fold.h"
 #include "eval/wildcard.h"
 #include "excel_locale.h"
@@ -81,17 +82,18 @@ bool probe_number(std::string_view rhs, double* out_number) {
   return true;
 }
 
-// Attempts to parse the exact ASCII criterion spellings TRUE / FALSE,
-// ignoring ASCII letter case. This probe is intentionally separate from the
+// Attempts to parse the active locale's TRUE / FALSE spellings, ignoring
+// ASCII letter case. This probe is intentionally separate from the
 // general text-to-number coercion ladder: COUNTIF's Eq / NotEq criteria treat
 // these two spellings as Bool criteria, while ordering criteria keep them as
 // text.
 bool probe_bool(std::string_view rhs, bool* out_bool) {
-  if (strings::case_insensitive_eq(rhs, "TRUE")) {
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  if (strings::case_insensitive_eq(rhs, facts.true_name)) {
     *out_bool = true;
     return true;
   }
-  if (strings::case_insensitive_eq(rhs, "FALSE")) {
+  if (strings::case_insensitive_eq(rhs, facts.false_name)) {
     *out_bool = false;
     return true;
   }

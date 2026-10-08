@@ -6,6 +6,7 @@
 
 #include "eval/date_text_parse.h"
 
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -191,14 +192,19 @@ bool starts_with_ci(std::string_view s, std::string_view expected) noexcept {
   return true;
 }
 
-// Consumes a case-insensitive English month name from the head of `s` and
-// advances `s` past it. On success writes the 1..12 month index into
-// `*out_month` and returns true. Accepts both the three-letter abbreviation
-// (Jan..Dec) and the full name (January..December); prefers the longest match
-// so "June" is not cut to "Jun" + "e".
-bool parse_mmm_month(std::string_view& s, int* out_month) noexcept {
-  // Order matches Excel's short-form abbreviation. We try the full name first
-  // to honour the longest-match rule before falling back to the 3-letter form.
+// English month names are rejected by the comma-decimal (continental European)
+// profiles, which accept only their own names (plus the English abbreviation
+// in the hyphenated `d-mmm-yy` form); every other profile accepts English
+// names in addition to its own.
+bool english_month_names_accepted() noexcept {
+  return locale_facts(current_eval_profile()).decimal_separator != ',';
+}
+
+// Consumes a case-insensitive month name from the head of `s` and advances
+// `s` past it. On success writes the 1..12 month index into `*out_month` and
+// returns true. Full names are tried before the abbreviations so "June" is
+// not cut to "Jun" + "e"; within each tier the locale spelling comes first.
+bool parse_mmm_month(std::string_view& s, int* out_month, bool hyphenated) noexcept {
   static constexpr std::string_view kFullNames[12] = {
       "January", "February", "March",     "April",   "May",      "June",
       "July",    "August",   "September", "October", "November", "December",
@@ -206,18 +212,21 @@ bool parse_mmm_month(std::string_view& s, int* out_month) noexcept {
   static constexpr std::string_view kShortNames[12] = {
       "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
   };
-  for (int i = 0; i < 12; ++i) {
-    if (starts_with_ci(s, kFullNames[i])) {
-      s.remove_prefix(kFullNames[i].size());
-      *out_month = i + 1;
-      return true;
-    }
-  }
-  for (int i = 0; i < 12; ++i) {
-    if (starts_with_ci(s, kShortNames[i])) {
-      s.remove_prefix(kShortNames[i].size());
-      *out_month = i + 1;
-      return true;
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  const bool english = english_month_names_accepted();
+  for (int tier = 0; tier < 2; ++tier) {
+    const bool english_tier = english || (hyphenated && tier == 1);
+    const auto& local_names = tier == 0 ? facts.month_long : facts.month_short;
+    const auto* english_names = tier == 0 ? kFullNames : kShortNames;
+    for (std::size_t i = 0; i < 12; ++i) {
+      const std::string_view candidates[2] = {local_names[i], english_tier ? english_names[i] : std::string_view()};
+      for (const std::string_view name : candidates) {
+        if (!name.empty() && starts_with_ci(s, name)) {
+          s.remove_prefix(name.size());
+          *out_month = static_cast<int>(i) + 1;
+          return true;
+        }
+      }
     }
   }
   return false;
@@ -466,16 +475,18 @@ NumericDateParseResult parse_ymd_text(std::string_view s, double* out_serial, st
     return NumericDateParseResult::kSuccess;
   }
 
-  // The two ASCII separators are intentionally interchangeable, preserving
-  // the existing leniency for mixed forms such as `2024-03/15`.
-  if (!consume_spaced_sep(&s, is_date_sep)) {
+  // The separators are intentionally interchangeable, preserving the
+  // existing leniency for mixed forms such as `2024-03/15`.
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  const auto is_sep = [dotted = facts.dotted_date](char c) { return is_date_sep(c) || (dotted && c == '.'); };
+  if (!consume_spaced_sep(&s, is_sep)) {
     return NumericDateParseResult::kNoMatch;
   }
   int second = 0;
   if (scan_digits(s, 2, &second) == 0) {
     return NumericDateParseResult::kNoMatch;
   }
-  if (!consume_spaced_sep(&s, is_date_sep)) {
+  if (!consume_spaced_sep(&s, is_sep)) {
     // This is the year-less M/D shape; let parse_md_text handle it.
     return NumericDateParseResult::kNoMatch;
   }
@@ -495,11 +506,16 @@ NumericDateParseResult parse_ymd_text(std::string_view s, double* out_serial, st
     year_digits = first_digits;
     month = second;
     day = third;
-  } else if (locale_facts(current_eval_profile()).date_order == DateOrder::kYMD) {
+  } else if (facts.date_order == DateOrder::kYMD) {
     year = first;
     year_digits = first_digits;
     month = second;
     day = third;
+  } else if (facts.date_order == DateOrder::kDMY) {
+    year = third;
+    year_digits = third_digits;
+    month = second;
+    day = first;
   } else {
     year = third;
     year_digits = third_digits;
@@ -521,18 +537,20 @@ NumericDateParseResult parse_ymd_text(std::string_view s, double* out_serial, st
 // after `parse_ymd_text` has already failed, so a genuine 3-component date
 // like `2024/3/15` is never reinterpreted as month/day.
 bool parse_md_text(std::string_view s, int current_year, double* out_serial, std::string_view* rest) noexcept {
-  if (current_year <= 0) {
-    return false;
-  }
-  int month = 0;
-  if (scan_digits(s, 2, &month) == 0) {
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  int first = 0;
+  if (scan_digits(s, 2, &first) == 0) {
     return false;
   }
   bool kanji_form = false;
+  bool dotted_form = false;
   if (!s.empty() && (s[0] == '-' || s[0] == '/')) {
     s.remove_prefix(1);
+  } else if (facts.dotted_date && !s.empty() && s[0] == '.') {
+    s.remove_prefix(1);
+    dotted_form = true;
   } else if (starts_with_utf8(s, kKanjiGatsu)) {
-    if (!locale_facts(current_eval_profile()).kanji_ymd_text) {
+    if (!facts.kanji_ymd_text) {
       return false;
     }
     s.remove_prefix(3);
@@ -540,17 +558,30 @@ bool parse_md_text(std::string_view s, int current_year, double* out_serial, std
   } else {
     return false;
   }
-  int day = 0;
-  if (!scan_day_tail(&s, kanji_form, &day)) {
-    return false;
+  const bool day_first = facts.date_order == DateOrder::kDMY && !kanji_form;
+  const std::string_view after_sep = s;
+  int second = 0;
+  if (scan_day_tail(&s, kanji_form, &second)) {
+    const int month = day_first ? second : first;
+    const int day = day_first ? first : second;
+    // `year_digits = 4` bypasses the two-digit pivot unconditionally: a
+    // caller-supplied current year is already a real four-digit year.
+    if (current_year > 0 && serial_from_parsed_ymd(current_year, 4, month, day, out_serial)) {
+      *rest = s;
+      return true;
+    }
   }
-  // `year_digits = 4` bypasses the two-digit pivot unconditionally: a
-  // caller-supplied current year is already a real four-digit year.
-  if (!serial_from_parsed_ymd(current_year, 4, month, day, out_serial)) {
-    return false;
+  // A dotted day-first text that is not a day.month reads as month.year.
+  if (dotted_form && day_first) {
+    std::string_view tail = after_sep;
+    int year = 0;
+    const std::size_t year_digits = scan_digits(tail, 4, &year);
+    if (year_digits > 0 && serial_from_parsed_ymd(year, year_digits, first, 1, out_serial)) {
+      *rest = tail;
+      return true;
+    }
   }
-  *rest = s;
-  return true;
+  return false;
 }
 
 bool parse_dmy_mmm_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
@@ -566,14 +597,21 @@ bool parse_dmy_mmm_text(std::string_view s, double* out_serial, std::string_view
   if (s.empty()) {
     return false;
   }
-  const char sep = s[0];
-  if (sep != '-' && sep != '/' && sep != ' ') {
+  // A dotted-date locale also writes `15. März 2024`: a dot after the day,
+  // blanks around the month word.
+  const char lead = s[0];
+  const bool dot_form = lead == '.' && locale_facts(current_eval_profile()).dotted_date;
+  if (lead != '-' && lead != '/' && lead != ' ' && !dot_form) {
     return false;
   }
+  const char sep = dot_form ? ' ' : lead;
   s.remove_prefix(1);
+  while (dot_form && !s.empty() && s[0] == ' ') {
+    s.remove_prefix(1);
+  }
   // Month word: case-insensitive 3-letter abbreviation or full English name.
   int month = 0;
-  if (!parse_mmm_month(s, &month)) {
+  if (!parse_mmm_month(s, &month, lead == '-')) {
     return false;
   }
   // Trailing separator must match the leading one exactly.
@@ -587,11 +625,15 @@ bool parse_dmy_mmm_text(std::string_view s, double* out_serial, std::string_view
 }
 
 bool parse_mmm_d_yyyy_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
+  // The month-first spelling is not a day-first locale's form.
+  if (locale_facts(current_eval_profile()).date_order == DateOrder::kDMY) {
+    return false;
+  }
   // Leading month word: case-insensitive 3-letter abbreviation or full
   // English name. Mac Excel accepts both forms in the workbook's ja-JP
   // locale (verified against the oracle).
   int month = 0;
-  if (!parse_mmm_month(s, &month)) {
+  if (!parse_mmm_month(s, &month, /*hyphenated=*/false)) {
     return false;
   }
   // At least one ASCII space between the month word and the day. Mac Excel
@@ -738,7 +780,7 @@ bool parse_time_text(std::string_view s, double* out_frac, std::string_view* res
       }
       has_seconds = true;
     }
-    if (has_seconds && !s.empty() && s[0] == '.') {
+    if (has_seconds && !s.empty() && s[0] == locale_facts(current_eval_profile()).decimal_separator) {
       s.remove_prefix(1);
       double scale = 0.1;
       bool any = false;

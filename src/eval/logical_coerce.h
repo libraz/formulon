@@ -12,8 +12,8 @@
 //     Callers that want "Blank is FALSE" (IFS) treat Skip as false.
 //   * Text (trimmed, ASCII case-insensitive):
 //       - ""          -> Skip
-//       - "TRUE"      -> true
-//       - "FALSE"     -> false
+//       - the locale's TRUE name  -> true
+//       - the locale's FALSE name -> false
 //       - anything else (including "0" / "1") -> `#VALUE!`
 //
 //     Mac asymmetry note: this branch INTENTIONALLY trims surrounding
@@ -39,6 +39,8 @@
 #include <cstdint>
 #include <string_view>
 
+#include "eval/eval_profile_scope.h"
+#include "excel_locale.h"
 #include "utils/strings.h"
 #include "value.h"
 
@@ -75,13 +77,20 @@ inline LogicalCoerce logical_coerce(const Value& v, bool* out_bool, ErrorCode* o
       if (trimmed.empty()) {
         return LogicalCoerce::Skip;
       }
-      if (strings::case_insensitive_eq(trimmed, "TRUE")) {
+      const LocaleFacts& facts = locale_facts(current_eval_profile());
+      if (strings::case_insensitive_eq(trimmed, facts.true_name)) {
         *out_bool = true;
         return LogicalCoerce::HasValue;
       }
-      if (strings::case_insensitive_eq(trimmed, "FALSE")) {
+      if (strings::case_insensitive_eq(trimmed, facts.false_name)) {
         *out_bool = false;
         return LogicalCoerce::HasValue;
+      }
+      // In a locale whose boolean names are not TRUE / FALSE, the English
+      // words are ignored like range text instead of failing the call.
+      if (facts.true_name != "TRUE" &&
+          (strings::case_insensitive_eq(trimmed, "TRUE") || strings::case_insensitive_eq(trimmed, "FALSE"))) {
+        return LogicalCoerce::Skip;
       }
       *out_err = ErrorCode::Value;
       return LogicalCoerce::Error;

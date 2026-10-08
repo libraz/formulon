@@ -23,6 +23,7 @@
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/tree_walker/broadcast.h"
+#include "excel_locale.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/strings.h"
@@ -42,11 +43,12 @@ LogicalCoerce logical_coerce_for_host(const Value& v, const EvalContext& ctx, bo
     return LogicalCoerce::Skip;
   }
   const std::string_view text = strings::trim(raw);
-  if (strings::case_insensitive_eq(text, "TRUE")) {
+  const LocaleFacts& facts = locale_facts(ctx.excel_profile());
+  if (strings::case_insensitive_eq(text, facts.true_name)) {
     *out_bool = true;
     return LogicalCoerce::HasValue;
   }
-  if (strings::case_insensitive_eq(text, "FALSE")) {
+  if (strings::case_insensitive_eq(text, facts.false_name)) {
     *out_bool = false;
     return LogicalCoerce::HasValue;
   }

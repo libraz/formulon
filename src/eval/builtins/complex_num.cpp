@@ -27,8 +27,10 @@
 
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
 #include "eval/locale_text.h"
+#include "excel_locale.h"
 #include "utils/arena.h"
 #include "utils/double_parse.h"
 #include "utils/expected.h"
@@ -79,19 +81,27 @@ inline bool parse_double(std::string_view s, double* out) {
 //   Full:            [+-]?<number>[+-]<number>?[ij]
 //
 // `i`/`j` are lowercase only; an uppercase `I` or `J` is rejected.
-std::optional<Complex> parse_complex_text(std::string_view src) {
-  if (src.empty()) {
+std::optional<Complex> parse_complex_text(std::string_view raw) {
+  if (raw.empty()) {
     return std::nullopt;
   }
+  // The text carries the locale decimal separator; the numeric scan below
+  // works on the invariant `.` form.
+  const char decimal = locale_facts(current_eval_profile()).decimal_separator;
+  std::string invariant(raw);
   // Reject any forbidden character up-front so we never fall into surprise
   // parse behaviours (e.g. the leading whitespace the decimal parser skips).
-  for (char c : src) {
+  for (char& c : invariant) {
     const bool ok =
-        (c >= '0' && c <= '9') || c == '+' || c == '-' || c == '.' || c == 'e' || c == 'E' || c == 'i' || c == 'j';
+        (c >= '0' && c <= '9') || c == '+' || c == '-' || c == decimal || c == 'e' || c == 'E' || c == 'i' || c == 'j';
     if (!ok) {
       return std::nullopt;
     }
+    if (c == decimal) {
+      c = '.';
+    }
   }
+  const std::string_view src = invariant;
   // Find the suffix (last `i` or `j`, if any). Mixed i/j is rejected.
   bool has_i = false;
   bool has_j = false;
