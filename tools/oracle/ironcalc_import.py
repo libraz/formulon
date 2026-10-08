@@ -57,12 +57,15 @@ import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import openpyxl
 from openpyxl.cell.cell import Cell
+from openpyxl.cell.text import Text
 from openpyxl.formula.tokenizer import Tokenizer
+from openpyxl.reader.excel import ExcelReader
 from openpyxl.utils import column_index_from_string, get_column_letter
 from openpyxl.utils.cell import coordinate_from_string
 from openpyxl.utils.datetime import to_excel as _datetime_to_excel_serial
+from openpyxl.xml.constants import SHARED_STRINGS, SHEET_MAIN_NS
+from openpyxl.xml.functions import iterparse
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE_DIR = REPO_ROOT / "tests" / "oracle" / "external" / "ironcalc" / "fixtures"
@@ -224,8 +227,113 @@ def _scrub_filename(part: str) -> str:
     return cleaned
 
 
+def _read_shared_strings_preserving_escapes(xml_source: Any) -> List[str]:
+    """Read shared strings without openpyxl's ``_x005F_`` rewrite.
+
+    The importer decodes OOXML escapes after the workbook reader has returned
+    cell values, so the shared-string layer must retain the original escape
+    spelling.  This deliberately mirrors openpyxl's reader except for its
+    ``text.replace("x005F_", "")`` step:
+
+    >>> import io
+    >>> _read_shared_strings_preserving_escapes(io.BytesIO(b'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>_x005F_x0001_</t></si></sst>'))
+    ['_x005F_x0001_']
+    """
+
+    strings: List[str] = []
+    string_tag = f"{{{SHEET_MAIN_NS}}}si"
+    for _, node in iterparse(xml_source):
+        if node.tag == string_tag:
+            strings.append(Text.from_tree(node).content)
+            node.clear()
+    return strings
+
+
+class _EscapedTextExcelReader(ExcelReader):
+    """ExcelReader variant that preserves raw shared-string escapes."""
+
+    def read_strings(self) -> None:
+        content_type = self.package.find(SHARED_STRINGS)
+        if content_type is None:
+            return
+        strings_path = content_type.PartName[1:]
+        with self.archive.open(strings_path) as source:
+            self.shared_strings = _read_shared_strings_preserving_escapes(source)
+
+
+def _load_workbook(filename: Any, *, data_only: bool):
+    """Load a workbook while retaining shared-string escape markers."""
+
+    reader = _EscapedTextExcelReader(filename, data_only=data_only, read_only=False)
+    reader.read()
+    return reader.wb
+
+
+def _decode_ooxml_text(value: str) -> str:
+    """Decode OOXML's ``_xHHHH_`` text escapes in one left-to-right pass.
+
+    ``_x005F_`` is the OOXML escape for a literal underscore.  Consuming that
+    escape as a unit, without rescanning the emitted underscore, protects a
+    following ``xHHHH_`` payload from a second decode.  UTF-16 surrogate
+    escapes are combined only when an adjacent valid pair is present;
+    isolated surrogates remain as their original ASCII escape spelling.
+    """
+
+    def escaped_codepoint(index: int) -> Optional[Tuple[int, int]]:
+        if index + 7 > len(value) or value[index : index + 2] != "_x" or value[index + 6] != "_":
+            return None
+        digits = value[index + 2 : index + 6]
+        if any(ch not in "0123456789abcdefABCDEF" for ch in digits):
+            return None
+        return int(digits, 16), index + 7
+
+    out: List[str] = []
+    index = 0
+    while index < len(value):
+        parsed = escaped_codepoint(index)
+        if parsed is None:
+            out.append(value[index])
+            index += 1
+            continue
+
+        codepoint, next_index = parsed
+        if 0xD800 <= codepoint <= 0xDBFF:
+            low = escaped_codepoint(next_index)
+            if low is not None and 0xDC00 <= low[0] <= 0xDFFF:
+                combined = 0x10000 + ((codepoint - 0xD800) << 10) + (low[0] - 0xDC00)
+                out.append(chr(combined))
+                index = low[1]
+                continue
+            out.append(value[index:next_index])
+            index = next_index
+            continue
+        if 0xDC00 <= codepoint <= 0xDFFF:
+            out.append(value[index:next_index])
+            index = next_index
+            continue
+
+        out.append(chr(codepoint))
+        index = next_index
+    return "".join(out)
+
+
 def _value_to_record(value: Any, *, where: str) -> Dict[str, Any]:
-    """Normalises a Python cell value into the uniform `{kind, ...}`."""
+    """Normalises a Python cell value into the uniform `{kind, ...}`.
+
+    Error strings are classified before OOXML text decoding, while ordinary
+    text receives the one-pass decoder below:
+
+    >>> _value_to_record("_x0001_", where="doctest")["value"] == chr(1)
+    True
+    >>> _value_to_record("_x005F_x0001_", where="doctest")["value"]
+    '_x0001_'
+    >>> _value_to_record("_xD83D__xDE00_", where="doctest")["value"] == chr(0x1F600)
+    True
+    >>> _value_to_record("_xD83D_", where="doctest")["value"]
+    '_xD83D_'
+    >>> _value_to_record("#VALUE!", where="doctest")
+    {'kind': 'error', 'code': '#VALUE!'}
+    """
 
     if value is None:
         return {"kind": "blank"}
@@ -238,7 +346,7 @@ def _value_to_record(value: Any, *, where: str) -> Dict[str, Any]:
         # IronCalc's cached error values come through as plain strings.
         if value.startswith("#") and value in EXCEL_ERROR_NAMES:
             return {"kind": "error", "code": value}
-        return {"kind": "text", "value": value}
+        return {"kind": "text", "value": _decode_ooxml_text(value)}
     # openpyxl auto-converts any cell carrying a date-style number format
     # into a datetime/date/time object — e.g. YEARFRAC.xlsx A2 arrives as
     # `datetime(2008, 3, 1)` even though the XML stores `<v>39508</v>`.
@@ -353,7 +461,7 @@ def _expand_reference(ref: str) -> List[str]:
     them would blow out the setup map.
     """
 
-    ref = ref.replace("$", "")
+    ref = ref.replace("$", "").upper()
     if ":" not in ref:
         # Single cell. Validate via coordinate_from_string.
         try:
@@ -391,12 +499,75 @@ class UnboundedReference(Exception):
     """
 
 
+def _strict_indirect_references(items: List[Any]) -> List[str]:
+    """Extract only statically safe A1 targets from ``INDIRECT`` calls."""
+
+    def next_significant(index: int) -> int:
+        while index < len(items) and items[index].type in {"WSPACE", "WHITE-SPACE"}:
+            index += 1
+        return index
+
+    def is_indirect_open(item: Any) -> bool:
+        if item.type != "FUNC" or item.subtype != "OPEN" or not item.value.endswith("("):
+            return False
+        name = item.value[:-1].upper()
+        if name.startswith("_XLFN."):
+            name = name[len("_XLFN.") :]
+        return name == "INDIRECT"
+
+    def is_static_a1_flag(item: Any) -> bool:
+        if item.type != "OPERAND":
+            return False
+        if item.value.upper() == "TRUE" and item.subtype != "TEXT":
+            return True
+        return item.subtype == "NUMBER" and item.value == "1"
+
+    refs: List[str] = []
+    for index, item in enumerate(items):
+        if not is_indirect_open(item):
+            continue
+        first = next_significant(index + 1)
+        if first >= len(items) or items[first].type != "OPERAND" or items[first].subtype != "TEXT":
+            continue
+        literal = items[first].value
+        if len(literal) < 2 or not (literal.startswith('"') and literal.endswith('"')):
+            continue
+
+        following = next_significant(first + 1)
+        if following < len(items) and items[following].type == "FUNC" and items[following].subtype == "CLOSE":
+            target = literal[1:-1]
+        elif following < len(items) and items[following].type == "SEP" and items[following].subtype == "ARG":
+            flag = next_significant(following + 1)
+            close = next_significant(flag + 1)
+            if flag >= len(items) or not is_static_a1_flag(items[flag]):
+                continue
+            if close >= len(items) or items[close].type != "FUNC" or items[close].subtype != "CLOSE":
+                continue
+            target = literal[1:-1]
+        else:
+            continue
+
+        # `_expand_reference` is deliberately the final validator: it rejects
+        # R1C1, names, whole rows/columns, and sheet-qualified targets.
+        refs.extend(_expand_reference(target))
+    return refs
+
+
 def _referenced_cells(formula: str) -> List[str]:
     """Returns all cell addresses referenced by `formula`.
 
     Raises `UnboundedReference` when the formula contains a reference
     we refuse to expand. That includes whole-column / whole-row
     references and anything that fails tokenization outright.
+
+    A literal A1 target in ``INDIRECT`` is included only when the call has
+    no second argument or a literal ``TRUE``/``1`` A1-mode argument. Other
+    forms remain dynamic and are left to the caller's existing fallback:
+
+    >>> _referenced_cells('=INDIRECT("$B$2:$B$4")')
+    ['B2', 'B3', 'B4']
+    >>> _referenced_cells('=INDIRECT("B2",FALSE)')
+    []
     """
 
     try:
@@ -406,10 +577,15 @@ def _referenced_cells(formula: str) -> List[str]:
     refs: List[str] = []
     for item in tok.items:
         if item.type == "OPERAND" and item.subtype == "RANGE":
+            # openpyxl tokenizes lower-case TRUE/FALSE as a RANGE even though
+            # Excel treats them as the logical constants in a formula.
+            if item.value.upper() in {"TRUE", "FALSE"}:
+                continue
             expanded = _expand_reference(item.value)
             if not expanded:
                 raise UnboundedReference(f"cannot expand reference {item.value!r}")
             refs.extend(expanded)
+    refs.extend(_strict_indirect_references(tok.items))
     return refs
 
 
@@ -846,16 +1022,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             continue
 
         try:
-            wb_formula = openpyxl.load_workbook(
-                xlsx_path,
-                data_only=False,
-                read_only=False,
-            )
-            wb_cached = openpyxl.load_workbook(
-                xlsx_path,
-                data_only=True,
-                read_only=False,
-            )
+            wb_formula = _load_workbook(xlsx_path, data_only=False)
+            wb_cached = _load_workbook(xlsx_path, data_only=True)
         except Exception as exc:
             msg = f"load failed for {rel_source}: {exc}"
             logger.info(msg)

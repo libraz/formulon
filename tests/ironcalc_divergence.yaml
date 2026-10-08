@@ -994,16 +994,6 @@ entries:
 
   # -- Pending imported-cache failures (2026-10-08) -----------------------
   # INDEX(A1:A3,0.4) remains unregistered pending its Excel measurement.
-  - id: ironcalc_calc_tests__DATE_AND_TIME_DATEVALUE_DATEVALUE.A22
-    cause: importer-decode
-    reason: "Formula moved from row 22 to Z1: E20:E22 selects a different row than the cached scalar; preserve formula placement before adjudication. Formula: =E20:E22"
-    prefer: ironcalc
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__DATE_AND_TIME_DATEVALUE_DATEVALUE.B22
-    cause: importer-decode
-    reason: "Formula moved from row 22 to Z1: E20:E22 selects a different row than the cached scalar; preserve formula placement before adjudication. Formula: =DATEVALUE(E20:E22)"
-    prefer: ironcalc
-    first_noted: 2026-10-08
   - id: ironcalc_calc_tests__DATE_AND_TIME_NOW_TODAY_Sheet1.A2
     cause: stale-cache
     reason: "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =NOW()"
@@ -1539,21 +1529,6 @@ entries:
     reason: "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =NETWORKDAYS.INTL(B62,A62)"
     prefer: ironcalc
     first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__DATE_AND_TIME_TIMEVALUE_TIMEVALUE.A22
-    cause: importer-decode
-    reason: "Formula moved from row 22 to Z1: E20:E24 selects a different row than the cached scalar; preserve formula placement before adjudication. Formula: =E20:E24"
-    prefer: ironcalc
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__DATE_AND_TIME_WORKDAY_WORKDAY.INTL_Sheet1.A29
-    cause: importer-decode
-    reason: "Formula moved from row 29 to Z1: F26:F33 selects a different row than the cached scalar; preserve formula placement before adjudication. Formula: =F26:F33"
-    prefer: ironcalc
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__DATE_AND_TIME_WORKDAY_WORKDAY.INTL_Sheet1.B30
-    cause: importer-decode
-    reason: "Formula moved from row 30 to Z1: F26:F33 selects a different row than the cached scalar; preserve formula placement before adjudication. Formula: =F26:F33"
-    prefer: ironcalc
-    first_noted: 2026-10-08
   - id: ironcalc_calc_tests__DATE_AND_TIME_WORKDAY_WORKDAY.INTL_Sheet1.C40
     cause: unadjudicated
     reason: "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =WORKDAY(A40,B40)"
@@ -1572,16 +1547,6 @@ entries:
   - id: ironcalc_calc_tests__DATE_AND_TIME_WORKDAY_WORKDAY.INTL_Sheet1.D42
     cause: unadjudicated
     reason: "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =WORKDAY.INTL(A42,B42)"
-    prefer: ironcalc
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__DATE_AND_TIME_YEARFRAC_DATEDIF_YEARFRAC_DATEDIF.A30
-    cause: importer-decode
-    reason: "Formula moved from row 30 to Z1: F28:F31 selects a different row than the cached scalar; preserve formula placement before adjudication. Formula: =F28:F31"
-    prefer: ironcalc
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__DATE_AND_TIME_YEARFRAC_DATEDIF_YEARFRAC_DATEDIF.B31
-    cause: importer-decode
-    reason: "Formula moved from row 31 to Z1: F28:F31 selects a different row than the cached scalar; preserve formula placement before adjudication. Formula: =F28:F31"
     prefer: ironcalc
     first_noted: 2026-10-08
   - id: ironcalc_calc_tests__FINANCIAL_ACCRINT_ACCRINTM_Sheet1.I5
@@ -3309,26 +3274,6 @@ entries:
     reason: "Cached fixture result differs from Formulon; the INDIRECT target exists in setup, so a missing-dependency diagnosis is not established. Mac Excel measurement is pending. Formula: =SUM(INDIRECT(\"A4\"))"
     prefer: ironcalc
     first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_PRODUCT_SUM_Sheet1.B46
-    cause: importer-decode
-    reason: "INDIRECT target formula dependencies A5=1/0 and A6=A1 are absent from the imported setup; repair dependency capture before adjudication. Formula: =PRODUCT(INDIRECT(\"A5\"))"
-    prefer: ironcalc
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_PRODUCT_SUM_Sheet1.C46
-    cause: importer-decode
-    reason: "INDIRECT target formula dependencies A5=1/0 and A6=A1 are absent from the imported setup; repair dependency capture before adjudication. Formula: =SUM(INDIRECT(\"A5\"))"
-    prefer: ironcalc
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_PRODUCT_SUM_Sheet1.B47
-    cause: importer-decode
-    reason: "INDIRECT target formula dependencies A5=1/0 and A6=A1 are absent from the imported setup; repair dependency capture before adjudication. Formula: =PRODUCT(INDIRECT(\"A6\"))"
-    prefer: ironcalc
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_PRODUCT_SUM_Sheet1.C47
-    cause: importer-decode
-    reason: "INDIRECT target formula dependencies A5=1/0 and A6=A1 are absent from the imported setup; repair dependency capture before adjudication. Formula: =SUM(INDIRECT(\"A6\"))"
-    prefer: ironcalc
-    first_noted: 2026-10-08
   - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_PRODUCT_SUM_Sheet1.B48
     cause: unadjudicated
     reason: "Cached fixture result differs from Formulon; the INDIRECT target exists in setup, so a missing-dependency diagnosis is not established. Mac Excel measurement is pending. Formula: =PRODUCT(INDIRECT(\"A7\"))"
@@ -3337,21 +3282,6 @@ entries:
   - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_PRODUCT_SUM_Sheet1.C48
     cause: unadjudicated
     reason: "Cached fixture result differs from Formulon; the INDIRECT target exists in setup, so a missing-dependency diagnosis is not established. Mac Excel measurement is pending. Formula: =SUM(INDIRECT(\"A7\"))"
-    prefer: ironcalc
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_PRODUCT_SUM_Sheet1.B54
-    cause: importer-decode
-    reason: "INDIRECT target formula dependencies A5=1/0 and A6=A1 are absent from the imported setup; repair dependency capture before adjudication. Formula: =PRODUCT(INDIRECT(\"A5:B5\"))"
-    prefer: ironcalc
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_PRODUCT_SUM_Sheet1.C54
-    cause: importer-decode
-    reason: "INDIRECT target formula dependencies A5=1/0 and A6=A1 are absent from the imported setup; repair dependency capture before adjudication. Formula: =SUM(INDIRECT(\"A5:B5\"))"
-    prefer: ironcalc
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_PRODUCT_SUM_Sheet1.B55
-    cause: importer-decode
-    reason: "INDIRECT target formula dependencies A5=1/0 and A6=A1 are absent from the imported setup; repair dependency capture before adjudication. Formula: =PRODUCT(INDIRECT(\"A6:B6\"))"
     prefer: ironcalc
     first_noted: 2026-10-08
   - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_SERIESSUM_Sheet1.C1
@@ -3413,151 +3343,6 @@ entries:
     cause: unadjudicated
     reason: "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.T.INV(D19,B19)"
     prefer: ironcalc
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B1
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A1)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B2
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A2)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B3
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A3)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B4
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A4)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B5
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A5)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B6
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A6)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B7
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A7)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B8
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A8)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B11
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A11)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B12
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A12)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B13
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A13)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B14
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A14)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B15
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A15)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B16
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A16)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B17
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A17)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B18
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A18)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B19
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A19)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B20
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A20)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B21
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A21)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B22
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A22)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B23
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A23)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B24
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A24)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B25
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A25)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B26
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A26)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B27
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A27)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B28
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A28)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B29
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A29)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B30
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A30)"
-    prefer: mac
-    first_noted: 2026-10-08
-  - id: ironcalc_calc_tests__TEXT_CHAR_Sheet1.B31
-    cause: importer-decode
-    reason: "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A31)"
-    prefer: mac
     first_noted: 2026-10-08
   - id: ironcalc_calc_tests_arithmetic_Sheet2.C1
     cause: unadjudicated
@@ -3763,5 +3548,45 @@ entries:
   - id: ironcalc_calc_tests_simple_functions_INDEX.H6
     cause: mac-probe
     reason: 'INDEX(A1:A3,0.4) truncates the row to zero and spills the column in Mac Excel 365; the legacy Windows cache contains #VALUE! from implicit intersection. Formulon matches the Mac spill. Probe: locale_profile_measurements.index_fractional_row.'
+    prefer: mac
+    first_noted: 2026-10-08
+
+  # -- Legacy implicit intersection over an aligned range -----------------
+  # The cache holds the row-intersected cell of a legacy formula; Mac Excel
+  # 365 spills the same formula and shows the range's top-left cell.
+  # Formulon matches the Mac spill. Probe: implicit_intersection.
+  - id: ironcalc_calc_tests__DATE_AND_TIME_DATEVALUE_DATEVALUE.A22
+    cause: mac-probe
+    reason: "=E20:E22 at A22: the legacy cache intersects row 22; Mac Excel 365 spills and shows the top-left cell. Probe: implicit_intersection.bare_col_range_row_included."
+    prefer: mac
+    first_noted: 2026-10-08
+  - id: ironcalc_calc_tests__DATE_AND_TIME_DATEVALUE_DATEVALUE.B22
+    cause: mac-probe
+    reason: "=DATEVALUE(E20:E22) at B22: the legacy cache intersects row 22; Mac Excel 365 spills and shows the top-left cell. Probe: implicit_intersection.bare_col_range_row_included."
+    prefer: mac
+    first_noted: 2026-10-08
+  - id: ironcalc_calc_tests__DATE_AND_TIME_TIMEVALUE_TIMEVALUE.A22
+    cause: mac-probe
+    reason: "=E20:E24 at A22: the legacy cache intersects row 22; Mac Excel 365 spills and shows the top-left cell. Probe: implicit_intersection.bare_col_range_row_included."
+    prefer: mac
+    first_noted: 2026-10-08
+  - id: ironcalc_calc_tests__DATE_AND_TIME_WORKDAY_WORKDAY.INTL_Sheet1.A29
+    cause: mac-probe
+    reason: "=F26:F33 at A29: the legacy cache intersects row 29; Mac Excel 365 spills and shows the top-left cell. Probe: implicit_intersection.bare_col_range_row_included."
+    prefer: mac
+    first_noted: 2026-10-08
+  - id: ironcalc_calc_tests__DATE_AND_TIME_WORKDAY_WORKDAY.INTL_Sheet1.B30
+    cause: mac-probe
+    reason: "=F26:F33 at B30: the legacy cache intersects row 30; Mac Excel 365 spills and shows the top-left cell. Probe: implicit_intersection.bare_col_range_row_included."
+    prefer: mac
+    first_noted: 2026-10-08
+  - id: ironcalc_calc_tests__DATE_AND_TIME_YEARFRAC_DATEDIF_YEARFRAC_DATEDIF.A30
+    cause: mac-probe
+    reason: "=F28:F31 at A30: the legacy cache intersects row 30; Mac Excel 365 spills and shows the top-left cell. Probe: implicit_intersection.bare_col_range_row_included."
+    prefer: mac
+    first_noted: 2026-10-08
+  - id: ironcalc_calc_tests__DATE_AND_TIME_YEARFRAC_DATEDIF_YEARFRAC_DATEDIF.B31
+    cause: mac-probe
+    reason: "=F28:F31 at B31: the legacy cache intersects row 31; Mac Excel 365 spills and shows the top-left cell. Probe: implicit_intersection.bare_col_range_row_included."
     prefer: mac
     first_noted: 2026-10-08

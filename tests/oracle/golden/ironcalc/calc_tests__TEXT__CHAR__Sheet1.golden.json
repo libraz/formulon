@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T08:32:30Z"
+    "generated_at": "2026-10-08T11:05:54Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -24,7 +24,10 @@
           "value": 1.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A1)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0001"
+      }
     },
     {
       "id": "B2",
@@ -35,7 +38,10 @@
           "value": 2.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A2)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0002"
+      }
     },
     {
       "id": "B3",
@@ -46,7 +52,10 @@
           "value": 3.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A3)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0003"
+      }
     },
     {
       "id": "B4",
@@ -57,7 +66,10 @@
           "value": 4.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A4)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0004"
+      }
     },
     {
       "id": "B5",
@@ -68,7 +80,10 @@
           "value": 5.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A5)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0005"
+      }
     },
     {
       "id": "B6",
@@ -79,7 +94,10 @@
           "value": 6.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A6)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0006"
+      }
     },
     {
       "id": "B7",
@@ -90,7 +108,10 @@
           "value": 7.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A7)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0007"
+      }
     },
     {
       "id": "B8",
@@ -101,7 +122,10 @@
           "value": 8.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A8)"
+      "expect": {
+        "kind": "text",
+        "value": "\b"
+      }
     },
     {
       "id": "B9",
@@ -140,7 +164,10 @@
           "value": 11.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A11)"
+      "expect": {
+        "kind": "text",
+        "value": "\u000b"
+      }
     },
     {
       "id": "B12",
@@ -151,7 +178,10 @@
           "value": 12.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A12)"
+      "expect": {
+        "kind": "text",
+        "value": "\f"
+      }
     },
     {
       "id": "B13",
@@ -162,7 +192,10 @@
           "value": 13.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A13)"
+      "expect": {
+        "kind": "text",
+        "value": "\r"
+      }
     },
     {
       "id": "B14",
@@ -173,7 +206,10 @@
           "value": 14.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A14)"
+      "expect": {
+        "kind": "text",
+        "value": "\u000e"
+      }
     },
     {
       "id": "B15",
@@ -184,7 +220,10 @@
           "value": 15.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A15)"
+      "expect": {
+        "kind": "text",
+        "value": "\u000f"
+      }
     },
     {
       "id": "B16",
@@ -195,7 +234,10 @@
           "value": 16.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A16)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0010"
+      }
     },
     {
       "id": "B17",
@@ -206,7 +248,10 @@
           "value": 17.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A17)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0011"
+      }
     },
     {
       "id": "B18",
@@ -217,7 +262,10 @@
           "value": 18.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A18)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0012"
+      }
     },
     {
       "id": "B19",
@@ -228,7 +276,10 @@
           "value": 19.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A19)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0013"
+      }
     },
     {
       "id": "B20",
@@ -239,7 +290,10 @@
           "value": 20.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A20)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0014"
+      }
     },
     {
       "id": "B21",
@@ -250,7 +304,10 @@
           "value": 21.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A21)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0015"
+      }
     },
     {
       "id": "B22",
@@ -261,7 +318,10 @@
           "value": 22.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A22)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0016"
+      }
     },
     {
       "id": "B23",
@@ -272,7 +332,10 @@
           "value": 23.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A23)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0017"
+      }
     },
     {
       "id": "B24",
@@ -283,7 +346,10 @@
           "value": 24.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A24)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0018"
+      }
     },
     {
       "id": "B25",
@@ -294,7 +360,10 @@
           "value": 25.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A25)"
+      "expect": {
+        "kind": "text",
+        "value": "\u0019"
+      }
     },
     {
       "id": "B26",
@@ -305,7 +374,10 @@
           "value": 26.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A26)"
+      "expect": {
+        "kind": "text",
+        "value": "\u001a"
+      }
     },
     {
       "id": "B27",
@@ -316,7 +388,10 @@
           "value": 27.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A27)"
+      "expect": {
+        "kind": "text",
+        "value": "\u001b"
+      }
     },
     {
       "id": "B28",
@@ -327,7 +402,10 @@
           "value": 28.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A28)"
+      "expect": {
+        "kind": "text",
+        "value": "\u001c"
+      }
     },
     {
       "id": "B29",
@@ -338,7 +416,10 @@
           "value": 29.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A29)"
+      "expect": {
+        "kind": "text",
+        "value": "\u001d"
+      }
     },
     {
       "id": "B30",
@@ -349,7 +430,10 @@
           "value": 30.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A30)"
+      "expect": {
+        "kind": "text",
+        "value": "\u001e"
+      }
     },
     {
       "id": "B31",
@@ -360,7 +444,10 @@
           "value": 31.0
         }
       },
-      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A31)"
+      "expect": {
+        "kind": "text",
+        "value": "\u001f"
+      }
     },
     {
       "id": "B32",

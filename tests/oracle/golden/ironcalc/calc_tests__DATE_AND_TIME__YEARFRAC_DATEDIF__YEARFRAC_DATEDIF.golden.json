@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T07:47:24Z"
+    "generated_at": "2026-10-08T13:02:05Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -1809,7 +1809,7 @@
           "value": 3.0
         }
       },
-      "skipped": "Formula moved from row 30 to Z1: F28:F31 selects a different row than the cached scalar; preserve formula placement before adjudication. Formula: =F28:F31"
+      "skipped": "=F28:F31 at A30: the legacy cache intersects row 30; Mac Excel 365 spills and shows the top-left cell. Probe: implicit_intersection.bare_col_range_row_included."
     },
     {
       "id": "B31",
@@ -1824,7 +1824,7 @@
           "value": 3.0
         }
       },
-      "skipped": "Formula moved from row 31 to Z1: F28:F31 selects a different row than the cached scalar; preserve formula placement before adjudication. Formula: =F28:F31"
+      "skipped": "=F28:F31 at B31: the legacy cache intersects row 31; Mac Excel 365 spills and shows the top-left cell. Probe: implicit_intersection.bare_col_range_row_included."
     },
     {
       "id": "A35",
