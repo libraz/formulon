@@ -270,14 +270,15 @@ TEST(WorkbookRecalc, RedefiningDefinedNameInvalidatesDependents) {
 TEST(WorkbookRecalc, AddingDefinedNameRecalculatesNameErrorDependents) {
   // An initially unresolved name produces #NAME?. Adding its definition must
   // rebuild the formula graph so the already-entered formula becomes live.
+  // The name must not be a built-in (RATE), which evaluates as a function value.
   Workbook wb = Workbook::create();
   wb.set_excel_profile(mac_365_ja_jp_profile());
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Rate*10")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=TaxRate*10")));
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   ASSERT_TRUE(StoredValue(wb, 0U, 0U, 0U).is_error());
   EXPECT_EQ(StoredValue(wb, 0U, 0U, 0U).as_error(), ErrorCode::Name);
 
-  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Rate", "=2")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("TaxRate", "=2")));
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   const Value a1 = StoredValue(wb, 0U, 0U, 0U);
   ASSERT_TRUE(a1.is_number());

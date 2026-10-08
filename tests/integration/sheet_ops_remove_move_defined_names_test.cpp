@@ -477,11 +477,13 @@ TEST(WorkbookSheetOps, SetDefinedNameRejectsEmptyName) {
 }
 
 TEST(WorkbookSheetOps, BulkDefinedNameReplacementReindexesAliasesAndPreservesUnrelatedSpill) {
+  // Origin, not BASE: a removed name that is also a built-in evaluates as a
+  // function value instead of #NAME?.
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(2.0))));
 
-  wb.set_defined_names({DefinedName{"Base", "=A1", -1, false, ""}, DefinedName{"Alias", "=Base", -1, false, ""},
+  wb.set_defined_names({DefinedName{"Origin", "=A1", -1, false, ""}, DefinedName{"Alias", "=Origin", -1, false, ""},
                         DefinedName{"UnrelatedSpill", "=SEQUENCE(2,1)", -1, false, ""}});
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=Alias")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 3U, "=UnrelatedSpill")));
@@ -491,10 +493,10 @@ TEST(WorkbookSheetOps, BulkDefinedNameReplacementReindexesAliasesAndPreservesUnr
   ASSERT_TRUE(wb.sheet(0U).resolve_cell_value(1U, 3U).is_number());
   EXPECT_DOUBLE_EQ(wb.sheet(0U).resolve_cell_value(1U, 3U).as_number(), 2.0);
 
-  // Retarget Base while keeping Alias unchanged. The unrelated named spill
+  // Retarget Origin while keeping Alias unchanged. The unrelated named spill
   // changes only its comment/hidden metadata and must stay committed while
   // the affected alias formula is re-registered.
-  wb.set_defined_names({DefinedName{"Base", "=A2", -1, false, ""}, DefinedName{"Alias", "=Base", -1, false, ""},
+  wb.set_defined_names({DefinedName{"Origin", "=A2", -1, false, ""}, DefinedName{"Alias", "=Origin", -1, false, ""},
                         DefinedName{"UnrelatedSpill", "=SEQUENCE(2,1)", -1, true, "preserve"}});
   const Value spill_before_recalc = wb.sheet(0U).resolve_cell_value(1U, 3U);
   ASSERT_TRUE(spill_before_recalc.is_number());
@@ -510,9 +512,9 @@ TEST(WorkbookSheetOps, BulkDefinedNameReplacementReindexesAliasesAndPreservesUnr
   ASSERT_TRUE(wb.sheet(0U).resolve_cell_value(0U, 1U).is_number());
   EXPECT_DOUBLE_EQ(wb.sheet(0U).resolve_cell_value(0U, 1U).as_number(), 8.0);
 
-  // Removing Base also removes the value behind Alias. The unrelated spill
+  // Removing Origin also removes the value behind Alias. The unrelated spill
   // remains available and is not swept by the name-list replacement.
-  wb.set_defined_names({DefinedName{"Alias", "=Base", -1, false, ""},
+  wb.set_defined_names({DefinedName{"Alias", "=Origin", -1, false, ""},
                         DefinedName{"UnrelatedSpill", "=SEQUENCE(2,1)", -1, true, "preserve"}});
   const Value spill_before_remove_recalc = wb.sheet(0U).resolve_cell_value(1U, 3U);
   ASSERT_TRUE(spill_before_remove_recalc.is_number());
