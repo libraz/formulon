@@ -105,18 +105,12 @@ bool resolve_field_column(const Value& field_value, const std::vector<Value>& db
     return true;
   }
   if (field_value.is_text()) {
-    // Mac Excel ja-JP folds the field-arg text and the database header
-    // text through a partial kana fold before comparing: hira/kata,
-    // full-width Latin -> ASCII, and full-width digits -> ASCII digits
-    // are folded; half-width katakana (U+FF61..U+FF9D) and the related
-    // standalone voicing marks are NOT folded. See
-    // `tests/oracle/cases/dfunc_kana_folding_probes.yaml`, in particular
-    // `dsum_field_arg_halfwidth_vs_fullwidth_header` (expects #VALUE!,
-    // i.e. no match) versus the hira/full-width-Latin/full-width-digit
-    // sibling cases (which all match).
+    // Mac Excel folds the field-argument text and database header text
+    // through the full kana/width fold. Windows keeps the existing
+    // comparison, so half-width and full-width kana remain distinct there.
     const bool jp_fold = width_folding(profile) == WidthFolding::kMac;
     const std::string folded_needle =
-        jp_fold ? fold_jp_text(field_value.as_text(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false)
+        jp_fold ? fold_jp_text(field_value.as_text(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/true)
                 : std::string(field_value.as_text());
     for (std::uint32_t c = 0; c < db_cols; ++c) {
       const Value& hdr = db_cells[c];
@@ -128,7 +122,7 @@ bool resolve_field_column(const Value& field_value, const std::vector<Value>& db
         continue;
       }
       const std::string folded_hdr =
-          jp_fold ? fold_jp_text(coerced.value(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false)
+          jp_fold ? fold_jp_text(coerced.value(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/true)
                   : coerced.value();
       if (strings::case_insensitive_eq(std::string_view(folded_hdr), std::string_view(folded_needle))) {
         *out_col_index = c;
@@ -156,18 +150,13 @@ std::uint32_t find_db_column(const Value& header_needle, const std::vector<Value
   if (!needle_coerced) {
     return db_cols;
   }
-  // Mac Excel ja-JP folds the criteria-block header text and the database
-  // header text through a partial kana fold before comparing: hira/kata,
-  // full-width Latin -> ASCII, and full-width digits -> ASCII digits are
-  // folded; half-width katakana (U+FF61..U+FF9D) and the related
-  // standalone voicing marks are NOT folded. See
-  // `tests/oracle/cases/dfunc_kana_folding_probes.yaml`, in particular
-  // `dsum_criteria_header_halfwidth_vs_fullwidth_db_header` (expects 0,
-  // i.e. no match) versus the hira and full-width-Latin sibling cases
-  // (which both match).
+  // Mac criteria-header matching follows the locale fact table: ja-JP keeps
+  // half-width kana distinct, while en-US folds it with the other width and
+  // kana variants. Windows keeps the existing comparison for both locales.
   const bool jp_fold = width_folding(profile) == WidthFolding::kMac;
+  const bool fold_halfwidth_kana = jp_fold && !locale_facts(profile).criteria_header_keeps_halfwidth_kana;
   const std::string folded_needle =
-      jp_fold ? fold_jp_text(needle_coerced.value(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false)
+      jp_fold ? fold_jp_text(needle_coerced.value(), /*fold_fullwidth_digits=*/true, fold_halfwidth_kana)
               : needle_coerced.value();
   for (std::uint32_t c = 0; c < db_cols; ++c) {
     auto hdr_coerced = coerce_to_text(db_cells[c]);
@@ -175,7 +164,7 @@ std::uint32_t find_db_column(const Value& header_needle, const std::vector<Value
       continue;
     }
     const std::string folded_hdr =
-        jp_fold ? fold_jp_text(hdr_coerced.value(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false)
+        jp_fold ? fold_jp_text(hdr_coerced.value(), /*fold_fullwidth_digits=*/true, fold_halfwidth_kana)
                 : hdr_coerced.value();
     if (strings::case_insensitive_eq(std::string_view(folded_hdr), std::string_view(folded_needle))) {
       return c;

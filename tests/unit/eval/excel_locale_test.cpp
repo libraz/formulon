@@ -51,6 +51,7 @@ void ExpectFactsEqual(const LocaleFacts& lhs, const LocaleFacts& rhs) {
   EXPECT_EQ(lhs.weekday_short, rhs.weekday_short);
   EXPECT_EQ(lhs.char_snaps_near_integer, rhs.char_snaps_near_integer);
   EXPECT_EQ(lhs.phonetic, rhs.phonetic);
+  EXPECT_EQ(lhs.criteria_header_keeps_halfwidth_kana, rhs.criteria_header_keeps_halfwidth_kana);
 }
 
 void ExpectJapaneseFacts(const LocaleFacts& facts) {
@@ -73,6 +74,7 @@ void ExpectJapaneseFacts(const LocaleFacts& facts) {
   EXPECT_EQ(facts.weekday_short, (std::array<std::string_view, 7>{"日", "月", "火", "水", "木", "金", "土"}));
   EXPECT_FALSE(facts.char_snaps_near_integer);
   EXPECT_TRUE(facts.phonetic);
+  EXPECT_TRUE(facts.criteria_header_keeps_halfwidth_kana);
 }
 
 void ExpectEnglishFacts(const LocaleFacts& facts) {
@@ -95,6 +97,7 @@ void ExpectEnglishFacts(const LocaleFacts& facts) {
   EXPECT_EQ(facts.weekday_short, (std::array<std::string_view, 7>{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}));
   EXPECT_TRUE(facts.char_snaps_near_integer);
   EXPECT_FALSE(facts.phonetic);
+  EXPECT_FALSE(facts.criteria_header_keeps_halfwidth_kana);
 }
 
 TEST(ExcelLocale, LocaleFactsHaveExactJapaneseAndEnglishValues) {

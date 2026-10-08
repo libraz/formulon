@@ -86,9 +86,7 @@ std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits, boo
     }
 
     // Full-width ASCII U+FF01..U+FF5E -> half-width ASCII (-0xFEE0).
-    // Lookup callers (MATCH / VLOOKUP / HLOOKUP / XLOOKUP / XMATCH) pass
-    // `fold_fullwidth_digits = false` to keep U+FF10..U+FF19 unfolded,
-    // matching the Mac Excel asymmetry documented in the header.
+    // `fold_fullwidth_digits = false` keeps U+FF10..U+FF19 unfolded.
     if (cp >= 0xFF01u && cp <= 0xFF5Eu) {
       const bool is_fullwidth_digit = cp >= 0xFF10u && cp <= 0xFF19u;
       if (is_fullwidth_digit && !fold_fullwidth_digits) {
@@ -108,12 +106,9 @@ std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits, boo
     }
 
     // Half-width katakana U+FF61..U+FF9D: map to full-width, optionally
-    // composing a trailing ﾞ / ﾟ from the next codepoint. D-function
-    // header callers pass `fold_halfwidth_kana = false`, in which case
-    // we suppress the entire branch — including the voicing-mark
-    // composition — so that `ｶﾞ` stays as the two-codepoint sequence
-    // FF76 FF9E and does not compose to ガ. See header for the Mac Excel
-    // empirical asymmetry that motivates this.
+    // composing a trailing ﾞ / ﾟ from the next codepoint. With
+    // `fold_halfwidth_kana = false` the whole branch is skipped, so `ｶﾞ`
+    // stays FF76 FF9E (see the header for the caller that needs it).
     if (fold_halfwidth_kana && cp >= 0xFF61u && cp <= 0xFF9Du) {
       std::uint32_t base = half_to_full_kana_or_punct(cp);
       if (is_voicing_base(base) && i + n < input.size()) {

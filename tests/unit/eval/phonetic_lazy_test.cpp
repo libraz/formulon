@@ -92,6 +92,52 @@ TEST(BuiltinsPhoneticLazy, AnnotatedAsciiCellReturnsKana) {
   EXPECT_EQ(v.as_text(), "furigana");
 }
 
+TEST(BuiltinsPhoneticLazy, ProfileControlsAnnotatedAndUnannotatedText) {
+  struct ProfileCase {
+    ExcelProfile profile;
+    bool returns_text;
+  };
+  const ProfileCase cases[] = {
+      {mac_365_ja_jp_profile(), true},
+      {win_365_ja_jp_profile(), true},
+      {mac_365_en_us_profile(), false},
+      {win_365_en_us_profile(), false},
+  };
+
+  for (const ProfileCase& test_case : cases) {
+    SCOPED_TRACE(excel_profile_id(test_case.profile));
+
+    Workbook annotated = MakeSingleSheetWorkbook();
+    annotated.set_excel_profile(test_case.profile);
+    annotated.sheet(0).set_cell_value(0, 0, Value::text("山田"));
+    annotated.sheet(0).set_cell_phonetic(0, 0, "やまだ");
+    EvalState annotated_state;
+    const EvalContext annotated_ctx(annotated, annotated.sheet(0), annotated_state);
+    const Value annotated_value = EvalWith("=PHONETIC(A1)", annotated_ctx);
+    if (test_case.returns_text) {
+      ASSERT_TRUE(annotated_value.is_text());
+      EXPECT_EQ(annotated_value.as_text(), "やまだ");
+    } else {
+      ASSERT_TRUE(annotated_value.is_error());
+      EXPECT_EQ(annotated_value.as_error(), ErrorCode::NA);
+    }
+
+    Workbook unannotated = MakeSingleSheetWorkbook();
+    unannotated.set_excel_profile(test_case.profile);
+    unannotated.sheet(0).set_cell_value(0, 0, Value::text("plain"));
+    EvalState unannotated_state;
+    const EvalContext unannotated_ctx(unannotated, unannotated.sheet(0), unannotated_state);
+    const Value unannotated_value = EvalWith("=PHONETIC(A1)", unannotated_ctx);
+    if (test_case.returns_text) {
+      ASSERT_TRUE(unannotated_value.is_text());
+      EXPECT_EQ(unannotated_value.as_text(), "plain");
+    } else {
+      ASSERT_TRUE(unannotated_value.is_error());
+      EXPECT_EQ(unannotated_value.as_error(), ErrorCode::NA);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Ref path: partial annotation keeps the unannotated remainder
 // ---------------------------------------------------------------------------

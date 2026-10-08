@@ -18,6 +18,7 @@
 #include "parser/parser.h"
 #include "sheet.h"
 #include "test_eval_helpers.h"
+#include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -75,6 +76,34 @@ TEST(BuiltinsXLookup, ArrayLiteralLookupAndReturnArrays) {
   const Value v = EvalSource("=XLOOKUP(2,{1,2,3},{10,20,30})");
   ASSERT_TRUE(v.is_number()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(v.as_number(), 20.0);
+}
+
+TEST(BuiltinsXLookup, ExactFullwidthDigitsFollowHostFolding) {
+  struct ProfileCase {
+    ExcelProfile profile;
+    bool folds_fullwidth_digits;
+  };
+  const ProfileCase cases[] = {
+      {mac_365_ja_jp_profile(), true},
+      {mac_365_en_us_profile(), true},
+      {win_365_ja_jp_profile(), false},
+      {win_365_en_us_profile(), false},
+  };
+
+  for (const ProfileCase& test_case : cases) {
+    SCOPED_TRACE(excel_profile_id(test_case.profile));
+    Workbook wb = Workbook::create();
+    wb.set_excel_profile(test_case.profile);
+    const Value v =
+        formulon::test::EvalSourceIn("=XLOOKUP(\"１２３\",{\"123\";\"456\"},{\"hit\";\"miss\"})", wb, wb.sheet(0));
+    if (test_case.folds_fullwidth_digits) {
+      ASSERT_TRUE(v.is_text());
+      EXPECT_EQ(v.as_text(), "hit");
+    } else {
+      ASSERT_TRUE(v.is_error());
+      EXPECT_EQ(v.as_error(), ErrorCode::NA);
+    }
+  }
 }
 
 TEST(BuiltinsXLookup, ArrayLookupValuePreservesVerticalAndHorizontalRangeShape) {

@@ -7,11 +7,11 @@
 // the un-evaluated argument's `Reference` AST so the eager dispatcher
 // cannot flatten the cell to a Value before the kana is read.
 //
-// For non-Ref arguments PHONETIC eagerly evaluates the subtree and
-// applies Mac's strict-text passthrough surface: text passes through
-// unchanged, blank yields "", numeric / boolean / array / error values
-// surface #N/A. Errors propagate through the eager arm before the
-// passthrough fires.
+// For ja-JP, non-Ref arguments eagerly evaluate the subtree and apply the
+// strict-text passthrough surface: text passes through unchanged, blank
+// yields "", numeric / boolean / array / error values surface #N/A. The
+// en-US profile returns #N/A after arity validation. Errors propagate
+// through the ja-JP eager arm before the passthrough fires.
 //
 // See `eval/lazy_impls.h` for the shared `LazyImpl` signature and the
 // dispatch-table contract in `tree_walker.cpp`.
@@ -53,13 +53,13 @@ class FunctionRegistry;
 /// acts as an insertion.
 std::string compose_phonetic(std::string_view surface, const std::vector<PhoneticRun>& runs);
 
-/// `PHONETIC(reference)` — returns the IME-typed kana annotation
+/// `PHONETIC(reference)` — in ja-JP, returns the IME-typed kana annotation
 /// attached to the referenced cell, or the cell's surface text when no
 /// annotation is present. Non-text values surface `#N/A`; blanks
 /// surface `""`. Whole-row / whole-column references surface `#VALUE!`.
 /// Non-Ref arguments are eagerly evaluated and the same text /
 /// blank / #N/A passthrough is applied to the resulting scalar (errors
-/// propagate).
+/// propagate). The en-US profile returns `#N/A` after arity validation.
 Value eval_phonetic_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx);
 

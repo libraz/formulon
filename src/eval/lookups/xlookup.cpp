@@ -94,10 +94,9 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, i
   }
   // Same kind — compare values directly.
   if (cell_rank == 1) {
-    // ja-JP fold (see classic.cpp::lookup_scan) before the ASCII
+    // Mac fold (see classic.cpp::lookup_scan) before the ASCII
     // case-insensitive compare so kana variants order together in
-    // XLOOKUP / XMATCH approximate paths. Full-width digits are NOT
-    // folded for lookups (Mac asymmetry — see jp_fold.h).
+    // XLOOKUP / XMATCH approximate paths. Digit folding here is unmeasured.
     if (width_folding(profile) == WidthFolding::kMac) {
       *out_cmp = strings::case_insensitive_compare(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false),
                                                    fold_jp_text(lookup.as_text(), /*fold_fullwidth_digits=*/false));
@@ -137,10 +136,8 @@ bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards, Ex
     if (!cell.is_text()) {
       return false;
     }
-    // ja-JP fold (see classic.cpp::lookup_scan) before lower-casing so
-    // XLOOKUP / XMATCH exact mode treats kana / full-width variants
-    // identically to Mac Excel. Full-width digits are NOT folded for
-    // lookups (Mac asymmetry — see jp_fold.h).
+    // Mac Excel folds kana, width variants, and full-width digits before
+    // lower-casing in exact mode. Windows retains its narrower comparison.
     //
     // The Windows path keeps the broad kana fold OFF (Windows Excel does
     // not fold hiragana<->katakana or plain half/full width in lookups —
@@ -149,9 +146,9 @@ bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards, Ex
     // ﾟ is a malformed encoding both Windows and Mac compose before the
     // exact-match compare.
     const bool jp_fold = width_folding(profile) == WidthFolding::kMac;
-    const std::string pat_lower = jp_fold ? fold_and_lower(lookup.as_text(), /*fold_fullwidth_digits=*/false)
+    const std::string pat_lower = jp_fold ? fold_and_lower(lookup.as_text(), /*fold_fullwidth_digits=*/true)
                                           : strings::to_ascii_lower(compose_jp_halfwidth_voicing(lookup.as_text()));
-    const std::string cell_lower = jp_fold ? fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/false)
+    const std::string cell_lower = jp_fold ? fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/true)
                                            : strings::to_ascii_lower(compose_jp_halfwidth_voicing(cell.as_text()));
     if (wildcards) {
       return wildcard_match(pat_lower, cell_lower);

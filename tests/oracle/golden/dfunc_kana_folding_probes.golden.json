@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T06:50:06Z"
+    "generated_at": "2026-10-08T09:55:07Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -237,6 +237,48 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dsum_field_arg_halfwidth_kana_vs_fullwidth_kana_header",
+      "formula": "=DSUM(A1:B3, \"ｳﾘｱｹﾞ\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "フルーツ"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ウリアゲ"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "フルーツ"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "アップル"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 300.0
       }
     },
     {

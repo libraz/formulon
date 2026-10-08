@@ -97,6 +97,75 @@ TEST(BuiltinsDatabase, DSumSimpleHeaderMatch) {
   EXPECT_DOUBLE_EQ(v.as_number(), 300.0);
 }
 
+TEST(BuiltinsDatabase, DSumFieldHeaderHalfwidthKanaFollowsHostFolding) {
+  struct ProfileCase {
+    ExcelProfile profile;
+    bool folds_halfwidth_kana;
+  };
+  const ProfileCase cases[] = {
+      {mac_365_ja_jp_profile(), true},
+      {mac_365_en_us_profile(), true},
+      {win_365_ja_jp_profile(), false},
+      {win_365_en_us_profile(), false},
+  };
+
+  for (const ProfileCase& test_case : cases) {
+    SCOPED_TRACE(excel_profile_id(test_case.profile));
+    Workbook wb = Workbook::create();
+    wb.set_excel_profile(test_case.profile);
+    auto& sheet = wb.sheet(0);
+    sheet.set_cell_value(0, 0, Value::text("フルーツ"));
+    sheet.set_cell_value(0, 1, Value::text("ウリアゲ"));
+    sheet.set_cell_value(1, 0, Value::text("アップル"));
+    sheet.set_cell_value(1, 1, Value::number(100.0));
+    sheet.set_cell_value(2, 0, Value::text("アップル"));
+    sheet.set_cell_value(2, 1, Value::number(200.0));
+    sheet.set_cell_value(0, 3, Value::text("フルーツ"));
+    sheet.set_cell_value(1, 3, Value::text("アップル"));
+
+    const Value v = EvalIn("=DSUM(A1:B3, \"ｳﾘｱｹﾞ\", D1:D2)", wb, wb.sheet(0));
+    if (test_case.folds_halfwidth_kana) {
+      ASSERT_TRUE(v.is_number());
+      EXPECT_DOUBLE_EQ(v.as_number(), 300.0);
+    } else {
+      ASSERT_TRUE(v.is_error());
+      EXPECT_EQ(v.as_error(), ErrorCode::Value);
+    }
+  }
+}
+
+TEST(BuiltinsDatabase, DSumCriteriaHeaderHalfwidthKanaUsesLocaleRule) {
+  struct ProfileCase {
+    ExcelProfile profile;
+    double expected;
+  };
+  const ProfileCase cases[] = {
+      {mac_365_ja_jp_profile(), 0.0},
+      {mac_365_en_us_profile(), 300.0},
+      {win_365_ja_jp_profile(), 0.0},
+      {win_365_en_us_profile(), 0.0},
+  };
+
+  for (const ProfileCase& test_case : cases) {
+    SCOPED_TRACE(excel_profile_id(test_case.profile));
+    Workbook wb = Workbook::create();
+    wb.set_excel_profile(test_case.profile);
+    auto& sheet = wb.sheet(0);
+    sheet.set_cell_value(0, 0, Value::text("フルーツ"));
+    sheet.set_cell_value(0, 1, Value::text("売上"));
+    sheet.set_cell_value(1, 0, Value::text("アップル"));
+    sheet.set_cell_value(1, 1, Value::number(100.0));
+    sheet.set_cell_value(2, 0, Value::text("アップル"));
+    sheet.set_cell_value(2, 1, Value::number(200.0));
+    sheet.set_cell_value(0, 3, Value::text("ﾌﾙｰﾂ"));
+    sheet.set_cell_value(1, 3, Value::text("アップル"));
+
+    const Value v = EvalIn("=DSUM(A1:B3, \"売上\", D1:D2)", wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number());
+    EXPECT_DOUBLE_EQ(v.as_number(), test_case.expected);
+  }
+}
+
 TEST(BuiltinsDatabase, DSumNumericFieldSelector) {
   Workbook wb = MakeFruitWorkbook();
   SetSingleFruitCriterion(wb, "Apple");

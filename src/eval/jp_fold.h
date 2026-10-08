@@ -18,28 +18,17 @@
 // case-insensitive ASCII compare, so e.g. `＊` -> `*` is then matched as
 // the literal byte `*` rather than as a wildcard.
 //
-// Caveat for the lookup family: empirically Mac Excel does NOT fold
-// full-width DIGITS U+FF10..U+FF19 in MATCH / VLOOKUP / HLOOKUP / XLOOKUP /
-// XMATCH text-equality, even though it does fold them in COUNTIF / SUMIF
-// (see `tests/oracle/cases/lookup_kana_folding_probes.yaml` vs
-// `tests/oracle/cases/countif_kana_folding_probes.yaml`). Lookup callers
-// pass `fold_fullwidth_digits = false` to suppress that single sub-range;
-// criteria callers (the default) keep folding digits.
+// Exact-match lookups (MATCH / VLOOKUP / HLOOKUP / XLOOKUP / XMATCH) fold
+// full-width digits like criteria do; the approximate-order comparisons
+// still pass `fold_fullwidth_digits = false`, which is unmeasured.
 //
-// Caveat for the D-function header path: empirically Mac Excel does NOT
-// fold half-width katakana (U+FF61..U+FF9D, plus the standalone voicing
-// marks U+FF9E / U+FF9F) when resolving the `field` argument or a
-// criteria-block header against the database header row, even though it
-// does fold them in COUNTIF / SUMIF cell-vs-criterion comparisons (see
-// `tests/oracle/cases/dfunc_kana_folding_probes.yaml`, in particular
-// `dsum_criteria_header_halfwidth_vs_fullwidth_db_header` and
-// `dsum_field_arg_halfwidth_vs_fullwidth_header`). D-function callers
-// pass `fold_halfwidth_kana = false` to suppress the entire half-width
-// katakana branch (including the voicing-mark composition path, so e.g.
-// `ｶﾞ` stays as the two-codepoint sequence FF76 FF9E and does not
-// compose to ガ). Criteria and lookup callers keep half-width folding on.
-// Do not "fix" this asymmetry without re-running the oracle against
-// Mac Excel 365 — it is a real product behaviour, not a bug.
+// D-function headers: the `field` argument folds half-width katakana like
+// every other Mac comparison. A criteria-block header does too, except in
+// ja-JP, where half-width katakana stays distinct
+// (`LocaleFacts::criteria_header_keeps_halfwidth_kana`); that caller passes
+// `fold_halfwidth_kana = false`, which also skips voicing-mark composition
+// (`ｶﾞ` stays FF76 FF9E). Both rules are measured in
+// `tests/oracle/cases/dfunc_kana_folding_probes.yaml`.
 
 #ifndef FORMULON_EVAL_JP_FOLD_H_
 #define FORMULON_EVAL_JP_FOLD_H_

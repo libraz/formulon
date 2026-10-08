@@ -47,6 +47,7 @@ struct LocaleFacts {
   std::array<std::string_view, 7> weekday_short;
   bool char_snaps_near_integer;
   bool phonetic;
+  bool criteria_header_keeps_halfwidth_kana;
 };
 
 const LocaleFacts& locale_facts(ExcelProfile profile) noexcept;

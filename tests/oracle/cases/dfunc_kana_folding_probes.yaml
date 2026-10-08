@@ -97,6 +97,19 @@ cases:
       D2: "アップル"
     formula: '=DSUM(A1:B3, "ｳﾘｱｹﾞ", D1:D2)'
 
+  - id: dsum_field_arg_halfwidth_kana_vs_fullwidth_kana_header
+    description: "field='ｳﾘｱｹﾞ' (half-width) vs db header 'ウリアゲ' (full-width) — the same word in both widths"
+    setup:
+      A1: "フルーツ"
+      B1: "ウリアゲ"
+      A2: "アップル"
+      B2: 100
+      A3: "アップル"
+      B3: 200
+      D1: "フルーツ"
+      D2: "アップル"
+    formula: '=DSUM(A1:B3, "ｳﾘｱｹﾞ", D1:D2)'
+
   - id: dsum_field_arg_fullwidth_latin_vs_ascii_header
     description: "field='ＳＡＬＥＳ' (full-width Latin) vs db header 'Sales' — does Mac fold?"
     setup:

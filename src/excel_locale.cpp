@@ -23,6 +23,7 @@ constexpr LocaleFacts kJapaneseFacts{
     {"日", "月", "火", "水", "木", "金", "土"},
     false,
     true,
+    true,
 };
 
 constexpr LocaleFacts kEnglishFacts{
@@ -43,6 +44,7 @@ constexpr LocaleFacts kEnglishFacts{
     {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"},
     {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"},
     true,
+    false,
     false,
 };
 

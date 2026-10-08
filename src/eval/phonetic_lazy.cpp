@@ -13,6 +13,7 @@
 #include "cell.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "excel_locale.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "phonetic.h"
@@ -26,7 +27,7 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Applies Mac's strict-text passthrough to a flattened scalar `v`:
+// Applies ja-JP's strict-text passthrough to a flattened scalar `v`:
 //   * Text  -> the text itself (unchanged).
 //   * Blank -> empty string (interned in the eval arena).
 //   * Error -> propagated unchanged.
@@ -103,6 +104,9 @@ Value eval_phonetic_lazy(const parser::AstNode& call, Arena& arena, const Functi
     // FunctionDef's `min_arity == max_arity == 1` contract.
     return Value::error(ErrorCode::Value);
   }
+  if (!locale_facts(ctx.excel_profile()).phonetic) {
+    return Value::error(ErrorCode::NA);
+  }
   const parser::AstNode& arg = call.as_call_arg(0);
 
   // Ref path: look up the target cell's phonetic_text directly. Mirrors
@@ -144,8 +148,8 @@ Value eval_phonetic_lazy(const parser::AstNode& call, Arena& arena, const Functi
 
   // Non-Ref arg (literal text, arithmetic, function call, range, ...):
   // eagerly evaluate the subtree so error propagation and the "literal
-  // text passes through" rule still apply. Mac accepts =PHONETIC("x")
-  // and returns "x"; everything non-text yields #N/A.
+  // text passes through" rule still apply in ja-JP. Everything non-text
+  // yields #N/A.
   const Value v = eval_node(arg, arena, registry, ctx);
   return apply_passthrough_surface(v, arena);
 }

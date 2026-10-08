@@ -37,13 +37,14 @@ namespace eval {
 namespace {
 
 // Lowercased, lookup-normalised form of `s` for exact / wildcard text
-// matching. On the Mac ja-JP path this folds kana / full-width variants
-// (`fold_and_lower`); on every other profile it still composes a half-width
-// voicing mark onto its base (`ｶﾞ` -> `ガ`) before ASCII-lowercasing, matching
-// XLOOKUP's `xlookup_exact_eq` so VLOOKUP / HLOOKUP / MATCH agree with it.
+// matching. On Mac profiles this folds kana / full-width variants and
+// full-width digits (`fold_and_lower`); on every other profile it still
+// composes a half-width voicing mark onto its base (`ｶﾞ` -> `ガ`) before
+// ASCII-lowercasing, matching XLOOKUP's `xlookup_exact_eq` so VLOOKUP /
+// HLOOKUP / MATCH agree with it.
 std::string lookup_text_key(std::string_view s, ExcelProfile profile) {
   if (width_folding(profile) == WidthFolding::kMac) {
-    return fold_and_lower(s, /*fold_fullwidth_digits=*/false);
+    return fold_and_lower(s, /*fold_fullwidth_digits=*/true);
   }
   return strings::to_ascii_lower(compose_jp_halfwidth_voicing(s));
 }
@@ -161,12 +162,11 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
     // treated as a literal X. Every other kind-pairing is a literal
     // equality compare.
     if (lookup_value.is_text()) {
-      // Mac Excel ja-JP folds kana variants (hira<->kata, half<->full-width
-      // katakana with voicing composition, full<->half-width ASCII letters
-      // / punctuation / space) before text equality. Apply `fold_jp_text`
-      // on both sides BEFORE ASCII-lowercasing so e.g. `ｶﾞ` -> `ガ`,
-      // `Ａ` -> `a`. Full-width digits are deliberately NOT folded for
-      // lookups (Mac asymmetry — see jp_fold.h).
+      // Mac Excel folds kana variants (hira<->kata, half<->full-width
+      // katakana with voicing composition, full<->half-width ASCII letters,
+      // punctuation, space, and digits) before text equality. Apply the
+      // same normalisation on both sides before ASCII-lowercasing so e.g.
+      // `ｶﾞ` -> `ガ` and `Ａ` -> `a`.
       const std::string pat_lower = lookup_text_key(lookup_value.as_text(), profile);
       for (std::size_t i = 0; i < n; ++i) {
         const Value& cell = cell_at(i);

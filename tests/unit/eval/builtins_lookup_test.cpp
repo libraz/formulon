@@ -26,6 +26,33 @@ TEST(BuiltinsMatch, ExactNumericFirstHit) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
+TEST(BuiltinsMatch, ExactFullwidthDigitsFollowHostFolding) {
+  struct ProfileCase {
+    ExcelProfile profile;
+    bool folds_fullwidth_digits;
+  };
+  const ProfileCase cases[] = {
+      {mac_365_ja_jp_profile(), true},
+      {mac_365_en_us_profile(), true},
+      {win_365_ja_jp_profile(), false},
+      {win_365_en_us_profile(), false},
+  };
+
+  for (const ProfileCase& test_case : cases) {
+    SCOPED_TRACE(excel_profile_id(test_case.profile));
+    Workbook wb = Workbook::create();
+    wb.set_excel_profile(test_case.profile);
+    const Value v = EvalSourceIn("=MATCH(\"１２３\",{\"123\";\"456\"},0)", wb, wb.sheet(0));
+    if (test_case.folds_fullwidth_digits) {
+      ASSERT_TRUE(v.is_number());
+      EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+    } else {
+      ASSERT_TRUE(v.is_error());
+      EXPECT_EQ(v.as_error(), ErrorCode::NA);
+    }
+  }
+}
+
 TEST(BuiltinsMatch, ExactMatchArrayLiteralUsesSharedRangeMaterialization) {
   const Value v = EvalSource("=MATCH(20,{10;20;30},0)");
   ASSERT_TRUE(v.is_number());
