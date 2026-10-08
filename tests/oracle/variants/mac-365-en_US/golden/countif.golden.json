@@ -6,7 +6,7 @@
     "excel_locale": "en-US",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T05:15:07Z"
+    "generated_at": "2026-10-08T08:06:58Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -826,6 +826,24 @@
           "value": 1.0
         },
         "Sheet3!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "countblank_3d",
+      "formula": "=COUNTIF(Sheet1:Sheet2!A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!A1": {
           "kind": "number",
           "value": 1.0
         }

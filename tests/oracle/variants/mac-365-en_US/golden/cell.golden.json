@@ -6,7 +6,7 @@
     "excel_locale": "en-US",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T05:15:07Z"
+    "generated_at": "2026-10-08T08:04:50Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -374,6 +374,25 @@
       "expect": {
         "kind": "number",
         "value": 22.0
+      }
+    },
+    {
+      "id": "cell_contents_range",
+      "formula": "=CELL(\"contents\",F1:F4)",
+      "setup": {
+        "F1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "formula_cell": "G2",
+      "expect": {
+        "kind": "number",
+        "value": 3.0
       }
     }
   ]

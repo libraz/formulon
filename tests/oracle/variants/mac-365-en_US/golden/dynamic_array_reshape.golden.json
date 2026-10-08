@@ -6,7 +6,7 @@
     "excel_locale": "en-US",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T05:37:24Z"
+    "generated_at": "2026-10-08T08:21:29Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -2209,6 +2209,83 @@
       "expect": {
         "kind": "number",
         "value": 2.0
+      }
+    },
+    {
+      "id": "choosecols_arr1",
+      "formula": "=CHOOSECOLS({1,2,3},{2})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "chooserows_arr1",
+      "formula": "=CHOOSEROWS({1;2;3},{2})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "trimrange_empty",
+      "formula": "=TRIMRANGE(A1:A10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "cc_vertical_idx",
+      "formula": "=CHOOSECOLS({1,2,3},{2;3})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          3.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "cc_2d_idx",
+      "formula": "=CHOOSECOLS({1,2,3},{1,2;3,1})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "cc_neg_arr",
+      "formula": "=CHOOSECOLS({1,2,3},{-1,1})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          3.0,
+          1.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "snap_choosecols_idx",
+      "formula": "=CHOOSECOLS({1,2,3},1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
       }
     }
   ]

@@ -6,7 +6,7 @@
     "excel_locale": "en-US",
     "date1904": true,
     "iterative": false,
-    "generated_at": "2026-10-08T05:15:07Z"
+    "generated_at": "2026-10-08T08:16:43Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -787,6 +787,15 @@
       "expect": {
         "kind": "number",
         "value": 2024.0
+      }
+    },
+    {
+      "id": "year_bool",
+      "formula": "=YEAR(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1904.0
       }
     }
   ]
