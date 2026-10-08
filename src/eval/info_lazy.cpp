@@ -24,6 +24,7 @@
 #include "eval/coerce.h"
 #include "eval/datetime_lazy.h"
 #include "eval/eval_context.h"
+#include "eval/formula_localize.h"
 #include "eval/function_registry.h"
 #include "eval/implicit_intersection.h"
 #include "eval/lazy_impls.h"
@@ -229,12 +230,13 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
     stripped.push_back(c);
     ++i;
   }
-  char* buf = static_cast<char*>(arena.allocate(stripped.size(), alignof(char)));
+  const std::string shown = localize_formula_text(stripped);
+  char* buf = static_cast<char*>(arena.allocate(shown.size(), alignof(char)));
   if (buf == nullptr) {
     return Value::error(ErrorCode::Value);
   }
-  std::copy(stripped.begin(), stripped.end(), buf);
-  return Value::text(std::string_view(buf, stripped.size()));
+  std::copy(shown.begin(), shown.end(), buf);
+  return Value::text(std::string_view(buf, shown.size()));
 }
 
 Value eval_isref_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

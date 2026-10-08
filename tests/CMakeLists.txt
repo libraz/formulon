@@ -458,6 +458,12 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
             ${CMAKE_SOURCE_DIR}/tests/codegen/dbcs_generated_test.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  add_test(
+    NAME LocaleFunctionNamesDrift
+    COMMAND ${_FORMULON_BEHAVIOR_PY} -m unittest
+            ${CMAKE_SOURCE_DIR}/tests/codegen/locale_function_names_generated_test.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   # Marked SLOW because the YAML-vocabulary scan reads the whole behaviour
   # corpus and is the single largest non-oracle test (~1 s in release).
   # Behaviour drift is checked by `make test-slow` and CI's nightly tier
