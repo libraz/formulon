@@ -1,7 +1,7 @@
 {
   "name": "@libraz/formulon",
   "version": "0.13.0",
-  "description": "Excel 365 calculation engine -- WASM binding",
+  "description": "Excel 365 calculation engine for browsers and Node (WebAssembly): evaluate formulas and recalculate .xlsx / .xlsb workbooks without Excel",
   "license": "Apache-2.0",
   "author": "libraz",
   "type": "module",
@@ -36,8 +36,14 @@
     "spreadsheet",
     "formula",
     "wasm",
+    "webassembly",
     "xlsx",
-    "calculation"
+    "xlsb",
+    "calculation",
+    "excel-formulas",
+    "formula-engine",
+    "recalculation",
+    "headless"
   ],
   "homepage": "https://formulon.libraz.net",
   "repository": {

@@ -34,9 +34,10 @@ CLI binaries are available from [GitHub Releases](https://github.com/libraz/form
 
 Anywhere a spreadsheet needs to be computed without booting Excel:
 
-- running `.xlsx` workbooks headlessly in batch jobs or data pipelines,
+- recalculating `.xlsx` and `.xlsb` workbooks headlessly in batch jobs or data pipelines,
 - evaluating Excel-style formulas inside a web application, in the browser,
 - embedding calculation into internal tools, bots, or notebooks,
+- giving AI agents workbook tools through [formulon-mcp](https://github.com/libraz/formulon-mcp), an MCP server built on the engine,
 - validating formulas and migrating legacy spreadsheets.
 
 For a worked example of embedding the engine, see [formulon-cell](https://github.com/libraz/formulon-cell), a browser spreadsheet UI built on `@libraz/formulon`. It also serves as an integration test, exercising the npm package end to end in a real browser.

@@ -34,9 +34,10 @@ CLI バイナリは [GitHub Releases](https://github.com/libraz/formulon/release
 
 Excel を起動せずにスプレッドシートを計算したい場面で使えます。
 
-- バッチジョブやデータパイプラインで `.xlsx` をヘッドレス再計算する
+- バッチジョブやデータパイプラインで `.xlsx` や `.xlsb` をヘッドレス再計算する
 - Web アプリの中で Excel 風の数式を評価する
 - 社内ツール、ボット、ノートブックに計算機能を組み込む
+- エンジンの上に作った MCP サーバー [formulon-mcp](https://github.com/libraz/formulon-mcp) を通じて、AI エージェントにブック操作のツールを渡す
 - 数式の検証や、レガシースプレッドシートの移行に使う
 
 組み込みの実装例として [formulon-cell](https://github.com/libraz/formulon-cell) があります。`@libraz/formulon` の上に作ったブラウザ向けのスプレッドシート UI で、npm パッケージを実ブラウザで一通り動かす結合テストも兼ねています。

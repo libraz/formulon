@@ -7,7 +7,8 @@
 [![Docs](https://img.shields.io/badge/docs-formulon.libraz.net-2563eb)](https://formulon.libraz.net)
 
 Excel 365 calculation engine, exposed as a pure-Python binding driven by
-WebAssembly. Evaluates formulas; loads and saves `.xlsx` workbooks; and
+WebAssembly, with no Excel installation required. Evaluates formulas;
+loads and saves `.xlsx` and `.xlsb` workbooks; and
 edits cells, the row/column matrix, styles, merges, comments,
 hyperlinks, data validations, conditional formats, defined names, and
 PivotTables. It also exposes recalc (full and partial), dependency-graph
@@ -15,6 +16,8 @@ tracing (precedents / dependents), dynamic-array spill info, the function
 catalog, and per-sheet view / protection settings. The goal is 1-bit
 compatibility with the default `win-365-ja_JP` behavior profile; callers can
 select the separately supported `mac-365-ja_JP` profile when required.
+Results are checked against real Excel, and known differences are listed in
+[`tests/divergence.yaml`](https://github.com/libraz/formulon/blob/main/tests/divergence.yaml).
 
 ## Install
 

@@ -21,7 +21,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "formulon"
 version = "0.13.0"
-description = "Excel 365 calculation engine -- Python binding"
+description = "Excel 365 calculation engine for Python: evaluate formulas and recalculate .xlsx / .xlsb workbooks without Excel"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
@@ -33,7 +33,7 @@ dependencies = [
   # API stable across formulon point releases.
   "wasmtime>=49,<50",
 ]
-keywords = ["excel", "spreadsheet", "formula", "xlsx", "calculation", "wasm"]
+keywords = ["excel", "spreadsheet", "formula", "xlsx", "xlsb", "calculation", "excel-formulas", "formula-engine", "recalculation", "headless", "wasm"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",

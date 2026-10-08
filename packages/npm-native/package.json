@@ -1,7 +1,7 @@
 {
   "name": "@libraz/formulon-native",
   "version": "0.13.0",
-  "description": "Excel 365 calculation engine -- native N-API binding",
+  "description": "Excel 365 calculation engine as a native Node addon (N-API): evaluate formulas and recalculate .xlsx / .xlsb workbooks without Excel",
   "license": "Apache-2.0",
   "author": "libraz",
   "type": "module",
@@ -30,7 +30,12 @@
     "formula",
     "n-api",
     "native",
-    "xlsx"
+    "xlsx",
+    "xlsb",
+    "excel-formulas",
+    "formula-engine",
+    "recalculation",
+    "headless"
   ],
   "homepage": "https://formulon.libraz.net",
   "repository": {

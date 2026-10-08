@@ -5,10 +5,13 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/formulon/blob/main/LICENSE)
 [![Docs](https://img.shields.io/badge/docs-formulon.libraz.net-2563eb)](https://formulon.libraz.net)
 
-Excel 365 calculation engine, compiled to WebAssembly. Evaluates formulas,
-loads and saves `.xlsx` workbooks, and defaults to the `win-365-ja_JP`
-behavior profile. Hosts can select the separately supported
-`mac-365-ja_JP` profile when required.
+Excel 365 calculation engine, compiled to WebAssembly for browsers and
+Node. Evaluates formulas and loads, recalculates, and saves `.xlsx` and
+`.xlsb` workbooks without an Excel installation. It defaults to the
+`win-365-ja_JP` behavior profile; hosts can select the separately
+supported `mac-365-ja_JP` profile when required. Results are checked
+against real Excel, and known differences are listed in
+[`tests/divergence.yaml`](https://github.com/libraz/formulon/blob/main/tests/divergence.yaml).
 
 ## Install
 
@@ -204,7 +207,9 @@ address space. Results are identical either way.
 ## Project
 
 Documentation — guides, compatibility notes, and the per-runtime API
-reference — is at <https://formulon.libraz.net>. Source, design notes,
+reference — is at <https://formulon.libraz.net>, and the
+[demos](https://formulon.libraz.net/demos) run this package in the
+browser. Source, design notes,
 and the oracle test suite live at <https://github.com/libraz/formulon>.
 [formulon-cell](https://github.com/libraz/formulon-cell) is a browser
 spreadsheet UI built on this package; it doubles as an integration test
