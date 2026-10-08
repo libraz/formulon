@@ -6,7 +6,7 @@
     "excel_locale": "de-DE",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T10:57:56Z"
+    "generated_at": "2026-10-08T19:09:27Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -32,7 +32,8 @@
       },
       "formula_cell": "Z2",
       "expect": {
-        "kind": "blank"
+        "kind": "error",
+        "code": "#SPILL!"
       }
     },
     {
@@ -58,7 +59,8 @@
       },
       "formula_cell": "Z2",
       "expect": {
-        "kind": "blank"
+        "kind": "error",
+        "code": "#SPILL!"
       }
     },
     {
@@ -84,7 +86,8 @@
       },
       "formula_cell": "B5",
       "expect": {
-        "kind": "blank"
+        "kind": "error",
+        "code": "#SPILL!"
       }
     },
     {
@@ -110,7 +113,8 @@
       },
       "formula_cell": "Z1",
       "expect": {
-        "kind": "blank"
+        "kind": "error",
+        "code": "#SPILL!"
       }
     },
     {
@@ -132,7 +136,8 @@
       },
       "formula_cell": "A5",
       "expect": {
-        "kind": "blank"
+        "kind": "error",
+        "code": "#SPILL!"
       }
     },
     {
@@ -231,7 +236,8 @@
       },
       "formula_cell": "A1",
       "expect": {
-        "kind": "blank"
+        "kind": "error",
+        "code": "#SPILL!"
       }
     },
     {
@@ -685,7 +691,8 @@
       },
       "formula_cell": "A2",
       "expect": {
-        "kind": "blank"
+        "kind": "error",
+        "code": "#SPILL!"
       }
     },
     {

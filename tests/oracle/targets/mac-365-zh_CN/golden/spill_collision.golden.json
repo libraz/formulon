@@ -6,7 +6,7 @@
     "excel_locale": "zh-CN",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T14:57:44Z"
+    "generated_at": "2026-10-08T19:23:20Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -40,7 +40,8 @@
         }
       },
       "expect": {
-        "kind": "blank"
+        "kind": "error",
+        "code": "#SPILL!"
       }
     },
     {
@@ -53,7 +54,8 @@
         }
       },
       "expect": {
-        "kind": "blank"
+        "kind": "error",
+        "code": "#SPILL!"
       }
     },
     {
@@ -66,7 +68,8 @@
         }
       },
       "expect": {
-        "kind": "blank"
+        "kind": "error",
+        "code": "#SPILL!"
       }
     },
     {
@@ -79,7 +82,8 @@
         }
       },
       "expect": {
-        "kind": "blank"
+        "kind": "error",
+        "code": "#SPILL!"
       }
     },
     {
@@ -92,7 +96,8 @@
         }
       },
       "expect": {
-        "kind": "blank"
+        "kind": "error",
+        "code": "#SPILL!"
       }
     },
     {
@@ -105,7 +110,8 @@
         }
       },
       "expect": {
-        "kind": "blank"
+        "kind": "error",
+        "code": "#SPILL!"
       }
     },
     {
@@ -118,7 +124,8 @@
         }
       },
       "expect": {
-        "kind": "blank"
+        "kind": "error",
+        "code": "#SPILL!"
       }
     },
     {
@@ -129,7 +136,8 @@
         "Z1:AA1"
       ],
       "expect": {
-        "kind": "blank"
+        "kind": "error",
+        "code": "#SPILL!"
       }
     }
   ]
