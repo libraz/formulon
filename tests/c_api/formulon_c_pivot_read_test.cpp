@@ -151,6 +151,7 @@ TEST(FormulonCApiPivot, CountAndLayoutLoadedPivot) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb.handle), 0) << fm_last_error_message();
   ASSERT_NE(wb.handle, nullptr);
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
 
   std::size_t count = 99;
   ASSERT_EQ(fm_workbook_pivot_count(wb.handle, 0, &count), 0);

@@ -84,6 +84,7 @@ TEST(FormulonCApiPivot, SaveRejectsAPivotCacheWithNoWorksheetSource) {
 TEST(FormulonCApiPivot, SavedScratchPivotEmitsLocationRequiredDefaults) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_idx = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
@@ -109,6 +110,7 @@ TEST(FormulonCApiPivot, SavedPivotLocationRefCoversTheProjectedGrid) {
   // to be pinned on the emitted bytes.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_idx = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
@@ -228,6 +230,7 @@ TEST(FormulonCApiPivot, PivotMutationsInvalidateGetPivotDataFormula) {
 TEST(FormulonCApiPivot, LoadedPivotCacheMutationReprojectsAuthoredLocation) {
   WorkbookGuard original;
   ASSERT_EQ(fm_workbook_create(&original.handle), 0);
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(original.handle, "win-365-ja_JP"), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_idx = 0;
   ASSERT_EQ(BuildScratchPivot(original.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
@@ -237,6 +240,7 @@ TEST(FormulonCApiPivot, LoadedPivotCacheMutationReprojectsAuthoredLocation) {
 
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(loaded.handle, "win-365-ja_JP"), 0);
   EXPECT_NE(SavedPivotXml(loaded.handle).find("<location ref=\"D1:E4\""), std::string::npos);
 
   // The loaded location is marked authored. Add a new shared item and record
@@ -644,6 +648,7 @@ TEST(FormulonCApiPivot, StructEnumMutatorsRejectRawValuesWithoutMutation) {
 TEST(FormulonCApiPivot, PivotProjectionUsesWorkbookLocaleAndReportLayout) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_idx = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();

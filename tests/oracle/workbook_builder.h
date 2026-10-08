@@ -111,6 +111,7 @@
 #include <string>
 #include <vector>
 
+#include "excel_profile.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "tests/oracle/json_reader.h"
@@ -145,7 +146,8 @@ struct FormulaProbeResult {
 ///
 /// `spec` must be a JSON object carrying a `sheets` block (sheet-name ->
 /// {A1 -> value}) and a `pivot` block (shape documented at the top of
-/// this header). The returned `BuiltPivot` is ready to feed into
+/// this header). `profile` is applied to the workbook before any formula
+/// cells are recalculated. The returned `BuiltPivot` is ready to feed into
 /// `pivot::evaluate` and `pivot::layout`.
 ///
 /// Errors (all `FormulonErrorCode::kInvalidArgument`):
@@ -154,7 +156,7 @@ struct FormulaProbeResult {
 ///   * a `source` / `anchor` address fails to parse.
 ///   * a declared row / col / data field name is not a source header.
 ///   * an `agg` string is not one of the recognised aggregation names.
-Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec);
+Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec, ExcelProfile profile);
 
 /// Attaches the built pivot to its workbook, evaluates every
 /// `pivot.formula_probes` entry, and returns the resulting cell values.
@@ -186,8 +188,9 @@ struct BuiltPrint {
 /// `print_area` / `print_titles` are installed as sheet-scoped
 /// `_xlnm.Print_Area` / `_xlnm.Print_Titles` defined names; its
 /// `page_setup` / `manual_breaks` are written into the sheet's
-/// `SheetPrintSettings`. The returned `BuiltPrint` is ready to feed into
-/// `print::paginate`.
+/// `SheetPrintSettings`. `profile` is applied to the workbook before any
+/// formula cells are recalculated. The returned `BuiltPrint` is ready to
+/// feed into `print::paginate`.
 ///
 /// Errors (all `FormulonErrorCode::kInvalidArgument`):
 ///   * `spec` is not an object, or has no `print` block.
@@ -196,7 +199,7 @@ struct BuiltPrint {
 ///   * a `print_area` / `print_titles` / `manual_breaks` token fails to
 ///     parse.
 ///   * a `page_setup` field has the wrong JSON type.
-Expected<BuiltPrint, Error> build_print_from_spec(const JsonValue& spec);
+Expected<BuiltPrint, Error> build_print_from_spec(const JsonValue& spec, ExcelProfile profile);
 
 }  // namespace oracle
 }  // namespace tests

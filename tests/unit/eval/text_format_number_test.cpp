@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/eval_profile_scope.h"
 #include "eval/text_format/display_text.h"
 #include "eval/text_format/number_format.h"
 #include "gtest/gtest.h"
@@ -21,6 +22,7 @@ namespace {
 // Convenience wrapper: render `value` through `format` and return the
 // resulting string. On any engine failure the returned optional is empty.
 std::string Render(double value, std::string_view format) {
+  const eval::ScopedEvalProfile profile_scope(mac_365_ja_jp_profile());
   std::string out;
   const FormatStatus s = apply_format(value, format, out);
   EXPECT_EQ(s, FormatStatus::kOk);
@@ -377,6 +379,7 @@ TEST(NumberFormatLiteral, BangEscape) {
 }
 
 TEST(NumberFormatLiteral, IncompleteSyntaxReturnsErrorWithoutAppending) {
+  const eval::ScopedEvalProfile profile_scope(mac_365_ja_jp_profile());
   for (const char* code : {"0!", "0\\", "0_", "0*", "0\"open", "[h", "[$-411", "@!", "@\\", "@_", "@*", "@\"open"}) {
     SCOPED_TRACE(code);
     std::string out = "prefix";
@@ -520,6 +523,7 @@ TEST(NumberFormatBracketed, EnglishColorNameIsValueError) {
   // A format string is read in the UI locale, so the English spellings are
   // not colours under the ja-JP profile and fall through to the
   // invalid-bracket path. Excel answers #VALUE! for all of them.
+  const eval::ScopedEvalProfile profile_scope(mac_365_ja_jp_profile());
   std::string out;
   EXPECT_EQ(apply_format(5.0, "[Red]0.00", out), FormatStatus::kValueError);
   EXPECT_EQ(apply_format(5.0, "[Blue]0.00", out), FormatStatus::kValueError);
@@ -543,6 +547,7 @@ TEST(NumberFormatBracketed, StoredDialectTakesEnglishColorNames) {
 }
 
 TEST(NumberFormatBracketed, NegativeSectionColorFollowsTheDialect) {
+  const eval::ScopedEvalProfile profile_scope(mac_365_ja_jp_profile());
   EXPECT_TRUE(negative_section_has_color("0;[Red]0", FormatDialect::kStored));
   EXPECT_FALSE(negative_section_has_color("[Red]0;0", FormatDialect::kStored));
   EXPECT_TRUE(negative_section_has_color("[Color3]0", FormatDialect::kStored));
@@ -601,6 +606,7 @@ TEST(NumberFormatBracketed, IndexedColorWithoutAnIndexIsValueError) {
 
 TEST(NumberFormatBracketed, SecondColorInOneSectionIsValueError) {
   // Either bracket alone is inert, but a section carries at most one colour.
+  const eval::ScopedEvalProfile profile_scope(mac_365_ja_jp_profile());
   std::string out;
   EXPECT_EQ(apply_format(5.0, "[赤][青]0.00", out), FormatStatus::kValueError);
   // One per section is still fine when the sections differ.

@@ -56,7 +56,9 @@ Value EvalWith(std::string_view src, const EvalContext& ctx) {
 
 // Builds a single-sheet workbook anchored at "Sheet1".
 Workbook MakeSingleSheetWorkbook() {
-  return Workbook::create();
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  return wb;
 }
 
 // ---------------------------------------------------------------------------

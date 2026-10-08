@@ -305,6 +305,7 @@ TEST(OoxmlPhoneticRoundTrip, PhoneticSubstitutesAnnotatedSpanOnly) {
   auto result_or = io::read_ooxml(SpanOf(bytes));
   ASSERT_TRUE(static_cast<bool>(result_or)) << "read_ooxml: " << result_or.error().message;
   Workbook& wb = result_or.value().workbook;
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   auto recalc_or = wb.recalc(eval::default_registry());
   ASSERT_TRUE(static_cast<bool>(recalc_or)) << "recalc: " << recalc_or.error().message;
 

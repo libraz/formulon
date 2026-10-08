@@ -139,13 +139,13 @@ TEST(FormulonCApiCalcMode, UnknownModeRejected) {
   EXPECT_EQ(mode, FM_CALC_MODE_AUTO);
 }
 
-TEST(FormulonCApiCalcMode, ExcelProfileIdDefaultsToWinJaAndRoundTrips) {
+TEST(FormulonCApiCalcMode, ExcelProfileIdDefaultsToWinEnAndRoundTrips) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
   const char* profile = nullptr;
   ASSERT_EQ(fm_workbook_excel_profile_id(wb.handle, &profile), 0);
-  ASSERT_STREQ(profile, "win-365-ja_JP");
+  ASSERT_STREQ(profile, "win-365-en_US");
 
   ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
   ASSERT_EQ(fm_workbook_excel_profile_id(wb.handle, &profile), 0);
@@ -163,6 +163,7 @@ TEST(FormulonCApiCalcMode, ExcelProfileSwitchDirtiesProfileSensitiveFormulas) {
   // survives the switch unrecomputed.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
   ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=CODE(\"\xe9\xab\x99\")"), 0);  // U+9AD9
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
@@ -189,7 +190,7 @@ TEST(FormulonCApiCalcMode, UnknownExcelProfileIdRejected) {
 
   const char* profile = nullptr;
   ASSERT_EQ(fm_workbook_excel_profile_id(wb.handle, &profile), 0);
-  EXPECT_STREQ(profile, "win-365-ja_JP");
+  EXPECT_STREQ(profile, "win-365-en_US");
 }
 
 TEST(FormulonCApiCalcMode, NullArgsReturnBindingNullPointer) {

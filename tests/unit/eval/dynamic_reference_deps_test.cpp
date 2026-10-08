@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "calc_settings.h"
@@ -540,6 +541,9 @@ TEST(ReadCircularity, BranchNotTakenIsNotCircular) {
   };
   for (const Case& c : cases) {
     Workbook wb = Workbook::create();
+    if (std::string_view(c.formula).find("PHONETIC") != std::string_view::npos) {
+      wb.set_excel_profile(mac_365_ja_jp_profile());
+    }
     Formula(wb, {0U, kA}, c.formula);
     EXPECT_EQ(Recalc(wb).cycle_cells, 0U) << c.formula;
     ExpectNumberAt(wb, {0U, kA}, c.want, c.formula);

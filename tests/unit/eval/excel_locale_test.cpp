@@ -27,9 +27,9 @@ TEST(ExcelLocale, InvalidIdsLeaveTheProfileUnchanged) {
   }
 }
 
-TEST(ExcelLocale, RuntimeDefaultRemainsWindowsJapanese) {
-  EXPECT_STREQ(excel_profile_id(default_excel_profile()), "win-365-ja_JP");
-  EXPECT_STREQ(excel_profile_id(Workbook::create().excel_profile()), "win-365-ja_JP");
+TEST(ExcelLocale, RuntimeDefaultIsWindowsEnglish) {
+  EXPECT_STREQ(excel_profile_id(default_excel_profile()), "win-365-en_US");
+  EXPECT_STREQ(excel_profile_id(Workbook::create().excel_profile()), "win-365-en_US");
 }
 
 void ExpectFactsEqual(const LocaleFacts& lhs, const LocaleFacts& rhs) {

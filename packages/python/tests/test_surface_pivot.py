@@ -75,6 +75,7 @@ class _PivotFixture:
 
     def __init__(self, wb: Workbook) -> None:
         self.wb = wb
+        wb.set_excel_profile_id("win-365-ja_JP")
         self.cache = wb.pivot_cache_create()
         wb.set_pivot_cache_worksheet_source(self.cache, PivotWorksheetSource(ref="A1:D5", sheet="Sheet1"))
         for name in ("Region", "Product", "Amount", "Date"):

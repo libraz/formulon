@@ -21,6 +21,7 @@ function buildPivot(mod) {
     assert.ok(status.ok, `${what}: ${JSON.stringify(status)}`);
     return r;
   };
+  must(wb.setExcelProfileId('win-365-ja_JP'), 'setExcelProfileId');
   const cacheId = must(wb.pivotCacheCreate(0), 'pivotCacheCreate').index;
   must(wb.pivotCacheSetWorksheetSource(cacheId, { present: true, ref: 'A1:D5', sheet: 'Sheet1' }), 'source');
   for (const name of ['Region', 'Product', 'Amount', 'Date']) must(wb.pivotCacheFieldAdd(cacheId, name), name);
@@ -728,7 +729,7 @@ test('fallible accessors report their status on success, rejection and a release
     }
   }
   assert.equal(wb.sheetCount().value, 1);
-  assert.equal(wb.excelProfileId().value, 'win-365-ja_JP');
+  assert.equal(wb.excelProfileId().value, 'win-365-en_US');
   assert.equal(wb.localizeFunctionName('SUM', 1).value, 'SUM');
   assert.equal(wb.localizeFunctionName('SUM', 99).status.ok, false);
 

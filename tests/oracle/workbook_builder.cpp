@@ -94,8 +94,9 @@ Expected<Value, Error> value_from_record(const JsonValue& rec, Workbook* workboo
 /// capture side builds the same fixture in the order the case states, so
 /// ordering by name here would give the two halves different sheet indices
 /// and the golden diff would compare the wrong sheet.
-Expected<std::unique_ptr<Workbook>, Error> build_workbook(const JsonValue& spec) {
+Expected<std::unique_ptr<Workbook>, Error> build_workbook(const JsonValue& spec, ExcelProfile profile) {
   auto workbook = std::make_unique<Workbook>(Workbook::create_empty());
+  workbook->set_excel_profile(profile);
 
   const JsonValue* sheets_v = spec.find("sheets");
   if (sheets_v == nullptr || !sheets_v->is_object()) {

@@ -281,8 +281,8 @@ TEST(EvalProfileScope, ConcurrentEvaluationsKeepProfilesIndependent) {
   EXPECT_TRUE(results[1].restored);
   EXPECT_EQ(results[0].observed, "mac-365-en_US");
   EXPECT_EQ(results[1].observed, "win-365-ja_JP");
-  EXPECT_EQ(results[0].after_scope, "win-365-ja_JP");
-  EXPECT_EQ(results[1].after_scope, "win-365-ja_JP");
+  EXPECT_EQ(results[0].after_scope, "win-365-en_US");
+  EXPECT_EQ(results[1].after_scope, "win-365-en_US");
 }
 
 TEST(EvalProfilePropagation, WorkbookBoundContextsUseEveryProfile) {

@@ -30,6 +30,7 @@
 #include <utility>
 #include <vector>
 
+#include "excel_profile.h"
 #include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
 #include "pivot/pivot_evaluator.h"
@@ -45,6 +46,10 @@
 
 #ifndef FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR
 #define FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR ""
+#endif
+
+#ifndef FORMULON_WORKBOOK_ORACLE_PRIMARY_PROFILE_ID
+#define FORMULON_WORKBOOK_ORACLE_PRIMARY_PROFILE_ID "win-365-ja_JP"
 #endif
 
 namespace formulon {
@@ -436,6 +441,15 @@ TEST_P(WorkbookOracleTest, Matches) {
     return;
   }
 
+  ExcelProfile profile;
+  if (param.variant.empty()) {
+    ASSERT_TRUE(parse_excel_profile_id(FORMULON_WORKBOOK_ORACLE_PRIMARY_PROFILE_ID, &profile))
+        << "invalid workbook oracle primary profile: " << FORMULON_WORKBOOK_ORACLE_PRIMARY_PROFILE_ID;
+  } else {
+    ASSERT_TRUE(parse_excel_profile_id(param.variant, &profile))
+        << "invalid workbook oracle variant profile: " << param.variant;
+  }
+
   // --- round-trip path -----------------------------------------------------
   // Author the same fixture the capture authored, save it, read those bytes
   // back, and diff what Formulon resolved them to against what Excel
@@ -459,7 +473,7 @@ TEST_P(WorkbookOracleTest, Matches) {
   // Rebuild the workbook from the declarative spec, paginate the named
   // sheet, and diff the `PaginationResult` against `expect.print`.
   if (has_print) {
-    auto built_or = build_print_from_spec(param.spec);
+    auto built_or = build_print_from_spec(param.spec, profile);
     ASSERT_TRUE(static_cast<bool>(built_or)) << "build_print_from_spec failed: " << built_or.error().message;
     const BuiltPrint& built = built_or.value();
 
@@ -538,7 +552,7 @@ TEST_P(WorkbookOracleTest, Matches) {
   // --- pivot path ----------------------------------------------------------
   // Rebuild the pivot from the declarative spec, evaluate + layout it, and
   // diff the rendered grid (anchor-relative) against `expect.pivot.grid`.
-  auto built_or = build_pivot_from_spec(param.spec);
+  auto built_or = build_pivot_from_spec(param.spec, profile);
   ASSERT_TRUE(static_cast<bool>(built_or)) << "build_pivot_from_spec failed: " << built_or.error().message;
   BuiltPivot built = std::move(built_or.value());
 

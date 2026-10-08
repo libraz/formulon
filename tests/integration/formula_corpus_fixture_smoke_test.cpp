@@ -64,6 +64,7 @@ Workbook LoadFixture() {
   if (!result_or) {
     return Workbook::create_empty();
   }
+  result_or.value().workbook.set_excel_profile(mac_365_ja_jp_profile());
   return std::move(result_or.value().workbook);
 }
 
@@ -358,6 +359,7 @@ TEST(FormulaCorpusFixtureSmoke, SaveReloadPreservesRecalculatedValues) {
   auto reloaded_or = io::read_ooxml(test::span_of(saved_or.value()));
   ASSERT_TRUE(static_cast<bool>(reloaded_or)) << "reload after save failed: " << reloaded_or.error().message;
   Workbook reloaded = std::move(reloaded_or.value().workbook);
+  reloaded.set_excel_profile(mac_365_ja_jp_profile());
   auto reload_recalc_or = reloaded.recalc(eval::default_registry());
   ASSERT_TRUE(static_cast<bool>(reload_recalc_or))
       << "recalc after reload failed: " << reload_recalc_or.error().message;

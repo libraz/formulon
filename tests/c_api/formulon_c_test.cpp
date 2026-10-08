@@ -301,6 +301,7 @@ TEST(FormulonCApi, CellPhoneticSettersDirtyPhoneticFormulaDependents) {
   // alone is dirty-only and cannot discover the change on its own.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
   ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "漢字"), 0);              // A1
   ASSERT_EQ(fm_workbook_set_cell_phonetic(wb.handle, 0, 0, 0, "かんじ"), 0);   // A1 reading
   ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 1, "=PHONETIC(A1)"), 0);  // B1

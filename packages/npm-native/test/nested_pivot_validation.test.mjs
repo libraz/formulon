@@ -13,6 +13,7 @@ function must(result, what) {
 
 function makePivot(Workbook) {
   const wb = Workbook.createDefault();
+  must(wb.setExcelProfileId('win-365-ja_JP'), 'setExcelProfileId');
   const cache = must(wb.pivotCacheCreate(0), 'pivotCacheCreate').index;
   must(
     wb.pivotCacheSetWorksheetSource(cache, { present: true, ref: 'A1:B3', sheet: 'Sheet1' }),

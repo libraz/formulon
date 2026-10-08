@@ -533,6 +533,7 @@ TEST(OoxmlWriterPivot, PivotTableWithUnresolvableCacheIdEmitsNoRels) {
 
 TEST(OoxmlWriterPivot, LocationRefCoversTheRenderedGridNotThePlaceholderSpan) {
   Workbook wb = Workbook::create_empty();
+  wb.set_excel_profile(win_365_ja_jp_profile());
   wb.add_sheet("Sheet1");
   wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(BuildRegionAmountCache(/*cache_id=*/0U)));
   auto table = BuildRegionAmountTable(/*cache_id=*/0U, /*anchor_row=*/0U, /*anchor_col=*/3U);

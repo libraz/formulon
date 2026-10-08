@@ -40,6 +40,8 @@ namespace {
 
 using formulon::test::EvalSource;
 
+Value EvalSourceWithProfile(std::string_view src, ExcelProfile profile);
+
 // ---------------------------------------------------------------------------
 // DATEVALUE
 // ---------------------------------------------------------------------------
@@ -96,10 +98,11 @@ TEST(Datevalue, SlashFormPadded) {
 
 TEST(Datevalue, KanjiFormWithTerminator) {
   // UTF-8 for 2024年3月15日.
-  const Value v = EvalSource(
+  const Value v = EvalSourceWithProfile(
       "=DATEVALUE(\"2024\xE5\xB9\xB4"
       "3\xE6\x9C\x88"
-      "15\xE6\x97\xA5\")");
+      "15\xE6\x97\xA5\")",
+      mac_365_ja_jp_profile());
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 45366.0);
 }
@@ -145,7 +148,7 @@ TEST(Datevalue, TwoDigitYearPivotBefore30IsTwentyFirstCentury) {
   // 2024 had 366, 2025 has 365, 2026 365, 2027 365, 2028 366. So
   // 2029-01-01 = 45292 + 366+365+365+365+366 = 45292 + 1827 = 47119.
   // 2029-03-15 = 47119 + 31 + 28 + 14 = 47192.
-  const Value v = EvalSource("=DATEVALUE(\"29-03-15\")");
+  const Value v = EvalSourceWithProfile("=DATEVALUE(\"29-03-15\")", mac_365_ja_jp_profile());
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 47192.0);
 }
@@ -155,8 +158,8 @@ TEST(Datevalue, TwoDigitYearPivotAfter30IsNineteenthCentury) {
   // days(1900-01-01 -> 1995-01-01) = 95*365 + 23 leap days + 1 ghost day
   // (Excel 1900 leap-year bug) = 34699, so serial(1995-01-01) = 34700 and
   // serial(1995-07-04) = 34700 + 184 = 34884.
-  const Value a = EvalSource("=DATEVALUE(\"95-07-04\")");
-  const Value b = EvalSource("=DATE(1995,7,4)");
+  const Value a = EvalSourceWithProfile("=DATEVALUE(\"95-07-04\")", mac_365_ja_jp_profile());
+  const Value b = EvalSourceWithProfile("=DATE(1995,7,4)", mac_365_ja_jp_profile());
   ASSERT_TRUE(a.is_number());
   ASSERT_TRUE(b.is_number());
   EXPECT_EQ(a.as_number(), b.as_number());
@@ -506,7 +509,7 @@ TEST(DatevalueDmmm, PurelyNumericDmyRejected) {
   // d-mmm-yyyy fall-back. The yyyy-first path also cannot consume it
   // cleanly (the trailing "99" bytes leak through), so DATEVALUE returns
   // #VALUE!.
-  const Value v = EvalSource("=DATEVALUE(\"10-12-1999\")");
+  const Value v = EvalSourceWithProfile("=DATEVALUE(\"10-12-1999\")", mac_365_ja_jp_profile());
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
@@ -541,7 +544,8 @@ TEST(DatevalueDmmm, IsoPathStillWorks) {
 
 constexpr date_time::CivilTime kPinnedNowForDatevalue{{2026, 4U, 23U}, {15U, 30U, 45U}};
 
-Value EvalSourcePinned(std::string_view src, date_time::CivilTime pinned = kPinnedNowForDatevalue) {
+Value EvalSourcePinned(std::string_view src, date_time::CivilTime pinned = kPinnedNowForDatevalue,
+                       ExcelProfile profile = default_excel_profile()) {
   Arena& parse_arena = formulon::test::test_parse_arena();
   Arena& eval_arena = formulon::test::test_eval_arena();
   parser::Parser p(src, parse_arena);
@@ -550,7 +554,8 @@ Value EvalSourcePinned(std::string_view src, date_time::CivilTime pinned = kPinn
   if (root == nullptr) {
     return Value::error(ErrorCode::Name);
   }
-  return evaluate(*root, eval_arena, default_registry(), EvalContext().with_pinned_now(pinned));
+  return evaluate(*root, eval_arena, default_registry(),
+                  EvalContext().with_pinned_now(pinned).with_excel_profile(profile));
 }
 
 struct DateProfileCase {
@@ -660,7 +665,8 @@ TEST(DatevalueYearLess, DashSeparatedUsesPinnedCurrentYear) {
 TEST(DatevalueYearLess, KanjiFormUsesPinnedCurrentYear) {
   const Value v = EvalSourcePinned(
       "=DATEVALUE(\"3\xE6\x9C\x88"
-      "15\xE6\x97\xA5\")");
+      "15\xE6\x97\xA5\")",
+      kPinnedNowForDatevalue, mac_365_ja_jp_profile());
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 46096.0);
 }

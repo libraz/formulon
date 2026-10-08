@@ -179,6 +179,7 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tools/oracle/.venv/bin/python")
 endif()
 set(_manifest_active_variants "")
 set(_manifest_workbook_active "")
+set(_workbook_oracle_primary_profile_id "win-365-ja_JP")
 
 # Whether a golden tree counts as active CTest coverage is decided here, at
 # configure time, from files the build does not otherwise depend on. Landing
@@ -460,6 +461,7 @@ if(FORMULON_ORACLE_VARIANTS)
   target_compile_definitions(formulon_workbook_oracle_variant_tests
     PRIVATE
       FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR=""
+      FORMULON_WORKBOOK_ORACLE_PRIMARY_PROFILE_ID="${_workbook_oracle_primary_profile_id}"
       FORMULON_WORKBOOK_ORACLE_VARIANT_DIRS_DEFAULT="${_wb_variant_dirs_default}"
   )
 
@@ -580,7 +582,8 @@ add_executable(formulon_workbook_oracle_tests
 # product/version. Keep them available for historical comparison, but do not
 # count them as active Windows 365 CTest coverage until their provenance file
 # explicitly opts in. The native builder test below remains active.
-set(_workbook_oracle_golden_dir "${CMAKE_CURRENT_SOURCE_DIR}/targets/win-365-ja_JP/golden_wb")
+set(_workbook_oracle_golden_dir
+    "${CMAKE_CURRENT_SOURCE_DIR}/targets/${_workbook_oracle_primary_profile_id}/golden_wb")
 set(_workbook_oracle_active FALSE)
 set(_workbook_oracle_provenance "${_workbook_oracle_golden_dir}/PROVENANCE.json")
 if(EXISTS "${_workbook_oracle_provenance}" AND _manifest_workbook_active STREQUAL "active")
@@ -635,6 +638,7 @@ set_property(
 target_compile_definitions(formulon_workbook_oracle_tests
   PRIVATE
     FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR="${_workbook_oracle_golden_dir}"
+    FORMULON_WORKBOOK_ORACLE_PRIMARY_PROFILE_ID="${_workbook_oracle_primary_profile_id}"
     FORMULON_WORKBOOK_ORACLE_SKIP_FILE="${_workbook_oracle_skip_file}"
 )
 

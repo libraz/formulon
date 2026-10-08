@@ -11,12 +11,14 @@
 #include "tests/oracle/workbook_builder.h"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <map>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_layout.h"
@@ -27,6 +29,7 @@
 namespace formulon {
 namespace tests {
 namespace oracle {
+
 namespace {
 
 // --- JsonValue construction helpers ----------------------------------------
@@ -109,7 +112,7 @@ JsonValue build_smoke_spec() {
 TEST(WorkbookBuilder, BuildsCacheAndTableFromSpec) {
   const JsonValue spec = build_smoke_spec();
 
-  auto built_or = build_pivot_from_spec(spec);
+  auto built_or = build_pivot_from_spec(spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const BuiltPivot& built = built_or.value();
 
@@ -129,7 +132,7 @@ TEST(WorkbookBuilder, BuildsCacheAndTableFromSpec) {
 
 TEST(WorkbookBuilder, EvaluateAndLayoutProduceAggregatedGrid) {
   const JsonValue spec = build_smoke_spec();
-  auto built_or = build_pivot_from_spec(spec);
+  auto built_or = build_pivot_from_spec(spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const BuiltPivot& built = built_or.value();
 
@@ -170,7 +173,7 @@ TEST(WorkbookBuilder, EvaluateAndLayoutProduceAggregatedGrid) {
 
 TEST(WorkbookBuilder, RejectsSpecWithoutPivotBlock) {
   const JsonValue spec = jobj({{"sheets", jobj({{"Data", jobj({})}})}});
-  auto built_or = build_pivot_from_spec(spec);
+  auto built_or = build_pivot_from_spec(spec, win_365_ja_jp_profile());
   EXPECT_FALSE(static_cast<bool>(built_or));
 }
 
@@ -182,7 +185,7 @@ TEST(WorkbookBuilder, RejectsUnknownAggregation) {
   pivot["data_fields"] = jarr({jobj({{"field", jstr("Amount")}, {"agg", jstr("Median")}})});
   root["pivot"] = jobj(std::move(pivot));
 
-  auto built_or = build_pivot_from_spec(jobj(std::move(root)));
+  auto built_or = build_pivot_from_spec(jobj(std::move(root)), win_365_ja_jp_profile());
   EXPECT_FALSE(static_cast<bool>(built_or));
 }
 
@@ -200,7 +203,7 @@ TEST(WorkbookBuilder, FormulaProbePinsDirectRefBranch) {
   root["pivot"] = jobj(std::move(pivot));
   const JsonValue probe_spec = jobj(std::move(root));
 
-  auto built_or = build_pivot_from_spec(probe_spec);
+  auto built_or = build_pivot_from_spec(probe_spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   BuiltPivot built = std::move(built_or.value());
 
@@ -223,7 +226,7 @@ TEST(WorkbookBuilder, FormulaProbePinsValueAxisRefBranch) {
   })});
   root["pivot"] = jobj(std::move(pivot));
   const JsonValue probe_spec = jobj(std::move(root));
-  auto built_or = build_pivot_from_spec(probe_spec);
+  auto built_or = build_pivot_from_spec(probe_spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   BuiltPivot built = std::move(built_or.value());
   auto results_or = evaluate_pivot_formula_probes(&built, probe_spec);
@@ -246,7 +249,7 @@ TEST(WorkbookBuilder, FormulaProbePinsPageAxisRefBranch) {
   })});
   root["pivot"] = jobj(std::move(pivot));
   const JsonValue probe_spec = jobj(std::move(root));
-  auto built_or = build_pivot_from_spec(probe_spec);
+  auto built_or = build_pivot_from_spec(probe_spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   BuiltPivot built = std::move(built_or.value());
   auto results_or = evaluate_pivot_formula_probes(&built, probe_spec);
@@ -293,7 +296,7 @@ TEST(WorkbookBuilder, CountAggregationCountsNonBlankRegardlessOfType) {
       {"pivot", std::move(pivot)},
   });
 
-  auto built_or = build_pivot_from_spec(spec);
+  auto built_or = build_pivot_from_spec(spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const BuiltPivot& built = built_or.value();
 
@@ -317,6 +320,89 @@ TEST(WorkbookBuilder, CountAggregationCountsNonBlankRegardlessOfType) {
 // than a literal.
 JsonValue formula_cell(std::string formula) {
   return jobj({{"kind", jstr("formula")}, {"formula", jstr(std::move(formula))}});
+}
+
+const std::array<std::pair<const char*, ExcelProfile>, 4>& all_excel_profiles() {
+  static constexpr std::array<std::pair<const char*, ExcelProfile>, 4> profiles{{
+      {"mac-365-ja_JP", mac_365_ja_jp_profile()},
+      {"win-365-ja_JP", win_365_ja_jp_profile()},
+      {"mac-365-en_US", mac_365_en_us_profile()},
+      {"win-365-en_US", win_365_en_us_profile()},
+  }};
+  return profiles;
+}
+
+std::string dollar_probe_value(ExcelProfile profile) {
+  return profile.locale == ExcelLocale::kJaJP ? "¥1,235" : "$1,234.50";
+}
+
+JsonValue build_locale_sensitive_pivot_spec() {
+  JsonValue data_cells = jobj({
+      {"A1", text_cell("Region")},
+      {"B1", text_cell("Amount")},
+      {"C1", text_cell("Label")},
+      {"A2", text_cell("North")},
+      {"B2", number_cell(100.0)},
+      {"C2", formula_cell("=DOLLAR(1234.5)")},
+      {"A3", text_cell("South")},
+      {"B3", number_cell(200.0)},
+      {"C3", formula_cell("=DOLLAR(1234.5)")},
+  });
+  JsonValue pivot = jobj({
+      {"source", jstr("Data!A1:C3")},
+      {"anchor", jstr("Report!A1")},
+      {"row_fields", jarr({jstr("Label")})},
+      {"data_fields", jarr({jobj({{"field", jstr("Amount")}, {"agg", jstr("Sum")}})})},
+  });
+  return jobj({
+      {"sheets", jobj({{"Data", std::move(data_cells)}, {"Report", jobj({})}})},
+      {"pivot", std::move(pivot)},
+  });
+}
+
+JsonValue build_locale_sensitive_print_spec() {
+  return jobj({
+      {"sheets", jobj({{"Sheet1", jobj({
+                                      {"A1", formula_cell("=DOLLAR(1234.5)")},
+                                      {"A2", text_cell("content")},
+                                  })}})},
+      {"print", jobj({
+                    {"sheet", jstr("Sheet1")},
+                    {"print_area", jstr("A1:A2")},
+                })},
+  });
+}
+
+TEST(WorkbookBuilder, ExplicitProfileControlsFormulaBeforePivotLabels) {
+  for (const auto& [id, profile] : all_excel_profiles()) {
+    auto built_or = build_pivot_from_spec(build_locale_sensitive_pivot_spec(), profile);
+    ASSERT_TRUE(static_cast<bool>(built_or)) << id << ": " << built_or.error().message;
+    const BuiltPivot& built = built_or.value();
+
+    EXPECT_TRUE(same_profile(built.workbook->excel_profile(), profile)) << id;
+    ASSERT_EQ(built.table.data_fields().size(), 1U) << id;
+    const std::string expected_label = profile.locale == ExcelLocale::kJaJP ? "合計 / Amount" : "Sum of Amount";
+    EXPECT_EQ(built.table.data_fields()[0].name, expected_label) << id;
+
+    const Sheet* data = built.workbook->sheet_by_name("Data");
+    ASSERT_NE(data, nullptr) << id;
+    const Value label = data->resolve_cell_value(1, 2);
+    ASSERT_TRUE(label.is_text()) << id;
+    EXPECT_EQ(label.as_text(), dollar_probe_value(profile)) << id;
+  }
+}
+
+TEST(WorkbookBuilderPrint, ExplicitProfileControlsFormulaBeforePagination) {
+  for (const auto& [id, profile] : all_excel_profiles()) {
+    auto built_or = build_print_from_spec(build_locale_sensitive_print_spec(), profile);
+    ASSERT_TRUE(static_cast<bool>(built_or)) << id << ": " << built_or.error().message;
+    const BuiltPrint& built = built_or.value();
+
+    EXPECT_TRUE(same_profile(built.workbook->excel_profile(), profile)) << id;
+    const Value value = built.workbook->sheet(built.sheet_index).resolve_cell_value(0, 0);
+    ASSERT_TRUE(value.is_text()) << id;
+    EXPECT_EQ(value.as_text(), dollar_probe_value(profile)) << id;
+  }
 }
 
 // Builds the Region/Amount dataset the three `*_with_error_in_value_column`
@@ -357,7 +443,7 @@ TEST(WorkbookBuilder, FormulaSourceCellCountsAsNonBlankLikeAnyError) {
   // case that motivated supporting `{"kind":"formula"}` pivot-source
   // cells at all -- North=3, South=2, total=5.
   const JsonValue spec = build_error_in_value_column_spec("Count");
-  auto built_or = build_pivot_from_spec(spec);
+  auto built_or = build_pivot_from_spec(spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const BuiltPivot& built = built_or.value();
 
@@ -382,7 +468,7 @@ TEST(WorkbookBuilder, SumAggregationPropagatesFormulaSourceError) {
   // the grand total both become the error; South, unaffected, sums
   // normally.
   const JsonValue spec = build_error_in_value_column_spec("Sum");
-  auto built_or = build_pivot_from_spec(spec);
+  auto built_or = build_pivot_from_spec(spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const BuiltPivot& built = built_or.value();
 
@@ -414,7 +500,7 @@ TEST(WorkbookBuilder, CountNumbersAggregationExcludesFormulaSourceError) {
   // cells, so the #DIV/0! cell drops out the same way a text cell
   // would -- North=2, South=2, total=4.
   const JsonValue spec = build_error_in_value_column_spec("CountNumbers");
-  auto built_or = build_pivot_from_spec(spec);
+  auto built_or = build_pivot_from_spec(spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const BuiltPivot& built = built_or.value();
 
@@ -467,7 +553,7 @@ TEST(WorkbookBuilder, FormulaSourceErrorCrossedWithColumnFieldStaysInItsOwnCell)
       {"pivot", std::move(pivot)},
   });
 
-  auto built_or = build_pivot_from_spec(spec);
+  auto built_or = build_pivot_from_spec(spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const BuiltPivot& built = built_or.value();
 
@@ -575,7 +661,7 @@ TEST(WorkbookBuilderPrint, WideTableWrapsOntoFurtherPageColumns) {
                 })},
   });
 
-  auto built_or = build_print_from_spec(spec);
+  auto built_or = build_print_from_spec(spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const BuiltPrint& built = built_or.value();
 
@@ -612,7 +698,7 @@ TEST(WorkbookBuilderPrint, TallTableForcesHorizontalBreak) {
                 })},
   });
 
-  auto built_or = build_print_from_spec(spec);
+  auto built_or = build_print_from_spec(spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const BuiltPrint& built = built_or.value();
 
@@ -651,7 +737,7 @@ TEST(WorkbookBuilderPrint, ManualRowBreakIsHonored) {
                 })},
   });
 
-  auto built_or = build_print_from_spec(spec);
+  auto built_or = build_print_from_spec(spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const BuiltPrint& built = built_or.value();
 
@@ -687,7 +773,7 @@ TEST(WorkbookBuilderPrint, FitToWidthCollapsesVerticalBreaks) {
                 })},
   });
 
-  auto built_or = build_print_from_spec(spec);
+  auto built_or = build_print_from_spec(spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const BuiltPrint& built = built_or.value();
 
@@ -716,7 +802,7 @@ TEST(WorkbookBuilderPrint, HiddenColumnCarriesNoWidthOfItsOwn) {
                 })},
   });
 
-  auto built_or = build_print_from_spec(spec);
+  auto built_or = build_print_from_spec(spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const SheetLayout& layout = built_or.value().workbook->sheet(built_or.value().sheet_index).layout();
 
@@ -742,7 +828,7 @@ TEST(WorkbookBuilderPrint, HiddenRowCarriesNoHeightOfItsOwn) {
                 })},
   });
 
-  auto built_or = build_print_from_spec(spec);
+  auto built_or = build_print_from_spec(spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const SheetLayout& layout = built_or.value().workbook->sheet(built_or.value().sheet_index).layout();
 
@@ -767,7 +853,7 @@ TEST(WorkbookBuilderPrint, HidingAndSizingTheSameColumnStayIndependent) {
                 })},
   });
 
-  auto built_or = build_print_from_spec(spec);
+  auto built_or = build_print_from_spec(spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const SheetLayout& layout = built_or.value().workbook->sheet(built_or.value().sheet_index).layout();
 
@@ -797,7 +883,7 @@ TEST(WorkbookBuilderPrint, HiddenColumnIsNotMaskedByAWidthSpanCoveringIt) {
                 })},
   });
 
-  auto built_or = build_print_from_spec(spec);
+  auto built_or = build_print_from_spec(spec, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const BuiltPrint& built = built_or.value();
 
@@ -815,7 +901,7 @@ TEST(WorkbookBuilderPrint, HiddenColumnIsNotMaskedByAWidthSpanCoveringIt) {
                     {"page_setup", a4_portrait_setup()},
                 })},
   });
-  auto visible_built = build_print_from_spec(visible);
+  auto visible_built = build_print_from_spec(visible, win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(visible_built)) << visible_built.error().message;
   auto without_hidden = print::paginate(*visible_built.value().workbook, visible_built.value().sheet_index);
   ASSERT_TRUE(static_cast<bool>(without_hidden)) << without_hidden.error().message;
@@ -829,7 +915,7 @@ TEST(WorkbookBuilderPrint, RejectsMalformedHiddenColumnKey) {
       {"hidden_columns", jarr({jstr("3")})},
       {"print", jobj({{"sheet", jstr("Sheet1")}, {"page_setup", a4_portrait_setup()}})},
   });
-  EXPECT_FALSE(static_cast<bool>(build_print_from_spec(spec)));
+  EXPECT_FALSE(static_cast<bool>(build_print_from_spec(spec, win_365_ja_jp_profile())));
 }
 
 TEST(WorkbookBuilderPrint, RejectsHiddenRowZero) {
@@ -839,18 +925,18 @@ TEST(WorkbookBuilderPrint, RejectsHiddenRowZero) {
       {"hidden_rows", jarr({jstr("0")})},
       {"print", jobj({{"sheet", jstr("Sheet1")}, {"page_setup", a4_portrait_setup()}})},
   });
-  EXPECT_FALSE(static_cast<bool>(build_print_from_spec(spec)));
+  EXPECT_FALSE(static_cast<bool>(build_print_from_spec(spec, win_365_ja_jp_profile())));
 }
 
 TEST(WorkbookBuilderPrint, RejectsSpecWithoutPrintBlock) {
   const JsonValue spec = jobj({{"sheets", jobj({{"Sheet1", jobj({})}})}});
-  auto built_or = build_print_from_spec(spec);
+  auto built_or = build_print_from_spec(spec, win_365_ja_jp_profile());
   EXPECT_FALSE(static_cast<bool>(built_or));
 }
 
 TEST(WorkbookBuilderPrint, RejectsUnknownSheet) {
   JsonValue spec = print_spec(jobj({{"sheet", jstr("Nonexistent")}}));
-  auto built_or = build_print_from_spec(spec);
+  auto built_or = build_print_from_spec(spec, win_365_ja_jp_profile());
   EXPECT_FALSE(static_cast<bool>(built_or));
 }
 
@@ -871,7 +957,7 @@ TEST(WorkbookBuilder, SheetIndicesFollowDeclarationOrderNotSheetName) {
   })json");
   ASSERT_TRUE(spec_or.has_value()) << spec_or.error().message;
 
-  auto built_or = build_print_from_spec(spec_or.value());
+  auto built_or = build_print_from_spec(spec_or.value(), win_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
   const BuiltPrint& built = built_or.value();
 

@@ -13,18 +13,30 @@
 
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
 namespace {
 
-using formulon::test::EvalSource;
+using formulon::test::EvalSourceIn;
+
+Value EvalWithProfile(std::string_view src, ExcelProfile profile) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(profile);
+  return EvalSourceIn(src, wb, wb.sheet(0));
+}
+
+Value EvalJapanese(std::string_view src) {
+  return EvalWithProfile(src, mac_365_ja_jp_profile());
+}
 
 // ---------------------------------------------------------------------------
 // Registry pin: all three names are registered.
@@ -42,26 +54,26 @@ TEST(BuiltinsWidthRegistry, AllNamesRegistered) {
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsWidthAsc, FullwidthAscii) {
-  const Value v = EvalSource(u8"=ASC(\"Ａ\")");  // "Ａ"
+  const Value v = EvalJapanese(u8"=ASC(\"Ａ\")");  // "Ａ"
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "A");
 }
 
 TEST(BuiltinsWidthAsc, FullwidthAsciiAndSpace) {
-  const Value v = EvalSource(u8"=ASC(\"ＡＢＣ　１２３\")");  // "ＡＢＣ　１２３"
+  const Value v = EvalJapanese(u8"=ASC(\"ＡＢＣ　１２３\")");  // "ＡＢＣ　１２３"
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "ABC 123");
 }
 
 TEST(BuiltinsWidthAsc, VoicedKatakanaGa) {
-  const Value v = EvalSource(u8"=ASC(\"ガ\")");  // "ガ"
+  const Value v = EvalJapanese(u8"=ASC(\"ガ\")");  // "ガ"
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"ｶﾞ");  // "ｶﾞ"
 }
 
 TEST(BuiltinsWidthAsc, SemiVoicedKatakanaRow) {
   // ASC("パピプペポ") -> "ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ"
-  const Value v = EvalSource(u8"=ASC(\"パピプペポ\")");
+  const Value v = EvalJapanese(u8"=ASC(\"パピプペポ\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ");
 }
@@ -69,40 +81,40 @@ TEST(BuiltinsWidthAsc, SemiVoicedKatakanaRow) {
 TEST(BuiltinsWidthAsc, VoicedVu) {
   // U+30F4 ヴ has no half-width counterpart in JIS X 0201, so Mac Excel
   // 365 (ja-JP) leaves it unchanged rather than decomposing to ｳ + ﾞ.
-  const Value v = EvalSource(u8"=ASC(\"ヴ\")");  // "ヴ"
+  const Value v = EvalJapanese(u8"=ASC(\"ヴ\")");  // "ヴ"
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"ヴ");  // "ヴ" (passthrough)
 }
 
 TEST(BuiltinsWidthAsc, HiraganaPassthrough) {
-  const Value v = EvalSource(u8"=ASC(\"ひらがな\")");  // "ひらがな"
+  const Value v = EvalJapanese(u8"=ASC(\"ひらがな\")");  // "ひらがな"
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"ひらがな");
 }
 
 TEST(BuiltinsWidthAsc, MixedKanjiAndFullwidthAscii) {
   // "混在ＡＢ" -> "混在AB"
-  const Value v = EvalSource(u8"=ASC(\"混在ＡＢ\")");
+  const Value v = EvalJapanese(u8"=ASC(\"混在ＡＢ\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"混在AB");
 }
 
 TEST(BuiltinsWidthAsc, EmptyString) {
-  const Value v = EvalSource("=ASC(\"\")");
+  const Value v = EvalJapanese("=ASC(\"\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "");
 }
 
 TEST(BuiltinsWidthAsc, AlreadyHalfwidth) {
   // Plain ASCII passes through unchanged.
-  const Value v = EvalSource("=ASC(\"hello\")");
+  const Value v = EvalJapanese("=ASC(\"hello\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "hello");
 }
 
 TEST(BuiltinsWidthAsc, NumberCoerces) {
   // Number coerces to text first, then ASC is identity on ASCII.
-  const Value v = EvalSource("=ASC(123)");
+  const Value v = EvalJapanese("=ASC(123)");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "123");
 }
@@ -110,7 +122,7 @@ TEST(BuiltinsWidthAsc, NumberCoerces) {
 TEST(BuiltinsWidthAsc, ArchaicKatakanaPassthrough) {
   // U+30F7 ヷ has no half-width equivalent in the standard table - pass
   // through verbatim.
-  const Value v = EvalSource(u8"=ASC(\"ヷ\")");
+  const Value v = EvalJapanese(u8"=ASC(\"ヷ\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"ヷ");
 }
@@ -120,7 +132,7 @@ TEST(BuiltinsWidthAsc, ArchaicKatakanaPassthrough) {
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsWidthJis, AsciiAndSpace) {
-  const Value v = EvalSource("=JIS(\"ABC 123\")");
+  const Value v = EvalJapanese("=JIS(\"ABC 123\")");
   ASSERT_TRUE(v.is_text());
   // "ＡＢＣ　１２３"
   EXPECT_EQ(v.as_text(), u8"ＡＢＣ　１２３");
@@ -128,55 +140,55 @@ TEST(BuiltinsWidthJis, AsciiAndSpace) {
 
 TEST(BuiltinsWidthJis, VoicedRecompose) {
   // JIS("ｶﾞ") -> "ガ"
-  const Value v = EvalSource(u8"=JIS(\"ｶﾞ\")");
+  const Value v = EvalJapanese(u8"=JIS(\"ｶﾞ\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"ガ");
 }
 
 TEST(BuiltinsWidthJis, SemiVoicedRow) {
   // JIS("ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ") -> "パピプペポ"
-  const Value v = EvalSource(u8"=JIS(\"ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ\")");
+  const Value v = EvalJapanese(u8"=JIS(\"ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"パピプペポ");
 }
 
 TEST(BuiltinsWidthJis, UnvoicedKatakanaRow) {
   // JIS("ｱｲｳｴｵ") -> "アイウエオ"
-  const Value v = EvalSource(u8"=JIS(\"ｱｲｳｴｵ\")");
+  const Value v = EvalJapanese(u8"=JIS(\"ｱｲｳｴｵ\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"アイウエオ");
 }
 
 TEST(BuiltinsWidthJis, BlankStringPassesThrough) {
-  const Value v = EvalSource("=JIS(\"\")");
+  const Value v = EvalJapanese("=JIS(\"\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "");
 }
 
 TEST(BuiltinsWidthJis, HalfwidthPunctuation) {
   // JIS("｡｢｣､･") -> "。「」、・"
-  const Value v = EvalSource(u8"=JIS(\"｡｢｣､･\")");
+  const Value v = EvalJapanese(u8"=JIS(\"｡｢｣､･\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"。「」、・");
 }
 
 TEST(BuiltinsWidthJis, LoneDakutenMapsToSpacingMark) {
   // A U+FF9E not preceded by a voice-accepting katakana maps to U+309B.
-  const Value v = EvalSource(u8"=JIS(\"ﾞ\")");
+  const Value v = EvalJapanese(u8"=JIS(\"ﾞ\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"゛");
 }
 
 TEST(BuiltinsWidthJis, DakutenAfterNonVoicedBaseSplits) {
   // ｧ (small a, no voiced form) + U+FF9E -> small a + spacing dakuten.
-  const Value v = EvalSource(u8"=JIS(\"ｧﾞ\")");
+  const Value v = EvalJapanese(u8"=JIS(\"ｧﾞ\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"ァ゛");
 }
 
 TEST(BuiltinsWidthJis, VuRecompose) {
   // JIS("ｳﾞ") -> "ヴ"
-  const Value v = EvalSource(u8"=JIS(\"ｳﾞ\")");
+  const Value v = EvalJapanese(u8"=JIS(\"ｳﾞ\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"ヴ");
 }
@@ -186,14 +198,14 @@ TEST(BuiltinsWidthJis, VuRecompose) {
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsWidthDbcs, AliasOfJisAscii) {
-  const Value v = EvalSource("=DBCS(\"ABC 123\")");
+  const Value v = EvalJapanese("=DBCS(\"ABC 123\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"ＡＢＣ　１２３");
 }
 
 TEST(BuiltinsWidthDbcs, AliasOfJisVoiced) {
   // DBCS("ｶﾞ") -> "ガ"
-  const Value v = EvalSource(u8"=DBCS(\"ｶﾞ\")");
+  const Value v = EvalJapanese(u8"=DBCS(\"ｶﾞ\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"ガ");
 }
@@ -223,8 +235,8 @@ TEST(BuiltinsWidthDbcs, BothSpellingsAgreeAcrossTheConversionCorpus) {
   };
   for (const char* argument : kArguments) {
     SCOPED_TRACE(argument);
-    const Value from_jis = EvalSource(std::string("=JIS(") + argument + ")");
-    const Value from_dbcs = EvalSource(std::string("=DBCS(") + argument + ")");
+    const Value from_jis = EvalJapanese(std::string("=JIS(") + argument + ")");
+    const Value from_dbcs = EvalJapanese(std::string("=DBCS(") + argument + ")");
     ASSERT_EQ(from_jis.kind(), from_dbcs.kind());
     if (from_jis.is_text()) {
       EXPECT_EQ(from_jis.as_text(), from_dbcs.as_text());
@@ -235,7 +247,7 @@ TEST(BuiltinsWidthDbcs, BothSpellingsAgreeAcrossTheConversionCorpus) {
 
   // The nesting order must not matter either, which is what the corpus's
   // two round-trip cases assert against Excel under the stored spelling.
-  EXPECT_EQ(EvalSource("=ASC(JIS(\"ABC123\"))").as_text(), EvalSource("=ASC(DBCS(\"ABC123\"))").as_text());
+  EXPECT_EQ(EvalJapanese("=ASC(JIS(\"ABC123\"))").as_text(), EvalJapanese("=ASC(DBCS(\"ABC123\"))").as_text());
 }
 
 // ---------------------------------------------------------------------------
@@ -243,14 +255,14 @@ TEST(BuiltinsWidthDbcs, BothSpellingsAgreeAcrossTheConversionCorpus) {
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsWidthRoundTrip, AscJisAsciiIdentity) {
-  const Value v = EvalSource("=ASC(JIS(\"ABC\"))");
+  const Value v = EvalJapanese("=ASC(JIS(\"ABC\"))");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "ABC");
 }
 
 TEST(BuiltinsWidthRoundTrip, JisAscVoicedIdentity) {
   // JIS(ASC("ガ")) -> "ガ"
-  const Value v = EvalSource(u8"=JIS(ASC(\"ガ\"))");
+  const Value v = EvalJapanese(u8"=JIS(ASC(\"ガ\"))");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), u8"ガ");
 }

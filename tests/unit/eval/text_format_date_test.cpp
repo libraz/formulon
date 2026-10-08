@@ -14,6 +14,7 @@
 #include <string_view>
 #include <utility>
 
+#include "eval/eval_profile_scope.h"
 #include "eval/text_format/display_text.h"
 #include "eval/text_format/number_format.h"
 #include "gtest/gtest.h"
@@ -24,6 +25,7 @@ namespace text_format {
 namespace {
 
 std::string Render(double value, std::string_view format) {
+  const eval::ScopedEvalProfile profile_scope(mac_365_ja_jp_profile());
   std::string out;
   const FormatStatus s = apply_format(value, format, out);
   EXPECT_EQ(s, FormatStatus::kOk);

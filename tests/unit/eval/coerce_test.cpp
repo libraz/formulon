@@ -121,10 +121,11 @@ TEST(CoerceToNumberTextDate, SlashSeparatedDate) {
 }
 
 TEST(CoerceToNumberTextDate, KanjiDate) {
-  auto r =
-      coerce_to_number(Value::text("2024\xE5\xB9\xB4"
-                                   "1\xE6\x9C\x88"
-                                   "10\xE6\x97\xA5"));
+  auto r = CoerceTextWithProfile(
+      "2024\xE5\xB9\xB4"
+      "1\xE6\x9C\x88"
+      "10\xE6\x97\xA5",
+      mac_365_ja_jp_profile());
   ASSERT_TRUE(r.has_value());
   EXPECT_DOUBLE_EQ(r.value(), 45301.0);
 }
@@ -283,9 +284,10 @@ TEST(CoerceToNumberTextCurrency, LeadingEuro) {
 }
 
 TEST(CoerceToNumberTextCurrency, LeadingYen) {
-  auto r =
-      coerce_to_number(Value::text("\xC2\xA5"
-                                   "1000"));
+  auto r = CoerceTextWithProfile(
+      "\xC2\xA5"
+      "1000",
+      mac_365_ja_jp_profile());
   ASSERT_TRUE(r.has_value());
   EXPECT_DOUBLE_EQ(r.value(), 1000.0);
 }
@@ -413,9 +415,10 @@ TEST(CoerceToNumberTextCurrency, WonRejected) {
 
 TEST(CoerceToNumberTextCurrency, FullWidthYenAccepted) {
   // The full-width yen sign `￥` (U+FFE5) is accepted: "￥100" -> 100.
-  auto r =
-      coerce_to_number(Value::text("\xEF\xBF\xA5"
-                                   "100"));
+  auto r = CoerceTextWithProfile(
+      "\xEF\xBF\xA5"
+      "100",
+      mac_365_ja_jp_profile());
   ASSERT_TRUE(r.has_value());
   EXPECT_DOUBLE_EQ(r.value(), 100.0);
 }
@@ -453,16 +456,17 @@ TEST(CoerceToNumberTextLocale, AccountingParensNegate) {
 
 TEST(CoerceToNumberTextLocale, FullWidthDigits) {
   // "１２３" (U+FF11 U+FF12 U+FF13) folds to 123.
-  auto r = coerce_to_number(Value::text("\xEF\xBC\x91\xEF\xBC\x92\xEF\xBC\x93"));
+  auto r = CoerceTextWithProfile("\xEF\xBC\x91\xEF\xBC\x92\xEF\xBC\x93", mac_365_ja_jp_profile());
   ASSERT_TRUE(r.has_value());
   EXPECT_DOUBLE_EQ(r.value(), 123.0);
 }
 
 TEST(CoerceToNumberTextLocale, YenWithGrouping) {
   // "¥1,000" (U+00A5 prefix + grouped digits) coerces to 1000.
-  auto r =
-      coerce_to_number(Value::text("\xC2\xA5"
-                                   "1,000"));
+  auto r = CoerceTextWithProfile(
+      "\xC2\xA5"
+      "1,000",
+      mac_365_ja_jp_profile());
   ASSERT_TRUE(r.has_value());
   EXPECT_DOUBLE_EQ(r.value(), 1000.0);
 }

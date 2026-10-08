@@ -150,6 +150,10 @@ class SurfaceParityTests(unittest.TestCase):
         for name in self.METHODS:
             self.assertTrue(hasattr(Workbook, name), f"Workbook missing method: {name}")
 
+    def test_default_workbook_uses_english_profile(self) -> None:
+        with Workbook.create_default() as wb:
+            self.assertEqual(wb.excel_profile_id(), "win-365-en_US")
+
     def test_public_types_exported(self) -> None:
         for name in (
             "MergeRange",

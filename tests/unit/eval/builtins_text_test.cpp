@@ -157,9 +157,10 @@ TEST(TextTrim, MultiBytePreserved) {
 TEST(TextTrim, StripsIdeographicSpace) {
   // Mac Excel 365 ja-JP: TRIM("　a　") -> "a". U+3000 (UTF-8 E3 80 80)
   // is treated as a trimmable whitespace at edges.
-  const Value v = EvalSource(
+  const Value v = EvalWithProfile(
       "=TRIM(\"\xE3\x80\x80"
-      "a\xE3\x80\x80\")");
+      "a\xE3\x80\x80\")",
+      mac_365_ja_jp_profile());
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "a");
 }
@@ -169,9 +170,10 @@ TEST(TextTrim, CollapsesIdeographicWithAscii) {
   // run here opens with U+3000, so that is what survives. Excel keeps the
   // character rather than normalising the run, which matters because a
   // full-width space between two words is typography, not padding.
-  const Value v = EvalSource(
+  const Value v = EvalWithProfile(
       "=TRIM(\"a\xE3\x80\x80 \xE3\x80\x80"
-      "b\")");
+      "b\")",
+      mac_365_ja_jp_profile());
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "a\xE3\x80\x80\x62");
 }
@@ -180,9 +182,10 @@ TEST(TextTrim, MixedRunOpeningWithAsciiKeepsTheAsciiSpace) {
   // The mirror of the case above: the same two space kinds in the other
   // order, so the ASCII space is the survivor. The pair is what shows the
   // rule is "first of the run" rather than "prefer one kind".
-  const Value v = EvalSource(
+  const Value v = EvalWithProfile(
       "=TRIM(\"a \xE3\x80\x80"
-      "b\")");
+      "b\")",
+      mac_365_ja_jp_profile());
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "a b");
 }
@@ -194,11 +197,11 @@ TEST(TextTrim, MixedRunOpeningWithAsciiKeepsTheAsciiSpace) {
 // spaced deliberately.
 TEST(TextTrim, SingleInteriorIdeographicSpaceIsKept) {
   // "あ　い" is already trimmed.
-  const Value v = EvalSource("=TRIM(\"\xE3\x81\x82\xE3\x80\x80\xE3\x81\x84\")");
+  const Value v = EvalWithProfile("=TRIM(\"\xE3\x81\x82\xE3\x80\x80\xE3\x81\x84\")", mac_365_ja_jp_profile());
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "\xE3\x81\x82\xE3\x80\x80\xE3\x81\x84");
 
-  const Value len = EvalSource("=LEN(TRIM(\"\xE3\x81\x82\xE3\x80\x80\xE3\x81\x84\"))");
+  const Value len = EvalWithProfile("=LEN(TRIM(\"\xE3\x81\x82\xE3\x80\x80\xE3\x81\x84\"))", mac_365_ja_jp_profile());
   ASSERT_TRUE(len.is_number());
   EXPECT_DOUBLE_EQ(len.as_number(), 3.0);
 }
@@ -206,7 +209,8 @@ TEST(TextTrim, SingleInteriorIdeographicSpaceIsKept) {
 TEST(TextTrim, RepeatedInteriorIdeographicSpacesCollapseToOneIdeographic) {
   // "あ　　い" -> "あ　い": the run shortens to one, and the one it keeps
   // is still U+3000.
-  const Value v = EvalSource("=TRIM(\"\xE3\x81\x82\xE3\x80\x80\xE3\x80\x80\xE3\x81\x84\")");
+  const Value v =
+      EvalWithProfile("=TRIM(\"\xE3\x81\x82\xE3\x80\x80\xE3\x80\x80\xE3\x81\x84\")", mac_365_ja_jp_profile());
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "\xE3\x81\x82\xE3\x80\x80\xE3\x81\x84");
 }
@@ -214,8 +218,9 @@ TEST(TextTrim, RepeatedInteriorIdeographicSpacesCollapseToOneIdeographic) {
 TEST(TextTrim, EdgeAndInteriorIdeographicSpacesTogether) {
   // "　　あ　　い　　" -> "あ　い": the edge runs go away entirely and the
   // interior one shortens to a single U+3000.
-  const Value v = EvalSource(
-      "=TRIM(\"\xE3\x80\x80\xE3\x80\x80\xE3\x81\x82\xE3\x80\x80\xE3\x80\x80\xE3\x81\x84\xE3\x80\x80\xE3\x80\x80\")");
+  const Value v = EvalWithProfile(
+      "=TRIM(\"\xE3\x80\x80\xE3\x80\x80\xE3\x81\x82\xE3\x80\x80\xE3\x80\x80\xE3\x81\x84\xE3\x80\x80\xE3\x80\x80\")",
+      mac_365_ja_jp_profile());
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "\xE3\x81\x82\xE3\x80\x80\xE3\x81\x84");
 }
@@ -241,9 +246,10 @@ TEST(TextTrim, IdeographicSpaceAdjacentToTabSurvivesAsItself) {
   // "a　\t　b" is unchanged. The tab is not trimmable and ends the run, so
   // each ideographic space is a run of one and keeps its own character
   // rather than being deleted or rewritten.
-  const Value v = EvalSource(
+  const Value v = EvalWithProfile(
       "=TRIM(\"a\xE3\x80\x80\t\xE3\x80\x80"
-      "b\")");
+      "b\")",
+      mac_365_ja_jp_profile());
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "a\xE3\x80\x80\t\xE3\x80\x80\x62");
 }

@@ -15,7 +15,7 @@ namespace oracle {
 namespace workbook_builder_detail {
 
 Error invalid(std::string message);
-Expected<std::unique_ptr<Workbook>, Error> build_workbook(const JsonValue& spec);
+Expected<std::unique_ptr<Workbook>, Error> build_workbook(const JsonValue& spec, ExcelProfile profile);
 
 }  // namespace workbook_builder_detail
 }  // namespace oracle

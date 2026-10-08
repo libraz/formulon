@@ -34,9 +34,9 @@ Value EvalWithProfile(std::string_view src, ExcelProfile profile) {
   return evaluate(*root, eval_arena, default_registry(), test::context_with_profile(profile));
 }
 
-TEST(FormulaProfile, NewWorkbookDefaultsToWinJa) {
+TEST(FormulaProfile, NewWorkbookDefaultsToWinEn) {
   const Workbook wb = Workbook::create();
-  EXPECT_STREQ(excel_profile_id(wb.excel_profile()), "win-365-ja_JP");
+  EXPECT_STREQ(excel_profile_id(wb.excel_profile()), "win-365-en_US");
 }
 
 TEST(FormulaProfile, DynamicArrayFunctionsAreAvailableOnBoth365Profiles) {

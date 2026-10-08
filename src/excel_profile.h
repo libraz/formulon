@@ -41,7 +41,7 @@ inline constexpr ExcelProfile win_365_en_us_profile() noexcept {
 }
 
 inline constexpr ExcelProfile default_excel_profile() noexcept {
-  return win_365_ja_jp_profile();
+  return win_365_en_us_profile();
 }
 
 inline bool same_profile(ExcelProfile a, ExcelProfile b) noexcept {

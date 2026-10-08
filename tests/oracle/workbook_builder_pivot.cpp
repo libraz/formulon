@@ -162,7 +162,7 @@ Expected<std::vector<std::string>, Error> string_list(const JsonValue& obj, cons
 
 }  // namespace
 
-Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec) {
+Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec, ExcelProfile profile) {
   if (!spec.is_object()) {
     return invalid("workbook spec must be an object");
   }
@@ -172,7 +172,7 @@ Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec) {
   }
   const JsonValue& pivot = *pivot_v;
 
-  ASSIGN_OR_RETURN(std::unique_ptr<Workbook> workbook, build_workbook(spec));
+  ASSIGN_OR_RETURN(std::unique_ptr<Workbook> workbook, build_workbook(spec, profile));
 
   // --- source range --------------------------------------------------------
   const JsonValue* source_v = pivot.find("source");
@@ -376,7 +376,6 @@ Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec) {
   if (data_v == nullptr || !data_v->is_array() || data_v->as_array().empty()) {
     return invalid("pivot block needs a non-empty 'data_fields' array");
   }
-  const ExcelProfile profile = workbook->excel_profile();
   std::map<std::string, std::uint32_t> source_name_occurrences;
   for (const JsonValue& df : data_v->as_array()) {
     if (!df.is_object()) {

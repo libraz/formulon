@@ -9,20 +9,31 @@
 #include <string>
 #include <string_view>
 
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "util/test_eval_helpers.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
 namespace {
 
 using formulon::test::EvalSource;
+using formulon::test::EvalSourceIn;
 
 // Evaluates `formula` and returns its text payload copied out of the shared
 // arena, so the caller can hold it across a second evaluation.
 std::string EvalText(std::string_view formula) {
   const Value v = EvalSource(formula);
+  EXPECT_TRUE(v.is_text()) << formula;
+  return v.is_text() ? std::string(v.as_text()) : std::string();
+}
+
+std::string EvalTextWithProfile(std::string_view formula, ExcelProfile profile) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(profile);
+  const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
   EXPECT_TRUE(v.is_text()) << formula;
   return v.is_text() ? std::string(v.as_text()) : std::string();
 }
@@ -75,7 +86,7 @@ TEST(DisplayRoundingTies, FixedMatchesRound) {
 
 TEST(DisplayRoundingTies, DollarMatchesRound) {
   // ja-JP renders the yen sign `¥` (UTF-8 0xC2 0xA5) as the prefix.
-  EXPECT_EQ(EvalText("=DOLLAR(1.005,2)"),
+  EXPECT_EQ(EvalTextWithProfile("=DOLLAR(1.005,2)", mac_365_ja_jp_profile()),
             "\xC2\xA5"
             "1.01");
 }

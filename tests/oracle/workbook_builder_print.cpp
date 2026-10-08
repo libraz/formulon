@@ -243,7 +243,7 @@ Expected<std::vector<std::uint32_t>, Error> uint_list(const JsonValue& block, co
 
 }  // namespace
 
-Expected<BuiltPrint, Error> build_print_from_spec(const JsonValue& spec) {
+Expected<BuiltPrint, Error> build_print_from_spec(const JsonValue& spec, ExcelProfile profile) {
   if (!spec.is_object()) {
     return invalid("workbook spec must be an object");
   }
@@ -253,7 +253,7 @@ Expected<BuiltPrint, Error> build_print_from_spec(const JsonValue& spec) {
   }
   const JsonValue& print = *print_v;
 
-  ASSIGN_OR_RETURN(std::unique_ptr<Workbook> workbook, build_workbook(spec));
+  ASSIGN_OR_RETURN(std::unique_ptr<Workbook> workbook, build_workbook(spec, profile));
 
   // --- target sheet --------------------------------------------------------
   const JsonValue* sheet_v = print.find("sheet");
