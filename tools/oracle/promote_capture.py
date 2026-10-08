@@ -65,7 +65,7 @@ PROVENANCE_NAME = "PROVENANCE.json"
 TRACKS = {
     "workbook": {
         "golden_key": "golden_wb",
-        "default_golden_dir": REPO_ROOT / "tests" / "oracle" / "golden_wb",
+        "default_golden_dir": REPO_ROOT / "tests" / "oracle" / "targets" / "win-365-ja_JP" / "golden_wb",
     },
 }
 
@@ -259,7 +259,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
     target_record = targets_doc["targets"][target_name]
 
-    golden_dir = TRACKS[args.track]["default_golden_dir"]
+    track = TRACKS[args.track]
+    output_dir = target_record.get("output_dir")
+    if isinstance(output_dir, str) and output_dir:
+        golden_dir = REPO_ROOT / Path(output_dir).parent / str(track["golden_key"])
+    else:
+        golden_dir = track["default_golden_dir"]
     # Only a `wanted` target stages outside the tree; a scaffolded one has
     # its capture written straight into the golden directory, so defaulting
     # to the staging path there would re-promote whatever capture happens

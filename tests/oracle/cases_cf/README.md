@@ -6,7 +6,7 @@ to `src/cf/cf_evaluator.cpp` surface as a CI failure rather than as a
 silent rendering regression in downstream UIs.
 
 This pipeline is **separate** from the function oracle
-(`tests/oracle/cases/` + `tests/oracle/golden/`). The function oracle
+(`tests/oracle/cases/` + `tests/oracle/targets/mac-365-ja_JP/golden/`). The function oracle
 fixates `=FORMULA` evaluation results: case YAML carries `formula` +
 cell `setup`, golden JSON carries Excel's observed `Value`. CF cases
 don't fit that shape — a CF case is a workbook with cell data + a list
@@ -141,7 +141,7 @@ the C++ checks don't drift from author intent):
    ```
    python3 tools/oracle/cf_case_schema.py \
        tests/oracle/cases_cf/<suite>.case.json \
-       tests/oracle/golden_cf/<suite>.golden.json
+       tests/oracle/targets/mac-365-ja_JP/golden_cf/<suite>.golden.json
    ```
 6. Build and run the test binary:
    ```

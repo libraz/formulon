@@ -131,7 +131,7 @@ tests/oracle/_tmp/
 # A scaffolded target's capture lands in the golden directory itself, so its
 # candidate marker is written there too. `make oracle-promote` consumes it and
 # supersedes it with the PROVENANCE.json beside it, which is what is committed.
-tests/oracle/golden_wb/PROVENANCE.candidate.json
+tests/oracle/targets/win-365-ja_JP/golden_wb/PROVENANCE.candidate.json
 
 # Fuzz corpora / crashes
 tests/fuzz/corpus/

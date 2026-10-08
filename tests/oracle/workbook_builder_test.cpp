@@ -258,7 +258,7 @@ TEST(WorkbookBuilder, FormulaProbePinsPageAxisRefBranch) {
 
 TEST(WorkbookBuilder, CountAggregationCountsNonBlankRegardlessOfType) {
   // Reproduces `count_with_text_in_value_column` from
-  // tests/oracle/golden_wb/pivot_cross_axis.golden.json (Windows Excel
+  // tests/oracle/targets/win-365-ja_JP/golden_wb/pivot_cross_axis.golden.json (Windows Excel
   // 365 ja-JP, build 16.0.20228): Excel's pivot "Count" (個数) mirrors
   // COUNTA -- it counts every non-blank cell of any type, not just
   // numbers. North's Amount column mixes two numbers with one text

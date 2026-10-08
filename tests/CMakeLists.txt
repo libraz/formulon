@@ -586,7 +586,7 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(
     NAME OracleVariantDivergenceIntegrity
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
-            --input ${CMAKE_SOURCE_DIR}/tests/oracle/variants/win-365-ja_JP/divergence.yaml
+            --input ${CMAKE_SOURCE_DIR}/tests/oracle/targets/win-365-ja_JP/divergence.yaml
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   add_test(

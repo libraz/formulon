@@ -150,7 +150,7 @@ TEST(FloorMathExactMultiple, IntegerMultipleUnaffected) {
 // Mac Excel 365 distinguishes between a parser-injected literal-empty arg
 // slot (`=MROUND(,5)` / `=MROUND(5,)`) and a Ref to a blank cell
 // (`=MROUND(A1,B1)` with A1/B1 blank). The probe golden
-// `tests/oracle/golden/lowrisk_probes.golden.json` records the full table.
+// `tests/oracle/targets/mac-365-ja_JP/golden/lowrisk_probes.golden.json` records the full table.
 
 TEST(MRoundBlankScalar, LiteralEmptyFirstArgYieldsNA) {
   const Value v = EvalSource("=MROUND(,5)");

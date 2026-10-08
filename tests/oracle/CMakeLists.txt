@@ -1,7 +1,7 @@
 # tests/oracle/CMakeLists.txt
 #
 # Defines the formulon_oracle_tests executable. The target is parameterized
-# over the golden JSON files under tests/oracle/golden/ which are produced
+# over the golden JSON files under the primary target's golden/ directory, which are produced
 # by tools/oracle/oracle_gen.py on macOS + Excel 365. When no golden files
 # exist (the default state before oracle-gen has been run), the test binary
 # links and runs but registers zero parameterized cases — ctest output is
@@ -34,7 +34,7 @@ target_include_directories(formulon_oracle_tests
 # directory is tolerated (load_oracle_cases returns an empty vector).
 target_compile_definitions(formulon_oracle_tests
   PRIVATE
-    FORMULON_ORACLE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden"
+    FORMULON_ORACLE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/targets/mac-365-ja_JP/golden"
 )
 
 formulon_apply_warnings(formulon_oracle_tests)
@@ -93,7 +93,8 @@ gtest_discover_tests(formulon_oracle_anchor_test)
 # fixtures (`tests/oracle/external/ironcalc/fixtures/`) via
 # `tools/oracle/ironcalc_import.py`. The binary reuses oracle_test.cpp
 # verbatim; only FORMULON_ORACLE_GOLDEN_DIR differs so the parameter
-# provider pulls from `golden/ironcalc/` instead of `golden/`.
+# provider pulls from `external/ironcalc/golden/` instead of the native
+# target's formula goldens.
 #
 # Registered under the `ironcalc` CTest label so the primary `oracle`
 # suite can still be invoked standalone by `make oracle-verify`.
@@ -115,7 +116,7 @@ target_include_directories(formulon_ironcalc_oracle_tests
 
 target_compile_definitions(formulon_ironcalc_oracle_tests
   PRIVATE
-    FORMULON_ORACLE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden/ironcalc"
+    FORMULON_ORACLE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/external/ironcalc/golden"
 )
 
 formulon_apply_warnings(formulon_ironcalc_oracle_tests)
@@ -126,7 +127,7 @@ formulon_apply_warnings(formulon_ironcalc_oracle_tests)
 # process-launch overhead, while a golden file is a useful failure unit (at
 # most 400 cases from one upstream worksheet).
 file(GLOB _formulon_ironcalc_goldens CONFIGURE_DEPENDS
-  "${CMAKE_CURRENT_SOURCE_DIR}/golden/ironcalc/*.golden.json"
+  "${CMAKE_CURRENT_SOURCE_DIR}/external/ironcalc/golden/*.golden.json"
 )
 foreach(_formulon_ironcalc_golden IN LISTS _formulon_ironcalc_goldens)
   get_filename_component(_formulon_ironcalc_file "${_formulon_ironcalc_golden}" NAME)
@@ -154,7 +155,7 @@ endforeach()
 # ---------------------------------------------------------------------------
 # Variant oracle target (opt-in)
 #
-# Loads goldens from tests/oracle/variants/<tag>/golden/ and tags each TEST_P
+# Loads goldens from tests/oracle/targets/<tag>/golden/ and tags each TEST_P
 # parameter with `__<tag>` so primary and variant test names never collide.
 # Built only when FORMULON_ORACLE_VARIANTS=ON; defaults to OFF so the
 # baseline build tree stays unchanged.
@@ -188,7 +189,7 @@ set(_manifest_workbook_active "")
 set_property(
   DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_SOURCE_DIR}/tools/oracle/targets.yaml"
-  "${CMAKE_CURRENT_SOURCE_DIR}/golden_wb/PROVENANCE.json"
+  "${CMAKE_CURRENT_SOURCE_DIR}/targets/win-365-ja_JP/golden_wb/PROVENANCE.json"
 )
 
 if(Python3_Interpreter_FOUND)
@@ -263,7 +264,7 @@ if(Python3_Interpreter_FOUND)
 endif()
 set_property(
   DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-  "${CMAKE_CURRENT_SOURCE_DIR}/variants/mac-365-en_US/divergence.yaml"
+  "${CMAKE_CURRENT_SOURCE_DIR}/targets/mac-365-en_US/divergence.yaml"
 )
 
 add_executable(formulon_oracle_en_us_tests ${FORMULON_ORACLE_TEST_SOURCES})
@@ -273,7 +274,7 @@ target_include_directories(formulon_oracle_en_us_tests
 )
 target_compile_definitions(formulon_oracle_en_us_tests
   PRIVATE
-    FORMULON_ORACLE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/variants/mac-365-en_US/golden"
+    FORMULON_ORACLE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/targets/mac-365-en_US/golden"
     FORMULON_ORACLE_PRIMARY_PROFILE_ID="mac-365-en_US"
     FORMULON_ORACLE_SKIP_FILE="${_en_us_oracle_skip_file}"
 )
@@ -285,7 +286,7 @@ add_test(
 )
 set_tests_properties(formulon_oracle_en_us_tests PROPERTIES LABELS "oracle")
 
-# A directory under variants/ is not automatically an active oracle.  In
+# A directory under targets/ is not automatically an active oracle.  In
 # particular, the historical win-365-ja_JP capture is deliberately kept for
 # research but its manifest status is `wanted` and its provenance record says
 # `active_ctest: false`.  Parse the tiny, committed JSON marker here rather
@@ -297,7 +298,7 @@ function(formulon_oracle_variant_active tag out_var)
     set(${out_var} FALSE PARENT_SCOPE)
     return()
   endif()
-  set(_provenance "${CMAKE_CURRENT_SOURCE_DIR}/variants/${tag}/PROVENANCE.json")
+  set(_provenance "${CMAKE_CURRENT_SOURCE_DIR}/targets/${tag}/golden/PROVENANCE.json")
   if(NOT EXISTS "${_provenance}")
     set(${out_var} FALSE PARENT_SCOPE)
     return()
@@ -323,7 +324,7 @@ function(formulon_oracle_variant_active tag out_var)
 endfunction()
 
 if(FORMULON_ORACLE_VARIANTS)
-  set(_variant_root "${CMAKE_CURRENT_SOURCE_DIR}/variants")
+  set(_variant_root "${CMAKE_CURRENT_SOURCE_DIR}/targets")
   set(_variant_dirs_default "")
   set(_variant_active_tags "")
   if(EXISTS "${_variant_root}")
@@ -348,7 +349,7 @@ if(FORMULON_ORACLE_VARIANTS)
   # here would resolve every tag's skips against mac-365-ja_JP instead.
   # `--target` is repeated once per active tag so emit_skip_list.py unions
   # each tag's own registry resolution (primary registry plus that tag's
-  # `tests/oracle/variants/<tag>/divergence.yaml` override) into the one
+  # `tests/oracle/targets/<tag>/divergence.yaml` override) into the one
   # file this binary's FORMULON_ORACLE_SKIP_FILE define points at.
   set(_variant_oracle_skip_file "")
   if(Python3_Interpreter_FOUND AND _variant_active_tags)
@@ -405,9 +406,9 @@ if(FORMULON_ORACLE_VARIANTS)
   # Workbook variant oracle target (opt-in)
   #
   # Mirrors formulon_oracle_variant_tests for the workbook track: loads
-  # goldens from tests/oracle/variants/<tag>/golden_wb/ (note `golden_wb`,
+  # goldens from tests/oracle/targets/<tag>/golden_wb/ (note `golden_wb`,
   # not `golden`) and tags each TEST_P parameter with `__<tag>`. The scan is
-  # a parallel pass over the same variants/ root because the workbook track
+  # a parallel pass over the same targets/ root because the workbook track
   # uses a separate golden tree; the discovered list is baked in as a
   # compile-time default and FORMULON_WORKBOOK_ORACLE_VARIANT_DIRS overrides
   # it at runtime. With no variant golden_wb dirs present the binary builds
@@ -506,7 +507,7 @@ target_include_directories(formulon_cf_oracle_tests
 
 target_compile_definitions(formulon_cf_oracle_tests
   PRIVATE
-    FORMULON_CF_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden_cf"
+    FORMULON_CF_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/targets/mac-365-ja_JP/golden_cf"
 )
 
 formulon_apply_warnings(formulon_cf_oracle_tests)
@@ -514,12 +515,13 @@ formulon_apply_warnings(formulon_cf_oracle_tests)
 # The CF golden's own cases (built programmatically by the fixtures) always
 # need to load, so unlike the workbook target above this cannot gate by
 # blanking the golden dir. Instead the `oracle` CTest label -- the one
-# `make oracle-verify` selects -- is granted only once golden_cf/PROVENANCE.json
+# `make oracle-verify` selects -- is granted only once the target's
+# golden_cf/PROVENANCE.json
 # opts in, using the same active_ctest gate the variant and workbook targets
 # already apply. Today's committed golden is `classification: reference-only`,
 # so it stays under the "cf-reference" label: discoverable, but not counted
 # as verified oracle coverage.
-set(_cf_oracle_provenance "${CMAKE_CURRENT_SOURCE_DIR}/golden_cf/PROVENANCE.json")
+set(_cf_oracle_provenance "${CMAKE_CURRENT_SOURCE_DIR}/targets/mac-365-ja_JP/golden_cf/PROVENANCE.json")
 set(_cf_oracle_active FALSE)
 if(EXISTS "${_cf_oracle_provenance}")
   file(READ "${_cf_oracle_provenance}" _cf_oracle_record)
@@ -578,7 +580,7 @@ add_executable(formulon_workbook_oracle_tests
 # product/version. Keep them available for historical comparison, but do not
 # count them as active Windows 365 CTest coverage until their provenance file
 # explicitly opts in. The native builder test below remains active.
-set(_workbook_oracle_golden_dir "${CMAKE_CURRENT_SOURCE_DIR}/golden_wb")
+set(_workbook_oracle_golden_dir "${CMAKE_CURRENT_SOURCE_DIR}/targets/win-365-ja_JP/golden_wb")
 set(_workbook_oracle_active FALSE)
 set(_workbook_oracle_provenance "${_workbook_oracle_golden_dir}/PROVENANCE.json")
 if(EXISTS "${_workbook_oracle_provenance}" AND _manifest_workbook_active STREQUAL "active")

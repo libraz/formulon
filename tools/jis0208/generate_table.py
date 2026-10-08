@@ -20,7 +20,7 @@ Usage:
 
 The output is deterministic and depends only on Python's iso2022_jp codec,
 which implements JIS X 0208-1983 identically to Mac Excel's CODE/CHAR
-(verified against tests/oracle/golden/code_char_jp_probes.golden.json).
+(verified against tests/oracle/targets/mac-365-ja_JP/golden/code_char_jp_probes.golden.json).
 """
 
 from __future__ import annotations

@@ -6,8 +6,8 @@ directory as committed at that ref. Cases are matched by suite file and
 case id; a numeric pair counts as equal within the newer side's suite
 tolerance. Typical uses:
 
-    golden_diff.py HEAD:tests/oracle/golden tests/oracle/golden
-    golden_diff.py tests/oracle/golden tests/oracle/variants/mac-365-en_US/golden --summary
+    golden_diff.py HEAD:tests/oracle/targets/mac-365-ja_JP/golden tests/oracle/targets/mac-365-ja_JP/golden
+    golden_diff.py tests/oracle/targets/mac-365-ja_JP/golden tests/oracle/targets/mac-365-en_US/golden --summary
 
 Only the ``expect`` / ``skipped`` state is compared; environment stamps
 are ignored. Exit status is 0 whatever the differences are.

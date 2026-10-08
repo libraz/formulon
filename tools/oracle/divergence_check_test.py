@@ -27,7 +27,7 @@ class IsPendingStampTest(unittest.TestCase):
 
     def test_bare_office_major_version_is_pending(self) -> None:
         # `Application.Version` on Office 2016 through 365 alike -- see
-        # tests/oracle/variants/win-365-ja_JP/ENVIRONMENT.md.
+        # tests/oracle/targets/win-365-ja_JP/ENVIRONMENT.md.
         self.assertTrue(divergence_check.is_pending_stamp("16.0"))
 
     def test_doc_placeholder_shape_is_pending(self) -> None:

@@ -64,14 +64,20 @@ def _record_status(record: Mapping[str, Any]) -> str:
     return status if isinstance(status, str) else ""
 
 
-def _provenance_path(repo_root: Path, target: str, record: Mapping[str, Any]) -> Path:
-    env = record.get("environment_md")
-    if isinstance(env, str) and env:
-        return repo_root / Path(env).parent / "PROVENANCE.json"
+def _target_root(repo_root: Path, target: str, record: Mapping[str, Any]) -> Path:
+    """Return the target directory containing its track directories."""
+
     output = record.get("output_dir")
     if isinstance(output, str) and output:
-        return repo_root / output / ".." / "PROVENANCE.json"
-    return repo_root / "tests" / "oracle" / "variants" / target / "PROVENANCE.json"
+        return repo_root / Path(output).parent
+    return repo_root / "tests" / "oracle" / "targets" / target
+
+
+def _provenance_path(repo_root: Path, target: str, record: Mapping[str, Any]) -> Path:
+    output = record.get("output_dir")
+    if isinstance(output, str) and output:
+        return repo_root / output / "PROVENANCE.json"
+    return _target_root(repo_root, target, record) / "golden" / "PROVENANCE.json"
 
 
 def load_provenance(repo_root: Path, target: str, record: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
@@ -290,7 +296,7 @@ def workbook_active(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> bool
     record = targets.get(target) if isinstance(targets, dict) and isinstance(target, str) else None
     if not isinstance(record, dict) or _record_status(record) not in {"primary", "scaffolded"}:
         return False
-    marker = repo_root / "tests" / "oracle" / "golden_wb" / "PROVENANCE.json"
+    marker = _target_root(repo_root, target, record) / "golden_wb" / "PROVENANCE.json"
     if not marker.exists():
         return False
     try:
@@ -316,7 +322,7 @@ def workbook_active(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> bool
     import hashlib
 
     for suite in required:
-        golden = repo_root / "tests" / "oracle" / "golden_wb" / f"{suite}.golden.json"
+        golden = _target_root(repo_root, target, record) / "golden_wb" / f"{suite}.golden.json"
         if not golden.exists():
             return False
         try:
@@ -382,11 +388,7 @@ def _cf_provenance_errors(doc: Mapping[str, Any], repo_root: Path) -> List[str]:
     if not isinstance(locale, str) or not locale:
         errors.append(f"targets.{primary}: CF track requires a locale")
 
-    golden_dir = (
-        (repo_root / "tests" / "oracle" / "golden_cf")
-        if primary == doc.get("primary")
-        else (repo_root / "tests" / "oracle" / "variants" / primary / "golden_cf")
-    )
+    golden_dir = _target_root(repo_root, primary, record) / "golden_cf"
     marker_path = golden_dir / "PROVENANCE.json"
     if not marker_path.exists():
         return errors
@@ -489,11 +491,11 @@ def cf_active(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> bool:
     primary = _cf_primary(doc)
     if not primary:
         return False
-    marker_dir = (
-        repo_root / "tests" / "oracle" / "golden_cf"
-        if primary == doc.get("primary")
-        else repo_root / "tests" / "oracle" / "variants" / primary / "golden_cf"
-    )
+    targets = doc.get("targets")
+    record = targets.get(primary) if isinstance(targets, Mapping) else None
+    if not isinstance(record, Mapping):
+        return False
+    marker_dir = _target_root(repo_root, primary, record) / "golden_cf"
     marker_path = marker_dir / "PROVENANCE.json"
     if not marker_path.exists():
         return False

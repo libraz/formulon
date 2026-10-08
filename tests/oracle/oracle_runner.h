@@ -2,7 +2,8 @@
 // Fixture support for the oracle gtest target.
 //
 // The oracle verifier is a parameterized Google Test that pulls cases from
-// the committed golden JSON files under `tests/oracle/golden/`. Each JSON
+// the committed golden JSON files under the selected target's `golden/`.
+// Each JSON
 // file is a `suite` and contains N `cases`; every (suite, case) pair is
 // expanded into one TEST_P parameter so failures point at a specific case
 // id, not a whole suite.

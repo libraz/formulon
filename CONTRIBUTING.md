@@ -192,18 +192,18 @@ Done. Your oracle data is on disk -- thank you for the donation!
   Target:   mac-365-en_US
   Locale:   en-US
   Host:     Darwin
-  Env file: tests/oracle/variants/mac-365-en_US/ENVIRONMENT.md
+  Env file: tests/oracle/targets/mac-365-en_US/ENVIRONMENT.md
 
   Files git considers new or changed:
-    tests/oracle/variants/mac-365-en_US/golden/...
-    tests/oracle/variants/mac-365-en_US/ENVIRONMENT.md
+    tests/oracle/targets/mac-365-en_US/golden/...
+    tests/oracle/targets/mac-365-en_US/ENVIRONMENT.md
     ...
 
   Next: push your branch and open a PR.
 
     git checkout -b oracle/mac-365-en_US-2026-04-28
-    git add tests/oracle/variants/mac-365-en_US/
-    git add tests/oracle/variants/mac-365-en_US/ENVIRONMENT.md
+    git add tests/oracle/targets/mac-365-en_US/
+    git add tests/oracle/targets/mac-365-en_US/ENVIRONMENT.md
     git add tools/oracle/targets.yaml    # bump status: wanted -> scaffolded
     git commit -m 'test(oracle): contribute mac-365-en_US goldens'
     git push -u origin oracle/mac-365-en_US-2026-04-28

@@ -7,7 +7,7 @@ artefacts in sync per suite:
   * tests/oracle/cases_cf/<suite>.yaml         — human-authored source
   * tests/oracle/cases_cf/<suite>.case.json    — JSON mirror consumed by
                                                  the future Mac driver
-  * tests/oracle/golden_cf/<suite>.golden.json — committed Formulon-
+  * tests/oracle/targets/mac-365-ja_JP/golden_cf/<suite>.golden.json — committed Formulon-
                                                  self-baseline (until
                                                  the Mac driver lands)
 
@@ -24,7 +24,7 @@ machine-generated artefacts.
 Usage:
     python3 tools/oracle/cf_case_schema.py \\
         tests/oracle/cases_cf/cf_smoke.case.json \\
-        tests/oracle/golden_cf/cf_smoke.golden.json
+        tests/oracle/targets/mac-365-ja_JP/golden_cf/cf_smoke.golden.json
 
 Exits 0 on success, 1 on validation failure (with a path-and-field
 location printed to stderr).
@@ -352,7 +352,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "golden_json",
         type=Path,
-        help="Path to tests/oracle/golden_cf/<suite>.golden.json",
+        help="Path to tests/oracle/targets/mac-365-ja_JP/golden_cf/<suite>.golden.json",
     )
     return p
 

@@ -5,8 +5,8 @@ options. The primary oracle is **Mac Excel 365 (ja-JP)**; additional Excel
 environments (Windows, other locales) are supported as opt-in **variants**.
 
 - **Inputs**: `tests/oracle/cases/*.yaml` (shared across all targets)
-- **Primary outputs**: `tests/oracle/golden/*.golden.json` + `tests/oracle/ENVIRONMENT.md`
-- **Variant outputs**: `tests/oracle/variants/<target>/golden/*.golden.json` + per-variant `ENVIRONMENT.md`
+- **Primary outputs**: `tests/oracle/targets/mac-365-ja_JP/golden/*.golden.json` + its `ENVIRONMENT.md`
+- **Target outputs**: `tests/oracle/targets/<target>/golden/*.golden.json` + per-target `ENVIRONMENT.md`
 
 The golden JSON is what the C++ oracle test target consumes. CI never starts
 Excel — generation happens on a developer machine and the resulting JSON is
@@ -56,8 +56,8 @@ The conditional-formatting track is declared separately in
 `targets.yaml`:
 `tracks.cf.primary: mac-365-ja_JP`. `cf_oracle_gen.py` resolves and validates
 that target (driver, host OS, locale, and M365 sentinel) before writing
-`golden_cf/*.golden.json`. A complete run also writes
-`golden_cf/PROVENANCE.json`, including the Excel build, capture id, suite
+`targets/<target>/golden_cf/*.golden.json`. A complete run also writes the
+target's `golden_cf/PROVENANCE.json`, including the Excel build, capture id, suite
 case counts, and SHA-256 for every golden. `cf-active` is the explicit
 check for a verified capture; a legacy/reference marker is intentionally not
 active coverage.
@@ -163,8 +163,9 @@ FORMULON_EXCEL_PRINTER="Microsoft Print to PDF" make oracle-gen-workbook TARGET=
 # A target whose status is still `wanted` has no established provenance,
 # so its capture stages outside the repository (the generator prints the
 # path) and is landed separately after review. GOLDEN_DIR= overrides where
-# it stages. Once the target is scaffolded the capture lands in
-# tests/oracle/golden_wb/ directly and promotion is the review step alone.
+# it stages. Once the target is scaffolded the capture lands in its
+# `tests/oracle/targets/<target>/golden_wb/` directory and promotion is the
+# review step alone.
 make oracle-promote TRACK=workbook TARGET=win-365-ja_JP DRY_RUN=1
 make oracle-promote TRACK=workbook TARGET=win-365-ja_JP
 
@@ -175,8 +176,8 @@ tools/oracle/.venv/bin/python tools/oracle/oracle_gen.py --suite count --visible
 ```
 
 Successful runs for a maintained target:
-- Primary: updates `tests/oracle/golden/*.golden.json` + `tests/oracle/ENVIRONMENT.md`
-- Variant: updates `tests/oracle/variants/<target>/golden/*.golden.json` + per-variant `ENVIRONMENT.md`
+- Primary: updates `tests/oracle/targets/mac-365-ja_JP/golden/*.golden.json` + its `ENVIRONMENT.md`
+- Target: updates `tests/oracle/targets/<target>/golden/*.golden.json` + per-target `ENVIRONMENT.md`
 
 ## Promoting a staged capture
 
@@ -237,8 +238,9 @@ cd build && ctest -L VARIANT --output-on-failure
 ```
 
 Variant test names get a `__<target>` suffix so primary and variant
-parameters never collide. Default builds (no `-DFORMULON_ORACLE_VARIANTS=ON`)
-ignore `tests/oracle/variants/` entirely.
+parameters never collide. These optional captures require
+`-DFORMULON_ORACLE_VARIANTS=ON`. The dedicated en-US formula gate runs
+independently of this option.
 
 ## Adding cases
 
@@ -289,7 +291,7 @@ differ in who chose — we did in the first, the mathematics did in the
 second. The full definitions live in the header of
 `tests/divergence.yaml`.
 
-Per-variant overrides live in `tests/oracle/variants/<target>/divergence.yaml`
+Per-target overrides live in `tests/oracle/targets/<target>/divergence.yaml`
 and get merged on top of the primary file (variant entries win on key
 collision).
 

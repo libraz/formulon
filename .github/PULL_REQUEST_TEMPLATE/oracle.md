@@ -63,7 +63,7 @@ Notable golden moves (if any):
 <!-- Anything Excel did that surprised you, or that the verifier flags
      against the primary (Mac ja-JP) golden. New entries probably
      belong in tests/divergence.yaml or
-     tests/oracle/variants/<target>/divergence.yaml -- include the
+     tests/oracle/targets/<target>/divergence.yaml -- include the
      proposed entry below if you can. -->
 
 - None / `<list>`

@@ -108,7 +108,7 @@ formula-track primary.
    ```
    python3 tools/oracle/workbook_case_schema.py \
        tests/oracle/cases_wb/<suite>.case.json \
-       [tests/oracle/golden_wb/<suite>.golden.json]
+       [tests/oracle/targets/win-365-ja_JP/golden_wb/<suite>.golden.json]
    ```
    The golden argument is optional -- omit it until the golden exists.
 4. On a product-verified Microsoft 365 Windows + Excel host, generate the

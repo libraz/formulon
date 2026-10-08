@@ -4,7 +4,7 @@
 // The workbook oracle is a parameterized Google Test covering workbook-
 // level features that are NOT formula results -- pivot tables and print
 // areas. It pulls cases from the committed golden JSON files under
-// `tests/oracle/golden_wb/`. Each JSON file is a `suite` whose `kind` is
+// the selected target's `golden_wb/` directory. Each JSON file is a `suite` whose `kind` is
 // `"workbook"` and contains N `cases`; every (suite, case) pair is
 // expanded into one TEST_P parameter so failures point at a specific
 // case id, not a whole suite.

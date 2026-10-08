@@ -26,5 +26,5 @@
     }
   ],
   "reason": "The existing CF smoke golden is retained as a hash-pinned reference until a fresh Mac Excel 365 capture records its exact build.",
-  "source": "tests/oracle/golden_cf/cf_smoke.golden.json"
+  "source": "tests/oracle/targets/mac-365-ja_JP/golden_cf/cf_smoke.golden.json"
 }

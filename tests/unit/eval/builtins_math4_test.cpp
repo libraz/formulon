@@ -281,7 +281,7 @@ TEST(BuiltinsMath4Gcd, FractionalTruncates) {
 // Mac Excel 365 surfaces #VALUE! for `=GCD(A1,B1,C1)` when every Ref
 // resolves to a blank cell, but returns 0 for `=GCD(A1:C1)` over the same
 // blank cells. The probe golden in
-// `tests/oracle/golden/lowrisk_probes.golden.json` records the table.
+// `tests/oracle/targets/mac-365-ja_JP/golden/lowrisk_probes.golden.json` records the table.
 
 TEST(BuiltinsMath4GcdBlankScalar, AllBlankRefsYieldValueError) {
   Workbook wb = Workbook::create();

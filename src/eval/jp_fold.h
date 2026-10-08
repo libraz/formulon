@@ -88,7 +88,7 @@ std::string fold_and_lower(std::string_view input, bool fold_fullwidth_digits = 
 /// `XLOOKUP("ｶﾞ", ...)` matches a cell holding `ガ`. Unlike
 /// `fold_jp_text`, it does NOT fold plain half/full width or
 /// hiragana<->katakana, matching the Windows-Excel asymmetry pinned by
-/// `tests/oracle/variants/win-365-ja_JP/golden/lookup_kana_folding_probes`.
+/// `tests/oracle/targets/win-365-ja_JP/golden/lookup_kana_folding_probes`.
 std::string compose_jp_halfwidth_voicing(std::string_view input);
 
 // ---------------------------------------------------------------------------

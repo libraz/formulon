@@ -8,7 +8,7 @@ Usage:
 Default paths match the repository layout:
 
     cases:  tests/oracle/cases/*.yaml
-    golden: tests/oracle/golden/*.golden.json
+    golden: tests/oracle/targets/mac-365-ja_JP/golden/*.golden.json
 
 Each YAML under `cases/` is evaluated independently; the corresponding
 `<suite>.golden.json` is rewritten from scratch. Failures in one suite do
@@ -48,8 +48,8 @@ except ImportError:  # pragma: no cover
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases"
-DEFAULT_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "golden"
-DEFAULT_ENV_FILE = REPO_ROOT / "tests" / "oracle" / "ENVIRONMENT.md"
+DEFAULT_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "targets" / "mac-365-ja_JP" / "golden"
+DEFAULT_ENV_FILE = REPO_ROOT / "tests" / "oracle" / "targets" / "mac-365-ja_JP" / "ENVIRONMENT.md"
 DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
 DEFAULT_TARGETS_FILE = Path(__file__).resolve().parent / "targets.yaml"
 
@@ -558,8 +558,8 @@ def _tree_wide_excel_version(golden_dir: Path, fallback: str) -> str:
     """Returns the oldest ``environment.excel_version`` among every
     committed golden in ``golden_dir``.
 
-    `ENVIRONMENT.md` documents itself as covering *all* of
-    `tests/oracle/golden/`, not just the suite(s) a given `oracle-gen`
+    `ENVIRONMENT.md` documents itself as covering *all* of the selected
+    target's `golden/` directory, not just the suite(s) a given `oracle-gen`
     invocation happened to touch. A per-suite `--suite` regeneration
     only advances that one suite's stamp; the tree-level file must
     keep following whichever committed suite is oldest, or
@@ -592,9 +592,8 @@ def _write_environment_md(
     path: Path, env: EnvironmentInfo, iso_now: str, *, excel_version: str, golden_dir: Path
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    # Name the directory this file actually documents: variants keep their
-    # own ENVIRONMENT.md next to their own goldens, so a hard-coded
-    # `tests/oracle/golden/` would misdescribe every target but the primary.
+    # Name the directory this file actually documents: each target keeps its
+    # own ENVIRONMENT.md next to its own goldens.
     try:
         documented_dir = golden_dir.relative_to(REPO_ROOT).as_posix()
     except ValueError:

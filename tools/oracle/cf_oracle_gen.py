@@ -13,7 +13,7 @@ Excel.app instance, recalculates, then captures
 ``DisplayFormat.Interior`` per cell in the case range. The captured fill
 colours are matched back to the rule descriptors to produce a
 ``<suite>.golden.json`` file shaped like the hand-authored
-self-baselines under ``tests/oracle/golden_cf/``.
+self-baselines under the primary target's ``golden_cf/`` directory.
 
 Supported rule types (matches the smoke suite):
 
@@ -85,7 +85,7 @@ except ImportError:  # pragma: no cover
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases_cf"
-DEFAULT_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "golden_cf"
+DEFAULT_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "targets" / "mac-365-ja_JP" / "golden_cf"
 DEFAULT_TARGETS_FILE = REPO_ROOT / "tools" / "oracle" / "targets.yaml"
 _M365_SENTINEL = "ARRAYTOTEXT(1) == text '1'"
 
@@ -150,9 +150,10 @@ def _resolve_cf_target(targets_doc: Dict[str, Any], requested: Optional[str]) ->
 def _cf_golden_dir(targets_doc: Dict[str, Any], target: Dict[str, Any]) -> Path:
     """Return the CF output directory for a target."""
 
-    if target["_name"] == _cf_primary(targets_doc):
-        return DEFAULT_GOLDEN_DIR
-    return REPO_ROOT / "tests" / "oracle" / "variants" / target["_name"] / "golden_cf"
+    output = target.get("output_dir")
+    if isinstance(output, str) and output:
+        return REPO_ROOT / Path(output).parent / "golden_cf"
+    return REPO_ROOT / "tests" / "oracle" / "targets" / target["_name"] / "golden_cf"
 
 
 def _iso_now() -> str:

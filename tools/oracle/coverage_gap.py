@@ -6,9 +6,9 @@ notions of "is there a test for this function?":
 
   * implementation status   - re-used from `tools/catalog/status.py`
   * native Formulon yaml    - `tests/oracle/cases/*.yaml`
-  * golden JSON corpora     - `tests/oracle/golden/**/*.json` (the imported
-                              ironcalc fixtures live under
-                              `tests/oracle/golden/ironcalc/` and are
+  * golden JSON corpora     - `tests/oracle/targets/mac-365-ja_JP/golden/**/*.json`
+                              (the imported ironcalc fixtures live under
+                              `tests/oracle/external/ironcalc/golden/` and are
                               counted separately from native goldens)
 
 The default report lists *pilot candidates*: functions that are implemented
@@ -38,8 +38,8 @@ from typing import Dict, Iterable, List, Optional, Sequence, Set
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CATALOG_DIR = REPO_ROOT / "tools" / "catalog"
 ORACLE_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases"
-ORACLE_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "golden"
-IRONCALC_GOLDEN_DIR = ORACLE_GOLDEN_DIR / "ironcalc"
+ORACLE_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "targets" / "mac-365-ja_JP" / "golden"
+IRONCALC_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "external" / "ironcalc" / "golden"
 
 sys.path.insert(0, str(CATALOG_DIR))
 import status as catalog_status  # type: ignore  # noqa: E402
@@ -79,8 +79,7 @@ def scan_dir(directory: Path, glob: str, recursive: bool = False) -> Dict[str, S
 
 
 def scan_native_golden(directory: Path) -> Dict[str, Set[Path]]:
-    """Scans `golden/*.json` only — recursing would re-count `golden/ironcalc/`
-    JSONs which are surfaced separately as the ironcalc bucket."""
+    """Scan only native target formula goldens; the external corpus is counted separately."""
     out: Dict[str, Set[Path]] = {}
     if not directory.is_dir():
         return out

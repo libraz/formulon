@@ -112,7 +112,7 @@ entries:
     applies_to: all
     mode: skip-oracle
     cause: excel-no-value
-    reason: "Excel discards these formulas at entry rather than evaluating them: `NA()` inside an array constant is not accepted (an error literal such as `{1,#N/A,3}` is), and ARRAYTOTEXT takes one or two arguments. Observed by entering each and reading the formula back empty. The error contract they were written for is captured by arraytotext_error_literal_in_array_default / _strict, arraytotext_error_cells_default / _strict and arraytotext_only_error_cells_default, which Excel does accept. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+    reason: "Excel discards these formulas at entry rather than evaluating them: `NA()` inside an array constant is not accepted (an error literal such as `{1,#N/A,3}` is), and ARRAYTOTEXT takes one or two arguments. Observed by entering each and reading the formula back empty. The error contract they were written for is captured by arraytotext_error_literal_in_array_default / _strict, arraytotext_error_cells_default / _strict and arraytotext_only_error_cells_default, which Excel does accept. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-08-05
     last_verified_excel_version: "16.112.1"
@@ -123,7 +123,7 @@ entries:
     applies_to: [mac-365-ja_JP, mac-365-en_US]
     mode: skip-oracle
     cause: accepted-divergence
-    reason: "WEEKNUM(DATE(2024,1,1),99): Mac Excel 365 ja-JP treats the unsupported return_type as the default type 1 and returns 1, where Windows Excel 365 ja-JP returns #NUM! (tests/oracle/variants/win-365-ja_JP/golden/datetime.golden.json). Formulon follows Windows, the primary 1-bit reference, and Microsoft's documented contract (only 1, 2, 11-17 and 21 are accepted)."
+    reason: "WEEKNUM(DATE(2024,1,1),99): Mac Excel 365 ja-JP treats the unsupported return_type as the default type 1 and returns 1, where Windows Excel 365 ja-JP returns #NUM! (tests/oracle/targets/win-365-ja_JP/golden/datetime.golden.json). Formulon follows Windows, the primary 1-bit reference, and Microsoft's documented contract (only 1, 2, 11-17 and 21 are accepted)."
     prefer: formulon
     first_noted: 2026-09-30
     last_verified_excel_version: "16.113.2"
@@ -167,7 +167,7 @@ entries:
     applies_to: all
     mode: skip-oracle
     cause: excel-no-value
-    reason: "Excel rejects ISFORMULA with a non-reference argument at entry, so the cell stays blank and no value is ever produced. Observed by reading the formula back empty while the `=ISFORMULA(A1)` and `=ISREF(42)` controls entered in the same pass retained and evaluated. Formulon returns #VALUE!, which Excel gives no answer to compare against. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+    reason: "Excel rejects ISFORMULA with a non-reference argument at entry, so the cell stays blank and no value is ever produced. Observed by reading the formula back empty while the `=ISFORMULA(A1)` and `=ISREF(42)` controls entered in the same pass retained and evaluated. Formulon returns #VALUE!, which Excel gives no answer to compare against. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-04-23
     last_verified_excel_version: "16.112.1"
@@ -234,7 +234,7 @@ entries:
     applies_to: all
     cause: excel-no-value
     mode: skip-oracle
-    reason: "Mac Excel refuses =ROWS({1,2;3,4,5}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's parser surfaces #NAME? for the jagged array literal. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+    reason: "Mac Excel refuses =ROWS({1,2;3,4,5}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's parser surfaces #NAME? for the jagged array literal. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-04-26
     last_verified_excel_version: "16.112"
@@ -243,7 +243,7 @@ entries:
     applies_to: all
     cause: excel-no-value
     mode: skip-oracle
-    reason: "Mac Excel refuses =ERF.PRECISE(1,2) at entry (the function is strict 1-arg): the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's registry enforces the (1,1) arity bound and returns #VALUE!, which is the more useful surface for tooling that consumes formula errors. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+    reason: "Mac Excel refuses =ERF.PRECISE(1,2) at entry (the function is strict 1-arg): the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's registry enforces the (1,1) arity bound and returns #VALUE!, which is the more useful surface for tooling that consumes formula errors. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-04-26
     last_verified_excel_version: "16.112"
@@ -252,7 +252,7 @@ entries:
     applies_to: all
     cause: excel-no-value
     mode: skip-oracle
-    reason: "Mac Excel refuses =ERFC.PRECISE(1,2) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon returns #VALUE! from arity enforcement, mirroring erf_precise_two_arg_rejected. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+    reason: "Mac Excel refuses =ERFC.PRECISE(1,2) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon returns #VALUE! from arity enforcement, mirroring erf_precise_two_arg_rejected. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-04-29
     last_verified_excel_version: "16.112"
@@ -269,7 +269,7 @@ entries:
     applies_to: all
     cause: excel-no-value
     mode: skip-oracle
-    reason: "Mac Excel refuses the two-endpoint mixed-axis spelling (=ROWS(A:1), =COLUMNS(A:1)) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The three-endpoint spelling (=ROWS(1:3:E5) / =COLUMNS(1:3:E5), cases rows_of_whole_row_chained_with_cell / columns_of_whole_row_chained_with_cell) is accepted and has a real golden. Formulon's parser surfaces #NAME? for the rejected two-endpoint spelling. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+    reason: "Mac Excel refuses the two-endpoint mixed-axis spelling (=ROWS(A:1), =COLUMNS(A:1)) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The three-endpoint spelling (=ROWS(1:3:E5) / =COLUMNS(1:3:E5), cases rows_of_whole_row_chained_with_cell / columns_of_whole_row_chained_with_cell) is accepted and has a real golden. Formulon's parser surfaces #NAME? for the rejected two-endpoint spelling. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-08-21
     last_verified_excel_version: "16.112.1"
@@ -310,7 +310,7 @@ entries:
   # moved off `1/0` inside an array constant — an expression Excel rejects
   # at formula entry — onto the `#DIV/0!` error literal, so they now name
   # something a live host can actually evaluate. Regenerated: all three
-  # goldens in tests/oracle/golden/lambda.golden.json carry the live
+  # goldens in tests/oracle/targets/mac-365-ja_JP/golden/lambda.golden.json carry the live
   # per-slot #DIV/0! array result with no `skipped` field.
 
   # Gap 2 (closed 2026-04-29): Formulon parser now accepts the
@@ -401,7 +401,7 @@ entries:
   # seasonality detector now removes the linear trend before computing the
   # autocorrelation, so a perfectly linear series reports no period (0) like
   # Excel instead of picking lag 2 off a non-stationary series. Regenerated:
-  # tests/oracle/golden/forecast_ets.golden.json carries the live
+  # tests/oracle/targets/mac-365-ja_JP/golden/forecast_ets.golden.json carries the live
   # `{kind: number, value: 0.0}` result with no `skipped` field.
 
   # REGEXEXTRACT spill-mode results — modes 1 (1 x N) and 2 (1 x G) are
@@ -461,7 +461,7 @@ entries:
   - id: frequency_empty_bins
     applies_to: all
     cause: excel-no-value
-    reason: "Mac Excel refuses =FREQUENCY({1;2;3}, {}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The empty array literal is rejected as a formula construct rather than treated as a degenerate bins argument. Formulon treats the zero-numeric-bin case as the documented 1x1 count spill. Non-empty fully non-numeric bins remain covered by unit tests. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+    reason: "Mac Excel refuses =FREQUENCY({1;2;3}, {}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The empty array literal is rejected as a formula construct rather than treated as a degenerate bins argument. Formulon treats the zero-numeric-bin case as the documented 1x1 count spill. Non-empty fully non-numeric bins remain covered by unit tests. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-05-15
     last_verified_excel_version: "16.112"
@@ -689,7 +689,7 @@ entries:
     applies_to: all
     cause: excel-no-value
     case_alias: lazy_phonetic_literal_text
-    reason: "As lazy_phonetic_literal_text: the case is `=PHONETIC(\"テスト\")` and Excel's PHONETIC takes a reference, so the literal is refused at entry and Excel stores no formula to evaluate. Annotated-cell behaviour agrees on both engines and is pinned by tests/integration/ooxml_phonetic_roundtrip_test.cpp. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+    reason: "As lazy_phonetic_literal_text: the case is `=PHONETIC(\"テスト\")` and Excel's PHONETIC takes a reference, so the literal is refused at entry and Excel stores no formula to evaluate. Annotated-cell behaviour agrees on both engines and is pinned by tests/integration/ooxml_phonetic_roundtrip_test.cpp. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
@@ -697,7 +697,7 @@ entries:
   - id: lazy_phonetic_literal_text
     applies_to: all
     cause: excel-no-value
-    reason: "Excel's PHONETIC takes a reference, so a string literal is refused at entry and leaves no reading. `=PHONETIC(A1)` over an unannotated text cell returns the text on both engines and is captured as lazy_phonetic_unannotated_cell; the annotated and partially annotated cases are pinned against a hand-built rPh package Excel was asked to open. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+    reason: "Excel's PHONETIC takes a reference, so a string literal is refused at entry and leaves no reading. `=PHONETIC(A1)` over an unannotated text cell returns the text on both engines and is captured as lazy_phonetic_unannotated_cell; the annotated and partially annotated cases are pinned against a hand-built rPh package Excel was asked to open. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: mac-excel-365
     first_noted: 2026-05-15
     last_verified_excel_version: "16.112.1"
@@ -721,7 +721,7 @@ entries:
     applies_to: all
     cause: excel-no-value
     mode: skip-oracle
-    reason: "Excel discards `=_xlfn.ANCHORARRAY(B1)` at entry, so there is no reading to compare. Entering `=B1#` on the same sheet returns #REF!, matching Formulon; that is captured as anchorarray_hash_static_value_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+    reason: "Excel discards `=_xlfn.ANCHORARRAY(B1)` at entry, so there is no reading to compare. Entering `=B1#` on the same sheet returns #REF!, matching Formulon; that is captured as anchorarray_hash_static_value_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: mac-excel-365
     first_noted: 2026-05-02
     last_verified_excel_version: "16.112.1"
@@ -730,7 +730,7 @@ entries:
     applies_to: all
     cause: excel-no-value
     mode: skip-oracle
-    reason: "Excel discards `=_xlfn.ANCHORARRAY(E1)` at entry. The `=E1#` spelling returns #REF! for a genuinely blank anchor, captured as anchorarray_hash_blank_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+    reason: "Excel discards `=_xlfn.ANCHORARRAY(E1)` at entry. The `=E1#` spelling returns #REF! for a genuinely blank anchor, captured as anchorarray_hash_blank_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: mac-excel-365
     first_noted: 2026-05-02
     last_verified_excel_version: "16.112.1"
@@ -742,7 +742,7 @@ entries:
     applies_to: all
     mode: skip-oracle
     cause: excel-no-value
-    reason: "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+    reason: "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-08-05
     last_verified_excel_version: "16.112.1"
@@ -1055,7 +1055,7 @@ entries:
   # most one rectangle, so `INDIRECT("A1,B2")` cannot return a 2-area
   # reference -- the INDIRECT call itself is #REF!, and AREAS reports that
   # error rather than a count of 2. Implementation (src/eval/areas_lazy.cpp),
-  # oracle case, and golden (tests/oracle/golden/areas.golden.json, no
+  # oracle case, and golden (tests/oracle/targets/mac-365-ja_JP/golden/areas.golden.json, no
   # `skipped` field) all agree on #REF!; this is not a pending divergence.
 
   # -- Circular reference with iterative calculation OFF ------------------

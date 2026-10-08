@@ -5,7 +5,7 @@ Reads the xlsx fixtures vendored at
 `tests/oracle/external/ironcalc/fixtures/` (originally from
 https://github.com/ironcalc/IronCalc, dual MIT / Apache-2.0) and emits
 one golden JSON per (xlsx, sheet) under
-`tests/oracle/golden/ironcalc/`.
+`tests/oracle/external/ironcalc/golden/`.
 
 The emitted JSON matches Formulon's existing oracle golden schema
 (`tests/oracle/README.md`): one `suite`, an `environment`, a numeric
@@ -23,7 +23,7 @@ Design notes
 
 * **Flat output directory.** `tests/oracle/oracle_runner.cpp` uses
   `std::filesystem::directory_iterator` (non-recursive) so every golden
-  JSON has to live directly under `golden/ironcalc/`. The source's
+  JSON has to live directly under `external/ironcalc/golden/`. The source's
   relative path is therefore folded into the filename using `__` as a
   separator: `calc_tests/AVERAGE.xlsx` + sheet `Sheet1` becomes
   `calc_tests__AVERAGE__Sheet1.golden.json`.
@@ -69,7 +69,7 @@ from openpyxl.xml.functions import iterparse
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE_DIR = REPO_ROOT / "tests" / "oracle" / "external" / "ironcalc" / "fixtures"
-DEFAULT_OUT_DIR = REPO_ROOT / "tests" / "oracle" / "golden" / "ironcalc"
+DEFAULT_OUT_DIR = REPO_ROOT / "tests" / "oracle" / "external" / "ironcalc" / "golden"
 DEFAULT_LOG_PATH = Path(__file__).resolve().parent / "ironcalc_import.log"
 DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "ironcalc_divergence.yaml"
 

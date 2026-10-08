@@ -4,7 +4,7 @@
 // The workbook oracle covers workbook-level features that are NOT formula
 // results -- pivot tables and print areas. Each parameter is a
 // (suite, case_id) pair loaded via `load_workbook_oracle_cases` from
-// `tests/oracle/golden_wb/*.golden.json`. The build wires the directory
+// `tests/oracle/targets/win-365-ja_JP/golden_wb/*.golden.json`. The build wires the directory
 // through the compile-time define `FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR`.
 // When the directory is empty (the expected state before the workbook
 // oracle generator has been run on a Windows host) the parameter vector
@@ -61,7 +61,7 @@ const std::vector<WorkbookOracleCase>& workbook_oracle_cases() {
   // yields an empty vector, so the parameterized suite registers zero
   // cases and the build stays green.
   //
-  // Variant goldens (tests/oracle/variants/<tag>/golden_wb/) are appended
+  // Variant goldens (tests/oracle/targets/<tag>/golden_wb/) are appended
   // after the primary set. Each variant case inherits its tag from the
   // load call; the parameter-name printer suffixes `__<tag>` so primary
   // and variant entries never collide. The primary build configures no

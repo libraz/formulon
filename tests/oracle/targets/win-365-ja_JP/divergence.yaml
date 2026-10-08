@@ -68,14 +68,14 @@ entries:
   # different places, and the suite tolerance accepts either.
   - id: iter_smoothing_fixed_point
     tolerance: { abs: 0.001, rel: 0.001 }
-    reason: "Win Excel 365 stops iterating `=Z1*0.9 + 1` at 9.991405 where Mac Excel 365 stops at 9.999445 (tests/oracle/golden/iterative_calc.golden.json), a real difference in where the solver halts that the iterative suite's 1e-3 tolerance absorbs. Recorded so the tolerance is a stated policy for this target rather than an accident; the engine's own stopping point is checked against both."
+    reason: "Win Excel 365 stops iterating `=Z1*0.9 + 1` at 9.991405 where Mac Excel 365 stops at 9.999445 (tests/oracle/targets/mac-365-ja_JP/golden/iterative_calc.golden.json), a real difference in where the solver halts that the iterative suite's 1e-3 tolerance absorbs. Recorded so the tolerance is a stated policy for this target rather than an accident; the engine's own stopping point is checked against both."
     prefer: formulon
     first_noted: 2026-09-30
     last_verified_excel_version: "16.0.20228"
   # A bounded range spilling over its own formula cell reads differently per
   # host, and the verifier's anchor projection accepts both readings.
   - id: bounded_rectangle_containing_its_own_formula_cell
-    reason: "`=A1:C3` entered in B2 is circular. Win Excel 365 captures the whole 3x3 rectangle as zeros; Mac Excel 365 captures the scalar 0 (tests/oracle/golden/whole_axis_spill.golden.json). The verifier compares the anchor, so both goldens pass without asserting the shape; recorded so that projection is not mistaken for agreement on the spill shape."
+    reason: "`=A1:C3` entered in B2 is circular. Win Excel 365 captures the whole 3x3 rectangle as zeros; Mac Excel 365 captures the scalar 0 (tests/oracle/targets/mac-365-ja_JP/golden/whole_axis_spill.golden.json). The verifier compares the anchor, so both goldens pass without asserting the shape; recorded so that projection is not mistaken for agreement on the spill shape."
     prefer: formulon
     first_noted: 2026-09-30
     last_verified_excel_version: "16.0.20228"

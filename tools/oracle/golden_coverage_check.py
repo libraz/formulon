@@ -42,8 +42,8 @@ except ImportError:  # pragma: no cover
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CASES_DIR = REPO_ROOT / "tests/oracle/cases"
-GOLDEN_DIR = REPO_ROOT / "tests/oracle/golden"
-# The target `tests/oracle/golden/` goldens are captured against -- see
+GOLDEN_DIR = REPO_ROOT / "tests/oracle/targets/mac-365-ja_JP/golden"
+# The target `tests/oracle/targets/mac-365-ja_JP/golden/` goldens are captured against -- see
 # `tools/oracle/targets.yaml`'s global `primary:`. Hardcoded rather than
 # read from targets.yaml because this script is scoped to that one
 # directory specifically, the same way GOLDEN_DIR is.

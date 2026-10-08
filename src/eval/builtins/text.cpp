@@ -496,7 +496,7 @@ Value Clean(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 //
 // Anything else (256..8480, unmapped DBCS slots, bytes outside [0x21, 0x7E],
 // n < 1, n > 65535) yields `#VALUE!`. Mac probe golden:
-// tests/oracle/golden/code_char_jp_probes.golden.json.
+// tests/oracle/targets/mac-365-ja_JP/golden/code_char_jp_probes.golden.json.
 Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   const ExcelProfile profile = current_eval_profile();
   const LocaleFacts& facts = locale_facts(profile);
@@ -572,7 +572,7 @@ Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 //   * Anything else (NEC extensions, emoji, supplementary plane, etc.):
 //     95 (ASCII underscore), the empirically confirmed Mac fallback.
 //
-// Mac probe golden: tests/oracle/golden/code_char_jp_probes.golden.json.
+// Mac probe golden: tests/oracle/targets/mac-365-ja_JP/golden/code_char_jp_probes.golden.json.
 //
 // This is the Mac-profile behavior. Under the runtime-default win-365-ja_JP
 // profile, `eval_code_lazy` (src/eval/info_lazy.cpp) overrides the fallback

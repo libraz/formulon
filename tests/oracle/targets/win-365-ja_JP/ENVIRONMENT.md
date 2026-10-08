@@ -1,7 +1,7 @@
 # Oracle Environment
 
 This file records the oldest Excel version any committed suite
-in `tests/oracle/variants/win-365-ja_JP/golden/` was generated against. Reviewers
+in `tests/oracle/targets/win-365-ja_JP/golden/` was generated against. Reviewers
 should watch this file on oracle-gen PRs to catch
 version-driven divergences early.
 

@@ -4,8 +4,8 @@
 The workbook track covers workbook-level features that are NOT formula
 results -- pivot tables and print areas. Cases are declarative mini-
 workbook specs discovered from `tests/oracle/cases_wb/*.case.json`; the
-golden JSON committed under `tests/oracle/golden_wb/` (or, for variants,
-`tests/oracle/variants/<target>/golden_wb/`) is what the C++ verifier
+golden JSON committed under the workbook target's `golden_wb/` directory is
+what the C++ verifier
 diffs against.
 
 Target resolution reads the `tracks.workbook` section of
@@ -69,7 +69,7 @@ except ImportError:  # pragma: no cover
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases_wb"
-DEFAULT_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "golden_wb"
+DEFAULT_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "targets" / "win-365-ja_JP" / "golden_wb"
 DEFAULT_TARGETS_FILE = Path(__file__).resolve().parent / "targets.yaml"
 DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
 
@@ -215,14 +215,14 @@ def _resolve_target(targets_doc: Dict[str, Any], name: Optional[str]) -> Dict[st
 def _golden_dir_for_target(targets_doc: Dict[str, Any], target: Dict[str, Any]) -> Path:
     """Returns the golden_wb directory for `target`.
 
-    The workbook primary writes to `tests/oracle/golden_wb/`; any other
-    target is treated as a variant and writes under
-    `tests/oracle/variants/<target>/golden_wb/`.
+    Every target writes its workbook track beside its formula track under
+    `tests/oracle/targets/<target>/golden_wb/`.
     """
 
-    if target["_name"] == _workbook_primary(targets_doc):
-        return DEFAULT_GOLDEN_DIR
-    return REPO_ROOT / "tests" / "oracle" / "variants" / target["_name"] / "golden_wb"
+    output = target.get("output_dir")
+    if isinstance(output, str) and output:
+        return REPO_ROOT / Path(output).parent / "golden_wb"
+    return REPO_ROOT / "tests" / "oracle" / "targets" / target["_name"] / "golden_wb"
 
 
 def _resolve_skips(
@@ -236,13 +236,13 @@ def _resolve_skips(
     `tests/divergence.yaml` exactly the way the formula track does: only
     `mode: skip-oracle` entries are collected, and `applies_to` scoping is
     respected. For a non-primary (variant) target the per-variant override
-    file `tests/oracle/variants/<tag>/divergence.yaml` is merged on top --
+    file `tests/oracle/targets/<tag>/divergence.yaml` is merged on top --
     entries there win on key collision because they are more specific.
     """
 
     skips = _load_divergence_skips(divergence_path, target["_name"])
     if target["_name"] != _workbook_primary(targets_doc):
-        variant_div = REPO_ROOT / "tests" / "oracle" / "variants" / target["_name"] / "divergence.yaml"
+        variant_div = REPO_ROOT / "tests" / "oracle" / "targets" / target["_name"] / "divergence.yaml"
         if variant_div.exists():
             skips.update(_load_divergence_skips(variant_div, target["_name"]))
     return skips
@@ -263,7 +263,7 @@ def _resolve_reprobes(
 
     reprobes = _load_divergence_reprobes(divergence_path, target["_name"])
     if target["_name"] != _workbook_primary(targets_doc):
-        variant_div = REPO_ROOT / "tests" / "oracle" / "variants" / target["_name"] / "divergence.yaml"
+        variant_div = REPO_ROOT / "tests" / "oracle" / "targets" / target["_name"] / "divergence.yaml"
         if variant_div.exists():
             reprobes.update(_load_divergence_reprobes(variant_div, target["_name"]))
     return reprobes

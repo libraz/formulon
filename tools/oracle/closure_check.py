@@ -9,7 +9,7 @@ all six conditions hold:
      belong to a `function: FN` group.
   2. tests/oracle/cases/*.yaml contains >= 1 case whose formula calls
      FN, covering each declared behavior probe.
-  3. tests/oracle/golden/*.json contains a corresponding entry for
+  3. tests/oracle/targets/mac-365-ja_JP/golden/*.json contains a corresponding entry for
      every case under (2). (Existence only; numeric verification is the
      oracle-verify step's job.)
   4. Every divergence.yaml entry whose `id` matches a case from (2)
@@ -52,7 +52,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CATALOG_DIR = REPO_ROOT / "tools" / "catalog"
 ORACLE_DIR = REPO_ROOT / "tools" / "oracle"
 CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases"
-GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "golden"
+GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "targets" / "mac-365-ja_JP" / "golden"
 BEHAVIORS_PATH = CATALOG_DIR / "behaviors.yaml"
 FAMILIES_PATH = CATALOG_DIR / "families.yaml"
 DIVERGENCE_PATH = REPO_ROOT / "tests" / "divergence.yaml"

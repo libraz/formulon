@@ -11,7 +11,7 @@ For each suite under `tests/oracle/cases_wb/` it checks:
   1. A declarative `<suite>.case.json` exists.
   2. The `<suite>.case.json` validates against `workbook_case_schema.py`
      (and, when a golden is present, the case <-> golden id sets agree).
-  3. A golden `tests/oracle/golden_wb/<suite>.golden.json` exists. A
+  3. A golden `tests/oracle/targets/win-365-ja_JP/golden_wb/<suite>.golden.json` exists. A
      missing golden is reported as MISSING, not a failure -- workbook
      goldens require a Windows + Excel host and are captured out of band.
   4. Every `tests/divergence.yaml` entry whose `id` matches a case in a
@@ -40,7 +40,7 @@ from typing import Dict, List, Optional, Set, Tuple
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ORACLE_DIR = REPO_ROOT / "tools" / "oracle"
 CASES_WB_DIR = REPO_ROOT / "tests" / "oracle" / "cases_wb"
-GOLDEN_WB_DIR = REPO_ROOT / "tests" / "oracle" / "golden_wb"
+GOLDEN_WB_DIR = REPO_ROOT / "tests" / "oracle" / "targets" / "win-365-ja_JP" / "golden_wb"
 DIVERGENCE_PATH = REPO_ROOT / "tests" / "divergence.yaml"
 
 sys.path.insert(0, str(ORACLE_DIR))
@@ -174,7 +174,7 @@ def check_suite(suite: str, case_path: Path) -> Tuple[bool, Optional[bool], List
     if golden_ids is None:
         msgs.append(
             _colour(
-                f"  [MISS] golden: not generated yet (expected tests/oracle/golden_wb/{suite}.golden.json)",
+                f"  [MISS] golden: not generated yet (expected tests/oracle/targets/win-365-ja_JP/golden_wb/{suite}.golden.json)",
                 YELLOW,
             )
         )

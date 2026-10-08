@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Regression tests for the tree-level `ENVIRONMENT.md` stamp.
 
-`ENVIRONMENT.md` documents itself as covering every suite under
-`tests/oracle/golden/`, not just whichever suite(s) a given
+`ENVIRONMENT.md` documents itself as covering every suite under the selected
+target's `golden/` directory, not just whichever suite(s) a given
 `oracle-gen --suite ...` invocation happened to touch. These tests pin
 the helper that derives the tree-wide stamp from the committed goldens
 themselves, so a partial regeneration can never advance the file past
@@ -100,7 +100,7 @@ class WriteEnvironmentMdTest(unittest.TestCase):
                 env,
                 "2026-08-14T00:00:00Z",
                 excel_version="16.108.1",
-                golden_dir=oracle_gen.REPO_ROOT / "tests" / "oracle" / "golden",
+                golden_dir=oracle_gen.REPO_ROOT / "tests" / "oracle" / "targets" / "mac-365-ja_JP" / "golden",
             )
             body = path.read_text(encoding="utf-8")
             self.assertIn("`16.108.1`", body)
@@ -112,15 +112,15 @@ class WriteEnvironmentMdTest(unittest.TestCase):
         from tools.oracle.drivers.base import EnvironmentInfo
 
         env = EnvironmentInfo(excel_version="16.112", excel_locale="ja-JP", date1904=False, iterative=False)
-        variant_dir = oracle_gen.REPO_ROOT / "tests" / "oracle" / "variants" / "win-365-ja_JP" / "golden"
+        variant_dir = oracle_gen.REPO_ROOT / "tests" / "oracle" / "targets" / "win-365-ja_JP" / "golden"
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / "ENVIRONMENT.md"
             oracle_gen._write_environment_md(
                 path, env, "2026-08-14T00:00:00Z", excel_version="16.112", golden_dir=variant_dir
             )
             body = path.read_text(encoding="utf-8")
-            self.assertIn("`tests/oracle/variants/win-365-ja_JP/golden/`", body)
-            self.assertNotIn("`tests/oracle/golden/`", body)
+            self.assertIn("`tests/oracle/targets/win-365-ja_JP/golden/`", body)
+            self.assertNotIn("`tests/oracle/targets/mac-365-ja_JP/golden/`", body)
 
 
 if __name__ == "__main__":

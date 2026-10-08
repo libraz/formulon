@@ -273,9 +273,9 @@ std::string PrintParamName(const ::testing::TestParamInfo<OracleCase>& info) {
 
 INSTANTIATE_TEST_SUITE_P(Oracle, OracleTest, ::testing::ValuesIn(oracle_cases()), PrintParamName);
 
-// The variant oracle binary loads only `tests/oracle/variants/<tag>/golden/`
+// The variant oracle binary loads only `tests/oracle/targets/<tag>/golden/`
 // and is expected to register zero parameters when no variants have been
-// scanned in (the default empty-`variants/` state). The instantiation above
+// scanned in (the default empty-target state). The instantiation above
 // then expands to nothing and gtest would otherwise fail the suite with
 // `GoogleTestVerification.UninstantiatedParameterizedTestSuite`. Allow that
 // state explicitly so an empty variant tree builds and runs cleanly; the

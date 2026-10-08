@@ -11,7 +11,7 @@
 # Mac-vs-Formulon divergences belong in `tests/divergence.yaml`. This
 # file is exclusively for divergences against IronCalc's published
 # behaviour, and every entry MUST cite a Mac-side probe golden under
-# `tests/oracle/golden/` as evidence that Formulon's behaviour matches
+# `tests/oracle/targets/mac-365-ja_JP/golden/` as evidence that Formulon's behaviour matches
 # Mac (so the skip is legitimate and not just hiding a Formulon bug) —
 # unless it declares an explicit `cause` for a pending or structural debt.
 #
@@ -33,7 +33,7 @@
 #
 # The probe reference is written into `reason` as "Probe: <name>", where
 # <name> is a golden file stem, suite or case id under
-# `tests/oracle/golden/`. The checker resolves it, so a renamed or
+# `tests/oracle/targets/mac-365-ja_JP/golden/`. The checker resolves it, so a renamed or
 # deleted probe fails rather than reading as evidence. An entry that
 # cites one and sets no `cause` is tallied as `mac-probe`.
 #
@@ -80,7 +80,7 @@ entries:
   # textifies the error to its display string ("#DIV/0!") and runs the
   # function on the resulting text — so e.g. LEN(#DIV/0!) returns 7 in
   # IronCalc and #DIV/0! on Mac. Formulon matches Mac.
-  # Probe: tests/oracle/golden/text_function_error_probes.golden.json
+  # Probe: tests/oracle/targets/mac-365-ja_JP/golden/text_function_error_probes.golden.json
   # (19 cases). Every STRING_HANDLING.A8 case below has `A8 = #DIV/0!`
   # fed into a text function.
   - id: ironcalc_calc_tests__TEXT_STRING_HANDLING_Sheet1.B8
@@ -126,7 +126,7 @@ entries:
   # 1D range, the range collapses to #VALUE!. Mac Excel 365 instead
   # spills the range into adjacent cells; xlwings reads the spill anchor
   # (the top-left cell). Formulon matches Mac (spill semantics).
-  # Probe: tests/oracle/golden/implicit_intersection.golden.json
+  # Probe: tests/oracle/targets/mac-365-ja_JP/golden/implicit_intersection.golden.json
   - id: ironcalc_calc_tests_simple_functions_Implicit_Intersection.B15
     reason: "IronCalc legacy II returns #VALUE! for col-misaligned 1D vertical range; Mac spills (anchor = top-left). Probe: implicit_intersection."
     prefer: mac
@@ -148,7 +148,7 @@ entries:
   # IronCalc parses hyphen-format ("10-12-1999") and US slash-format
   # ("M/D/YYYY") date strings as numbers. Mac Excel 365 in ja-JP locale
   # rejects both with #VALUE!. Formulon follows Mac's locale-aware
-  # behaviour. Probe: tests/oracle/golden/value_coercion_probes.golden.json
+  # behaviour. Probe: tests/oracle/targets/mac-365-ja_JP/golden/value_coercion_probes.golden.json
   - id: ironcalc_calc_tests__TEXT_T_VALUE_VALUETOTEXT_Sheet1.I5
     reason: "VALUE(\"10-12-1999\") returns 36504 in IronCalc, #VALUE! on Mac ja-JP. Probe: value_coercion_probes (value_hyphen_date_1)."
     prefer: mac
@@ -641,7 +641,7 @@ entries:
   # magnitudes 1e+12 to 1e+30 demands exact bit equality -- mathematically
   # infeasible without arbitrary-precision arithmetic. Both Formulon and
   # Mac use the same NR algorithm; the residual is in summation order.
-  # Probe goldens: tests/oracle/golden/ironcalc_drift_probes.golden.json
+  # Probe goldens: tests/oracle/targets/mac-365-ja_JP/golden/ironcalc_drift_probes.golden.json
   # (bessel_besseli_32_7, bessel_besseli_neg32_7, bessel_besselk_04_10,
   # bessel_bessely_02_10, bessel_bessely_04_10, bessel_besselk_2_30,
   # bessel_bessely_2_30) anchor the Mac values and pass under the probe
@@ -730,7 +730,7 @@ entries:
   # "II". Mac Excel 365 confirms the spill semantics: the primary
   # implicit_intersection suite's function-arg cases read back the spill
   # anchor, never the row-aligned element. Formulon matches Mac 365.
-  # Probe: tests/oracle/golden/implicit_intersection.golden.json
+  # Probe: tests/oracle/targets/mac-365-ja_JP/golden/implicit_intersection.golden.json
   #        (round_col_range_row_excluded / round_row_range_col_excluded).
   - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_ARABIC_ROMAN_ARABIC.B41
     reason: "=ARABIC(E39:E42) at row 41 -> IronCalc IIE picks E41=10; Excel 365 spills, anchor=ARABIC(E39)=1. Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
@@ -913,7 +913,7 @@ entries:
   # Excel rejects the bracket with #VALUE!; the localized `[赤]` is what
   # gets accepted and discarded. IronCalc is en-US and discards `[Red]`.
   # Formulon matches Mac.
-  # Probe: tests/oracle/golden/text_format.golden.json
+  # Probe: tests/oracle/targets/mac-365-ja_JP/golden/text_format.golden.json
   # (text_color_english_name_rejected, text_color_localized_name_discarded).
   - id: ironcalc_calc_tests__TEXT_TEXT_NUMBERS.I3
     reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."

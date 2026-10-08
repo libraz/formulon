@@ -1,8 +1,9 @@
 # Oracle generation targets. The "primary" target is the canonical 1-bit
 # compatibility reference; variants are opt-in additional environments
-# whose goldens land under tests/oracle/variants/<name>/. The en-US oracle
-# gate is the explicit exception: mac-365-en_US remains under variants/
-# while its dedicated CTest is required coverage.
+# whose goldens land under tests/oracle/targets/<name>/. The target root
+# contains the formula, CF, and workbook tracks captured for that target.
+# The mac-365-en_US target is the dedicated English oracle gate and remains
+# required CTest coverage; other non-primary targets are opt-in.
 #
 # Target name shape: <host>-<excel-major>-<locale>
 #
@@ -39,12 +40,12 @@ targets:
     driver: macos_excel
     runs_on: [Darwin]
     locale: ja-JP
-    output_dir: tests/oracle/golden
-    environment_md: tests/oracle/ENVIRONMENT.md
+    output_dir: tests/oracle/targets/mac-365-ja_JP/golden
+    environment_md: tests/oracle/targets/mac-365-ja_JP/ENVIRONMENT.md
     # divergence: tests/divergence.yaml   # primary uses the global file
-                                          # via --divergence; variants set
+                                          # via --divergence; non-primary targets set
                                           # this to a per-target path
-                                          # (e.g. tests/oracle/variants/<name>/divergence.yaml).
+                                          # (e.g. tests/oracle/targets/<name>/divergence.yaml).
 
   win-365-ja_JP:
     # Microsoft 365 (Windows, ja-JP) goldens.
@@ -59,12 +60,12 @@ targets:
     #
     # Re-captured 2026-08-16 on a genuine Microsoft 365 ja-JP install,
     # EXCEL.EXE file version 16.0.20228.20190, through the WSL2 -> Windows
-    # COM bridge: the workbook track (tests/oracle/golden_wb, promoted via
+    # COM bridge: the workbook track (tests/oracle/targets/win-365-ja_JP/golden_wb, promoted via
     # `make oracle-promote`) and the formula track (`output_dir` below).
     # Both generators gate on the ARRAYTOTEXT(1) M365 sentinel.
     status: scaffolded
     # Only the workbook track is active CTest coverage; its marker lives in
-    # tests/oracle/golden_wb/PROVENANCE.json. The formula-track directory
+    # tests/oracle/targets/win-365-ja_JP/golden_wb/PROVENANCE.json. The formula-track directory
     # record below stays `active_ctest: false` because provenance.py's
     # variant inventory check needs a per-golden `capture_id` that
     # oracle_gen.py does not stamp yet.
@@ -72,13 +73,13 @@ targets:
       classification: verified
       verified: true
       product: Microsoft 365 Apps, Excel 16.0.20228.20190 (ja-JP)
-      source: tests/oracle/variants/win-365-ja_JP/PROVENANCE.json
+      source: tests/oracle/targets/win-365-ja_JP/golden/PROVENANCE.json
     driver: windows_excel
     runs_on: [Windows, Linux]
     locale: ja-JP
-    output_dir: tests/oracle/variants/win-365-ja_JP/golden
-    environment_md: tests/oracle/variants/win-365-ja_JP/ENVIRONMENT.md
-    divergence: tests/oracle/variants/win-365-ja_JP/divergence.yaml
+    output_dir: tests/oracle/targets/win-365-ja_JP/golden
+    environment_md: tests/oracle/targets/win-365-ja_JP/ENVIRONMENT.md
+    divergence: tests/oracle/targets/win-365-ja_JP/divergence.yaml
     # win_python: not set by default to keep author-specific paths out
     # of the committed manifest. Two ways to point the bridge at a
     # Windows-side python.exe:
@@ -97,7 +98,7 @@ targets:
   # missed). They are no longer a maintained oracle target and will not be
   # regenerated. The captured data is retained purely as historical
   # reference under `tests/oracle/reference/win-2019-ja_JP/` and is NOT
-  # scanned by the variant test harness (only `tests/oracle/variants/*`
+  # scanned by the variant test harness (only `tests/oracle/targets/*`
   # is). See that directory's ENVIRONMENT.md for context.
 
   # ----------------------------------------------------------------------
@@ -114,63 +115,63 @@ targets:
     driver: macos_excel
     runs_on: [Darwin]
     locale: en-US
-    output_dir: tests/oracle/variants/mac-365-en_US/golden
-    environment_md: tests/oracle/variants/mac-365-en_US/ENVIRONMENT.md
-    divergence: tests/oracle/variants/mac-365-en_US/divergence.yaml
+    output_dir: tests/oracle/targets/mac-365-en_US/golden
+    environment_md: tests/oracle/targets/mac-365-en_US/ENVIRONMENT.md
+    divergence: tests/oracle/targets/mac-365-en_US/divergence.yaml
 
   mac-365-de_DE:
     status: scaffolded
     driver: macos_excel
     runs_on: [Darwin]
     locale: de-DE
-    output_dir: tests/oracle/variants/mac-365-de_DE/golden
-    environment_md: tests/oracle/variants/mac-365-de_DE/ENVIRONMENT.md
-    divergence: tests/oracle/variants/mac-365-de_DE/divergence.yaml
+    output_dir: tests/oracle/targets/mac-365-de_DE/golden
+    environment_md: tests/oracle/targets/mac-365-de_DE/ENVIRONMENT.md
+    divergence: tests/oracle/targets/mac-365-de_DE/divergence.yaml
 
   mac-365-fr_FR:
     status: scaffolded
     driver: macos_excel
     runs_on: [Darwin]
     locale: fr-FR
-    output_dir: tests/oracle/variants/mac-365-fr_FR/golden
-    environment_md: tests/oracle/variants/mac-365-fr_FR/ENVIRONMENT.md
-    divergence: tests/oracle/variants/mac-365-fr_FR/divergence.yaml
+    output_dir: tests/oracle/targets/mac-365-fr_FR/golden
+    environment_md: tests/oracle/targets/mac-365-fr_FR/ENVIRONMENT.md
+    divergence: tests/oracle/targets/mac-365-fr_FR/divergence.yaml
 
   mac-365-zh_CN:
     status: scaffolded
     driver: macos_excel
     runs_on: [Darwin]
     locale: zh-CN
-    output_dir: tests/oracle/variants/mac-365-zh_CN/golden
-    environment_md: tests/oracle/variants/mac-365-zh_CN/ENVIRONMENT.md
-    divergence: tests/oracle/variants/mac-365-zh_CN/divergence.yaml
+    output_dir: tests/oracle/targets/mac-365-zh_CN/golden
+    environment_md: tests/oracle/targets/mac-365-zh_CN/ENVIRONMENT.md
+    divergence: tests/oracle/targets/mac-365-zh_CN/divergence.yaml
 
   mac-365-ko_KR:
     status: scaffolded
     driver: macos_excel
     runs_on: [Darwin]
     locale: ko-KR
-    output_dir: tests/oracle/variants/mac-365-ko_KR/golden
-    environment_md: tests/oracle/variants/mac-365-ko_KR/ENVIRONMENT.md
-    divergence: tests/oracle/variants/mac-365-ko_KR/divergence.yaml
+    output_dir: tests/oracle/targets/mac-365-ko_KR/golden
+    environment_md: tests/oracle/targets/mac-365-ko_KR/ENVIRONMENT.md
+    divergence: tests/oracle/targets/mac-365-ko_KR/divergence.yaml
 
   mac-365-th_TH:
     status: wanted
     driver: macos_excel
     runs_on: [Darwin]
     locale: th-TH
-    output_dir: tests/oracle/variants/mac-365-th_TH/golden
-    environment_md: tests/oracle/variants/mac-365-th_TH/ENVIRONMENT.md
-    divergence: tests/oracle/variants/mac-365-th_TH/divergence.yaml
+    output_dir: tests/oracle/targets/mac-365-th_TH/golden
+    environment_md: tests/oracle/targets/mac-365-th_TH/ENVIRONMENT.md
+    divergence: tests/oracle/targets/mac-365-th_TH/divergence.yaml
 
   win-365-en_US:
     status: wanted
     driver: windows_excel
     runs_on: [Windows, Linux]
     locale: en-US
-    output_dir: tests/oracle/variants/win-365-en_US/golden
-    environment_md: tests/oracle/variants/win-365-en_US/ENVIRONMENT.md
-    divergence: tests/oracle/variants/win-365-en_US/divergence.yaml
+    output_dir: tests/oracle/targets/win-365-en_US/golden
+    environment_md: tests/oracle/targets/win-365-en_US/ENVIRONMENT.md
+    divergence: tests/oracle/targets/win-365-en_US/divergence.yaml
 
   win-365-de_DE:
     # Decimal-comma locale; exercises TEXT formatting and DATEVALUE parsing
@@ -179,18 +180,18 @@ targets:
     driver: windows_excel
     runs_on: [Windows, Linux]
     locale: de-DE
-    output_dir: tests/oracle/variants/win-365-de_DE/golden
-    environment_md: tests/oracle/variants/win-365-de_DE/ENVIRONMENT.md
-    divergence: tests/oracle/variants/win-365-de_DE/divergence.yaml
+    output_dir: tests/oracle/targets/win-365-de_DE/golden
+    environment_md: tests/oracle/targets/win-365-de_DE/ENVIRONMENT.md
+    divergence: tests/oracle/targets/win-365-de_DE/divergence.yaml
 
   win-365-fr_FR:
     status: wanted
     driver: windows_excel
     runs_on: [Windows, Linux]
     locale: fr-FR
-    output_dir: tests/oracle/variants/win-365-fr_FR/golden
-    environment_md: tests/oracle/variants/win-365-fr_FR/ENVIRONMENT.md
-    divergence: tests/oracle/variants/win-365-fr_FR/divergence.yaml
+    output_dir: tests/oracle/targets/win-365-fr_FR/golden
+    environment_md: tests/oracle/targets/win-365-fr_FR/ENVIRONMENT.md
+    divergence: tests/oracle/targets/win-365-fr_FR/divergence.yaml
 
   win-365-zh_CN:
     # Anchors NUMBERSTRING and Chinese-locale TEXT format codes.
@@ -198,18 +199,18 @@ targets:
     driver: windows_excel
     runs_on: [Windows, Linux]
     locale: zh-CN
-    output_dir: tests/oracle/variants/win-365-zh_CN/golden
-    environment_md: tests/oracle/variants/win-365-zh_CN/ENVIRONMENT.md
-    divergence: tests/oracle/variants/win-365-zh_CN/divergence.yaml
+    output_dir: tests/oracle/targets/win-365-zh_CN/golden
+    environment_md: tests/oracle/targets/win-365-zh_CN/ENVIRONMENT.md
+    divergence: tests/oracle/targets/win-365-zh_CN/divergence.yaml
 
   win-365-ko_KR:
     status: wanted
     driver: windows_excel
     runs_on: [Windows, Linux]
     locale: ko-KR
-    output_dir: tests/oracle/variants/win-365-ko_KR/golden
-    environment_md: tests/oracle/variants/win-365-ko_KR/ENVIRONMENT.md
-    divergence: tests/oracle/variants/win-365-ko_KR/divergence.yaml
+    output_dir: tests/oracle/targets/win-365-ko_KR/golden
+    environment_md: tests/oracle/targets/win-365-ko_KR/ENVIRONMENT.md
+    divergence: tests/oracle/targets/win-365-ko_KR/divergence.yaml
 
   win-365-th_TH:
     # Anchors BAHTTEXT against authentic Thai-locale Excel.
@@ -217,6 +218,6 @@ targets:
     driver: windows_excel
     runs_on: [Windows, Linux]
     locale: th-TH
-    output_dir: tests/oracle/variants/win-365-th_TH/golden
-    environment_md: tests/oracle/variants/win-365-th_TH/ENVIRONMENT.md
-    divergence: tests/oracle/variants/win-365-th_TH/divergence.yaml
+    output_dir: tests/oracle/targets/win-365-th_TH/golden
+    environment_md: tests/oracle/targets/win-365-th_TH/ENVIRONMENT.md
+    divergence: tests/oracle/targets/win-365-th_TH/divergence.yaml

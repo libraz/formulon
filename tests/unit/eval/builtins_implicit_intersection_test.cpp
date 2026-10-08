@@ -3,7 +3,7 @@
 // (`=A1:A5`) and implicit intersection on `@`-prefixed ranges
 // (`=@A1:A5`). Verified Mac semantics:
 // `tests/oracle/cases/implicit_intersection.yaml` and corresponding
-// `tests/oracle/golden/implicit_intersection.golden.json`.
+// `tests/oracle/targets/mac-365-ja_JP/golden/implicit_intersection.golden.json`.
 //
 // Bare range in a value context: spills the whole rectangle as a
 // dynamic array, independent of the formula cell's position. Blank source

@@ -41,9 +41,9 @@ FORMULA_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases"
 WORKBOOK_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases_wb"
 DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
 IRONCALC_DIVERGENCE = REPO_ROOT / "tests" / "ironcalc_divergence.yaml"
-GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "golden"
-IRONCALC_GOLDEN_DIR = GOLDEN_DIR / "ironcalc"
-VARIANTS_DIR = REPO_ROOT / "tests" / "oracle" / "variants"
+GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "targets" / "mac-365-ja_JP" / "golden"
+IRONCALC_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "external" / "ironcalc" / "golden"
+VARIANTS_DIR = REPO_ROOT / "tests" / "oracle" / "targets"
 TARGETS_FILE = REPO_ROOT / "tools" / "oracle" / "targets.yaml"
 # The explicit every-target value of `applies_to`; `oracle_gen.py` reads it too.
 APPLIES_TO_ALL = "all"
@@ -178,7 +178,10 @@ def load_observations(golden_dirs: "list[Path] | None" = None) -> dict[str, str]
 
     out: dict[str, str] = {}
     if golden_dirs is None:
-        golden_dirs = [REPO_ROOT / "tests/oracle/golden", REPO_ROOT / "tests/oracle/golden_wb"]
+        golden_dirs = [
+            REPO_ROOT / "tests/oracle/targets/mac-365-ja_JP/golden",
+            REPO_ROOT / "tests/oracle/targets/win-365-ja_JP/golden_wb",
+        ]
     for golden_dir in golden_dirs:
         for path in sorted(golden_dir.glob("*.golden.json")):
             try:
@@ -325,7 +328,7 @@ def is_pending_stamp(value: Any) -> bool:
     A verified stamp must be a bare Microsoft 365 build string, e.g.
     ``"16.111.2"`` or ``"16.112"``. Everything else counts as pending,
     including three specific non-evidence shapes CONTRIBUTING.md and
-    tests/oracle/variants/win-365-ja_JP/ENVIRONMENT.md call out by name:
+    tests/oracle/targets/win-365-ja_JP/ENVIRONMENT.md call out by name:
 
     - The literal ``"16.0"``. ``Application.Version`` reports this same
       bare major.0 string for every Office SKU from 2016 through 365 --
@@ -770,7 +773,10 @@ def validate_ironcalc(path: Path, *, golden_dir: Path | None = None, probe_dir: 
         probes = cited_probes(entry)
         unknown = [name for name in probes if name not in probe_names]
         if unknown:
-            errors.append(f"{case_id}: probe evidence names no golden under tests/oracle/golden: {', '.join(unknown)}")
+            errors.append(
+                f"{case_id}: probe evidence names no golden under "
+                f"tests/oracle/targets/mac-365-ja_JP/golden: {', '.join(unknown)}"
+            )
         cause = entry.get("cause")
         if cause is None:
             # Derived, not guessed: the citation is the evidence, and an

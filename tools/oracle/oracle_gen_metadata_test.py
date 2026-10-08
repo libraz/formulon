@@ -11,7 +11,7 @@ from pathlib import Path
 from tools.oracle import case_schema, oracle_gen
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-VARIANT_DIVERGENCE = REPO_ROOT / "tests/oracle/variants/win-365-ja_JP/divergence.yaml"
+VARIANT_DIVERGENCE = REPO_ROOT / "tests/oracle/targets/win-365-ja_JP/divergence.yaml"
 
 
 class OracleGeneratorMetadataTest(unittest.TestCase):
@@ -58,7 +58,7 @@ class OracleGeneratorMetadataTest(unittest.TestCase):
                 }
                 for case in self.by_name[name].cases
             }
-            golden_path = REPO_ROOT / "tests/oracle/variants/win-365-ja_JP/golden" / f"{name}.golden.json"
+            golden_path = REPO_ROOT / "tests/oracle/targets/win-365-ja_JP/golden" / f"{name}.golden.json"
             golden = json.loads(golden_path.read_text(encoding="utf-8"))
             actual = {
                 case["id"]: {
@@ -86,7 +86,11 @@ class OracleGeneratorMetadataTest(unittest.TestCase):
         source_case = next(case for case in suite.cases if case.id == "spill_blocked_by_merged_anchor")
         self.assertEqual(source_case.merges, ["Z1:AA1"])
 
-        golden = json.loads((REPO_ROOT / "tests/oracle/golden/spill_collision.golden.json").read_text(encoding="utf-8"))
+        golden = json.loads(
+            (REPO_ROOT / "tests/oracle/targets/mac-365-ja_JP/golden/spill_collision.golden.json").read_text(
+                encoding="utf-8"
+            )
+        )
         generated = next(record for record in golden["cases"] if record["id"] == source_case.id)
         self.assertEqual(generated.get("merges"), source_case.merges)
 
@@ -133,7 +137,9 @@ class FormulaCellSchemaTest(unittest.TestCase):
         self.assertTrue(all(cell for cell in declared.values()))
 
         golden = json.loads(
-            (REPO_ROOT / "tests/oracle/golden/whole_axis_spill.golden.json").read_text(encoding="utf-8")
+            (REPO_ROOT / "tests/oracle/targets/mac-365-ja_JP/golden/whole_axis_spill.golden.json").read_text(
+                encoding="utf-8"
+            )
         )
         self.assertEqual({record["id"]: record.get("formula_cell") for record in golden["cases"]}, declared)
 
@@ -164,7 +170,9 @@ class FormulaCellSchemaTest(unittest.TestCase):
 
     def test_shape_captured_goldens_carry_shape_and_samples(self) -> None:
         golden = json.loads(
-            (REPO_ROOT / "tests/oracle/golden/whole_axis_spill.golden.json").read_text(encoding="utf-8")
+            (REPO_ROOT / "tests/oracle/targets/mac-365-ja_JP/golden/whole_axis_spill.golden.json").read_text(
+                encoding="utf-8"
+            )
         )
         shaped = [record for record in golden["cases"] if record.get("capture") == "shape"]
         self.assertTrue(shaped)
@@ -177,7 +185,9 @@ class FormulaCellSchemaTest(unittest.TestCase):
 
     def test_suites_without_a_placement_keep_the_field_out_of_the_golden(self) -> None:
         golden = json.loads(
-            (REPO_ROOT / "tests/oracle/golden/implicit_intersection.golden.json").read_text(encoding="utf-8")
+            (REPO_ROOT / "tests/oracle/targets/mac-365-ja_JP/golden/implicit_intersection.golden.json").read_text(
+                encoding="utf-8"
+            )
         )
         self.assertTrue(all("formula_cell" not in record for record in golden["cases"]))
 

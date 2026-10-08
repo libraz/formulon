@@ -91,7 +91,7 @@ def _skips_for_target(
 
     When `targets_doc` is given and `target` is not that track's own
     primary, `target` is a variant: its per-variant override file
-    (`tests/oracle/variants/<target>/divergence.yaml`) is merged on top of
+    (`tests/oracle/targets/<target>/divergence.yaml`) is merged on top of
     the primary registry, entries there winning on key collision, mirroring
     `workbook_oracle_gen._resolve_skips`. Omitting `targets_doc` (the
     default) keeps a primary-target call resolving from the primary
@@ -100,7 +100,7 @@ def _skips_for_target(
 
     skips = _load_divergence_skips(divergence, target, suites=suites)
     if targets_doc is not None and target != track_primary(targets_doc, track):
-        variant_div = REPO_ROOT / "tests" / "oracle" / "variants" / target / "divergence.yaml"
+        variant_div = REPO_ROOT / "tests" / "oracle" / "targets" / target / "divergence.yaml"
         if variant_div.exists():
             skips.update(_load_divergence_skips(variant_div, target, suites=suites))
     return skips

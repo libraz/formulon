@@ -254,7 +254,7 @@ TEST(RangeEndpoint, RefToMultiCellOffset) {
   // in the union so the unioned range is A1:B4 =
   //   1 + 2 + 3 + 4 + 10 + 20 + 30 + 40 = 110.
   // Verified against Mac Excel 365 in
-  // tests/oracle/golden/range_endpoint_calls.golden.json.
+  // tests/oracle/targets/mac-365-ja_JP/golden/range_endpoint_calls.golden.json.
   Workbook wb = Workbook::create();
   for (std::uint32_t r = 0; r < 5; ++r) {
     wb.sheet(0).set_cell_value(r, 0, Value::number(static_cast<double>(r + 1)));

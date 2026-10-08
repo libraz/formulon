@@ -17,7 +17,7 @@ def _workbook_tree(root: Path, *, case_ids: list[str], golden_ids: list[str]) ->
     """Materialises a one-suite workbook capture and its manifest doc."""
 
     cases_dir = root / "tests/oracle/cases_wb"
-    golden_dir = root / "tests/oracle/golden_wb"
+    golden_dir = root / "tests/oracle/targets/win/golden_wb"
     cases_dir.mkdir(parents=True)
     golden_dir.mkdir(parents=True)
     (cases_dir / "suite.case.json").write_text(
@@ -69,7 +69,13 @@ def _workbook_tree(root: Path, *, case_ids: list[str], golden_ids: list[str]) ->
     )
     return {
         "tracks": {"workbook": {"primary": "win"}},
-        "targets": {"win": {"status": "scaffolded", "locale": "ja-JP"}},
+        "targets": {
+            "win": {
+                "status": "scaffolded",
+                "locale": "ja-JP",
+                "output_dir": "tests/oracle/targets/win/golden",
+            }
+        },
     }
 
 
@@ -118,9 +124,9 @@ class ProvenancePolicyTest(unittest.TestCase):
     def test_wanted_target_is_not_active_even_with_old_goldens(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            target_dir = root / "tests/oracle/variants/win/golden"
+            target_dir = root / "tests/oracle/targets/win/golden"
             target_dir.mkdir(parents=True)
-            (target_dir.parent / "PROVENANCE.json").write_text(
+            (target_dir / "PROVENANCE.json").write_text(
                 json.dumps(
                     {"target": "win", "status": "wanted", "classification": "reference-only", "verified": False}
                 ),
@@ -129,10 +135,10 @@ class ProvenancePolicyTest(unittest.TestCase):
             doc = {
                 "primary": "mac",
                 "targets": {
-                    "mac": {"status": "primary", "environment_md": "tests/oracle/ENVIRONMENT.md"},
+                    "mac": {"status": "primary", "environment_md": "tests/oracle/targets/mac/ENVIRONMENT.md"},
                     "win": {
                         "status": "wanted",
-                        "environment_md": "tests/oracle/variants/win/ENVIRONMENT.md",
+                        "environment_md": "tests/oracle/targets/win/ENVIRONMENT.md",
                     },
                 },
             }
@@ -142,9 +148,10 @@ class ProvenancePolicyTest(unittest.TestCase):
     def test_reference_capture_cannot_claim_verified_product(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            env = root / "tests/oracle/variants/win/ENVIRONMENT.md"
+            env = root / "tests/oracle/targets/win/ENVIRONMENT.md"
             env.parent.mkdir(parents=True)
-            (env.parent / "PROVENANCE.json").write_text(
+            (env.parent / "golden" / "PROVENANCE.json").parent.mkdir(parents=True)
+            (env.parent / "golden" / "PROVENANCE.json").write_text(
                 json.dumps(
                     {"status": "scaffolded", "classification": "active", "verified": True, "active_ctest": True}
                 ),
@@ -163,7 +170,7 @@ class ProvenancePolicyTest(unittest.TestCase):
     def test_active_scaffold_requires_verified_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            env = root / "tests/oracle/variants/win/ENVIRONMENT.md"
+            env = root / "tests/oracle/targets/win/ENVIRONMENT.md"
             env.parent.mkdir(parents=True)
             golden_dir = env.parent / "golden"
             golden_dir.mkdir()
@@ -183,7 +190,7 @@ class ProvenancePolicyTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            (env.parent / "PROVENANCE.json").write_text(
+            (env.parent / "golden" / "PROVENANCE.json").write_text(
                 json.dumps(
                     {
                         "status": "scaffolded",
@@ -217,7 +224,7 @@ class ProvenancePolicyTest(unittest.TestCase):
                     "win": {
                         "status": "scaffolded",
                         "locale": "ja-JP",
-                        "output_dir": "tests/oracle/variants/win/golden",
+                        "output_dir": "tests/oracle/targets/win/golden",
                         "environment_md": str(env.relative_to(root)),
                     },
                 },
@@ -230,7 +237,7 @@ class ProvenancePolicyTest(unittest.TestCase):
     def test_cf_primary_requires_complete_hashed_capture(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            golden_dir = root / "tests/oracle/golden_cf"
+            golden_dir = root / "tests/oracle/targets/mac/golden_cf"
             golden_dir.mkdir(parents=True)
             golden_path = golden_dir / "cf_smoke.golden.json"
             golden_path.write_text(
