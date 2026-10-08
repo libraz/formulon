@@ -1,0 +1,4302 @@
+{
+  "suite": "aggregate",
+  "description": "SUM / AVERAGE / MIN / MAX / PRODUCT with direct args, ranges, and coercion edge cases",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "ko-KR",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-08T15:13:53Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "sum_three_integers",
+      "formula": "=SUM(1,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "sum_with_floats",
+      "formula": "=SUM(1.5,2.5,3.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "sum_from_range",
+      "formula": "=SUM(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "sum_range_skips_text",
+      "formula": "=SUM(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "sum_range_skips_bool",
+      "formula": "=SUM(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "sum_direct_arg_bool_counted",
+      "formula": "=SUM(10,TRUE,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 41.0
+      }
+    },
+    {
+      "id": "sum_range_with_error",
+      "formula": "=SUM(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "sum_empty_range",
+      "formula": "=SUM(A1:A3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sum_mixed_direct_and_range",
+      "formula": "=SUM(A1:A2,30,40)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "average_three_integers",
+      "formula": "=AVERAGE(2,4,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "average_from_range",
+      "formula": "=AVERAGE(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "average_range_skips_text",
+      "formula": "=AVERAGE(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "average_range_skips_bool",
+      "formula": "=AVERAGE(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "average_empty_range_is_div0",
+      "formula": "=AVERAGE(A1:A3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "average_direct_arg_bool_counted",
+      "formula": "=AVERAGE(10,TRUE,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 13.666666666666666
+      }
+    },
+    {
+      "id": "min_three_integers",
+      "formula": "=MIN(3,1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "min_with_negative",
+      "formula": "=MIN(-5,0,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "min_from_range",
+      "formula": "=MIN(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "min_range_skips_text_and_bool",
+      "formula": "=MIN(A1:A4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "min_empty_range_is_zero",
+      "formula": "=MIN(A1:A3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "max_three_integers",
+      "formula": "=MAX(3,1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "max_with_negative",
+      "formula": "=MAX(-5,-10,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "max_from_range",
+      "formula": "=MAX(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "max_empty_range_is_zero",
+      "formula": "=MAX(A1:A3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "product_three_integers",
+      "formula": "=PRODUCT(2,3,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "product_with_zero",
+      "formula": "=PRODUCT(2,0,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "product_from_range",
+      "formula": "=PRODUCT(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "product_empty_range_is_zero",
+      "formula": "=PRODUCT(A1:A3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "product_range_skips_text",
+      "formula": "=PRODUCT(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "aggregate_sum_no_errors",
+      "formula": "=AGGREGATE(9, 0, A1:A4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "aggregate_average_with_error_ignore",
+      "formula": "=AGGREGATE(1, 2, A1:A4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 23.333333333333332
+      }
+    },
+    {
+      "id": "aggregate_average_with_error_propagate",
+      "formula": "=AGGREGATE(1, 0, A1:A4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "aggregate_large_with_k",
+      "formula": "=AGGREGATE(14, 0, A1:A5, 2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "aggregate_percentile_inc",
+      "formula": "=AGGREGATE(16, 0, A1:A5, 0.5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "aggregate_quartile_inc_q2",
+      "formula": "=AGGREGATE(17, 0, A1:A5, 2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "aggregate_function_num_out_of_range",
+      "formula": "=AGGREGATE(20, 0, A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "aggregate_options_out_of_range",
+      "formula": "=AGGREGATE(9, 8, A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "aggregate_nested_fn9_opt0",
+      "formula": "=AGGREGATE(9,0,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3100.0
+      }
+    },
+    {
+      "id": "aggregate_nested_fn9_opt1",
+      "formula": "=AGGREGATE(9,1,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3100.0
+      }
+    },
+    {
+      "id": "aggregate_nested_fn9_opt2",
+      "formula": "=AGGREGATE(9,2,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3100.0
+      }
+    },
+    {
+      "id": "aggregate_nested_fn9_opt3",
+      "formula": "=AGGREGATE(9,3,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3100.0
+      }
+    },
+    {
+      "id": "aggregate_nested_fn9_opt4",
+      "formula": "=AGGREGATE(9,4,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3511.0
+      }
+    },
+    {
+      "id": "aggregate_nested_fn9_opt5",
+      "formula": "=AGGREGATE(9,5,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3511.0
+      }
+    },
+    {
+      "id": "aggregate_nested_fn9_opt6",
+      "formula": "=AGGREGATE(9,6,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3511.0
+      }
+    },
+    {
+      "id": "aggregate_nested_fn9_opt7",
+      "formula": "=AGGREGATE(9,7,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3511.0
+      }
+    },
+    {
+      "id": "aggregate_nested_fn1_opt0",
+      "formula": "=AGGREGATE(1,0,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 620.0
+      },
+      "tolerance": {
+        "abs": 0.0001,
+        "rel": 1e-06
+      }
+    },
+    {
+      "id": "aggregate_nested_fn1_opt1",
+      "formula": "=AGGREGATE(1,1,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 620.0
+      },
+      "tolerance": {
+        "abs": 0.0001,
+        "rel": 1e-06
+      }
+    },
+    {
+      "id": "aggregate_nested_fn1_opt2",
+      "formula": "=AGGREGATE(1,2,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 620.0
+      },
+      "tolerance": {
+        "abs": 0.0001,
+        "rel": 1e-06
+      }
+    },
+    {
+      "id": "aggregate_nested_fn1_opt3",
+      "formula": "=AGGREGATE(1,3,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 620.0
+      },
+      "tolerance": {
+        "abs": 0.0001,
+        "rel": 1e-06
+      }
+    },
+    {
+      "id": "aggregate_nested_fn1_opt4",
+      "formula": "=AGGREGATE(1,4,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 319.1818181818182
+      },
+      "tolerance": {
+        "abs": 0.0001,
+        "rel": 1e-06
+      }
+    },
+    {
+      "id": "aggregate_nested_fn1_opt5",
+      "formula": "=AGGREGATE(1,5,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 319.1818181818182
+      },
+      "tolerance": {
+        "abs": 0.0001,
+        "rel": 1e-06
+      }
+    },
+    {
+      "id": "aggregate_nested_fn1_opt6",
+      "formula": "=AGGREGATE(1,6,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 319.1818181818182
+      },
+      "tolerance": {
+        "abs": 0.0001,
+        "rel": 1e-06
+      }
+    },
+    {
+      "id": "aggregate_nested_fn1_opt7",
+      "formula": "=AGGREGATE(1,7,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 319.1818181818182
+      },
+      "tolerance": {
+        "abs": 0.0001,
+        "rel": 1e-06
+      }
+    },
+    {
+      "id": "aggregate_nested_fn4_opt0",
+      "formula": "=AGGREGATE(4,0,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2000.0
+      }
+    },
+    {
+      "id": "aggregate_nested_fn4_opt1",
+      "formula": "=AGGREGATE(4,1,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2000.0
+      }
+    },
+    {
+      "id": "aggregate_nested_fn4_opt2",
+      "formula": "=AGGREGATE(4,2,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2000.0
+      }
+    },
+    {
+      "id": "aggregate_nested_fn4_opt3",
+      "formula": "=AGGREGATE(4,3,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2000.0
+      }
+    },
+    {
+      "id": "aggregate_nested_fn4_opt4",
+      "formula": "=AGGREGATE(4,4,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2000.0
+      }
+    },
+    {
+      "id": "aggregate_nested_fn4_opt5",
+      "formula": "=AGGREGATE(4,5,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2000.0
+      }
+    },
+    {
+      "id": "aggregate_nested_fn4_opt6",
+      "formula": "=AGGREGATE(4,6,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2000.0
+      }
+    },
+    {
+      "id": "aggregate_nested_fn4_opt7",
+      "formula": "=AGGREGATE(4,7,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2000.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt0_k1",
+      "formula": "=AGGREGATE(15,0,A1:A11,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt0_k2",
+      "formula": "=AGGREGATE(15,0,A1:A11,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt1_k1",
+      "formula": "=AGGREGATE(15,1,A1:A11,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt1_k2",
+      "formula": "=AGGREGATE(15,1,A1:A11,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt2_k1",
+      "formula": "=AGGREGATE(15,2,A1:A11,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt2_k2",
+      "formula": "=AGGREGATE(15,2,A1:A11,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt3_k1",
+      "formula": "=AGGREGATE(15,3,A1:A11,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt3_k2",
+      "formula": "=AGGREGATE(15,3,A1:A11,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt4_k1",
+      "formula": "=AGGREGATE(15,4,A1:A11,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt4_k2",
+      "formula": "=AGGREGATE(15,4,A1:A11,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt5_k1",
+      "formula": "=AGGREGATE(15,5,A1:A11,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt5_k2",
+      "formula": "=AGGREGATE(15,5,A1:A11,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt6_k1",
+      "formula": "=AGGREGATE(15,6,A1:A11,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt6_k2",
+      "formula": "=AGGREGATE(15,6,A1:A11,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt7_k1",
+      "formula": "=AGGREGATE(15,7,A1:A11,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "aggregate_nested_small_opt7_k2",
+      "formula": "=AGGREGATE(15,7,A1:A11,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "aggregate_nested_report_block_fn1_opt0",
+      "formula": "=AGGREGATE(1,0,A20:A26)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A20:A22)"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 400.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A24:A25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 300.0
+      },
+      "tolerance": {
+        "abs": 0.0001,
+        "rel": 1e-06
+      }
+    },
+    {
+      "id": "aggregate_nested_report_block_fn9_opt0",
+      "formula": "=AGGREGATE(9,0,A20:A26)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A20:A22)"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 400.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A24:A25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1500.0
+      }
+    },
+    {
+      "id": "aggregate_nested_report_block_fn1_opt4",
+      "formula": "=AGGREGATE(1,4,A20:A26)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A20:A22)"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 400.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A24:A25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 428.57142857142856
+      },
+      "tolerance": {
+        "abs": 0.0001,
+        "rel": 1e-06
+      }
+    },
+    {
+      "id": "aggregate_nested_report_block_fn9_opt4",
+      "formula": "=AGGREGATE(9,4,A20:A26)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A20:A22)"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 400.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A24:A25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3000.0
+      }
+    },
+    {
+      "id": "aggregate_nested_spill_anchor_opt0",
+      "formula": "=AGGREGATE(9,0,C1:C3)",
+      "setup": {
+        "X10": {
+          "kind": "number",
+          "value": 512.0
+        },
+        "C1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X10)+SEQUENCE(3)*0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "aggregate_nested_spill_anchor_opt4",
+      "formula": "=AGGREGATE(9,4,C1:C3)",
+      "setup": {
+        "X10": {
+          "kind": "number",
+          "value": 512.0
+        },
+        "C1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X10)+SEQUENCE(3)*0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1536.0
+      }
+    },
+    {
+      "id": "average_omit",
+      "formula": "=AVERAGE(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "da_average_bool",
+      "formula": "=AVERAGE(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.75
+      }
+    },
+    {
+      "id": "da_average_numtext",
+      "formula": "=AVERAGE(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.25
+      }
+    },
+    {
+      "id": "da_average_badtext",
+      "formula": "=AVERAGE(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_max_omit",
+      "formula": "=MAX(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "da_max_bool",
+      "formula": "=MAX(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "da_max_numtext",
+      "formula": "=MAX(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "da_max_badtext",
+      "formula": "=MAX(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_min_omit",
+      "formula": "=MIN(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "da_min_bool",
+      "formula": "=MIN(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "da_min_numtext",
+      "formula": "=MIN(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "da_min_badtext",
+      "formula": "=MIN(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_product_bool",
+      "formula": "=PRODUCT(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "da_product_numtext",
+      "formula": "=PRODUCT(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 400.0
+      }
+    },
+    {
+      "id": "da_product_badtext",
+      "formula": "=PRODUCT(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}
