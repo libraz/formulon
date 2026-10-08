@@ -184,6 +184,58 @@ def _case_input(case: case_schema.Case) -> Dict[str, object]:
     return result
 
 
+def _case_record(case: case_schema.Case) -> Dict[str, object]:
+    """The input fields a golden records for a case, in golden field order."""
+
+    record: Dict[str, object] = {
+        "id": case.id,
+        "formula": case.formula,
+        "setup": case.setup,
+    }
+    if case.formula_cell:
+        record["formula_cell"] = case.formula_cell
+    if case.capture:
+        record["capture"] = case.capture
+    if case.merges:
+        record["merges"] = list(case.merges)
+    return record
+
+
+_REUSE_ENV_KEYS = ("excel_version", "excel_locale", "date1904", "iterative")
+
+
+def _reusable_expectations(
+    suite: case_schema.Suite,
+    existing: Optional[Dict[str, Any]],
+    env_json: Dict[str, object],
+) -> Dict[str, Dict[str, object]]:
+    """Expectations an incremental run may keep from the suite's existing golden.
+
+    A case is kept when the golden captured it under the same Excel version,
+    locale and workbook options and its recorded inputs equal the YAML's.
+    Shape-captured cases are always re-run, since their samples are not
+    recorded in the golden.
+    """
+
+    if not existing:
+        return {}
+    old_env = existing.get("environment") or {}
+    if any(old_env.get(key) != env_json.get(key) for key in _REUSE_ENV_KEYS):
+        return {}
+    old_cases = {c.get("id"): c for c in existing.get("cases", []) if isinstance(c, dict)}
+    keep: Dict[str, Dict[str, object]] = {}
+    for case in suite.cases:
+        old = old_cases.get(case.id)
+        if old is None or "expect" not in old or case.capture:
+            continue
+        record = _case_record(case)
+        if json.loads(json.dumps(record)) == {key: old.get(key) for key in record} and not (
+            set(old) - set(record) - {"expect", "tolerance", "compare_mode"}
+        ):
+            keep[case.id] = old["expect"]
+    return keep
+
+
 def _write_golden(
     out_path: Path,
     suite: case_schema.Suite,
@@ -191,23 +243,15 @@ def _write_golden(
     results: List[CaseResult],
     skipped: Optional[Dict[str, str]] = None,
     observed: Optional[Dict[str, CaseResult]] = None,
+    reused: Optional[Dict[str, Dict[str, object]]] = None,
 ) -> None:
     skipped = skipped or {}
     observed = observed or {}
+    reused = reused or {}
     cases_out: List[Dict[str, object]] = []
     by_id = {r.id: r for r in results}
     for c in suite.cases:
-        record: Dict[str, object] = {
-            "id": c.id,
-            "formula": c.formula,
-            "setup": c.setup,
-        }
-        if c.formula_cell:
-            record["formula_cell"] = c.formula_cell
-        if c.capture:
-            record["capture"] = c.capture
-        if c.merges:
-            record["merges"] = list(c.merges)
+        record = _case_record(c)
         if c.id in skipped:
             record["skipped"] = skipped[c.id]
             # Evidence for a still-pending divergence, recorded beside the
@@ -219,11 +263,11 @@ def _write_golden(
             cases_out.append(record)
             continue
         r = by_id.get(c.id)
-        if r is None:
+        if r is None and c.id not in reused:
             record["skipped"] = "no result captured"
             cases_out.append(record)
             continue
-        record["expect"] = _result_to_json(r)
+        record["expect"] = _result_to_json(r) if r is not None else reused[c.id]
         if c.tolerance is not None:
             record["tolerance"] = c.tolerance.to_dict()
         if c.compare_mode is not None and c.compare_mode != "exact":
@@ -622,6 +666,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="YAML listing cases to skip / widen; see tests/divergence.yaml.",
     )
     parser.add_argument(
+        "--incremental",
+        action="store_true",
+        help=(
+            "Drive only the cases the suite's existing golden lacks or recorded "
+            "with different inputs, and keep the rest. A suite whose golden was "
+            "captured under another Excel version, locale or workbook option is "
+            "captured in full."
+        ),
+    )
+    parser.add_argument(
         "--strict",
         action="store_true",
         help="Abort on first suite failure instead of continuing.",
@@ -803,7 +857,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                 # A skipped case whose stamp is still pending stays in the
                 # run -- its result is written as `observed`, not `expect`.
                 runnable = [c for c in suite.cases if c.id not in skips or c.id in reprobes]
-                case_inputs = [_case_input(c) for c in runnable]
                 env_copy = EnvironmentInfo(
                     excel_version=env.excel_version,
                     excel_locale=env.excel_locale,
@@ -811,6 +864,16 @@ def main(argv: Optional[List[str]] = None) -> int:
                     iterative=suite.options.get("iterative", False),
                 )
                 this_env_json = _env_to_json(env_copy, iso_now)
+                out_path = golden_dir / f"{suite.name}.golden.json"
+                reused: Dict[str, Dict[str, object]] = {}
+                if args.incremental and out_path.exists():
+                    existing = json.loads(out_path.read_text(encoding="utf-8"))
+                    reused = _reusable_expectations(suite, existing, this_env_json)
+                    runnable = [c for c in runnable if c.id not in reused or c.id in reprobes]
+                    if not runnable:
+                        this_env_json = existing["environment"]
+                    print(f"  incremental: {len(reused)} kept, {len(runnable)} to capture")
+                case_inputs = [_case_input(c) for c in runnable]
                 results: List[CaseResult] = []
                 if args.batch_size and args.batch_size < 1:
                     raise ValueError("--batch-size must be >= 1")
@@ -874,7 +937,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                         f"  * {len(observed)} skipped case(s) still owed an observation and were probed "
                         "anyway (see golden 'observed' fields)"
                     )
-                out_path = golden_dir / f"{suite.name}.golden.json"
                 _write_golden(
                     out_path,
                     suite,
@@ -882,6 +944,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     runtime_results,
                     skipped=merged_skips,
                     observed=observed,
+                    reused=reused,
                 )
                 print(f"  -> {out_path.relative_to(REPO_ROOT)}")
             except Exception as exc:

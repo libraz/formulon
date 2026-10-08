@@ -130,6 +130,11 @@ make oracle-gen
 # Primary, single suite
 make oracle-gen SUITE=count
 
+# Capture only cases the golden lacks or records with different inputs;
+# the rest are kept. A golden from another Excel version, locale or
+# workbook option is captured in full.
+make oracle-gen SUITE=count INCREMENTAL=1
+
 # Conditional-formatting primary (Mac Excel 365 ja-JP)
 make oracle-gen-cf
 make oracle-gen-cf SUITE=cf_smoke
@@ -244,13 +249,13 @@ ignore `tests/oracle/variants/` entirely.
      formula: "=SUM(A1:A3)"
      setup: { A1: 1, A2: "text", A3: 3 }
    ```
-3. Regenerate the primary golden:
+3. Capture the new cases into the primary golden (existing cases are kept):
    ```bash
-   make oracle-gen SUITE=<category>
+   make oracle-gen SUITE=<category> INCREMENTAL=1
    ```
-4. (Optional) Regenerate variant goldens on the appropriate host:
+4. (Optional) Capture them into variant goldens on the appropriate host:
    ```bash
-   make oracle-gen TARGET=win-365-ja_JP SUITE=<category>
+   make oracle-gen TARGET=<target> SUITE=<category> INCREMENTAL=1
    ```
 5. Commit the YAML + every refreshed `*.golden.json`.
 

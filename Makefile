@@ -580,7 +580,7 @@ oracle-setup-wsl:
 
 oracle-gen:
 	@$(call require_oracle_venv,oracle-gen)
-	@$(ORACLE_GEN) $(if $(SUITE),--suite $(SUITE),) $(if $(TARGET),--target $(TARGET),)
+	@$(ORACLE_GEN) $(if $(SUITE),--suite $(SUITE),) $(if $(TARGET),--target $(TARGET),) $(if $(INCREMENTAL),--incremental,)
 
 # CF (conditional-formatting) track. macOS-only; see cf_oracle_gen.py for
 # the supported rule subset.
