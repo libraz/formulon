@@ -29,6 +29,7 @@ the Mac and Windows drivers.
 
 from __future__ import annotations
 
+import subprocess
 from typing import Any, Dict, Optional
 
 # ``Application.International(xlCountryCode)`` returns a phone-style
@@ -188,6 +189,43 @@ def detect_locale_from_app(app: Any) -> Optional[str]:
     if cc is None:
         return None
     return COUNTRY_CODE_TO_BCP47.get(cc)
+
+
+def _read_default(domain: str, key: str) -> Optional[str]:
+    """Returns the first token of a macOS ``defaults`` value, or ``None``."""
+
+    args = ["defaults", "read"] + (["-g"] if domain == "-g" else [domain]) + [key]
+    try:
+        out = subprocess.run(args, capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    for tok in out.stdout.replace("(", " ").replace(")", " ").replace(",", " ").split():
+        tok = tok.strip('"')
+        if tok:
+            return tok
+    return None
+
+
+def detect_mac_excel_locale(bundle_id: str = "com.microsoft.Excel") -> Optional[str]:
+    """Returns the BCP-47 locale Mac Excel calculates under, or ``None``.
+
+    Mac Excel exposes no ``International`` accessor to AppleScript. Its
+    calculation surfaces follow two independent settings: the UI language
+    (code page, ASC/DBCS, era and day names, NUMBERSTRING) and the region
+    (currency, date order, format keywords). Each is read from the app's
+    own ``defaults`` domain first, then the global one, and joined as
+    ``<language>-<REGION>``.
+    """
+
+    lang = _read_default(bundle_id, "AppleLanguages") or _read_default("-g", "AppleLanguages")
+    region = _read_default(bundle_id, "AppleLocale") or _read_default("-g", "AppleLocale")
+    if not lang or not region:
+        return None
+    lang = lang.replace("_", "-").split("-")[0]
+    region = region.split("@")[0].replace("-", "_").split("_")[-1]
+    return f"{lang}-{region.upper()}"
 
 
 def normalise_error_token(text: str) -> Optional[str]:

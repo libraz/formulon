@@ -6,7 +6,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from tools.oracle.drivers import base, macos_excel, windows_excel
+from tools.oracle.drivers import _locale, base, macos_excel, windows_excel
 
 
 class _FakeCell:
@@ -634,6 +634,58 @@ class SpillShapeProbeTest(unittest.TestCase):
         # Importing the Windows adapter must remain possible on Mac/Linux so
         # these fake tests can exercise its COM call shape without xlwings.
         self.assertTrue(hasattr(windows_excel, "_evaluate_spill_shape"))
+
+
+class _FakeLocalizingCell:
+    """A cell whose value assignment parses number-looking text, like Excel."""
+
+    def __init__(self):
+        self.value = None
+        self.formula2 = None
+
+    def __setattr__(self, name, value):
+        if name == "value" and isinstance(value, str) and value.replace(".", "", 1).isdigit():
+            value = float(value)
+        object.__setattr__(self, name, value)
+
+
+class _FakeLocalizingSheet:
+    def __init__(self):
+        self.cell = _FakeLocalizingCell()
+
+    def range(self, _address):
+        return self.cell
+
+
+class MacExcelLocaleTest(unittest.TestCase):
+    def test_number_looking_text_is_reentered_behind_a_prefix(self) -> None:
+        sheet = _FakeLocalizingSheet()
+        macos_excel._write_cell(sheet, "A1", {"kind": "text", "value": "1.25"})
+        self.assertEqual(sheet.cell.formula2, "'1.25")
+
+    def test_plain_text_keeps_the_value_assignment(self) -> None:
+        sheet = _FakeLocalizingSheet()
+        macos_excel._write_cell(sheet, "A1", {"kind": "text", "value": "abc"})
+        self.assertEqual(sheet.cell.value, "abc")
+        self.assertIsNone(sheet.cell.formula2)
+
+    def test_evaluate_uses_the_recorded_local_function_names(self) -> None:
+        api = _FakeMacApi(1)
+        app = _FakeApp(api)
+        names = {"ROWS": "ZEILEN", "COLUMNS": "SPALTEN", "TYPE": "TYP"}
+        with patch.dict(macos_excel._LOCAL_FUNCTION_NAMES, {id(app): names}):
+            macos_excel._app_evaluate(app)("ROWS([B]TYPE!$Z$1#)*16384+COLUMNS([B]TYPE!$Z$1#)")
+        self.assertEqual(api.calls, [{"name": "ZEILEN([B]TYPE!$Z$1#)*16384+SPALTEN([B]TYPE!$Z$1#)"}])
+
+    def test_mac_locale_joins_language_and_region(self) -> None:
+        values = {
+            ("com.microsoft.Excel", "AppleLanguages"): "zh-Hans",
+            ("com.microsoft.Excel", "AppleLocale"): None,
+            ("-g", "AppleLanguages"): "ja-JP",
+            ("-g", "AppleLocale"): "zh_CN@calendar=gregorian",
+        }
+        with patch.object(_locale, "_read_default", lambda domain, key: values[(domain, key)]):
+            self.assertEqual(_locale.detect_mac_excel_locale(), "zh-CN")
 
 
 if __name__ == "__main__":

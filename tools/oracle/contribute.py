@@ -40,8 +40,8 @@ _CONTRIBUTE_BANNER = """\
     differently across locales (BAHTTEXT, NUMBERSTRING, decimal-comma
     locales, localized TEXT format codes) and across the Mac/Windows
     ports. The maintainer team can't reproduce these from a single
-    install -- Excel's locale is system-wide, not a runtime switch,
-    and licenses are per-account/per-platform. Goldens captured by
+    install -- Windows Excel's locale follows the system, and licenses
+    are per-account/per-platform. Goldens captured by
     contributors who actually run Excel in that locale are how
     Formulon stays honest.
 

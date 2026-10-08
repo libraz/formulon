@@ -105,13 +105,61 @@ targets:
   # ----------------------------------------------------------------------
 
   mac-365-en_US:
-    status: wanted
+    # Mac Excel takes its calculation locale from two per-app defaults:
+    # AppleLanguages (code page, DBCS, era/day names) and AppleLocale
+    # (currency, date order, format keywords). Set both, then relaunch.
+    status: scaffolded
     driver: macos_excel
     runs_on: [Darwin]
     locale: en-US
     output_dir: tests/oracle/variants/mac-365-en_US/golden
     environment_md: tests/oracle/variants/mac-365-en_US/ENVIRONMENT.md
     divergence: tests/oracle/variants/mac-365-en_US/divergence.yaml
+
+  mac-365-de_DE:
+    status: wanted
+    driver: macos_excel
+    runs_on: [Darwin]
+    locale: de-DE
+    output_dir: tests/oracle/variants/mac-365-de_DE/golden
+    environment_md: tests/oracle/variants/mac-365-de_DE/ENVIRONMENT.md
+    divergence: tests/oracle/variants/mac-365-de_DE/divergence.yaml
+
+  mac-365-fr_FR:
+    status: wanted
+    driver: macos_excel
+    runs_on: [Darwin]
+    locale: fr-FR
+    output_dir: tests/oracle/variants/mac-365-fr_FR/golden
+    environment_md: tests/oracle/variants/mac-365-fr_FR/ENVIRONMENT.md
+    divergence: tests/oracle/variants/mac-365-fr_FR/divergence.yaml
+
+  mac-365-zh_CN:
+    status: wanted
+    driver: macos_excel
+    runs_on: [Darwin]
+    locale: zh-CN
+    output_dir: tests/oracle/variants/mac-365-zh_CN/golden
+    environment_md: tests/oracle/variants/mac-365-zh_CN/ENVIRONMENT.md
+    divergence: tests/oracle/variants/mac-365-zh_CN/divergence.yaml
+
+  mac-365-ko_KR:
+    status: wanted
+    driver: macos_excel
+    runs_on: [Darwin]
+    locale: ko-KR
+    output_dir: tests/oracle/variants/mac-365-ko_KR/golden
+    environment_md: tests/oracle/variants/mac-365-ko_KR/ENVIRONMENT.md
+    divergence: tests/oracle/variants/mac-365-ko_KR/divergence.yaml
+
+  mac-365-th_TH:
+    status: wanted
+    driver: macos_excel
+    runs_on: [Darwin]
+    locale: th-TH
+    output_dir: tests/oracle/variants/mac-365-th_TH/golden
+    environment_md: tests/oracle/variants/mac-365-th_TH/ENVIRONMENT.md
+    divergence: tests/oracle/variants/mac-365-th_TH/divergence.yaml
 
   win-365-en_US:
     status: wanted

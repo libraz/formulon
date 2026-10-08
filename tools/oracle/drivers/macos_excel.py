@@ -38,10 +38,11 @@ are then read in a second pass and packaged into `CaseResult` records.
 from __future__ import annotations
 
 import platform
+import re
 from typing import Any, Dict, List, Optional
 
 from . import case_sheet, cell_result
-from ._locale import detect_locale_from_app
+from ._locale import detect_locale_from_app, detect_mac_excel_locale
 from .base import (
     DEFAULT_FORMULA_CELL,
     MAX_CAPTURE_CELLS,
@@ -227,10 +228,39 @@ def _classify_value(cell, evaluate) -> CaseResult:
     return cell_result.classify_value(cell, evaluate, _cell_displayed_text)
 
 
+# Functions the shared result probes pass to Application.Evaluate.
+_EVALUATE_FUNCTIONS = ("ROWS", "COLUMNS", "TYPE")
+_LOCAL_FUNCTION_NAMES: Dict[int, Dict[str, str]] = {}
+
+
+def _record_local_function_names(app) -> None:
+    """Records the name Mac Excel's UI language gives each probe function.
+
+    Mac ``evaluate`` parses in the UI language (``ZEILEN`` under de-DE), unlike
+    ``formula2``, so the names are read back once per app from a scratch book.
+    """
+
+    wb = app.books.add()
+    try:
+        cell = wb.sheets[0].range("A1")
+        cell.formula2 = "=" + "+".join(f"{fn}(B1)" for fn in _EVALUATE_FUNCTIONS)
+        local = re.findall(r"([^=+(]+)\(B1\)", str(cell.api.formula_local.get()))
+    finally:
+        wb.close()
+    if len(local) != len(_EVALUATE_FUNCTIONS):
+        raise RuntimeError(f"could not read localized probe function names: {local!r}")
+    _LOCAL_FUNCTION_NAMES[id(app)] = dict(zip(_EVALUATE_FUNCTIONS, local))
+
+
 def _app_evaluate(app):
     """Mac Application.Evaluate adapter shared by the result probes."""
 
-    return lambda expression: app.api.evaluate(name=expression)
+    names = _LOCAL_FUNCTION_NAMES.get(id(app), {})
+    pattern = re.compile(r"\b(" + "|".join(_EVALUATE_FUNCTIONS) + r")\(")
+
+    return lambda expression: app.api.evaluate(
+        name=pattern.sub(lambda m: names.get(m.group(1), m.group(1)) + "(", expression)
+    )
 
 
 def _evaluate_spill_shape(app, anchor, *, max_cells: Optional[int] = MAX_CAPTURE_CELLS) -> tuple[int, int]:
@@ -297,6 +327,7 @@ class ExcelOracle(OracleDriver):
             _set_iteration(self._app, False)
         except Exception:
             pass
+        _record_local_function_names(self._app)
 
     def __enter__(self) -> "ExcelOracle":
         return self
@@ -336,7 +367,7 @@ class ExcelOracle(OracleDriver):
                     version = f"{version} (Build {b})"
             except Exception:
                 pass
-        locale = detect_locale_from_app(self._app) or ""
+        locale = detect_locale_from_app(self._app) or detect_mac_excel_locale() or ""
         return EnvironmentInfo(
             excel_version=version.strip(),
             excel_locale=locale,
@@ -482,6 +513,8 @@ class ExcelOracle(OracleDriver):
                     _set_date1904(wb, date1904)
                     try:
                         sht = wb.sheets[0]
+                        # The default name follows the UI language (Tabelle1).
+                        sht.name = "Sheet1"
                         setup = case.get("setup") or {}
                         _apply_merges(sht, case.get("merges") or [])
                         for addr, rec in setup.items():
@@ -758,9 +791,11 @@ def _write_cell(sht, addr: str, rec: Dict[str, Any], *, context: str = "setup ce
             # entry, not on a value assignment.
             rng.formula2 = "'"
             return
-        # A non-empty string needs no prefix; Excel's default string
-        # handling stores it verbatim.
+        # A value assignment parses number- or date-looking text ("123",
+        # "1.25"), so that case is re-entered behind the same prefix.
         rng.value = text
+        if rng.value != text:
+            rng.formula2 = "'" + text
         return
     if kind == "formula":
         _assign_formula(rng, rec["formula"], context=context)
