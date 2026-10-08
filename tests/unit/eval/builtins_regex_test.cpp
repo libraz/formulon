@@ -552,12 +552,13 @@ TEST(RegexCrossCutting, ErrorInReplacementPropagates) {
 }
 
 TEST(RegexCrossCutting, PatternPastCapIsRejectedWhileLexing) {
-  // A pattern one byte past the 32 767-character cap can only be written
-  // as a literal, and that literal makes the formula longer than the
-  // tokenizer's own UTF-16 length cap. Since the cap bounds a single
+  // A pattern one byte past the 32 767-character cap, written as a literal,
+  // makes the formula longer than the tokenizer's own UTF-16 length cap. Since the cap bounds a single
   // token as well as the token stream, the source is rejected while
-  // lexing and the pattern never reaches PCRE2 -- so the engine-side
-  // length guard is unreachable from a formula rather than untested.
+  // lexing and the pattern never reaches PCRE2. Built at evaluation time
+  // instead, it is cut to the cap by `&` or refused by REPT / CONCAT, so the
+  // engine-side length guard is unreachable from a formula rather than
+  // untested.
   std::string pat(32768, 'a');
   std::string src = "=REGEXTEST(\"abc\", \"";
   src += pat;
@@ -567,15 +568,6 @@ TEST(RegexCrossCutting, PatternPastCapIsRejectedWhileLexing) {
   parser::Parser p(src, parse_arena);
   (void)p.parse();
   EXPECT_FALSE(p.errors().empty());
-}
-
-TEST(RegexCrossCutting, PatternPastCapIsValueError) {
-  // Build the over-long pattern at evaluation time. Writing it as a
-  // literal would push the formula source past the tokenizer's own
-  // length cap, so the engine-side guard would never see it.
-  const Value v = EvalSource("=REGEXTEST(\"abc\", REPT(\"a\", 32767) & \"a\")");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(RegexCrossCutting, PatternAtCapBoundaryIsAccepted) {

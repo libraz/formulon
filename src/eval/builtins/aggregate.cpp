@@ -53,20 +53,38 @@ Value Sum(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 }
 
 // CONCAT(value, ...) / CONCATENATE(value, ...) ---------------------------
-// Both spellings share an implementation. Each argument is rendered via
-// `coerce_to_text`; left-most error wins. The joined result is interned in
-// the call's arena so the returned Value remains readable for the caller.
-Value Concat(const Value* args, std::uint32_t arity, Arena& arena) {
+// Each argument is rendered via `coerce_to_text`; left-most error wins. The
+// spellings differ only past the text cap: CONCAT is #CALC!, CONCATENATE cuts
+// the result as `&` does.
+Expected<std::string, ErrorCode> join_texts(const Value* args, std::uint32_t arity) {
   std::string joined;
   for (std::uint32_t i = 0; i < arity; ++i) {
     auto coerced = coerce_to_text(args[i]);
     if (!coerced) {
-      return Value::error(coerced.error());
+      return coerced.error();
     }
     joined.append(coerced.value());
   }
-  const std::string_view interned = arena.intern(joined);
-  return Value::text(interned);
+  return joined;
+}
+
+Value Concat(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto joined = join_texts(args, arity);
+  if (!joined) {
+    return Value::error(joined.error());
+  }
+  if (utf16_units_in(joined.value()) > kExcelTextCapUnits) {
+    return Value::error(ErrorCode::Calc);
+  }
+  return Value::text(arena.intern(joined.value()));
+}
+
+Value Concatenate(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto joined = join_texts(args, arity);
+  if (!joined) {
+    return Value::error(joined.error());
+  }
+  return Value::text(arena.intern(clip_to_text_cap(joined.value())));
 }
 
 // LEN(text) --------------------------------------------------------------
@@ -401,7 +419,7 @@ void register_aggregate_builtins(FunctionRegistry& registry) {
       {"CONCAT", 1u, kVariadic, &Concat, true, true},
       // CONCATENATE keeps legacy implicit-intersection semantics, so it is
       // intentionally not range-aware.
-      {"CONCATENATE", 1u, kVariadic, &Concat},
+      {"CONCATENATE", 1u, kVariadic, &Concatenate},
       {"LEN", 1u, 1u, &Len},
       {"MIN", 1u, kVariadic, &Min, true, true, true},
       {"MAX", 1u, kVariadic, &Max, true, true, true},

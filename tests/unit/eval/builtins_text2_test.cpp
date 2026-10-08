@@ -118,13 +118,13 @@ TEST(BuiltinsText2TextJoin, IgnoreEmptyAsNumberZeroIsFalse) {
   EXPECT_EQ(v.as_text(), "a,,b");
 }
 
-TEST(BuiltinsText2TextJoin, ResultExceedingCapIsValueError) {
+TEST(BuiltinsText2TextJoin, ResultExceedingCapIsCalcError) {
   // Each REPT yields 32,000 ASCII bytes (= 32,000 UTF-16 units). Two of
   // them plus a 1-byte delimiter sums to 64,001 units, well above the
   // 32,767-unit cap.
   const Value v = EvalSource("=TEXTJOIN(\",\", TRUE, REPT(\"a\", 32000), REPT(\"b\", 32000))");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
 }
 
 TEST(BuiltinsText2TextJoin, JustAtCapIsAllowed) {
@@ -137,11 +137,11 @@ TEST(BuiltinsText2TextJoin, JustAtCapIsAllowed) {
 
 // One unit past the cap is the first input that fails, so the accept /
 // reject boundary is pinned from both sides: 32,767 units is text (above),
-// 32,768 is `#VALUE!`.
-TEST(BuiltinsText2TextJoin, OneUnitOverCapIsValueError) {
+// 32,768 is `#CALC!`.
+TEST(BuiltinsText2TextJoin, OneUnitOverCapIsCalcError) {
   const Value v = EvalSource("=TEXTJOIN(\",\", TRUE, REPT(\"a\", 16383), REPT(\"b\", 16384))");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
 }
 
 // The cap counts UTF-16 units, not bytes. 16,383 supplementary-plane
@@ -153,10 +153,10 @@ TEST(BuiltinsText2TextJoin, SupplementaryPlaneJustAtCapIsAllowed) {
   EXPECT_EQ(v.as_text().size(), 65533u);
 }
 
-TEST(BuiltinsText2TextJoin, SupplementaryPlaneOneUnitOverCapIsValueError) {
+TEST(BuiltinsText2TextJoin, SupplementaryPlaneOneUnitOverCapIsCalcError) {
   const Value v = EvalSource("=TEXTJOIN(\"\", TRUE, REPT(\"\xF0\x9F\x99\x82\", 16383), \"ab\")");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
 }
 
 // The cap is reached by the accumulated result, not by any single piece, so
@@ -168,7 +168,35 @@ TEST(BuiltinsText2TextJoin, CapIsReachedAcrossManySmallPieces) {
 
   const Value over_cap = EvalSource("=TEXTJOIN(\"\", TRUE, REPT(\"a\", 16000), REPT(\"b\", 16000), REPT(\"c\", 768))");
   ASSERT_TRUE(over_cap.is_error());
-  EXPECT_EQ(over_cap.as_error(), ErrorCode::Value);
+  EXPECT_EQ(over_cap.as_error(), ErrorCode::Calc);
+}
+
+// Past the text cap CONCAT is #CALC!, while `&` and CONCATENATE cut the
+// result to 32,767 units, dropping a surrogate pair that straddles the cut.
+TEST(BuiltinsText2Concat, ConcatPastCapIsCalcError) {
+  const Value at_cap = EvalSource("=LEN(CONCAT(REPT(\"a\",32766),\"b\"))");
+  ASSERT_TRUE(at_cap.is_number());
+  EXPECT_EQ(at_cap.as_number(), 32767.0);
+  for (const char* formula : {"=CONCAT(REPT(\"a\",32767),\"b\")", "=CONCAT(REPT(\"a\",32766),\"\xF0\x9F\x99\x82\")"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Calc) << formula;
+  }
+}
+
+TEST(BuiltinsText2Concat, AmpersandAndConcatenateCutAtCap) {
+  for (const char* formula : {"=LEN(REPT(\"a\",32767)&\"b\")", "=LEN(CONCATENATE(REPT(\"a\",32767),\"b\"))",
+                              "=LEN(REPT(\"a\",32767)&REPT(\"b\",32767))"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_number()) << formula;
+    EXPECT_EQ(v.as_number(), 32767.0) << formula;
+  }
+  const Value last = EvalSource("=RIGHT(REPT(\"a\",32767)&\"b\",1)");
+  ASSERT_TRUE(last.is_text());
+  EXPECT_EQ(last.as_text(), "a");
+  const Value split_pair = EvalSource("=LEN(REPT(\"a\",32766)&\"\xF0\x9F\x99\x82\")");
+  ASSERT_TRUE(split_pair.is_number());
+  EXPECT_EQ(split_pair.as_number(), 32766.0);
 }
 
 TEST(BuiltinsText2TextJoin, TooFewArgsIsArityError) {

@@ -77,9 +77,14 @@ inline double truncate_index(double value) noexcept {
 /// unchanged.
 Expected<double, ErrorCode> coerce_to_index_number(const Value& v);
 
-/// Excel's text-cell limit in UTF-16 units; text builtins whose result
-/// would exceed it (REPT, REPLACEB, TEXTJOIN, REGEXREPLACE, ...) yield `#VALUE!`.
+/// Excel's text-cell limit in UTF-16 units. A result over it is `#VALUE!`
+/// from REPT / SUBSTITUTE / REPLACE(B) / REGEXREPLACE, `#CALC!` from CONCAT
+/// and TEXTJOIN, and is cut to the limit by `&` and CONCATENATE.
 inline constexpr std::uint64_t kExcelTextCapUnits = 32767u;
+
+/// The prefix of `text` that fits `kExcelTextCapUnits`, the cut `&` and
+/// CONCATENATE apply. A surrogate pair straddling the limit is dropped whole.
+std::string_view clip_to_text_cap(std::string_view text) noexcept;
 
 /// Coerces `v` to its Excel-visible string representation.
 ///

@@ -9,6 +9,7 @@
 
 #include "eval/coerce.h"
 #include "eval/lazy_impls.h"
+#include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -36,7 +37,7 @@ constexpr std::size_t kMaxUtf8SequenceBytes = 4u;
 // the end of one piece counts as one malformed unit per byte until the
 // continuation bytes arrive, at which point the same bytes decode as a
 // single codepoint. Since the cap decides whether TEXTJOIN returns text or
-// `#VALUE!`, that difference is Excel-observable.
+// `#CALC!`, that difference is Excel-observable.
 //
 // So the count is committed only for the prefix a later append can no
 // longer affect — everything up to the last `kMaxUtf8SequenceBytes` — and
@@ -62,6 +63,12 @@ class RunningUtf16Units {
   std::uint64_t committed_units_ = 0;
 };
 
+// One flattened text argument cell, or `repeat` identical cells in a row.
+struct TextPiece {
+  std::string text;
+  std::uint64_t repeat;
+};
+
 // Flattens `node` (scalar, range, or array) into `out`, appending each
 // cell's text projection in row-major order. Mirrors the range-flattening
 // the generic `accepts_ranges` dispatcher performs for an ordinary
@@ -70,7 +77,7 @@ class RunningUtf16Units {
 // through the dispatcher's per-position loop (which cannot special-case
 // `delimiter` — see the header comment).
 bool flatten_text_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                      const EvalContext& ctx, std::vector<std::string>* out, Value* out_err) {
+                      const EvalContext& ctx, std::vector<TextPiece>* out, Value* out_err) {
   const Value v = eval_node_as_array(node, arena, registry, ctx);
   if (v.is_error()) {
     *out_err = v;
@@ -85,7 +92,17 @@ bool flatten_text_arg(const parser::AstNode& node, Arena& arena, const FunctionR
       *out_err = Value::error(t.error());
       return false;
     }
-    out->push_back(std::move(t.value()));
+    out->push_back(TextPiece{std::move(t.value()), 1U});
+  }
+  // A whole-axis reference walks only its populated head; the blank cells past
+  // it still take a delimiter each.
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  if (static_reference_shape(node, ctx, &rows, &cols)) {
+    const std::uint64_t declared = static_cast<std::uint64_t>(rows) * cols;
+    if (declared > n) {
+      out->push_back(TextPiece{std::string(), declared - n});
+    }
   }
   return true;
 }
@@ -133,7 +150,7 @@ Value eval_textjoin_lazy(const parser::AstNode& call, Arena& arena, const Functi
   // text1, [text2], ... (args 2..N): each may be scalar, range, or array;
   // flatten every argument's cells, in call order, into one text-piece
   // list.
-  std::vector<std::string> pieces;
+  std::vector<TextPiece> pieces;
   for (std::uint32_t i = 2; i < arity; ++i) {
     Value err = Value::blank();
     if (!flatten_text_arg(call.as_call_arg(i), arena, registry, ctx, &pieces, &err)) {
@@ -145,21 +162,32 @@ Value eval_textjoin_lazy(const parser::AstNode& call, Arena& arena, const Functi
   bool first = true;
   RunningUtf16Units counter;
   std::size_t delim_index = 0;
-  for (const std::string& piece : pieces) {
-    if (ignore_empty && piece.empty()) {
+  bool all_delimiters_empty = true;
+  for (const std::string& d : delimiters) {
+    all_delimiters_empty = all_delimiters_empty && d.empty();
+  }
+  for (const TextPiece& piece : pieces) {
+    if (ignore_empty && piece.text.empty()) {
       continue;
     }
-    if (!first) {
-      out.append(delimiters[delim_index % delimiters.size()]);
-      ++delim_index;
+    // A run of empty cells joined by empty delimiters adds nothing.
+    if (piece.text.empty() && all_delimiters_empty) {
+      first = false;
+      continue;
     }
-    out.append(piece);
-    first = false;
-    // Cap check after each appended piece, on the joined result rather than
-    // on the piece: the cap is a property of the whole string, and the
-    // first piece that carries it over is the one that fails the call.
-    if (counter.units_of(out) > kExcelTextCapUnits) {
-      return Value::error(ErrorCode::Value);
+    for (std::uint64_t k = 0; k < piece.repeat; ++k) {
+      if (!first) {
+        out.append(delimiters[delim_index % delimiters.size()]);
+        ++delim_index;
+      }
+      out.append(piece.text);
+      first = false;
+      // Cap check after each appended piece, on the joined result rather than
+      // on the piece: the cap is a property of the whole string, and the
+      // first piece that carries it over is the one that fails the call.
+      if (counter.units_of(out) > kExcelTextCapUnits) {
+        return Value::error(ErrorCode::Calc);
+      }
     }
   }
   return Value::text(arena.intern(out));

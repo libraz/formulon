@@ -266,10 +266,9 @@ Value apply_concat(const Value& lhs, const Value& rhs, Arena& arena) {
   joined.reserve(lhs_text.value().size() + rhs_text.value().size());
   joined.append(lhs_text.value());
   joined.append(rhs_text.value());
-  const std::string_view interned = arena.intern(joined);
   // Empty input is fine: Arena::intern returns an empty view that is still
   // a valid Text payload.
-  return Value::text(interned);
+  return Value::text(arena.intern(clip_to_text_cap(joined)));
 }
 
 Value apply_comparison(parser::BinOp op, const Value& lhs, const Value& rhs) {

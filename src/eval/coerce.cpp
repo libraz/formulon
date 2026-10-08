@@ -13,6 +13,8 @@
 #include "utils/double_parse.h"
 #include "utils/expected.h"
 #include "utils/strings.h"
+#include "utils/text_ops.h"
+#include "utils/utf8_length.h"
 #include "value.h"
 
 namespace formulon {
@@ -140,6 +142,14 @@ Expected<double, ErrorCode> coerce_to_index_number(const Value& v) {
     return std::move(number.error());
   }
   return truncate_index(number.value());
+}
+
+std::string_view clip_to_text_cap(std::string_view text) noexcept {
+  // Each UTF-16 unit takes at least one byte, so a short text cannot exceed the cap.
+  if (text.size() <= kExcelTextCapUnits || utf16_units_in(text) <= kExcelTextCapUnits) {
+    return text;
+  }
+  return text.substr(0, utf16_to_byte_offset_floor(text, static_cast<std::uint32_t>(kExcelTextCapUnits)));
 }
 
 Expected<std::string, ErrorCode> coerce_to_text(const Value& v) {

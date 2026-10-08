@@ -36,7 +36,8 @@ class FunctionRegistry;
 /// cyclically across the flattened, in-call-order sequence of `text1,
 /// text2, ...` cells (each of which may itself be a scalar, range, or
 /// array). Errors in any argument propagate. Result length is capped at
-/// Excel's 32,767 UTF-16-unit limit; exceeding it surfaces `#VALUE!`.
+/// Excel's 32,767 UTF-16-unit limit; exceeding it surfaces `#CALC!`, counting
+/// the blank cells of a whole-axis reference past its populated head.
 Value eval_textjoin_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx);
 
