@@ -1,0 +1,80 @@
+{
+  "suite": "encodeurl",
+  "description": "ENCODEURL -- RFC 3986 percent-encoding with uppercase hex (Excel 365 Mac ja-JP)",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "fr-FR",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-08T11:48:08Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "encodeurl_space",
+      "formula": "=ENCODEURL(\"hello world\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "encodeurl_query_string_chars",
+      "formula": "=ENCODEURL(\"a/b c?d=1&e=2\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "encodeurl_unreserved_passthrough",
+      "formula": "=ENCODEURL(\"ABCabc012-_.~\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "encodeurl_japanese_utf8",
+      "formula": "=ENCODEURL(\"日本語\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "encodeurl_bool_true",
+      "formula": "=ENCODEURL(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "encodeurl_empty_string",
+      "formula": "=ENCODEURL(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "encodeurl_percent_self_encodes",
+      "formula": "=ENCODEURL(\"100%\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    }
+  ]
+}

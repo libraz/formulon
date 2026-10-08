@@ -1,0 +1,1485 @@
+{
+  "suite": "pivotby",
+  "description": "PIVOTBY dynamic-array pivot (Excel 365). Perspectives parallel GROUPBY's structure — bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "fr-FR",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-08T12:17:26Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "pivotby_bare_sum",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, , 0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "X",
+          "Y",
+          "A",
+          1.0,
+          "",
+          "B",
+          "",
+          2.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "id": "pivotby_lambda_sum",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, , 0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "X",
+          "Y",
+          "A",
+          1.0,
+          "",
+          "B",
+          "",
+          2.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "id": "pivotby_row_sort_order_zero_rejected",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pivotby_unknown_name_error",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, NOPE_NAME, 0, 0, 0, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "pivotby_field_headers_out_of_range",
+      "formula": "=PIVOTBY({\"A\"}, {\"X\"}, {1}, SUM, 5, 0, 0, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pivotby_filter_array_length_mismatch",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0, 0, {TRUE;FALSE;TRUE})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pivotby_filter_array_excludes_all",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0, 0, {FALSE;FALSE})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pivotby_multi_col_rows_basic",
+      "formula": "=PIVOTBY({\"A\",\"P\";\"B\",\"Q\";\"A\",\"P\"}, {\"X\";\"Y\";\"X\"}, {1;2;3}, SUM, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "",
+          "X",
+          "Y",
+          "Total",
+          "A",
+          "P",
+          4.0,
+          "",
+          4.0,
+          "B",
+          "Q",
+          "",
+          2.0,
+          2.0,
+          "Total",
+          "",
+          4.0,
+          2.0,
+          6.0
+        ],
+        "shape": [
+          4,
+          5
+        ]
+      }
+    },
+    {
+      "id": "pivotby_multi_col_cols_basic",
+      "formula": "=PIVOTBY({\"A\";\"B\";\"A\"}, {\"X\",\"M\";\"Y\",\"N\";\"X\",\"M\"}, {1;2;3}, SUM, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "X",
+          "Y",
+          "Total",
+          "",
+          "M",
+          "N",
+          "",
+          "A",
+          4.0,
+          "",
+          4.0,
+          "B",
+          "",
+          2.0,
+          2.0,
+          "Total",
+          4.0,
+          2.0,
+          6.0
+        ],
+        "shape": [
+          5,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_multi_values_basic",
+      "formula": "=PIVOTBY({\"A\";\"B\";\"A\"}, {\"X\";\"Y\";\"X\"}, {1,10;2,20;3,30}, SUM, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "X",
+          "X",
+          "Y",
+          "Y",
+          "Total",
+          "Total",
+          "A",
+          4.0,
+          40.0,
+          "",
+          "",
+          "",
+          "",
+          "B",
+          "",
+          "",
+          2.0,
+          20.0,
+          "",
+          "",
+          "Total",
+          4.0,
+          40.0,
+          2.0,
+          20.0,
+          "",
+          ""
+        ],
+        "shape": [
+          4,
+          7
+        ]
+      }
+    },
+    {
+      "id": "pivotby_multi_all_axes",
+      "formula": "=PIVOTBY({\"A\",\"P\";\"B\",\"Q\";\"A\",\"P\"}, {\"X\",\"M\";\"Y\",\"N\";\"X\",\"M\"}, {1,10;2,20;3,30}, SUM, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "",
+          "X",
+          "X",
+          "Y",
+          "Y",
+          "Total",
+          "Total",
+          "",
+          "",
+          "M",
+          "M",
+          "N",
+          "N",
+          "",
+          "",
+          "A",
+          "P",
+          4.0,
+          40.0,
+          "",
+          "",
+          "",
+          "",
+          "B",
+          "Q",
+          "",
+          "",
+          2.0,
+          20.0,
+          "",
+          "",
+          "Total",
+          "",
+          4.0,
+          40.0,
+          2.0,
+          20.0,
+          "",
+          ""
+        ],
+        "shape": [
+          5,
+          8
+        ]
+      }
+    },
+    {
+      "id": "pivotby_multi_with_input_header",
+      "formula": "=PIVOTBY({\"R1\",\"R2\";\"A\",\"P\";\"B\",\"Q\";\"A\",\"P\"}, {\"C\";\"X\";\"Y\";\"X\"}, {\"V\";1;2;3}, SUM, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "",
+          "C",
+          "",
+          "",
+          "",
+          "",
+          "X",
+          "Y",
+          "Total",
+          "R1",
+          "R2",
+          "V",
+          "V",
+          "V",
+          "A",
+          "P",
+          4.0,
+          "",
+          4.0,
+          "B",
+          "Q",
+          "",
+          2.0,
+          2.0,
+          "Total",
+          "",
+          4.0,
+          2.0,
+          6.0
+        ],
+        "shape": [
+          6,
+          5
+        ]
+      }
+    },
+    {
+      "id": "pivotby_row_subtotal_depth_two",
+      "formula": "=PIVOTBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"}, {\"X\";\"Y\";\"X\"}, {10;20;30}, SUM, 0, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "",
+          "X",
+          "Y",
+          "Total",
+          "A",
+          "x",
+          10.0,
+          "",
+          10.0,
+          "A",
+          "y",
+          "",
+          20.0,
+          20.0,
+          "A",
+          "",
+          10.0,
+          20.0,
+          30.0,
+          "B",
+          "x",
+          30.0,
+          "",
+          30.0,
+          "B",
+          "",
+          30.0,
+          "",
+          30.0,
+          "Total général",
+          "",
+          40.0,
+          20.0,
+          60.0
+        ],
+        "shape": [
+          7,
+          5
+        ]
+      }
+    },
+    {
+      "id": "pivotby_field_headers_auto_header_row",
+      "formula": "=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "r"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "c"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "p"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "x",
+          1.0,
+          3.0,
+          4.0,
+          "y",
+          "",
+          2.0,
+          2.0,
+          "Total",
+          1.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          4,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_field_headers_auto_no_header_row",
+      "formula": "=PIVOTBY(A1:A3,B1:B3,C1:C3,SUM)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "p"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "x",
+          1.0,
+          3.0,
+          4.0,
+          "y",
+          "",
+          2.0,
+          2.0,
+          "Total",
+          1.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          4,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_sort_orders_omitted_keys_ascending",
+      "formula": "=PIVOTBY({\"y\";\"x\";\"y\"},{\"q\";\"p\";\"p\"},{1;2;3},SUM,0,0,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "x",
+          2.0,
+          "",
+          "y",
+          3.0,
+          1.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "id": "pivotby_measured_fh0_hdr",
+      "formula": "=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "r"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "c"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "p"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "c",
+          "p",
+          "q",
+          "Total",
+          "r",
+          0.0,
+          "",
+          "",
+          0.0,
+          "x",
+          "",
+          1.0,
+          3.0,
+          4.0,
+          "y",
+          "",
+          "",
+          2.0,
+          2.0,
+          "Total",
+          0.0,
+          1.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          5,
+          5
+        ]
+      }
+    },
+    {
+      "id": "pivotby_measured_fh0_nohdr",
+      "formula": "=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "r"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "c"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "p"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "x",
+          1.0,
+          3.0,
+          4.0,
+          "y",
+          "",
+          2.0,
+          2.0,
+          "Total",
+          1.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          4,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_measured_fh1_hdr",
+      "formula": "=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "r"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "c"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "p"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "x",
+          1.0,
+          3.0,
+          4.0,
+          "y",
+          "",
+          2.0,
+          2.0,
+          "Total",
+          1.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          4,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_measured_fh1_nohdr",
+      "formula": "=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "r"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "c"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "p"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "q",
+          "Total",
+          "x",
+          3.0,
+          3.0,
+          "y",
+          2.0,
+          2.0,
+          "Total",
+          5.0,
+          5.0
+        ],
+        "shape": [
+          4,
+          3
+        ]
+      }
+    },
+    {
+      "id": "pivotby_measured_fh2_hdr",
+      "formula": "=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "r"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "c"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "p"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "Champ de colonne 1",
+          "",
+          "",
+          "",
+          "",
+          "c",
+          "p",
+          "q",
+          "Total",
+          "Champ de ligne 1",
+          "Valeur 1",
+          "Valeur 1",
+          "Valeur 1",
+          "Valeur 1",
+          "r",
+          0.0,
+          "",
+          "",
+          0.0,
+          "x",
+          "",
+          1.0,
+          3.0,
+          4.0,
+          "y",
+          "",
+          "",
+          2.0,
+          2.0,
+          "Total",
+          0.0,
+          1.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          7,
+          5
+        ]
+      }
+    },
+    {
+      "id": "pivotby_measured_fh2_nohdr",
+      "formula": "=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "r"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "c"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "p"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "Champ de colonne 1",
+          "",
+          "",
+          "",
+          "p",
+          "q",
+          "Total",
+          "Champ de ligne 1",
+          "Valeur 1",
+          "Valeur 1",
+          "Valeur 1",
+          "x",
+          1.0,
+          3.0,
+          4.0,
+          "y",
+          "",
+          2.0,
+          2.0,
+          "Total",
+          1.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          6,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_measured_fh3_hdr",
+      "formula": "=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "r"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "c"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "p"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "c",
+          "",
+          "",
+          "",
+          "p",
+          "q",
+          "Total",
+          "r",
+          "v",
+          "v",
+          "v",
+          "x",
+          1.0,
+          3.0,
+          4.0,
+          "y",
+          "",
+          2.0,
+          2.0,
+          "Total",
+          1.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          6,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_measured_fh3_nohdr",
+      "formula": "=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "r"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "c"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "p"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "",
+          "",
+          "q",
+          "Total",
+          "x",
+          1.0,
+          1.0,
+          "x",
+          3.0,
+          3.0,
+          "y",
+          2.0,
+          2.0,
+          "Total",
+          5.0,
+          5.0
+        ],
+        "shape": [
+          6,
+          3
+        ]
+      }
+    },
+    {
+      "id": "pivotby_measured_lit_fh0",
+      "formula": "=PIVOTBY({\"x\";\"y\";\"x\"},{\"p\";\"q\";\"q\"},{1;2;3},SUM,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "x",
+          1.0,
+          3.0,
+          4.0,
+          "y",
+          "",
+          2.0,
+          2.0,
+          "Total",
+          1.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          4,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_measured_rng_fh0",
+      "formula": "=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,0)",
+      "setup": {
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "p"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "x",
+          1.0,
+          3.0,
+          4.0,
+          "y",
+          "",
+          2.0,
+          2.0,
+          "Total",
+          1.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          4,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_measured_rng_fh0_isblank",
+      "formula": "=ISBLANK(INDEX(PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,0),1,1))",
+      "setup": {
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "p"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "pivotby_measured_lit_isblank",
+      "formula": "=ISBLANK(INDEX(PIVOTBY({\"x\";\"y\";\"x\"},{\"p\";\"q\";\"q\"},{1;2;3},SUM,0),1,1))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "pivotby_measured_rng_type",
+      "formula": "=TYPE(INDEX(PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,0),1,1))",
+      "setup": {
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "p"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "pivotby_hdr_default_noheader",
+      "formula": "=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "r"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "c"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "p"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "x",
+          1.0,
+          3.0,
+          4.0,
+          "y",
+          "",
+          2.0,
+          2.0,
+          "Total",
+          1.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          4,
+          4
+        ]
+      }
+    }
+  ]
+}

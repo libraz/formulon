@@ -1,0 +1,69 @@
+{
+  "suite": "mode_mult",
+  "description": "MODE.MULT vertical-array mode spill — five perspectives spanning two-way tie (2x1 spill), single-mode 1x1 spill, all-unique input ->",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "fr-FR",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-08T12:16:07Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "mode_mult_two_way_tie",
+      "formula": "=MODE.MULT(1,2,1,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "mode_mult_single_mode_1x1",
+      "formula": "=MODE.MULT({1,2,1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mode_mult_all_unique_na",
+      "formula": "=MODE.MULT(1,2,3,4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "mode_mult_singleton_na",
+      "formula": "=MODE.MULT(5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "mode_mult_error_propagates",
+      "formula": "=MODE.MULT(1, #DIV/0!, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    }
+  ]
+}

@@ -126,7 +126,7 @@ targets:
     divergence: tests/oracle/variants/mac-365-de_DE/divergence.yaml
 
   mac-365-fr_FR:
-    status: wanted
+    status: scaffolded
     driver: macos_excel
     runs_on: [Darwin]
     locale: fr-FR
