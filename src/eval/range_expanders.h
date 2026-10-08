@@ -8,6 +8,7 @@
 // would otherwise collapse to a scalar `Value`:
 //
 //   * `expand_offset_call`  -> `OFFSET(reference, ...)`
+//   * `expand_indirect_call` -> `INDIRECT(ref_text, [a1])`
 //   * `expand_choose_call`  -> `CHOOSE(idx, value1, value2, ...)`
 //   * `expand_if_call`      -> `IF(cond, then, [else])`
 //   * `expand_row_call`     -> `ROW(arg)`
@@ -55,6 +56,14 @@ class FunctionRegistry;
 bool expand_offset_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
                         std::uint32_t* out_rows, std::uint32_t* out_cols);
+
+/// Expands `Call("INDIRECT", ...)` into the cells of the reference it
+/// names, so an aggregator treats `SUM(INDIRECT("A2"))` like `SUM(A2)`:
+/// a single-cell result is range-sourced rather than a scalar argument.
+/// Same out-param contract as `expand_offset_call`.
+bool expand_indirect_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                          std::uint32_t* out_rows, std::uint32_t* out_cols);
 
 /// Expands `Call("CHOOSE", index, value1, value2, …)` into a flat row-major
 /// vector of cell `Value`s by evaluating `index`, validating it against the

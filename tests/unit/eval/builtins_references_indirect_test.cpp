@@ -124,6 +124,18 @@ TEST(BuiltinsIndirect, RangeTextInSumAggregates) {
   EXPECT_DOUBLE_EQ(v.as_number(), 60.0);
 }
 
+TEST(BuiltinsIndirect, SingleCellNumericTextIsSkippedByAggregators) {
+  // A single-cell INDIRECT is a reference, so SUM / PRODUCT skip its text
+  // exactly as they do for SUM(A1); the text is not coerced to 7.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::text("7"));
+  for (const char* src : {"=SUM(INDIRECT(\"A1\"))", "=PRODUCT(INDIRECT(\"A1\"))", "=SUM(A1)"}) {
+    const Value v = EvalSourceIn(src, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << src << ": " << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), 0.0) << src;
+  }
+}
+
 TEST(BuiltinsIndirect, MultiColTableInVlookup) {
   // VLOOKUP with an INDIRECT multi-column table argument resolves the
   // table rectangle and returns the column-2 cell of the matched row.

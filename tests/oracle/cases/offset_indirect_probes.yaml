@@ -107,3 +107,22 @@ cases:
   - id: column_indirect_same_sheet
     description: 'COLUMN(INDIRECT("D5")) on current sheet'
     formula: '=COLUMN(INDIRECT("D5"))'
+
+  # F) A numeric-looking text cell reached through INDIRECT. Aggregators
+  # skip text in a reference, so the single-cell INDIRECT result must not
+  # be coerced as a scalar argument would be. SUM(A2) is the direct control.
+  - id: sum_indirect_single_cell_numeric_text
+    setup: { A2: '="7"' }
+    formula: '=SUM(INDIRECT("A2"))'
+
+  - id: product_indirect_single_cell_numeric_text
+    setup: { A2: '="7"' }
+    formula: '=PRODUCT(INDIRECT("A2"))'
+
+  - id: sum_direct_ref_numeric_text
+    setup: { A2: '="7"' }
+    formula: '=SUM(A2)'
+
+  - id: sum_indirect_range_numeric_text
+    setup: { A2: '="7"', B2: 3 }
+    formula: '=SUM(INDIRECT("A2:B2"))'

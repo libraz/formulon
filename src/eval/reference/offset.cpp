@@ -150,6 +150,43 @@ bool expand_offset_call(const parser::AstNode& call, Arena& arena, const Functio
   return true;
 }
 
+bool expand_indirect_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                          std::uint32_t* out_rows, std::uint32_t* out_cols) {
+  std::string_view sheet;
+  std::uint32_t top = 0;
+  std::uint32_t left = 0;
+  std::uint32_t bottom = 0;
+  std::uint32_t right = 0;
+  bool is_range = false;
+  ErrorCode err = ErrorCode::Ref;
+  if (!resolve_reference_call(call, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &is_range, &err)) {
+    *out_err_code = err;
+    return false;
+  }
+  parser::Reference lhs{};
+  parser::Reference rhs{};
+  lhs.sheet = sheet;
+  lhs.row = top;
+  lhs.col = left;
+  rhs.sheet = sheet;
+  rhs.row = bottom;
+  rhs.col = right;
+  auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
+  if (!expanded) {
+    *out_err_code = expanded.error();
+    return false;
+  }
+  *out_cells = std::move(expanded.value());
+  if (out_rows != nullptr) {
+    *out_rows = bottom - top + 1U;
+  }
+  if (out_cols != nullptr) {
+    *out_cols = right - left + 1U;
+  }
+  return true;
+}
+
 bool expand_choose_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
                         std::uint32_t* out_rows, std::uint32_t* out_cols) {

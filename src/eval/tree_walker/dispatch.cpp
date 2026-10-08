@@ -834,13 +834,20 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     // the rectangle OFFSET would synthesize, not the `#VALUE!` OFFSET
     // itself returns in scalar context. We share the expansion helper
     // with `resolve_range_arg` (lazy family) so the two paths cannot
-    // drift on cross-sheet / cycle / bounds semantics. Other calls (e.g.
-    // `INDIRECT("A1:B2")`) would need a `Value::Array` runtime to
-    // expand; they fall through to `eval_node` and surface whatever
-    // scalar result OFFSET / INDIRECT produces today.
+    // drift on cross-sheet / cycle / bounds semantics.
     bool expanded_call_handled = false;
     Value expanded_call_return = Value::blank();
     if (!append_expanded_call_argument(*def, arg_node, "OFFSET", expand_offset_call, arena, registry, ctx, &values,
+                                       &expanded_call_handled, &expanded_call_return)) {
+      return expanded_call_return;
+    }
+    if (expanded_call_handled) {
+      had_range_shaped_arg = true;
+      continue;
+    }
+    // INDIRECT names a reference, so its cells take the range filters even
+    // when it resolves to one cell: SUM(INDIRECT("A2")) skips text as SUM(A2) does.
+    if (!append_expanded_call_argument(*def, arg_node, "INDIRECT", expand_indirect_call, arena, registry, ctx, &values,
                                        &expanded_call_handled, &expanded_call_return)) {
       return expanded_call_return;
     }
