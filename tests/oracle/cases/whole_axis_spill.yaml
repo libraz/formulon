@@ -121,6 +121,26 @@ cases:
       B1: 10
     expect: 0
 
+  # The same cycle with the axis inside an expression. ROWS reads only the
+  # declared shape, so its answer does not depend on how the cycle is seeded.
+  - id: axis_self_ref_derived_col
+    description: "=A:A+0 at A1; column A is otherwise empty"
+    formula: "=A:A+0"
+    formula_cell: A1
+    expect: 0
+
+  - id: axis_self_ref_sum_derived_col
+    description: "=SUM(C:C*1) at C1; column C is otherwise empty"
+    formula: "=SUM(C:C*1)"
+    formula_cell: C1
+    expect: 0
+
+  - id: axis_self_ref_rows_derived_col
+    description: "=ROWS(G:G+0) at G1; the declared height, cycle or not"
+    formula: "=ROWS(G:G+0)"
+    formula_cell: G1
+    expect: 1048576
+
   # The two cases above isolate circularity by clearing the runway. This
   # pair instead makes both conditions true at once and shows which one
   # Excel decides first: the footprint fits from row 1, A2 and A3 occupy

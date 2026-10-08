@@ -1,0 +1,95 @@
+suite: text_length_cap
+description: >
+  Results that would pass Excel's 32,767 UTF-16-unit text limit. The
+  functions do not agree on what happens there: REPT, SUBSTITUTE and
+  REPLACE are #VALUE!, CONCAT and TEXTJOIN are #CALC!, and `&` and
+  CONCATENATE cut the result to the limit. A cut that would split a
+  surrogate pair leaves 32,766 units. Long results are read through LEN
+  so no case stores text near the limit in a cell.
+
+  The whole-column TEXTJOIN cases show that the blank cells past the
+  populated head take a delimiter each when empty cells are kept.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: text_cap_rept_past_cap
+    description: "REPT one unit past the cap -> #VALUE!"
+    formula: '=REPT("a",32768)'
+    expect: { kind: error, code: "#VALUE!" }
+  - id: text_cap_substitute_past_cap
+    description: "SUBSTITUTE growing 20000 units to 40000 -> #VALUE!"
+    formula: '=SUBSTITUTE(REPT("a",20000),"a","bb")'
+    expect: { kind: error, code: "#VALUE!" }
+  - id: text_cap_replace_past_cap
+    description: "REPLACE growing a full-cap text by one unit -> #VALUE!"
+    formula: '=REPLACE(REPT("a",32767),1,1,"bb")'
+    expect: { kind: error, code: "#VALUE!" }
+  - id: text_cap_concat_at_cap
+    description: "CONCAT reaching exactly 32767 units"
+    formula: '=LEN(CONCAT(REPT("a",32766),"b"))'
+    expect: 32767
+  - id: text_cap_concat_past_cap
+    description: "CONCAT one unit past the cap -> #CALC!"
+    formula: '=CONCAT(REPT("a",32767),"b")'
+    expect: { kind: error, code: "#CALC!" }
+  - id: text_cap_concat_pair_past_cap
+    description: "CONCAT whose last surrogate pair crosses the cap -> #CALC!"
+    formula: '=CONCAT(REPT("a",32766),UNICHAR(128512))'
+    expect: { kind: error, code: "#CALC!" }
+  - id: text_cap_textjoin_at_cap
+    description: "TEXTJOIN reaching exactly 32767 units"
+    formula: '=LEN(TEXTJOIN(",",TRUE,REPT("a",32765),"b"))'
+    expect: 32767
+  - id: text_cap_textjoin_past_cap
+    description: "TEXTJOIN one unit past the cap -> #CALC!"
+    formula: '=TEXTJOIN(",",TRUE,REPT("a",32766),"b")'
+    expect: { kind: error, code: "#CALC!" }
+  - id: text_cap_ampersand_cuts
+    description: "& past the cap keeps the first 32767 units"
+    formula: '=LEN(REPT("a",32767)&"b")'
+    expect: 32767
+  - id: text_cap_ampersand_cuts_tail
+    description: "& past the cap drops the right operand's text"
+    formula: '=RIGHT(REPT("a",32767)&"b",1)'
+    expect: a
+  - id: text_cap_ampersand_two_full
+    description: "& of two full-cap texts keeps 32767 units"
+    formula: '=LEN(REPT("a",32767)&REPT("b",32767))'
+    expect: 32767
+  - id: text_cap_ampersand_split_pair
+    description: "& whose cut falls inside a surrogate pair leaves 32766 units"
+    formula: '=LEN(REPT("a",32766)&UNICHAR(128512))'
+    expect: 32766
+  - id: text_cap_concatenate_cuts
+    description: "CONCATENATE past the cap keeps the first 32767 units"
+    formula: '=LEN(CONCATENATE(REPT("a",32767),"b"))'
+    expect: 32767
+  - id: text_cap_textjoin_whole_column_blanks
+    description: "TEXTJOIN keeping empties over a whole column -> #CALC!"
+    formula: '=TEXTJOIN(",",FALSE,Sheet2!A:A)'
+    setup: &keys
+      Sheet2!A1: k1
+      Sheet2!A2: k2
+      Sheet2!A3: k3
+      Sheet2!A5: k5
+    expect: { kind: error, code: "#CALC!" }
+  - id: text_cap_textjoin_whole_column_ignore_empty
+    description: "TEXTJOIN skipping empties over a whole column"
+    formula: '=TEXTJOIN(",",TRUE,Sheet2!A:A)'
+    setup: *keys
+    expect: "k1,k2,k3,k5"
+  - id: text_cap_textjoin_bounded_blanks
+    description: "TEXTJOIN keeping empties over 20000 rows stays under the cap"
+    formula: '=LEN(TEXTJOIN(",",FALSE,Sheet2!A1:A20000))'
+    setup: *keys
+    expect: 20007
+  - id: text_cap_concat_whole_column
+    description: "CONCAT over a whole column joins the populated cells"
+    formula: '=CONCAT(Sheet2!A:A)'
+    setup: *keys
+    expect: k1k2k3k5
+  - id: text_cap_textjoin_derived_whole_column
+    description: "TEXTJOIN keeping empties over A:A&\"\" -> #CALC!"
+    formula: '=TEXTJOIN(",",FALSE,Sheet2!A:A&"")'
+    setup: *keys
+    expect: { kind: error, code: "#CALC!" }

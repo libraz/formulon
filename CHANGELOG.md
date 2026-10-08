@@ -87,7 +87,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   while that workbook is closed. A cell missing from a linked workbook's
   cached values reads as blank instead of 0.
 - A conditional-format or data-validation formula whose result is an array
-  uses the array's first element for every cell it applies to.
+  uses the array's first element for every cell it applies to. The ad-hoc
+  rule probe (`fm_workbook_evaluate_cf_formula`) decides the same way, also
+  where the array could not spill from the target cell.
+- Text past the 32,767-character limit follows Excel function by function:
+  `CONCAT` and `TEXTJOIN` return `#CALC!` (`TEXTJOIN` used to return
+  `#VALUE!`), and `&` and `CONCATENATE` cut the result to the limit instead
+  of returning longer text. `TEXTJOIN` with empty cells kept counts every
+  blank row of a whole column, so `TEXTJOIN(",",FALSE,A:A)` is `#CALC!`.
+- `ISREF` is TRUE for a cell, range or whole column in another workbook,
+  written directly or bound by `LET`.
 
 ## [0.13.0] - 2026-10-06
 

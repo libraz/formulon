@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-07T16:13:57Z"
+    "generated_at": "2026-10-08T00:32:36Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -171,6 +171,27 @@
       },
       "formula_cell": "A5",
       "skipped": "=5:5 at A5 with row 5 otherwise empty: same isolation on the row axis. Nothing else in row 5 holds a formula, so the formula cell is the sole member of the cycle and Excel seeds it with 0. Formulon returns #REF! per its cycle policy."
+    },
+    {
+      "id": "axis_self_ref_derived_col",
+      "formula": "=A:A+0",
+      "setup": {},
+      "formula_cell": "A1",
+      "skipped": "=A:A+0 at A1 with column A otherwise empty: the formula cell is the sole member of the cycle and Excel seeds it with 0, as for the bare =A:A. Formulon returns #REF! per its cycle policy (circular_reference_iterative_off_returns_ref)."
+    },
+    {
+      "id": "axis_self_ref_sum_derived_col",
+      "formula": "=SUM(C:C*1)",
+      "setup": {},
+      "formula_cell": "C1",
+      "skipped": "=SUM(C:C*1) at C1 with column C otherwise empty: the formula cell is the sole member of the cycle and Excel seeds it with 0. Formulon returns #REF! per its cycle policy (circular_reference_iterative_off_returns_ref)."
+    },
+    {
+      "id": "axis_self_ref_rows_derived_col",
+      "formula": "=ROWS(G:G+0)",
+      "setup": {},
+      "formula_cell": "G1",
+      "skipped": "=ROWS(G:G+0) at G1: G:G+0 reads the formula cell, so the cell is in a cycle; Excel seeds it and ROWS reports the declared 1048576 rows. Formulon returns #REF! per its cycle policy (circular_reference_iterative_off_returns_ref)."
     },
     {
       "id": "whole_col_cycle_decided_before_blocking",
@@ -2137,10 +2158,7 @@
         }
       },
       "formula_cell": "Z1",
-      "expect": {
-        "kind": "number",
-        "value": 0.0
-      }
+      "skipped": "SUM(Sheet2!A:A+Sheet2!1:1): a whole column plus a whole row broadcasts to the full 1,048,576 x 16,384 grid. Excel answers 0 for it (measured; the rule behind the 0 is not identified). Formulon has no single repeated tail for a two-axis result, so it would have to expand ~1.7e10 cells and refuses with #NUM! at the derived-array ceiling, as for any other oversized array."
     },
     {
       "id": "axis_sumproduct_col_vs_bounded_mismatch",

@@ -1309,6 +1309,38 @@ entries:
     prefer: formulon
     first_noted: 2026-10-08
     last_verified_excel_version: "16.113.3"
+  - id: axis_self_ref_derived_col
+    applies_to: all
+    cause: accepted-divergence
+    mode: skip-oracle
+    reason: "=A:A+0 at A1 with column A otherwise empty: the formula cell is the sole member of the cycle and Excel seeds it with 0, as for the bare =A:A. Formulon returns #REF! per its cycle policy (circular_reference_iterative_off_returns_ref)."
+    prefer: formulon
+    first_noted: 2026-10-08
+    last_verified_excel_version: "16.113.3"
+  - id: axis_self_ref_sum_derived_col
+    applies_to: all
+    cause: accepted-divergence
+    mode: skip-oracle
+    reason: "=SUM(C:C*1) at C1 with column C otherwise empty: the formula cell is the sole member of the cycle and Excel seeds it with 0. Formulon returns #REF! per its cycle policy (circular_reference_iterative_off_returns_ref)."
+    prefer: formulon
+    first_noted: 2026-10-08
+    last_verified_excel_version: "16.113.3"
+  - id: axis_self_ref_rows_derived_col
+    applies_to: all
+    cause: accepted-divergence
+    mode: skip-oracle
+    reason: "=ROWS(G:G+0) at G1: G:G+0 reads the formula cell, so the cell is in a cycle; Excel seeds it and ROWS reports the declared 1048576 rows. Formulon returns #REF! per its cycle policy (circular_reference_iterative_off_returns_ref)."
+    prefer: formulon
+    first_noted: 2026-10-08
+    last_verified_excel_version: "16.113.3"
+  - id: text_cap_textjoin_derived_whole_column
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "TEXTJOIN(\",\",FALSE,Sheet2!A:A&\"\"): Excel joins all 1,048,576 rows of the derived column, so the kept empties carry the text past the cap and the answer is #CALC!. Formulon's array arguments to lazy functions still walk only the populated head of a derived whole column, so it returns k1,k2,k3,,k5. The bare-reference spelling Sheet2!A:A counts the blank rows and is a live golden."
+    prefer: mac-excel-365
+    first_noted: 2026-10-08
+    last_verified_excel_version: "16.113.3"
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
