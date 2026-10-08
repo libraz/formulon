@@ -1,5 +1,5 @@
 # Ruff config for the repo-tooling Python: tools/** (oracle, catalog, ci,
-# codegen, dev, bench, jis0208) and the standalone test drivers under
+# codegen, dev, bench, dbcs) and the standalone test drivers under
 # tests/ (tests/parity/run_parity.py, tests/codegen/*.py). Invoked from
 # the repo root by `make format` / `make format-check`.
 #

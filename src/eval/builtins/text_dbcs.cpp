@@ -1,7 +1,7 @@
 //
 // Byte-oriented text family: LENB, LEFTB, RIGHTB, MIDB, REPLACEB, FINDB,
-// SEARCHB. DBCS profiles use the CP932 byte rule; other profiles use Excel's
-// UTF-16-unit rule. See `text.cpp` for the corresponding non-B family.
+// SEARCHB. DBCS profiles count code-page bytes (`dbcs_char_bytes`); other
+// profiles use Excel's UTF-16-unit rule. See `text.cpp` for the corresponding non-B family.
 
 #include <cstddef>
 #include <cstdint>
@@ -26,6 +26,10 @@ namespace {
 
 bool uses_dbcs_profile() noexcept {
   return locale_facts(current_eval_profile()).dbcs_codepage != DbcsCodepage::kNone;
+}
+
+bool halfwidth_kana_single_byte() noexcept {
+  return locale_facts(current_eval_profile()).halfwidth_kana_single_byte;
 }
 
 }  // namespace
@@ -59,7 +63,7 @@ Value FindB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!read_search_args(args, arity, SearchUnit::DbcsByte, &sargs, &early)) {
     return early;
   }
-  const std::vector<DbcsCharRec> chars = build_dbcs_char_map(sargs.haystack);
+  const std::vector<DbcsCharRec> chars = build_dbcs_char_map(sargs.haystack, halfwidth_kana_single_byte());
   for (const DbcsCharRec& rec : chars) {
     if (rec.dbcs_position < static_cast<std::uint64_t>(sargs.start)) {
       continue;
@@ -94,7 +98,8 @@ Value SearchB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!read_search_args(args, arity, SearchUnit::DbcsByte, &sargs, &early)) {
     return early;
   }
-  const std::vector<DbcsCharRec> chars = build_dbcs_char_map(sargs.haystack);
+  const bool kana_single = halfwidth_kana_single_byte();
+  const std::vector<DbcsCharRec> chars = build_dbcs_char_map(sargs.haystack, kana_single);
   // Find the byte offset that corresponds to `start`. If `start` lands
   // strictly inside a 2-byte character, round up to the next character
   // boundary (matches SEARCH's rounding-up convention on UTF-16 splits).
@@ -105,7 +110,7 @@ Value SearchB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
       break;
     }
   }
-  // SEARCHB's `?` matches only SBCS codepoints under the ja-JP DBCS rule, so
+  // In ja / ko SEARCHB's `?` matches only SBCS codepoints, so
   // `=SEARCHB("?","漢ABC")` skips the kanji and lands on the 'A'.
   const std::size_t match_byte = find_folded(sargs.haystack, sargs.needle, start_byte, SearchUnit::DbcsByte);
   if (match_byte == std::string::npos) {
@@ -126,7 +131,7 @@ Value SearchB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // Defensive: if the match happens to land exactly at haystack.size()
   // (possible with wildcard on empty trailing), return the final position
   // after the last character.
-  return Value::number(static_cast<double>(bytes_in_jajp(sargs.haystack) + 1));
+  return Value::number(static_cast<double>(dbcs_bytes_in(sargs.haystack, kana_single) + 1));
 }
 
 }  // namespace text_detail
@@ -135,11 +140,10 @@ namespace {
 
 // --- Byte-oriented text family (LENB / LEFTB / RIGHTB / MIDB / CHAR / CODE)
 //
-// Excel ja-JP measures "byte" length against the Shift-JIS (CP932) single-
-// byte region: ASCII and half-width katakana are 1 byte, and every other
-// character -- including supplementary-plane codepoints such as emoji --
-// counts as 2 bytes (matching observed Mac Excel ja-JP behaviour). See
-// `src/eval/utf8_length.h::byte_count_jajp` for the classifier.
+// A DBCS profile measures "byte" length with `dbcs_char_bytes`: ASCII is 1
+// byte, half-width katakana is 1 where the locale encodes it single-byte
+// (ja), and every other character -- including supplementary-plane code
+// points such as emoji -- counts as 2 bytes.
 //
 // When a byte-budgeted slice (LEFTB/RIGHTB/MIDB) would land in the middle
 // of a 2-byte character (i.e. we have exactly 1 byte of budget left and the
@@ -149,14 +153,14 @@ namespace {
 
 // Decode a single UTF-8 codepoint starting at `src[i]`. On malformed input
 // returns a 1-byte "raw" step so the caller can still make progress; such
-// steps are classified as 1 DBCS byte per `byte_count_jajp` convention.
+// steps are classified as 1 DBCS byte.
 struct Utf8Step {
   std::uint32_t codepoint;  // Decoded codepoint (0xFFFD on malformed input).
   std::size_t byte_len;     // Number of UTF-8 bytes consumed (>= 1).
-  int dbcs_bytes;           // DBCS byte cost under the ja-JP rule.
+  int dbcs_bytes;           // DBCS byte cost under the active profile.
 };
 
-Utf8Step next_utf8_step(std::string_view src, std::size_t i) noexcept {
+Utf8Step next_utf8_step(std::string_view src, std::size_t i, bool kana_single) noexcept {
   std::size_t bytes = 0;
   const std::uint32_t cp = decode_utf8_step(src, i, &bytes);
   // Lenient decoder reports U+FFFD on malformed input with a 1-byte
@@ -165,7 +169,7 @@ Utf8Step next_utf8_step(std::string_view src, std::size_t i) noexcept {
   if (bytes == 1 && cp == 0xFFFDu) {
     return {0xFFFDu, 1u, 1};
   }
-  return {cp, bytes, byte_count_jajp(cp)};
+  return {cp, bytes, text_detail::dbcs_char_bytes(cp, kana_single)};
 }
 
 // Reads the `text, [num_bytes=1]` prologue LEFTB and RIGHTB share.
@@ -272,8 +276,9 @@ Value Lenb(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!text) {
     return Value::error(text.error());
   }
-  const double length = uses_dbcs_profile() ? static_cast<double>(bytes_in_jajp(text.value()))
-                                            : static_cast<double>(utf16_units_in(text.value()));
+  const double length = uses_dbcs_profile()
+                            ? static_cast<double>(dbcs_bytes_in(text.value(), halfwidth_kana_single_byte()))
+                            : static_cast<double>(utf16_units_in(text.value()));
   return Value::number(length);
 }
 
@@ -284,6 +289,7 @@ Value Leftb(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!uses_dbcs_profile()) {
     return leftb_utf16(args, arity, arena);
   }
+  const bool kana_single = halfwidth_kana_single_byte();
   std::string src;
   std::uint64_t budget = 0;
   Value early = Value::blank();
@@ -295,7 +301,7 @@ Value Leftb(const Value* args, std::uint32_t arity, Arena& arena) {
   out.reserve(src.size());
   std::size_t i = 0;
   while (i < src.size()) {
-    const Utf8Step step = next_utf8_step(src, i);
+    const Utf8Step step = next_utf8_step(src, i, kana_single);
     const auto cost = static_cast<std::uint64_t>(step.dbcs_bytes);
     if (used + cost <= budget) {
       out.append(src, i, step.byte_len);
@@ -325,6 +331,7 @@ Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!uses_dbcs_profile()) {
     return rightb_utf16(args, arity, arena);
   }
+  const bool kana_single = halfwidth_kana_single_byte();
   std::string src;
   std::uint64_t budget = 0;
   Value early = Value::blank();
@@ -343,7 +350,7 @@ Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
   {
     std::size_t i = 0;
     while (i < src.size()) {
-      const Utf8Step step = next_utf8_step(src, i);
+      const Utf8Step step = next_utf8_step(src, i, kana_single);
       chars.push_back({i, step.byte_len, step.dbcs_bytes});
       i += step.byte_len;
     }
@@ -391,6 +398,7 @@ Value Midb(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!uses_dbcs_profile()) {
     return midb_utf16(args, arity, arena);
   }
+  const bool kana_single = halfwidth_kana_single_byte();
   auto parsed = read_text_window_args(args, arity, /*snap_start=*/false);
   if (!parsed) {
     return Value::error(parsed.error());
@@ -414,7 +422,7 @@ Value Midb(const Value* args, std::uint32_t arity, Arena& arena) {
   bool head_pad = false;
 
   while (i < src.size()) {
-    const Utf8Step step = next_utf8_step(src, i);
+    const Utf8Step step = next_utf8_step(src, i, kana_single);
     const auto cost = static_cast<std::uint64_t>(step.dbcs_bytes);
     const std::uint64_t char_start = cursor + 1;   // 1-based byte position of this char.
     const std::uint64_t char_end = cursor + cost;  // 1-based byte position of final byte.
@@ -471,14 +479,14 @@ Value Midb(const Value* args, std::uint32_t arity, Arena& arena) {
 // Builds the per-character DBCS map for a UTF-8 byte sequence. Each entry
 // stores the character's UTF-8 byte offset and length, its DBCS cost, and
 // its 1-based DBCS position. Used by FINDB / SEARCHB / REPLACEB to
-// translate between UTF-8 byte offsets and ja-JP DBCS byte positions.
-std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src) {
+// translate between UTF-8 byte offsets and DBCS byte positions.
+std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src, bool kana_single) {
   std::vector<DbcsCharRec> out;
   out.reserve(src.size());
   std::uint64_t dbcs_cursor = 1;  // 1-based DBCS position of the next character
   std::size_t i = 0;
   while (i < src.size()) {
-    const Utf8Step step = next_utf8_step(src, i);
+    const Utf8Step step = next_utf8_step(src, i, kana_single);
     DbcsCharRec rec;
     rec.byte_offset = i;
     rec.byte_len = step.byte_len;
@@ -491,7 +499,7 @@ std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src) {
   return out;
 }
 
-// REPLACEB(old_text, start_num, num_bytes, new_text) - ja-JP DBCS byte
+// REPLACEB(old_text, start_num, num_bytes, new_text) - DBCS byte
 // replace. Mirrors REPLACE but all offsets are in DBCS bytes. If
 // `start_num` falls strictly inside a 2-byte character, a single ASCII
 // space is emitted in place of the character's leading byte (MIDB's head-
@@ -503,6 +511,7 @@ Value ReplaceB_(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!uses_dbcs_profile()) {
     return replaceb_utf16(args, arity, arena);
   }
+  const bool kana_single = halfwidth_kana_single_byte();
   auto parsed = read_text_window_args(args, arity, /*snap_start=*/true);
   if (!parsed) {
     return Value::error(parsed.error());
@@ -526,7 +535,7 @@ Value ReplaceB_(const Value* args, std::uint32_t arity, Arena& arena) {
   bool in_deletion = false;  // we've emitted either the head_pad or started consuming the deletion window
 
   while (i < src.size()) {
-    const Utf8Step step = next_utf8_step(src, i);
+    const Utf8Step step = next_utf8_step(src, i, kana_single);
     const auto cost = static_cast<std::uint64_t>(step.dbcs_bytes);
     const std::uint64_t char_start = cursor + 1;   // 1-based first byte
     const std::uint64_t char_end = cursor + cost;  // 1-based last byte
@@ -577,7 +586,7 @@ Value ReplaceB_(const Value* args, std::uint32_t arity, Arena& arena) {
         // fully or emit tail pad on partial overflow.
         std::uint64_t budget_left = remaining_budget;
         while (i < src.size() && budget_left > 0) {
-          const Utf8Step s2 = next_utf8_step(src, i);
+          const Utf8Step s2 = next_utf8_step(src, i, kana_single);
           const auto c2 = static_cast<std::uint64_t>(s2.dbcs_bytes);
           if (c2 <= budget_left) {
             cursor += c2;
@@ -600,7 +609,7 @@ Value ReplaceB_(const Value* args, std::uint32_t arity, Arena& arena) {
     {
       std::uint64_t budget_left = budget;
       while (i < src.size() && budget_left > 0) {
-        const Utf8Step s2 = next_utf8_step(src, i);
+        const Utf8Step s2 = next_utf8_step(src, i, kana_single);
         const auto c2 = static_cast<std::uint64_t>(s2.dbcs_bytes);
         if (c2 <= budget_left) {
           cursor += c2;

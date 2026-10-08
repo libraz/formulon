@@ -11,7 +11,9 @@
 #include <utility>
 
 #include "eval/coerce.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/wildcard.h"
+#include "excel_locale.h"
 #include "utils/text_ops.h"
 #include "utils/utf8_length.h"
 
@@ -58,7 +60,36 @@ int truncate_saturated(double d) {
   return static_cast<int>(truncated);
 }
 
+// SEARCHB's `?` spans one SBCS character in ja and ko but any character in zh
+// (locale_tokens.searchb_question_kanji).
+bool question_spans_sbcs_only(DbcsCodepage codepage) noexcept {
+  return codepage != DbcsCodepage::kGb2312;
+}
+
 }  // namespace
+
+int dbcs_char_bytes(std::uint32_t codepoint, bool halfwidth_kana_single_byte) noexcept {
+  if (codepoint <= 0x7Fu) {
+    return 1;
+  }
+  if (halfwidth_kana_single_byte && codepoint >= 0xFF61u && codepoint <= 0xFF9Fu) {
+    return 1;
+  }
+  return 2;
+}
+
+std::uint64_t dbcs_bytes_in(std::string_view s, bool halfwidth_kana_single_byte) noexcept {
+  std::uint64_t bytes = 0;
+  std::size_t i = 0;
+  while (i < s.size()) {
+    std::size_t step = 0;
+    const std::uint32_t cp = decode_utf8_step(s, i, &step);
+    bytes +=
+        (step == 1 && cp == 0xFFFDu) ? 1u : static_cast<std::uint64_t>(dbcs_char_bytes(cp, halfwidth_kana_single_byte));
+    i += step;
+  }
+  return bytes;
+}
 
 Expected<int, ErrorCode> read_int_arg(const Value& v) {
   auto d = read_finite_number(v);
@@ -104,9 +135,10 @@ bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, S
     return false;
   }
   const int start = parsed.value();
-  const std::uint64_t total = (unit == SearchUnit::DbcsByte)
-                                  ? bytes_in_jajp(haystack.value())
-                                  : static_cast<std::uint64_t>(utf16_units_in(haystack.value()));
+  const std::uint64_t total =
+      (unit == SearchUnit::DbcsByte)
+          ? dbcs_bytes_in(haystack.value(), locale_facts(current_eval_profile()).halfwidth_kana_single_byte)
+          : static_cast<std::uint64_t>(utf16_units_in(haystack.value()));
   if (start < 1 || static_cast<std::uint64_t>(start) > total + 1) {
     *out_result = Value::error(ErrorCode::Value);
     return false;
@@ -132,8 +164,10 @@ std::size_t find_folded(const std::string& haystack, const std::string& needle, 
   }
   // The wildcard matchers report offsets relative to the scanned suffix.
   const std::string_view suffix = std::string_view(lowered_haystack).substr(start_byte);
+  const bool sbcs_question =
+      unit == SearchUnit::DbcsByte && question_spans_sbcs_only(locale_facts(current_eval_profile()).dbcs_codepage);
   const std::size_t rel =
-      unit == SearchUnit::DbcsByte ? wildcard_find_dbcs(lowered_needle, suffix) : wildcard_find(lowered_needle, suffix);
+      sbcs_question ? wildcard_find_dbcs(lowered_needle, suffix) : wildcard_find(lowered_needle, suffix);
   if (rel == std::string_view::npos) {
     return std::string::npos;
   }

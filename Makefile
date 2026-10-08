@@ -23,7 +23,7 @@ NODE ?= node
 RUFF ?= uvx ruff
 
 # Repo-tooling Python trees governed by the root ruff.toml. `tools`
-# covers oracle/catalog/ci/codegen/dev/bench/jis0208; `tests` picks up
+# covers oracle/catalog/ci/codegen/dev/bench/dbcs; `tests` picks up
 # the standalone .py drivers (tests/parity/run_parity.py,
 # tests/codegen/*.py) -- ruff only visits Python files, so the C++ and
 # .mjs trees underneath are ignored. Excludes for build*/venv/vendored
@@ -118,7 +118,7 @@ test-all: build-type
 #                             (config: biome.json at the repo root)
 #   tools/, tests/**/*.py  -> ruff format + ruff check --fix over the
 #                             repo-tooling Python (oracle, catalog, ci,
-#                             codegen, dev, bench, jis0208, parity runner)
+#                             codegen, dev, bench, dbcs, parity runner)
 #                             (config: ruff.toml at the repo root)
 # `format`, `format-check` and `lint` all fan out over every language and run
 # every step even after one fails, then report a per-language summary and exit

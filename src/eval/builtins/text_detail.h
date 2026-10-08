@@ -45,7 +45,7 @@ Expected<int, ErrorCode> read_optional_int_arg(const Value* args, std::uint32_t 
                                                int default_value);
 
 // Unit a search family counts positions in: UTF-16 units for FIND and
-// SEARCH, ja-JP DBCS bytes for FINDB and SEARCHB.
+// SEARCH, DBCS bytes for FINDB and SEARCHB under a DBCS profile.
 enum class SearchUnit : std::uint8_t { Utf16, DbcsByte };
 
 // The coerced `find_text` / `within_text` / `start_num` arguments the
@@ -68,9 +68,9 @@ struct SearchArgs {
 bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, SearchArgs* out, Value* out_result);
 
 // ASCII-case-insensitive SEARCH / SEARCHB match of `needle` in `haystack`
-// from `start_byte`, honouring `?` / `*` / `~` wildcards; `unit` selects
-// whether `?` spans any character or only an SBCS one. Returns the absolute
-// byte offset of the match, or `std::string::npos`.
+// from `start_byte`, honouring `?` / `*` / `~` wildcards; under `DbcsByte`
+// the active locale decides whether `?` spans any character or only an SBCS
+// one. Returns the absolute byte offset of the match, or `std::string::npos`.
 std::size_t find_folded(const std::string& haystack, const std::string& needle, std::size_t start_byte,
                         SearchUnit unit);
 
@@ -88,8 +88,17 @@ struct TextWindowArgs {
 // reads `start` through `read_snapped_int_arg`.
 Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std::uint32_t arity, bool snap_start);
 
+// DBCS byte cost of one code point: 1 for ASCII, 1 for half-width katakana
+// when the locale encodes it single-byte, 2 for everything else (including
+// characters the code page cannot encode, measured by lenb_hangul and
+// lenb_kanji_not_in_gb2312).
+int dbcs_char_bytes(std::uint32_t codepoint, bool halfwidth_kana_single_byte) noexcept;
+
+// Sum of `dbcs_char_bytes` over `s`; a malformed UTF-8 byte costs 1.
+std::uint64_t dbcs_bytes_in(std::string_view s, bool halfwidth_kana_single_byte) noexcept;
+
 // Per-character record: UTF-8 byte offset, byte length, 1-based DBCS
-// position (byte position under the ja-JP DBCS rule), and DBCS cost.
+// position (byte position under the active DBCS rule), and DBCS cost.
 struct DbcsCharRec {
   std::size_t byte_offset;
   std::size_t byte_len;
@@ -98,9 +107,9 @@ struct DbcsCharRec {
 };
 
 // Walks `src` once and builds the per-character map. O(n) time, one pass.
-std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src);
+std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src, bool halfwidth_kana_single_byte);
 
-// Byte-oriented text family (ja-JP DBCS) implementations. Defined in
+// Byte-oriented text family (DBCS) implementations. Defined in
 // `text_dbcs.cpp`. Exposed so `register_text_builtins()` in `text.cpp` can
 // take their addresses when populating the FunctionRegistry.
 Value Lenb(const Value* args, std::uint32_t arity, Arena& arena);

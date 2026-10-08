@@ -181,9 +181,13 @@ Value Asc(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (!text) {
     return Value::error(text.error());
   }
-  if (locale_facts(current_eval_profile()).dbcs_codepage == DbcsCodepage::kNone) {
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  if (facts.dbcs_codepage == DbcsCodepage::kNone) {
     return Value::text(arena.intern(text.value()));
   }
+  // Kana and yen conversion follow the single-byte katakana of CP932 (ja);
+  // zh / ko leave them as-is (width.asc_voiced_ga, width.dbcs_unvoiced_row).
+  const bool kana = facts.halfwidth_kana_single_byte;
   const std::string& src = text.value();
   std::string out;
   out.reserve(src.size());
@@ -201,12 +205,12 @@ Value Asc(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
       append_codepoint(out, cp - 0xFEE0);
     } else if (cp == 0x3000) {
       out.push_back(' ');
-    } else if (cp == 0xFFE5) {
+    } else if (kana && cp == 0xFFE5) {
       // Full-width yen sign -> ASCII backslash. Mac Excel ja-JP follows the
       // CP932 mapping where 0x5C is the yen position; the full-width yen
       // collapses to U+005C even though a half-width yen U+00A5 also exists.
       out.push_back('\\');
-    } else if (cp >= 0x30A1 && cp <= 0x30FC) {
+    } else if (kana && cp >= 0x30A1 && cp <= 0x30FC) {
       const auto& m = kKatakanaFullToHalf[cp - 0x30A1];
       if (m.first == 0) {
         // Archaic katakana without a half-width mapping: pass through.
@@ -232,9 +236,12 @@ Value Jis(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (!text) {
     return Value::error(text.error());
   }
-  if (locale_facts(current_eval_profile()).dbcs_codepage == DbcsCodepage::kNone) {
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  if (facts.dbcs_codepage == DbcsCodepage::kNone) {
     return Value::text(arena.intern(text.value()));
   }
+  // Half-width katakana stays as-is outside ja (width.dbcs_unvoiced_row).
+  const bool kana = facts.halfwidth_kana_single_byte;
   const std::string& src = text.value();
   std::string out;
   // Full-width codepoints are 3 UTF-8 bytes; a single ASCII input grows
@@ -256,6 +263,11 @@ Value Jis(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     }
     if (cp >= 0x21 && cp <= 0x7E) {
       append_codepoint(out, cp + 0xFEE0);
+      view.remove_prefix(d.byte_len);
+      continue;
+    }
+    if (!kana && cp >= 0xFF61 && cp <= 0xFF9F) {
+      out.append(view.data(), d.byte_len);
       view.remove_prefix(d.byte_len);
       continue;
     }

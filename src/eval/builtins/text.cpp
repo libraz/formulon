@@ -22,9 +22,9 @@
 #include "eval/builtins/registration_helpers.h"
 #include "eval/builtins/text_detail.h"
 #include "eval/coerce.h"
+#include "eval/dbcs_table.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
-#include "eval/jis0208_table.h"
 #include "excel_locale.h"
 #include "sbcs_codepage.h"
 #include "utils/arena.h"
@@ -478,25 +478,18 @@ Value Clean(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // REPLACEB / FINDB / SEARCHB) lives in `text_dbcs.cpp`.
 
 // CHAR(number) - returns the single-character text whose active profile's
-// single-byte codepage value is `number`. DBCS profiles retain the CP932/JIS
-// extension below; single-byte profiles accept 1..255 only.
+// codepage value is `number`. Single-byte profiles accept 1..255 only.
 //
-// Mac Excel ja-JP uses CP932 / JIS X 0208. The valid argument space is the
-// disjoint union of two ranges:
+// DBCS profiles accept the disjoint union of two ranges:
 //
-//   1..255       SBCS region. ASCII (1..127), the CP1252 high table for
-//                lead-byte slots (0x80..0x9F), half-width katakana
-//                (0xA1..0xDF -> U+FF61..U+FF9F), and the 0xA0..0xFF
-//                passthrough are kept exactly as before; ASC/JIS round-trip
-//                relies on the half-width katakana mapping.
-//   8481..32382  DBCS region: `n` is split into `(hi << 8) | lo` where
-//                hi, lo each live in [0x21, 0x7E] (i.e. JIS X 0208 row,
-//                cell in [1, 94]). The Unicode codepoint comes from the
-//                JIS X 0208 reverse table.
+//   1..255   SBCS region. ASCII as-is; with `halfwidth_kana_single_byte`
+//            (ja) 0xA1..0xDF are half-width katakana and the CP932 lead
+//            bytes are a space; otherwise the profile's SBCS page decodes it.
+//   >255     DBCS region: `n - dbcs_code_bias` splits into row / cell in
+//            [1, 94] (the JIS form in ja, the EUC form in zh / ko).
 //
-// Anything else (256..8480, unmapped DBCS slots, bytes outside [0x21, 0x7E],
-// n < 1, n > 65535) yields `#VALUE!`. Mac probe golden:
-// tests/oracle/targets/mac-365-ja_JP/golden/code_char_jp_probes.golden.json.
+// Anything else (unmapped DBCS slots, out-of-range bytes, n < 1, n > 65535)
+// yields `#VALUE!`. Goldens: code_char_jp_probes on every Mac target.
 Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   const ExcelProfile profile = current_eval_profile();
   const LocaleFacts& facts = locale_facts(profile);
@@ -508,22 +501,16 @@ Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (n < 1) {
     return Value::error(ErrorCode::Value);
   }
-  if (facts.dbcs_codepage == DbcsCodepage::kNone) {
-    if (n > 0xFF) {
-      return Value::error(ErrorCode::Value);
-    }
-    const std::uint32_t cp = sbcs_decode_byte(sbcs_codepage(profile), static_cast<std::uint8_t>(n));
-    const std::string encoded = encode_utf8_codepoint(cp);
-    if (encoded.empty()) {
-      return Value::error(ErrorCode::Value);
-    }
-    return Value::text(arena.intern(encoded));
+  if (facts.dbcs_codepage == DbcsCodepage::kNone && n > 0xFF) {
+    return Value::error(ErrorCode::Value);
   }
   std::uint32_t cp = 0;
-  if (n <= 0xFF) {
-    if (n < 0x80) {
-      cp = static_cast<std::uint32_t>(n);
-    } else if (n >= 0xA1 && n <= 0xDF) {
+  if (n < 0x80) {
+    cp = static_cast<std::uint32_t>(n);
+  } else if (n <= 0xFF && !facts.halfwidth_kana_single_byte) {
+    cp = sbcs_decode_byte(sbcs_codepage(profile), static_cast<std::uint8_t>(n));
+  } else if (n <= 0xFF) {
+    if (n >= 0xA1 && n <= 0xDF) {
       // Half-width katakana mapping: 0xA1 -> U+FF61, 0xDF -> U+FF9F.
       cp = 0xFF61u + static_cast<std::uint32_t>(n - 0xA1);
     } else if ((n >= 0x81 && n <= 0x9F) || (n >= 0xE0 && n <= 0xFC)) {
@@ -533,18 +520,17 @@ Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
       // 0x80, 0xA0 and 0xFD-0xFF map to the same-numbered code point.
       cp = static_cast<std::uint32_t>(n);
     }
-  } else if (n < 0x2121 || n > 0xFFFF) {
-    // Gap between SBCS and DBCS, or wider than two bytes. Mac returns
-    // #VALUE! (probe `char_above_255` in code_char_jp_probes).
-    return Value::error(ErrorCode::Value);
   } else {
-    const auto hi = static_cast<std::uint8_t>((n >> 8) & 0xFF);
-    const auto lo = static_cast<std::uint8_t>(n & 0xFF);
-    const std::uint16_t mapped = lookup_jis0208_to_unicode(hi, lo);
-    if (mapped == 0u) {
+    const int bias = dbcs_code_bias(facts.dbcs_codepage);
+    const int hi = (n >> 8) - (bias >> 8);
+    const int lo = (n & 0xFF) - (bias & 0xFF);
+    if (n > 0xFFFF || hi < 1 || hi > 94 || lo < 1 || lo > 94) {
       return Value::error(ErrorCode::Value);
     }
-    cp = static_cast<std::uint32_t>(mapped);
+    cp = lookup_dbcs_to_unicode(facts.dbcs_codepage, static_cast<std::uint8_t>(hi), static_cast<std::uint8_t>(lo));
+    if (cp == 0u) {
+      return Value::error(ErrorCode::Value);
+    }
   }
   const std::string encoded = encode_utf8_codepoint(cp);
   if (encoded.empty()) {
@@ -554,22 +540,19 @@ Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 }
 
 // CODE(text) - returns the active profile's codepage value for the first
-// character in `text`. Empty text yields `#VALUE!`.
+// character in `text`. Empty text yields `#VALUE!`. Under a DBCS profile:
 //
 //   * ASCII (codepoint < 0x80): codepoint itself.
-//   * Half-width katakana (U+FF61..U+FF9F): 0xA1..0xDF.
-//   * Anything in JIS X 0208: the row-cell encoding from
-//     `lookup_unicode_to_jis0208` (e.g. CODE("あ") = 0x2422 = 9250).
+//   * Half-width katakana with `halfwidth_kana_single_byte` (ja): 0xA1..0xDF.
+//   * Anything the DBCS table encodes: row / cell plus `dbcs_code_bias`
+//     (e.g. CODE("あ") = 9250 in ja, 42146 in zh).
 //   * Anything else (NEC extensions, emoji, supplementary plane, etc.):
-//     95 (ASCII underscore), the empirically confirmed Mac fallback.
+//     95 (ASCII underscore), the measured Mac fallback.
 //
-// Mac probe golden: tests/oracle/targets/mac-365-ja_JP/golden/code_char_jp_probes.golden.json.
-//
-// This is the Mac-profile behavior. Under the runtime-default win-365-ja_JP
-// profile, `eval_code_lazy` (src/eval/info_lazy.cpp) overrides the fallback
-// case before it ever reaches this eager impl: a supplementary-plane
-// codepoint (> U+FFFF) returns 63, and U+9AD9 specifically returns 38526,
-// instead of the 95 fallback above.
+// Goldens: code_char_jp_probes on every Mac target. Under the runtime-default
+// win-365-ja_JP profile, `eval_code_lazy` (src/eval/info_lazy.cpp) overrides
+// the fallback first: a supplementary-plane codepoint returns 63 and U+9AD9
+// returns 38526.
 Value Code_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const ExcelProfile profile = current_eval_profile();
   const LocaleFacts& facts = locale_facts(profile);
@@ -592,14 +575,13 @@ Value Code_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (cp < 0x80u) {
     return Value::number(static_cast<double>(cp));
   }
-  if (cp >= 0xFF61u && cp <= 0xFF9Fu) {
+  if (facts.halfwidth_kana_single_byte && cp >= 0xFF61u && cp <= 0xFF9Fu) {
     return Value::number(static_cast<double>(0xA1u + (cp - 0xFF61u)));
   }
-  const std::uint16_t mapped = lookup_unicode_to_jis0208(cp);
+  const std::uint16_t mapped = lookup_unicode_to_dbcs(facts.dbcs_codepage, cp);
   if (mapped != 0u) {
-    return Value::number(static_cast<double>(mapped));
+    return Value::number(static_cast<double>(mapped + dbcs_code_bias(facts.dbcs_codepage)));
   }
-  // Mac fallback for anything outside JIS X 0208 (NEC ext, emoji, etc.).
   return Value::number(95.0);
 }
 

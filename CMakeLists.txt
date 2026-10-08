@@ -358,8 +358,6 @@ set(FORMULON_CORE_SOURCES
   src/eval/wildcard.cpp
   src/eval/jp_fold.cpp
   src/eval/jp_kana_table.cpp
-  src/eval/jis0208_table.cpp
-  src/eval/jis0208_table_lookup.cpp
   src/eval/dbcs_table.cpp
   src/eval/dbcs_jis0208_table.cpp
   src/eval/dbcs_gb2312_table.cpp
