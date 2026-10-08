@@ -199,7 +199,7 @@ void cap_integer_significant_digits(std::string* digits) {
 // (e.g. colour markers).
 void render_text_section(const Section& /*section*/, std::string_view fmt, std::string_view original,
                          std::string& out) {
-  const bool ja_syntax = locale_facts(eval::current_eval_profile()).ja_format_syntax;
+  const bool bang_escape = locale_facts(eval::current_eval_profile()).bang_escape;
   std::size_t i = 0;
   while (i < fmt.size()) {
     const char c = fmt[i];
@@ -212,7 +212,7 @@ void render_text_section(const Section& /*section*/, std::string_view fmt, std::
       i = j < fmt.size() ? j + 1 : j;
       continue;
     }
-    if ((c == '\\' || (c == '!' && ja_syntax)) && i + 1 < fmt.size()) {
+    if ((c == '\\' || (c == '!' && bang_escape)) && i + 1 < fmt.size()) {
       out.push_back(fmt[i + 1]);
       i += 2;
       continue;

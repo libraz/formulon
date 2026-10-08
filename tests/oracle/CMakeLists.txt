@@ -287,6 +287,20 @@ add_test(
 )
 set_tests_properties(formulon_oracle_en_us_tests PROPERTIES LABELS "oracle")
 
+if(DEFINED _FORMULON_BEHAVIOR_PY)
+  add_test(
+    NAME DivergenceRecordIntegrity
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME OracleVariantDivergenceIntegrity
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
+            --input ${CMAKE_SOURCE_DIR}/tests/oracle/targets/win-365-ja_JP/divergence.yaml
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+endif()
+
 # A directory under targets/ is not automatically an active oracle.  In
 # particular, the historical win-365-ja_JP capture is deliberately kept for
 # research but its manifest status is `wanted` and its provenance record says

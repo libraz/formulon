@@ -77,7 +77,7 @@ Value Trim(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     return Value::error(text.error());
   }
   const std::string& src = text.value();
-  const bool dbcs = locale_facts(current_eval_profile()).dbcs;
+  const bool dbcs = locale_facts(current_eval_profile()).dbcs_codepage != DbcsCodepage::kNone;
   // Detects U+3000 (UTF-8: 0xE3 0x80 0x80) starting at byte index `i` in
   // src. The bound is written `i + 3 <= src.size()` rather than the
   // equivalent `i + 2 < src.size()` so the "we need to read three bytes
@@ -508,7 +508,7 @@ Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (n < 1) {
     return Value::error(ErrorCode::Value);
   }
-  if (!facts.dbcs) {
+  if (facts.dbcs_codepage == DbcsCodepage::kNone) {
     if (n > 0xFF) {
       return Value::error(ErrorCode::Value);
     }
@@ -585,7 +585,7 @@ Value Code_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Value);
   }
   const std::uint32_t cp = decoded.codepoint;
-  if (!facts.dbcs) {
+  if (facts.dbcs_codepage == DbcsCodepage::kNone) {
     const int encoded = sbcs_encode_codepoint(sbcs_codepage(profile), cp);
     return Value::number(static_cast<double>(encoded < 0 ? 95 : encoded));
   }

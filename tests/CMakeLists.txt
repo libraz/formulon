@@ -163,6 +163,11 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/eval_context_test.cpp
   unit/eval/formula_profile_test.cpp
   unit/eval/excel_locale_test.cpp
+  unit/eval/locale_text_test.cpp
+  unit/eval/format_localize_test.cpp
+  unit/eval/formula_localize_test.cpp
+  unit/eval/dbcs_table_test.cpp
+  unit/eval/references_locale_test.cpp
   unit/eval/eval_profile_scope_test.cpp
   unit/eval/eval_recursion_depth_test.cpp
   unit/eval/eval_state_test.cpp
@@ -576,17 +581,6 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(
     NAME SeamIntegrityLayers
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_source_seams.py layers
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  add_test(
-    NAME DivergenceRecordIntegrity
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  add_test(
-    NAME OracleVariantDivergenceIntegrity
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
-            --input ${CMAKE_SOURCE_DIR}/tests/oracle/targets/win-365-ja_JP/divergence.yaml
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   add_test(

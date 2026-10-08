@@ -25,7 +25,7 @@ namespace eval {
 namespace {
 
 bool uses_dbcs_profile() noexcept {
-  return locale_facts(current_eval_profile()).dbcs;
+  return locale_facts(current_eval_profile()).dbcs_codepage != DbcsCodepage::kNone;
 }
 
 }  // namespace

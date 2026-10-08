@@ -335,6 +335,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/text_width.cpp
   src/eval/builtins/web.cpp
   src/eval/text_format/display_text.cpp
+  src/eval/text_format/format_localize.cpp
   src/eval/text_format/number_format.cpp
   src/eval/text_format/number_format_scanner.cpp
   src/eval/text_format/number_format_section.cpp
@@ -359,6 +360,13 @@ set(FORMULON_CORE_SOURCES
   src/eval/jp_kana_table.cpp
   src/eval/jis0208_table.cpp
   src/eval/jis0208_table_lookup.cpp
+  src/eval/dbcs_table.cpp
+  src/eval/dbcs_jis0208_table.cpp
+  src/eval/dbcs_gb2312_table.cpp
+  src/eval/dbcs_ksx1001_table.cpp
+  src/eval/locale_text.cpp
+  src/eval/locale_function_names.cpp
+  src/eval/formula_localize.cpp
   src/eval/coupon_schedule.cpp
   src/eval/date_text_parse.cpp
   src/eval/datetime_lazy.cpp

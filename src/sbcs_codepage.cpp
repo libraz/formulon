@@ -40,8 +40,9 @@ constexpr std::array<std::uint32_t, 128> kWindows1252High = {{
     0x00F5u, 0x00F6u, 0x00F7u, 0x00F8u, 0x00F9u, 0x00FAu, 0x00FBu, 0x00FCu, 0x00FDu, 0x00FEu, 0x00FFu,
 }};
 
+// Mac Thai shares the Mac Roman table until it has its own.
 const std::array<std::uint32_t, 128>& high_table(SbcsCodepage codepage) noexcept {
-  return codepage == SbcsCodepage::kMacRoman ? kMacRomanHigh : kWindows1252High;
+  return codepage == SbcsCodepage::kWindows1252 ? kWindows1252High : kMacRomanHigh;
 }
 
 }  // namespace
@@ -52,6 +53,10 @@ std::uint32_t sbcs_decode_byte(SbcsCodepage codepage, std::uint8_t byte) noexcep
   }
   if (codepage == SbcsCodepage::kCp932) {
     return byte;
+  }
+  if (codepage == SbcsCodepage::kDbcsHighBlank) {
+    // 0x80 and 0xFF keep their own code point; every other high byte is a space.
+    return byte == 0x80u || byte == 0xFFu ? byte : 0x20u;
   }
   return high_table(codepage)[static_cast<std::size_t>(byte - 0x80u)];
 }
@@ -64,6 +69,9 @@ int sbcs_encode_codepoint(SbcsCodepage codepage, std::uint32_t codepoint) noexce
     if (codepoint >= 0xFF61u && codepoint <= 0xFF9Fu) {
       return static_cast<int>(0xA1u + codepoint - 0xFF61u);
     }
+    return -1;
+  }
+  if (codepage == SbcsCodepage::kDbcsHighBlank) {
     return -1;
   }
   const auto& table = high_table(codepage);

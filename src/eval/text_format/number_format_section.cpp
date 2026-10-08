@@ -100,7 +100,7 @@ void disambiguate_minutes(std::vector<Token>& toks) noexcept {
 
 std::vector<std::string_view> split_sections(std::string_view fmt) {
   std::vector<std::string_view> out;
-  const bool ja_syntax = locale_facts(eval::current_eval_profile()).ja_format_syntax;
+  const bool bang_escape = locale_facts(eval::current_eval_profile()).bang_escape;
   std::size_t start = 0;
   for (std::size_t i = 0; i < fmt.size();) {
     const char c = fmt[i];
@@ -115,7 +115,7 @@ std::vector<std::string_view> split_sections(std::string_view fmt) {
       }
       continue;
     }
-    if (c == '\\' || (c == '!' && ja_syntax)) {
+    if (c == '\\' || (c == '!' && bang_escape)) {
       i += i + 1 < fmt.size() ? 1 + utf8_scalar_width(fmt, i + 1) : 1;
       // Skip escape + one complete UTF-8 scalar payload.
       continue;

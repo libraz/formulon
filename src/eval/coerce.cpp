@@ -8,8 +8,10 @@
 #include <string_view>
 
 #include "eval/date_text_parse.h"
+#include "eval/eval_profile_scope.h"
+#include "eval/locale_text.h"
 #include "eval/number_parse.h"
-#include "utils/double_format.h"
+#include "excel_locale.h"
 #include "utils/double_parse.h"
 #include "utils/expected.h"
 #include "utils/strings.h"
@@ -155,13 +157,10 @@ std::string_view clip_to_text_cap(std::string_view text) noexcept {
 
 Expected<std::string, ErrorCode> coerce_to_text(const Value& v) {
   switch (v.kind()) {
-    case ValueKind::Number: {
-      std::string out;
-      format_double(out, v.as_number());
-      return out;
-    }
+    case ValueKind::Number:
+      return locale_number_text(v.as_number());
     case ValueKind::Bool:
-      return std::string(v.as_boolean() ? "TRUE" : "FALSE");
+      return std::string(locale_bool_text(v.as_boolean()));
     case ValueKind::Blank:
       return std::string();
     case ValueKind::Text:
@@ -336,10 +335,11 @@ Expected<bool, ErrorCode> coerce_to_bool(const Value& v) {
       // used by AND / OR / XOR / IFS (`eval/logical_coerce.h`) modulo the
       // Skip vs. HasValue distinction; the two helpers stay in sync.
       const std::string_view text = v.as_text();
-      if (strings::case_insensitive_eq(text, "TRUE")) {
+      const LocaleFacts& facts = locale_facts(current_eval_profile());
+      if (strings::case_insensitive_eq(text, facts.true_name)) {
         return true;
       }
-      if (strings::case_insensitive_eq(text, "FALSE")) {
+      if (strings::case_insensitive_eq(text, facts.false_name)) {
         return false;
       }
       return ErrorCode::Value;

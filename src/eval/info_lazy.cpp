@@ -473,7 +473,7 @@ Value eval_lenb_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return arg;
   }
   const ExcelProfile profile = ctx.excel_profile();
-  if (profile.host == ExcelHost::kWin365 && locale_facts(profile).dbcs) {
+  if (profile.host == ExcelHost::kWin365 && locale_facts(profile).dbcs_codepage != DbcsCodepage::kNone) {
     auto text = coerce_to_text(arg);
     if (!text) {
       return Value::error(text.error());

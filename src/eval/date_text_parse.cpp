@@ -363,7 +363,7 @@ constexpr EraName kEraNames[] = {
 // input does not start with one of the five recognised eras; in that case
 // the caller falls back to the regular Gregorian date forms.
 bool parse_era_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
-  if (!locale_facts(current_eval_profile()).kanji_date_text) {
+  if (!locale_facts(current_eval_profile()).japanese_era) {
     return false;
   }
   for (const EraName& name : kEraNames) {
@@ -435,7 +435,7 @@ bool scan_day_tail(std::string_view* s, bool kanji_form, int* day) noexcept {
 }
 
 NumericDateParseResult parse_ymd_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
-  const bool japanese_date = locale_facts(current_eval_profile()).kanji_date_text;
+  const bool japanese_date = locale_facts(current_eval_profile()).kanji_ymd_text;
   int first = 0;
   const std::size_t first_digits = scan_digits(s, 4, &first);
   if (first_digits == 0) {
@@ -532,7 +532,7 @@ bool parse_md_text(std::string_view s, int current_year, double* out_serial, std
   if (!s.empty() && (s[0] == '-' || s[0] == '/')) {
     s.remove_prefix(1);
   } else if (starts_with_utf8(s, kKanjiGatsu)) {
-    if (!locale_facts(current_eval_profile()).kanji_date_text) {
+    if (!locale_facts(current_eval_profile()).kanji_ymd_text) {
       return false;
     }
     s.remove_prefix(3);
@@ -641,7 +641,7 @@ bool scan_digits_with_unit(std::string_view* s, int max_digits, const char (&uni
 // match this exact shape; on success advances `*rest` past the `分` or
 // `秒` terminator.
 bool parse_kanji_time_text(std::string_view s, double* out_frac, std::string_view* rest) noexcept {
-  if (!locale_facts(current_eval_profile()).kanji_date_text) {
+  if (!locale_facts(current_eval_profile()).kanji_time_text) {
     return false;
   }
   int hour = 0;

@@ -4451,7 +4451,7 @@ typedef struct {
  *   * `0` — `en-US` (default).
  *   * `1` — `ja-JP`.
  */
-typedef enum { FM_LOCALE_EN_US = 0, FM_LOCALE_JA_JP = 1 } fm_locale_t;
+typedef enum { FM_LOCALE_EN_US = 0, FM_LOCALE_JA_JP = 1, FM_LOCALE_DE_DE = 2, FM_LOCALE_FR_FR = 3 } fm_locale_t;
 
 /**
  * @brief Returns metadata for the function `name` in `locale`.

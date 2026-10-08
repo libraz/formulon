@@ -232,17 +232,8 @@ struct CurrencyStyle {
 };
 
 CurrencyStyle locale_dollar_style() {
-  const LocaleFacts& facts = locale_facts(current_eval_profile());
-  const std::string_view format = facts.dollar_format;
-  const std::size_t separator = format.find(';');
-  const std::string_view positive = format.substr(0, separator);
-  const std::size_t first_placeholder = positive.find_first_of("0#?");
-  const std::string_view symbol =
-      first_placeholder == std::string_view::npos ? facts.currency_symbol : positive.substr(0, first_placeholder);
-  const std::string_view negative =
-      separator == std::string_view::npos ? std::string_view{} : format.substr(separator + 1);
-  return CurrencyStyle{symbol, static_cast<int>(facts.dollar_default_decimals),
-                       negative.find('(') != std::string_view::npos};
+  const Currency& currency = locale_facts(current_eval_profile()).currency;
+  return CurrencyStyle{currency.symbol, static_cast<int>(currency.default_decimals), currency.negative_parens};
 }
 
 Value format_currency(const Value* args, std::uint32_t arity, Arena& arena, const CurrencyStyle& style) {

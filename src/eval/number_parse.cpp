@@ -42,7 +42,7 @@ std::string_view strip_currency(std::string_view s) noexcept {
   if (s.front() == '$') {
     return s.substr(1);
   }
-  const bool japanese_currency = locale_facts(current_eval_profile()).currency_symbol == "¥";
+  const bool japanese_currency = locale_facts(current_eval_profile()).currency.symbol == "¥";
   if (japanese_currency && s.size() >= 2 && static_cast<unsigned char>(s[0]) == 0xC2u &&
       static_cast<unsigned char>(s[1]) == 0xA5u) {
     return s.substr(2);

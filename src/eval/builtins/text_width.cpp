@@ -181,7 +181,7 @@ Value Asc(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (!text) {
     return Value::error(text.error());
   }
-  if (!locale_facts(current_eval_profile()).dbcs) {
+  if (locale_facts(current_eval_profile()).dbcs_codepage == DbcsCodepage::kNone) {
     return Value::text(arena.intern(text.value()));
   }
   const std::string& src = text.value();
@@ -232,7 +232,7 @@ Value Jis(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (!text) {
     return Value::error(text.error());
   }
-  if (!locale_facts(current_eval_profile()).dbcs) {
+  if (locale_facts(current_eval_profile()).dbcs_codepage == DbcsCodepage::kNone) {
     return Value::text(arena.intern(text.value()));
   }
   const std::string& src = text.value();

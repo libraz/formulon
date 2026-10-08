@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "eval/eval_profile_scope.h"
+#include "eval/locale_text.h"
 #include "eval/text_format/number_format.h"
 #include "sheet.h"
 #include "style_resolve.h"
@@ -64,10 +65,10 @@ DisplayText format_value_for_display(const Value& value, std::string_view code, 
     case ValueKind::Text:
       return render_text(value.as_text(), code);
     case ValueKind::Bool:
-      return render_text(value.as_boolean() ? "TRUE" : "FALSE", code);
+      return render_text(eval::locale_bool_text(value.as_boolean()), code);
     case ValueKind::Error: {
       DisplayText result;
-      result.text = display_name(value.as_error());
+      result.text = std::string(eval::locale_error_text(value.as_error()));
       return result;
     }
     default:

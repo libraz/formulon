@@ -7,8 +7,8 @@
 //   * `parse_complex`  parses such text into (real, imag, suffix); accepts
 //     Number / Bool / Blank directly for Excel quirk compatibility.
 //   * `format_complex` renders (real, imag, suffix) back to a canonical
-//     Excel-compatible string. Uses `format_double` (the same shortest-
-//     round-trip formatter as SUM's text coerce) so output is stable across
+//     Excel-compatible string. Uses `locale_number_text` (the same shortest-
+//     round-trip formatter as the text coerce) so output is stable across
 //     the engine.
 //   * Individual IM* impls reuse those two helpers and a small `CplxOp`
 //     set (multiplication, reciprocal, exp, ln) for arithmetic.
@@ -28,8 +28,8 @@
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
+#include "eval/locale_text.h"
 #include "utils/arena.h"
-#include "utils/double_format.h"
 #include "utils/double_parse.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -255,7 +255,7 @@ std::string format_complex(double re, double im, char suffix) {
   // Pure real.
   if (im == 0.0) {
     std::string out;
-    format_double(out, re);
+    out += locale_number_text(re);
     return out;
   }
 
@@ -272,18 +272,18 @@ std::string format_complex(double re, double im, char suffix) {
       out.push_back(suffix);
       return out;
     }
-    format_double(out, im);
+    out += locale_number_text(im);
     out.push_back(suffix);
     return out;
   }
 
   // Full form.
   std::string out;
-  format_double(out, re);
+  out += locale_number_text(re);
   if (im > 0.0) {
     out.push_back('+');
   }
-  // im < 0 -> format_double already renders the leading '-'.
+  // im < 0 -> the number text already carries the leading '-'.
   if (im == 1.0) {
     // Drop the coefficient but keep the '+' we just appended.
     out.push_back(suffix);
@@ -294,7 +294,7 @@ std::string format_complex(double re, double im, char suffix) {
     out.push_back(suffix);
     return out;
   }
-  format_double(out, im);
+  out += locale_number_text(im);
   out.push_back(suffix);
   return out;
 }

@@ -27,7 +27,7 @@ namespace number_format_detail {
 
 void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect) {
   std::vector<Token>& toks = out.tokens;
-  const bool ja_syntax = locale_facts(eval::current_eval_profile()).ja_format_syntax;
+  const LocaleFacts& facts = locale_facts(eval::current_eval_profile());
   auto push_literal = [&](std::size_t b, std::size_t e, bool protected_literal = false) {
     if (b == e) {
       return;
@@ -59,12 +59,12 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
       continue;
     }
     // Escape, spacing, and fill operators each require a following scalar.
-    if ((c == '\\' || (c == '!' && ja_syntax) || c == '_' || c == '*') && i + 1 == fmt.size()) {
+    if ((c == '\\' || (c == '!' && facts.bang_escape) || c == '_' || c == '*') && i + 1 == fmt.size()) {
       out.has_invalid_bracket = true;
       return;
     }
     // Escape `\x` or `!x` -> next UTF-8 scalar is a literal.
-    if ((c == '\\' || (c == '!' && ja_syntax)) && i + 1 < fmt.size()) {
+    if ((c == '\\' || (c == '!' && facts.bang_escape)) && i + 1 < fmt.size()) {
       const std::size_t payload_width = utf8_scalar_width(fmt, i + 1);
       push_literal(i + 1, i + 1 + payload_width, true);
       i += 1 + payload_width;
@@ -157,7 +157,7 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
         // matching Mac Excel's behaviour. The renderer applies the chosen
         // mapping at digit-emit time. The English host accepts the bracket as
         // inert metadata and leaves the digits in their ordinary form.
-        if (ja_syntax) {
+        if (facts.dbnum) {
           switch (dbnum) {
             case 1:
               out.dbnum_mode = DbNumMode::kDBNum1;
@@ -241,22 +241,17 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
         i += 7;
         continue;
       }
-      // ja-JP spells the built-in General format code "G/標準" rather than
-      // the English "General" -- this is the literal numFmtId=0 keyword
-      // Excel 365 (ja-JP) stores and displays, not a translation applied
-      // at render time. Recognized as a single 8-byte unit (a case-
-      // insensitive 'G', '/', then the two kanji 標準, UTF-8
-      // E6 A8 99 E6 BA 96) so it is never reached by the single-`g`
-      // era-name scan below, which would otherwise misread the standalone
-      // 'G' as `EraG`.
-      static constexpr char kJaGeneralTail[] = "/\xE6\xA8\x99\xE6\xBA\x96";
-      constexpr std::size_t kJaGeneralTailLen = sizeof(kJaGeneralTail) - 1;
-      if (ja_syntax && i + 1 + kJaGeneralTailLen <= fmt.size() &&
-          fmt.compare(i + 1, kJaGeneralTailLen, kJaGeneralTail) == 0) {
+      // A locale may spell the built-in General code `G/<word>` (ja-JP
+      // "G/標準") -- the literal numFmtId=0 keyword Excel stores and displays.
+      // Recognized as one unit (a case-insensitive 'G', then the alias tail)
+      // so the single-`g` era-name scan below never misreads the 'G' as `EraG`.
+      const std::string_view general_alias = facts.general_alias;
+      if (general_alias.size() > 1 && general_alias[0] == 'G' &&
+          fmt.compare(i + 1, general_alias.size() - 1, general_alias.substr(1)) == 0) {
         Token t;
         t.kind = Tok::GeneralNumber;
         toks.push_back(t);
-        i += 1 + kJaGeneralTailLen;
+        i += general_alias.size();
         continue;
       }
     }
