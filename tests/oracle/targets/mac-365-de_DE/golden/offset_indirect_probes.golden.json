@@ -6,7 +6,7 @@
     "excel_locale": "de-DE",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T10:31:56Z"
+    "generated_at": "2026-10-08T23:22:49Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -181,6 +181,66 @@
       "expect": {
         "kind": "number",
         "value": 4.0
+      }
+    },
+    {
+      "id": "sum_indirect_single_cell_numeric_text",
+      "formula": "=SUM(INDIRECT(\"A2\"))",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=\"7\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "product_indirect_single_cell_numeric_text",
+      "formula": "=PRODUCT(INDIRECT(\"A2\"))",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=\"7\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sum_direct_ref_numeric_text",
+      "formula": "=SUM(A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=\"7\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sum_indirect_range_numeric_text",
+      "formula": "=SUM(INDIRECT(\"A2:B2\"))",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=\"7\""
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
       }
     }
   ]
