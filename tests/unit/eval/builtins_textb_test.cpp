@@ -5,6 +5,8 @@
 // codepoints, plus the "pad with ASCII space on a 1-byte overflow of a
 // 2-byte character" rule shared by LEFTB / RIGHTB / MIDB.
 
+#include <array>
+#include <string>
 #include <string_view>
 
 #include "eval/eval_context.h"
@@ -14,8 +16,10 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "test_eval_helpers.h"
+#include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -50,6 +54,24 @@ Value EvalSourceWithHost(std::string_view src, ExcelHost host) {
   }
   const EvalContext ctx = test::host_context(host);
   return evaluate(*root, eval_arena, default_registry(), ctx);
+}
+
+struct TextProfileCase {
+  ExcelProfile profile;
+  const char* id;
+};
+
+constexpr std::array<TextProfileCase, 4> kTextProfiles = {{
+    {mac_365_ja_jp_profile(), "mac-365-ja_JP"},
+    {win_365_ja_jp_profile(), "win-365-ja_JP"},
+    {mac_365_en_us_profile(), "mac-365-en_US"},
+    {win_365_en_us_profile(), "win-365-en_US"},
+}};
+
+Value EvalWithProfile(std::string_view src, ExcelProfile profile) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(profile);
+  return formulon::test::EvalSourceIn(src, wb, wb.sheet(0));
 }
 
 // ---------------------------------------------------------------------------
@@ -401,6 +423,123 @@ TEST(TextCode, ErrorPropagates) {
   const Value v = EvalSource("=CODE(#REF!)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(TextProfileCodepage, CharAndCodeUseTheSelectedProfile) {
+  for (const TextProfileCase& test_case : kTextProfiles) {
+    SCOPED_TRACE(test_case.id);
+    const bool japanese = test_case.profile.locale == ExcelLocale::kJaJP;
+    const bool mac = test_case.profile.host == ExcelHost::kMac365;
+
+    if (!japanese) {
+      const Value char_high = EvalWithProfile("=CHAR(130)", test_case.profile);
+      ASSERT_TRUE(char_high.is_text());
+      if (mac) {
+        EXPECT_EQ(char_high.as_text(), "\xC3\x87");
+      } else {
+        EXPECT_EQ(char_high.as_text(), "\xE2\x80\x9A");
+      }
+    }
+
+    const Value char_katakana = EvalWithProfile("=CHAR(169)", test_case.profile);
+    ASSERT_TRUE(char_katakana.is_text());
+    EXPECT_EQ(char_katakana.as_text(), japanese ? "\xEF\xBD\xA9" : "\xC2\xA9");
+
+    const Value code_accent = EvalWithProfile("=CODE(\"é\")", test_case.profile);
+    ASSERT_TRUE(code_accent.is_number());
+    const double expected_accent = japanese ? 95.0 : (mac ? 142.0 : 233.0);
+    EXPECT_DOUBLE_EQ(code_accent.as_number(), expected_accent);
+
+    const Value code_hiragana = EvalWithProfile("=CODE(\"あ\")", test_case.profile);
+    ASSERT_TRUE(code_hiragana.is_number());
+    EXPECT_DOUBLE_EQ(code_hiragana.as_number(), japanese ? 9250.0 : 95.0);
+  }
+}
+
+TEST(TextProfileCodepage, CharArgumentsKeepRangeAndFallbackRules) {
+  for (const TextProfileCase& test_case : kTextProfiles) {
+    SCOPED_TRACE(test_case.id);
+    const Value near_integer = EvalWithProfile("=CODE(CHAR(64.9999999))", test_case.profile);
+    ASSERT_TRUE(near_integer.is_number());
+    const double expected_near_integer = test_case.profile.locale == ExcelLocale::kEnUS ? 65.0 : 64.0;
+    EXPECT_DOUBLE_EQ(near_integer.as_number(), expected_near_integer);
+
+    const Value out_of_range = EvalWithProfile("=CHAR(256)", test_case.profile);
+    ASSERT_TRUE(out_of_range.is_error());
+    EXPECT_EQ(out_of_range.as_error(), ErrorCode::Value);
+
+    const Value unmapped = EvalWithProfile("=CODE(\"☃\")", test_case.profile);
+    ASSERT_TRUE(unmapped.is_number());
+    EXPECT_DOUBLE_EQ(unmapped.as_number(), 95.0);
+  }
+}
+
+TEST(TextProfileByteFunctions, NonDbcsUsesUtf16UnitsForSupplementaryText) {
+  const std::string text =
+      "あ\xF0\x9F\x98\x80"
+      "B";
+  const std::string lenb_formula = "=LENB(\"" + text + "\")";
+  const std::string leftb_formula = "=LEFTB(\"" + text + "\",3)";
+  const std::string rightb_formula = "=RIGHTB(\"" + text + "\",2)";
+  const std::string midb_formula = "=MIDB(\"" + text + "\",2,1)";
+  const std::string findb_formula = "=FINDB(\"B\",\"" + text + "\")";
+  const std::string searchb_formula = "=SEARCHB(\"B\",\"" + text + "\")";
+  const std::string replaceb_formula = "=REPLACEB(\"abcdef\",2,3,\"X\")";
+  const std::string replaceb_non_ascii_formula = "=REPLACEB(\"あいう\",2,1,\"X\")";
+
+  for (const TextProfileCase& test_case : kTextProfiles) {
+    SCOPED_TRACE(test_case.id);
+    const bool japanese = test_case.profile.locale == ExcelLocale::kJaJP;
+
+    const Value lenb = EvalWithProfile(lenb_formula, test_case.profile);
+    ASSERT_TRUE(lenb.is_number());
+    EXPECT_DOUBLE_EQ(lenb.as_number(), japanese ? 5.0 : 4.0);
+
+    const Value leftb = EvalWithProfile(leftb_formula, test_case.profile);
+    ASSERT_TRUE(leftb.is_text());
+    EXPECT_EQ(leftb.as_text(), japanese ? "あ " : "あ\xF0\x9F\x98\x80");
+
+    const Value rightb = EvalWithProfile(rightb_formula, test_case.profile);
+    ASSERT_TRUE(rightb.is_text());
+    const std::string expected_right = japanese ? std::string(" ") + "B" : std::string("\xF0\x9F\x98\x80") + "B";
+    EXPECT_EQ(rightb.as_text(), expected_right);
+
+    const Value midb = EvalWithProfile(midb_formula, test_case.profile);
+    ASSERT_TRUE(midb.is_text());
+    EXPECT_EQ(midb.as_text(), japanese ? " " : "\xF0\x9F\x98\x80");
+
+    const Value findb = EvalWithProfile(findb_formula, test_case.profile);
+    ASSERT_TRUE(findb.is_number());
+    EXPECT_DOUBLE_EQ(findb.as_number(), japanese ? 5.0 : 4.0);
+
+    const Value searchb = EvalWithProfile(searchb_formula, test_case.profile);
+    ASSERT_TRUE(searchb.is_number());
+    EXPECT_DOUBLE_EQ(searchb.as_number(), japanese ? 5.0 : 4.0);
+
+    const Value replaceb = EvalWithProfile(replaceb_formula, test_case.profile);
+    ASSERT_TRUE(replaceb.is_text());
+    EXPECT_EQ(replaceb.as_text(), "aXef");
+
+    const Value replaceb_non_ascii = EvalWithProfile(replaceb_non_ascii_formula, test_case.profile);
+    ASSERT_TRUE(replaceb_non_ascii.is_text());
+    EXPECT_EQ(replaceb_non_ascii.as_text(), japanese ? " Xいう" : "あXう");
+  }
+}
+
+TEST(TextProfileLazyDispatch, CodeAndLenbUseLocaleFactsOnWindows) {
+  for (const TextProfileCase& test_case : kTextProfiles) {
+    SCOPED_TRACE(test_case.id);
+    const bool japanese = test_case.profile.locale == ExcelLocale::kJaJP;
+    const bool win = test_case.profile.host == ExcelHost::kWin365;
+
+    const Value code = EvalWithProfile("=CODE(\"\xF0\x9F\x98\x80\")", test_case.profile);
+    ASSERT_TRUE(code.is_number());
+    EXPECT_DOUBLE_EQ(code.as_number(), japanese && win ? 63.0 : 95.0);
+
+    const Value lenb = EvalWithProfile("=LENB(\"あ\")", test_case.profile);
+    ASSERT_TRUE(lenb.is_number());
+    EXPECT_DOUBLE_EQ(lenb.as_number(), japanese ? 2.0 : 1.0);
+  }
 }
 
 }  // namespace

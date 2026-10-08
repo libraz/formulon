@@ -42,8 +42,10 @@
 
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
 #include "eval/jp_kana_table.h"
+#include "excel_locale.h"
 #include "utils/arena.h"
 #include "utils/text_ops.h"
 #include "value.h"
@@ -179,6 +181,9 @@ Value Asc(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (!text) {
     return Value::error(text.error());
   }
+  if (!locale_facts(current_eval_profile()).dbcs) {
+    return Value::text(arena.intern(text.value()));
+  }
   const std::string& src = text.value();
   std::string out;
   out.reserve(src.size());
@@ -226,6 +231,9 @@ Value Jis(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   auto text = coerce_to_text(args[0]);
   if (!text) {
     return Value::error(text.error());
+  }
+  if (!locale_facts(current_eval_profile()).dbcs) {
+    return Value::text(arena.intern(text.value()));
   }
   const std::string& src = text.value();
   std::string out;

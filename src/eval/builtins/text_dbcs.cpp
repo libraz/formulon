@@ -1,8 +1,7 @@
 //
-// Byte-oriented text family (ja-JP DBCS): LENB, LEFTB, RIGHTB, MIDB,
-// REPLACEB, FINDB, SEARCHB. See `text.cpp` for the UTF-16-unit-based core
-// family (LEN / LEFT / RIGHT / MID / FIND / SEARCH / REPLACE). The DBCS
-// rule is documented near the LENB block below.
+// Byte-oriented text family: LENB, LEFTB, RIGHTB, MIDB, REPLACEB, FINDB,
+// SEARCHB. DBCS profiles use the CP932 byte rule; other profiles use Excel's
+// UTF-16-unit rule. See `text.cpp` for the corresponding non-B family.
 
 #include <cstddef>
 #include <cstdint>
@@ -12,6 +11,8 @@
 
 #include "eval/builtins/text_detail.h"
 #include "eval/coerce.h"
+#include "eval/eval_profile_scope.h"
+#include "excel_locale.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "utils/text_ops.h"
@@ -21,16 +22,38 @@
 namespace formulon {
 namespace eval {
 
+namespace {
+
+bool uses_dbcs_profile() noexcept {
+  return locale_facts(current_eval_profile()).dbcs;
+}
+
+}  // namespace
+
 namespace text_detail {
 
 // --- FINDB / SEARCHB shared helpers -------------------------------------
 
 // FINDB(find_text, within_text, [start_num]) - case-sensitive, no wildcards.
-// Returns the 1-based ja-JP DBCS byte position of the first occurrence of
-// `find_text` in `within_text` at or after `start_num` (default 1, also in
-// DBCS bytes). Not found / out-of-range `start_num` / `start_num < 1`
-// surface `#VALUE!`. Empty `find_text` returns `start_num` (FIND's quirk).
+// Returns the 1-based profile-specific byte/unit position of the first
+// occurrence of `find_text` in `within_text` at or after `start_num`.
+// Not found / out-of-range `start_num` / `start_num < 1` surface `#VALUE!`.
+// Empty `find_text` returns `start_num` (FIND's quirk).
 Value FindB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  if (!uses_dbcs_profile()) {
+    SearchArgs sargs;
+    Value early = Value::blank();
+    if (!read_search_args(args, arity, SearchUnit::Utf16, &sargs, &early)) {
+      return early;
+    }
+    const std::size_t start_byte = utf16_to_byte_offset(sargs.haystack, static_cast<std::uint32_t>(sargs.start - 1));
+    const std::size_t pos = sargs.haystack.find(sargs.needle, start_byte);
+    if (pos == std::string::npos) {
+      return Value::error(ErrorCode::Value);
+    }
+    const std::uint32_t units = utf16_units_in(std::string_view(sargs.haystack).substr(0, pos));
+    return Value::number(static_cast<double>(units + 1));
+  }
   SearchArgs sargs;
   Value early = Value::blank();
   if (!read_search_args(args, arity, SearchUnit::DbcsByte, &sargs, &early)) {
@@ -49,9 +72,23 @@ Value FindB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 }
 
 // SEARCHB(find_text, within_text, [start_num]) - case-insensitive with
-// DOS-style wildcards. Mirrors SEARCH semantically but position values are
-// in DBCS bytes. `start_num` is also in DBCS bytes.
+// DOS-style wildcards. Mirrors SEARCH semantically in the active profile's
+// byte/unit position space.
 Value SearchB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  if (!uses_dbcs_profile()) {
+    SearchArgs sargs;
+    Value early = Value::blank();
+    if (!read_search_args(args, arity, SearchUnit::Utf16, &sargs, &early)) {
+      return early;
+    }
+    const std::size_t start_byte = utf16_to_byte_offset(sargs.haystack, static_cast<std::uint32_t>(sargs.start - 1));
+    const std::size_t pos = find_folded(sargs.haystack, sargs.needle, start_byte, SearchUnit::Utf16);
+    if (pos == std::string::npos) {
+      return Value::error(ErrorCode::Value);
+    }
+    const std::uint32_t units = utf16_units_in(std::string_view(sargs.haystack).substr(0, pos));
+    return Value::number(static_cast<double>(units + 1));
+  }
   SearchArgs sargs;
   Value early = Value::blank();
   if (!read_search_args(args, arity, SearchUnit::DbcsByte, &sargs, &early)) {
@@ -157,23 +194,96 @@ bool read_byte_budget_args(const Value* args, std::uint32_t arity, std::string* 
   return true;
 }
 
+Value leftb_utf16(const Value* args, std::uint32_t arity, Arena& arena) {
+  std::string src;
+  std::uint64_t budget = 0;
+  Value early = Value::blank();
+  if (!read_byte_budget_args(args, arity, &src, &budget, &early)) {
+    return early;
+  }
+  return Value::text(arena.intern(utf16_substring(src, 0u, static_cast<std::uint32_t>(budget))));
+}
+
+Value rightb_utf16(const Value* args, std::uint32_t arity, Arena& arena) {
+  std::string src;
+  std::uint64_t budget = 0;
+  Value early = Value::blank();
+  if (!read_byte_budget_args(args, arity, &src, &budget, &early)) {
+    return early;
+  }
+  const std::uint32_t total = utf16_units_in(src);
+  const std::uint32_t take = budget >= total ? total : static_cast<std::uint32_t>(budget);
+  return Value::text(arena.intern(utf16_substring(src, total - take, take)));
+}
+
+Value midb_utf16(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto parsed = text_detail::read_text_window_args(args, arity, /*snap_start=*/false);
+  if (!parsed) {
+    return Value::error(parsed.error());
+  }
+  const std::string& src = parsed.value().text;
+  const std::uint32_t total = utf16_units_in(src);
+  const std::uint32_t start = static_cast<std::uint32_t>(parsed.value().start - 1);
+  if (start >= total || parsed.value().count == 0) {
+    return Value::text({});
+  }
+  const std::uint32_t available = total - start;
+  const std::uint32_t length = static_cast<std::uint32_t>(parsed.value().count) < available
+                                   ? static_cast<std::uint32_t>(parsed.value().count)
+                                   : available;
+  return Value::text(arena.intern(utf16_substring(src, start, length)));
+}
+
+Value replaceb_utf16(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto parsed = text_detail::read_text_window_args(args, arity, /*snap_start=*/true);
+  if (!parsed) {
+    return Value::error(parsed.error());
+  }
+  const std::string& old_text = parsed.value().text;
+  const std::uint32_t total = utf16_units_in(old_text);
+  std::uint32_t start = static_cast<std::uint32_t>(parsed.value().start - 1);
+  if (start > total) {
+    start = total;
+  }
+  const std::uint32_t remaining = total - start;
+  const std::uint32_t requested = static_cast<std::uint32_t>(parsed.value().count);
+  const std::uint32_t deleted = requested < remaining ? requested : remaining;
+  const std::string prefix = utf16_substring(old_text, 0u, start);
+  const std::string suffix = utf16_substring(old_text, start + deleted, remaining - deleted);
+  std::string out;
+  out.reserve(prefix.size() + parsed.value().new_text.size() + suffix.size());
+  out.append(prefix);
+  out.append(parsed.value().new_text);
+  out.append(suffix);
+  if (static_cast<std::uint64_t>(utf16_units_in(out)) > kExcelTextCapUnits) {
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::text(arena.intern(out));
+}
+
 }  // namespace
 
 namespace text_detail {
 
-// LENB(text) - returns the ja-JP DBCS byte length of the coerced text.
+// LENB(text) - returns the active profile's byte-oriented length. Non-DBCS
+// profiles use Excel's UTF-16 code-unit count for the *B family.
 Value Lenb(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto text = coerce_to_text(args[0]);
   if (!text) {
     return Value::error(text.error());
   }
-  return Value::number(static_cast<double>(bytes_in_jajp(text.value())));
+  const double length = uses_dbcs_profile() ? static_cast<double>(bytes_in_jajp(text.value()))
+                                            : static_cast<double>(utf16_units_in(text.value()));
+  return Value::number(length);
 }
 
 // LEFTB(text, [num_bytes=1]) - leftmost `num_bytes` bytes. When a 2-byte
 // character would straddle the budget (1 byte remaining), emit an ASCII
 // space in its place and stop.
 Value Leftb(const Value* args, std::uint32_t arity, Arena& arena) {
+  if (!uses_dbcs_profile()) {
+    return leftb_utf16(args, arity, arena);
+  }
   std::string src;
   std::uint64_t budget = 0;
   Value early = Value::blank();
@@ -212,6 +322,9 @@ Value Leftb(const Value* args, std::uint32_t arity, Arena& arena) {
 // the rightmost window that fits the budget. If a 2-byte character would
 // straddle the window boundary on the left edge, emit an ASCII space.
 Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
+  if (!uses_dbcs_profile()) {
+    return rightb_utf16(args, arity, arena);
+  }
   std::string src;
   std::uint64_t budget = 0;
   Value early = Value::blank();
@@ -275,6 +388,9 @@ Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
 // pad and consume 1 byte of budget; from there walk normally, padding on
 // the trailing edge with the same 1-byte-overflow rule as LEFTB.
 Value Midb(const Value* args, std::uint32_t arity, Arena& arena) {
+  if (!uses_dbcs_profile()) {
+    return midb_utf16(args, arity, arena);
+  }
   auto parsed = read_text_window_args(args, arity, /*snap_start=*/false);
   if (!parsed) {
     return Value::error(parsed.error());
@@ -384,6 +500,9 @@ std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src) {
 // space before `new_text` is appended. `start_num < 1` or `num_bytes < 0`
 // -> `#VALUE!`. Result capped at Excel's 32,767-unit text limit.
 Value ReplaceB_(const Value* args, std::uint32_t arity, Arena& arena) {
+  if (!uses_dbcs_profile()) {
+    return replaceb_utf16(args, arity, arena);
+  }
   auto parsed = read_text_window_args(args, arity, /*snap_start=*/true);
   if (!parsed) {
     return Value::error(parsed.error());

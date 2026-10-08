@@ -5,6 +5,7 @@
 // and asserts the resulting Value. TEXT / VALUE / NUMBERVALUE live in
 // `builtins_value_numbervalue_test.cpp` next to their shared format engine.
 
+#include <array>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -28,6 +29,24 @@ namespace {
 
 using formulon::test::EvalSource;
 using formulon::test::EvalSourceIn;
+
+struct TextProfileCase {
+  ExcelProfile profile;
+  const char* id;
+};
+
+constexpr std::array<TextProfileCase, 4> kTextProfiles = {{
+    {mac_365_ja_jp_profile(), "mac-365-ja_JP"},
+    {win_365_ja_jp_profile(), "win-365-ja_JP"},
+    {mac_365_en_us_profile(), "mac-365-en_US"},
+    {win_365_en_us_profile(), "win-365-en_US"},
+}};
+
+Value EvalWithProfile(std::string_view src, ExcelProfile profile) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(profile);
+  return EvalSourceIn(src, wb, wb.sheet(0));
+}
 
 // ---------------------------------------------------------------------------
 // UPPER
@@ -238,6 +257,40 @@ TEST(TextTrim, DoesNotStripNbsp) {
   const Value trimmed = EvalSource("=TRIM(CHAR(160) & \"x\" & CHAR(160))");
   ASSERT_TRUE(trimmed.is_text());
   EXPECT_EQ(trimmed.as_text(), raw);
+}
+
+TEST(TextProfileWidth, EnglishWidthFunctionsAreNoOps) {
+  for (const TextProfileCase& test_case : kTextProfiles) {
+    SCOPED_TRACE(test_case.id);
+    const bool japanese = test_case.profile.locale == ExcelLocale::kJaJP;
+
+    const Value asc = EvalWithProfile("=ASC(\"ＡＢＣ　１２３\")", test_case.profile);
+    ASSERT_TRUE(asc.is_text());
+    EXPECT_EQ(asc.as_text(), japanese ? "ABC 123" : "ＡＢＣ　１２３");
+
+    const Value dbcs = EvalWithProfile("=DBCS(\"ABC 123\")", test_case.profile);
+    ASSERT_TRUE(dbcs.is_text());
+    EXPECT_EQ(dbcs.as_text(), japanese ? "ＡＢＣ　１２３" : "ABC 123");
+  }
+}
+
+TEST(TextProfileTrim, IdeographicSpaceFollowsDbcsProfile) {
+  for (const TextProfileCase& test_case : kTextProfiles) {
+    SCOPED_TRACE(test_case.id);
+    const Value trimmed = EvalWithProfile("=TRIM(\"　a　\")", test_case.profile);
+    ASSERT_TRUE(trimmed.is_text());
+    EXPECT_EQ(trimmed.as_text(), test_case.profile.locale == ExcelLocale::kJaJP ? "a" : "　a　");
+  }
+}
+
+TEST(TextProfileLazyDispatch, TextBackslashRewriteUsesTheSbcCodepage) {
+  for (const TextProfileCase& test_case : kTextProfiles) {
+    SCOPED_TRACE(test_case.id);
+    const Value formatted = EvalWithProfile("=TEXT(10, \"\\$0\")", test_case.profile);
+    ASSERT_TRUE(formatted.is_text());
+    const bool win_ja = test_case.profile.host == ExcelHost::kWin365 && test_case.profile.locale == ExcelLocale::kJaJP;
+    EXPECT_EQ(formatted.as_text(), win_ja ? "\xC2\xA5$10" : "$10");
+  }
 }
 
 // ---------------------------------------------------------------------------

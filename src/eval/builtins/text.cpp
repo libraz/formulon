@@ -22,9 +22,12 @@
 #include "eval/builtins/registration_helpers.h"
 #include "eval/builtins/text_detail.h"
 #include "eval/coerce.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
 #include "eval/jis0208_table.h"
+#include "excel_locale.h"
 #include "utils/arena.h"
+#include "utils/sbcs_codepage.h"
 #include "utils/text_ops.h"
 #include "utils/utf8_length.h"
 #include "value.h"
@@ -55,11 +58,11 @@ Value Lower(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return Value::text(arena.intern(to_lower_ascii(text.value())));
 }
 
-// TRIM(text) - removes leading and trailing ASCII spaces (0x20) plus the
-// ideographic space U+3000 (encoded UTF-8 as `E3 80 80`), and collapses runs
-// of those same characters internally. Mac Excel 365 ja-JP treats U+3000 as
-// a trimmable space; other whitespace-like bytes (tabs, newlines, NBSP
-// U+00A0, etc.) are preserved verbatim.
+// TRIM(text) - removes leading and trailing ASCII spaces (0x20), plus the
+// ideographic space U+3000 (encoded UTF-8 as `E3 80 80`) for DBCS profiles.
+// It collapses runs of those same characters internally. Other
+// whitespace-like bytes (tabs, newlines, NBSP U+00A0, etc.) are preserved
+// verbatim.
 //
 // A collapsed run keeps the character that *started* it rather than
 // normalising to an ASCII space: `"a　　b"` trims to `"a　b"`, and a mixed
@@ -74,6 +77,7 @@ Value Trim(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     return Value::error(text.error());
   }
   const std::string& src = text.value();
+  const bool dbcs = locale_facts(current_eval_profile()).dbcs;
   // Detects U+3000 (UTF-8: 0xE3 0x80 0x80) starting at byte index `i` in
   // src. The bound is written `i + 3 <= src.size()` rather than the
   // equivalent `i + 2 < src.size()` so the "we need to read three bytes
@@ -98,7 +102,7 @@ Value Trim(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
       ++i;
       continue;
     }
-    if (is_ideographic_space_at(i)) {
+    if (dbcs && is_ideographic_space_at(i)) {
       if (seen_non_space && pending_space.empty()) {
         pending_space = "\xE3\x80\x80";
       }
@@ -473,8 +477,9 @@ Value Clean(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // The byte-oriented slicing family (LENB / LEFTB / RIGHTB / MIDB /
 // REPLACEB / FINDB / SEARCHB) lives in `text_dbcs.cpp`.
 
-// CHAR(number) - returns the single-character text whose Mac Excel ja-JP
-// codepage value is `number`. `number` is truncated to an integer.
+// CHAR(number) - returns the single-character text whose active profile's
+// single-byte codepage value is `number`. DBCS profiles retain the CP932/JIS
+// extension below; single-byte profiles accept 1..255 only.
 //
 // Mac Excel ja-JP uses CP932 / JIS X 0208. The valid argument space is the
 // disjoint union of two ranges:
@@ -493,13 +498,26 @@ Value Clean(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // n < 1, n > 65535) yields `#VALUE!`. Mac probe golden:
 // tests/oracle/golden/code_char_jp_probes.golden.json.
 Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto parsed = read_int_arg(args[0]);
+  const ExcelProfile profile = current_eval_profile();
+  const LocaleFacts& facts = locale_facts(profile);
+  auto parsed = facts.char_snaps_near_integer ? read_snapped_int_arg(args[0], 0.0) : read_int_arg(args[0]);
   if (!parsed) {
     return Value::error(parsed.error());
   }
   const int n = parsed.value();
   if (n < 1) {
     return Value::error(ErrorCode::Value);
+  }
+  if (!facts.dbcs) {
+    if (n > 0xFF) {
+      return Value::error(ErrorCode::Value);
+    }
+    const std::uint32_t cp = sbcs_decode_byte(sbcs_codepage(profile), static_cast<std::uint8_t>(n));
+    const std::string encoded = encode_utf8_codepoint(cp);
+    if (encoded.empty()) {
+      return Value::error(ErrorCode::Value);
+    }
+    return Value::text(arena.intern(encoded));
   }
   std::uint32_t cp = 0;
   if (n <= 0xFF) {
@@ -544,8 +562,8 @@ Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return Value::text(arena.intern(encoded));
 }
 
-// CODE(text) - returns the Mac Excel ja-JP CP932 / JIS X 0208 value of the
-// first character in `text`. Empty text yields `#VALUE!`.
+// CODE(text) - returns the active profile's codepage value for the first
+// character in `text`. Empty text yields `#VALUE!`.
 //
 //   * ASCII (codepoint < 0x80): codepoint itself.
 //   * Half-width katakana (U+FF61..U+FF9F): 0xA1..0xDF.
@@ -562,6 +580,8 @@ Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // codepoint (> U+FFFF) returns 63, and U+9AD9 specifically returns 38526,
 // instead of the 95 fallback above.
 Value Code_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  const ExcelProfile profile = current_eval_profile();
+  const LocaleFacts& facts = locale_facts(profile);
   auto text = coerce_to_text(args[0]);
   if (!text) {
     return Value::error(text.error());
@@ -574,6 +594,10 @@ Value Code_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Value);
   }
   const std::uint32_t cp = decoded.codepoint;
+  if (!facts.dbcs) {
+    const int encoded = sbcs_encode_codepoint(sbcs_codepage(profile), cp);
+    return Value::number(static_cast<double>(encoded < 0 ? 95 : encoded));
+  }
   if (cp < 0x80u) {
     return Value::number(static_cast<double>(cp));
   }

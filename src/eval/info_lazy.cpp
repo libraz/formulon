@@ -31,6 +31,7 @@
 #include "eval/name_env_resolve.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_resolvers.h"
+#include "excel_locale.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -435,7 +436,8 @@ Value eval_code_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (arg.is_error()) {
     return arg;
   }
-  if (ctx.excel_profile().host == ExcelHost::kWin365) {
+  const ExcelProfile profile = ctx.excel_profile();
+  if (profile.host == ExcelHost::kWin365 && sbcs_codepage(profile) == SbcsCodepage::kCp932) {
     auto text = coerce_to_text(arg);
     if (!text) {
       return Value::error(text.error());
@@ -470,7 +472,8 @@ Value eval_lenb_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (arg.is_error()) {
     return arg;
   }
-  if (ctx.excel_profile().host == ExcelHost::kWin365) {
+  const ExcelProfile profile = ctx.excel_profile();
+  if (profile.host == ExcelHost::kWin365 && locale_facts(profile).dbcs) {
     auto text = coerce_to_text(arg);
     if (!text) {
       return Value::error(text.error());
@@ -545,7 +548,8 @@ Value eval_text_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (args[1].is_error()) {
     return args[1];
   }
-  if (ctx.excel_profile().host == ExcelHost::kWin365) {
+  const ExcelProfile profile = ctx.excel_profile();
+  if (profile.host == ExcelHost::kWin365 && sbcs_codepage(profile) == SbcsCodepage::kCp932) {
     auto fmt = coerce_to_text(args[1]);
     if (!fmt) {
       return Value::error(fmt.error());
