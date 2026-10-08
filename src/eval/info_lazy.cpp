@@ -62,6 +62,10 @@ bool is_static_reference_shape(const parser::AstNode& node) noexcept {
     case parser::NodeKind::RangeOp:
     case parser::NodeKind::StructuredRef:
       return true;
+    case parser::NodeKind::ExternalRef:
+      // A cell or range on one sheet of another workbook. Neither the
+      // `[Book]!Name` form nor a 3-D span is, as for a local `Ref3D`.
+      return node.as_external_ref_name().empty() && node.as_external_ref_sheet_end().empty();
     default:
       return false;
   }

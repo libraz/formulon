@@ -173,10 +173,36 @@ TEST_F(WholeAxisNames, LetBoundExternalColumnSpillsDeclaredHeight) {
 }
 
 TEST_F(WholeAxisNames, LetBoundExternalRangeIsValueToRangeCriteriaFunctions) {
+  // The binding stays a reference, so the #VALUE! below is the external-range
+  // rule rather than COUNTIF rejecting a non-reference argument. ISREF is TRUE
+  // for each form in Excel with the source workbook closed.
+  for (const char* formula : {"=LET(x,[Src.xlsx]S!A1:A5,ISREF(x))", "=ISREF([Src.xlsx]S!A1:A5)",
+                              "=ISREF([Src.xlsx]S!A1)", "=ISREF([Src.xlsx]S!A:A)"}) {
+    const Value is_ref = Adhoc(formula);
+    ASSERT_TRUE(is_ref.is_boolean()) << formula << " -> " << is_ref.debug_to_string();
+    EXPECT_TRUE(is_ref.as_boolean()) << formula;
+  }
+  ExpectNumber("=LET(x,L!A1:A5,COUNTIF(x,\"k2\"))", 1.0);
   ExpectError("=LET(x,[Src.xlsx]S!A1:A5,COUNTIF(x,\"k2\"))", ErrorCode::Value);
   ExpectError("=LET(x,[Src.xlsx]S!A:A,COUNTIF(x,\"k2\"))", ErrorCode::Value);
   ExpectError("=LET(x,[Src.xlsx]S!A1:A5,COUNTBLANK(x))", ErrorCode::Value);
   ExpectError("=LET(a,[Src.xlsx]S!A:A,b,[Src.xlsx]S!B:B,SUMIF(a,\"k2\",b))", ErrorCode::Value);
+}
+
+// The blank cells past a whole column's populated head each take a delimiter,
+// which carries the joined text past the cap.
+TEST_F(WholeAxisNames, TextJoinCountsWholeColumnBlanks) {
+  ExpectError("=TEXTJOIN(\",\",FALSE,L!A:A)", ErrorCode::Calc);
+  ExpectNumber("=LEN(TEXTJOIN(\",\",FALSE,L!A1:A20000))", 20007.0);
+  // Not measured: with no delimiter the whole sheet's blanks add nothing, and
+  // must not be walked one by one.
+  ExpectNumber("=LEN(TEXTJOIN(\"\",FALSE,L!A:XFD))", 18.0);
+  for (const char* formula : {"=TEXTJOIN(\",\",TRUE,L!A:A)", "=CONCAT(L!A:A)"}) {
+    const Value v = Adhoc(formula);
+    ASSERT_TRUE(v.is_text()) << formula << " -> " << v.debug_to_string();
+  }
+  EXPECT_EQ(Adhoc("=TEXTJOIN(\",\",TRUE,L!A:A)").as_text(), "k1,k2,k3,k5");
+  EXPECT_EQ(Adhoc("=CONCAT(L!A:A)").as_text(), "k1k2k3k5");
 }
 
 }  // namespace
