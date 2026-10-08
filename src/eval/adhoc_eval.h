@@ -69,7 +69,8 @@ Value evaluate_formula_text_array(const Workbook& workbook, const Sheet& sheet, 
 /// at `(row, col)` on `sheet`, with relative references written relative to
 /// `(anchor_row, anchor_col)` (the CF-applied range's top-left) shifted to
 /// the target cell before evaluation. Mirrors the anchor plumbing used by
-/// the CF-rule evaluator (`cf_helpers.cpp::parse_shift_evaluate`).
+/// the CF-rule evaluator (`cf_helpers.cpp::parse_shift_evaluate`). An array
+/// result is decided by its first element, as it is there.
 ///
 /// The evaluated result is coerced with Excel's CF-predicate rules rather
 /// than propagated verbatim (see `coerce_cf_predicate`): error / blank /

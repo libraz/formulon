@@ -118,8 +118,7 @@ bool evaluate_cf_formula(const Workbook& workbook, const Sheet& sheet, std::uint
 
   EvalState state;
   const EvalContext ctx = make_readonly_context(workbook, sheet, state, row, col);
-  const Value result = reduce_to_scalar(evaluate(*shifted, arena, registry, ctx));
-  return coerce_cf_predicate(result);
+  return coerce_cf_predicate(evaluate_first_element(*shifted, arena, registry, ctx));
 }
 
 bool coerce_cf_predicate(const Value& v) {

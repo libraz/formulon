@@ -9,6 +9,7 @@
 #include "cf/cf_evaluator.h"
 #include "cf/cf_types.h"
 #include "cf/validation_eval.h"
+#include "eval/adhoc_eval.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
@@ -121,6 +122,22 @@ TEST(CfWholeAxis, ComparisonFormsStayUnderOneMiBOfArena) {
   for (const char* formula : {"$B:$B>25", "$B:$B+0>25"}) {
     Arena arena;
     EXPECT_TRUE(g.CfMatches(formula, 2, kColD, &arena));
+    EXPECT_LT(arena.bytes_allocated(), static_cast<std::size_t>(1) << 20) << formula << ": " << arena.bytes_allocated();
+  }
+}
+
+// The ad-hoc rule probe takes the same first element: an array the target cell
+// could not spill into still decides the rule, and a whole column is not expanded.
+TEST(CfWholeAxis, AdhocProbeAgreesWithRuleEvaluation) {
+  Grid g;
+  g.SetB({100, 10, 10, 40, 10});
+  g.wb.set_cell_value(g.sheet_index, 2, kColD, Value::number(1.0));
+  const Sheet& sheet = g.wb.sheet(g.sheet_index);
+  for (const char* formula : {"$B:$B>25", "$B$1:$B$5>25"}) {
+    Arena arena;
+    EXPECT_TRUE(eval::evaluate_cf_formula(g.wb, sheet, 0U, kColD, 0U, kColD, formula, arena, eval::default_registry()))
+        << formula;
+    EXPECT_TRUE(g.CfMatches(formula, 0U)) << formula;
     EXPECT_LT(arena.bytes_allocated(), static_cast<std::size_t>(1) << 20) << formula << ": " << arena.bytes_allocated();
   }
 }
