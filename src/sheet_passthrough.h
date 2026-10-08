@@ -138,9 +138,10 @@ struct XlsbExternSheetEntry {
 /// keeping these slots preserves source order even when a source omits one of
 /// those blocks.
 ///
-/// Retention is byte-verbatim. A workbook row/column edit remaps the x14 CF
-/// ranges and formulas and each sparkline's range and source; coordinates
-/// in any other retained record keep their pre-edit values. A retained formula
+/// Retention is byte-verbatim except where a workbook row/column edit moves
+/// the cells a record names: the x14 CF ranges and formulas, each
+/// sparkline's range and source, and the records `io/xlsb/tail_refs.h`
+/// lists for the AutoFilter, breaks and worksheet children. A retained formula
 /// blob's sheet-qualified references are `ixti` indices into the source
 /// `BrtExternSheet` table, which `extern_sheets` records so the writer can
 /// keep those indices.

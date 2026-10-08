@@ -1237,16 +1237,16 @@ entries:
   # their .xlsb records) with them; Windows Excel's own edited saves are the
   # fixture in tests/unit/io/x14_structural_edit_fixture_test.cpp. What
   # remains is below.
-  - id: structural_edit_does_not_remap_unmodelled_worksheet_children
+  - id: structural_edit_does_not_remap_ole_and_control_anchors
     applies_to: all
     cause: engine-gap
     mode: skip-oracle
     scope: deferred-feature
-    evidence: [src/sheet.h, tests/integration/structural_edit_matrix_test.cpp]
-    reason: "`insert_rows` / `delete_rows` / `insert_cols` / `delete_cols` do not remap coordinates inside an unmodelled `<worksheet>` child retained byte-verbatim so a save does not drop it -- a `<sortState ref>`, for one. It keeps its pre-edit rectangle and nothing reports it. The x14 ranges and formulas in the `<extLst>` and in the matching `.xlsb` records do move, as Excel moves them."
-    prefer: win-excel-365
+    evidence: [src/io/worksheet_child_refs.h, tests/unit/io/retained_children_edit_fixture_test.cpp]
+    reason: "A row/column edit moves the cells named by the retained `<worksheet>` children as Excel moves them -- protected ranges, scenarios, the sheet sort state, cell watches, ignored errors, web-publish ranges, and in a `.xlsb` the AutoFilter and breaks kept as records (Excel saves under tests/fixtures/excel/retained_children_edit/). The anchors inside `<oleObjects>` and `<controls>` still keep their pre-edit cells, and nothing reports it; this host cannot author either object to measure how Excel moves them. `<smartTags>` stays put too, though Excel drops smart tags on any save."
+    prefer: mac-excel-365
     first_noted: 2026-08-21
-    last_verified_excel_version: "16.0.20228"
+    last_verified_excel_version: "16.113.3"
   - id: structural_insert_does_not_inherit_adjacent_formatting
     applies_to: all
     cause: engine-gap

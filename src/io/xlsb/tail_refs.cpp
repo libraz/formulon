@@ -8,11 +8,13 @@
 #include <utility>
 #include <vector>
 
+#include "auto_filter.h"
 #include "io/xlsb/feature_formula.h"
 #include "io/xlsb/ptg.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "parser/reference.h"
+#include "sheet.h"
 
 namespace formulon::io::xlsb {
 namespace {
@@ -489,12 +491,418 @@ void RemapSlotFormulas(std::vector<std::uint8_t>& buf, const std::vector<XlsbExt
   }
 }
 
+// Worksheet-children records, measured against Excel's .xlsx twins (field
+// offsets in bytes).
+constexpr std::uint16_t kBeginScenMan = 500;  // u16 current, u16 show
+constexpr std::uint16_t kEndScenMan = 501;
+constexpr std::uint16_t kBeginSct = 502;  // u16 input-cell count
+constexpr std::uint16_t kEndSct = 503;
+constexpr std::uint16_t kSlc = 504;             // u32 row, u32 col
+constexpr std::uint16_t kBeginSortState = 530;  // RfX at 2
+constexpr std::uint16_t kEndSortState = 531;
+constexpr std::uint16_t kBeginSortCond = 532;  // RfX at 2
+constexpr std::uint16_t kEndSortCond = 533;
+constexpr std::uint16_t kRangeProtection = 536;   // Sqrfx at 2
+constexpr std::uint16_t kBeginWebPubItems = 554;  // u32 item count
+constexpr std::uint16_t kEndWebPubItems = 555;
+constexpr std::uint16_t kBeginWebPubItem = 556;  // u32 source type, RfX at 9
+constexpr std::uint16_t kEndWebPubItem = 557;
+constexpr std::uint16_t kCellWatch = 607;  // u32 row, u32 col
+constexpr std::uint16_t kBeginCellIgnoreEcs = 648;
+constexpr std::uint16_t kCellIgnoreEc = 649;  // u32 flags, Sqrfx at 4
+constexpr std::uint16_t kEndCellIgnoreEcs = 650;
+constexpr std::uint32_t kWebSourceRange = 4U;
+constexpr std::uint16_t kBeginAFilter = 161;  // RfX at 0
+constexpr std::uint16_t kEndAFilter = 162;
+constexpr std::uint16_t kBeginFilterColumn = 163;  // u32 column id
+constexpr std::uint16_t kEndFilterColumn = 164;
+constexpr std::uint16_t kBeginRwBrk = 392;  // u32 count, u32 manual count
+constexpr std::uint16_t kEndRwBrk = 393;
+constexpr std::uint16_t kBeginColBrk = 394;
+constexpr std::uint16_t kEndColBrk = 395;
+constexpr std::uint16_t kBrk = 396;  // u32 id, min, max, u32 manual
+
+enum class Outcome { kUnchanged, kChanged, kEmptied };
+
+std::vector<std::uint8_t> CurrentPayload(const Edit& edit, std::size_t i) {
+  const ByteSpan p = edit.recs[i].payload;
+  return edit.payload[i] ? *edit.payload[i] : std::vector<std::uint8_t>(p.data, p.data + p.size);
+}
+
+/// Maps the Sqrfx at `offset` of record `i` through `remap`.
+Outcome RemapSqrfxAt(Edit& edit, std::size_t i, std::size_t offset, const SqrefRemap& remap) {
+  const ByteSpan p = edit.recs[i].payload;
+  if (p.size < offset) {
+    return Outcome::kUnchanged;
+  }
+  ByteSpan cursor{p.data + offset, p.size - offset};
+  std::vector<MergeRange> ranges;
+  if (!read_sqref(cursor, ranges)) {
+    return Outcome::kUnchanged;
+  }
+  const std::vector<MergeRange> before = ranges;
+  remap(ranges);
+  if (ranges.empty()) {
+    return Outcome::kEmptied;
+  }
+  if (ranges == before) {
+    return Outcome::kUnchanged;
+  }
+  std::vector<std::uint8_t> out(p.data, p.data + offset);
+  emit_sqref(out, ranges);
+  out.insert(out.end(), cursor.data, cursor.data + cursor.size);
+  edit.payload[i] = std::move(out);
+  return Outcome::kChanged;
+}
+
+/// Maps the RfX at `offset` of record `i`, or with `cell` the u32 row / col
+/// pair there, through `remap`.
+Outcome RemapRectAt(Edit& edit, std::size_t i, std::size_t offset, bool cell, const SqrefRemap& remap) {
+  const ByteSpan p = edit.recs[i].payload;
+  if (p.size < offset + (cell ? 8U : 16U)) {
+    return Outcome::kUnchanged;
+  }
+  const std::uint8_t* at = p.data + offset;
+  MergeRange rect;
+  if (cell) {
+    rect = MergeRange{LoadU32(at), LoadU32(at + 4), LoadU32(at), LoadU32(at + 4)};
+  } else {
+    ByteSpan cursor{at, 16U};
+    rect = read_rfx(cursor).value();
+  }
+  if (rect.last_row >= Sheet::kMaxRows || rect.last_col >= Sheet::kMaxCols || rect.first_row > rect.last_row ||
+      rect.first_col > rect.last_col) {
+    return Outcome::kUnchanged;
+  }
+  std::vector<MergeRange> ranges{rect};
+  remap(ranges);
+  if (ranges.empty()) {
+    return Outcome::kEmptied;
+  }
+  if (ranges.front() == rect) {
+    return Outcome::kUnchanged;
+  }
+  std::vector<std::uint8_t> out = CurrentPayload(edit, i);
+  if (cell) {
+    StoreU32(out.data() + offset, ranges.front().first_row);
+    StoreU32(out.data() + offset + 4, ranges.front().first_col);
+  } else {
+    std::vector<std::uint8_t> rfx;
+    emit_rfx(rfx, ranges.front());
+    std::copy(rfx.begin(), rfx.end(), out.begin() + static_cast<std::ptrdiff_t>(offset));
+  }
+  edit.payload[i] = std::move(out);
+  return Outcome::kChanged;
+}
+
+std::size_t CountKept(const Edit& edit, std::size_t from, std::size_t until, std::uint16_t type) {
+  std::size_t n = 0;
+  for (std::size_t i = from; i < until; ++i) {
+    n += edit.keep[i] && edit.recs[i].type == type ? 1U : 0U;
+  }
+  return n;
+}
+
+std::size_t CountAll(const Edit& edit, std::size_t from, std::size_t until, std::uint16_t type) {
+  std::size_t n = 0;
+  for (std::size_t i = from; i < until; ++i) {
+    n += edit.recs[i].type == type ? 1U : 0U;
+  }
+  return n;
+}
+
+/// After input cells were dropped: a scenario left without one goes, the
+/// others' counts follow, and the manager's current / shown indexes clamp to
+/// the last scenario left.
+void SettleScenarios(Edit& edit) {
+  for (std::size_t man = edit.Find(0, kBeginScenMan); man < edit.recs.size();
+       man = edit.Find(man + 1U, kBeginScenMan)) {
+    const std::size_t man_end = edit.Find(man, kEndScenMan);
+    if (man_end == edit.recs.size()) {
+      return;
+    }
+    std::uint16_t remaining = 0;
+    bool removed = false;
+    for (std::size_t sct = edit.Find(man, kBeginSct); sct < man_end; sct = edit.Find(sct + 1U, kBeginSct)) {
+      const std::size_t sct_end = edit.Find(sct, kEndSct);
+      const std::size_t kept = CountKept(edit, sct, sct_end, kSlc);
+      if (sct_end < man_end && kept == 0U) {
+        edit.Drop(sct, sct_end);
+        removed = true;
+        continue;
+      }
+      ++remaining;
+      if (sct_end < man_end && kept != CountAll(edit, sct, sct_end, kSlc) && edit.recs[sct].payload.size >= 2U) {
+        std::vector<std::uint8_t> out = CurrentPayload(edit, sct);
+        StoreU16(out.data(), static_cast<std::uint16_t>(kept));
+        edit.payload[sct] = std::move(out);
+      }
+    }
+    if (!removed) {
+      continue;
+    }
+    if (remaining == 0U) {
+      edit.Drop(man, man_end);
+      continue;
+    }
+    if (edit.recs[man].payload.size < 4U) {
+      continue;
+    }
+    std::vector<std::uint8_t> out = CurrentPayload(edit, man);
+    for (std::size_t field = 0; field < 4U; field += 2U) {
+      if (LoadU16(out.data() + field) >= remaining) {
+        StoreU16(out.data() + field, static_cast<std::uint16_t>(remaining - 1U));
+      }
+    }
+    edit.payload[man] = std::move(out);
+  }
+}
+
+/// Moves the AutoFilter block at `begin` by the model's own rule. A column id
+/// and a sort condition each move independently of the others, so
+/// `shift_auto_filter` runs once per piece on a filter holding only that
+/// piece. Returns true when the block changed.
+bool RemapAutoFilter(Edit& edit, std::size_t begin, const StructuralEdit& e) {
+  const std::size_t end = edit.Find(begin, kEndAFilter);
+  if (end == edit.recs.size() || edit.recs[begin].payload.size < 16U) {
+    return false;
+  }
+  ByteSpan cursor{edit.recs[begin].payload.data, 16U};
+  AutoFilter whole;
+  whole.range = read_rfx(cursor).value();
+  const auto moved = [&e](AutoFilter filter) -> std::optional<AutoFilter> {
+    if (!shift_auto_filter(filter, e.index, e.count, e.is_delete, e.row_axis, /*header_delete_removes=*/true)) {
+      return std::nullopt;
+    }
+    return filter;
+  };
+  const std::optional<AutoFilter> range = moved(whole);
+  if (!range) {
+    edit.Drop(begin, end);
+    return true;
+  }
+  bool changed = false;
+  const auto store_rfx = [&edit, &changed](std::size_t i, std::size_t offset, const MergeRange& rect) {
+    std::vector<std::uint8_t> out = CurrentPayload(edit, i);
+    std::vector<std::uint8_t> rfx;
+    emit_rfx(rfx, rect);
+    std::copy(rfx.begin(), rfx.end(), out.begin() + static_cast<std::ptrdiff_t>(offset));
+    edit.payload[i] = std::move(out);
+    changed = true;
+  };
+  if (!(range->range == whole.range)) {
+    store_rfx(begin, 0U, range->range);
+  }
+  std::optional<SortState> sort;
+  std::size_t sort_begin = end;
+  std::size_t conditions_left = 0;
+  bool condition_dropped = false;
+  for (std::size_t i = begin + 1U; i < end; ++i) {
+    const FramedRecord& rec = edit.recs[i];
+    if (rec.type == kBeginFilterColumn && rec.payload.size >= 4U) {
+      AutoFilter one = whole;
+      one.columns.emplace_back().col_id = LoadU32(rec.payload.data);
+      const std::optional<AutoFilter> after = moved(one);
+      if (after->columns.empty()) {
+        edit.Drop(i, edit.Find(i, kEndFilterColumn));
+        changed = true;
+      } else if (after->columns.front().col_id != one.columns.front().col_id) {
+        std::vector<std::uint8_t> out = CurrentPayload(edit, i);
+        StoreU32(out.data(), after->columns.front().col_id);
+        edit.payload[i] = std::move(out);
+        changed = true;
+      }
+    } else if (rec.type == kBeginSortState && rec.payload.size >= 18U) {
+      ByteSpan at{rec.payload.data + 2, 16U};
+      sort.emplace().ref = read_rfx(at).value();
+      sort_begin = i;
+      AutoFilter with_sort = whole;
+      with_sort.sort = sort;
+      const std::optional<AutoFilter> after = moved(with_sort);
+      if (after->sort && !(after->sort->ref == sort->ref)) {
+        store_rfx(i, 2U, after->sort->ref);
+      }
+    } else if (rec.type == kBeginSortCond && sort && rec.payload.size >= 18U) {
+      ByteSpan at{rec.payload.data + 2, 16U};
+      AutoFilter with_cond = whole;
+      with_cond.sort = sort;
+      with_cond.sort->conditions.emplace_back().ref = read_rfx(at).value();
+      const std::optional<AutoFilter> after = moved(with_cond);
+      if (!after->sort || after->sort->conditions.empty()) {
+        edit.Drop(i, edit.Find(i, kEndSortCond));
+        condition_dropped = changed = true;
+      } else {
+        ++conditions_left;
+        if (!(after->sort->conditions.front().ref == with_cond.sort->conditions.front().ref)) {
+          store_rfx(i, 2U, after->sort->conditions.front().ref);
+        }
+      }
+    }
+  }
+  if (condition_dropped && conditions_left == 0U && sort_begin < end) {
+    edit.Drop(sort_begin, edit.Find(sort_begin, kEndSortState));
+  }
+  return changed;
+}
+
+/// Moves the manual breaks of the BrtBeginRwBrk / BrtBeginColBrk block at
+/// `begin` as the model moves its own: a break in the deleted band goes, the
+/// block's total and manual counts follow, and an emptied block goes.
+bool RemapBreaks(Edit& edit, std::size_t begin, std::uint16_t end_type, const StructuralEdit& e) {
+  const std::size_t end = edit.Find(begin, end_type);
+  if (end == edit.recs.size() || edit.recs[begin].payload.size < 8U) {
+    return false;
+  }
+  bool changed = false;
+  std::uint32_t kept = 0;
+  std::uint32_t manual = 0;
+  for (std::size_t i = begin + 1U; i < end; ++i) {
+    const FramedRecord& rec = edit.recs[i];
+    if (rec.type != kBrk || rec.payload.size < 16U) {
+      continue;
+    }
+    const std::uint32_t id = LoadU32(rec.payload.data);
+    std::vector<MergeRange> at{MergeRange{id, id, id, id}};
+    shift_sqref_ranges(at, e.index, e.count, e.is_delete, e.row_axis);
+    if (at.empty()) {
+      edit.Drop(i, i);
+      changed = true;
+      continue;
+    }
+    ++kept;
+    manual += LoadU32(rec.payload.data + 12) != 0U ? 1U : 0U;
+    const std::uint32_t moved = e.row_axis ? at.front().first_row : at.front().first_col;
+    if (moved != id) {
+      std::vector<std::uint8_t> out = CurrentPayload(edit, i);
+      StoreU32(out.data(), moved);
+      edit.payload[i] = std::move(out);
+      changed = true;
+    }
+  }
+  if (!changed) {
+    return false;
+  }
+  if (kept == 0U) {
+    edit.Drop(begin, end);
+    return true;
+  }
+  std::vector<std::uint8_t> out = CurrentPayload(edit, begin);
+  StoreU32(out.data(), kept);
+  StoreU32(out.data() + 4, manual);
+  edit.payload[begin] = std::move(out);
+  return true;
+}
+
+void RemapSlotChildRefs(std::vector<std::uint8_t>& buf, const StructuralEdit& e) {
+  const SqrefRemap move = [&e](std::vector<MergeRange>& ranges) {
+    shift_sqref_ranges(ranges, e.index, e.count, e.is_delete, e.row_axis);
+  };
+  const SqrefRemap cut = [&e](std::vector<MergeRange>& ranges) {
+    cut_sqref_ranges(ranges, e.index, e.count, e.is_delete, e.row_axis);
+  };
+  Edit edit = Open(buf);
+  bool changed = false;
+  bool cells_dropped = false;
+  const auto note = [&changed](Outcome outcome) {
+    changed = changed || outcome != Outcome::kUnchanged;
+    return outcome == Outcome::kEmptied;
+  };
+  for (std::size_t i = 0; i < edit.recs.size(); ++i) {
+    if (!edit.keep[i]) {
+      continue;
+    }
+    switch (edit.recs[i].type) {
+      case kBeginAFilter: {
+        changed = RemapAutoFilter(edit, i, e) || changed;
+        i = std::min(edit.Find(i, kEndAFilter), edit.recs.size() - 1U);
+        break;
+      }
+      case kBeginRwBrk:
+      case kBeginColBrk:
+        if ((edit.recs[i].type == kBeginRwBrk) == e.row_axis) {
+          changed = RemapBreaks(edit, i, edit.recs[i].type == kBeginRwBrk ? kEndRwBrk : kEndColBrk, e) || changed;
+        }
+        break;
+      case kRangeProtection:
+        if (note(RemapSqrfxAt(edit, i, 2U, move))) {
+          edit.Drop(i, i);
+        }
+        break;
+      case kSlc:
+        if (note(RemapRectAt(edit, i, 0U, true, move))) {
+          edit.Drop(i, i);
+          cells_dropped = true;
+        }
+        break;
+      case kBeginSortState:
+        if (note(RemapRectAt(edit, i, 2U, false, move))) {
+          edit.Drop(i, edit.Find(i, kEndSortState));
+        }
+        break;
+      case kBeginSortCond:
+        if (note(RemapRectAt(edit, i, 2U, false, move))) {
+          edit.Drop(i, edit.Find(i, kEndSortCond));
+        }
+        break;
+      case kCellWatch: {
+        // A watch on a deleted cell keeps its address.
+        const Outcome outcome = RemapRectAt(edit, i, 0U, true, move);
+        changed = changed || outcome == Outcome::kChanged;
+        break;
+      }
+      case kCellIgnoreEc:
+        // The first entry an edit empties takes every later entry with it.
+        if (note(RemapSqrfxAt(edit, i, 4U, cut))) {
+          for (std::size_t j = i; j < edit.recs.size() && edit.recs[j].type == kCellIgnoreEc; ++j) {
+            edit.Drop(j, j);
+          }
+        }
+        break;
+      case kBeginWebPubItem:
+        if (edit.recs[i].payload.size >= 4U && LoadU32(edit.recs[i].payload.data) == kWebSourceRange &&
+            note(RemapRectAt(edit, i, 9U, false, move))) {
+          edit.Drop(i, edit.Find(i, kEndWebPubItem));
+        }
+        break;
+      default:
+        break;
+    }
+  }
+  if (!changed) {
+    return;
+  }
+  if (cells_dropped) {
+    SettleScenarios(edit);
+  }
+  edit.DropEmpty(kBeginSortState, kEndSortState, kBeginSortCond);
+  edit.DropEmpty(kBeginCellIgnoreEcs, kEndCellIgnoreEcs, kCellIgnoreEc);
+  edit.DropEmpty(kBeginWebPubItems, kEndWebPubItems, kBeginWebPubItem);
+  for (std::size_t i = edit.Find(0, kBeginWebPubItems); i < edit.recs.size();
+       i = edit.Find(i + 1U, kBeginWebPubItems)) {
+    const std::size_t close = edit.Find(i, kEndWebPubItems);
+    const auto kept = static_cast<std::uint32_t>(CountKept(edit, i, close, kBeginWebPubItem));
+    if (edit.keep[i] && edit.recs[i].payload.size >= 4U && LoadU32(edit.recs[i].payload.data) != kept) {
+      std::vector<std::uint8_t> out = CurrentPayload(edit, i);
+      StoreU32(out.data(), kept);
+      edit.payload[i] = std::move(out);
+    }
+  }
+  edit.Write(buf);
+}
+
 }  // namespace
 
 void remap_tail_sqrefs(XlsbSheetTail& tail, const SqrefRemap& remap) {
   for (std::vector<std::uint8_t>* slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
     RemapSlotSqrefs(*slot, remap);
+  }
+}
+
+void remap_tail_child_refs(XlsbSheetTail& tail, const StructuralEdit& edit) {
+  for (std::vector<std::uint8_t>* slot :
+       {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
+    RemapSlotChildRefs(*slot, edit);
   }
 }
 

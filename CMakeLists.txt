@@ -147,6 +147,8 @@ set(FORMULON_CORE_SOURCES
   src/io/defined_names.cpp
   src/io/dynamic_array_formula.cpp
   src/io/ext_lst_refs.cpp
+  src/io/sqref_text.cpp
+  src/io/worksheet_child_refs.cpp
   src/io/future_functions.cpp
   src/io/iso_date.cpp
   src/io/ooxml_reader.cpp

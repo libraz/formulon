@@ -91,6 +91,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/tables_reader_test.cpp
   unit/io/workbook_kind_test.cpp
   unit/io/x14_structural_edit_fixture_test.cpp
+  unit/io/retained_children_edit_fixture_test.cpp
   unit/io/xml_escape_test.cpp
   unit/io/ooxml_external_link_writer_test.cpp
   unit/io/xml_utils_test.cpp

@@ -17,6 +17,7 @@
 #define FORMULON_IO_XLSB_TAIL_REFS_H_
 
 #include "io/ext_lst_refs.h"
+#include "io/worksheet_child_refs.h"
 #include "parser/ast_shift.h"
 #include "sheet_passthrough.h"
 
@@ -26,6 +27,15 @@ namespace formulon::io::xlsb {
 /// `remap`. An emptied range drops the block or sparkline, then a
 /// sparkline group left without sparklines, then a container left empty.
 void remap_tail_sqrefs(XlsbSheetTail& tail, const SqrefRemap& remap);
+
+/// Moves the coordinates of the other retained records that name cells for
+/// `edit`: the AutoFilter block and the manual breaks by the rules the model
+/// applies to its own copies (`shift_auto_filter`, the break shift), and the
+/// records behind the children `remap_worksheet_children` covers --
+/// BrtRangeProtection, the scenario and sort-state blocks, BrtCellWatch,
+/// BrtCellIgnoreEC and a range-sourced web-publish item -- by its rules.
+/// What an edit empties is dropped with its container.
+void remap_tail_child_refs(XlsbSheetTail& tail, const StructuralEdit& edit);
 
 /// Maps every reference in the retained sparkline, x14 CF rule and x14
 /// threshold formulas through `transform`, naming 3-D sheets through

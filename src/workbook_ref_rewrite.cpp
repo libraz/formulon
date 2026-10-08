@@ -14,6 +14,7 @@
 #include "eval/dep_graph.h"
 #include "eval/recalc_engine.h"
 #include "io/ext_lst_refs.h"
+#include "io/worksheet_child_refs.h"
 #include "io/xlsb/tail_refs.h"
 #include "io/xml_utils.h"
 #include "io/xsd_int.h"
@@ -365,9 +366,12 @@ void shift_retained_extension_ranges(Sheet& sheet, std::uint32_t index, std::uin
   if (io::remap_ext_lst_sqrefs(ext_lst, remap)) {
     sheet.set_ext_lst_xml(std::move(ext_lst));
   }
+  const StructuralEdit edit{index, count, is_delete, row_axis};
+  io::remap_worksheet_children(sheet.mutable_raw_extensions(), edit);
   if (!sheet.xlsb_tail().empty()) {
     XlsbSheetTail tail = sheet.xlsb_tail();
     io::xlsb::remap_tail_sqrefs(tail, remap);
+    io::xlsb::remap_tail_child_refs(tail, edit);
     sheet.set_xlsb_tail(std::move(tail));
   }
 }

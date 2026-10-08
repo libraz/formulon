@@ -97,6 +97,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   blank row of a whole column, so `TEXTJOIN(",",FALSE,A:A)` is `#CALC!`.
 - `ISREF` is TRUE for a cell, range or whole column in another workbook,
   written directly or bound by `LET`.
+- Row and column inserts and deletes move the cells named by worksheet
+  content kept for a lossless save, as Excel moves them: protected ranges,
+  scenario input cells, a sheet sort state, cell watches, ignored-error
+  ranges and web-publish ranges, and in XLSB the AutoFilter and manual page
+  breaks. A watch on a deleted cell keeps its address, an insert inside an
+  ignored-error range leaves the new cells out of it, and a sort state goes
+  with the last of its sort conditions, the AutoFilter's included.
 
 ## [0.13.0] - 2026-10-06
 

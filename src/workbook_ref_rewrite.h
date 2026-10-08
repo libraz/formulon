@@ -91,9 +91,10 @@ bool remap_book_views_xml(std::string& book_views_xml, const std::vector<std::ui
 bool rewrite_defined_names(std::vector<DefinedName>& names, const std::vector<const parser::RefTransform*>& per_sheet,
                            const parser::RefTransform& unowned_transform);
 
-// Moves the ranges inside `sheet`'s retained worksheet extensions -- the
-// raw `<extLst>` and the `.xlsb` tail records -- for a row/column edit, by
-// the rule `shift_sqref_ranges` applies to the modelled sqrefs. The sheet
+// Moves the ranges inside `sheet`'s retained worksheet content -- the raw
+// `<extLst>`, the unmodelled `<worksheet>` children and the `.xlsb` tail
+// records -- for a row/column edit, by the rule `shift_sqref_ranges` applies
+// to the modelled sqrefs, or `cut_sqref_ranges` where Excel cuts. The sheet
 // cannot do this in its own move: finding those ranges takes the
 // file-format readers. Formulas in the same content move with
 // `rewrite_sheet_metadata_formulas` against pre-edit coordinates, so call

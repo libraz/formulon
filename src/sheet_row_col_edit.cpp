@@ -306,6 +306,29 @@ void shift_sqref_ranges(std::vector<MergeRange>& ranges, std::uint32_t index, st
   }
 }
 
+void cut_sqref_ranges(std::vector<MergeRange>& ranges, std::uint32_t index, std::uint32_t count, bool is_delete,
+                      bool row_axis) {
+  std::vector<MergeRange> out;
+  out.reserve(ranges.size() * 2U);
+  for (const MergeRange& range : ranges) {
+    MergeRange rest = range;
+    // The part before the edit stays put; the rest moves as a range of its own.
+    if ((row_axis ? range.first_row : range.first_col) < index &&
+        index <= (row_axis ? range.last_row : range.last_col)) {
+      MergeRange head = range;
+      (row_axis ? head.last_row : head.last_col) = index - 1U;
+      out.push_back(head);
+      (row_axis ? rest.first_row : rest.first_col) = index;
+    }
+    bool drop = false;
+    ShiftAxisRange(rest, index, count, is_delete, row_axis, &drop);
+    if (!drop) {
+      out.push_back(rest);
+    }
+  }
+  ranges = std::move(out);
+}
+
 bool shift_auto_filter(AutoFilter& filter, std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis,
                        bool header_delete_removes) {
   if (filter.is_opaque()) {
@@ -334,7 +357,12 @@ bool shift_auto_filter(AutoFilter& filter, std::uint32_t index, std::uint32_t co
           kept.push_back(std::move(cond));
         }
       }
-      filter.sort->conditions = std::move(kept);
+      // A sort state goes with the last of its conditions.
+      if (kept.empty() && !filter.sort->conditions.empty()) {
+        filter.sort.reset();
+      } else {
+        filter.sort->conditions = std::move(kept);
+      }
     }
   }
   if (row_axis) {

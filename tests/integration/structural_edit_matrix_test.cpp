@@ -732,24 +732,18 @@ TEST(StructuralEditMatrix, DeletingEveryExtLstRangeEmptiesIt) {
   EXPECT_EQ(sheet.ext_lst_xml(), "");
 }
 
-// An unmodelled `<worksheet>` child is the structure a row/column edit does
-// not reach: it is retained verbatim, so a rectangle inside it keeps its
-// pre-edit coordinates. The reason is
-// `structural_edit_does_not_remap_unmodelled_worksheet_children` in
-// tests/divergence.yaml.
+// A retained `<worksheet>` child that names cells moves with a row/column
+// edit, as the modelled structures beside it do; the per-kind rules are
+// pinned against Excel in unit/io/retained_children_edit_fixture_test.cpp.
 
-TEST(StructuralEditMatrix, EditsLeaveRawWorksheetChildrenAtTheirPreEditRectangle) {
+TEST(StructuralEditMatrix, EditsMoveRawWorksheetChildrenWithTheModelledRanges) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
 
   // `<sortState>` is the everyday case: Excel writes it whenever a range
   // is sorted without a table, and it names a rectangle.
-  const std::string sort_state = "<sortState ref=\"A1:C10\"><sortCondition ref=\"A1:A10\"/></sortState>";
-  sheet.mutable_raw_extensions().push_back(WorksheetRawChild{11U, sort_state});
-
-  // Control: a modelled rectangle over the same cells, so an edit that did
-  // not run at all cannot be mistaken for one that ran and left the raw
-  // child alone.
+  sheet.mutable_raw_extensions().push_back(
+      WorksheetRawChild{11U, "<sortState ref=\"A1:C10\"><sortCondition ref=\"A1:A10\"/></sortState>"});
   sheet.mutable_merges().push_back(MergeRange{0U, 0U, 9U, 2U});
 
   ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, 0, 5)));
@@ -758,7 +752,7 @@ TEST(StructuralEditMatrix, EditsLeaveRawWorksheetChildrenAtTheirPreEditRectangle
   EXPECT_EQ(sheet.merges()[0].first_row, 5U);
   EXPECT_EQ(sheet.merges()[0].last_row, 14U);
   ASSERT_EQ(sheet.raw_extensions().size(), 1U);
-  EXPECT_EQ(sheet.raw_extensions()[0].xml, sort_state);
+  EXPECT_EQ(sheet.raw_extensions()[0].xml, "<sortState ref=\"A6:C15\"><sortCondition ref=\"A6:A15\"/></sortState>");
 }
 
 TEST(StructuralEditMatrix, DeleteRowsShrinksHyperlinkRange) {

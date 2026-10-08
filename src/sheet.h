@@ -52,6 +52,27 @@ namespace pivot {
 class PivotTable;
 }  // namespace pivot
 
+/// One row/column structural edit, as the coordinate mapping every
+/// sheet-attached structure derives from.
+///
+/// `index` is the 0-based band the edit starts at and `count` its width. On
+/// an insert, a coordinate `>= index` moves forward by `count`. On a delete,
+/// `[index, index + count)` is the deleted band — a coordinate inside it is
+/// dropped or clamped, and a coordinate past it moves back by `count`.
+///
+/// The four public `Sheet` edit methods each build one of these and hand it
+/// to `Sheet::shift_sheet_metadata`, which is the single place that
+/// enumerates the modelled structures. A structure that is not listed there
+/// does not move, and that failure is silent in a user's file —
+/// `tests/integration/structural_edit_matrix_test.cpp` asserts each one's
+/// post-edit coordinate.
+struct StructuralEdit {
+  std::uint32_t index = 0;
+  std::uint32_t count = 0;
+  bool is_delete = false;
+  bool row_axis = false;
+};
+
 /// Moves the ranges of one sqref (a conditional format's, or a retained x14
 /// copy of one) for a row/column edit: `count` rows or columns inserted or
 /// deleted at 0-based `index`. Ranges the edit deletes are removed, and a
@@ -59,8 +80,17 @@ class PivotTable;
 void shift_sqref_ranges(std::vector<MergeRange>& ranges, std::uint32_t index, std::uint32_t count, bool is_delete,
                         bool row_axis);
 
+/// Moves the ranges of an sqref that an edit cuts rather than stretches (same
+/// arguments as `shift_sqref_ranges`): a range the edit falls inside splits
+/// at `index`, so an insert leaves its new band uncovered and a delete
+/// leaves the two sides as separate ranges. Excel moves `<ignoredError>`
+/// ranges this way.
+void cut_sqref_ranges(std::vector<MergeRange>& ranges, std::uint32_t index, std::uint32_t count, bool is_delete,
+                      bool row_axis);
+
 /// Moves an AutoFilter for a row/column edit (same arguments as
-/// `shift_sqref_ranges`): its range and sort ranges follow the span rules,
+/// `shift_sqref_ranges`): its range and sort ranges follow the span rules, a
+/// sort state goes with the last of its conditions,
 /// a column delete removes the deleted columns' criteria and renumbers the
 /// later `colId`s down, and an insert strictly inside the range renumbers the
 /// `colId`s at or after it up. Returns false when the filter must be removed:
@@ -1306,10 +1336,8 @@ class Sheet {
   /// Mutable access for the OOXML reader.
   SheetPrintSettings& mutable_print_settings() noexcept { return print_settings_; }
 
-  /// Retention is byte-verbatim, so a row/column insert or delete does not
-  /// remap coordinates inside these elements. A retained child that names
-  /// cells (a `ref`, an `sqref`, a formula) keeps pointing at the
-  /// pre-edit coordinates while the model-owned structures beside it move.
+  /// Retention is verbatim except where a row/column edit moves the cells a
+  /// child names, by the rules in `io/worksheet_child_refs.h`.
   const WorksheetRawExtensions& raw_extensions() const noexcept { return raw_extensions_; }
   WorksheetRawExtensions& mutable_raw_extensions() noexcept { return raw_extensions_; }
 
@@ -1427,35 +1455,14 @@ class Sheet {
   void delete_cols(std::uint32_t col, std::uint32_t count);
 
  private:
-  /// One row/column structural edit, as the coordinate mapping every
-  /// sheet-attached structure derives from.
-  ///
-  /// `index` is the 0-based band the edit starts at and `count` its width. On
-  /// an insert, a coordinate `>= index` moves forward by `count`. On a delete,
-  /// `[index, index + count)` is the deleted band — a coordinate inside it is
-  /// dropped or clamped, and a coordinate past it moves back by `count`.
-  ///
-  /// The four public edit methods each build one of these and hand it to
-  /// `shift_sheet_metadata`, which is the single place that enumerates the
-  /// structures. A structure that is not listed there does not move, and that
-  /// failure is silent in a user's file — `tests/integration/
-  /// structural_edit_matrix_test.cpp` asserts each one's post-edit coordinate.
-  struct StructuralEdit {
-    std::uint32_t index = 0;
-    std::uint32_t count = 0;
-    bool is_delete = false;
-    bool row_axis = false;
-  };
-
   /// Applies `edit` to every sheet-attached structure other than the cells
   /// themselves (which each public edit method moves first, since the cell
   /// storage differs per axis).
   ///
   /// The retained `ext_lst_xml_`, `xlsb_tail_` and `raw_extensions_` are
   /// deliberately absent: the sheet does not parse them. The workbook edit
-  /// moves the x14 ranges and formulas in the first two, since that needs
-  /// the file-format readers; `raw_extensions_` children keep their pre-edit
-  /// rectangles. The AutoFilter moves through `shift_auto_filter`.
+  /// moves the coordinates inside them, since that needs the file-format
+  /// readers. The AutoFilter moves through `shift_auto_filter`.
   void shift_sheet_metadata(const StructuralEdit& edit);
 
   // ---------------------------------------------------------------------------

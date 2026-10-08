@@ -660,13 +660,16 @@ FM_API fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, const 
  * hyperlinks, tables, print areas, manual breaks and the auto-filter
  * range. The ranges and formulas inside the worksheet-level `<extLst>`
  * (the `x14` conditional-formatting block, sparkline groups, `x14`
- * validations) move with them, as Excel moves them.
+ * validations) move with them, as Excel moves them, and so do the cells
+ * named by the other worksheet content kept verbatim for a lossless save:
+ * protected ranges, scenarios, a sheet sort state, cell watches,
+ * ignored-error ranges and web-publish ranges.
  *
- * What they do not move is an unmodelled `<worksheet>` child the engine
- * retains byte-verbatim so a save does not drop it (a `<sortState>`, for
- * one): a `ref` inside it keeps its pre-edit rectangle, and nothing reports
- * it. An insert also does not copy the formatting of the row or column
- * before it onto the new one, which Excel does -- a sparkline included.
+ * What they do not move is the anchor of an embedded OLE object or form
+ * control, also kept verbatim: it keeps its pre-edit cell, and nothing
+ * reports it. An insert also does not copy the formatting of the row or
+ * column before it onto the new one, which Excel does -- a sparkline
+ * included.
  */
 
 /**

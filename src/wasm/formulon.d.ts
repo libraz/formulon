@@ -2535,13 +2535,15 @@ export interface Workbook {
    * hyperlinks, tables, print areas, manual breaks and the auto-filter
    * range. The ranges and formulas inside the worksheet `<extLst>` (the
    * `x14` conditional-formatting block, sparkline groups, `x14`
-   * validations) move with them, as Excel moves them.
+   * validations) move with them, as Excel moves them, and so do the cells
+   * named by the other worksheet content kept verbatim for a lossless save:
+   * protected ranges, scenarios, a sheet sort state, cell watches,
+   * ignored-error ranges and web-publish ranges.
    *
-   * They do not move an unmodelled `<worksheet>` child kept byte-verbatim
-   * so a save does not drop it (a `<sortState>`, for one): a `ref` inside
-   * it keeps its pre-edit rectangle, and nothing reports it. An insert also
-   * does not copy the formatting of the row or column before it onto the
-   * new one, which Excel does — a sparkline included.
+   * They do not move the anchor of an embedded OLE object or form control,
+   * also kept verbatim: it keeps its pre-edit cell, and nothing reports it.
+   * An insert also does not copy the formatting of the row or column before
+   * it onto the new one, which Excel does — a sparkline included.
    */
 
   /** Inserts `count` rows at `row` on `sheet` and rewrites cross-workbook
