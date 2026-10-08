@@ -131,8 +131,10 @@ file(GLOB _formulon_ironcalc_goldens CONFIGURE_DEPENDS
 foreach(_formulon_ironcalc_golden IN LISTS _formulon_ironcalc_goldens)
   get_filename_component(_formulon_ironcalc_file "${_formulon_ironcalc_golden}" NAME)
   string(REGEX REPLACE "\\.golden\\.json$" "" _formulon_ironcalc_suffix "${_formulon_ironcalc_file}")
-  string(REPLACE "__" "_" _formulon_ironcalc_suite_suffix "${_formulon_ironcalc_suffix}")
-  set(_formulon_ironcalc_suite "ironcalc_${_formulon_ironcalc_suite_suffix}")
+  # The importer's file name and suite name fold separators differently, so
+  # take the suite from the golden rather than deriving it from the name.
+  file(READ "${_formulon_ironcalc_golden}" _formulon_ironcalc_json)
+  string(JSON _formulon_ironcalc_suite GET "${_formulon_ironcalc_json}" suite)
   # PrintParamName (oracle_test.cpp) folds every character outside
   # [A-Za-z0-9_] to '_' when it builds the registered gtest name, because a
   # suite pulled from an upstream IronCalc sheet name can carry a '.' or '-'
