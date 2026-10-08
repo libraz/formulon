@@ -24,9 +24,42 @@ from .base import (
 )
 
 DisplayedText = Callable[[Any], Optional[str]]
+Evaluate = Callable[[str], Any]
+
+# ERROR.TYPE result -> canonical error name.
+_ERROR_TYPE_NAMES = {
+    1: "#NULL!",
+    2: "#DIV/0!",
+    3: "#VALUE!",
+    4: "#REF!",
+    5: "#NAME?",
+    6: "#NUM!",
+    7: "#N/A",
+    8: "#GETTING_DATA",
+    9: "#SPILL!",
+    10: "#CONNECT!",
+    11: "#BLOCKED!",
+    12: "#UNKNOWN!",
+    13: "#FIELD!",
+    14: "#CALC!",
+}
 
 
-def error_display_from_cell(cell, displayed_text: DisplayedText) -> Optional[str]:
+def _error_name_from_excel(evaluate: Optional[Evaluate], cell) -> Optional[str]:
+    """Asks Excel for the cell's error kind via ``ERROR.TYPE``; None if it cannot say."""
+
+    if evaluate is None:
+        return None
+    try:
+        code = evaluate(f"ERROR.TYPE({cell.get_address(external=True)})")
+    except Exception:
+        return None
+    if isinstance(code, bool) or not isinstance(code, (int, float)):
+        return None
+    return _ERROR_TYPE_NAMES.get(int(code))
+
+
+def error_display_from_cell(cell, displayed_text: DisplayedText, evaluate: Optional[Evaluate] = None) -> Optional[str]:
     """Returns the tokenised Excel error name for `cell`, or None.
 
     Walks four progressively weaker signals:
@@ -37,6 +70,10 @@ def error_display_from_cell(cell, displayed_text: DisplayedText) -> Optional[str
       4. ``cell.value`` is ``None`` AND the displayed text nonetheless
          starts with ``#``. This is the fallback path where the Python
          layer has coerced the error into ``None``.
+
+    A ``#`` text that none of these resolve (a localized name missing from the
+    table) is asked of Excel through ``ERROR.TYPE``; if that fails too, an
+    error cell must not be recorded as blank, so this raises.
     """
 
     raw = cell.value
@@ -75,6 +112,13 @@ def error_display_from_cell(cell, displayed_text: DisplayedText) -> Optional[str
         for name in _ERR_DISPLAY_NAMES:
             if text == name:
                 return name
+    if text and text.startswith("#"):
+        name = _error_name_from_excel(evaluate, cell)
+        if name is not None:
+            return name
+        # A non-empty string value that is not an error is plain text.
+        if not (isinstance(raw, str) and raw):
+            raise RuntimeError(f"unresolvable error text {text!r}; refusing to record the cell as blank")
     return None
 
 
@@ -88,7 +132,7 @@ def classify_value(cell, evaluate, displayed_text: DisplayedText) -> CaseResult:
     ``""`` or blank; without it (``None``) an empty read-back stays blank.
     """
 
-    err = error_display_from_cell(cell, displayed_text)
+    err = error_display_from_cell(cell, displayed_text, evaluate)
     if err is not None:
         return CaseResult(id="", kind="error", error_code=err)
 

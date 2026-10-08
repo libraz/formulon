@@ -218,8 +218,8 @@ _classify_python_scalar = cell_result.classify_python_scalar
 _array_cell_from_scalar = cell_result.array_cell_from_scalar
 
 
-def _error_display_from_cell(cell) -> Optional[str]:
-    return cell_result.error_display_from_cell(cell, _cell_displayed_text)
+def _error_display_from_cell(cell, evaluate=None) -> Optional[str]:
+    return cell_result.error_display_from_cell(cell, _cell_displayed_text, evaluate)
 
 
 def _classify_value(cell, evaluate) -> CaseResult:
@@ -229,7 +229,7 @@ def _classify_value(cell, evaluate) -> CaseResult:
 
 
 # Functions the shared result probes pass to Application.Evaluate.
-_EVALUATE_FUNCTIONS = ("ROWS", "COLUMNS", "TYPE")
+_EVALUATE_FUNCTIONS = ("ROWS", "COLUMNS", "TYPE", "ERROR.TYPE")
 _LOCAL_FUNCTION_NAMES: Dict[int, Dict[str, str]] = {}
 
 
@@ -256,7 +256,7 @@ def _app_evaluate(app):
     """Mac Application.Evaluate adapter shared by the result probes."""
 
     names = _LOCAL_FUNCTION_NAMES.get(id(app), {})
-    pattern = re.compile(r"\b(" + "|".join(_EVALUATE_FUNCTIONS) + r")\(")
+    pattern = re.compile(r"\b(" + "|".join(re.escape(fn) for fn in _EVALUATE_FUNCTIONS) + r")\(")
 
     return lambda expression: app.api.evaluate(
         name=pattern.sub(lambda m: names.get(m.group(1), m.group(1)) + "(", expression)

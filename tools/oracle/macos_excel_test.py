@@ -42,6 +42,18 @@ class _FakeCell:
         return "'[Book.xlsx]Sheet1'!$Z$1"
 
 
+class _FakeErrorTextCell:
+    """A cell whose error value the bridge coerced to None, leaving only displayed text."""
+
+    value = None
+
+    def __init__(self, text: str) -> None:
+        self.api = type("Api", (), {"string_value": text})()
+
+    def get_address(self, *, external=False):
+        return "'[Book.xlsx]Sheet1'!$Z$1"
+
+
 class _FakeAnchor:
     def __init__(
         self,
@@ -676,6 +688,32 @@ class MacExcelLocaleTest(unittest.TestCase):
         with patch.dict(macos_excel._LOCAL_FUNCTION_NAMES, {id(app): names}):
             macos_excel._app_evaluate(app)("ROWS([B]TYPE!$Z$1#)*16384+COLUMNS([B]TYPE!$Z$1#)")
         self.assertEqual(api.calls, [{"name": "ZEILEN([B]TYPE!$Z$1#)*16384+SPALTEN([B]TYPE!$Z$1#)"}])
+
+    def test_evaluate_rewrites_error_type_without_touching_type(self) -> None:
+        api = _FakeMacApi(1)
+        app = _FakeApp(api)
+        names = {"TYPE": "TYP", "ERROR.TYPE": "FEHLER.TYP"}
+        with patch.dict(macos_excel._LOCAL_FUNCTION_NAMES, {id(app): names}):
+            macos_excel._app_evaluate(app)("ERROR.TYPE(A1)+TYPE(A1)")
+        self.assertEqual(api.calls, [{"name": "FEHLER.TYP(A1)+TYP(A1)"}])
+
+    def test_unknown_localized_error_text_is_resolved_through_error_type(self) -> None:
+        cell = _FakeErrorTextCell("#\u00dcBERLAUF!")
+        calls = []
+
+        def evaluate(expression):
+            calls.append(expression)
+            return 9
+
+        result = macos_excel._classify_value(cell, evaluate)
+        self.assertEqual((result.kind, result.error_code), ("error", "#SPILL!"))
+        self.assertEqual(calls, ["ERROR.TYPE('[Book.xlsx]Sheet1'!$Z$1)"])
+
+    def test_unresolvable_error_text_raises_instead_of_recording_blank(self) -> None:
+        with self.assertRaises(RuntimeError):
+            macos_excel._classify_value(_FakeErrorTextCell("#XYZ!"), lambda _expression: 0)
+        with self.assertRaises(RuntimeError):
+            macos_excel._classify_value(_FakeErrorTextCell("#XYZ!"), None)
 
     def test_mac_locale_joins_language_and_region(self) -> None:
         values = {

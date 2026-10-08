@@ -134,8 +134,8 @@ _read_margins = windows_page_setup.read_margins
 _read_roundtrip = windows_page_setup.read_roundtrip
 
 
-def _error_display_from_cell(cell) -> Optional[str]:
-    return cell_result.error_display_from_cell(cell, _cell_displayed_text)
+def _error_display_from_cell(cell, evaluate=None) -> Optional[str]:
+    return cell_result.error_display_from_cell(cell, _cell_displayed_text, evaluate)
 
 
 def _classify_value(cell, evaluate=None) -> CaseResult:
