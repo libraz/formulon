@@ -12,6 +12,8 @@
 #include <string>
 #include <string_view>
 
+#include "eval/eval_profile_scope.h"
+#include "excel_locale.h"
 #include "sheet.h"
 #include "utils/a1_column.h"
 
@@ -317,7 +319,7 @@ struct R1C1Axis {
 // Reads one `R`/`C` axis at `text[*i]` when the marker matches `marker`.
 // Returns false only on malformed input; an absent axis leaves `*out`
 // unset and still returns true.
-bool parse_r1c1_axis(std::string_view text, std::size_t* i, char marker, R1C1Axis* out) {
+bool parse_r1c1_axis(std::string_view text, std::size_t* i, const LocaleFacts& facts, char marker, R1C1Axis* out) {
   if (*i >= text.size()) {
     return true;
   }
@@ -330,7 +332,7 @@ bool parse_r1c1_axis(std::string_view text, std::size_t* i, char marker, R1C1Axi
   }
   ++*i;
   out->present = true;
-  if (*i < text.size() && text[*i] == '[') {
+  if (*i < text.size() && text[*i] == facts.r1c1_open) {
     ++*i;
     bool negative = false;
     if (*i < text.size() && (text[*i] == '-' || text[*i] == '+')) {
@@ -346,7 +348,7 @@ bool parse_r1c1_axis(std::string_view text, std::size_t* i, char marker, R1C1Axi
       }
       ++*i;
     }
-    if (*i == digits_start || *i >= text.size() || text[*i] != ']') {
+    if (*i == digits_start || *i >= text.size() || text[*i] != facts.r1c1_close) {
       return false;
     }
     ++*i;
@@ -390,11 +392,12 @@ bool resolve_r1c1_axis(const R1C1Axis& axis, bool base_present, std::uint32_t ba
 }
 
 // Parses one `R...C...` endpoint. At least one axis must be written.
-bool parse_r1c1_endpoint(std::string_view text, std::size_t* i, R1C1Axis* row, R1C1Axis* col) {
-  if (!parse_r1c1_axis(text, i, 'R', row)) {
+bool parse_r1c1_endpoint(std::string_view text, std::size_t* i, const LocaleFacts& facts, R1C1Axis* row,
+                         R1C1Axis* col) {
+  if (!parse_r1c1_axis(text, i, facts, facts.r1c1_row, row)) {
     return false;
   }
-  if (!parse_r1c1_axis(text, i, 'C', col)) {
+  if (!parse_r1c1_axis(text, i, facts, facts.r1c1_col, col)) {
     return false;
   }
   return row->present || col->present;
@@ -403,6 +406,7 @@ bool parse_r1c1_endpoint(std::string_view text, std::size_t* i, R1C1Axis* row, R
 }  // namespace
 
 A1Parse parse_r1c1_ref(std::string_view text, const R1C1Base& base) {
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
   A1Parse out;
   if (text.empty()) {
     return out;
@@ -414,7 +418,7 @@ A1Parse parse_r1c1_ref(std::string_view text, const R1C1Base& base) {
 
   R1C1Axis row1;
   R1C1Axis col1;
-  if (!parse_r1c1_endpoint(text, &i, &row1, &col1)) {
+  if (!parse_r1c1_endpoint(text, &i, facts, &row1, &col1)) {
     return out;
   }
   R1C1Axis row2 = row1;
@@ -424,7 +428,7 @@ A1Parse parse_r1c1_ref(std::string_view text, const R1C1Base& base) {
     ++i;
     row2 = R1C1Axis{};
     col2 = R1C1Axis{};
-    if (!parse_r1c1_endpoint(text, &i, &row2, &col2)) {
+    if (!parse_r1c1_endpoint(text, &i, facts, &row2, &col2)) {
       return out;
     }
     // A range whose endpoints name different axes (`R2:R3C4`) has no

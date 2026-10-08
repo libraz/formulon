@@ -21,12 +21,14 @@
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/implicit_intersection.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
 #include "eval/text_format/display_text.h"
 #include "eval/text_format/number_format.h"
+#include "excel_locale.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -287,12 +289,14 @@ std::string_view number_format_for_xf(const CellXf* xf, const EvalContext& ctx) 
 }
 
 std::string_view cell_format_code(const CellXf* xf) {
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  const std::string_view general(&facts.cell_format_general, 1);
   if (xf == nullptr) {
-    return "G";
+    return general;
   }
   switch (xf->num_fmt_id) {
     case 0:
-      return "G";
+      return general;
     case 1:
       return "F0";
     case 2:
@@ -335,7 +339,7 @@ std::string_view cell_format_code(const CellXf* xf) {
     case 21:
       return "D8";
     default:
-      return "G";
+      return general;
   }
 }
 
@@ -549,13 +553,14 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     // and agrees whether it arrived as a constant or as the result of
     // `=""`. The two are indistinguishable to every predicate Excel
     // exposes, so no cell metadata is needed to tell them apart.
+    const LocaleFacts& facts = locale_facts(current_eval_profile());
     if (resolved.is_blank()) {
-      return arena_text(arena, "b");
+      return arena_text(arena, std::string_view(&facts.cell_type_blank, 1));
     }
     if (resolved.is_text()) {
-      return arena_text(arena, "l");
+      return arena_text(arena, std::string_view(&facts.cell_type_label, 1));
     }
-    return arena_text(arena, "v");
+    return arena_text(arena, std::string_view(&facts.cell_type_value, 1));
   }
 
   // Reference-independent keys. These ignore the supplied reference

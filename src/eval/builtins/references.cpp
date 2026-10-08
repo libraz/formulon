@@ -16,7 +16,9 @@
 #include "eval/a1_parse.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
+#include "excel_locale.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -223,21 +225,22 @@ Value Address(const Value* args, std::uint32_t arity, Arena& arena) {
     // / `C[0]` when the numeric value is read as an absolute coordinate
     // and the caller still asked for the relative form — this matches
     // Excel's "R[0]C[0] relative to the current cell" semantics.
-    out.push_back('R');
+    const LocaleFacts& facts = locale_facts(current_eval_profile());
+    out.push_back(facts.r1c1_row);
     if (row_abs) {
       out.append(std::to_string(row));
     } else {
-      out.push_back('[');
+      out.push_back(facts.r1c1_open);
       out.append(std::to_string(row));
-      out.push_back(']');
+      out.push_back(facts.r1c1_close);
     }
-    out.push_back('C');
+    out.push_back(facts.r1c1_col);
     if (col_abs) {
       out.append(std::to_string(col));
     } else {
-      out.push_back('[');
+      out.push_back(facts.r1c1_open);
       out.append(std::to_string(col));
-      out.push_back(']');
+      out.push_back(facts.r1c1_close);
     }
   }
 

@@ -82,6 +82,10 @@ struct R1C1Base {
 /// and reports its result in the same `A1Parse` shape so both styles
 /// reach one consumer.
 ///
+/// The row/column letters and the relative brackets follow the current
+/// eval profile (`R`/`C` and `[ ]` for ja/en, `Z`/`S` and `( )` for de, ...);
+/// another locale's spelling is malformed.
+///
 /// An axis is written either absolutely (`R5`, 1-based) or relative to
 /// `base` (`R[-2]`, or a bare `R` meaning offset 0). An endpoint that
 /// names only one axis is unbounded along the other — `R5` is the whole
