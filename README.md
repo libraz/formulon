@@ -13,6 +13,8 @@ Formulon is a headless, Excel-compatible calculation engine — a C++17 core tha
 
 No Excel installation, no Microsoft runtime, no COM automation required. The WASM build runs in browsers and Node, and the Python package runs the same WASM core through `wasmtime`; native CLI binaries ship for `darwin-arm64`, `linux-x64`, and `linux-arm64`.
 
+Formulas are parsed with English function names and the separators the file formats store, so formula syntax does not change with the locale. What the ja-JP profile does change includes text width and kana handling, the byte-counting `*B` functions such as `LENB`, `CODE` / `CHAR`, environment values from `INFO` / `CELL`, Japanese date text such as `年月日` forms and eras, and PivotTable labels. Only ja-JP has been captured against Excel, so no English-locale profile is exposed yet; see [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles).
+
 ## Install
 
 ```bash
@@ -145,7 +147,7 @@ Feedback, issue reports, and oracle divergence reports are very welcome.
 
 ## Contributing
 
-The fastest way to help right now is to **donate Excel oracle data from your locale**. If you run Excel 365 anywhere other than Mac ja-JP, one command (`make oracle-contribute`) drives Excel, captures goldens, and walks you through the PR. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full flow and the rationale for why this is community-driven.
+The fastest way to help right now is to **donate Excel oracle data from your locale**. If you run Excel 365 on Windows, one command (`make oracle-contribute`) drives Excel, captures goldens, and walks you through the PR. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full flow and the rationale for why this is community-driven.
 
 ## License
 

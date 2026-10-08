@@ -13,6 +13,8 @@
 
 Excel 本体、Microsoft ランタイム、COM オートメーションは実行時には不要です。WASM 版はブラウザと Node で動作し、Python 版は `wasmtime` 経由で同じ WASM コアを呼び出します。ネイティブ CLI は `darwin-arm64` / `linux-x64` / `linux-arm64` 向けに配布しています。
 
+数式は英語の関数名と、ファイル形式が保存する区切り文字で解析するので、数式の書き方はロケールによって変わりません。ja-JP プロファイルによって変わる挙動には、文字幅とかなの扱い、`LENB` などバイト単位で数える `*B` 系の関数、`CODE` / `CHAR`、`INFO` / `CELL` が返す環境値、`年月日` 表記や和暦などの日本語の日付文字列、ピボットテーブルのラベルなどがあります。Excel と突き合わせて取得したのは ja-JP だけなので、英語ロケールのプロファイルはまだ公開していません。詳しくは [ロケールプロファイル](https://formulon.libraz.net/ja/compatibility/locale-profiles) を参照してください。
+
 ## インストール
 
 ```bash
@@ -122,7 +124,7 @@ OOXML reader / writer はシート、スタイル、条件付き書式、コメ�
 
 ## コントリビューション
 
-いちばん助かるのは、**手元の Excel から oracle データを提供していただくこと**です。Mac ja-JP 以外の Excel 365 をお持ちなら、`make oracle-contribute` で Excel を駆動して golden を取得し、PR の手順まで進められます。詳しくは [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+いちばん助かるのは、**手元の Excel から oracle データを提供していただくこと**です。Windows の Excel 365 をお持ちなら、`make oracle-contribute` で Excel を駆動して golden を取得し、PR の手順まで進められます。詳しくは [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
 
 ## ライセンス
 

@@ -55,10 +55,13 @@ ways no amount of code review can paper over:
 
 The maintainer team can't reproduce these from a single install:
 
-1. **Excel locale isn't a runtime switch.** It's tied to system
-   language + Office language pack + (on Windows) registry. Switching
-   requires editing OS settings and restarting Excel — not automatable
-   on a CI runner.
+1. **Windows Excel's locale follows the system.** It's tied to the OS
+   language, the Office language pack and the registry, so switching it
+   means editing OS settings and restarting Excel. Mac Excel instead
+   takes its calculation locale from two per-app settings (see
+   [Capturing another locale on a Mac](#capturing-another-locale-on-a-mac)),
+   so Mac locales can be captured from one install; Windows locales
+   still need a contributor who runs them.
 2. **Excel licenses are per-account / per-platform.** The maintainer
    team has Mac Excel 365 ja-JP and one Windows Microsoft 365 ja-JP
    install. Practically and legally, we cannot run "all locales" on one
@@ -97,16 +100,35 @@ Run `make oracle-contribute-list` for the current set. It reads
 alongside the subset your host can actually drive, so it never drifts
 out of step with the file above.
 
-Two groups of `wanted` slots are worth calling out. **`mac-365-en_US`**
-and **`win-365-en_US`** gate the English behavior profiles: those
-profiles stay unexposed until matching EN oracle data and verified
-locale-specific behavior exist, so a capture from either host is what
-unblocks them. **`win-365-de_DE`** is the first decimal-comma locale and
+Two groups of `wanted` slots are worth calling out. **`win-365-en_US`**
+pairs with the maintainer-captured `mac-365-en_US` to pin the English
+behavior on both hosts. **`win-365-de_DE`** is the first decimal-comma locale and
 reaches `TEXT` formatting and `DATEVALUE` parsing paths that neither
 ja-JP nor en-US touches.
 
 If your locale isn't listed at all, see
 [Adding a new target](#adding-a-new-target).
+
+### Capturing another locale on a Mac
+
+Mac Excel reads two settings from its own defaults domain, and each moves
+a different set of results: `AppleLanguages` (the `CHAR` / `CODE` code
+page, `LENB`, `ASC`, era and day names, `NUMBERSTRING`) and `AppleLocale`
+(currency, date order, `TEXT` format keywords). Set both, then relaunch
+Excel:
+
+```bash
+osascript -e 'tell application "Microsoft Excel" to quit'
+defaults write com.microsoft.Excel AppleLanguages -array en-US
+defaults write com.microsoft.Excel AppleLocale en_US
+open -a "Microsoft Excel"
+make oracle-gen TARGET=mac-365-en_US
+```
+
+The generator records the locale it reads back from those settings, and
+warns when it differs from the target's. Remove both keys
+(`defaults delete com.microsoft.Excel AppleLanguages`, likewise
+`AppleLocale`) to return Excel to the system locale.
 
 ### Prerequisites
 
