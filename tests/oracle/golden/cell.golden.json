@@ -2,11 +2,11 @@
   "suite": "cell",
   "description": "CELL(info_type, [reference]) — info_type dispatch covering address/col/row/contents/type and the metadata stubs (filename/format/color/parentheses/prefix/protect/width).",
   "environment": {
-    "excel_version": "16.112.1",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-20T20:08:49Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -239,6 +239,141 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "cell_contents_implicit_intersection_at",
+      "formula": "=CELL(\"contents\",@F1:F4)",
+      "setup": {
+        "F1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 44.0
+        }
+      },
+      "formula_cell": "G2",
+      "expect": {
+        "kind": "number",
+        "value": 22.0
+      }
+    },
+    {
+      "id": "cell_row_implicit_intersection_at",
+      "formula": "=CELL(\"row\",@F1:F4)",
+      "setup": {
+        "F1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 44.0
+        }
+      },
+      "formula_cell": "G2",
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "cell_address_implicit_intersection_at",
+      "formula": "=CELL(\"address\",@F1:F4)",
+      "setup": {
+        "F1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 44.0
+        }
+      },
+      "formula_cell": "G2",
+      "expect": {
+        "kind": "text",
+        "value": "$F$2"
+      }
+    },
+    {
+      "id": "cell_type_implicit_intersection_at",
+      "formula": "=CELL(\"type\",@F1:F4)",
+      "setup": {
+        "F1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "F2": {
+          "kind": "text",
+          "value": "label"
+        },
+        "F3": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 44.0
+        }
+      },
+      "formula_cell": "G2",
+      "expect": {
+        "kind": "text",
+        "value": "l"
+      }
+    },
+    {
+      "id": "cell_contents_implicit_intersection_single",
+      "formula": "=CELL(\"contents\",SINGLE(F1:F4))",
+      "setup": {
+        "F1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 44.0
+        }
+      },
+      "formula_cell": "G2",
+      "expect": {
+        "kind": "number",
+        "value": 22.0
       }
     }
   ]

@@ -165,8 +165,9 @@ bool ReadFixedWideString(ByteSpan& cursor, std::uint32_t units, std::string& out
 }
 
 /// True when `name` carries one of Excel's hidden storage prefixes, i.e.
-/// the record is a `_xlfn.<FN>` future-function or `_xlpm.<param>`
-/// LET / LAMBDA-parameter placeholder rather than a user-visible defined
+/// the record is a `_xlfn.<FN>` future-function, `_xlpm.<param>`
+/// LET / LAMBDA-parameter or `_xleta.<FN>` function-value placeholder
+/// rather than a user-visible defined
 /// name. Matched case-insensitively, the same way `ptg_reader.cpp`
 /// resolves these names during Ptg decode.
 ///
@@ -175,7 +176,7 @@ bool ReadFixedWideString(ByteSpan& cursor, std::uint32_t units, std::string& out
 /// user chose to hide from the Name Manager, and both this reader's
 /// writer counterpart and Excel itself store the two the same way.
 bool IsStoragePlaceholderName(std::string_view name) {
-  constexpr std::string_view kPrefixes[] = {"_xlfn.", "_xlpm."};
+  constexpr std::string_view kPrefixes[] = {"_xlfn.", "_xlpm.", "_xleta."};
   for (const std::string_view prefix : kPrefixes) {
     if (name.size() < prefix.size()) {
       continue;

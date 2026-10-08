@@ -93,6 +93,16 @@ bool is_external_range_arg(const parser::AstNode& arg, const EvalContext& ctx) {
   return resolve_range_binding(arg, ctx.name_env(), /*accept_ref=*/false).kind() == parser::NodeKind::ExternalRef;
 }
 
+/// `resolve_range_arg` for the range-taking conditional aggregates, which
+/// reject a 3-D reference with `#VALUE!`.
+Expected<RangeResult, ErrorCode> resolve_conditional_range(const parser::AstNode& arg, Arena& arena,
+                                                           const FunctionRegistry& registry, const EvalContext& ctx) {
+  if (resolve_range_binding(arg, ctx.name_env(), /*accept_ref=*/false).kind() == parser::NodeKind::Ref3D) {
+    return ErrorCode::Value;
+  }
+  return resolve_range_arg(arg, arena, registry, ctx);
+}
+
 /// True when any argument of `call` in `[first, arity)`, stepping by `step`,
 /// is an external range.
 bool any_external_range_arg(const parser::AstNode& call, std::uint32_t first, std::uint32_t step,
@@ -142,7 +152,7 @@ bool resolve_criteria_pairs(const parser::AstNode& call, std::uint32_t first_pai
   for (std::uint32_t k = 0; k < pair_count; ++k) {
     const std::uint32_t range_idx = first_pair_index + (k * 2);
     const std::uint32_t crit_idx = range_idx + 1;
-    auto resolved = resolve_range_arg(call.as_call_arg(range_idx), arena, registry, ctx);
+    auto resolved = resolve_conditional_range(call.as_call_arg(range_idx), arena, registry, ctx);
     if (!resolved) {
       *out_err_value = Value::error(resolved.error());
       return false;
@@ -262,7 +272,7 @@ bool resolve_optional_value_range(const parser::AstNode& arg, std::uint32_t crit
     return true;
   }
 
-  auto resolved = resolve_range_arg(arg, arena, registry, ctx);
+  auto resolved = resolve_conditional_range(arg, arena, registry, ctx);
   if (!resolved) {
     *out_err_value = Value::error(resolved.error());
     return false;
@@ -280,7 +290,7 @@ struct IfsInputs {
 
 bool resolve_ifs_inputs(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, IfsInputs* out, Value* out_err_value) {
-  auto value_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+  auto value_resolved = resolve_conditional_range(call.as_call_arg(0), arena, registry, ctx);
   if (!value_resolved) {
     *out_err_value = Value::error(value_resolved.error());
     return false;
@@ -387,7 +397,7 @@ struct IfInputs {
 
 bool resolve_if_inputs(const parser::AstNode& call, std::uint32_t arity, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx, IfInputs* out, Value* out_err) {
-  auto crit_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+  auto crit_resolved = resolve_conditional_range(call.as_call_arg(0), arena, registry, ctx);
   if (!crit_resolved) {
     *out_err = Value::error(crit_resolved.error());
     return false;
@@ -499,7 +509,7 @@ Value eval_countif_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (is_external_range_arg(call.as_call_arg(0), ctx)) {
     return Value::error(ErrorCode::Value);
   }
-  auto resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+  auto resolved = resolve_conditional_range(call.as_call_arg(0), arena, registry, ctx);
   if (!resolved) {
     return Value::error(resolved.error());
   }
@@ -584,7 +594,7 @@ Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const Functi
   // Resolve the first criteria range to fix the expected shape.
   std::vector<std::vector<Value>> criteria_cells;
   std::vector<Value> criteria;
-  auto first_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+  auto first_resolved = resolve_conditional_range(call.as_call_arg(0), arena, registry, ctx);
   if (!first_resolved) {
     return Value::error(first_resolved.error());
   }

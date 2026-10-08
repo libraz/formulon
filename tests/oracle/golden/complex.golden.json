@@ -2,11 +2,11 @@
   "suite": "complex",
   "description": "Excel's complex-number family: COMPLEX + the 24 IM* functions. Cases focus on the formatting rules (pure real, pure imag, +/-1 coefficient elision, alternate 'j' suffix), the arithmetic core (IMSUM / IMSUB / IMPRODUCT / IMDIV / IMPOWER) including mixed-suffix error cases, and exponential / logarithmic / root operations where floating-point drift is most likely. Trigonometric and hyperbolic variants are exercised at stable points (z=0, pure real) to keep goldens robust.\n",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-05,
@@ -1264,6 +1264,259 @@
       "expect": {
         "kind": "text",
         "value": "0.648054273663885"
+      }
+    },
+    {
+      "id": "atp_imabs_bool",
+      "formula": "=IMABS(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_imabs_boolcell",
+      "formula": "=IMABS(A1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_complex_bool",
+      "formula": "=COMPLEX(TRUE,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_complex_omit",
+      "formula": "=COMPLEX(,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_complex_boolcell",
+      "formula": "=COMPLEX(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_imreal_bool",
+      "formula": "=IMREAL(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_imaginary_bool",
+      "formula": "=IMAGINARY(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_imconjugate_bool",
+      "formula": "=IMCONJUGATE(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_imargument_bool",
+      "formula": "=IMARGUMENT(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_imsum_bool",
+      "formula": "=IMSUM(TRUE,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_imsum_omit",
+      "formula": "=IMSUM(,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_imsub_bool",
+      "formula": "=IMSUB(TRUE,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_imsub_omit",
+      "formula": "=IMSUB(,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_improduct_bool",
+      "formula": "=IMPRODUCT(TRUE,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_improduct_omit",
+      "formula": "=IMPRODUCT(,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_imdiv_bool",
+      "formula": "=IMDIV(TRUE,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_imdiv_omit",
+      "formula": "=IMDIV(,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_impower_bool",
+      "formula": "=IMPOWER(TRUE,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_impower_omit",
+      "formula": "=IMPOWER(,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_imexp_bool",
+      "formula": "=IMEXP(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_imln_bool",
+      "formula": "=IMLN(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_imsqrt_bool",
+      "formula": "=IMSQRT(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_imsin_bool",
+      "formula": "=IMSIN(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_imcos_bool",
+      "formula": "=IMCOS(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_imtan_bool",
+      "formula": "=IMTAN(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_imsinh_bool",
+      "formula": "=IMSINH(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "opt_complex_suffix_omit",
+      "formula": "=COMPLEX(1,1,)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1+i"
       }
     }
   ]

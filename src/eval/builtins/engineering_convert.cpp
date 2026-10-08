@@ -408,7 +408,7 @@ Value Convert(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 void register_engineering_convert_builtins(FunctionRegistry& registry) {
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"CONVERT", 3u, 3u, &Convert},
+      builtins_detail::analysis_toolpak({"CONVERT", 3u, 3u, &Convert}),
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

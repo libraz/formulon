@@ -316,6 +316,13 @@ TEST(BuiltinsEngineeringSpecial, BesselKNegativeXIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+// ERF is the one Analysis-ToolPak function whose omitted optional slot is #N/A.
+TEST(EngineeringSpecialAnalysisToolPak, ErfOmittedUpperLimitIsNA) {
+  const Value v = EvalSource("=ERF(0.5,)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

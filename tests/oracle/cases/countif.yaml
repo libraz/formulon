@@ -229,3 +229,11 @@ cases:
     description: "\">\"&B1 builds comparator >15 from cell"
     setup: { A1: 10, A2: 20, A3: 30, B1: 15 }
     formula: "=COUNTIF(A1:A3,\">\"&B1)"
+
+  # A 3-D reference is not a valid range argument.
+  - id: countif_three_d_reference_value_error
+    setup:
+      'Sheet1!A1': 1
+      'Sheet2!A1': 1
+      'Sheet3!A1': 1
+    formula: '=COUNTIF(Sheet1:Sheet3!A1,1)'

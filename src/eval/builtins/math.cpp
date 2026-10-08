@@ -69,8 +69,9 @@ Value Int_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Helper: read the optional `digits` argument of TRUNC / ROUND-family.
 // Returns the integer count of decimal places, an `ErrorCode` if the
 // argument cannot be coerced or is non-finite (NaN/Inf), or 0 when no
-// second argument is supplied.
-Expected<int, ErrorCode> read_digits(const Value* args, std::uint32_t arity, std::uint32_t index) {
+// second argument is supplied. `snap` applies `snap_near_integer` before the
+// truncation (ROUND only).
+Expected<int, ErrorCode> read_digits(const Value* args, std::uint32_t arity, std::uint32_t index, bool snap) {
   if (arity <= index) {
     return 0;
   }
@@ -90,7 +91,7 @@ Expected<int, ErrorCode> read_digits(const Value* args, std::uint32_t arity, std
   // before converting; every caller compares against thresholds (+/-308) far
   // inside this range, so saturating carries the same meaning as the real
   // magnitude.
-  const double truncated = std::trunc(d);
+  const double truncated = std::trunc(snap ? snap_near_integer(d) : d);
   constexpr double kIntMax = 2147483647.0;
   constexpr double kIntMin = -2147483648.0;
   if (truncated >= kIntMax) {
@@ -109,12 +110,12 @@ Expected<int, ErrorCode> read_digits(const Value* args, std::uint32_t arity, std
 // beyond ~308 places a double has no digits left to round (a no-op), and
 // below ~-308 every finite double rounds to a multiple of 10^|digits|, i.e. 0.
 template <typename Scale>
-Value round_to_digits(const Value* args, std::uint32_t arity, Scale scale) {
+Value round_to_digits(const Value* args, std::uint32_t arity, Scale scale, bool snap_digits = false) {
   auto value = coerce_to_number(args[0]);
   if (!value) {
     return Value::error(value.error());
   }
-  auto digits = read_digits(args, arity, 1);
+  auto digits = read_digits(args, arity, 1, snap_digits);
   if (!digits) {
     return Value::error(digits.error());
   }
@@ -246,11 +247,14 @@ Value Power(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // halves at the same scale, so values that are truly off the boundary
 // are unaffected.
 Value Round(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return round_to_digits(args, 2, [](double x, double factor) {
-    const double scaled = x * factor;
-    const double bias = std::copysign(std::fabs(scaled) * 2.0 * std::numeric_limits<double>::epsilon(), scaled);
-    return to_finite_value(std::round(scaled + bias) / factor);
-  });
+  return round_to_digits(
+      args, 2,
+      [](double x, double factor) {
+        const double scaled = x * factor;
+        const double bias = std::copysign(std::fabs(scaled) * 2.0 * std::numeric_limits<double>::epsilon(), scaled);
+        return to_finite_value(std::round(scaled + bias) / factor);
+      },
+      /*snap_digits=*/true);
 }
 
 // ROUNDDOWN - always toward zero. `ROUNDDOWN(2.99, 0) = 2`,
@@ -569,7 +573,7 @@ void register_math_builtins(FunctionRegistry& registry) {
       {"SQRT", 1u, 1u, &Sqrt},
       {"MOD", 2u, 2u, &Mod},
       {"POWER", 2u, 2u, &Power},
-      {"QUOTIENT", 2u, 2u, &Quotient},
+      builtins_detail::analysis_toolpak({"QUOTIENT", 2u, 2u, &Quotient}),
       {"ROUND", 2u, 2u, &Round},
       {"ROUNDDOWN", 2u, 2u, &RoundDown},
       {"ROUNDUP", 2u, 2u, &RoundUp},
@@ -577,8 +581,7 @@ void register_math_builtins(FunctionRegistry& registry) {
       {"ODD", 1u, 1u, &Odd},
       {"CEILING", 2u, 2u, &Ceiling},
       {"FLOOR", 2u, 2u, &Floor},
-      {"MROUND", 2u, 2u, &MRound, true, false, false, false, false, FunctionDef::BlankScalarPolicy::RejectLiteralEmpty,
-       ErrorCode::NA},
+      builtins_detail::analysis_toolpak({"MROUND", 2u, 2u, &MRound}),
       {"CEILING.MATH", 1u, 3u, &CeilingMath},
       {"FLOOR.MATH", 1u, 3u, &FloorMath},
   };

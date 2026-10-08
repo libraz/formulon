@@ -349,3 +349,101 @@ cases:
   - id: permutationa_fractional_truncates
     description: "Both arguments truncate toward zero before computation."
     formula: "=PERMUTATIONA(3.9, 2.5)"
+
+  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  #    arguments, and the near-integer snap of integer arguments --------------
+  - id: arabic_iim
+    formula: "=ARABIC(\"IIM\")"
+
+  - id: arabic_im
+    formula: "=ARABIC(\"IM\")"
+
+  - id: arabic_iix
+    formula: "=ARABIC(\"IIX\")"
+
+  - id: arabic_iic
+    formula: "=ARABIC(\"IIC\")"
+
+  - id: arabic_vx
+    formula: "=ARABIC(\"VX\")"
+
+  - id: arabic_xxc
+    formula: "=ARABIC(\"XXC\")"
+
+  - id: th_fact_230
+    formula: "=FACT(10.99999977)"
+
+  - id: th_fact_235
+    formula: "=FACT(10.999999765)"
+
+  - id: th_fact_238
+    formula: "=FACT(10.9999997616)"
+
+  - id: th_fact_239
+    formula: "=FACT(10.999999761)"
+
+  - id: th_fact_240
+    formula: "=FACT(10.99999976)"
+
+  - id: th_fact_245
+    formula: "=FACT(10.999999755)"
+
+  - id: th_fact_250
+    formula: "=FACT(10.99999975)"
+
+  - id: th_fact_260
+    formula: "=FACT(10.99999974)"
+
+  - id: pf_permut
+    formula: "=PERMUT(5.9999999,2)"
+
+  - id: atp_gcd_bool
+    formula: "=GCD(TRUE,2)"
+
+  - id: atp_gcd_omit
+    formula: "=GCD(,2)"
+
+  - id: atp_gcd_boolcell
+    setup: { A1: true }
+    formula: "=GCD(A1,2)"
+
+  - id: atp_lcm_bool
+    formula: "=LCM(TRUE,2)"
+
+  - id: atp_lcm_omit
+    formula: "=LCM(,2)"
+
+  - id: atp_lcm_boolcell
+    setup: { A1: true }
+    formula: "=LCM(A1,2)"
+
+  - id: atp_factdouble_bool
+    formula: "=FACTDOUBLE(TRUE)"
+
+  - id: atp_factdouble_boolcell
+    setup: { A1: true }
+    formula: "=FACTDOUBLE(A1)"
+
+  - id: atp_sqrtpi_bool
+    formula: "=SQRTPI(TRUE)"
+
+  - id: atp_sqrtpi_boolcell
+    setup: { A1: true }
+    formula: "=SQRTPI(A1)"
+
+  - id: atp_multinomial_bool
+    formula: "=MULTINOMIAL(TRUE,2)"
+
+  - id: atp_multinomial_omit
+    formula: "=MULTINOMIAL(,2)"
+
+  - id: atp_multinomial_boolcell
+    setup: { A1: true }
+    formula: "=MULTINOMIAL(A1,2)"
+
+  - id: near_fact
+    formula: "=FACT(3.9999999)"
+
+  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  - id: opt_gcd_arr_bool
+    formula: "=GCD({TRUE,2})"

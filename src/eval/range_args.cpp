@@ -127,6 +127,17 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
   // cell Refs and scalar bindings are intentionally left as-is so the
   // existing 1-cell / scalar-fallback semantics are preserved.
   const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
+  // 3-D reference: the cells of the span, flattened (no rectangle shape).
+  if (arg_node.kind() == parser::NodeKind::Ref3D) {
+    out_cells->clear();
+    if (!expand_ref3d_cells(arg_node, arena, registry, ctx, out_cells)) {
+      *out_err_code = ErrorCode::Ref;
+      return false;
+    }
+    *out_rows = static_cast<std::uint32_t>(out_cells->size());
+    *out_cols = 1U;
+    return true;
+  }
   // OFFSET / CHOOSE / IF / ROW / COLUMN all need range-shaped expansion
   // glue (see per-branch comments below). Dispatch via a single
   // case-insensitive name lookup against `kRangeShapedNames` so the hot
@@ -554,6 +565,83 @@ bool filter_range_sourced_values(const FunctionDef& def, const Value* cells, std
     }
   }
   *out_count = kept;
+  return true;
+}
+
+bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx, std::vector<Value>* out) {
+  const Workbook* wb = ctx.workbook();
+  const parser::Reference& cell = node.as_ref3d_cell();
+  const bool is_range = node.as_ref3d_is_range();
+  const parser::Reference& cell_end = node.as_ref3d_cell_end();
+  std::size_t begin_idx = static_cast<std::size_t>(-1);
+  std::size_t end_idx = static_cast<std::size_t>(-1);
+  if (wb != nullptr) {
+    begin_idx = wb->sheet_index_by_name(node.as_ref3d_sheet_begin());
+    end_idx = wb->sheet_index_by_name(node.as_ref3d_sheet_end());
+  }
+  const bool full_col = cell.is_full_col || (is_range && cell_end.is_full_col);
+  const bool full_row = cell.is_full_row || (is_range && cell_end.is_full_row);
+  const bool incompatible_whole_shape =
+      (full_col && full_row) ||
+      (is_range && (cell.is_full_col != cell_end.is_full_col || cell.is_full_row != cell_end.is_full_row));
+  const bool corners_out_of_bounds =
+      (full_col && (cell.col >= Sheet::kMaxCols || (is_range && cell_end.col >= Sheet::kMaxCols))) ||
+      (full_row && (cell.row >= Sheet::kMaxRows || (is_range && cell_end.row >= Sheet::kMaxRows))) ||
+      (!full_col && !full_row &&
+       (cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols ||
+        (is_range && (cell_end.row >= Sheet::kMaxRows || cell_end.col >= Sheet::kMaxCols))));
+  if (wb == nullptr || begin_idx == static_cast<std::size_t>(-1) || end_idx == static_cast<std::size_t>(-1) ||
+      incompatible_whole_shape || corners_out_of_bounds) {
+    return false;
+  }
+  const std::size_t lo = std::min(begin_idx, end_idx);
+  const std::size_t hi = std::max(begin_idx, end_idx);
+  // Tail rectangle: a single cell, or the normalised `cell:cell_end`
+  // area. Excel aggregates the same rectangle from every sheet in the
+  // span, so the cross-product (sheets * area cells) flows into the
+  // range-aware function.
+  for (std::size_t s = lo; s <= hi; ++s) {
+    const std::string_view sheet_name = wb->sheet(s).name();
+    const Sheet& target_sheet = wb->sheet(s);
+    std::uint32_t r_lo = 0;
+    std::uint32_t r_hi = 0;
+    std::uint32_t c_lo = 0;
+    std::uint32_t c_hi = 0;
+    if (full_col) {
+      c_lo = is_range ? std::min(cell.col, cell_end.col) : cell.col;
+      c_hi = is_range ? std::max(cell.col, cell_end.col) : cell.col;
+      const auto extent = target_sheet.populated_extent(0U, c_lo, Sheet::kMaxRows - 1U, c_hi);
+      if (!extent.has_value()) {
+        continue;
+      }
+      r_lo = 0U;
+      r_hi = extent->last_row;
+    } else if (full_row) {
+      r_lo = is_range ? std::min(cell.row, cell_end.row) : cell.row;
+      r_hi = is_range ? std::max(cell.row, cell_end.row) : cell.row;
+      const auto extent = target_sheet.populated_extent(r_lo, 0U, r_hi, Sheet::kMaxCols - 1U);
+      if (!extent.has_value()) {
+        continue;
+      }
+      c_lo = 0U;
+      c_hi = extent->last_col;
+    } else {
+      r_lo = is_range ? std::min(cell.row, cell_end.row) : cell.row;
+      r_hi = is_range ? std::max(cell.row, cell_end.row) : cell.row;
+      c_lo = is_range ? std::min(cell.col, cell_end.col) : cell.col;
+      c_hi = is_range ? std::max(cell.col, cell_end.col) : cell.col;
+    }
+    for (std::uint32_t r = r_lo; r <= r_hi; ++r) {
+      for (std::uint32_t c = c_lo; c <= c_hi; ++c) {
+        parser::Reference per_sheet{};
+        per_sheet.sheet = sheet_name;
+        per_sheet.row = r;
+        per_sheet.col = c;
+        out->push_back(ctx.resolve_ref(per_sheet, arena, registry));
+      }
+    }
+  }
   return true;
 }
 

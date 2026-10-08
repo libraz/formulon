@@ -2,9 +2,10 @@
 // Higher-moment descriptive-statistics family:
 // GEOMEAN, HARMEAN, DEVSQ, AVEDEV, SKEW, SKEW.P, KURT, STANDARDIZE.
 //
-// All entries share the skip-non-numeric rule of the MEDIAN / VAR family
-// (only `Number` kind participates; Text / Bool / Blank are ignored;
-// Errors are short-circuited by the dispatcher). STANDARDIZE is the odd
+// All entries share the direct-argument rule of the VAR / STDEV family
+// (`collect_direct_stats`): a direct Bool / numeric Text / omitted slot
+// counts, non-numeric Text is #VALUE!, range-sourced non-Numbers are
+// dropped by the dispatcher; Errors are short-circuited by the dispatcher. STANDARDIZE is the odd
 // one out -- scalar-only, no range expansion -- but it is grouped here
 // because it consumes the same `(x, mean, sd)` triple that backs every
 // other moment-based function in this TU.
@@ -31,7 +32,11 @@ namespace stats_detail {
 // coerced via the numeric provenance rule) yields `#NUM!`. Computed in
 // log-space to avoid overflow for long data sets: exp(mean(ln(x_i))).
 Value GeoMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
+  auto collected = collect_direct_stats(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
+  }
+  const std::vector<double>& xs = collected.value();
   if (xs.empty()) {
     return Value::error(ErrorCode::Num);
   }
@@ -49,7 +54,11 @@ Value GeoMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // HARMEAN(value, ...) - harmonic mean. Every input must be strictly
 // positive; any value <= 0 yields `#NUM!`. `n / sum(1/x_i)`.
 Value HarMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
+  auto collected = collect_direct_stats(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
+  }
+  const std::vector<double>& xs = collected.value();
   if (xs.empty()) {
     return Value::error(ErrorCode::Num);
   }
@@ -71,7 +80,11 @@ Value HarMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // `sum((x_i - mean)^2)`. Empty numeric slice yields 0 per Excel (the
 // empty sum is zero; there is no division involved).
 Value DevSq(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
+  auto collected = collect_direct_stats(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
+  }
+  const std::vector<double>& xs = collected.value();
   if (xs.empty()) {
     return Value::number(0.0);
   }
@@ -82,7 +95,11 @@ Value DevSq(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // AVEDEV(value, ...) - mean absolute deviation from the mean,
 // `sum(|x_i - mean|) / n`. Empty numeric slice yields `#NUM!`.
 Value AveDev(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
+  auto collected = collect_direct_stats(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
+  }
+  const std::vector<double>& xs = collected.value();
   if (xs.empty()) {
     return Value::error(ErrorCode::Num);
   }

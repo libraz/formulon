@@ -403,7 +403,11 @@ TEST(BuiltinsTocol, IgnoreThreeSkipsBothBlanksAndErrors) {
   EXPECT_DOUBLE_EQ(cells[3].as_number(), 6.0);
 }
 
-TEST(BuiltinsTocol, EmptyTextCellsBecomeBlanksButAreNotIgnored) {
+bool IsEmptyText(const Value& v) {
+  return v.is_text() && v.as_text().empty();
+}
+
+TEST(BuiltinsTocol, EmptyTextCellsStayTextAndAreNotIgnored) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -416,11 +420,11 @@ TEST(BuiltinsTocol, EmptyTextCellsBecomeBlanksButAreNotIgnored) {
   ASSERT_EQ(v.as_array_cols(), 1U);
   const Value* cells = v.as_array_cells();
   EXPECT_DOUBLE_EQ(cells[0].as_number(), 1.0);
-  EXPECT_TRUE(cells[1].is_blank());
+  EXPECT_TRUE(IsEmptyText(cells[1]));
   EXPECT_DOUBLE_EQ(cells[2].as_number(), 2.0);
-  EXPECT_TRUE(cells[3].is_blank());
+  EXPECT_TRUE(IsEmptyText(cells[3]));
   EXPECT_DOUBLE_EQ(cells[4].as_number(), 3.0);
-  EXPECT_TRUE(cells[5].is_blank());
+  EXPECT_TRUE(IsEmptyText(cells[5]));
 }
 
 TEST(BuiltinsTocol, ArrayLiteralErrorsCanBeIgnored) {
@@ -506,7 +510,7 @@ TEST(BuiltinsTorow, ScanByColumnFlag) {
   EXPECT_DOUBLE_EQ(cells[5].as_number(), 6.0);
 }
 
-TEST(BuiltinsTorow, EmptyTextCellsBecomeBlanksButAreNotIgnored) {
+TEST(BuiltinsTorow, EmptyTextCellsStayTextAndAreNotIgnored) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -518,10 +522,10 @@ TEST(BuiltinsTorow, EmptyTextCellsBecomeBlanksButAreNotIgnored) {
   ASSERT_EQ(v.as_array_rows(), 1U);
   ASSERT_EQ(v.as_array_cols(), 4U);
   const Value* cells = v.as_array_cells();
-  EXPECT_TRUE(cells[0].is_blank());
+  EXPECT_TRUE(IsEmptyText(cells[0]));
   EXPECT_DOUBLE_EQ(cells[1].as_number(), 1.0);
   EXPECT_DOUBLE_EQ(cells[2].as_number(), 2.0);
-  EXPECT_TRUE(cells[3].is_blank());
+  EXPECT_TRUE(IsEmptyText(cells[3]));
 }
 
 TEST(BuiltinsTorow, ArrayLiteralErrorsCanBeIgnored) {

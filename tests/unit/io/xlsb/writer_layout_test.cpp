@@ -508,6 +508,33 @@ TEST(XlsbWriter, PreservesRawStylesPartFromExistingXlsb) {
   EXPECT_EQ(styles_or.value(), raw_bytes);
 }
 
+TEST(XlsbWriter, SheetFormatPrFlagsSurviveRoundTrip) {
+  Workbook wb = Workbook::create();
+  SheetFormatDefaults& src = wb.sheet(0).mutable_format_defaults();
+  src.has_default_row_height = true;
+  src.default_row_height = 15.75;
+  src.custom_height = true;
+  src.zero_height = true;
+  src.thick_top = true;
+  src.thick_bottom = true;
+  src.outline_level_row = 2U;
+  src.outline_level_col = 3U;
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+  const SheetFormatDefaults& out = read_or.value().workbook.sheet(0).format_defaults();
+  EXPECT_TRUE(out.has_default_row_height);
+  EXPECT_DOUBLE_EQ(out.default_row_height, 15.75);
+  EXPECT_TRUE(out.custom_height);
+  EXPECT_TRUE(out.zero_height);
+  EXPECT_TRUE(out.thick_top);
+  EXPECT_TRUE(out.thick_bottom);
+  EXPECT_EQ(out.outline_level_row, 2U);
+  EXPECT_EQ(out.outline_level_col, 3U);
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io

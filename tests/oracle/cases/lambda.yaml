@@ -270,3 +270,97 @@ cases:
   - id: let_lambda_helper_omitted_arg_isblank_middle
     description: "ISBLANK on the omitted middle parameter"
     formula: "=LET(f, LAMBDA(a, b, c, ISBLANK(b)), f(1, , 3))"
+
+  # -- A built-in named as a value -------------------------------------------
+  # A bare function name is a function value, the kind LAMBDA produces.
+  - id: function_value_bare_sum
+    description: "A bare built-in name in a cell shows #CALC!, as a LAMBDA does"
+    formula: "=SUM"
+
+  - id: function_value_bare_lower_case
+    description: "The name is matched without regard to case"
+    formula: "=sum"
+
+  - id: function_value_bare_unicode
+    description: "A post-2007 built-in named bare"
+    formula: "=UNICODE"
+
+  - id: function_value_if_result
+    description: "IF passing a function value through to the cell"
+    formula: "=IF(TRUE,SUM)"
+
+  - id: function_value_in_arithmetic
+    description: "A function value as an operand is #VALUE!"
+    formula: "=ABS+1"
+
+  - id: function_value_after_call
+    description: "A call of the same function next to its bare name"
+    formula: "=SUM(1,2)+SUM"
+
+  - id: function_value_in_concat
+    description: "A function value concatenated"
+    formula: "=SUM({1,2})&ABS"
+
+  - id: function_value_as_argument
+    description: "A function value passed where a number is expected"
+    formula: "=ABS(SUM)"
+
+  - id: function_value_type
+    description: "TYPE of a function value"
+    formula: "=TYPE(SUM)"
+
+  - id: function_value_type_lambda
+    description: "TYPE of a LAMBDA"
+    formula: "=TYPE(LAMBDA(x,x))"
+
+  - id: function_value_iserror
+    description: "A function value is no error"
+    formula: "=ISERROR(SUM)"
+
+  - id: function_value_iserror_lambda
+    description: "A LAMBDA is no error"
+    formula: "=ISERROR(LAMBDA(x,x))"
+
+  - id: function_value_isref
+    description: "A function value is no reference"
+    formula: "=ISREF(SUM)"
+
+  - id: function_value_isomitted
+    description: "A function value is no omitted argument"
+    formula: "=_xlfn.ISOMITTED(SUM)"
+
+  - id: function_value_error_type
+    description: "ERROR.TYPE of a function value"
+    formula: "=ERROR.TYPE(SUM)"
+
+  - id: function_value_index
+    description: "INDEX over a function value"
+    formula: "=INDEX(ABS,1)"
+
+  - id: function_value_unknown_name
+    description: "A name that is no built-in stays #NAME?"
+    formula: "=FOOBARBAZ"
+
+  - id: function_value_let_bound
+    description: "A function value bound by LET and called"
+    formula: "=LET(f,ABS,f(-2))"
+
+  - id: function_value_choose_call
+    description: "Calling the function value CHOOSE selects"
+    formula: "=CHOOSE(1,SUM,ABS)(5)"
+
+  - id: function_value_if_call
+    description: "Calling the function value IF selects"
+    formula: "=IF(TRUE,ABS,SUM)(-3)"
+
+  - id: function_value_reduce
+    description: "A bare built-in as REDUCE's function"
+    formula: "=REDUCE(0,{1,2},SUM)"
+
+  - id: function_value_byrow
+    description: "A bare built-in as BYROW's function"
+    formula: "=BYROW({1,2;3,4},SUM)"
+
+  - id: function_value_map
+    description: "A bare built-in as MAP's function"
+    formula: "=MAP({1,2},ABS)"

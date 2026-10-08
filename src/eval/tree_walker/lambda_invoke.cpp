@@ -30,6 +30,47 @@ namespace eval {
 
 namespace {
 
+// Builds the eta-expansion of the built-in `name` at `arity`:
+// `LAMBDA(p1, ..., pn, name(p1, ..., pn))`. The parameter names cannot be
+// spelled in a formula, so the body can only ever see its own arguments.
+// Returns nullptr on arena exhaustion.
+const LambdaValue* eta_expand(std::string_view name, std::uint32_t arity, Arena& arena) {
+  std::string_view* params = nullptr;
+  const parser::AstNode** body_args = nullptr;
+  if (arity > 0U) {
+    params = arena.create_array<std::string_view>(arity);
+    body_args = arena.create_array<const parser::AstNode*>(arity);
+    if (params == nullptr || body_args == nullptr) {
+      return nullptr;
+    }
+  }
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    params[i] = arena.intern("@" + std::to_string(i + 1U));
+    body_args[i] = parser::make_name_ref(arena, params[i]);
+    if (params[i].empty() || body_args[i] == nullptr) {
+      return nullptr;
+    }
+  }
+  const parser::AstNode* body = parser::make_call(arena, name, body_args, arity);
+  auto* lv = arena.create<LambdaValue>();
+  if (body == nullptr || lv == nullptr) {
+    return nullptr;
+  }
+  lv->params = params;
+  lv->param_count = arity;
+  lv->optional_count = 0U;
+  lv->body = body;
+  lv->captured_env = nullptr;
+  return lv;
+}
+
+// The lambda a call of `lv` with `arity` arguments runs: `lv` itself, or the
+// eta-expansion of the built-in a function value names. Null on arena
+// exhaustion.
+const LambdaValue* at_arity(const LambdaValue* lv, std::uint32_t arity, Arena& arena) {
+  return lv->builtin.empty() ? lv : eta_expand(lv->builtin, arity, arena);
+}
+
 // `syntax_args` is the call site's argument AST, consulted for one thing
 // only: telling a syntactically omitted slot (`f(1, , 3)`) from a supplied
 // one. It is deliberately separate from `ast_args`, the per-argument AST
@@ -111,6 +152,10 @@ Value invoke_lambda_values_with_ast(const LambdaValue* lv, std::uint32_t arity, 
   if (lambda_guard.exceeded()) {
     return Value::error(ErrorCode::Calc);
   }
+  lv = at_arity(lv, arity, arena);
+  if (lv == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
   return invoke_lambda_values_impl(lv, arity, args, ast_args, /*syntax_args=*/nullptr, arena, registry, ctx);
 }
 
@@ -136,43 +181,17 @@ const parser::AstNode* array_literal_ast(const ArrayValue* arr, Arena& arena) {
 
 namespace {
 
-// Builds the eta-expansion of the built-in `name` at `arity`:
-// `LAMBDA(p1, ..., pn, name(p1, ..., pn))`. The parameter names cannot be
-// spelled in a formula, so the body can only ever see its own arguments.
-// Returns nullptr on arena exhaustion.
-const LambdaValue* eta_expand(std::string_view name, std::uint32_t arity, Arena& arena) {
-  std::string_view* params = nullptr;
-  const parser::AstNode** body_args = nullptr;
-  if (arity > 0U) {
-    params = arena.create_array<std::string_view>(arity);
-    body_args = arena.create_array<const parser::AstNode*>(arity);
-    if (params == nullptr || body_args == nullptr) {
-      return nullptr;
-    }
-  }
-  for (std::uint32_t i = 0; i < arity; ++i) {
-    params[i] = arena.intern("@" + std::to_string(i + 1U));
-    body_args[i] = parser::make_name_ref(arena, params[i]);
-    if (params[i].empty() || body_args[i] == nullptr) {
-      return nullptr;
-    }
-  }
-  const parser::AstNode* body = parser::make_call(arena, name, body_args, arity);
-  auto* lv = arena.create<LambdaValue>();
-  if (body == nullptr || lv == nullptr) {
-    return nullptr;
-  }
-  lv->params = params;
-  lv->param_count = arity;
-  lv->optional_count = 0U;
-  lv->body = body;
-  lv->captured_env = nullptr;
-  return lv;
-}
-
 // A lambda is callable by a helper when it accepts `call_arity` arguments
-// (trailing `[optional]` params may stay unbound) and carries a body.
-const LambdaValue* check_callable(const LambdaValue* lv, std::uint32_t call_arity, Value* out_err) {
+// (trailing `[optional]` params may stay unbound) and carries a body. A
+// function value is callable at any arity; the built-in judges it when run.
+const LambdaValue* check_callable(const LambdaValue* lv, std::uint32_t call_arity, Arena& arena, Value* out_err) {
+  if (!lv->builtin.empty()) {
+    const LambdaValue* expanded = at_arity(lv, call_arity, arena);
+    if (expanded == nullptr) {
+      *out_err = Value::error(ErrorCode::Num);
+    }
+    return expanded;
+  }
   const std::uint32_t required = lv->param_count - lv->optional_count;
   if (call_arity < required || call_arity > lv->param_count) {
     *out_err = Value::error(ErrorCode::Value);
@@ -189,34 +208,7 @@ const LambdaValue* check_callable(const LambdaValue* lv, std::uint32_t call_arit
 
 const LambdaValue* resolve_callable(const parser::AstNode& arg, std::uint32_t call_arity, Arena& arena,
                                     const FunctionRegistry& registry, const EvalContext& ctx, Value* out_err) {
-  // `Sheet1!Fn` is neither a binding nor a built-in; it evaluates below.
-  if (arg.kind() == parser::NodeKind::NameRef && arg.as_name_sheet().empty()) {
-    const std::string_view name = arg.as_name();
-    const NameEnv* env = ctx.name_env();
-    // A name bound in scope shadows any built-in of the same spelling.
-    const auto read = [&](const parser::AstNode& ref) { return eval_node_shaped(ref, arena, registry, ctx); };
-    if (const auto* binding = (env != nullptr) ? env->lookup(name) : nullptr; binding != nullptr) {
-      const Value bound = NameEnv::binding_value(*binding, arena, read);
-      if (bound.is_error()) {
-        *out_err = bound;
-        return nullptr;
-      }
-      if (!bound.is_lambda()) {
-        *out_err = Value::error(ErrorCode::Value);
-        return nullptr;
-      }
-      return check_callable(bound.as_lambda(), call_arity, out_err);
-    }
-    // An unbound built-in name is an eta-reduced lambda. A miss falls through
-    // to ordinary evaluation, which reports `#NAME?`.
-    if (registry.lookup(name) != nullptr || find_lazy_impl(strip_future_prefix(name)) != nullptr) {
-      const LambdaValue* lv = eta_expand(name, call_arity, arena);
-      if (lv == nullptr) {
-        *out_err = Value::error(ErrorCode::Num);
-      }
-      return lv;
-    }
-  }
+  // A bare built-in name evaluates to a function value like any LAMBDA.
   const Value v = eval_node(arg, arena, registry, ctx);
   if (v.is_error()) {
     *out_err = v;
@@ -226,7 +218,7 @@ const LambdaValue* resolve_callable(const parser::AstNode& arg, std::uint32_t ca
     *out_err = Value::error(ErrorCode::Value);
     return nullptr;
   }
-  return check_callable(v.as_lambda(), call_arity, out_err);
+  return check_callable(v.as_lambda(), call_arity, arena, out_err);
 }
 
 Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::AstNode* const* call_args, Arena& arena,
@@ -240,6 +232,10 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
   EvalDepthGuard lambda_guard(ctx.lambda_depth_counter(), kMaxLambdaDepth);
   if (lambda_guard.exceeded()) {
     return Value::error(ErrorCode::Calc);
+  }
+  lv = at_arity(lv, arity, arena);
+  if (lv == nullptr) {
+    return Value::error(ErrorCode::Num);
   }
   const std::uint32_t required = lv->param_count - lv->optional_count;
   if (arity < required || arity > lv->param_count) {
@@ -269,6 +265,11 @@ bool resolve_lambda_reference(const LambdaValue* lv, std::uint32_t arity, const 
   EvalDepthGuard lambda_guard(ctx.lambda_depth_counter(), kMaxLambdaDepth);
   if (lambda_guard.exceeded()) {
     *out_err = ErrorCode::Calc;
+    return false;
+  }
+  lv = at_arity(lv, arity, arena);
+  if (lv == nullptr) {
+    *out_err = ErrorCode::Num;
     return false;
   }
   std::vector<Value> args;

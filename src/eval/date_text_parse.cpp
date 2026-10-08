@@ -580,6 +580,43 @@ bool parse_kanji_time_text(std::string_view s, double* out_frac, std::string_vie
   return true;
 }
 
+// Consumes a 12-hour marker -- A, P, AM or PM, any case, after at least one space -- and an optional trailing "."
+// (a space may precede it). A lone letter must end the word, so "10:00 Apr 5" does not read "A" as a marker.
+bool scan_meridiem(std::string_view* s, bool* pm) noexcept {
+  std::string_view tail = *s;
+  std::size_t space_count = 0;
+  while (!tail.empty() && (tail[0] == ' ' || tail[0] == '\t')) {
+    tail.remove_prefix(1);
+    ++space_count;
+  }
+  if (space_count == 0 || tail.empty()) {
+    return false;
+  }
+  const auto upper = [](char c) { return static_cast<char>(c >= 'a' && c <= 'z' ? c - ('a' - 'A') : c); };
+  const char c0 = upper(tail[0]);
+  if (c0 != 'A' && c0 != 'P') {
+    return false;
+  }
+  if (tail.size() >= 2 && upper(tail[1]) == 'M') {
+    tail.remove_prefix(2);
+  } else if (tail.size() == 1 || tail[1] == ' ' || tail[1] == '\t' || tail[1] == '.') {
+    tail.remove_prefix(1);
+  } else {
+    return false;
+  }
+  std::string_view dotted = tail;
+  while (!dotted.empty() && (dotted[0] == ' ' || dotted[0] == '\t')) {
+    dotted.remove_prefix(1);
+  }
+  if (!dotted.empty() && dotted[0] == '.') {
+    dotted.remove_prefix(1);
+    tail = dotted;
+  }
+  *pm = c0 == 'P';
+  *s = tail;
+  return true;
+}
+
 // Parses a leading time token. See `parse_date_time_text` for the grammar.
 bool parse_time_text(std::string_view s, double* out_frac, std::string_view* rest) noexcept {
   // Probe for the kanji form `H時M分[S秒]` first: scan past the leading
@@ -597,57 +634,43 @@ bool parse_time_text(std::string_view s, double* out_frac, std::string_view* res
   if (scan_digits(s, 3, &hour) == 0) {
     return false;
   }
-  if (s.empty() || s[0] != ':') {
-    return false;
-  }
-  s.remove_prefix(1);
+  // `H` alone is a time only with a 12-hour marker ("6 PM").
+  const bool hour_only = s.empty() || s[0] != ':';
   int minute = 0;
-  if (scan_digits(s, 3, &minute) == 0 || minute < 0) {
-    return false;
-  }
   int second = 0;
-  bool has_seconds = false;
-  if (!s.empty() && s[0] == ':') {
-    s.remove_prefix(1);
-    if (scan_digits(s, 3, &second) == 0 || second < 0) {
-      return false;
-    }
-    has_seconds = true;
-  }
   double sub_seconds = 0.0;
-  if (has_seconds && !s.empty() && s[0] == '.') {
+  if (!hour_only) {
     s.remove_prefix(1);
-    double scale = 0.1;
-    bool any = false;
-    while (!s.empty() && s[0] >= '0' && s[0] <= '9') {
-      sub_seconds += (s[0] - '0') * scale;
-      scale *= 0.1;
-      s.remove_prefix(1);
-      any = true;
-    }
-    if (!any) {
+    if (scan_digits(s, 3, &minute) == 0 || minute < 0) {
       return false;
+    }
+    bool has_seconds = false;
+    if (!s.empty() && s[0] == ':') {
+      s.remove_prefix(1);
+      if (scan_digits(s, 3, &second) == 0 || second < 0) {
+        return false;
+      }
+      has_seconds = true;
+    }
+    if (has_seconds && !s.empty() && s[0] == '.') {
+      s.remove_prefix(1);
+      double scale = 0.1;
+      bool any = false;
+      while (!s.empty() && s[0] >= '0' && s[0] <= '9') {
+        sub_seconds += (s[0] - '0') * scale;
+        scale *= 0.1;
+        s.remove_prefix(1);
+        any = true;
+      }
+      if (!any) {
+        return false;
+      }
     }
   }
   bool pm = false;
-  bool have_ampm = false;
-  {
-    std::string_view tail = s;
-    std::size_t space_count = 0;
-    while (!tail.empty() && (tail[0] == ' ' || tail[0] == '\t')) {
-      tail.remove_prefix(1);
-      ++space_count;
-    }
-    if (space_count >= 1 && tail.size() >= 2) {
-      const char c0 = static_cast<char>(tail[0] >= 'a' && tail[0] <= 'z' ? tail[0] - ('a' - 'A') : tail[0]);
-      const char c1 = static_cast<char>(tail[1] >= 'a' && tail[1] <= 'z' ? tail[1] - ('a' - 'A') : tail[1]);
-      if ((c0 == 'A' || c0 == 'P') && c1 == 'M') {
-        pm = (c0 == 'P');
-        have_ampm = true;
-        tail.remove_prefix(2);
-        s = tail;
-      }
-    }
+  const bool have_ampm = scan_meridiem(&s, &pm);
+  if (hour_only && !have_ampm) {
+    return false;
   }
   if (have_ampm) {
     if (hour > 12) {
@@ -655,7 +678,7 @@ bool parse_time_text(std::string_view s, double* out_frac, std::string_view* res
     }
     if (hour == 12 && !pm) {
       hour = 0;
-    } else if (pm && hour >= 1 && hour < 12) {
+    } else if (pm && hour < 12) {
       hour += 12;
     }
   }
@@ -720,6 +743,19 @@ bool parse_date_time_text(std::string_view s, double* out_date_serial, double* o
       frac = f;
       has_time = true;
       rest = after;
+      // A date may follow the time after whitespace ("6 PM 2026/7/7").
+      std::string_view date_rest = rest;
+      std::size_t space_count = 0;
+      while (!date_rest.empty() && (date_rest[0] == ' ' || date_rest[0] == '\t')) {
+        date_rest.remove_prefix(1);
+        ++space_count;
+      }
+      double date_serial = 0.0;
+      if (space_count >= 1 && parse_date_text(date_rest, current_year, &date_serial, &date_rest)) {
+        serial = date_serial;
+        has_date = true;
+        rest = date_rest;
+      }
     }
   }
   if (!has_date && !has_time) {

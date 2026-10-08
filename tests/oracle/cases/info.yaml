@@ -442,3 +442,23 @@ cases:
     description: "Negative row offset above row 1 -> #REF!"
     setup: { A1: 42 }
     formula: "=OFFSET(A1, -5, 0)"
+
+  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  #    arguments, and the near-integer snap of integer arguments --------------
+  - id: atp_iseven_bool
+    formula: "=ISEVEN(TRUE)"
+
+  - id: atp_iseven_boolcell
+    setup: { A1: true }
+    formula: "=ISEVEN(A1)"
+
+  - id: atp_isodd_bool
+    formula: "=ISODD(TRUE)"
+
+  - id: atp_isodd_boolcell
+    setup: { A1: true }
+    formula: "=ISODD(A1)"
+
+  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  - id: opt_iseven_arr_bool
+    formula: "=ISEVEN({TRUE})"

@@ -2,11 +2,11 @@
   "suite": "t_dist",
   "description": "T.DIST / T.DIST.2T / T.DIST.RT / T.INV / T.INV.2T — Student's t distribution family",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T01:10:04Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -326,6 +326,59 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      }
+    },
+    {
+      "id": "t_dist_pdf_df_zero_is_div0",
+      "formula": "=T.DIST(1,0,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "t_dist_all_omitted_is_div0",
+      "formula": "=T.DIST(,,)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "t_dist_cdf_df_zero_is_num",
+      "formula": "=T.DIST(1,0,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "t_inv_2t_just_above_one",
+      "formula": "=T.INV.2T(1.0000001,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.284989018215513e-07
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 1e-08
+      }
+    },
+    {
+      "id": "t_inv_2t_above_one",
+      "formula": "=T.INV.2T(1.5,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.6998120613124317
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 1e-12
       }
     }
   ]

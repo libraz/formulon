@@ -773,6 +773,17 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
           return NameEnv::read_shaped(*binding, read);
         }
       }
+      // An undefined built-in name is that function as a value (`=TYPE(SUM)`).
+      if (find_defined_name(ctx, node.as_name()) == nullptr &&
+          (registry.lookup(node.as_name()) != nullptr ||
+           find_lazy_impl(strip_future_prefix(node.as_name())) != nullptr)) {
+        auto* lv = arena.create<LambdaValue>();
+        if (lv == nullptr) {
+          return Shaped{Value::error(ErrorCode::Num), nullptr};
+        }
+        lv->builtin = node.as_name();
+        return Shaped{Value::lambda(lv), nullptr};
+      }
       return resolve_defined_name_shaped(node.as_name(), arena, registry, ctx);
     }
 

@@ -72,6 +72,21 @@ inline double truncate_index(double value) noexcept {
   return std::trunc(value);
 }
 
+/// Distance below an integer within which Excel snaps an integer argument up
+/// to it: 2^-22, measured identical at 1.x, 14.x and 10000.x.
+inline constexpr double kNearIntegerSnap = 0x1p-22;
+
+/// Snaps `value` to the nearest integer when it lies within `kNearIntegerSnap`
+/// of it, on either side, as Excel does for some integer arguments (LEFT's
+/// count, ROUND's digits, FACT, DATE's parts, ...) before their usual
+/// truncation: `14.9999999` becomes `15` and `-1.9999999` becomes `-2`.
+/// Callers run their validity checks on the raw value first:
+/// `LEFT("abc",-0.0000001)` is `#VALUE!`, not `""`.
+inline double snap_near_integer(double value) noexcept {
+  const double nearest = std::round(value);
+  return std::fabs(value - nearest) <= kNearIntegerSnap ? nearest : value;
+}
+
 /// `coerce_to_number` followed by `truncate_index`, for the call sites that
 /// do not need the pre-truncation magnitude. Coercion failures propagate
 /// unchanged.

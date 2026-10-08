@@ -678,6 +678,30 @@ TEST(BuiltinsAreas, LetBoundRangeCountsItsSourceShape) {
   EXPECT_EQ(picked.as_number(), 2.0);
 }
 
+TEST(BuiltinsMiscSequence, RowsSnapToNearInteger) {
+  const Value v = EvalSource("=ROWS(SEQUENCE(2.9999999))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsMiscSequence, ColsSnapToNearInteger) {
+  const Value v = EvalSource("=COLUMNS(SEQUENCE(1,2.9999999))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsMiscRandArray, RowsSnapToNearInteger) {
+  const Value v = EvalSource("=ROWS(RANDARRAY(2.9999999))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsMiscRandArray, ColsSnapToNearInteger) {
+  const Value v = EvalSource("=COLUMNS(RANDARRAY(1,2.9999999))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 3.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -39,7 +39,7 @@ class FunctionRegistry;
 
 /// True when `name` (with or without an `_xlfn.` storage prefix) is a
 /// builtin whose result can be a reference: INDIRECT, OFFSET, IF, CHOOSE,
-/// IFS, SWITCH, INDEX and XLOOKUP. Answers from the same table
+/// IFS, SWITCH, INDEX, XLOOKUP, TRIMRANGE and the `_TRO_*` trim operators. Answers from the same table
 /// `resolve_reference_call` dispatches through, so every consumer that asks
 /// "is this call a reference?" sees one list.
 bool is_reference_call_name(std::string_view name) noexcept;
@@ -48,7 +48,7 @@ bool is_reference_call_name(std::string_view name) noexcept;
 /// with `arity` arguments can be the reference the call returns: INDEX's
 /// source, XLOOKUP's return_array / if_not_found, an IF branch, a CHOOSE
 /// value, an IFS value, or a SWITCH result / default. Always false for
-/// INDIRECT and OFFSET, whose result is built at evaluation time, and for a
+/// INDIRECT, OFFSET and the trims, whose result is built at evaluation time, and for a
 /// name `is_reference_call_name` rejects.
 bool is_reference_carrying_arg(std::string_view call_name, std::uint32_t arg_index, std::uint32_t arity) noexcept;
 

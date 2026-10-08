@@ -14,16 +14,15 @@
 // in `stats/stats_distributions.cpp` and `stats/stats_distributions_misc.cpp`.
 // All four TUs share `stats/stats_helpers.h` and register here.
 //
-// Argument-type rule: MEDIAN / MODE / PERCENTILE / QUARTILE / TRIMMEAN
-// (`stats/stats_order.cpp`) silently SKIP text, boolean, and blank inputs
-// regardless of provenance -- only values whose kind is `Number`
-// participate. VAR.S / VAR.P / STDEV.S / STDEV.P (this file) and SMALL /
-// LARGE (`stats/stats_order.cpp`) instead follow the AVERAGE-family rule
-// Microsoft documents for these functions: a range/array-sourced non-
-// Number cell is dropped (via the dispatcher's `range_filter_numeric_only`
-// filter), but a DIRECT Bool or numeric-Text argument coerces the same way
-// `Sum` / `Average` coerce a direct argument -- see
-// `collect_direct_scalar_coerced`. The dispatcher runs with
+// Argument-type rule: PERCENTILE / QUARTILE / TRIMMEAN / MODE
+// (`stats/stats_order.cpp`) silently SKIP text, boolean, and blank direct
+// inputs -- only values whose kind is `Number` participate. VAR / STDEV /
+// MEDIAN and the higher-moment family (`collect_direct_stats`) follow the
+// AVERAGE-family rule: a range/array-sourced non-Number cell is dropped (via
+// the dispatcher's `range_filter_numeric_only` filter), but a DIRECT Bool,
+// numeric-Text or omitted argument counts (TRUE = 1, omitted = 0) and other
+// direct Text is #VALUE!. SMALL / LARGE use `collect_direct_scalar_coerced`,
+// the same rule without the omitted-slot term. The dispatcher runs with
 // `propagate_errors = true` so error-typed arguments always short-circuit
 // before the impl executes.
 
@@ -102,6 +101,15 @@ Expected<std::vector<double>, ErrorCode> collect_direct_scalar_coerced(const Val
   return eval::collect_numerics(args, count, policy);
 }
 
+Expected<std::vector<double>, ErrorCode> collect_direct_stats(const Value* args, std::uint32_t count) {
+  NumericCollectPolicy policy;
+  policy.include_bool = true;
+  policy.include_text_numeric_literal = true;
+  policy.error_on_text = true;
+  policy.blank_as_zero = true;
+  return eval::collect_numerics(args, count, policy);
+}
+
 Expected<std::vector<double>, ErrorCode> collect_a(const Value* args, std::uint32_t count) {
   NumericCollectPolicy policy;
   policy.include_bool = true;                  // Direct Bool -> 1 / 0.
@@ -130,7 +138,11 @@ MeanSS compute_mean_ss(const std::vector<double>& xs) {
 
 Expected<CenteredScaled, ErrorCode> centered_and_scaled(const Value* args, std::uint32_t arity, std::size_t min_n,
                                                         double sample_offset) {
-  std::vector<double> xs = collect_numerics(args, arity);
+  auto collected = collect_direct_stats(args, arity);
+  if (!collected) {
+    return collected.error();
+  }
+  std::vector<double> xs = std::move(collected.value());
   if (xs.size() < min_n) {
     return ErrorCode::Div0;
   }
@@ -309,13 +321,13 @@ double InverseStandardNormal(double p) {
 // ---------------------------------------------------------------------------
 
 // Shared entry for VAR.S / VAR.P / STDEV.S / STDEV.P: collects via
-// `collect_direct_scalar_coerced` (direct Bool / numeric-Text coerce; a
+// `collect_direct_stats` (direct Bool / numeric-Text / omitted slot coerce; a
 // range-sourced non-Number cell was already dropped by the dispatcher's
 // `range_filter_numeric_only` filter) per Microsoft's documented rule that
 // "logical values and text representations of numbers that you type
 // directly into the list of arguments are counted".
 static Value var_or_stdev_dispatch(const Value* args, std::uint32_t arity, bool sample, bool square_root) {
-  auto collected = collect_direct_scalar_coerced(args, arity);
+  auto collected = collect_direct_stats(args, arity);
   if (!collected) {
     return Value::error(collected.error());
   }
@@ -417,10 +429,10 @@ static Value StdevPA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 
 void register_stats_builtins(FunctionRegistry& registry) {
   static constexpr builtins_detail::BuiltinRegistration range_stats[] = {
-      {"MEDIAN", 1u, kVariadic, &stats_detail::Median, true, true},
-      {"MODE", 1u, kVariadic, &stats_detail::Mode, true, true},
-      {"MODE.SNGL", 1u, kVariadic, &stats_detail::Mode, true, true},
-      {"MODE.MULT", 1u, kVariadic, &stats_detail::ModeMult, true, true, false, false, false,
+      {"MEDIAN", 1u, kVariadic, &stats_detail::Median, true, true, true},
+      {"MODE", 1u, kVariadic, &stats_detail::Mode, true, true, true},
+      {"MODE.SNGL", 1u, kVariadic, &stats_detail::Mode, true, true, true},
+      {"MODE.MULT", 1u, kVariadic, &stats_detail::ModeMult, true, true, true, false, false,
        FunctionDef::BlankScalarPolicy::Allow, ErrorCode::Value, FunctionDef::ResultShape::kArray},
       {"LARGE", 2u, kVariadic, &stats_detail::Large, true, true, true},
       {"SMALL", 2u, kVariadic, &stats_detail::Small, true, true, true},
@@ -432,7 +444,7 @@ void register_stats_builtins(FunctionRegistry& registry) {
       {"QUARTILE.EXC", 2u, kVariadic, &stats_detail::QuartileExc, true, true, true},
       // range_filter_numeric_only = true: a range/array-sourced Bool or
       // Text cell is dropped, but a direct Bool/numeric-Text argument
-      // still coerces via `collect_direct_scalar_coerced` -- Microsoft's
+      // still coerces via `collect_direct_stats` -- Microsoft's
       // documented VAR.S/VAR.P/STDEV.S/STDEV.P rule for direct arguments.
       {"STDEV.S", 1u, kVariadic, &stats_detail::StdevS, true, true, true},
       {"STDEV", 1u, kVariadic, &stats_detail::StdevS, true, true, true},

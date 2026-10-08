@@ -157,3 +157,25 @@ cases:
   - id: t_dist_rt_plus_dist_is_1
     description: "T.DIST(x, df, TRUE) + T.DIST.RT(x, df) == 1"
     formula: "=T.DIST(1.5, 10, TRUE) + T.DIST.RT(1.5, 10)"
+
+  - id: t_dist_pdf_df_zero_is_div0
+    description: "T.DIST pdf with df=0 is #DIV/0!"
+    formula: "=T.DIST(1,0,FALSE)"
+
+  - id: t_dist_all_omitted_is_div0
+    description: "T.DIST(,,) is the pdf at df=0, #DIV/0!"
+    formula: "=T.DIST(,,)"
+
+  - id: t_dist_cdf_df_zero_is_num
+    description: "T.DIST cdf with df=0 stays #NUM!"
+    formula: "=T.DIST(1,0,TRUE)"
+
+  - id: t_inv_2t_just_above_one
+    description: "T.INV.2T just above 1 keeps its relative accuracy"
+    tolerance: { abs: 0.0, rel: 1.0e-8 }
+    formula: "=T.INV.2T(1.0000001,10)"
+
+  - id: t_inv_2t_above_one
+    description: "T.INV.2T(1.5,10) is the negative upper-tail quantile"
+    tolerance: { abs: 0.0, rel: 1.0e-12 }
+    formula: "=T.INV.2T(1.5,10)"

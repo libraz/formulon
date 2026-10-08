@@ -691,6 +691,80 @@ TEST(MathProduct, EmptyArgListIsArityViolation) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// ---------------------------------------------------------------------------
+// Analysis-ToolPak argument rule (QUOTIENT / MROUND / GCD)
+// ---------------------------------------------------------------------------
+
+TEST(MathAnalysisToolPak, QuotientBoolLiteralIsValue) {
+  const Value v = EvalSource("=QUOTIENT(TRUE,1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(MathAnalysisToolPak, QuotientBoolCellIsValue) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::boolean(true));
+  const Value v = EvalSourceIn("=QUOTIENT(A1,1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(MathAnalysisToolPak, QuotientOmittedRequiredIsNA) {
+  const Value v = EvalSource("=QUOTIENT(,1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(MathAnalysisToolPak, QuotientBlankRefIsZero) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=QUOTIENT(A1,1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(MathAnalysisToolPak, MroundBoolLiteralIsValue) {
+  const Value v = EvalSource("=MROUND(TRUE,1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(MathAnalysisToolPak, GcdOmittedIsNA) {
+  const Value v = EvalSource("=GCD(,2)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(MathAnalysisToolPak, GcdBoolCellIsValue) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::boolean(true));
+  const Value v = EvalSourceIn("=GCD(A1,2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(MathAnalysisToolPak, GcdBlankRefsKeepValueError) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=GCD(A1,B1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// ROUND's digits snap up to a near integer; 1.999999 is outside 2^-22.
+TEST(MathRound, DigitsSnapToNearInteger) {
+  const Value snapped = EvalSource("=ROUND(1.23456,1.9999999)");
+  ASSERT_TRUE(snapped.is_number());
+  EXPECT_DOUBLE_EQ(snapped.as_number(), 1.23);
+  const Value truncated = EvalSource("=ROUND(1.23456,1.999999)");
+  ASSERT_TRUE(truncated.is_number());
+  EXPECT_DOUBLE_EQ(truncated.as_number(), 1.2);
+}
+
+TEST(MathAnalysisToolPak, GcdBoolInArrayLiteralIsValue) {
+  const Value v = EvalSource("=GCD({TRUE,2})");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

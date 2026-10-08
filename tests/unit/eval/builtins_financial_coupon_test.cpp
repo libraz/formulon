@@ -425,6 +425,36 @@ TEST(FinancialCoupon1904, CoupPcdReturnsThe1904SystemSerial) {
   EXPECT_EQ(v1904.as_number(), 40497.0 - 1462.0);
 }
 
+// ---------------------------------------------------------------------------
+// Analysis-ToolPak argument rule (lazy financial date family)
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsCouponAnalysisToolPak, CoupnumBoolIsValue) {
+  const Value v = EvalSource("=COUPNUM(TRUE,40000,2)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsCouponAnalysisToolPak, CoupnumOmittedRequiredIsNA) {
+  const Value v = EvalSource("=COUPNUM(,40000,2)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsCouponAnalysisToolPak, CoupnumOmittedBasisKeepsDefault) {
+  const Value omitted = EvalSource("=COUPNUM(39000,40000,2,)");
+  const Value absent = EvalSource("=COUPNUM(39000,40000,2)");
+  ASSERT_TRUE(omitted.is_number());
+  ASSERT_TRUE(absent.is_number());
+  EXPECT_EQ(omitted.as_number(), absent.as_number());
+}
+
+TEST(BuiltinsCouponAnalysisToolPak, DiscOmittedRequiredIsNA) {
+  const Value v = EvalSource("=DISC(,40000,97,100)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

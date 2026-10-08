@@ -21,6 +21,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -67,7 +68,7 @@ constexpr std::uint8_t kSatSunWeekendMask = 0x60U;
 // Decodes the Excel `weekend` argument into a 7-bit Mon=0..Sun=6 mask.
 // Accepted shapes:
 //
-//   * Number 1..7  -> pre-defined paired-weekend pattern (Sat+Sun, Sun+Mon, ...)
+//   * Number 1..7  -> pre-defined paired-weekend pattern (TRUE reads as 1) (Sat+Sun, Sun+Mon, ...)
 //   * Number 11..17 -> single-day weekend (Sun only, Mon only, ...)
 //   * 7-char text of '0'/'1' with position 0 = Monday. The all-weekend
 //     mask "1111111" is rejected by Excel as `#VALUE!`.
@@ -76,8 +77,10 @@ constexpr std::uint8_t kSatSunWeekendMask = 0x60U;
 // error code distinguishes `#NUM!` (invalid numeric selector) from
 // `#VALUE!` (malformed string / unsupported kind).
 bool parse_weekend_arg(const Value& arg_val, std::uint8_t* out_mask, ErrorCode* out_err) noexcept {
-  if (arg_val.is_number()) {
-    const double trunc = std::trunc(arg_val.as_number());
+  if (arg_val.is_number() || arg_val.is_boolean() || arg_val.is_blank()) {
+    // TRUE is selector 1; FALSE and a blank cell are selector 0, which no pattern matches.
+    const double selector = arg_val.is_number() ? arg_val.as_number() : (arg_val.is_boolean() && arg_val.as_boolean());
+    const double trunc = std::trunc(selector);
     // The table below expands to Excel's documented encoding:
     //   paired:  1 Sat+Sun, 2 Sun+Mon, 3 Mon+Tue, 4 Tue+Wed,
     //            5 Wed+Thu, 6 Thu+Fri, 7 Fri+Sat
@@ -122,7 +125,7 @@ bool parse_weekend_arg(const Value& arg_val, std::uint8_t* out_mask, ErrorCode* 
     *out_mask = mask;
     return true;
   }
-  // Blank / Bool / Error / other shapes -- surface #VALUE! consistently.
+  // Error / other shapes -- surface #VALUE! consistently.
   *out_err = ErrorCode::Value;
   return false;
 }
@@ -150,6 +153,11 @@ bool collect_holidays_from_arg(const parser::AstNode& hol_arg, Arena& arena, con
     return false;
   }
   const std::vector<Value> cells = std::move(resolved.value().cells);
+  // A lone boolean holiday (literal or cell) is #VALUE! under the Analysis-ToolPak rule.
+  if (cells.size() == 1U && cells[0].is_boolean()) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
   for (const Value& v : cells) {
     if (v.is_error()) {
       *out_err = v;
@@ -203,7 +211,7 @@ bool resolve_intl_calendar(const parser::AstNode& call, std::uint32_t arity, Are
                            const FunctionRegistry& registry, const EvalContext& ctx, std::uint8_t* out_mask,
                            std::vector<double>* out_holidays, Value* out_err) {
   *out_mask = kSatSunWeekendMask;
-  if (arity >= 3U) {
+  if (arity >= 3U && !is_omitted_arg(call.as_call_arg(2))) {
     const Value weekend = eval_node(call.as_call_arg(2), arena, registry, ctx);
     if (weekend.is_error()) {
       *out_err = weekend;
@@ -220,8 +228,8 @@ bool resolve_intl_calendar(const parser::AstNode& call, std::uint32_t arity, Are
 }
 
 // Evaluates arguments 0 and 1, then coerces both to numbers. Errors
-// surface in that order: arg 0 value, arg 1 value, arg 0 coercion, arg 1
-// coercion. Returns `false` with the error in `*out_err`.
+// surface in that order: arg 0 value / boolean / omission, arg 1 likewise,
+// arg 0 coercion, arg 1 coercion. Returns `false` with the error in `*out_err`.
 bool eval_leading_numbers(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx, double* out_first, double* out_second, Value* out_err) {
   const Value first_v = eval_node(call.as_call_arg(0), arena, registry, ctx);
@@ -229,9 +237,17 @@ bool eval_leading_numbers(const parser::AstNode& call, Arena& arena, const Funct
     *out_err = first_v;
     return false;
   }
+  if (const Value atp = atp_arg_error(call.as_call_arg(0), first_v, /*required=*/true); atp.is_error()) {
+    *out_err = atp;
+    return false;
+  }
   const Value second_v = eval_node(call.as_call_arg(1), arena, registry, ctx);
   if (second_v.is_error()) {
     *out_err = second_v;
+    return false;
+  }
+  if (const Value atp = atp_arg_error(call.as_call_arg(1), second_v, /*required=*/true); atp.is_error()) {
+    *out_err = atp;
     return false;
   }
   auto first_n = coerce_to_number(first_v);
@@ -307,10 +323,11 @@ Value add_workdays(double start, double days, std::uint8_t mask, const std::vect
 // weekend-mask calendar (and the 4th argument).
 Value eval_workdays_driver(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx, bool add_days, bool intl) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 2U || arity > (intl ? 4U : 3U)) {
+  if (call.as_call_arity() < 2U || call.as_call_arity() > (intl ? 4U : 3U)) {
     return Value::error(ErrorCode::Value);
   }
+  // Trailing omitted optional slots take their defaults.
+  const std::uint32_t arity = atp_evaluated_arity(call, 2U, intl ? 4U : 3U);
   double start = 0.0;
   double second = 0.0;
   Value err = Value::blank();

@@ -171,6 +171,55 @@ TEST(BuiltinsHypgeomDist, BigKBiggerThanPopIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+// Asserts a numeric result within `rel` relative tolerance of `expected`.
+void ExpectTailRel(const char* formula, double expected, double rel) {
+  const Value v = EvalSource(formula);
+  ASSERT_TRUE(v.is_number()) << formula;
+  EXPECT_NEAR(v.as_number(), expected, std::abs(expected) * rel) << formula;
+}
+
+void ExpectTailErr(const char* formula, ErrorCode code) {
+  const Value v = EvalSource(formula);
+  ASSERT_TRUE(v.is_error()) << formula;
+  EXPECT_EQ(v.as_error(), code) << formula;
+}
+
+TEST(BuiltinsTDistZeroDf, PdfIsDiv0WhileTheRestStayNum) {
+  ExpectTailErr("=T.DIST(1,0,FALSE)", ErrorCode::Div0);
+  ExpectTailErr("=T.DIST(,,)", ErrorCode::Div0);
+  ExpectTailErr("=T.DIST(1,0,TRUE)", ErrorCode::Num);
+  ExpectTailErr("=T.DIST.2T(1,0)", ErrorCode::Num);
+  ExpectTailErr("=T.DIST.RT(1,0)", ErrorCode::Num);
+  ExpectTailErr("=T.INV(0.9,0)", ErrorCode::Num);
+  ExpectTailErr("=T.INV.2T(0.5,0)", ErrorCode::Num);
+}
+
+TEST(BuiltinsBinomInvProbabilityBounds, EndpointsAreNum) {
+  ExpectTailErr("=BINOM.INV(10,0,0.5)", ErrorCode::Num);
+  ExpectTailErr("=BINOM.INV(10,1,0.5)", ErrorCode::Num);
+  ExpectTailErr("=BINOM.INV(10,,0.5)", ErrorCode::Num);
+  ExpectTailErr("=CRITBINOM(10,0,0.5)", ErrorCode::Num);
+}
+
+TEST(BuiltinsTInvPrecision, QuantilesNearTheCentreAndTheTails) {
+  ExpectTailRel("=T.INV.2T(1.0000001,10)", -1.284989018215513e-07, 1e-8);
+  ExpectTailRel("=T.INV.2T(1.5,10)", -0.6998120613124317, 1e-13);
+  ExpectTailRel("=T.INV(1E-9,5)", -98.93722464836996, 1e-11);
+  ExpectTailRel("=T.INV.2T(1E-20,10)", 274.8423853162235, 1e-11);
+  ExpectTailErr("=T.INV.2T(1E6,10)", ErrorCode::Num);
+  ExpectTailErr("=T.INV.2T(2,1E6)", ErrorCode::Num);
+}
+
+TEST(BuiltinsChisqPrecision, VeryLargeDegreesOfFreedom) {
+  ExpectTailRel("=CHISQ.DIST.RT(1E10,1E10)", 0.4999981193680548, 1e-12);
+  ExpectTailRel("=CHISQ.INV(CHISQ.DIST(1E10,1E10,TRUE),1E10)/1E10", 1.0, 1e-12);
+  ExpectTailRel("=CHISQ.INV.RT(CHISQ.DIST.RT(1E10,1E10),1E10)/1E10", 1.0, 1e-12);
+  ExpectTailRel("=CHISQ.DIST(10000,10000,TRUE)", 0.5018806340338173, 1e-12);
+  ExpectTailRel("=CHISQ.INV(0.001,10000)", 9568.668495093969, 1e-12);
+  ExpectTailRel("=CHISQ.INV.RT(1E-12,3)", 58.91975568320216, 1e-12);
+  ExpectTailRel("=CHISQ.INV(0.95,4)", 9.487729036781154, 1e-12);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -167,3 +167,18 @@ cases:
   - id: chisq_dist_pdf_df3_x0
     description: "PDF at x=0 with df=3 — value is 0 (chi-squared with df>=2 has zero density at zero)"
     formula: "=CHISQ.DIST(0, 3, FALSE)"
+
+  - id: chisq_dist_rt_df_1e10
+    description: "CHISQ.DIST.RT at the centre of df=1E10"
+    tolerance: { abs: 0.0, rel: 1.0e-12 }
+    formula: "=CHISQ.DIST.RT(1E10,1E10)"
+
+  - id: chisq_inv_round_trip_df_1e10
+    description: "CHISQ.INV recovers x at df=1E10"
+    tolerance: { abs: 0.0, rel: 1.0e-12 }
+    formula: "=CHISQ.INV(CHISQ.DIST(1E10,1E10,TRUE),1E10)/1E10"
+
+  - id: chisq_inv_rt_round_trip_df_1e10
+    description: "CHISQ.INV.RT recovers x at df=1E10"
+    tolerance: { abs: 0.0, rel: 1.0e-12 }
+    formula: "=CHISQ.INV.RT(CHISQ.DIST.RT(1E10,1E10),1E10)/1E10"

@@ -117,7 +117,9 @@ void ApplySheetPrTabHidden(const pugi::xml_node& worksheet, SheetView& view) {
   }
 }
 
-/// Parses `<sheetFormatPr defaultColWidth defaultRowHeight baseColWidth/>`
+/// Parses `<sheetFormatPr defaultColWidth defaultRowHeight baseColWidth
+/// customHeight zeroHeight thickTop thickBottom outlineLevelRow
+/// outlineLevelCol/>`
 /// into `defaults`. The element appears before `<cols>` in the worksheet
 /// part. Absent attributes leave the corresponding fields at their
 /// struct defaults; `defaultColWidth` / `defaultRowHeight` also set the
@@ -145,6 +147,12 @@ void ApplySheetFormatDefaults(const pugi::xml_node& worksheet, SheetFormatDefaul
   if (parse_xsd_nonneg_double(attr_str(fmt, "baseColWidth"), &measurement)) {
     defaults.base_col_width = measurement;
   }
+  defaults.custom_height = read_xsd_bool(fmt, "customHeight", false);
+  defaults.zero_height = read_xsd_bool(fmt, "zeroHeight", false);
+  defaults.thick_top = read_xsd_bool(fmt, "thickTop", false);
+  defaults.thick_bottom = read_xsd_bool(fmt, "thickBottom", false);
+  defaults.outline_level_row = parse_outline_level(fmt.attribute("outlineLevelRow").value());
+  defaults.outline_level_col = parse_outline_level(fmt.attribute("outlineLevelCol").value());
 }
 
 /// Parses `<cols><col min max width style hidden outlineLevel/></cols>` into

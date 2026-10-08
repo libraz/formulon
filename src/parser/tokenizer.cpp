@@ -484,7 +484,7 @@ const std::vector<Token>& Tokenizer::tokens() {
         emit_single_char(TokenKind::Semicolon);
         continue;
       case ':':
-        emit_single_char(TokenKind::Colon);
+        scan_colon();
         continue;
       case '!':
         emit_single_char(TokenKind::Bang);
@@ -529,6 +529,12 @@ const std::vector<Token>& Tokenizer::tokens() {
     // A sheet qualifier, whatever the run would otherwise tokenize as.
     if (bracket_depth_ == 0 && (is_ascii_digit(static_cast<char>(c)) || (c != '\\' && is_ident_start_byte(c))) &&
         try_scan_local_sheet_qualifier()) {
+      continue;
+    }
+
+    // `.:` / `.:.` after a range endpoint the scanners stopped short of.
+    if (c == '.' && byte_pos_ + 1 < source_.size() && source_[byte_pos_ + 1] == ':') {
+      scan_colon();
       continue;
     }
 
@@ -835,6 +841,10 @@ void Tokenizer::scan_number() {
       continue;
     }
     if (ch == '.' && !saw_dot && !saw_exp) {
+      // `1.:3` is a leading-trim row range, not the literal `1.`.
+      if (byte_pos_ + 1 < source_.size() && source_[byte_pos_ + 1] == ':' && byte_pos_ > start) {
+        break;
+      }
       saw_dot = true;
       is_integer = false;
       advance_one();
@@ -902,7 +912,8 @@ void Tokenizer::scan_number() {
   // Reject an immediately-following second '.' as in `1.2.3`. Without this
   // check the main loop would produce Number("1.2"), Invalid or similar;
   // flagging it here yields the more actionable diagnostic.
-  if (byte_pos_ < source_.size() && source_[byte_pos_] == '.') {
+  if (byte_pos_ < source_.size() && source_[byte_pos_] == '.' &&
+      !(byte_pos_ + 1 < source_.size() && source_[byte_pos_ + 1] == ':')) {
     // Absorb the offending run up to the next whitespace / operator so the
     // diagnostic lexeme covers the whole malformed literal.
     while (byte_pos_ < source_.size() && (is_ascii_digit(source_[byte_pos_]) || source_[byte_pos_] == '.')) {
@@ -1051,6 +1062,19 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
       continue;
     }
     if (c < 0x80) {
+      // A cell or column endpoint stops before the `.:` of a trim operator; a
+      // `.` inside a name (`Tax.Rate`) does not.
+      if (c == '.' && byte_pos_ + 1 < source_.size() && source_[byte_pos_ + 1] == ':') {
+        const std::string_view head(source_.data() + start, byte_pos_ - start);
+        bool letters_only = false;
+        bool anchored_letters = false;
+        if (head.size() >= 2 && head.front() == '$') {
+          (void)looks_like_cellref(head.substr(1), &anchored_letters);
+        }
+        if (looks_like_cellref(head, &letters_only) || letters_only || anchored_letters) {
+          break;
+        }
+      }
       if (is_ident_cont_byte(c)) {
         advance_one();
         continue;
@@ -1259,6 +1283,30 @@ void Tokenizer::scan_lt() {
     }
   }
   emit(TokenKind::Lt, start);
+}
+
+void Tokenizer::scan_colon() {
+  const std::size_t start = byte_pos_;
+  mark_start();
+  const bool leading = source_[byte_pos_] == '.';
+  if (leading) {
+    advance_one();
+  }
+  advance_one();  // ':'
+  // `:.` only before a reference endpoint (`A1:.A10`, `1:.1`, `A:.$A`).
+  bool trailing = false;
+  if (byte_pos_ + 1 < source_.size() && source_[byte_pos_] == '.') {
+    const char next = source_[byte_pos_ + 1];
+    if (is_ascii_letter(next) || is_ascii_digit(next) || next == '$') {
+      trailing = true;
+      advance_one();
+    }
+  }
+  emit(TokenKind::Colon, start);
+  tokens_.back().trim = leading && trailing ? TrimRefMode::Both
+                        : leading           ? TrimRefMode::Leading
+                        : trailing          ? TrimRefMode::Trailing
+                                            : TrimRefMode::None;
 }
 
 void Tokenizer::scan_gt() {

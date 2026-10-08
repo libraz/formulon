@@ -178,11 +178,15 @@ struct EncodedFormula {
 ///   * The hidden `_xlfn.LET` / `_xlfn.LAMBDA` callee and one
 ///     `_xlpm.<param>` placeholder per LET binding or LAMBDA parameter.
 ///
+///   * The hidden `_xleta.<NAME>` of each of `function_values`
+///     (`function_value_refs`), a built-in named as a value.
+///
 /// Names already present in `seen` are skipped (both to dedupe and so
 /// callers can pre-seed `seen` with names that already have an assigned
 /// `ilbl`, e.g. from the workbook's existing defined-name table).
 void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names,
-                       std::unordered_set<std::string>& seen);
+                       std::unordered_set<std::string>& seen,
+                       const std::vector<const parser::AstNode*>* function_values = nullptr);
 
 /// `collect_ptg_names` without the self-book `[0]!Rate`: every name the
 /// formula resolves from its own scope.
@@ -243,6 +247,12 @@ using NameShapes = std::function<NameShape(const parser::AstNode& name)>;
 /// it evaluates a multi-valued operand where a formula without the mark
 /// would intersect it (`=SUM(A1:A2*2)`). Measured against Excel's own marks.
 bool formula_is_dynamic_array(const parser::AstNode& root, const NameShapes& names);
+
+/// The `NameRef`s in `root` that name a built-in function as a value
+/// (`=TYPE(SUM)`): unqualified, bound by no enclosing LET / LAMBDA, and
+/// naming no defined name `names` knows. Excel stores each as
+/// `_xleta.<NAME>`.
+std::vector<const parser::AstNode*> function_value_refs(const parser::AstNode& root, const NameShapes& names);
 
 /// True when Excel 365 sets `fCalcExp` on a defined name whose formula is
 /// `root` (measured name by name): its value is a call to a built-in

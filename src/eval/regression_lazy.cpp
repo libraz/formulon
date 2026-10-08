@@ -25,6 +25,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -132,6 +134,34 @@ bool compute_slope_intercept(const std::variant<Value, NumericPairs>& prepared, 
   return true;
 }
 
+// COVARIANCE.P / COVARIANCE.S given two scalar expressions treat each as a
+// one-element array. Returns the single pair (a non-numeric scalar leaves
+// none), or an error Value when either argument evaluates to an error;
+// nullopt when either argument is not a scalar expression.
+std::optional<std::variant<Value, NumericPairs>> scalar_covariance_pairs(const parser::AstNode& call, Arena& arena,
+                                                                         const FunctionRegistry& registry,
+                                                                         const EvalContext& ctx) {
+  RangeResult scalars[2];
+  for (std::uint32_t i = 0; i < 2U; ++i) {
+    auto resolved = resolve_range_arg(call.as_call_arg(i), arena, registry, ctx);
+    if (!resolved || !resolved.value().from_scalar || resolved.value().cells.size() != 1U) {
+      return std::nullopt;
+    }
+    scalars[i] = std::move(resolved.value());
+  }
+  for (const RangeResult& r : scalars) {
+    if (r.cells.front().is_error()) {
+      return std::variant<Value, NumericPairs>{r.cells.front()};
+    }
+  }
+  NumericPairs pairs;
+  if (scalars[0].cells.front().is_number() && scalars[1].cells.front().is_number()) {
+    pairs.first.push_back(scalars[0].cells.front().as_number());
+    pairs.second.push_back(scalars[1].cells.front().as_number());
+  }
+  return std::variant<Value, NumericPairs>{std::move(pairs)};
+}
+
 enum class PairStat {
   Correl,
   CovarianceP,
@@ -149,6 +179,12 @@ enum class PairStat {
 Value eval_pair_stat(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx, PairStat kind) {
   auto prepared = prepare_pairs(call, arena, registry, ctx);
+  if ((kind == PairStat::CovarianceP || kind == PairStat::CovarianceS) && std::holds_alternative<Value>(prepared) &&
+      std::get<Value>(prepared).is_error() && std::get<Value>(prepared).as_error() == ErrorCode::NA) {
+    if (auto scalar = scalar_covariance_pairs(call, arena, registry, ctx)) {
+      prepared = std::move(*scalar);
+    }
+  }
   if (std::holds_alternative<Value>(prepared)) {
     return std::get<Value>(prepared);
   }

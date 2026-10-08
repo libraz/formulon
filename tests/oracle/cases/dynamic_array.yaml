@@ -239,3 +239,15 @@ cases:
     setup:
       A1: "=SEQUENCE(3)"
     formula: "=SUM(OFFSET(A1,0,5)#)"
+
+  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  #    arguments, and the near-integer snap of integer arguments --------------
+  - id: pf_sequence
+    formula: "=ROWS(SEQUENCE(2.9999999))"
+
+  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  - id: snap_sequence_cols
+    formula: "=COLUMNS(SEQUENCE(1,2.9999999))"
+
+  - id: snap_randarray_rows
+    formula: "=ROWS(RANDARRAY(2.9999999))"

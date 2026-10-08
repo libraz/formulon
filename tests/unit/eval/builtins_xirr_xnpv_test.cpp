@@ -250,6 +250,33 @@ TEST(FinancialXnpv, ArityTooMany) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// XNPV follows the Analysis-ToolPak rule on its scalar rate.
+TEST(BuiltinsXnpvAnalysisToolPak, BoolRateIsValue) {
+  const Value v = EvalSource("=XNPV(TRUE,{1,2},{1,2})");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsXnpvAnalysisToolPak, OmittedRateIsNA) {
+  const Value v = EvalSource("=XNPV(,{-1,2},{1,2})");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsXirrAnalysisToolPak, BoolGuessIsValue) {
+  const Value v = EvalSource("=XIRR({-100,110},{1,400},TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsXirrAnalysisToolPak, OmittedGuessMatchesAbsentGuess) {
+  const Value omitted = EvalSource("=XIRR({-100,110},{1,400},)");
+  const Value absent = EvalSource("=XIRR({-100,110},{1,400})");
+  ASSERT_TRUE(omitted.is_number());
+  ASSERT_TRUE(absent.is_number());
+  EXPECT_EQ(omitted.as_number(), absent.as_number());
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

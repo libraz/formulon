@@ -240,33 +240,6 @@ static double ChisqPdf(double x, double df) noexcept {
 // online help and tracked by the oracle suite.
 static constexpr double kChisqDfMax = 1.0e10;
 
-// Threshold above which the chi-squared CDF switches from the regularized
-// incomplete-gamma series to the Wilson-Hilferty cube-root transform. The
-// series-based `p_gamma` accumulates non-trivial round-off in the central
-// CLT regime `x ≈ df` once `df` is several thousand (Mac Excel uses an
-// approximation that diverges from our series by ~2.4e-3 at df=10000).
-// Wilson-Hilferty is ~1e-5 accurate at df=1000 and continues improving
-// like 1/df, so 1000 is a safe switch-over point that does not regress
-// the medium-df oracle cases (df = 1 / 2 / 4.7 / 100 / etc.).
-static constexpr double kChisqWilsonHilfertyDf = 1000.0;
-
-// Wilson-Hilferty approximation for the chi-squared CDF: the cube-root
-// transform `h = (x/df)^(1/3)` is approximately normal with mean
-// `1 - 2/(9 df)` and variance `2/(9 df)`, so the CDF reduces to the
-// standard-normal CDF of the standardised z. Used only when `df` is
-// large enough that the incomplete-gamma series struggles in the
-// CLT regime; smaller df rely on `stats::p_gamma` for full precision.
-static double ChisqCdfWilsonHilferty(double x, double df) noexcept {
-  const double h = std::cbrt(x / df);
-  const double inv9df = 1.0 / (9.0 * df);
-  const double mu = 1.0 - 2.0 * inv9df;
-  const double sigma = std::sqrt(2.0 * inv9df);
-  const double z = (h - mu) / sigma;
-  // Standard-normal CDF via complementary error function; matches the
-  // formula in `NormDistCompute` so callers stay consistent.
-  return 0.5 * std::erfc(-z / std::sqrt(2.0));
-}
-
 // CHISQ.DIST(x, df, cumulative) - chi-squared distribution CDF or PDF.
 // Excel floors `df` toward -inf and rejects non-positive `df`, `df` above
 // 1e10, and negative `x` with `#NUM!`. The PDF singularity at `x == 0`
@@ -285,11 +258,6 @@ Value ChisqDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (input.value().cumulative) {
     if (x == 0.0) {
       r = 0.0;
-    } else if (df >= kChisqWilsonHilfertyDf) {
-      // The incomplete-gamma series loses precision near the CLT centre
-      // for very large df (Mac Excel disagrees by ~2e-3 at df=10000).
-      // Wilson-Hilferty matches Mac Excel to <1e-5 in this regime.
-      r = ChisqCdfWilsonHilferty(x, df);
     } else {
       r = stats::p_gamma(0.5 * df, 0.5 * x);
     }
@@ -328,56 +296,12 @@ Value ChisqDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   return finite_number_result(r);
 }
 
-// Shared Newton-Raphson inverter for CHISQ.INV(p, df). Assumes the caller
-// has already validated `0 <= p < 1` and `df` in range, and passes the
-// already-floored `df`. `p == 0` is handled up-front by the wrappers; this
-// routine is invoked only with `p` strictly in (0, 1). Returns NaN on
+// Shared inverter of CHISQ.INV / CHISQ.INV.RT: `2 * gamma_quantile(df / 2)`
+// on the requested tail probability, which must lie strictly in (0, 1). The
+// caller has already validated `df` and passes it floored. Returns NaN on
 // non-convergence so callers can surface `#NUM!`.
-static double ChisqInvCore(double p, double df) noexcept {
-  // Wilson-Hilferty transformation for the initial guess. For moderate df
-  // this lands within a few percent of the true quantile; for very small
-  // df / extreme p we fall back to df/2 if the guess goes negative.
-  const double h = 2.0 / (9.0 * df);
-  const double z = InverseStandardNormal(p);
-  const double cube_arg = 1.0 - h + z * std::sqrt(h);
-  double x = df * cube_arg * cube_arg * cube_arg;
-  if (!(x > 0.0)) {
-    // Covers negative, zero, NaN cases (e.g. df=1 and p near 0).
-    x = 0.5 * df;
-  }
-  constexpr int kMaxIter = 100;
-  constexpr double kTol = 1e-10;
-  for (int i = 0; i < kMaxIter; ++i) {
-    const double cdf = stats::p_gamma(0.5 * df, 0.5 * x);
-    if (std::isnan(cdf)) {
-      return std::numeric_limits<double>::quiet_NaN();
-    }
-    const double pdf = ChisqPdf(x, df);
-    if (pdf <= 0.0 || std::isnan(pdf) || std::isinf(pdf)) {
-      // No meaningful Newton step; accept the current x as the best
-      // estimate and let the caller decide whether it's close enough.
-      return x;
-    }
-    double step = (cdf - p) / pdf;
-    double x_new = x - step;
-    // Safeguard against stepping into the forbidden x < 0 half-line.
-    // Halve the step until we land inside the positive reals.
-    while (x_new <= 0.0) {
-      step *= 0.5;
-      x_new = x - step;
-      if (std::abs(step) < kTol) {
-        x_new = 0.5 * x;  // Final fallback: move toward zero.
-        break;
-      }
-    }
-    if (std::abs(x_new - x) < kTol * std::max(1.0, std::abs(x))) {
-      return x_new;
-    }
-    x = x_new;
-  }
-  // Failed to converge after kMaxIter iterations. Return NaN so the
-  // wrapper surfaces #NUM!.
-  return std::numeric_limits<double>::quiet_NaN();
+static double ChisqInvCore(double tail, double df, bool upper) noexcept {
+  return 2.0 * stats::gamma_quantile(0.5 * df, tail, upper);
 }
 
 // CHISQ.INV(p, df) - inverse of the left-tailed chi-squared CDF. `p` must
@@ -395,7 +319,8 @@ Value ChisqInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (p == 0.0) {
     return Value::number(0.0);
   }
-  return finite_number_result(ChisqInvCore(p, df));
+  return finite_number_result(p < 0.5 ? ChisqInvCore(p, df, /*upper=*/false)
+                                      : ChisqInvCore(1.0 - p, df, /*upper=*/true));
 }
 
 // CHISQ.INV.RT(p, df) - inverse of the right-tailed CDF. `p == 1` means
@@ -415,7 +340,7 @@ Value ChisqInvRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (p == 1.0) {
     return Value::number(0.0);
   }
-  return finite_number_result(ChisqInvCore(1.0 - p, df));
+  return finite_number_result(ChisqInvCore(p, df, /*upper=*/true));
 }
 
 // EXPON.DIST(x, lambda, cumulative) - exponential distribution PDF or CDF.
@@ -508,9 +433,10 @@ static double TDistPdf(double x, double df) noexcept {
 }
 
 // T.DIST(x, deg_freedom, cumulative) - Student's t-distribution PDF or CDF.
-// `df` is floored toward -inf and must satisfy `df >= 1`; `x` is
-// unrestricted (the distribution is symmetric around 0). The PDF uses
-// lgamma to avoid overflow at large df.
+// `df` is floored toward -inf and must satisfy `df >= 1`, except that the
+// PDF at a floored `df == 0` is `#DIV/0!`; `x` is unrestricted (the
+// distribution is symmetric around 0). The PDF uses lgamma to avoid
+// overflow at large df.
 Value TDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto input = read_pair_cumulative(args);
   if (!input) {
@@ -518,6 +444,9 @@ Value TDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   const double x = input.value().first;
   const double df = std::floor(input.value().second);
+  if (df == 0.0 && !input.value().cumulative) {
+    return Value::error(ErrorCode::Div0);
+  }
   if (df < 1.0 || df > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
@@ -558,37 +487,53 @@ Value TDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return finite_number_result(TDistRtCore(x, df));
 }
 
-// Inverts the Student's t CDF through the directly evaluated right tail and
-// a dynamically expanded bracket. This admits heavy df=1 Cauchy tails whose
-// finite quantiles can exceed the previous fixed 1e6 limit.
+// Probability mass of Student's t between 0 and `x >= 0`. Evaluated from the
+// small-argument side of the incomplete beta so it stays relatively accurate
+// for an `x` near 0, where `0.5 - right_tail` would cancel.
+static double TDistCentralMass(double x, double df) noexcept {
+  if (df >= kTDistAsymptoticDfThreshold) {
+    return 0.5 - TDistRtAsymptotic(x, df);
+  }
+  const double t2 = x * x;
+  const double z = std::isinf(t2) ? 1.0 : t2 / (df + t2);
+  return 0.5 * stats::regularized_incomplete_beta(0.5, 0.5 * df, z);
+}
+
+// Solves for the `x >= 0` whose right tail equals `q`, `0 < q < 0.5`, by
+// bisection on a doubled bracket. A `q` above 0.25 is matched against the
+// central mass `0.5 - q` (exact in floating point) instead of the tail, so a
+// quantile near 0 keeps its relative accuracy. Returns NaN when no finite
+// bracket exists or the underlying beta evaluation refuses the shape.
+static double TInvTail(double q, double df) noexcept {
+  const bool use_central = q > 0.25;
+  const double central = 0.5 - q;
+  const auto reached = [&](double x) {
+    return use_central ? TDistCentralMass(x, df) >= central : TDistRtCore(x, df) <= q;
+  };
+  double lo = 0.0;
+  double hi = 1.0;
+  for (int i = 0; i < 1024 && !reached(hi); ++i) {
+    if (hi > std::numeric_limits<double>::max() * 0.5) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    lo = hi;
+    hi *= 2.0;
+  }
+  for (int i = 0; i < 200 && hi - lo > 4e-16 * hi; ++i) {
+    const double mid = lo + (hi - lo) * 0.5;
+    (reached(mid) ? hi : lo) = mid;
+  }
+  return lo + (hi - lo) * 0.5;
+}
+
+// Inverts the Student's t CDF through the smaller tail, so the probability
+// never passes through `1 - p`. A bracket that grows dynamically admits the
+// heavy df=1 Cauchy tails whose finite quantiles exceed any fixed limit.
 double TInvCore(double p, double df) noexcept {
   if (p == 0.5) {
     return 0.0;
   }
-  if (p < 0.5) {
-    return -TInvCore(1.0 - p, df);
-  }
-  const double target = 1.0 - p;
-  double lo = 0.0;
-  double hi = 1.0;
-  for (int i = 0; i < 1024 && TDistRtCore(hi, df) > target; ++i) {
-    if (hi > std::numeric_limits<double>::max() * 0.5) {
-      return std::numeric_limits<double>::quiet_NaN();
-    }
-    hi *= 2.0;
-  }
-  for (int i = 0; i < 160; ++i) {
-    const double mid = lo + (hi - lo) * 0.5;
-    if (TDistRtCore(mid, df) > target) {
-      lo = mid;
-    } else {
-      hi = mid;
-    }
-    if (hi - lo <= 1e-12 * std::max(1.0, hi)) {
-      break;
-    }
-  }
-  return lo + (hi - lo) * 0.5;
+  return p < 0.5 ? -TInvTail(p, df) : TInvTail(1.0 - p, df);
 }
 
 // T.INV(probability, deg_freedom) - inverse of Student's t CDF.
@@ -614,7 +559,9 @@ Value TInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // then lies in (0, 0.5)). We mirror that behaviour for 1-bit parity:
 // the validation accepts `p < 2`, the `p == 1` fast path stays as the
 // symmetric centre, and `TInvCore(1 - p/2, df)` handles the extended
-// range naturally because `1 - p/2` remains strictly inside (0, 1).
+// range naturally because `1 - p/2` remains strictly inside (0, 1). The
+// tail probability is formed directly (`p/2`, or `1 - p/2` for p > 1), never
+// as `1 - p/2` before inverting.
 Value TInv2T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto input = read_number_pair(args, 0, 1);
   if (!input) {
@@ -628,7 +575,7 @@ Value TInv2T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (p == 1.0) {
     return Value::number(0.0);
   }
-  return finite_number_result(TInvCore(1.0 - 0.5 * p, df));
+  return finite_number_result(p < 1.0 ? TInvTail(0.5 * p, df) : -TInvTail(1.0 - 0.5 * p, df));
 }
 
 // Snedecor's F CDF at `x >= 0` with `(d1, d2)` degrees of freedom, via

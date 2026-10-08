@@ -154,3 +154,31 @@ cases:
   - id: amordegrc_purchase_after_first_period_is_num
     description: "purchase_date > first_period -> #NUM!"
     formula: "=AMORDEGRC(2400, DATE(2009,1,15), DATE(2008,12,31), 300, 1, 0.15, 1)"
+
+  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  #    arguments, and the near-integer snap of integer arguments --------------
+  - id: atp_accrintm_bool
+    formula: "=ACCRINTM(TRUE,40000,0.1,1000)"
+
+  - id: atp_accrintm_omit
+    formula: "=ACCRINTM(,40000,0.1,1000)"
+
+  - id: atp_accrintm_boolcell
+    setup: { A1: true }
+    formula: "=ACCRINTM(A1,40000,0.1,1000)"
+
+  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  - id: a4_accrint_bool
+    formula: "=ACCRINT(TRUE,DATE(2024,1,15),DATE(2030,1,15),0.1,1000,2)"
+
+  - id: a4_accrint_omit
+    formula: "=ACCRINT(,DATE(2024,1,15),DATE(2030,1,15),0.1,1000,2)"
+
+  - id: a4_amorlinc_bool
+    formula: "=AMORLINC(TRUE,DATE(2024,1,15),DATE(2030,1,15),100,1,0.1)"
+
+  - id: a4_amorlinc_omit
+    formula: "=AMORLINC(,DATE(2024,1,15),DATE(2030,1,15),100,1,0.1)"
+
+  - id: opt_accrint_calc_bool
+    formula: "=ACCRINT(DATE(2024,1,15),DATE(2024,1,15)+182,DATE(2030,1,15),0.1,1000,2,0,FALSE)"

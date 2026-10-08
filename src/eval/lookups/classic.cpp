@@ -345,10 +345,10 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
   if (!index_num) {
     return fail_lookup(lookup, arena, Value::error(index_num.error()));
   }
-  const double index_raw = truncate_index(index_num.value());
-  if (index_raw < 1.0) {
+  if (truncate_index(index_num.value()) < 1.0 && snap_near_integer(index_num.value()) < 1.0) {
     return fail_lookup(lookup, arena, Value::error(ErrorCode::Value));
   }
+  const double index_raw = truncate_index(snap_near_integer(index_num.value()));
   const std::uint32_t result_extent = axis == LookupAxis::Column ? cols : rows;
   if (index_raw > static_cast<double>(result_extent)) {
     return fail_lookup(lookup, arena, Value::error(ErrorCode::Ref));

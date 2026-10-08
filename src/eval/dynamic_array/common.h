@@ -120,14 +120,6 @@ bool ascii_ci_less(std::string_view a, std::string_view b);
 bool resolve_sort_order_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx, bool& descending, Value& error_out);
 
-/// Resolve a 1-based / negative index for CHOOSECOLS / CHOOSEROWS into a
-/// 0-based axis index. Returns `true` and writes `out` on success;
-/// `false` and writes the caller-visible error on coercion failure, zero
-/// index, or out-of-range.
-bool resolve_choose_index(const parser::AstNode& node, std::uint32_t axis_size, Arena& arena,
-                          const FunctionRegistry& registry, const EvalContext& ctx, std::uint32_t& out,
-                          Value& error_out);
-
 /// Decode a signed count argument for TAKE / DROP into a half-open
 /// `[lo, hi)` slice of the source axis. `take == true` selects cells to
 /// retain; `take == false` selects cells to drop (and the retained range

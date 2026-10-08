@@ -2,11 +2,11 @@
   "suite": "stats",
   "description": "MEDIAN / MODE / LARGE / SMALL / PERCENTILE / QUARTILE / STDEV / VAR",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T01:04:33Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -2313,6 +2313,186 @@
       "expect": {
         "kind": "number",
         "value": 0.4082482904638623
+      }
+    },
+    {
+      "id": "median_only_omitted_slots",
+      "formula": "=MEDIAN(,)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "avedev_only_omitted_slots",
+      "formula": "=AVEDEV(,)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "stdev_omitted_slot_counts",
+      "formula": "=STDEV(3,,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "geomean_omitted_slot_is_num",
+      "formula": "=GEOMEAN(,)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "mode_omitted_slot_is_value",
+      "formula": "=MODE(3,3,,6)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mode_mult_omitted_slot_is_value",
+      "formula": "=MODE.MULT(3,3,,6)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "avedev_direct_bool",
+      "formula": "=AVEDEV(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.25
+      }
+    },
+    {
+      "id": "avedev_direct_numeric_text",
+      "formula": "=AVEDEV(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.75
+      }
+    },
+    {
+      "id": "avedev_direct_text_is_value",
+      "formula": "=AVEDEV(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "devsq_direct_numeric_text",
+      "formula": "=DEVSQ(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 232.75
+      }
+    },
+    {
+      "id": "kurt_direct_bool",
+      "formula": "=KURT(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0448178009999545
+      }
+    },
+    {
+      "id": "skew_direct_numeric_text",
+      "formula": "=SKEW(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9778816913890982
+      }
+    },
+    {
+      "id": "skew_p_direct_bool",
+      "formula": "=SKEW.P(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5113967694826014
+      }
+    },
+    {
+      "id": "geomean_direct_numeric_text",
+      "formula": "=GEOMEAN(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.47213595499958
+      }
+    },
+    {
+      "id": "geomean_direct_bool_is_num",
+      "formula": "=GEOMEAN(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "harmean_direct_numeric_text",
+      "formula": "=HARMEAN(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.424242424242424
+      }
+    },
+    {
+      "id": "median_direct_bool",
+      "formula": "=MEDIAN(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.5
+      }
+    },
+    {
+      "id": "median_direct_numeric_text",
+      "formula": "=MEDIAN(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "large_k_snaps_near_integer",
+      "formula": "=LARGE({10;5;30;20},1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "small_k_truncates_near_integer",
+      "formula": "=SMALL({10;5;30;20},1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
       }
     }
   ]

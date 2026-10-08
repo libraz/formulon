@@ -29,14 +29,14 @@ TEST(PivotBy, RowTotalDepthTwoAddsASubtotalRowPerOuterRowGroup) {
   EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 20.0);
   // Subtotal for outer group A: 10 under X, 20 under Y, 30 in total.
   EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "A");
-  EXPECT_TRUE(Cell(v, 3, 1).is_blank()) << v.debug_to_string();
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 3, 1))) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 10.0);
   EXPECT_DOUBLE_EQ(Cell(v, 3, 3).as_number(), 20.0);
   EXPECT_DOUBLE_EQ(Cell(v, 3, 4).as_number(), 30.0);
   // Outer group B has no Y data, so that cell stays blank.
   EXPECT_EQ(std::string(Cell(v, 5, 0).as_text()), "B");
   EXPECT_DOUBLE_EQ(Cell(v, 5, 2).as_number(), 30.0);
-  EXPECT_TRUE(Cell(v, 5, 3).is_blank()) << v.debug_to_string();
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 5, 3))) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 5, 4).as_number(), 30.0);
   // Grand total closes the block, promoted to 総計 now that subtotal rows
   // share the same column.
@@ -102,16 +102,16 @@ TEST(PivotBy, ColTotalDepthPositiveTwoMatchesMacExcelObservedMatrix) {
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_rows(), 5U);
   ASSERT_EQ(v.as_array_cols(), 6U);
-  EXPECT_TRUE(Cell(v, 0, 0).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 0, 0)));
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "Y");
   EXPECT_EQ(std::string(Cell(v, 0, 4).as_text()), "Y");
   EXPECT_EQ(std::string(Cell(v, 0, 5).as_text()), "総計");
   EXPECT_EQ(std::string(Cell(v, 1, 1).as_text()), "M");
-  EXPECT_TRUE(Cell(v, 1, 2).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 1, 2)));
   EXPECT_EQ(std::string(Cell(v, 1, 3).as_text()), "N");
-  EXPECT_TRUE(Cell(v, 1, 4).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 1, 4)));
   EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "合計");
   EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 4.0);
   EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 4.0);
@@ -120,11 +120,11 @@ TEST(PivotBy, ColTotalDepthPositiveTwoMatchesMacExcelObservedMatrix) {
   EXPECT_DOUBLE_EQ(Cell(v, 2, 5).as_number(), 6.0);
   EXPECT_DOUBLE_EQ(Cell(v, 3, 1).as_number(), 4.0);
   EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 4.0);
-  EXPECT_TRUE(Cell(v, 3, 3).is_blank());
-  EXPECT_TRUE(Cell(v, 3, 4).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 3, 3)));
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 3, 4)));
   EXPECT_DOUBLE_EQ(Cell(v, 3, 5).as_number(), 4.0);
-  EXPECT_TRUE(Cell(v, 4, 1).is_blank());
-  EXPECT_TRUE(Cell(v, 4, 2).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 4, 1)));
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 4, 2)));
   EXPECT_DOUBLE_EQ(Cell(v, 4, 3).as_number(), 2.0);
   EXPECT_DOUBLE_EQ(Cell(v, 4, 4).as_number(), 2.0);
   EXPECT_DOUBLE_EQ(Cell(v, 4, 5).as_number(), 2.0);
@@ -139,16 +139,16 @@ TEST(PivotBy, ColTotalDepthNegativeTwoMatchesMacExcelObservedMatrix) {
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_rows(), 5U);
   ASSERT_EQ(v.as_array_cols(), 6U);
-  EXPECT_TRUE(Cell(v, 0, 0).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 0, 0)));
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "総計");
   EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 4).as_text()), "Y");
   EXPECT_EQ(std::string(Cell(v, 0, 5).as_text()), "Y");
-  EXPECT_TRUE(Cell(v, 1, 1).is_blank());
-  EXPECT_TRUE(Cell(v, 1, 2).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 1, 1)));
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 1, 2)));
   EXPECT_EQ(std::string(Cell(v, 1, 3).as_text()), "M");
-  EXPECT_TRUE(Cell(v, 1, 4).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 1, 4)));
   EXPECT_EQ(std::string(Cell(v, 1, 5).as_text()), "N");
   EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "合計");
   EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 6.0);
@@ -170,10 +170,10 @@ TEST(PivotBy, ColTotalDepthTwoTilesEveryValueColumn) {
   EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 40.0);
   EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 4.0);
   EXPECT_DOUBLE_EQ(Cell(v, 2, 4).as_number(), 40.0);
-  EXPECT_TRUE(Cell(v, 2, 5).is_blank());
-  EXPECT_TRUE(Cell(v, 2, 6).is_blank());
-  EXPECT_TRUE(Cell(v, 2, 7).is_blank());
-  EXPECT_TRUE(Cell(v, 2, 8).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 2, 5)));
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 2, 6)));
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 2, 7)));
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 2, 8)));
   EXPECT_DOUBLE_EQ(Cell(v, 3, 5).as_number(), 2.0);
   EXPECT_DOUBLE_EQ(Cell(v, 3, 6).as_number(), 20.0);
   EXPECT_DOUBLE_EQ(Cell(v, 3, 7).as_number(), 2.0);
@@ -190,7 +190,7 @@ TEST(PivotBy, RowAndColumnNestedSubtotalsIntersectAtBothOuterKeys) {
   ASSERT_EQ(v.as_array_cols(), 7U);
   // A subtotal row: X leaf/subtotal=10, Y leaf/subtotal=20.
   EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "A");
-  EXPECT_TRUE(Cell(v, 4, 1).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 4, 1)));
   EXPECT_DOUBLE_EQ(Cell(v, 4, 2).as_number(), 10.0);
   EXPECT_DOUBLE_EQ(Cell(v, 4, 3).as_number(), 10.0);
   EXPECT_DOUBLE_EQ(Cell(v, 4, 4).as_number(), 20.0);
@@ -199,8 +199,8 @@ TEST(PivotBy, RowAndColumnNestedSubtotalsIntersectAtBothOuterKeys) {
   EXPECT_EQ(std::string(Cell(v, 6, 0).as_text()), "B");
   EXPECT_DOUBLE_EQ(Cell(v, 6, 2).as_number(), 30.0);
   EXPECT_DOUBLE_EQ(Cell(v, 6, 3).as_number(), 30.0);
-  EXPECT_TRUE(Cell(v, 6, 4).is_blank());
-  EXPECT_TRUE(Cell(v, 6, 5).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 6, 4)));
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 6, 5)));
 }
 
 TEST(PivotBy, ColSubtotalSortKeepsOuterGroupsContiguous) {
@@ -234,8 +234,8 @@ TEST(PivotBy, ColSubtotalFilterAndErrorRemainLocal) {
   // out and stays blank. B remains fully calculable.
   EXPECT_EQ(Cell(v, 2, 1).as_error(), ErrorCode::Div0);
   EXPECT_EQ(Cell(v, 2, 2).as_error(), ErrorCode::Div0);
-  EXPECT_TRUE(Cell(v, 2, 3).is_blank());
-  EXPECT_TRUE(Cell(v, 2, 4).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 2, 3)));
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 2, 4)));
   EXPECT_DOUBLE_EQ(Cell(v, 3, 1).as_number(), 0.25);
   EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 0.25);
   EXPECT_DOUBLE_EQ(Cell(v, 3, 3).as_number(), 0.125);
@@ -250,7 +250,7 @@ TEST(PivotBy, ColTotalDepthTwoWithOneColumnLevelKeepsOrdinaryLayout) {
   ASSERT_EQ(v.as_array_cols(), 4U);  // key + two leaves + ordinary grand total
   // Row 0 is the col-axis label row; row 1 is the first body row (A).
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 1.0);
-  EXPECT_TRUE(Cell(v, 1, 2).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 1, 2)));
   EXPECT_TRUE(log.empty()) << "unexpected diagnostic: " << log.joined();
 }
 

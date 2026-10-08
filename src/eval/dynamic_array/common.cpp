@@ -276,38 +276,6 @@ bool resolve_sort_order_arg(const parser::AstNode& node, Arena& arena, const Fun
   return false;
 }
 
-bool resolve_choose_index(const parser::AstNode& node, std::uint32_t axis_size, Arena& arena,
-                          const FunctionRegistry& registry, const EvalContext& ctx, std::uint32_t& out,
-                          Value& error_out) {
-  double truncated = 0.0;
-  if (!eval_truncated_number_arg(node, arena, registry, ctx, truncated, error_out)) {
-    return false;
-  }
-  // Truncate-toward-zero on the user-supplied index. `0` after truncation
-  // is invalid; positives map to `[1, axis_size]`, negatives to
-  // `[-axis_size, -1]`. Anything else surfaces #VALUE!.
-  if (truncated == 0.0) {
-    error_out = Value::error(ErrorCode::Value);
-    return false;
-  }
-  if (truncated > 0.0) {
-    if (truncated > static_cast<double>(axis_size)) {
-      error_out = Value::error(ErrorCode::Value);
-      return false;
-    }
-    out = static_cast<std::uint32_t>(truncated) - 1U;
-    return true;
-  }
-  // Negative index path. `-1` maps to the last element (`axis_size - 1`).
-  const double abs_idx = -truncated;
-  if (abs_idx > static_cast<double>(axis_size)) {
-    error_out = Value::error(ErrorCode::Value);
-    return false;
-  }
-  out = axis_size - static_cast<std::uint32_t>(abs_idx);
-  return true;
-}
-
 bool resolve_take_drop_range(const parser::AstNode* node, std::uint32_t axis_size, bool take, Arena& arena,
                              const FunctionRegistry& registry, const EvalContext& ctx, std::uint32_t& lo,
                              std::uint32_t& hi, Value& error_out) {

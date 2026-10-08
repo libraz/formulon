@@ -118,6 +118,12 @@ struct SheetFormatDefaults {
   double base_col_width = ooxml_defaults::kBaseColWidthChars;
   bool has_default_col_width = false;   ///< True when `defaultColWidth` was present.
   bool has_default_row_height = false;  ///< True when `defaultRowHeight` was present.
+  bool custom_height = false;           ///< `customHeight`: the default row height is an explicit override.
+  bool zero_height = false;             ///< `zeroHeight`: rows are hidden by default.
+  bool thick_top = false;               ///< `thickTop`: rows carry a thick top border by default.
+  bool thick_bottom = false;            ///< `thickBottom`: rows carry a thick bottom border by default.
+  std::uint8_t outline_level_row = 0;   ///< `outlineLevelRow`: highest row outline level in use.
+  std::uint8_t outline_level_col = 0;   ///< `outlineLevelCol`: highest column outline level in use.
 };
 
 /// A single manual page break.

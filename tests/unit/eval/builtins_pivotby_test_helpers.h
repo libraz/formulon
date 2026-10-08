@@ -31,6 +31,11 @@ inline Value EvalSrc(std::string_view src) {
   return evaluate(*root, eval_arena, default_registry(), test::mac_context());
 }
 
+/// True for the empty-text cell Excel fills result placeholders with.
+inline bool IsPlaceholder(const Value& v) {
+  return v.is_text() && v.as_text().empty();
+}
+
 inline const Value& Cell(const Value& v, std::uint32_t r, std::uint32_t c) {
   return v.as_array_cells()[static_cast<std::size_t>(r) * v.as_array_cols() + c];
 }

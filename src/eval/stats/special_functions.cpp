@@ -65,11 +65,12 @@ int clamp_iterations(double budget) noexcept {
 }
 
 // The gamma series and continued fraction need materially more work for a
-// large shape parameter around their transition boundary. Never return a
-// partial sum silently: callers receive NaN on a genuine non-convergence and
-// convert it to Excel's #NUM!.
+// large shape parameter around their transition boundary: the terms fall off
+// like exp(-n^2 / 2a), and the stopping rule below also waits out the slowly
+// decaying tail. Never return a partial sum silently: callers receive NaN on
+// a genuine non-convergence and convert it to Excel's #NUM!.
 int max_gamma_iterations(double a) noexcept {
-  return clamp_iterations(10.0 * std::sqrt(a) + 200.0);
+  return clamp_iterations(16.0 * std::sqrt(a) + 200.0);
 }
 
 // Iteration budget for the beta continued fraction, which follows a
@@ -109,20 +110,122 @@ struct CfResult {
   bool converged;
 };
 
-// Series expansion for `P(a, x)` valid for `x < a + 1`.
+// Stirling-series remainder `ln(n!) - ((n + 1/2) ln n - n + ln sqrt(2 pi))`,
+// the building block of the saddle-point prefactors below. The series is used
+// past 15; below it the definition is evaluated directly, where `ln(n!)` is
+// small enough not to cancel.
+double stirling_error(double n) noexcept {
+  if (n <= 15.0) {
+    constexpr double kLnSqrtTwoPi = 0.918938533204672741780329736406;
+    return log_gamma(n + 1.0) - (n + 0.5) * std::log(n) + n - kLnSqrtTwoPi;
+  }
+  constexpr double kS0 = 1.0 / 12.0;
+  constexpr double kS1 = 1.0 / 360.0;
+  constexpr double kS2 = 1.0 / 1260.0;
+  constexpr double kS3 = 1.0 / 1680.0;
+  constexpr double kS4 = 1.0 / 1188.0;
+  const double nn = n * n;
+  if (n > 500.0) {
+    return (kS0 - kS1 / nn) / n;
+  }
+  if (n > 80.0) {
+    return (kS0 - (kS1 - kS2 / nn) / nn) / n;
+  }
+  if (n > 35.0) {
+    return (kS0 - (kS1 - (kS2 - kS3 / nn) / nn) / nn) / n;
+  }
+  return (kS0 - (kS1 - (kS2 - (kS3 - kS4 / nn) / nn) / nn) / nn) / n;
+}
+
+// Deviance term `x ln(x / np) + np - x` without the cancellation a direct
+// evaluation suffers when `x` is close to `np`.
+double deviance_term(double x, double np) noexcept {
+  if (std::abs(x - np) < 0.1 * (x + np)) {
+    double v = (x - np) / (x + np);
+    double s = (x - np) * v;
+    if (std::abs(s) < std::numeric_limits<double>::min()) {
+      return s;
+    }
+    double ej = 2.0 * x * v;
+    v *= v;
+    for (int j = 1; j < 1000; ++j) {
+      ej *= v;
+      const double s1 = s + ej / static_cast<double>(2 * j + 1);
+      if (s1 == s) {
+        return s1;
+      }
+      s = s1;
+    }
+  }
+  return x * std::log(x / np) + np - x;
+}
+
+// `x^a e^-x / Gamma(a)`, the factor in front of both incomplete-gamma
+// recursions. Past a shape of 15 the three log-space terms of the direct form
+// are individually huge and cancel, leaving a relative error that grows with
+// `a`; the saddle-point form `sqrt(a / 2 pi) exp(-stirling_error(a) -
+// deviance_term(a, x))` keeps every term small and is accurate to a few ulps
+// at any shape.
+double gamma_prefactor(double a, double x) noexcept {
+  constexpr double kSaddlePointShape = 15.0;
+  if (a > kSaddlePointShape) {
+    constexpr double kTwoPi = 6.283185307179586476925286766559;
+    return std::sqrt(a / kTwoPi) * std::exp(-stirling_error(a) - deviance_term(a, x));
+  }
+  return std::exp(-x + a * std::log(x) - log_gamma(a));
+}
+
+// `x^a (1 - x)^b / B(a, b)`, the factor in front of the incomplete-beta
+// continued fraction. The direct log-space form sums five terms that grow
+// with the shapes and cancel, so its relative error grows like
+// `eps * (a + b)`; the binomial saddle-point form
+// `n * p^a q^b Gamma(n) / (Gamma(a) Gamma(b))` with `n = a + b` and
+// `q = 1 - x` keeps every term small.
+double beta_prefactor(double a, double b, double x) noexcept {
+  const double n = a + b;
+  constexpr double kSaddlePointShape = 30.0;
+  if (n > kSaddlePointShape) {
+    constexpr double kTwoPi = 6.283185307179586476925286766559;
+    const double q = 1.0 - x;
+    const double log_binomial =
+        stirling_error(n) - stirling_error(a) - stirling_error(b) - deviance_term(a, n * x) - deviance_term(b, n * q);
+    return std::sqrt(n / (kTwoPi * a * b)) * std::exp(log_binomial) * (a * b / n);
+  }
+  return std::exp(log_gamma(n) - log_gamma(a) - log_gamma(b) + a * std::log(x) + b * std::log(1.0 - x));
+}
+
+// Series expansion for `P(a, x)`:
 // γ(a, x) / Γ(a) = e^(-x) * x^a / Γ(a) * Σ_{n=0..∞} x^n / (a*(a+1)*...*(a+n))
-// which is written iteratively as sum_{n} del_n where del_0 = 1/a and
-// del_{n+1} = del_n * x / (a + n + 1). Early-out when |del| < |sum| * eps.
+// written iteratively as sum_{n} del_n where del_0 = 1/a and
+// del_{n+1} = del_n * x / (a + n + 1). Early-out once the geometric tail left
+// behind, `del * x / (ap - x)`, is below `sum * eps`; stopping on `del` alone
+// leaves a truncation error of order `eps / (1 - x/ap)`, which is large when
+// `x` is close to a big `a`.
+//
+// For a large shape the series runs for ~sqrt(a) steps and a plain recurrence
+// accumulates their round-off (about 1e-11 relative at a = 5e9). Each term is
+// therefore carried as an unevaluated sum of two doubles, with the quotient
+// `x / ap` split into its rounded value and exact remainder, and the sum is
+// compensated; the cost is a few extra operations per step.
 CfResult p_gamma_series(double a, double x) noexcept {
-  double ap = a;
-  double sum = 1.0 / a;
-  double del = sum;
-  for (int n = 1; n <= max_gamma_iterations(a); ++n) {
-    ap += 1.0;
-    del *= x / ap;
-    sum += del;
-    if (std::abs(del) < std::abs(sum) * kEps) {
-      return {sum * std::exp(-x + a * std::log(x) - log_gamma(a)), true};
+  double term_hi = 1.0 / a;
+  double term_lo = std::fma(-term_hi, a, 1.0) / a;
+  double sum = term_hi;
+  double comp = term_lo;
+  const int max_iterations = max_gamma_iterations(a);
+  for (int n = 1; n <= max_iterations; ++n) {
+    const double ap = a + static_cast<double>(n);
+    const double ratio_hi = x / ap;
+    const double ratio_lo = std::fma(-ratio_hi, ap, x) / ap;
+    const double product = term_hi * ratio_hi;
+    const double error = std::fma(term_hi, ratio_hi, -product) + (term_hi * ratio_lo + term_lo * ratio_hi);
+    term_hi = product + error;
+    term_lo = error - (term_hi - product);
+    const double total = sum + term_hi;
+    comp += (std::abs(sum) >= std::abs(term_hi) ? (sum - total) + term_hi : (term_hi - total) + sum) + term_lo;
+    sum = total;
+    if (ap > x && term_hi * x < (sum + comp) * kEps * (ap - x)) {
+      return {(sum + comp) * gamma_prefactor(a, x), true};
     }
   }
   return {std::numeric_limits<double>::quiet_NaN(), false};
@@ -148,7 +251,7 @@ CfResult q_gamma_cf(double a, double x) noexcept {
     const double del = d * c;
     h *= del;
     if (std::abs(del - 1.0) < kEps) {
-      return {h * std::exp(-x + a * std::log(x) - log_gamma(a)), true};
+      return {h * gamma_prefactor(a, x), true};
     }
   }
   return {std::numeric_limits<double>::quiet_NaN(), false};
@@ -201,6 +304,15 @@ CfResult beta_cf(double a, double b, double x) noexcept {
   return {std::numeric_limits<double>::quiet_NaN(), false};
 }
 
+// Largest `x` for which the series is preferred over the continued fraction.
+// The classical split is `a + 1`; for a large shape the series stays accurate
+// well beyond it (its terms carry no cancellation) while the continued
+// fraction near the centre accumulates round-off, so the split moves out to
+// three standard deviations, where the complement is still >= 1e-3.
+double series_limit(double a) noexcept {
+  return a < 100.0 ? a + 1.0 : a + 3.0 * std::sqrt(a) + 1.0;
+}
+
 }  // namespace
 
 double log_gamma(double x) noexcept {
@@ -221,7 +333,7 @@ double p_gamma(double a, double x) noexcept {
   if (x == 0.0) {
     return 0.0;
   }
-  if (x < a + 1.0) {
+  if (x < series_limit(a)) {
     return p_gamma_series(a, x).value;
   }
   // Continued-fraction branch computes Q; return 1 - Q.
@@ -236,11 +348,63 @@ double q_gamma(double a, double x) noexcept {
   if (x == 0.0) {
     return 1.0;
   }
-  if (x < a + 1.0) {
+  if (x < series_limit(a)) {
     const CfResult p = p_gamma_series(a, x);
     return p.converged ? 1.0 - p.value : p.value;
   }
   return q_gamma_cf(a, x).value;
+}
+
+double gamma_quantile(double a, double prob, bool upper) noexcept {
+  constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
+  if (!(a > 0.0) || !(prob > 0.0 && prob < 1.0)) {
+    return kNaN;
+  }
+  // The smaller tail carries the information: `1 - prob` is exact once
+  // `prob > 0.5`, while a tail recovered as `1 - P` is not.
+  if (prob > 0.5) {
+    prob = 1.0 - prob;
+    upper = !upper;
+  }
+  // Newton on `ln tail(e^t) - ln prob`, a smooth near-linear function of
+  // `t = ln x` even when `prob` is far below double epsilon relative to 1.
+  // A bracket on the root keeps every step that Newton would throw outside it
+  // (or that a vanishing slope cannot define) on a bisection.
+  const double sign = upper ? -1.0 : 1.0;
+  constexpr double kMaxLogX = 700.0;
+  constexpr double kMaxStep = 4.0;
+  double lo = -kMaxLogX;
+  double hi = kMaxLogX;
+  double t = std::log(a);
+  for (int i = 0; i < 400; ++i) {
+    const double x = std::exp(t);
+    const double tail = upper ? q_gamma(a, x) : p_gamma(a, x);
+    if (std::isnan(tail)) {
+      return kNaN;
+    }
+    // A tail that underflowed lies below the target on the increasing side.
+    const double g = sign * (tail > 0.0 ? std::log(tail) - std::log(prob) : -kMaxLogX);
+    if (g < 0.0) {
+      lo = t;
+    } else {
+      hi = t;
+    }
+    const double slope = tail > 0.0 ? gamma_prefactor(a, x) / tail : 0.0;
+    double t_new;
+    if (slope > 0.0 && std::isfinite(slope)) {
+      t_new = t - std::clamp(g / slope, -kMaxStep, kMaxStep);
+    } else {
+      t_new = g < 0.0 ? t + kMaxStep : t - kMaxStep;
+    }
+    if (!(t_new > lo && t_new < hi)) {
+      t_new = (lo > -kMaxLogX && hi < kMaxLogX) ? 0.5 * (lo + hi) : std::clamp(t_new, lo, hi);
+    }
+    if (std::abs(t_new - t) <= 1e-15 * std::max(1.0, std::abs(t))) {
+      return std::exp(t_new);
+    }
+    t = t_new;
+  }
+  return kNaN;
 }
 
 double regularized_incomplete_beta(double a, double b, double x) noexcept {
@@ -274,7 +438,7 @@ double regularized_incomplete_beta(double a, double b, double x) noexcept {
   if (!(std::numeric_limits<double>::epsilon() * log_magnitude < 1.0)) {
     return std::numeric_limits<double>::quiet_NaN();
   }
-  const double bt = std::exp(lg_ab - lg_a - lg_b + a_log_x + b_log_1mx);
+  const double bt = beta_prefactor(a, b, x);
   // Reflection point (a+1)/(a+b+2) is the approximate maximum of the
   // integrand; call `beta_cf` on whichever branch keeps x on the fast
   // side, and use the `I_x(a,b) = 1 - I_{1-x}(b,a)` identity otherwise.

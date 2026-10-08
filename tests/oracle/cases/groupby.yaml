@@ -54,3 +54,248 @@ cases:
   - id: groupby_subtotal_depth_two
     description: 'GROUPBY({"A","x";"A","y";"B","x"}, {10;20;30}, SUM, 0, 2) -> per-outer-group subtotal rows under a 総計 row'
     formula: '=GROUPBY({"A","x";"A","y";"B","x"}, {10;20;30}, SUM, 0, 2)'
+
+  # total_depth omitted: a grand total at the bottom.
+  - id: groupby_total_depth_default_grand_total
+    formula: '=GROUPBY({"a";"a";"b"},{1;2;3},SUM)'
+
+  # field_headers omitted: a text first row over non-text data is consumed
+  # as headers and not shown.
+  - id: groupby_field_headers_auto_header_row
+    setup:
+      A1: k
+      B1: v
+      A2: b
+      B2: 1
+      A3: a
+      B3: 2
+      A4: b
+      B4: 3
+    formula: '=GROUPBY(A1:A4,B1:B4,SUM)'
+
+  - id: groupby_field_headers_auto_no_header_row
+    setup:
+      A1: b
+      B1: 1
+      A2: a
+      B2: 2
+      A3: b
+      B3: 3
+    formula: '=GROUPBY(A1:A3,B1:B3,SUM)'
+
+  # sort_order omitted: ascending on the first key column.
+  - id: groupby_sort_order_omitted_text_keys_ascending
+    formula: '=GROUPBY({"b";"a";"c";"a"},{1;2;3;4},SUM,0,0)'
+
+  - id: groupby_sort_order_omitted_number_keys_ascending
+    formula: '=GROUPBY({3;1;2},{1;2;3},SUM,0,0)'
+
+  # GROUPBY defaults and header handling, placeholder text cells, key ordering.
+  - id: groupby_measured_fh0_hdr
+    setup:
+      A1: "k"
+      B1: "v"
+      A2: "b"
+      B2: 1
+      A3: "a"
+      B3: 2
+      A4: "b"
+      B4: 3
+    formula: '=GROUPBY(A1:A4,B1:B4,SUM,0)'
+
+  - id: groupby_measured_fh0_nohdr
+    setup:
+      A1: "k"
+      B1: "v"
+      A2: "b"
+      B2: 1
+      A3: "a"
+      B3: 2
+      A4: "b"
+      B4: 3
+    formula: '=GROUPBY(A2:A4,B2:B4,SUM,0)'
+
+  - id: groupby_measured_fh1_hdr
+    setup:
+      A1: "k"
+      B1: "v"
+      A2: "b"
+      B2: 1
+      A3: "a"
+      B3: 2
+      A4: "b"
+      B4: 3
+    formula: '=GROUPBY(A1:A4,B1:B4,SUM,1)'
+
+  - id: groupby_measured_fh1_nohdr
+    setup:
+      A1: "k"
+      B1: "v"
+      A2: "b"
+      B2: 1
+      A3: "a"
+      B3: 2
+      A4: "b"
+      B4: 3
+    formula: '=GROUPBY(A2:A4,B2:B4,SUM,1)'
+
+  - id: groupby_measured_fh2_hdr
+    setup:
+      A1: "k"
+      B1: "v"
+      A2: "b"
+      B2: 1
+      A3: "a"
+      B3: 2
+      A4: "b"
+      B4: 3
+    formula: '=GROUPBY(A1:A4,B1:B4,SUM,2)'
+
+  - id: groupby_measured_fh2_nohdr
+    setup:
+      A1: "k"
+      B1: "v"
+      A2: "b"
+      B2: 1
+      A3: "a"
+      B3: 2
+      A4: "b"
+      B4: 3
+    formula: '=GROUPBY(A2:A4,B2:B4,SUM,2)'
+
+  - id: groupby_measured_fh3_hdr
+    setup:
+      A1: "k"
+      B1: "v"
+      A2: "b"
+      B2: 1
+      A3: "a"
+      B3: 2
+      A4: "b"
+      B4: 3
+    formula: '=GROUPBY(A1:A4,B1:B4,SUM,3)'
+
+  - id: groupby_measured_fh3_nohdr
+    setup:
+      A1: "k"
+      B1: "v"
+      A2: "b"
+      B2: 1
+      A3: "a"
+      B3: 2
+      A4: "b"
+      B4: 3
+    formula: '=GROUPBY(A2:A4,B2:B4,SUM,3)'
+
+  - id: groupby_measured_auto_numhdr
+    setup:
+      A1: "k"
+      B1: 5
+      A2: "a"
+      B2: 1
+      A3: "b"
+      B3: 2
+    formula: '=GROUPBY(A1:A3,B1:B3,SUM)'
+
+  - id: groupby_measured_auto_textvals
+    setup:
+      A1: "k"
+      B1: "v"
+      A2: "a"
+      B2: "x"
+      A3: "b"
+      B3: "y"
+    formula: '=GROUPBY(A1:A3,B1:B3,COUNTA)'
+
+  - id: groupby_measured_auto_rowfield_num
+    setup:
+      A1: 1
+      B1: "v"
+      A2: 2
+      B2: 1
+      A3: 3
+      B3: 2
+    formula: '=GROUPBY(A1:A3,B1:B3,SUM)'
+
+  - id: groupby_measured_auto_2valcols
+    setup:
+      A1: "k"
+      B1: "v1"
+      C1: "v2"
+      A2: "a"
+      B2: 1
+      C2: 10
+      A3: "b"
+      B3: 2
+      C3: 20
+    formula: '=GROUPBY(A1:A3,B1:C3,SUM)'
+
+  - id: groupby_measured_auto_2valcols_mixed
+    setup:
+      A1: "k"
+      B1: "v1"
+      C1: 5
+      A2: "a"
+      B2: 1
+      C2: 10
+      A3: "b"
+      B3: 2
+      C3: 20
+    formula: '=GROUPBY(A1:A3,B1:C3,SUM)'
+
+  - id: groupby_measured_auto_2keycols
+    setup:
+      A1: "k1"
+      B1: "k2"
+      C1: "v"
+      A2: "b"
+      B2: "y"
+      C2: 1
+      A3: "a"
+      B3: "z"
+      C3: 2
+      A4: "a"
+      B4: "y"
+      C4: 3
+    formula: '=GROUPBY(A1:B4,C1:C4,SUM)'
+
+  - id: groupby_measured_sort_2keys
+    setup:
+      A2: "b"
+      B2: "y"
+      C2: 1
+      A3: "a"
+      B3: "z"
+      C3: 2
+      A4: "a"
+      B4: "y"
+      C4: 3
+    formula: '=GROUPBY(A2:B4,C2:C4,SUM,0,0)'
+
+  - id: groupby_measured_sort_2keys_total
+    setup:
+      A2: "b"
+      B2: "y"
+      C2: 1
+      A3: "a"
+      B3: "z"
+      C3: 2
+      A4: "a"
+      B4: "y"
+      C4: 3
+    formula: '=GROUPBY(A2:B4,C2:C4,SUM,0,2)'
+
+  - id: groupby_measured_sort_mixed_types
+    formula: '=GROUPBY({"b";2;TRUE;"a";1},{1;2;3;4;5},SUM,0,0)'
+
+  - id: groupby_measured_sort_case
+    formula: '=GROUPBY({"b";"B";"a";"A"},{1;2;3;4},SUM,0,0)'
+
+  - id: gb2_lit_total
+    formula: '=GROUPBY({"b","y";"a","z";"a","y"},{1;2;3},SUM,0)'
+
+  - id: gb2_lit_total_type
+    formula: '=TYPE(INDEX(GROUPBY({"b","y";"a","z";"a","y"},{1;2;3},SUM,0),4,2))'
+
+  - id: gb2_lit_total_len
+    formula: '=ISBLANK(INDEX(GROUPBY({"b","y";"a","z";"a","y"},{1;2;3},SUM,0),4,2))'

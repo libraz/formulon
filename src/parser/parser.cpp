@@ -591,6 +591,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     return placeholder;
   }
 
+  const std::size_t atom_begin = pos_;
   AstNode* lhs = parse_atom(ctx);
   if (lhs == nullptr) {
     // parse_atom only returns nullptr on arena exhaustion; treat as a hard
@@ -598,6 +599,27 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     bailed_ = true;
     --depth_;
     return nullptr;
+  }
+  // A range the atom folded itself (`A1:.A10`, `A:.A`, `Sheet2!1.:1`).
+  if (lhs->kind() == NodeKind::Ref || lhs->kind() == NodeKind::RangeOp) {
+    TrimRefMode trim = TrimRefMode::None;
+    for (std::size_t i = atom_begin; i < pos_ && i < tokens_.size(); ++i) {
+      if (tokens_[i].kind == TokenKind::LParen) {
+        trim = TrimRefMode::None;
+        break;
+      }
+      if (tokens_[i].kind == TokenKind::Colon && tokens_[i].trim != TrimRefMode::None) {
+        trim = tokens_[i].trim;
+      }
+    }
+    if (trim != TrimRefMode::None) {
+      lhs = wrap_trim_ref(lhs, trim);
+      if (lhs == nullptr) {
+        bailed_ = true;
+        --depth_;
+        return nullptr;
+      }
+    }
   }
 
   while (true) {
@@ -638,7 +660,8 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // Gate by LHS shape so we do not turn `=TRUE(1)` (Bool literal then
       // `(`) and similar non-callable forms into LambdaCall nodes the user
       // did not write. Only `Lambda` (an immediate IIFE), `LambdaCall`
-      // (chained curry) and a sheet- or self-book-qualified name
+      // (chained curry), a call returning a function value
+      // (`CHOOSE(1,SUM,ABS)(5)`) and a sheet- or self-book-qualified name
       // (`Sheet1!Fn(2)`, `[0]!Fn(2)`, whose unqualified spelling is an
       // ordinary `Call`) participate, plus a cell or area reference
       // (`A1(1)`, `Sheet1!LOG10(100)`, `(A1:A2)(1)`, `(A1,B1)(1)`).
@@ -660,7 +683,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       const bool cell_callee =
           is_cell(*lhs) || lk == NodeKind::UnionOp || lk == NodeKind::IntersectOp ||
           (lk == NodeKind::RangeOp && is_cell(lhs->as_range_lhs()) && is_cell(lhs->as_range_rhs()));
-      if (lk != NodeKind::Lambda && lk != NodeKind::LambdaCall && !sheet_name && !cell_callee) {
+      if (lk != NodeKind::Lambda && lk != NodeKind::LambdaCall && lk != NodeKind::Call && !sheet_name && !cell_callee) {
         // Special-case: a *Bool* literal LHS followed by an empty `()` is
         // treated as a no-op so the surrounding Pratt loop can continue and
         // pick up trailing operators. The motivating case is `=TRUE()+0`: the
@@ -824,6 +847,10 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
       }
       node = make_range_op(arena_, lhs, rhs);
+      if (node != nullptr && op_tok.trim != TrimRefMode::None) {
+        node->set_range(SpanRange(lhs->range(), rhs->range()));
+        node = wrap_trim_ref(node, op_tok.trim);
+      }
     } else if (kind == TokenKind::Whitespace) {
       // Space-as-intersection. The LHS shape was already validated above.
       // Validate the RHS shape with the same rules used for `:`, widened by
@@ -849,6 +876,15 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     node->set_range(SpanRange(lhs->range(), rhs->range()));
     lhs = node;
   }
+}
+
+AstNode* Parser::wrap_trim_ref(AstNode* range, TrimRefMode mode) {
+  const AstNode* args[1] = {range};
+  AstNode* call = make_call(arena_, trim_ref_function_name(mode), args, 1U);
+  if (call != nullptr) {
+    call->set_range(range->range());
+  }
+  return call;
 }
 
 // ---------------------------------------------------------------------------

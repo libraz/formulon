@@ -2,11 +2,11 @@
   "suite": "info",
   "description": "IS* predicates, T, N type-introspection and coercion",
   "environment": {
-    "excel_version": "16.112.1",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-20T19:34:05Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -622,13 +622,13 @@
       "id": "isformula_of_literal_number_is_value",
       "formula": "=ISFORMULA(42)",
       "setup": {},
-      "skipped": "Excel rejects ISFORMULA with a non-reference argument at entry, so the cell stays blank and no value is ever produced. Observed by reading the formula back empty while the `=ISFORMULA(A1)` and `=ISREF(42)` controls entered in the same pass retained and evaluated. Formulon returns #VALUE!, which Excel gives no answer to compare against."
+      "skipped": "Excel rejects ISFORMULA with a non-reference argument at entry, so the cell stays blank and no value is ever produced. Observed by reading the formula back empty while the `=ISFORMULA(A1)` and `=ISREF(42)` controls entered in the same pass retained and evaluated. Formulon returns #VALUE!, which Excel gives no answer to compare against. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     },
     {
       "id": "isformula_of_literal_text_is_value",
       "formula": "=ISFORMULA(\"A1\")",
       "setup": {},
-      "skipped": "Excel rejects ISFORMULA with a non-reference argument at entry, so the cell stays blank and no value is ever produced. Observed by reading the formula back empty while the `=ISFORMULA(A1)` and `=ISREF(42)` controls entered in the same pass retained and evaluated. Formulon returns #VALUE!, which Excel gives no answer to compare against."
+      "skipped": "Excel rejects ISFORMULA with a non-reference argument at entry, so the cell stays blank and no value is ever produced. Observed by reading the formula back empty while the `=ISFORMULA(A1)` and `=ISREF(42)` controls entered in the same pass retained and evaluated. Formulon returns #VALUE!, which Excel gives no answer to compare against. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     },
     {
       "id": "isref_of_cell_ref",
@@ -1095,6 +1095,61 @@
       "expect": {
         "kind": "error",
         "code": "#REF!"
+      }
+    },
+    {
+      "id": "atp_iseven_bool",
+      "formula": "=ISEVEN(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_iseven_boolcell",
+      "formula": "=ISEVEN(A1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_isodd_bool",
+      "formula": "=ISODD(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_isodd_boolcell",
+      "formula": "=ISODD(A1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "opt_iseven_arr_bool",
+      "formula": "=ISEVEN({TRUE})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
       }
     }
   ]

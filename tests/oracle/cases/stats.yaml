@@ -749,3 +749,82 @@ cases:
   - id: steyx_three_points
     description: "Minimal n=3 sample; non-zero residual"
     formula: "=STEYX({2;3;5},{1;2;3})"
+
+  - id: median_only_omitted_slots
+    description: "MEDIAN counts omitted slots as 0"
+    formula: "=MEDIAN(,)"
+
+  - id: avedev_only_omitted_slots
+    description: "AVEDEV counts omitted slots as 0"
+    formula: "=AVEDEV(,)"
+
+  - id: stdev_omitted_slot_counts
+    description: "STDEV counts an omitted slot as 0"
+    formula: "=STDEV(3,,6)"
+
+  - id: geomean_omitted_slot_is_num
+    description: "GEOMEAN with an omitted slot (0) is #NUM!"
+    formula: "=GEOMEAN(,)"
+
+  - id: mode_omitted_slot_is_value
+    description: "MODE with an omitted slot is #VALUE!"
+    formula: "=MODE(3,3,,6)"
+
+  - id: mode_mult_omitted_slot_is_value
+    description: "MODE.MULT with an omitted slot is #VALUE!"
+    formula: "=MODE.MULT(3,3,,6)"
+
+  - id: avedev_direct_bool
+    description: "AVEDEV counts direct booleans"
+    formula: "=AVEDEV(10,20,TRUE,FALSE)"
+
+  - id: avedev_direct_numeric_text
+    description: "AVEDEV counts direct numeric text"
+    formula: "=AVEDEV(1,2,\"10\",\"20\")"
+
+  - id: avedev_direct_text_is_value
+    description: "AVEDEV with direct non-numeric text is #VALUE!"
+    formula: "=AVEDEV(1,2,\"x\")"
+
+  - id: devsq_direct_numeric_text
+    description: "DEVSQ counts direct numeric text"
+    formula: "=DEVSQ(1,2,\"10\",\"20\")"
+
+  - id: kurt_direct_bool
+    description: "KURT counts direct booleans"
+    formula: "=KURT(10,20,TRUE,FALSE)"
+
+  - id: skew_direct_numeric_text
+    description: "SKEW counts direct numeric text"
+    formula: "=SKEW(1,2,\"10\",\"20\")"
+
+  - id: skew_p_direct_bool
+    description: "SKEW.P counts direct booleans"
+    formula: "=SKEW.P(10,20,TRUE,FALSE)"
+
+  - id: geomean_direct_numeric_text
+    description: "GEOMEAN counts direct numeric text"
+    formula: "=GEOMEAN(1,2,\"10\",\"20\")"
+
+  - id: geomean_direct_bool_is_num
+    description: "GEOMEAN with a direct FALSE (0) is #NUM!"
+    formula: "=GEOMEAN(10,20,TRUE,FALSE)"
+
+  - id: harmean_direct_numeric_text
+    description: "HARMEAN counts direct numeric text"
+    formula: "=HARMEAN(1,2,\"10\",\"20\")"
+
+  - id: median_direct_bool
+    description: "MEDIAN counts direct booleans"
+    formula: "=MEDIAN(10,20,TRUE,FALSE)"
+
+  - id: median_direct_numeric_text
+    description: "MEDIAN counts direct numeric text"
+    formula: "=MEDIAN(1,2,\"10\",\"20\")"
+
+  # -- LARGE k near-integer snap (SMALL truncates) ---------------------------
+  - id: large_k_snaps_near_integer
+    formula: "=LARGE({10;5;30;20},1.9999999)"
+
+  - id: small_k_truncates_near_integer
+    formula: "=SMALL({10;5;30;20},1.9999999)"

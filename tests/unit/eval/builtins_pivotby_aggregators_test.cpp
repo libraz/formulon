@@ -24,7 +24,7 @@ TEST(PivotBy, BareSumName) {
   EXPECT_EQ(v.as_array_rows(), 3U);
   EXPECT_EQ(v.as_array_cols(), 3U);
   // Col-axis row: [blank corner, "X", "Y"].
-  EXPECT_TRUE(Cell(v, 0, 0).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 0, 0)));
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "Y");
   EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "A");

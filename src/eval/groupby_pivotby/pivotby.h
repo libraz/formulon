@@ -10,16 +10,12 @@
 // PIVOTBY signature (Mac Excel 365):
 //
 //   PIVOTBY(row_fields, col_fields, values, function,
-//           [field_headers=3], [row_total_depth=-1], [row_sort_order=0],
-//           [col_total_depth=1], [col_sort_order=0], [filter_array])
+//           [field_headers=auto], [row_total_depth=1], [row_sort_order=ascending],
+//           [col_total_depth=1], [col_sort_order=ascending], [filter_array])
 //
-// Differences vs. GROUPBY argument defaults:
-//   * `field_headers` defaults to `3` (vs. `0`) — pivot output typically
-//     wants both the input row to be treated as a header AND a header to
-//     be emitted on the output's left/top edges.
-//   * `col_total_depth` defaults to `1` (vs. row_total_depth's `-1`) —
-//     grand totals on rows live at the top by default, on columns they
-//     live on the right by default.
+// Argument defaults match GROUPBY's: omitted `field_headers` detects a header
+// row, omitted sort orders sort the keys ascending, and `col_total_depth`
+// defaults to `1` (grand-total column on the right).
 //
 // See `eval/lazy_impls.h` for the shared `LazyImpl` signature. The PIVOTBY
 // impl is wired into the central `kLazyDispatch` table in
@@ -44,8 +40,8 @@ class EvalContext;
 class FunctionRegistry;
 
 /// `PIVOTBY(row_fields, col_fields, values, function, [field_headers=3],
-///          [row_total_depth=-1], [row_sort_order=0], [col_total_depth=1],
-///          [col_sort_order=0], [filter_array])` — see the header preamble
+///          [row_total_depth=1], [row_sort_order=ascending], [col_total_depth=1],
+///          [col_sort_order=ascending], [filter_array])` — see the header preamble
 /// for the full contract.
 Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx);

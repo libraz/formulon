@@ -30,7 +30,11 @@
 #ifndef FORMULON_EVAL_TRIMRANGE_LAZY_H_
 #define FORMULON_EVAL_TRIMRANGE_LAZY_H_
 
+#include <cstdint>
+#include <string_view>
+
 #include "utils/arena.h"
+#include "utils/error.h"
 #include "value.h"
 
 namespace formulon {
@@ -66,6 +70,23 @@ class FunctionRegistry;
 ///   * trimming would leave zero rows or zero columns -> `#REF!`.
 Value eval_trimrange_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx);
+
+/// Resolves a TRIMRANGE or `_TRO_*` call over a reference to the rectangle it
+/// returns, which is itself a reference (Excel stores both calls with
+/// reference class). A cell is blank when it holds nothing, so finding the
+/// edges evaluates no cell. Fails with the source's error, `#VALUE!` for a
+/// source that is no reference or a bad mode, and `#REF!` when every cell is
+/// blank. Same contract as `resolve_reference_call`.
+bool resolve_trim_reference(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                            std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                            bool* out_is_range, ErrorCode* out_err);
+
+/// The trim-reference operators, stored as `_TRO_LEADING(range)` (`.:`),
+/// `_TRO_TRAILING(range)` (`:.`) and `_TRO_ALL(range)` (`.:.`): TRIMRANGE
+/// with that one mode on both axes.
+Value eval_trim_ref_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon

@@ -379,8 +379,9 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
       if (!cell.dynamic_array && anchored == nullptr) {
         implied_at = xlsb::legacy_intersections(*formula_root, name_shapes);
       }
+      const std::vector<const parser::AstNode*> function_values = xlsb::function_value_refs(*formula_root, name_shapes);
       const std::string storage =
-          parser::format_formula_storage(*formula_root, &storage_call_name, &implied_at, indexer);
+          parser::format_formula_storage(*formula_root, &storage_call_name, &implied_at, indexer, &function_values);
       // Only re-serialise when the storage form differs in substance: a
       // storage prefix, an external book's `[N]`, or a bare sheet name that
       // needs quotes. A classic formula's stored text is emitted verbatim

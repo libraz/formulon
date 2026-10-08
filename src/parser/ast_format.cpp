@@ -79,6 +79,8 @@ std::uint8_t ParenCount(const ParenCounts& parens, const AstNode& node) {
 // Forward declaration: the full recursion target, which prints `node`
 // inside the parentheses `parens` gives it.
 void FormatNode(const AstNode& node, std::string& out, const ParenCounts& parens);
+// `FormatNode` without the node's own parentheses.
+void FormatBare(const AstNode& node, std::string& out, const ParenCounts& parens);
 
 // Renders a Number payload. Outside an array constant a negative value is
 // parenthesised so its leading `-` cannot glue onto an adjacent operator;
@@ -504,7 +506,55 @@ void FormatUnion(const AstNode& node, std::string& out, const ParenCounts& paren
   }
 }
 
+// Spells the trim-reference operator for `mode`.
+const char* TrimRefOperator(TrimRefMode mode) noexcept {
+  switch (mode) {
+    case TrimRefMode::Leading:
+      return ".:";
+    case TrimRefMode::Trailing:
+      return ":.";
+    case TrimRefMode::Both:
+      return ".:.";
+    case TrimRefMode::None:
+      break;
+  }
+  return ":";
+}
+
+// Prints a `_TRO_*` call over a range as its operator (`A1:.A10`, `A.:A`) by
+// respelling the range's own `:`; false, printing nothing, for any other
+// argument.
+bool FormatTrimRef(const AstNode& node, TrimRefMode mode, std::string& out, const ParenCounts& parens) {
+  const AstNode& arg = node.as_call_arg(0);
+  std::string text;
+  std::size_t colon = std::string::npos;
+  if (arg.kind() == NodeKind::RangeOp && ParenCount(parens, arg) == 0U &&
+      !TrySpliceWholeAxisPair(arg.as_range_lhs(), arg.as_range_rhs(), text)) {
+    FormatNode(arg.as_range_lhs(), text, parens);
+    colon = text.size();
+    text.push_back(':');
+    FormatNode(arg.as_range_rhs(), text, parens);
+  } else if ((arg.kind() == NodeKind::Ref || arg.kind() == NodeKind::RangeOp) && ParenCount(parens, arg) == 0U) {
+    // A whole column or row prints as one token; sheet names hold no `:`.
+    if (text.empty()) {
+      FormatBare(arg, text, parens);
+    }
+    colon = text.rfind(':');
+  }
+  if (colon == std::string::npos) {
+    return false;
+  }
+  out.append(text, 0, colon);
+  out.append(TrimRefOperator(mode));
+  out.append(text, colon + 1, std::string::npos);
+  return true;
+}
+
 void FormatCall(const AstNode& node, std::string& out, const ParenCounts& parens) {
+  if (const TrimRefMode mode = trim_ref_call_mode(node);
+      mode != TrimRefMode::None && FormatTrimRef(node, mode, out, parens)) {
+    return;
+  }
   out.append(node.as_call_name());
   out.push_back('(');
   const std::uint32_t n = node.as_call_arity();
@@ -593,6 +643,9 @@ bool CalleePrintsBare(const AstNode& callee) {
     case NodeKind::LambdaCall:
     case NodeKind::UnionOp:  // prints its own parentheses
       return true;
+    case NodeKind::Call:
+      // `CHOOSE(1,SUM,ABS)(5)`; a trim reference prints as a range.
+      return trim_ref_call_mode(callee) == TrimRefMode::None;
     case NodeKind::Ref:
       return !callee.as_ref().sheet.empty() || !is_cellref_shaped_function_name(format_a1(callee.as_ref()));
     default:
@@ -761,7 +814,8 @@ void CollectParens(const AstNode& node, int min_bp, ParenCounts& out) {
       CollectParens(node.as_implicit_intersection_operand(), kBpAtPrefix, out);
       return;
     case NodeKind::Call:
-      Parenthesize(node, false, out);
+      // A trim reference prints as a range operator.
+      Parenthesize(node, trim_ref_call_mode(node) != TrimRefMode::None && kBpRange < min_bp, out);
       for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
         CollectParens(node.as_call_arg(i), 0, out);
       }
@@ -813,6 +867,7 @@ struct StorageEmitter {
   std::vector<std::string_view> scope;  // in-scope LET binding / LAMBDA param names
   const std::vector<const AstNode*>* omitted_at = nullptr;
   const ExternalBookIndexer* indexer = nullptr;
+  const std::vector<const AstNode*>* function_values = nullptr;
   ParenCounts parens;
 
   bool in_scope(std::string_view name) const {
@@ -889,6 +944,12 @@ struct StorageEmitter {
         // parameter.
         if (sheet.empty() && in_scope(name)) {
           out.append("_xlpm.");
+        } else if (function_values != nullptr &&
+                   std::find(function_values->begin(), function_values->end(), &node) != function_values->end()) {
+          // Excel upper-cases a built-in it stores as a value.
+          out.append("_xleta.");
+          out.append(strings::to_ascii_upper(name));
+          return;
         }
         AppendNameSheetQualifier(node, out);
         out.append(name);
@@ -966,7 +1027,13 @@ struct StorageEmitter {
   }
 
   void emit_call(const AstNode& node, std::string& out) {
-    append_function_name(out, node.as_call_name());
+    // `f(-2)` calls a LET / LAMBDA parameter.
+    if (in_scope(node.as_call_name())) {
+      out.append("_xlpm.");
+      out.append(node.as_call_name());
+    } else {
+      append_function_name(out, node.as_call_name());
+    }
     out.push_back('(');
     const std::uint32_t n = node.as_call_arity();
     for (std::uint32_t i = 0; i < n; ++i) {
@@ -1131,11 +1198,12 @@ std::string format_formula(const AstNode& node) {
 }
 
 std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpeller spell,
-                                   const std::vector<const AstNode*>* omitted_at, const ExternalBookIndexer* indexer) {
+                                   const std::vector<const AstNode*>* omitted_at, const ExternalBookIndexer* indexer,
+                                   const std::vector<const AstNode*>* function_values) {
   if (!ast_depth_within_limit(node, kMaxFormulaAstDepth)) {
     return "#REF!";
   }
-  StorageEmitter emitter{spell, {}, omitted_at, indexer, {}};
+  StorageEmitter emitter{spell, {}, omitted_at, indexer, function_values, {}};
   CollectParens(node, 0, emitter.parens);
   std::string out;
   out.reserve(64);

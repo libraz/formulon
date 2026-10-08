@@ -677,6 +677,32 @@ bool is_cellref_shaped_function_name(std::string_view lexeme) noexcept {
   return strings::case_insensitive_eq(lexeme, "LOG10");
 }
 
+std::string_view trim_ref_function_name(TrimRefMode mode) noexcept {
+  switch (mode) {
+    case TrimRefMode::Leading:
+      return "_TRO_LEADING";
+    case TrimRefMode::Trailing:
+      return "_TRO_TRAILING";
+    case TrimRefMode::Both:
+      return "_TRO_ALL";
+    case TrimRefMode::None:
+      break;
+  }
+  return {};
+}
+
+TrimRefMode trim_ref_call_mode(const AstNode& node) noexcept {
+  if (node.kind() != NodeKind::Call || node.as_call_arity() != 1U) {
+    return TrimRefMode::None;
+  }
+  for (const TrimRefMode mode : {TrimRefMode::Leading, TrimRefMode::Trailing, TrimRefMode::Both}) {
+    if (strings::case_insensitive_eq(node.as_call_name(), trim_ref_function_name(mode))) {
+      return mode;
+    }
+  }
+  return TrimRefMode::None;
+}
+
 bool is_volatile_function_name(std::string_view name) noexcept {
   if (name.empty()) {
     return false;

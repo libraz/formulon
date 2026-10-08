@@ -761,6 +761,17 @@ TEST(CollectNumericsErrorOnErrorCellDisabled, ErrorDroppedSilently) {
   EXPECT_DOUBLE_EQ(r.value()[1], 2.0);
 }
 
+TEST(SnapNearInteger, SnapsWithinTwoToTheMinus22) {
+  EXPECT_EQ(snap_near_integer(14.9999997616), 15.0);
+  EXPECT_EQ(snap_near_integer(14.999999761), 14.999999761);
+  EXPECT_EQ(snap_near_integer(10000.9999999), 10001.0);
+  EXPECT_EQ(snap_near_integer(-1.0000001), -1.0);
+  EXPECT_EQ(snap_near_integer(-1.9999999), -2.0);
+  EXPECT_EQ(snap_near_integer(-1.999999), -1.999999);
+  EXPECT_EQ(snap_near_integer(14.0000001), 14.0);
+  EXPECT_EQ(snap_near_integer(3.0), 3.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -117,9 +117,12 @@ using StorageFunctionNameSpeller = std::string (*)(std::string_view name);
 /// `'[1]S1:S2'!A1`, `[1]!Name`); every reference must bind to a link.
 /// A sheet-qualified name its `qualifier_index` maps is written `[N]!Name`.
 /// Without one, the book is spelled as `format_formula` spells it.
+/// Each of `function_values` (`NameRef`s naming a built-in used as a value,
+/// `=TYPE(SUM)`) is written `_xleta.` plus the upper-cased name.
 std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpeller spell,
                                    const std::vector<const AstNode*>* omitted_at = nullptr,
-                                   const ExternalBookIndexer* indexer = nullptr);
+                                   const ExternalBookIndexer* indexer = nullptr,
+                                   const std::vector<const AstNode*>* function_values = nullptr);
 
 /// True when `root` holds a local sheet qualifier written bare that A1
 /// notation requires quoted (`S2!A1`, `2024!A1`, `Data:S2!A1`): stored

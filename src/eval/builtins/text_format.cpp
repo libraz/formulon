@@ -123,8 +123,8 @@ namespace {
 // ---------------------------------------------------------------------------
 //
 // Rounds `number` to `decimals` places and renders it with thousands group
-// separators unless `no_commas` is truthy. `decimals` is truncated toward
-// zero; Excel caps the decimals parameter at 127 (values outside [-127, 127]
+// separators unless `no_commas` is truthy. `decimals` snaps to a near
+// integer, then truncates toward zero; Excel caps the decimals parameter at 127 (values outside [-127, 127]
 // surface `#VALUE!`). Negative `decimals` rounds left of the decimal point
 // (e.g. `FIXED(1234.56, -2) = "1,200"`). The actual rounding at negative
 // decimals is done manually before formatting because `apply_format`'s
@@ -138,7 +138,7 @@ Expected<int, ErrorCode> fixed_read_int(const Value& v) {
   if (std::isnan(d.value()) || std::isinf(d.value())) {
     return ErrorCode::Num;
   }
-  const double truncated = std::trunc(d.value());
+  const double truncated = std::trunc(snap_near_integer(d.value()));
   if (truncated < -127.0 || truncated > 127.0) {
     return ErrorCode::Value;
   }

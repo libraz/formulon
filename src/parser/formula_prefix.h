@@ -11,6 +11,7 @@
 //                       dynamic-array functions (FILTER, SORT, ...).
 //   * `_xlws.`        — a legacy standalone worksheet marker.
 //   * `_xlpm.`        — LET / LAMBDA parameter names.
+//   * `_xleta.`       — a built-in function named as a value (`TYPE(SUM)`).
 //
 // Excel's formula bar shows the names WITHOUT these prefixes. Formulon's
 // public `formula_text` (surfaced through every binding) must match the
@@ -56,8 +57,8 @@ inline bool formula_prefix_ci_eq(std::string_view s, std::string_view lit) noexc
   return true;
 }
 
-/// Removes Excel's `_xlfn._xlws.` / `_xlfn.` / `_xlws.` / `_xlpm.` storage
-/// prefixes from `formula`, returning the canonical (formula-bar) form.
+/// Removes Excel's `_xlfn._xlws.` / `_xlfn.` / `_xlws.` / `_xlpm.` / `_xleta.`
+/// storage prefixes from `formula`, returning the canonical (formula-bar) form.
 ///
 /// The removal is applied only OUTSIDE double-quoted string literals (so a
 /// literal such as `"cost _xlfn. note"` is preserved verbatim), and only
@@ -71,10 +72,11 @@ inline bool formula_prefix_ci_eq(std::string_view s, std::string_view lit) noexc
 /// removed only before a name `known` accepts: Excel keeps it on a name it
 /// does not recognise (`_xlfn.FOOBAR(1)` stays so in the formula bar and the
 /// file), and the writers re-apply it only to the names they know. `_xlpm.`
-/// always goes.
+/// and `_xleta.` always go.
 inline std::string strip_storage_prefixes(std::string_view formula, bool (*known)(std::string_view) = nullptr) {
   // Longest first so `_xlfn._xlws.` is consumed as a unit before `_xlfn.`.
-  static constexpr std::array<std::string_view, 4> kPrefixes = {"_xlfn._xlws.", "_xlfn.", "_xlws.", "_xlpm."};
+  static constexpr std::array<std::string_view, 5> kPrefixes = {"_xlfn._xlws.", "_xlfn.", "_xlws.", "_xlpm.",
+                                                                "_xleta."};
   std::string out;
   out.reserve(formula.size());
   bool in_string = false;
@@ -111,7 +113,7 @@ inline std::string strip_storage_prefixes(std::string_view formula, bool (*known
               ++end;
             }
             const std::string_view name = formula.substr(i + prefix.size(), end - i - prefix.size());
-            if (prefix != "_xlpm." && known != nullptr && !known(name)) {
+            if (prefix != "_xlpm." && prefix != "_xleta." && known != nullptr && !known(name)) {
               break;
             }
             i += prefix.size();
@@ -130,9 +132,9 @@ inline std::string strip_storage_prefixes(std::string_view formula, bool (*known
   return out;
 }
 
-/// Respells each one-argument call to `SINGLE` / `ANCHORARRAY` in `formula`
-/// (a leading `=` optional) as the `@x` / `x#` operator Excel's formula bar
-/// shows for it, copying every other character verbatim. Returns `formula`
+/// Respells each one-argument call to `SINGLE` / `ANCHORARRAY` / `_TRO_*` in
+/// `formula` (a leading `=` optional) as the `@x` / `x#` / `A1:.A10` operator
+/// Excel's formula bar shows for it, copying every other character verbatim. Returns `formula`
 /// unchanged when it holds none or does not parse.
 std::string spell_storage_operators(std::string_view formula);
 

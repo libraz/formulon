@@ -622,6 +622,17 @@ TEST(BuiltinsText3Hyperlink, ErrorInLinkPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
+TEST(BuiltinsText3Fixed, DecimalsSnapToNearInteger) {
+  EXPECT_EQ(EvalSource("=FIXED(1.23456,1.9999999)").as_text(), "1.23");
+  EXPECT_EQ(EvalSource("=FIXED(1.23456,1.999999)").as_text(), "1.2");
+}
+
+TEST(BuiltinsText3Dollar, DecimalsSnapToNearInteger) {
+  EXPECT_EQ(EvalSource("=DOLLAR(1.23456,1.9999999)").as_text(),
+            "\xC2\xA5"
+            "1.23");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

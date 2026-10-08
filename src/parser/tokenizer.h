@@ -154,6 +154,9 @@ class Tokenizer {
   bool at_operand_start() const noexcept;
   void scan_lt();
   void scan_gt();
+  // Scans `:` or a trim-reference operator (`.:`, `:.`, `.:.`) as a `Colon`
+  // carrying its `TrimRefMode`.
+  void scan_colon();
 
   // Checks whether `word` (ASCII) is `TRUE` or `FALSE` case-insensitively.
   static bool is_bool_word(std::string_view word, bool* out) noexcept;

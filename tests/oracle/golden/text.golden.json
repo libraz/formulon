@@ -2,11 +2,11 @@
   "suite": "text",
   "description": "LEN / LEFT / RIGHT / MID / CONCAT / EXACT / FIND / SEARCH / UPPER / LOWER / PROPER / TRIM / CLEAN / SUBSTITUTE / REPT / TEXTJOIN / UNICHAR / UNICODE",
   "environment": {
-    "excel_version": "16.113.2",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-09-29T07:46:13Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -2107,6 +2107,177 @@
       "expect": {
         "kind": "text",
         "value": ""
+      }
+    },
+    {
+      "id": "pf_right",
+      "formula": "=LEN(RIGHT(\"abcdef\",2.9999999))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "pf_fixed",
+      "formula": "=FIXED(1.23456,1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.23"
+      }
+    },
+    {
+      "id": "pf_substitute_n",
+      "formula": "=SUBSTITUTE(\"aaa\",\"a\",\"b\",1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aba"
+      }
+    },
+    {
+      "id": "pf_find_start",
+      "formula": "=FIND(\"b\",\"abcb\",2.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "pf_replace",
+      "formula": "=REPLACE(\"abcdef\",1.9999999,1,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "axcdef"
+      }
+    },
+    {
+      "id": "pf_char_big",
+      "formula": "=CODE(CHAR(64.9999999))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "pf_mid_len",
+      "formula": "=LEN(MID(\"abcdef\",1,2.9999999))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "pf_left_neg",
+      "formula": "=LEFT(\"abc\",-0.0000001)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "near_left",
+      "formula": "=LEN(LEFT(\"abcdef\",2.9999999))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "snap_search",
+      "formula": "=SEARCH(\"b\",\"abcb\",2.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "snap_searchb",
+      "formula": "=SEARCHB(\"b\",\"abcb\",2.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "snap_findb",
+      "formula": "=FINDB(\"b\",\"abcb\",2.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "snap_leftb",
+      "formula": "=LENB(LEFTB(\"abcdef\",2.9999999))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "snap_rightb",
+      "formula": "=LENB(RIGHTB(\"abcdef\",2.9999999))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "snap_replaceb",
+      "formula": "=REPLACEB(\"abcdef\",1.9999999,1,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "axcdef"
+      }
+    },
+    {
+      "id": "snap_dollar",
+      "formula": "=DOLLAR(1.23456,1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "¥1.23"
+      }
+    },
+    {
+      "id": "snap_mid_start",
+      "formula": "=MID(\"abcdef\",1.9999999,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "snap_textbefore_n",
+      "formula": "=TEXTBEFORE(\"a-b-c\",\"-\",1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a-b"
+      }
+    },
+    {
+      "id": "snap_rept",
+      "formula": "=LEN(REPT(\"a\",2.9999999))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
       }
     }
   ]

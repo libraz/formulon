@@ -102,6 +102,12 @@ bool xlsb_uses_hidden_name(std::string_view canonical_name);
 /// for these (`parser::strip_storage_prefixes`).
 bool has_storage_prefix(std::string_view canonical_name);
 
+/// Returns the name Excel stores for the built-in `name` used as a value
+/// rather than called (`=TYPE(SUM)`): `_xleta.` plus the upper-cased
+/// `canonical_function_name`. The prefix is dropped on ingestion
+/// (`parser::strip_storage_prefixes`).
+std::string function_value_storage_name(std::string_view name);
+
 /// Returns the name the hidden `BrtName` carries for a call to
 /// `canonical_name` encoded through the XLSB hidden-name route.
 ///

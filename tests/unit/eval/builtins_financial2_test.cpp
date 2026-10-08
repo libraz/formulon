@@ -418,6 +418,21 @@ TEST(FinancialIsPmt, NegativePvFlipsSign) {
   EXPECT_NEAR(v.as_number(), expected, 1e-10);
 }
 
+// EFFECT follows the Analysis-ToolPak rule.
+TEST(BuiltinsFinancial2AnalysisToolPak, EffectBoolCellIsValue) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::boolean(true));
+  const Value v = EvalSourceIn("=EFFECT(A1,2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsFinancial2AnalysisToolPak, EffectOmittedRequiredIsNA) {
+  const Value v = EvalSource("=EFFECT(,2)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

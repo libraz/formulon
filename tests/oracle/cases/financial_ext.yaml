@@ -185,3 +185,48 @@ cases:
 
   - id: ispmt_nper_zero_is_div0
     formula: "=ISPMT(0.05, 0, 0, 1000)"
+
+  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  #    arguments, and the near-integer snap of integer arguments --------------
+  - id: atp_dollarde_bool
+    formula: "=DOLLARDE(TRUE,2)"
+
+  - id: atp_dollarde_omit
+    formula: "=DOLLARDE(,2)"
+
+  - id: atp_dollarde_boolcell
+    setup: { A1: true }
+    formula: "=DOLLARDE(A1,2)"
+
+  - id: atp_effect_bool
+    formula: "=EFFECT(TRUE,2)"
+
+  - id: atp_effect_omit
+    formula: "=EFFECT(,2)"
+
+  - id: atp_effect_boolcell
+    setup: { A1: true }
+    formula: "=EFFECT(A1,2)"
+
+  - id: atp_nominal_bool
+    formula: "=NOMINAL(TRUE,2)"
+
+  - id: atp_nominal_omit
+    formula: "=NOMINAL(,2)"
+
+  - id: atp_nominal_boolcell
+    setup: { A1: true }
+    formula: "=NOMINAL(A1,2)"
+
+  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  - id: a4_dollarfr_bool
+    formula: "=DOLLARFR(TRUE,2)"
+
+  - id: a4_dollarfr_omit
+    formula: "=DOLLARFR(,2)"
+
+  - id: a4_fvschedule_bool
+    formula: "=FVSCHEDULE(TRUE,{0.1})"
+
+  - id: a4_fvschedule_omit
+    formula: "=FVSCHEDULE(,{0.1})"

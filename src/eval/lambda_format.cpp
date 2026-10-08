@@ -13,6 +13,9 @@ namespace formulon {
 namespace eval {
 
 std::string format_lambda_value(const LambdaValue& lv) {
+  if (!lv.builtin.empty()) {
+    return std::string(lv.builtin);
+  }
   std::string out;
   out.append("LAMBDA(");
   const std::uint32_t first_optional = lv.param_count - lv.optional_count;

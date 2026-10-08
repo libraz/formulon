@@ -566,3 +566,273 @@ cases:
   - id: workday_intl_with_holidays
     description: "Holidays array extends the run forward under default weekend"
     formula: "=WORKDAY.INTL(DATE(2024,1,1),5,1,{45293,45294})"
+
+  # -- Near-integer snap, second rounding, DATE limits (Excel-measured) ------
+  - id: date_day_snap_up
+    formula: "=DATE(2025,1,14.9999997616)"
+
+  - id: date_day_no_snap
+    formula: "=DATE(2025,1,14.999999761)"
+
+  - id: date_day_big_snap
+    formula: "=DATE(2025,1,10000.9999997616)"
+
+  - id: date_day_snap_to_one
+    formula: "=DATE(2025,1,0.9999999)"
+
+  - id: date_day_neg_snap
+    formula: "=DATE(2025,3,-1.9999999)"
+
+  - id: date_day_neg_no_snap
+    formula: "=DATE(2025,3,-1.0000001)"
+
+  - id: date_year_snap_1900
+    formula: "=DATE(1899.9999999,1,1)"
+
+  - id: time_second_snap
+    formula: "=TIME(0,0,0.99999995)*86400"
+
+  - id: time_minute_neg_snap
+    formula: "=TIME(1,-0.9999999,0)*1440"
+
+  - id: weekday_return_type_snap
+    formula: "=WEEKDAY(1,1.9999999)"
+
+  - id: weeknum_return_type_snap
+    formula: "=WEEKNUM(10,1.9999999)"
+
+  - id: day_second_round_below_half
+    formula: "=DAY(40000.9999942)"
+
+  - id: day_second_round_above_half
+    formula: "=DAY(40000.9999943)"
+
+  - id: month_second_round
+    formula: "=MONTH(45688.9999999)"
+
+  - id: year_second_round
+    formula: "=YEAR(DATE(2025,12,31)+0.9999999)"
+
+  - id: weekday_second_round
+    formula: "=WEEKDAY(40000.9999999)"
+
+  - id: day_second_round_past_max
+    formula: "=DAY(2958465.999999)"
+
+  - id: date_month_32767
+    formula: "=DATE(2025,32767,1)"
+
+  - id: date_month_neg_32768
+    formula: "=DATE(5000,-32768,1)"
+
+  - id: date_month_snap_32767
+    formula: "=DATE(2025,32766.9999999,1)"
+
+  - id: date_month_neg_snap_32768
+    formula: "=DATE(5000,-32767.9999999,1)"
+
+  - id: date_day_32768
+    formula: "=DATE(2025,1,32768)"
+
+  - id: date_day_1e6
+    formula: "=DATE(2025,1,1000000)"
+
+  - id: date_day_32767_5
+    formula: "=DATE(2025,1,32767.5)"
+
+  - id: date_day_neg_32768
+    formula: "=DATE(2025,1,-32768)"
+
+  - id: date_day_neg_32769
+    formula: "=DATE(2025,1,-32769)"
+
+  - id: date_day_neg_1e6
+    formula: "=DATE(2025,1,-1000000)"
+
+  - id: date_year_10000
+    formula: "=DATE(10000,1,1)"
+
+  - id: time_hour_32767
+    formula: "=TIME(32767,0,0)"
+
+  - id: time_hour_32768
+    formula: "=TIME(32768,0,0)"
+
+  - id: time_second_100000
+    formula: "=TIME(0,0,100000)"
+
+  - id: eomonth_serial_zero
+    formula: "=EOMONTH(0,0)"
+
+  - id: eomonth_serial_zero_plus_7
+    formula: "=EOMONTH(0,7)"
+
+  - id: eomonth_serial_zero_minus_1
+    formula: "=EOMONTH(0,-1)"
+
+  - id: edate_serial_zero_plus_1
+    formula: "=EDATE(0,1)"
+
+  - id: weekday_text_return_type_before_range
+    formula: "=WEEKDAY(-1,\"abc\")"
+
+  - id: weeknum_return_type_negative
+    formula: "=WEEKNUM(10,-2)"
+
+  # -- Analysis-ToolPak argument rule for the calendar family ---------------
+  - id: eomonth_blank_cell
+    setup: {}
+    formula: "=EOMONTH(A1,0)"
+
+  - id: edate_bool_start
+    formula: "=EDATE(TRUE,1)"
+
+  - id: edate_bool_months
+    formula: "=EDATE(1,TRUE)"
+
+  - id: edate_bool_cell
+    setup:
+      A1: { kind: formula, formula: "=TRUE" }
+    formula: "=EDATE(10,A1)"
+
+  - id: edate_omitted_start
+    formula: "=EDATE(,1)"
+
+  - id: edate_omitted_months
+    formula: "=EDATE(1,)"
+
+  - id: edate_both_omitted
+    formula: "=EDATE(,)"
+
+  - id: eomonth_bool
+    formula: "=EOMONTH(TRUE,1)"
+
+  - id: eomonth_omitted_months
+    formula: "=EOMONTH(1,)"
+
+  - id: eomonth_both_omitted
+    formula: "=EOMONTH(,)"
+
+  - id: networkdays_bool_start
+    formula: "=NETWORKDAYS(TRUE,10)"
+
+  - id: networkdays_bool_cell
+    setup:
+      A1: { kind: formula, formula: "=TRUE" }
+    formula: "=NETWORKDAYS(1,A1)"
+
+  - id: networkdays_omitted_end
+    formula: "=NETWORKDAYS(1,)"
+
+  - id: networkdays_both_omitted
+    formula: "=NETWORKDAYS(,)"
+
+  - id: workday_bool_start
+    formula: "=WORKDAY(TRUE,1)"
+
+  - id: workday_bool_days
+    formula: "=WORKDAY(1,TRUE)"
+
+  - id: workday_bool_holidays
+    formula: "=WORKDAY(1,5,TRUE)"
+
+  - id: workday_bool_holidays_cell
+    setup:
+      A1: { kind: formula, formula: "=TRUE" }
+    formula: "=WORKDAY(1,5,A1)"
+
+  - id: workday_both_omitted
+    formula: "=WORKDAY(,)"
+
+  - id: workday_omitted_holidays
+    formula: "=WORKDAY(DATE(2025,1,1),10,)"
+
+  - id: workday_intl_bool_start
+    formula: "=WORKDAY.INTL(TRUE,5)"
+
+  - id: workday_intl_omitted_start
+    formula: "=WORKDAY.INTL(,5)"
+
+  - id: workday_intl_omitted_weekend_and_holidays
+    formula: "=WORKDAY.INTL(DATE(2025,1,1),10,,)"
+
+  - id: workday_intl_omitted_weekend_with_holidays
+    formula: "=WORKDAY.INTL(DATE(2025,1,1),10,,{45660})"
+
+  - id: networkdays_intl_bool_start
+    formula: "=NETWORKDAYS.INTL(TRUE,5)"
+
+  - id: networkdays_intl_omitted_start
+    formula: "=NETWORKDAYS.INTL(,5)"
+
+  - id: workday_intl_weekend_true
+    formula: "=WORKDAY.INTL(DATE(2025,1,1),10,TRUE)"
+
+  - id: networkdays_intl_weekend_true
+    formula: "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2025,12,31),TRUE)"
+
+  - id: workday_intl_weekend_false
+    formula: "=WORKDAY.INTL(DATE(2025,1,1),10,FALSE)"
+
+  - id: networkdays_intl_weekend_false
+    formula: "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2025,12,31),FALSE)"
+
+  - id: workday_intl_weekend_text_one
+    formula: "=WORKDAY.INTL(DATE(2025,1,1),10,\"1\")"
+
+  - id: workday_intl_weekend_blank_cell
+    setup: {}
+    formula: "=WORKDAY.INTL(DATE(2025,1,1),10,A1)"
+
+  - id: workday_intl_blank_holidays_cell
+    setup: {}
+    formula: "=WORKDAY.INTL(DATE(2025,1,1),10,1,A1)"
+
+  - id: yearfrac_bool_start
+    formula: "=YEARFRAC(TRUE,10)"
+
+  - id: yearfrac_bool_basis
+    formula: "=YEARFRAC(1,10,TRUE)"
+
+  - id: yearfrac_bool_basis_cell
+    setup:
+      A1: { kind: formula, formula: "=TRUE" }
+    formula: "=YEARFRAC(1,10,A1)"
+
+  - id: yearfrac_omitted_start
+    formula: "=YEARFRAC(,1)"
+
+  - id: yearfrac_omitted_end
+    formula: "=YEARFRAC(1,)"
+
+  - id: yearfrac_omitted_basis
+    formula: "=YEARFRAC(1,400,)"
+
+  - id: weeknum_bool_serial
+    formula: "=WEEKNUM(TRUE)"
+
+  - id: weeknum_bool_serial_cell
+    setup:
+      A1: { kind: formula, formula: "=TRUE" }
+    formula: "=WEEKNUM(A1)"
+
+  - id: weeknum_bool_return_type
+    formula: "=WEEKNUM(10,FALSE)"
+
+  - id: weeknum_omitted_serial
+    formula: "=WEEKNUM(,1)"
+
+  - id: weeknum_both_omitted
+    formula: "=WEEKNUM(,)"
+
+  - id: weeknum_omitted_return_type
+    formula: "=WEEKNUM(10,)"
+
+  - id: days_omitted_start
+    formula: "=DAYS(,5)"
+
+  - id: weekday_omitted_serial
+    formula: "=WEEKDAY(,1)"
+
+  - id: datedif_omitted_end
+    formula: "=DATEDIF(1,,\"d\")"

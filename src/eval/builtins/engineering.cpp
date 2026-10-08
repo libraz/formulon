@@ -529,13 +529,25 @@ void register_engineering_builtins(FunctionRegistry& registry) {
   // Base conversion. The spec pins BIN2DEC / OCT2DEC / HEX2DEC to exactly
   // one argument (no `places`); all others accept an optional `places`.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"BIN2DEC", 1u, 1u, &Bin2Dec},     {"BIN2OCT", 1u, 2u, &Bin2Oct},     {"BIN2HEX", 1u, 2u, &Bin2Hex},
-      {"OCT2DEC", 1u, 1u, &Oct2Dec},     {"OCT2BIN", 1u, 2u, &Oct2Bin},     {"OCT2HEX", 1u, 2u, &Oct2Hex},
-      {"HEX2DEC", 1u, 1u, &Hex2Dec},     {"HEX2BIN", 1u, 2u, &Hex2Bin},     {"HEX2OCT", 1u, 2u, &Hex2Oct},
-      {"DEC2BIN", 1u, 2u, &Dec2Bin},     {"DEC2OCT", 1u, 2u, &Dec2Oct},     {"DEC2HEX", 1u, 2u, &Dec2Hex},
-      {"BITAND", 2u, 2u, &BitAnd},       {"BITOR", 2u, 2u, &BitOr},         {"BITXOR", 2u, 2u, &BitXor},
-      {"BITLSHIFT", 2u, 2u, &BitLShift}, {"BITRSHIFT", 2u, 2u, &BitRShift}, {"DELTA", 1u, 2u, &Delta},
-      {"GESTEP", 1u, 2u, &Gestep},
+      builtins_detail::analysis_toolpak({"BIN2DEC", 1u, 1u, &Bin2Dec}),
+      builtins_detail::analysis_toolpak({"BIN2OCT", 1u, 2u, &Bin2Oct}),
+      builtins_detail::analysis_toolpak({"BIN2HEX", 1u, 2u, &Bin2Hex}),
+      builtins_detail::analysis_toolpak({"OCT2DEC", 1u, 1u, &Oct2Dec}),
+      builtins_detail::analysis_toolpak({"OCT2BIN", 1u, 2u, &Oct2Bin}),
+      builtins_detail::analysis_toolpak({"OCT2HEX", 1u, 2u, &Oct2Hex}),
+      builtins_detail::analysis_toolpak({"HEX2DEC", 1u, 1u, &Hex2Dec}),
+      builtins_detail::analysis_toolpak({"HEX2BIN", 1u, 2u, &Hex2Bin}),
+      builtins_detail::analysis_toolpak({"HEX2OCT", 1u, 2u, &Hex2Oct}),
+      builtins_detail::analysis_toolpak({"DEC2BIN", 1u, 2u, &Dec2Bin}),
+      builtins_detail::analysis_toolpak({"DEC2OCT", 1u, 2u, &Dec2Oct}),
+      builtins_detail::analysis_toolpak({"DEC2HEX", 1u, 2u, &Dec2Hex}),
+      {"BITAND", 2u, 2u, &BitAnd},
+      {"BITOR", 2u, 2u, &BitOr},
+      {"BITXOR", 2u, 2u, &BitXor},
+      {"BITLSHIFT", 2u, 2u, &BitLShift},
+      {"BITRSHIFT", 2u, 2u, &BitRShift},
+      builtins_detail::analysis_toolpak({"DELTA", 1u, 2u, &Delta}),
+      builtins_detail::analysis_toolpak({"GESTEP", 1u, 2u, &Gestep}),
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

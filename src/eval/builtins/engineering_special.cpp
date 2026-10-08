@@ -505,15 +505,15 @@ void register_engineering_special_builtins(FunctionRegistry& registry) {
   // 1-arg. The dispatcher enforces arity, so passing a second argument to
   // ERF.PRECISE / ERFC / ERFC.PRECISE surfaces #VALUE! before the impl runs.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"ERF", 1u, 2u, &Erf},
+      builtins_detail::analysis_toolpak_no_omitted_default({"ERF", 1u, 2u, &Erf}),
       {"ERF.PRECISE", 1u, 1u, &ErfPrecise},
-      {"ERFC", 1u, 1u, &Erfc},
+      builtins_detail::analysis_toolpak({"ERFC", 1u, 1u, &Erfc}),
       {"ERFC.PRECISE", 1u, 1u, &ErfcPrecise},
       // BESSEL family. All are strict 2-arg (x, n).
-      {"BESSELJ", 2u, 2u, &BesselJ},
-      {"BESSELY", 2u, 2u, &BesselY},
-      {"BESSELI", 2u, 2u, &BesselI},
-      {"BESSELK", 2u, 2u, &BesselK},
+      builtins_detail::analysis_toolpak({"BESSELJ", 2u, 2u, &BesselJ}),
+      builtins_detail::analysis_toolpak({"BESSELY", 2u, 2u, &BesselY}),
+      builtins_detail::analysis_toolpak({"BESSELI", 2u, 2u, &BesselI}),
+      builtins_detail::analysis_toolpak({"BESSELK", 2u, 2u, &BesselK}),
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

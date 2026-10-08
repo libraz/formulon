@@ -2,11 +2,11 @@
   "suite": "financial_ext",
   "description": "Non-DCC financial builtins — DOLLARDE / DOLLARFR / EFFECT / NOMINAL / FVSCHEDULE / PDURATION / RRI / MIRR / ISPMT. See `eval/builtins/financial.cpp` and `eval/financial_lazy.cpp` (MIRR).",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-09,
@@ -475,6 +475,138 @@
       "expect": {
         "kind": "error",
         "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "atp_dollarde_bool",
+      "formula": "=DOLLARDE(TRUE,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_dollarde_omit",
+      "formula": "=DOLLARDE(,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_dollarde_boolcell",
+      "formula": "=DOLLARDE(A1,2)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_effect_bool",
+      "formula": "=EFFECT(TRUE,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_effect_omit",
+      "formula": "=EFFECT(,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_effect_boolcell",
+      "formula": "=EFFECT(A1,2)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_nominal_bool",
+      "formula": "=NOMINAL(TRUE,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_nominal_omit",
+      "formula": "=NOMINAL(,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_nominal_boolcell",
+      "formula": "=NOMINAL(A1,2)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_dollarfr_bool",
+      "formula": "=DOLLARFR(TRUE,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_dollarfr_omit",
+      "formula": "=DOLLARFR(,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_fvschedule_bool",
+      "formula": "=FVSCHEDULE(TRUE,{0.1})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_fvschedule_omit",
+      "formula": "=FVSCHEDULE(,{0.1})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
       }
     }
   ]

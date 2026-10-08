@@ -277,9 +277,10 @@ bool AlwaysCalculates(const parser::AstNode& node, const NameShapes& names, std:
       }
       break;
     case NodeKind::LambdaCall: {
-      // A call through a reference (`A1(1)`) calls nothing Excel knows.
+      // A call through a reference (`A1(1)`) calls nothing Excel knows; a call
+      // of a computed function value (`CHOOSE(1,SUM,ABS)(5)`) does.
       const NodeKind callee = node.as_lambda_call_callee().kind();
-      if (callee != NodeKind::Lambda && callee != NodeKind::LambdaCall) {
+      if (callee != NodeKind::Lambda && callee != NodeKind::LambdaCall && callee != NodeKind::Call) {
         return true;
       }
       break;
@@ -328,7 +329,53 @@ bool ContainsVolatileCall(const parser::AstNode& node) {
   return false;
 }
 
+/// Walker behind `function_value_refs`; `bound` holds the LET / LAMBDA names in scope.
+void CollectFunctionValues(const parser::AstNode& node, const NameShapes& names, std::vector<std::string_view>& bound,
+                           std::vector<const parser::AstNode*>& out) {
+  using parser::NodeKind;
+  const std::size_t depth = bound.size();
+  switch (node.kind()) {
+    case NodeKind::NameRef: {
+      const std::string_view name = node.as_name();
+      const bool is_bound = std::any_of(bound.begin(), bound.end(),
+                                        [&](std::string_view b) { return strings::case_insensitive_eq(b, name); });
+      if (node.as_name_sheet().empty() && !is_bound && !(names && names(node).defined) &&
+          IsBuiltin(canonical_function_name(name))) {
+        out.push_back(&node);
+      }
+      return;
+    }
+    case NodeKind::LetBinding:
+      for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
+        CollectFunctionValues(node.as_let_binding_expr(i), names, bound, out);
+        bound.push_back(node.as_let_binding_name(i));
+      }
+      CollectFunctionValues(node.as_let_body(), names, bound, out);
+      bound.resize(depth);
+      return;
+    case NodeKind::Lambda:
+      for (std::uint32_t i = 0; i < node.as_lambda_param_count(); ++i) {
+        bound.push_back(node.as_lambda_param(i));
+      }
+      CollectFunctionValues(node.as_lambda_body(), names, bound, out);
+      bound.resize(depth);
+      return;
+    default:
+      for (const parser::AstNode* child : parser::child_nodes(node)) {
+        CollectFunctionValues(*child, names, bound, out);
+      }
+      return;
+  }
+}
+
 }  // namespace
+
+std::vector<const parser::AstNode*> function_value_refs(const parser::AstNode& root, const NameShapes& names) {
+  std::vector<std::string_view> bound;
+  std::vector<const parser::AstNode*> out;
+  CollectFunctionValues(root, names, bound, out);
+  return out;
+}
 
 bool name_sets_calc_exp(const parser::AstNode& root, const NameShapes& names) {
   std::unordered_map<const parser::AstNode*, std::uint8_t> parens;

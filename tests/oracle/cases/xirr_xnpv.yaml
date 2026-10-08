@@ -262,3 +262,28 @@ cases:
     description: "Text rate -> #VALUE!"
     setup: { A1: -1000, A2: 1100, B1: 39448, B2: 39813 }
     formula: "=XNPV(\"x\", A1:A2, B1:B2)"
+
+  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  #    arguments, and the near-integer snap of integer arguments --------------
+  - id: atp_xnpv_bool
+    formula: "=XNPV(TRUE,{1,2},{1,2})"
+
+  - id: atp_xnpv_omit
+    formula: "=XNPV(,{-1,2},{1,2})"
+
+  - id: atp_xnpv_boolcell
+    setup: { A1: true }
+    formula: "=XNPV(A1,{1,2},{1,2})"
+
+  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  - id: a4_xirr_bool
+    formula: "=XIRR({-100,110},{TRUE,400})"
+
+  - id: a4_xirr_omit
+    formula: "=XIRR(,{1,400})"
+
+  - id: opt_xirr_guess_bool
+    formula: "=XIRR({-100,110},{1,400},TRUE)"
+
+  - id: opt_xirr_guess_omit
+    formula: "=XIRR({-100,110},{1,400},)"

@@ -331,6 +331,31 @@ TEST(BuiltinsBetaInv, RoundTrip) {
   EXPECT_NEAR(back.as_number(), 0.4, 1e-9);
 }
 
+// Asserts a numeric result within `rel` relative tolerance of `expected`.
+void ExpectGdRel(const char* formula, double expected, double rel) {
+  const Value v = EvalSource(formula);
+  ASSERT_TRUE(v.is_number()) << formula;
+  EXPECT_NEAR(v.as_number(), expected, std::abs(expected) * rel) << formula;
+}
+
+void ExpectGdErr(const char* formula, ErrorCode code) {
+  const Value v = EvalSource(formula);
+  ASSERT_TRUE(v.is_error()) << formula;
+  EXPECT_EQ(v.as_error(), code) << formula;
+}
+
+TEST(BuiltinsGammaDist, PdfAtZeroIsNumUpToAlphaOne) {
+  ExpectGdErr("=GAMMA.DIST(0, 0.5, 2, FALSE)", ErrorCode::Num);
+  ExpectGdErr("=GAMMA.DIST(0, 1, 2, FALSE)", ErrorCode::Num);
+  ExpectGdErr("=GAMMADIST(0, 1, 1, FALSE)", ErrorCode::Num);
+  ExpectGdRel("=GAMMA.DIST(0, 1.5, 2, FALSE)", 0.0, 0.0);
+}
+
+TEST(BuiltinsGammaInv, SmallProbabilityRoundTrips) {
+  ExpectGdRel("=GAMMA.INV(GAMMA.DIST(1E-5,9,2,TRUE),9,2)", 9.999999999999992e-06, 1e-12);
+  ExpectGdRel("=GAMMA.INV(0.5,3,2)", 5.348120627447123, 1e-13);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

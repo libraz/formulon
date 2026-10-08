@@ -10,6 +10,7 @@
 
 #include "io/ooxml/workbook_xml_builder.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -26,6 +27,7 @@
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml_defs.h"
 #include "io/workbook_kind_ooxml.h"
+#include "io/xlsb/ptg_writer.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
@@ -37,6 +39,7 @@
 #include "unknown_relationship.h"
 #include "utils/arena.h"
 #include "utils/double_format.h"
+#include "utils/strings.h"
 #include "utils/structured_log.h"
 #include "workbook.h"
 
@@ -154,8 +157,17 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
     parser::AstNode* formula_root = formula_parser.parse();
     bool storage_emitted = false;
     if (formula_root != nullptr && formula_parser.errors().empty()) {
-      const std::string storage =
-          parser::format_formula_storage(*formula_root, &storage_call_name, /*omitted_at=*/nullptr, &indexer);
+      const xlsb::NameShapes defined = [&names](const parser::AstNode& node) {
+        xlsb::NameShape shape;
+        shape.defined = node.kind() == parser::NodeKind::NameRef &&
+                        std::any_of(names.begin(), names.end(), [&](const DefinedName& d) {
+                          return strings::case_insensitive_eq(d.name, node.as_name());
+                        });
+        return shape;
+      };
+      const std::vector<const parser::AstNode*> function_values = xlsb::function_value_refs(*formula_root, defined);
+      const std::string storage = parser::format_formula_storage(*formula_root, &storage_call_name,
+                                                                 /*omitted_at=*/nullptr, &indexer, &function_values);
       // Only re-serialise when the storage form differs in substance; a
       // classic formula is emitted verbatim below to preserve its exact
       // spelling.

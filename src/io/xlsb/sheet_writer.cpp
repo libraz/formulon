@@ -28,6 +28,7 @@
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/sheet_properties_records.h"
 #include "io/xlsb/sst_writer.h"
+#include "print/sheet_geometry.h"
 #include "sheet.h"
 #include "style_resolve.h"
 #include "utils/error.h"
@@ -361,7 +362,14 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheet), ByteSpan{});
   emit_ws_prop(body, sheet);
   EmitWorksheetDimensions(body, sheet);
-  EmitWorksheetViewsAndFormatting(body, sheet.view(), sheet.format_defaults());
+  // BrtWsFmtInfo always carries a row height, so an unset default is written
+  // as the height the engine itself resolves for the sheet.
+  SheetFormatDefaults format_defaults = sheet.format_defaults();
+  if (!format_defaults.has_default_row_height) {
+    format_defaults.default_row_height = print::default_row_height_pt(sheet);
+    format_defaults.has_default_row_height = true;
+  }
+  EmitWorksheetViewsAndFormatting(body, sheet.view(), format_defaults);
   EmitColumnInfos(body, sheet.layout());
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheetData), ByteSpan{});
 

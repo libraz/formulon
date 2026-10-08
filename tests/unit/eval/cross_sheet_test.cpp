@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
@@ -380,6 +381,32 @@ TEST(EvalContextCrossSheetRange, ThreeDRangeTailAggregatesAcrossSheets) {
   const Value cnt_v = evaluate(*cnt_root, arena, default_registry(), ctx);
   ASSERT_TRUE(cnt_v.is_number());
   EXPECT_EQ(cnt_v.as_number(), 4.0);
+}
+
+TEST(EvalContextCrossSheetRange, ThreeDRangeCountsNumbersAcrossSheets) {
+  // COUNT over a 3-D reference counts Number cells only: a text cell, a
+  // boolean cell and an error cell are not counted.
+  Workbook wb = MakeTwoSheetWorkbook();
+  wb.add_sheet("Sheet3");
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(1).set_cell_value(0, 0, Value::number(2.0));
+  wb.sheet(2).set_cell_value(0, 0, Value::number(3.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("t"));
+  wb.sheet(1).set_cell_value(1, 0, Value::boolean(true));
+  wb.sheet(2).set_cell_value(1, 0, Value::error(ErrorCode::Div0));
+
+  EvalState state;
+  Arena arena;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  for (const auto& [src, expected] : {std::pair<const char*, double>{"=COUNT(Sheet1:Sheet3!A1)", 3.0},
+                                      std::pair<const char*, double>{"=COUNT(Sheet1:Sheet3!A1:A2)", 3.0}}) {
+    parser::Parser p(src, arena);
+    parser::AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr);
+    const Value v = evaluate(*root, arena, default_registry(), ctx);
+    ASSERT_TRUE(v.is_number()) << src;
+    EXPECT_EQ(v.as_number(), expected) << src;
+  }
 }
 
 TEST(EvalContextCrossSheetRange, ThreeDFullColumnAndRowAggregateAcrossSheets) {

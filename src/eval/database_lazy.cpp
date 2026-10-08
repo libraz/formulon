@@ -94,9 +94,8 @@ bool resolve_field_column(const Value& field_value, const std::vector<Value>& db
     // (CHOOSE, INDEX). FALSE -> 0 falls through the `< 1` check below and
     // is rejected with `#VALUE!`.
     const double raw = field_value.is_boolean() ? (field_value.as_boolean() ? 1.0 : 0.0) : field_value.as_number();
-    // Excel truncates (not rounds) toward zero, matching every other
-    // integer-index argument (e.g. CHOOSE, INDEX).
-    const long long idx = static_cast<long long>(raw);
+    // Excel snaps a near integer up, then truncates toward zero.
+    const long long idx = static_cast<long long>(snap_near_integer(raw));
     if (idx < 1 || static_cast<std::uint64_t>(idx) > db_cols) {
       *out_err = Value::error(ErrorCode::Value);
       return false;

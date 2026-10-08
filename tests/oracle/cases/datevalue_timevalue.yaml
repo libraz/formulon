@@ -325,3 +325,82 @@ cases:
   - id: datevalue_excel_serial_text
     description: "Numeric text resembling serial — Excel does NOT interpret this as a date"
     formula: "=DATEVALUE(\"45383\")"
+
+  # -- Hour-only and dotted 12-hour forms (Excel-measured) ------------------
+  - id: timevalue_hour_only_pm
+    formula: "=TIMEVALUE(\"6 PM\")"
+
+  - id: timevalue_hour_only_am
+    formula: "=TIMEVALUE(\"6 AM\")"
+
+  - id: timevalue_hour_only_p
+    formula: "=TIMEVALUE(\"6 P\")"
+
+  - id: timevalue_12_pm
+    formula: "=TIMEVALUE(\"12 PM\")"
+
+  - id: timevalue_12_am
+    formula: "=TIMEVALUE(\"12 AM\")"
+
+  - id: timevalue_0_pm
+    formula: "=TIMEVALUE(\"0 PM\")"
+
+  - id: timevalue_lowercase_pm
+    formula: "=TIMEVALUE(\"4 pm\")"
+
+  - id: timevalue_trailing_dot
+    formula: "=TIMEVALUE(\"6:00 PM.\")"
+
+  - id: timevalue_minutes_trailing_dot
+    formula: "=TIMEVALUE(\"6:30 pm.\")"
+
+  - id: timevalue_space_dot
+    formula: "=TIMEVALUE(\"6 pm .\")"
+
+  - id: timevalue_date_then_hour_pm
+    formula: "=TIMEVALUE(\"2026/7/7 6 PM\")"
+
+  - id: timevalue_date_then_hour_pm_dot
+    formula: "=TIMEVALUE(\"2026/7/7 6 pm.\")"
+
+  - id: timevalue_hour_pm_then_date
+    formula: "=TIMEVALUE(\"6 PM 2026/7/7\")"
+
+  - id: datevalue_date_then_hour_pm
+    formula: "=DATEVALUE(\"2026/7/7 6 PM\")"
+
+  - id: value_hour_only_pm
+    formula: "=VALUE(\"6 PM\")"
+
+  - id: value_minutes_trailing_dot
+    formula: "=VALUE(\"6:30 PM.\")"
+
+  - id: coerce_hour_only_pm
+    formula: "=\"6 PM\"+0"
+
+  - id: timevalue_no_space_before_marker
+    formula: "=TIMEVALUE(\"6PM\")"
+
+  - id: timevalue_hour_over_12_pm
+    formula: "=TIMEVALUE(\"18 PM\")"
+
+  - id: timevalue_13_00_pm
+    formula: "=TIMEVALUE(\"13:00 PM\")"
+
+  - id: timevalue_hour_dot
+    formula: "=TIMEVALUE(\"6.\")"
+
+  - id: timevalue_hour_alone
+    formula: "=TIMEVALUE(\"6\")"
+
+  - id: timevalue_dotted_am
+    formula: "=TIMEVALUE(\"6 a.m.\")"
+
+  - id: timevalue_dotted_pm
+    formula: "=TIMEVALUE(\"6 p.m.\")"
+
+  - id: timevalue_marker_first
+    formula: "=TIMEVALUE(\"AM 6\")"
+
+  - id: timevalue_marker_suffix
+    formula: "=TIMEVALUE(\"6 pmx\")"

@@ -202,3 +202,37 @@ cases:
   - id: mduration_invalid_basis_error
     description: "MDURATION invalid basis 5 -> #NUM!"
     formula: '=MDURATION(DATE(2020,1,1),DATE(2030,1,1),0.05,0.06,2,5)'
+
+  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  - id: a4_price_bool
+    formula: "=PRICE(TRUE,DATE(2030,1,15),0.05,0.06,100,2)"
+
+  - id: a4_price_omit
+    formula: "=PRICE(,DATE(2030,1,15),0.05,0.06,100,2)"
+
+  - id: a4_yield_bool
+    formula: "=YIELD(TRUE,DATE(2030,1,15),0.05,95,100,2)"
+
+  - id: a4_yield_omit
+    formula: "=YIELD(,DATE(2030,1,15),0.05,95,100,2)"
+
+  - id: a4_duration_bool
+    formula: "=DURATION(TRUE,DATE(2030,1,15),0.05,0.06,2)"
+
+  - id: a4_duration_omit
+    formula: "=DURATION(,DATE(2030,1,15),0.05,0.06,2)"
+
+  - id: a4_mduration_bool
+    formula: "=MDURATION(TRUE,DATE(2030,1,15),0.05,0.06,2)"
+
+  - id: a4_mduration_omit
+    formula: "=MDURATION(,DATE(2030,1,15),0.05,0.06,2)"
+
+  - id: a4_oddfprice_bool
+    formula: "=ODDFPRICE(TRUE,DATE(2030,1,15),DATE(2024,1,15),DATE(2024,1,15)+200,0.05,0.06,100,2)"
+
+  - id: a4_oddfprice_omit
+    formula: "=ODDFPRICE(,DATE(2030,1,15),DATE(2024,1,15),DATE(2024,1,15)+200,0.05,0.06,100,2)"
+
+  - id: opt_price_basis_omit
+    formula: "=PRICE(DATE(2024,1,15),DATE(2030,1,15),0.05,0.06,100,2,)"

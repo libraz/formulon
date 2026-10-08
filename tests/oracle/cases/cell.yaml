@@ -111,3 +111,49 @@ cases:
   - id: cell_empty_info_type
     description: 'Empty info_type surfaces #VALUE!'
     formula: '=CELL("", A1)'
+
+  # Implicit-intersection argument, formula at G2: `@F1:F4` projects to F2.
+  - id: cell_contents_implicit_intersection_at
+    formula_cell: G2
+    setup:
+      F1: 11
+      F2: 22
+      F3: 33
+      F4: 44
+    formula: '=CELL("contents",@F1:F4)'
+
+  - id: cell_row_implicit_intersection_at
+    formula_cell: G2
+    setup:
+      F1: 11
+      F2: 22
+      F3: 33
+      F4: 44
+    formula: '=CELL("row",@F1:F4)'
+
+  - id: cell_address_implicit_intersection_at
+    formula_cell: G2
+    setup:
+      F1: 11
+      F2: 22
+      F3: 33
+      F4: 44
+    formula: '=CELL("address",@F1:F4)'
+
+  - id: cell_type_implicit_intersection_at
+    formula_cell: G2
+    setup:
+      F1: 11
+      F2: label
+      F3: 33
+      F4: 44
+    formula: '=CELL("type",@F1:F4)'
+
+  - id: cell_contents_implicit_intersection_single
+    formula_cell: G2
+    setup:
+      F1: 11
+      F2: 22
+      F3: 33
+      F4: 44
+    formula: '=CELL("contents",SINGLE(F1:F4))'

@@ -2,11 +2,11 @@
   "suite": "regression",
   "description": "CORREL / COVARIANCE.P / COVARIANCE.S / SLOPE / INTERCEPT / RSQ / FORECAST.LINEAR — pairwise linear-regression builtins",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-10,
@@ -2573,6 +2573,42 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "covariance_p_scalars",
+      "formula": "=COVARIANCE.P(1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "covariance_p_equal_scalars",
+      "formula": "=COVARIANCE.P(3,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "covar_scalars",
+      "formula": "=COVAR(1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "covariance_s_scalars_is_div0",
+      "formula": "=COVARIANCE.S(1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
       }
     }
   ]

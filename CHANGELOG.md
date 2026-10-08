@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A built-in function name written bare is a function value, as a `LAMBDA`
+  is: `=TYPE(SUM)` is 128, `=SUM` shows `#CALC!`, `=ABS+1` is `#VALUE!`, and
+  `=LET(f,ABS,f(-2))`, `=CHOOSE(1,SUM,ABS)(5)` and `=IF(TRUE,ABS,SUM)(-3)`
+  call it. A defined name or LET binding of the same spelling still wins.
+  XLSX and XLSB store it as `_xleta.SUM`, read and written.
+- The trim-reference operators `A1:.A10` (trailing blanks), `A1.:A10`
+  (leading) and `A1.:.A10` (both), over bounded ranges, whole columns and
+  rows, 2-D and sheet-qualified ranges. XLSX and XLSB store them as
+  `_xlfn._TRO_TRAILING(A1:A10)` and its siblings, and they read back in
+  operator form.
 - References to another workbook can be entered, displayed and evaluated:
   `=[Book.xlsx]Sheet1!A1`, `='/Users/x/[Book.xlsx]Sheet1'!A1`,
   `=SUM([Book.xlsx]Sheet1:Sheet2!A1)` and `=Book.xlsx!Name`, in cells, defined
@@ -104,6 +114,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   breaks. A watch on a deleted cell keeps its address, an insert inside an
   ignored-error range leaves the new cells out of it, and a sort state goes
   with the last of its sort conditions, the AutoFilter's included.
+- An integer argument within 2^-22 below a whole number counts as that
+  number in the functions where Excel does so, among them `DATE`, `TIME`,
+  `INDEX`, `VLOOKUP` / `HLOOKUP`, the `D*` field, `LEFT` / `RIGHT`, `FIND`,
+  `ROUND`, `FACT`, `LARGE`, `SEQUENCE`, `ADDRESS` and `WEEKDAY`; `MID`,
+  `REPT`, `CHOOSE`, `SMALL` and the other plain truncations are unchanged.
+- The former Analysis ToolPak functions (engineering, `IM*`, bond and
+  coupon, `EDATE`, `EOMONTH`, `WORKDAY`, `NETWORKDAYS`, `YEARFRAC`,
+  `WEEKNUM`, `QUOTIENT`, `GCD`, `MROUND` and the rest of the set) return
+  `#VALUE!` for a boolean argument and `#N/A` for an omitted required one.
+- An omitted argument counts as 0 in `COUNT`, `COUNTA`, `MEDIAN`, `STDEV`,
+  `VAR`, `KURT`, `SKEW`, `AVEDEV`, `DEVSQ`, `GEOMEAN` and `HARMEAN`;
+  `PRODUCT` skips it and `MODE` is `#VALUE!`. Direct booleans and numeric
+  text count in `KURT`, `SKEW`, `GEOMEAN`, `HARMEAN`, `MEDIAN`, `AVEDEV`
+  and `DEVSQ`, as in `STDEV`.
+- Dates: serial 0 is 1900-01-00 in `EOMONTH` and `EDATE`; `DAY`, `MONTH`,
+  `YEAR` and `WEEKDAY` round to the nearest second first; `DATE` bounds the
+  month and saturates the day as Excel does; the `.INTL` weekend argument
+  takes a boolean, blank or text as Excel does; and time text accepts the
+  hour-only `6 PM` form and a trailing `.` after AM/PM.
+- Statistics: `T.DIST` density at 0 degrees of freedom is `#DIV/0!`;
+  `COVARIANCE.P`, `COVAR` and `COVARIANCE.S` take scalars; `GAMMA.DIST`
+  density at 0 follows alpha; `CHISQ.TEST` drops non-numeric pairs and
+  allows negative values; `BINOM.INV` rejects a probability of 0 or 1; and
+  `GAMMA.INV`, `CHISQ.DIST.RT`, `CHISQ.INV` and `T.INV.2T` are accurate at
+  extreme arguments.
+- `CHOOSECOLS` and `CHOOSEROWS` take an array of indexes; `COUNT` counts
+  across a 3-D reference and `COUNTIF` on one is `#VALUE!`; `CELL` with
+  `@range` reads the intersected cell; `ARABIC` follows Excel's subtractive
+  rule (`IIM` is 998); and `TOCOL` / `TOROW` fillers are empty text.
+- `GROUPBY` and `PIVOTBY` default to a grand total, detected headers and an
+  ascending sort, and their empty label cells are empty text.
+- `<sheetFormatPr>` keeps `customHeight` and its other attributes through
+  an XLSX or XLSB save.
 
 ## [0.13.0] - 2026-10-06
 

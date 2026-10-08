@@ -22,6 +22,16 @@
 namespace formulon {
 namespace parser {
 
+/// Trim mode of a trim-reference operator, numbered as TRIMRANGE's
+/// `trim_rows` / `trim_cols` argument: `.:` trims leading blanks, `:.`
+/// trailing ones and `.:.` both. `None` is the plain `:`.
+enum class TrimRefMode : std::uint8_t {
+  None = 0,
+  Leading = 1,
+  Trailing = 2,
+  Both = 3,
+};
+
 /// Token kind enumeration.
 ///
 /// Values are used as dispatch keys by the Pratt parser; add new kinds at
@@ -117,6 +127,8 @@ struct Token {
   std::string_view text;
   /// Parsed error-literal code (ErrorLiteral).
   ErrorCode error_code = ErrorCode::Null;
+  /// Trim mode of a `Colon` spelled `.:`, `:.` or `.:.`.
+  TrimRefMode trim = TrimRefMode::None;
 };
 
 }  // namespace parser

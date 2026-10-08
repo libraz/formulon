@@ -151,11 +151,10 @@ DecodedIndex decode_index_cell(const Value& value) {
     return DecodedIndex{IndexAxisState::kError, 0U, number.error()};
   }
   const double original = number.value();
-  const double raw = truncate_index(original);
-  // A selector below 1 never names a row / column: negatives and sub-1
-  // fractions are both `#VALUE!`. Only an exact zero means "whole spanned
-  // dimension", so the fraction check tests `original` rather than `raw`.
-  if (original < 0.0 || (raw == 0.0 && original != 0.0)) {
+  // The lower bound applies after the snap and the truncation toward zero,
+  // so anything in (-1, 1) selects the whole spanned dimension.
+  const double raw = truncate_index(snap_near_integer(original));
+  if (raw < 0.0) {
     return DecodedIndex{IndexAxisState::kError, 0U, ErrorCode::Value};
   }
   // Avoid an implementation-defined narrowing conversion for a gigantic

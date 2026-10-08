@@ -52,6 +52,15 @@ double p_gamma(double a, double x) noexcept;
 /// Returns `NaN` if `a <= 0` or `x < 0`; `1` at `x == 0`.
 double q_gamma(double a, double x) noexcept;
 
+/// Inverse of the regularized incomplete gamma functions: the `x` with
+/// `P(a, x) == prob` (`upper == false`) or `Q(a, x) == prob` (`upper == true`).
+///
+/// Solved in `ln x` against `ln prob` on whichever tail is smaller, so a
+/// probability far below 1 (the lower tail of a large shape, say) keeps full
+/// relative accuracy. Returns `NaN`
+/// unless `a > 0` and `0 < prob < 1`, or when the iteration fails to converge.
+double gamma_quantile(double a, double prob, bool upper) noexcept;
+
 /// Regularized incomplete beta function
 /// `I_x(a, b) = B(x; a, b) / B(a, b)`, the CDF of the Beta(a, b) law.
 ///

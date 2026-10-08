@@ -656,6 +656,24 @@ TEST(BuiltinsCount, AndOrRangeProvenanceSkipsTextCells) {
   EXPECT_EQ(direct_text.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsCount, OmittedSlotCountsAsZero) {
+  const Value count = EvalSource("=COUNT(3,4,,6,7)");
+  ASSERT_TRUE(count.is_number());
+  EXPECT_EQ(count.as_number(), 5.0);
+  const Value pair = EvalSource("=COUNT(,)");
+  ASSERT_TRUE(pair.is_number());
+  EXPECT_EQ(pair.as_number(), 2.0);
+}
+
+TEST(BuiltinsCount, CountaCountsOmittedSlots) {
+  const Value three = EvalSource("=COUNTA(3,,4)");
+  ASSERT_TRUE(three.is_number());
+  EXPECT_EQ(three.as_number(), 3.0);
+  const Value pair = EvalSource("=COUNTA(,)");
+  ASSERT_TRUE(pair.is_number());
+  EXPECT_EQ(pair.as_number(), 2.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

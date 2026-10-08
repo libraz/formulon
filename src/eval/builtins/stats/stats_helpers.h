@@ -47,8 +47,7 @@ std::vector<double> collect_numerics(const Value* args, std::uint32_t count);
 // because the dispatcher short-circuits with `propagate_errors = true`.
 Expected<std::vector<double>, ErrorCode> collect_a(const Value* args, std::uint32_t count);
 
-// Direct-scalar-aware collector used by SMALL / LARGE and by VAR.S / VAR.P /
-// STDEV.S / STDEV.P (and their legacy aliases). Range-sourced cells that
+// Direct-scalar-aware collector used by SMALL / LARGE. Range-sourced cells that
 // are non-Number have already been dropped by the dispatcher's
 // `range_filter_numeric_only` filter, so this helper only sees Number kinds
 // plus any direct scalar arguments. Direct Number -> kept; direct Bool ->
@@ -57,6 +56,13 @@ Expected<std::vector<double>, ErrorCode> collect_a(const Value* args, std::uint3
 // is where this helper diverges from the "A"-family rule. Errors never
 // reach this helper (dispatcher short-circuits via `propagate_errors`).
 Expected<std::vector<double>, ErrorCode> collect_direct_scalar_coerced(const Value* args, std::uint32_t count);
+
+// Direct-argument collector of the dispersion and moment families (VAR /
+// STDEV / KURT / SKEW / GEOMEAN / HARMEAN / MEDIAN / AVEDEV / DEVSQ). Same
+// coercion as `collect_direct_scalar_coerced`, except that an omitted slot
+// (`f(1,,3)`, the only Blank that survives the dispatcher's range filter)
+// counts as 0.
+Expected<std::vector<double>, ErrorCode> collect_direct_stats(const Value* args, std::uint32_t count);
 
 // (mean, sum_of_squared_deviations) pair returned by `compute_mean_ss`.
 struct MeanSS {

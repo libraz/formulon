@@ -27,7 +27,12 @@ bool IsOperatorCall(const AstNode& node, std::string_view name) {
 }
 
 bool IsStorageOperatorCall(const AstNode& node) {
-  return IsOperatorCall(node, "SINGLE") || IsOperatorCall(node, "ANCHORARRAY");
+  return IsOperatorCall(node, "SINGLE") || IsOperatorCall(node, "ANCHORARRAY") ||
+         trim_ref_call_mode(node) != TrimRefMode::None;
+}
+
+const char* TrimRefOperator(TrimRefMode mode) {
+  return mode == TrimRefMode::Leading ? ".:" : mode == TrimRefMode::Trailing ? ":." : ".:.";
 }
 
 bool HasStorageOperatorCall(const AstNode& node) {
@@ -55,6 +60,9 @@ class OperatorRespeller {
     }
     if (IsStorageOperatorCall(node)) {
       const AstNode& arg = node.as_call_arg(0);
+      if (const TrimRefMode mode = trim_ref_call_mode(node); mode != TrimRefMode::None) {
+        return trim_ref(node, arg, mode);
+      }
       if (IsOperatorCall(node, "SINGLE")) {
         // `@` binds looser than `:`, ` ` and `%`, tighter than every infix operator.
         const bool wrap_arg = arg.kind() == NodeKind::BinaryOp ||
@@ -92,6 +100,22 @@ class OperatorRespeller {
   }
 
  private:
+  // `_TRO_TRAILING(A1:A10)` is `A1:.A10`; the range's own `:` takes the
+  // operator. An argument that is no range keeps the call spelling.
+  std::string trim_ref(const AstNode& call, const AstNode& arg, TrimRefMode mode) const {
+    if (arg.paren_depth() == 0U && arg.kind() == NodeKind::RangeOp) {
+      return text(arg.as_range_lhs(), true) + TrimRefOperator(mode) + text(arg.as_range_rhs(), true);
+    }
+    if (arg.paren_depth() == 0U && arg.kind() == NodeKind::Ref) {
+      const std::string ref(src_.substr(arg.range().start, arg.range().end - arg.range().start));
+      if (const std::size_t colon = ref.rfind(':'); colon != std::string::npos) {
+        return ref.substr(0, colon) + TrimRefOperator(mode) + ref.substr(colon + 1);
+      }
+    }
+    const TextRange r = call.range();
+    return std::string(src_.substr(r.start, r.end - r.start));
+  }
+
   std::string parenthesised(const AstNode& node, bool wrap) const {
     std::string inner = text(node, false);
     return wrap && (inner.empty() || inner.front() != '(') ? "(" + inner + ")" : inner;
@@ -106,7 +130,7 @@ std::string spell_storage_operators(std::string_view formula) {
   const std::size_t body_at = !formula.empty() && formula.front() == '=' ? 1U : 0U;
   const std::string_view body = formula.substr(body_at);
   if (!strings::case_insensitive_contains(body, "SINGLE(") &&
-      !strings::case_insensitive_contains(body, "ANCHORARRAY(")) {
+      !strings::case_insensitive_contains(body, "ANCHORARRAY(") && !strings::case_insensitive_contains(body, "_TRO_")) {
     return std::string(formula);
   }
   Arena arena;

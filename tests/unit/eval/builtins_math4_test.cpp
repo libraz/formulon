@@ -310,10 +310,10 @@ TEST(BuiltinsMath4GcdBlankScalar, BasicSanityTwelveAndEighteen) {
   EXPECT_EQ(v.as_number(), 6.0);
 }
 
-TEST(BuiltinsMath4GcdBlankScalar, LiteralEmptySlotYieldsValueError) {
+TEST(BuiltinsMath4GcdBlankScalar, LiteralEmptySlotYieldsNA) {
   const Value v = EvalSource("=GCD(,5)");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
 // ---------------------------------------------------------------------------
@@ -385,10 +385,10 @@ TEST(BuiltinsMath4LcmBlankScalar, BasicSanityFourAndSix) {
   EXPECT_EQ(v.as_number(), 12.0);
 }
 
-TEST(BuiltinsMath4LcmBlankScalar, LiteralEmptySlotYieldsValueError) {
+TEST(BuiltinsMath4LcmBlankScalar, LiteralEmptySlotYieldsNA) {
   const Value v = EvalSource("=LCM(,5)");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
 // ---------------------------------------------------------------------------
@@ -738,6 +738,38 @@ TEST(BuiltinsMath4Registration, AllNamesRegistered) {
   for (const char* name : {"FACT", "FACTDOUBLE", "COMBIN", "COMBINA", "MULTINOMIAL", "GCD", "LCM", "ARABIC", "ROMAN",
                            "BASE", "DECIMAL", "CEILING.PRECISE", "FLOOR.PRECISE", "ISO.CEILING", "SQRTPI"}) {
     EXPECT_NE(reg.lookup(name), nullptr) << "not registered: " << name;
+  }
+}
+
+// FACT snaps up within 2^-22: 10.9999997616 is inside, 10.999999761 is not.
+TEST(BuiltinsMath4Fact, NearIntegerSnapBoundary) {
+  const Value inside = EvalSource("=FACT(10.9999997616)");
+  ASSERT_TRUE(inside.is_number());
+  EXPECT_EQ(inside.as_number(), 39916800.0);
+  const Value outside = EvalSource("=FACT(10.999999761)");
+  ASSERT_TRUE(outside.is_number());
+  EXPECT_EQ(outside.as_number(), 3628800.0);
+}
+
+TEST(BuiltinsMath4Fact, NegativeRawValueIsNumBeforeSnap) {
+  const Value v = EvalSource("=FACT(-0.0000001)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+// A char subtracts when it is smaller than the largest value to its right.
+TEST(BuiltinsMath4Arabic, SubtractsAgainstLargestValueToTheRight) {
+  const struct {
+    const char* src;
+    double expected;
+  } cases[] = {
+      {"=ARABIC(\"IIM\")", 998.0}, {"=ARABIC(\"IM\")", 999.0}, {"=ARABIC(\"IIX\")", 8.0},
+      {"=ARABIC(\"IIC\")", 98.0},  {"=ARABIC(\"XXC\")", 80.0}, {"=ARABIC(\"VX\")", 5.0},
+  };
+  for (const auto& c : cases) {
+    const Value v = EvalSource(c.src);
+    ASSERT_TRUE(v.is_number()) << c.src;
+    EXPECT_EQ(v.as_number(), c.expected) << c.src;
   }
 }
 

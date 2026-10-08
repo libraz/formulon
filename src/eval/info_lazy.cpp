@@ -29,6 +29,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_resolvers.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -506,14 +507,18 @@ Value eval_weeknum_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (arity < 1U || arity > 2U) {
     return Value::error(ErrorCode::Value);
   }
+  // Analysis-ToolPak rule: a boolean is #VALUE!, an omitted serial is #N/A, an omitted return_type is its default.
+  const std::uint32_t evaluated = atp_evaluated_arity(call, 1U, 2U);
   Value args[2] = {eval_node(call.as_call_arg(0), arena, registry, ctx), Value::number(1.0)};
-  if (args[0].is_error()) {
-    return args[0];
-  }
-  if (arity == 2U) {
-    args[1] = eval_node(call.as_call_arg(1), arena, registry, ctx);
-    if (args[1].is_error()) {
-      return args[1];
+  for (std::uint32_t i = 0; i < evaluated; ++i) {
+    if (i == 1U) {
+      args[1] = eval_node(call.as_call_arg(1), arena, registry, ctx);
+    }
+    if (args[i].is_error()) {
+      return args[i];
+    }
+    if (const Value atp = atp_arg_error(call.as_call_arg(i), args[i], atp_slot_required(i, 1U, 2U)); atp.is_error()) {
+      return atp;
     }
   }
   // WEEKNUM is date1904-sensitive and no longer in the eager registry; reach
@@ -524,7 +529,7 @@ Value eval_weeknum_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (entry == nullptr) {
     return Value::error(ErrorCode::Name);
   }
-  return entry->impl(args, arity, arena, ctx.date1904());
+  return entry->impl(args, evaluated, arena, ctx.date1904());
 }
 
 Value eval_text_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

@@ -383,3 +383,29 @@ cases:
     description: "ZTEST with sigma=0 -> #DIV/0!"
     setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6 }
     formula: "=ZTEST(A1:A5, 4, 0)"
+
+  - id: chisq_test_bool_pair_dropped
+    description: "CHISQ.TEST drops a pair with a boolean side"
+    tolerance: { abs: 0.0, rel: 1.0e-12 }
+    formula: "=CHISQ.TEST({TRUE,2},{3,4})"
+
+  - id: chisq_test_bool_pair_dropped_2d
+    description: "CHISQ.TEST drops a boolean pair and keeps the 2-D degrees of freedom"
+    formula: "=CHISQ.TEST({TRUE,2;3,4},{1,2;3,4})"
+
+  - id: chisq_test_negative_values_allowed
+    description: "CHISQ.TEST accepts negative values while the statistic stays non-negative"
+    tolerance: { abs: 0.0, rel: 1.0e-12 }
+    formula: "=CHISQ.TEST({-1,-2},{3,-4})"
+
+  - id: chisq_test_negative_statistic_is_num
+    description: "CHISQ.TEST with a negative statistic is #NUM!"
+    formula: "=CHISQ.TEST({-1,-2},{-3,-4})"
+
+  - id: chisq_test_negative_expected_is_num
+    description: "CHISQ.TEST with a negative statistic from a negative expected count is #NUM!"
+    formula: "=CHISQ.TEST({1,2},{-3,4})"
+
+  - id: chisq_test_inline_zero_expected_is_div0
+    description: "CHISQ.TEST with an expected 0 is #DIV/0!"
+    formula: "=CHISQ.TEST({1,2},{0,4})"

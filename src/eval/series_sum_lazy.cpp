@@ -15,6 +15,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -29,14 +30,19 @@ using builtins_detail::to_finite_value;
 
 // Evaluates a scalar numeric argument. Returns `true` and writes the
 // numeric value to `*out` on success; on failure writes the Excel error
-// to `*out_err` and returns `false`. Bool / Text / Blank all resolve to
-// `#VALUE!` - SERIESSUM's three scalar arguments are documented as
-// numeric and Excel rejects non-numeric scalars.
+// to `*out_err` and returns `false`. An omitted slot is `#N/A` under the
+// Analysis-ToolPak rule; Bool / Text / Blank all resolve to `#VALUE!` -
+// SERIESSUM's three scalar arguments are documented as numeric and Excel
+// rejects non-numeric scalars.
 bool eval_scalar_numeric(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, double* out, Value* out_err) {
   const Value v = eval_node(arg_node, arena, registry, ctx);
   if (v.is_error()) {
     *out_err = v;
+    return false;
+  }
+  if (const Value atp = atp_arg_error(arg_node, v, /*required=*/true); atp.is_error()) {
+    *out_err = atp;
     return false;
   }
   if (!v.is_number()) {

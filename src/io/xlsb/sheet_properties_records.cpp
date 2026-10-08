@@ -19,7 +19,6 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/number_text.h"
-#include "utils/structured_log.h"
 
 namespace formulon {
 namespace io {
@@ -261,11 +260,8 @@ void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsProp), properties);
 }
 
-/// Decodes the fixed-width worksheet default-format record. The model only
-/// carries the default column/row metrics and base column width; the thick
-/// border and outline-level metadata has no corresponding model state, so it
-/// is surfaced as a structured warning while the representable fields still
-/// round-trip.
+/// Decodes the fixed-width worksheet default-format record into the sheet's
+/// `<sheetFormatPr>` model.
 Expected<void, Error> decode_ws_fmt_info(const XlsbRecord& rec, Sheet& sheet, std::size_t sheet_index) {
   if (rec.payload.size < 12U) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtWsFmtInfo payload truncated",
@@ -324,32 +320,16 @@ Expected<void, Error> decode_ws_fmt_info(const XlsbRecord& rec, Sheet& sheet, st
 
   const bool f_unsynced = (flags & 0x00000001U) != 0U;
   const bool f_dy_zero = (flags & 0x00000002U) != 0U;
-  if (f_dy_zero) {
-    defaults.has_default_row_height = true;
-    defaults.default_row_height = 0.0;
-  } else if (f_unsynced) {
-    defaults.has_default_row_height = true;
-    defaults.default_row_height = static_cast<double>(miy_def_rw_height) / 20.0;
-  } else if (miy_def_rw_height == kCanonicalDefaultRowHeightTwips) {
-    defaults.has_default_row_height = false;
-    defaults.default_row_height = 0.0;
-  } else {
-    // Excel commonly writes FFFFFFFF/10/400/0 for an OOXML sheet whose
-    // visible default row height is 20pt. Preserve that effective value for
-    // compatibility even without fUnsynced.
-    defaults.has_default_row_height = true;
-    defaults.default_row_height = static_cast<double>(miy_def_rw_height) / 20.0;
-  }
-
-  if (thick_top || thick_bottom || row_outline_max != 0U || col_outline_max != 0U) {
-    StructuredLog("xlsb.reader.unsupported_ws_format_metadata")
-        .field("sheet_index", static_cast<std::int64_t>(sheet_index))
-        .field("thick_top", thick_top)
-        .field("thick_bottom", thick_bottom)
-        .field("row_outline_max", static_cast<std::int64_t>(row_outline_max))
-        .field("col_outline_max", static_cast<std::int64_t>(col_outline_max))
-        .warn();
-  }
+  // Excel always writes miyDefRwHeight, so the record carries the default
+  // row height whether or not fUnsynced marks it as a custom override.
+  defaults.has_default_row_height = true;
+  defaults.default_row_height = static_cast<double>(miy_def_rw_height) / 20.0;
+  defaults.custom_height = f_unsynced;
+  defaults.zero_height = f_dy_zero;
+  defaults.thick_top = thick_top;
+  defaults.thick_bottom = thick_bottom;
+  defaults.outline_level_row = row_outline_max;
+  defaults.outline_level_col = col_outline_max;
   return Expected<void, Error>::Ok();
 }
 
@@ -384,20 +364,35 @@ void emit_ws_fmt_info(std::vector<std::uint8_t>& dst, const SheetFormatDefaults&
 
   std::uint16_t miy_default_row_height = kCanonicalDefaultRowHeightTwips;
   std::uint32_t format_flags = 0U;
-  if (defaults.has_default_row_height && valid_default_row_height) {
+  const bool emit_default_row_height = defaults.has_default_row_height && valid_default_row_height;
+  if (emit_default_row_height) {
     miy_default_row_height = static_cast<std::uint16_t>(std::round(defaults.default_row_height * 20.0));
     if (miy_default_row_height == 0U) {
       format_flags |= 0x00000002U;  // fDyZero: explicit zero (including quantized-zero).
-    } else {
-      format_flags |= 0x00000001U;  // fUnsynced: explicit positive default row height.
     }
   }
+  if (defaults.custom_height) {
+    format_flags |= 0x00000001U;  // fUnsynced
+  }
+  if (defaults.zero_height) {
+    format_flags |= 0x00000002U;  // fDyZero: rows hidden by default.
+  }
+  if (defaults.thick_top) {
+    format_flags |= 0x00000004U;
+  }
+  if (defaults.thick_bottom) {
+    format_flags |= 0x00000008U;
+  }
+  const std::uint8_t row_outline_max = std::min<std::uint8_t>(defaults.outline_level_row, 7U);
+  const std::uint8_t col_outline_max = std::min<std::uint8_t>(defaults.outline_level_col, 7U);
+  format_flags |= static_cast<std::uint32_t>(row_outline_max) << 16U;
+  format_flags |= static_cast<std::uint32_t>(col_outline_max) << 24U;
 
   std::vector<std::uint8_t> formatting;
   emit_u32(formatting, dx_g_col);
   emit_u16(formatting, base_col_width);
   emit_u16(formatting, miy_default_row_height);
-  emit_u32(formatting, format_flags);  // thick/outline metadata is not authored by this model
+  emit_u32(formatting, format_flags);
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsFmtInfo), formatting);
 }
 

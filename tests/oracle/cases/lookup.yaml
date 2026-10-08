@@ -957,3 +957,42 @@ cases:
       A1: 2
       A3: 1
     formula: "=COUNTA(CHOOSE(SEQUENCE(1),A1:A3))"
+
+  - id: index_column_snaps_near_integer
+    setup:
+      A1: 10
+      B1: 20
+      C1: 30
+    formula: "=INDEX(A1:C1,1,1.9999999)"
+
+  - id: index_column_below_snap_distance_truncates
+    setup:
+      A1: 10
+      B1: 20
+      C1: 30
+    formula: "=INDEX(A1:C1,1,1.999999761)"
+
+  - id: index_column_tiny_selects_whole_row
+    formula: "=INDEX({1,2,3},1,0.0000001)"
+
+  - id: vlookup_index_snaps_near_integer
+    setup:
+      A1: 1
+      B1: 5
+      C1: 7
+    formula: "=VLOOKUP(1,A1:C1,2.9999999,FALSE)"
+
+  - id: choosecols_array_index_horizontal
+    formula: "=CHOOSECOLS({1,2,3},{1,3})"
+
+  - id: choosecols_array_index_vertical_negative
+    formula: "=CHOOSECOLS({1,2,3},{-1;1})"
+
+  - id: choosecols_scalar_and_array_index
+    formula: "=CHOOSECOLS({1,2,3},1,{2,3})"
+
+  - id: chooserows_array_index_horizontal
+    formula: "=CHOOSEROWS({1;2;3},{1,3})"
+
+  - id: choosecols_array_index_two_dimensional
+    formula: "=CHOOSECOLS({1,2,3},{1,2;2,3})"

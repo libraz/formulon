@@ -86,6 +86,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/sheet_reader_test.cpp
   unit/io/sst_reader_test.cpp
   unit/io/storage_prefix_container_test.cpp
+  unit/io/function_value_trim_ref_storage_test.cpp
   unit/io/styles_reader_test.cpp
   unit/io/styles_writer_test.cpp
   unit/io/tables_reader_test.cpp
@@ -128,6 +129,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/writer_test.cpp
   unit/io/xlsb/writer_formula_test.cpp
   unit/io/xlsb/writer_layout_test.cpp
+  unit/io/sheet_format_pr_roundtrip_test.cpp
   unit/io/xlsb/writer_metadata_test.cpp
   unit/io/xlsb_fidelity_test.cpp
   unit/io/xlsb_phonetic_test.cpp
@@ -293,6 +295,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/text_ops_test.cpp
   unit/eval/let_test.cpp
   unit/eval/lambda_test.cpp
+  unit/eval/function_value_trim_ref_eval_test.cpp
   unit/eval/lambda_format_test.cpp
   unit/eval/lambda_helpers_test.cpp
   unit/eval/builtins_misc_test.cpp
@@ -324,6 +327,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/textsplit_eval_test.cpp
   unit/eval/trimrange_eval_test.cpp
   unit/parser/spill_ref_test.cpp
+  unit/parser/trim_ref_parse_test.cpp
   unit/parser/structured_ref_test.cpp
   unit/eval/structured_ref_eval_test.cpp
   unit/pivot/pivot_evaluator_aggregation_test.cpp

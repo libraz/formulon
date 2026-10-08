@@ -142,16 +142,12 @@ bool read_byte_budget_args(const Value* args, std::uint32_t arity, std::string* 
     *out_early = Value::error(text.error());
     return false;
   }
-  auto byte_count = text_detail::read_optional_int_arg(args, arity, 1, 1);
+  auto byte_count = arity > 1u ? text_detail::read_snapped_int_arg(args[1], 0.0) : Expected<int, ErrorCode>(1);
   if (!byte_count) {
     *out_early = Value::error(byte_count.error());
     return false;
   }
   const int budget = byte_count.value();
-  if (budget < 0) {
-    *out_early = Value::error(ErrorCode::Value);
-    return false;
-  }
   if (budget == 0) {
     *out_early = Value::text({});
     return false;
@@ -279,7 +275,7 @@ Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
 // pad and consume 1 byte of budget; from there walk normally, padding on
 // the trailing edge with the same 1-byte-overflow rule as LEFTB.
 Value Midb(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto parsed = read_text_window_args(args, arity);
+  auto parsed = read_text_window_args(args, arity, /*snap_start=*/false);
   if (!parsed) {
     return Value::error(parsed.error());
   }
@@ -388,7 +384,7 @@ std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src) {
 // space before `new_text` is appended. `start_num < 1` or `num_bytes < 0`
 // -> `#VALUE!`. Result capped at Excel's 32,767-unit text limit.
 Value ReplaceB_(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto parsed = read_text_window_args(args, arity);
+  auto parsed = read_text_window_args(args, arity, /*snap_start=*/true);
   if (!parsed) {
     return Value::error(parsed.error());
   }

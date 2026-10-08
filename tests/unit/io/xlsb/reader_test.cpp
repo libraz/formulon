@@ -95,8 +95,10 @@ TEST(XlsbReader, DecodesAbsentAndExcelCompatibleWorksheetFormatDefaults) {
   EXPECT_DOUBLE_EQ(absent_defaults.base_col_width, 8.0);
   EXPECT_FALSE(absent_defaults.has_default_col_width);
   EXPECT_DOUBLE_EQ(absent_defaults.default_col_width, 0.0);
-  EXPECT_FALSE(absent_defaults.has_default_row_height);
-  EXPECT_DOUBLE_EQ(absent_defaults.default_row_height, 0.0);
+  // The record always carries the default row height; fUnsynced alone marks it custom.
+  EXPECT_TRUE(absent_defaults.has_default_row_height);
+  EXPECT_DOUBLE_EQ(absent_defaults.default_row_height, 15.0);
+  EXPECT_FALSE(absent_defaults.custom_height);
 
   auto excel = read_defaults(WorksheetFormatPayload(0xFFFFFFFFU, 10U, 400U, 0U));
   ASSERT_TRUE(static_cast<bool>(excel)) << excel.error().message << " | " << excel.error().context;

@@ -33,6 +33,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/index_sort.h"
+#include "utils/strings.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -86,7 +87,23 @@ void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_
   if (root == nullptr || !p.errors().empty()) {
     return;
   }
-  collect_ptg_names(*root, names, seen);
+  // The visibility rule `name_shapes` applies when the cell is encoded.
+  const NameShapes visible_names = [&](const parser::AstNode& node) {
+    NameShape shape;
+    if (node.kind() != parser::NodeKind::NameRef) {
+      return shape;
+    }
+    for (const auto& [text, scopes] : defined_scopes) {
+      if (strings::case_insensitive_eq(text, node.as_name()) &&
+          std::any_of(scopes.begin(), scopes.end(),
+                      [scope_sheet_id](std::int32_t s) { return s < 0 || s == scope_sheet_id; })) {
+        shape.defined = true;
+      }
+    }
+    return shape;
+  };
+  const std::vector<const parser::AstNode*> function_values = function_value_refs(*root, visible_names);
+  collect_ptg_names(*root, names, seen, &function_values);
   collect_sheet_qualified_names(*root, qualified);
   std::vector<std::string> referenced;
   std::unordered_set<std::string> referenced_seen;
@@ -493,6 +510,7 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
   // callee shows up as #NAME? on load. A prefixed name Excel does not know
   // (`_xlfn.FOOBAR`) is an ordinary undefined-name stub instead (measured).
   const bool is_param = name.rfind("_xlpm.", 0) == 0;
+  const bool is_function_value = name.rfind("_xleta.", 0) == 0;
   std::string_view callee(name);
   const bool xlfn = callee.rfind("_xlfn.", 0) == 0;
   callee.remove_prefix(xlfn ? 6U : 0U);
@@ -500,10 +518,12 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
     callee.remove_prefix(6U);
   }
   const bool is_future_fn = xlfn && has_storage_prefix(callee);
-  const bool is_placeholder = is_param || is_future_fn;
+  const bool is_placeholder = is_param || is_future_fn || is_function_value;
   std::uint32_t flags;
   if (is_param) {
     flags = 0x00020019U;
+  } else if (is_function_value) {
+    flags = 0x00020009U;
   } else if (is_future_fn) {
     flags = 0x0002000bU;
   } else {

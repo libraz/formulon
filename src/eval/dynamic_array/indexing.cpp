@@ -1,11 +1,15 @@
 
 #include "eval/dynamic_array/indexing.h"
 
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
+#include "eval/coerce.h"
 #include "eval/dynamic_array/common.h"
 #include "eval/omitted_arg.h"
+#include "eval/range_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -15,6 +19,30 @@ namespace formulon {
 namespace eval {
 
 namespace {
+
+/// Maps one CHOOSECOLS / CHOOSEROWS index to a 0-based lane. The value is
+/// truncated toward zero; positives address `[1, axis_size]`, negatives count
+/// from the end, and zero or anything out of range is `#VALUE!`.
+bool map_choose_index(const Value& cell, std::uint32_t axis_size, std::uint32_t& out, Value& error_out) {
+  if (cell.is_error()) {
+    error_out = cell;
+    return false;
+  }
+  auto number = coerce_to_number(cell);
+  if (!number) {
+    error_out = Value::error(number.error());
+    return false;
+  }
+  const double truncated = std::trunc(number.value());
+  const double magnitude = std::fabs(truncated);
+  if (truncated == 0.0 || magnitude > static_cast<double>(axis_size)) {
+    error_out = Value::error(ErrorCode::Value);
+    return false;
+  }
+  const auto lane = static_cast<std::uint32_t>(magnitude);
+  out = truncated > 0.0 ? lane - 1U : axis_size - lane;
+  return true;
+}
 
 /// CHOOSECOLS / CHOOSEROWS. The two differ only in which axis the indices
 /// address, so `by_col` selects both the bound the indices are checked against
@@ -31,18 +59,27 @@ Value eval_choose_lanes(const parser::AstNode& call, Arena& arena, const Functio
     return err;
   }
 
-  // Resolve each index in turn. `resolve_choose_index` handles coercion,
-  // truncation, sign mapping, and bounds in one place.
+  // Each index argument is a scalar or a 1-D array; its elements are picked in
+  // order. A 2-D index array is `#VALUE!`.
   const std::uint32_t lanes = by_col ? array->cols : array->rows;
   std::vector<std::uint32_t> picks;
   picks.reserve(arity - 1U);
   for (std::uint32_t i = 1; i < arity; ++i) {
-    std::uint32_t idx = 0;
-    Value idx_err = Value::error(ErrorCode::Value);
-    if (!dynamic_array::resolve_choose_index(call.as_call_arg(i), lanes, arena, registry, ctx, idx, idx_err)) {
-      return idx_err;
+    const ArrayValue* indices = nullptr;
+    if (!resolve_array_value(call.as_call_arg(i), arena, registry, ctx, &indices, &err)) {
+      return err;
     }
-    picks.push_back(idx);
+    if (indices->rows != 1U && indices->cols != 1U) {
+      return Value::error(ErrorCode::Value);
+    }
+    const std::size_t count = static_cast<std::size_t>(indices->rows) * indices->cols;
+    for (std::size_t k = 0; k < count; ++k) {
+      std::uint32_t idx = 0;
+      if (!map_choose_index(indices->cells[k], lanes, idx, err)) {
+        return err;
+      }
+      picks.push_back(idx);
+    }
   }
 
   ArrayValue* out = dynamic_array::materialise_selected_lanes(*array, picks, by_col, arena);

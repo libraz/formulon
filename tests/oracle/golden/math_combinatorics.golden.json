@@ -2,11 +2,11 @@
   "suite": "math_combinatorics",
   "description": "Combinatorial, numeral-system, precise-rounding, and miscellaneous scalar math builtins (ARABIC, ROMAN, BASE, DECIMAL, CEILING.PRECISE, FLOOR.PRECISE, ISO.CEILING, COMBIN, COMBINA, FACT, FACTDOUBLE, GCD, LCM, MULTINOMIAL, SQRTPI). Kept in a separate suite so the existing math golden stays bit-stable and only new cases need to be populated by `make oracle-gen` on macOS.\n",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -866,6 +866,301 @@
       "expect": {
         "kind": "number",
         "value": 9.0
+      }
+    },
+    {
+      "id": "arabic_iim",
+      "formula": "=ARABIC(\"IIM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 998.0
+      }
+    },
+    {
+      "id": "arabic_im",
+      "formula": "=ARABIC(\"IM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 999.0
+      }
+    },
+    {
+      "id": "arabic_iix",
+      "formula": "=ARABIC(\"IIX\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "arabic_iic",
+      "formula": "=ARABIC(\"IIC\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 98.0
+      }
+    },
+    {
+      "id": "arabic_vx",
+      "formula": "=ARABIC(\"VX\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "arabic_xxc",
+      "formula": "=ARABIC(\"XXC\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 80.0
+      }
+    },
+    {
+      "id": "th_fact_230",
+      "formula": "=FACT(10.99999977)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39916800.0
+      }
+    },
+    {
+      "id": "th_fact_235",
+      "formula": "=FACT(10.999999765)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39916800.0
+      }
+    },
+    {
+      "id": "th_fact_238",
+      "formula": "=FACT(10.9999997616)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39916800.0
+      }
+    },
+    {
+      "id": "th_fact_239",
+      "formula": "=FACT(10.999999761)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3628800.0
+      }
+    },
+    {
+      "id": "th_fact_240",
+      "formula": "=FACT(10.99999976)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3628800.0
+      }
+    },
+    {
+      "id": "th_fact_245",
+      "formula": "=FACT(10.999999755)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3628800.0
+      }
+    },
+    {
+      "id": "th_fact_250",
+      "formula": "=FACT(10.99999975)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3628800.0
+      }
+    },
+    {
+      "id": "th_fact_260",
+      "formula": "=FACT(10.99999974)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3628800.0
+      }
+    },
+    {
+      "id": "pf_permut",
+      "formula": "=PERMUT(5.9999999,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "atp_gcd_bool",
+      "formula": "=GCD(TRUE,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_gcd_omit",
+      "formula": "=GCD(,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_gcd_boolcell",
+      "formula": "=GCD(A1,2)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_lcm_bool",
+      "formula": "=LCM(TRUE,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_lcm_omit",
+      "formula": "=LCM(,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_lcm_boolcell",
+      "formula": "=LCM(A1,2)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_factdouble_bool",
+      "formula": "=FACTDOUBLE(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_factdouble_boolcell",
+      "formula": "=FACTDOUBLE(A1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_sqrtpi_bool",
+      "formula": "=SQRTPI(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_sqrtpi_boolcell",
+      "formula": "=SQRTPI(A1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_multinomial_bool",
+      "formula": "=MULTINOMIAL(TRUE,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_multinomial_omit",
+      "formula": "=MULTINOMIAL(,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_multinomial_boolcell",
+      "formula": "=MULTINOMIAL(A1,2)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "near_fact",
+      "formula": "=FACT(3.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "opt_gcd_arr_bool",
+      "formula": "=GCD({TRUE,2})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
       }
     }
   ]

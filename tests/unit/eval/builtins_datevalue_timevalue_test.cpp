@@ -17,6 +17,7 @@
 //   2026-04-23 = 46135
 
 #include <cmath>
+#include <string>
 #include <string_view>
 
 #include "eval/eval_context.h"
@@ -590,6 +591,59 @@ TEST(DatevalueYearLess, WithoutAPinnedClockStillUsesTheHostYear) {
   const Value v = EvalSource("=YEAR(DATEVALUE(\"3/15\"))");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), static_cast<double>(date_time::host_civil_time().date.y));
+}
+
+// ---------------------------------------------------------------------------
+// Hour-only and dotted 12-hour forms, shared by TIMEVALUE / VALUE / DATEVALUE /
+// arithmetic coercion.
+// ---------------------------------------------------------------------------
+
+TEST(TimeTextMeridiem, AcceptedForms) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=TIMEVALUE(\"6 PM\")", 0.75},
+      {"=TIMEVALUE(\"6 AM\")", 0.25},
+      {"=TIMEVALUE(\"6 P\")", 0.75},
+      {"=TIMEVALUE(\"12 PM\")", 0.5},
+      {"=TIMEVALUE(\"12 AM\")", 0.0},
+      {"=TIMEVALUE(\"0 PM\")", 0.5},
+      {"=TIMEVALUE(\"4 pm\")", 4.0 / 24.0 + 0.5},
+      {"=TIMEVALUE(\"6:00 PM.\")", 0.75},
+      {"=TIMEVALUE(\"6:30 pm.\")", 0.7708333333333334},
+      {"=TIMEVALUE(\"6 pm .\")", 0.75},
+      {"=TIMEVALUE(\"2026/7/7 6 PM\")", 0.75},
+      {"=TIMEVALUE(\"2026/7/7 6 pm.\")", 0.75},
+      {"=TIMEVALUE(\"6 PM 2026/7/7\")", 0.75},
+      {"=DATEVALUE(\"2026/7/7 6 PM\")", 46210.0},
+      {"=DATEVALUE(\"6 PM 2026/7/7\")", 46210.0},
+      {"=VALUE(\"6 PM\")", 0.75},
+      {"=VALUE(\"6:30 PM.\")", 0.7708333333333334},
+      {"=\"6 PM\"+0", 0.75},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_NEAR(v.as_number(), c.expected, 1e-15) << c.formula;
+  }
+}
+
+TEST(TimeTextMeridiem, RejectedForms) {
+  const char* const texts[] = {"6PM", "18 PM", "13:00 PM", "6.", "6", "6 a.m.", "6 p.m.", "AM 6", "6 pmx", "6 Px"};
+  for (const char* text : texts) {
+    const std::string formula = std::string("=TIMEVALUE(\"") + text + "\")";
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+}
+
+TEST(TimeTextMeridiem, MonthWordAfterTimeIsNotAMarker) {
+  const Value v = EvalSource("=TIMEVALUE(\"10:00 Apr 5, 2024\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 10.0 / 24.0, 1e-15);
 }
 
 }  // namespace

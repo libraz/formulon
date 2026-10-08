@@ -329,3 +329,36 @@ cases:
   - id: gammaln_precise_negative_is_num
     description: "GAMMALN.PRECISE rejects x <= 0; yields #NUM!"
     formula: "=GAMMALN.PRECISE(-1)"
+
+  - id: gamma_dist_pdf_zero_alpha_half
+    description: "GAMMA.DIST pdf at x=0 with alpha 0.5 is #NUM!"
+    formula: "=GAMMA.DIST(0,0.5,2,FALSE)"
+
+  - id: gamma_dist_pdf_zero_alpha_one
+    description: "GAMMA.DIST pdf at x=0 with alpha 1 is #NUM!"
+    formula: "=GAMMA.DIST(0,1,2,FALSE)"
+
+  - id: gammadist_pdf_zero_alpha_one
+    description: "GAMMADIST pdf at x=0 with alpha 1 is #NUM!"
+    formula: "=GAMMADIST(0,1,1,FALSE)"
+
+  - id: gamma_dist_pdf_zero_alpha_above_one
+    description: "GAMMA.DIST pdf at x=0 with alpha above 1 is 0"
+    formula: "=GAMMA.DIST(0,1.5,2,FALSE)"
+
+  - id: gamma_inv_small_p_round_trip
+    description: "GAMMA.INV recovers a point whose CDF is far below 1e-50"
+    tolerance: { abs: 0.0, rel: 1.0e-12 }
+    formula: "=GAMMA.INV(GAMMA.DIST(1E-5,9,2,TRUE),9,2)"
+
+  - id: binom_inv_probability_zero_is_num
+    description: "BINOM.INV with probability_s 0 is #NUM!"
+    formula: "=BINOM.INV(10,0,0.5)"
+
+  - id: binom_inv_probability_one_is_num
+    description: "BINOM.INV with probability_s 1 is #NUM!"
+    formula: "=BINOM.INV(10,1,0.5)"
+
+  - id: binom_inv_probability_omitted_is_num
+    description: "BINOM.INV with probability_s omitted is #NUM!"
+    formula: "=BINOM.INV(10,,0.5)"

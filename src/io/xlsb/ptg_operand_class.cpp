@@ -150,7 +150,11 @@ Shape Shapes::name_shape(const parser::AstNode& node) const {
   if (const auto* b = binding(node)) {
     return b->second;
   }
-  return defined(node).scalar ? Shape::kScalar : Shape::kReference;
+  const NameShape shape = defined(node);
+  // An undefined built-in name is a function value, one value like a constant.
+  const bool function_value = !shape.defined && node.kind() == parser::NodeKind::NameRef &&
+                              node.as_name_sheet().empty() && IsBuiltin(canonical_function_name(node.as_name()));
+  return shape.scalar || function_value ? Shape::kScalar : Shape::kReference;
 }
 
 bool Shapes::positive_int(const parser::AstNode& node, std::uint32_t want) const {

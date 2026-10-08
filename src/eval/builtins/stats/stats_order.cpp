@@ -32,14 +32,28 @@ namespace formulon {
 namespace eval {
 namespace stats_detail {
 
-// MEDIAN(value, ...) - median of numeric values. Non-numerics are skipped;
+// An omitted slot is the only Blank that survives the dispatcher's range filter.
+static bool has_omitted_slot(const Value* args, std::uint32_t arity) {
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    if (args[i].kind() == ValueKind::Blank) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// MEDIAN(value, ...) - median of numeric values. Range-sourced non-numerics are skipped;
 // an empty collection yields `#NUM!`. For an even count the result is the
 // arithmetic mean of the two middle elements. The arithmetic and the
 // error-code surface live in `numeric_aggregate_kernels::run_median`, which
 // AGGREGATE function 12 shares, so the two spellings of this aggregate
 // cannot drift apart.
 Value Median(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto result = numeric_aggregate_kernels::run_median(collect_numerics(args, arity));
+  auto collected = collect_direct_stats(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
+  }
+  auto result = numeric_aggregate_kernels::run_median(std::move(collected.value()));
   if (!result) {
     return Value::error(result.error());
   }
@@ -52,6 +66,9 @@ Value Median(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // first-occurrence tie-break kernel with AGGREGATE function 13 so the two
 // surfaces cannot diverge.
 Value Mode(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  if (has_omitted_slot(args, arity)) {
+    return Value::error(ErrorCode::Value);
+  }
   const std::vector<double> xs = collect_numerics(args, arity);
   auto r = numeric_aggregate_kernels::mode_first_occurrence(xs);
   if (!r) {
@@ -67,6 +84,9 @@ Value Mode(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // when only one mode exists (Excel: MODE.MULT({1,2,1}) -> {1} as a 1x1
 // vertical array, which spills as a single cell).
 Value ModeMult(const Value* args, std::uint32_t arity, Arena& arena) {
+  if (has_omitted_slot(args, arity)) {
+    return Value::error(ErrorCode::Value);
+  }
   std::vector<double> xs = collect_numerics(args, arity);
   if (xs.empty()) {
     return Value::error(ErrorCode::NA);
@@ -117,14 +137,15 @@ static Value large_small(const Value* args, std::uint32_t arity, bool want_large
   if (!k_raw) {
     return Value::error(k_raw.error());
   }
-  const double k = k_raw.value();
+  // LARGE snaps a near-integer k up; SMALL measured to truncate.
+  const double k = want_large ? snap_near_integer(k_raw.value()) : k_raw.value();
   auto xs_e = collect_direct_scalar_coerced(args, data_count);
   if (!xs_e) {
     return Value::error(xs_e.error());
   }
   std::vector<double>& xs = xs_e.value();
   const auto n = static_cast<double>(xs.size());
-  if (xs.empty() || k < 1.0 || k > n) {
+  if (xs.empty() || k_raw.value() < 1.0 || k > n) {
     return Value::error(ErrorCode::Num);
   }
   std::sort(xs.begin(), xs.end());

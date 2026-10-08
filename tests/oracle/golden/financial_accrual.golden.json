@@ -2,11 +2,11 @@
   "suite": "financial_accrual",
   "description": "Accrued-interest and specialized-depreciation financial builtins — ACCRINT / ACCRINTM / VDB / AMORDEGRC / AMORLINC. See `eval/builtins/financial_accrual.cpp` and `eval/builtins/financial_depreciation.cpp`.",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-09,
@@ -330,6 +330,83 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "atp_accrintm_bool",
+      "formula": "=ACCRINTM(TRUE,40000,0.1,1000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_accrintm_omit",
+      "formula": "=ACCRINTM(,40000,0.1,1000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_accrintm_boolcell",
+      "formula": "=ACCRINTM(A1,40000,0.1,1000)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_accrint_bool",
+      "formula": "=ACCRINT(TRUE,DATE(2024,1,15),DATE(2030,1,15),0.1,1000,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_accrint_omit",
+      "formula": "=ACCRINT(,DATE(2024,1,15),DATE(2030,1,15),0.1,1000,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_amorlinc_bool",
+      "formula": "=AMORLINC(TRUE,DATE(2024,1,15),DATE(2030,1,15),100,1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_amorlinc_omit",
+      "formula": "=AMORLINC(,DATE(2024,1,15),DATE(2030,1,15),100,1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "opt_accrint_calc_bool",
+      "formula": "=ACCRINT(DATE(2024,1,15),DATE(2024,1,15)+182,DATE(2030,1,15),0.1,1000,2,0,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 600.0
       }
     }
   ]

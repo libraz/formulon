@@ -310,6 +310,10 @@ TEXTBEFORE
 TEXTJOIN
 TEXTSPLIT
 TRIMRANGE
+# The trim-reference operators `.:` / `:.` / `.:.`, stored as these calls.
+_TRO_ALL
+_TRO_LEADING
+_TRO_TRAILING
 VALUE
 
 # 11.3.5 Date & Time (約 25)

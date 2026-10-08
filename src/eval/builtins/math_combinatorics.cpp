@@ -117,14 +117,19 @@ Expected<UIntPair, ErrorCode> read_nonneg_uint_pair(const Value* args) {
 // FACT / FACTDOUBLE
 // ---------------------------------------------------------------------------
 
-// FACT(n) - n! for non-negative integer n <= 170. Fractional input is
-// truncated toward zero. Negative n or n > 170 yields #NUM!.
+// FACT(n) - n! for non-negative integer n <= 170. Fractional input snaps
+// to a near integer, then truncates toward zero. Negative raw n or n > 170
+// yields #NUM!.
 Value Fact(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto n = read_nonneg_uint_arg(args, 0, 170u);
-  if (!n) {
-    return Value::error(n.error());
+  auto x = read_number_arg(args, 0);
+  if (!x) {
+    return Value::error(x.error());
   }
-  return Value::number(factorial_lookup(static_cast<std::uint32_t>(n.value())));
+  std::uint64_t n = 0;
+  if (x.value() < 0.0 || !try_truncate_nonneg(snap_near_integer(x.value()), 170u, &n)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(factorial_lookup(static_cast<std::uint32_t>(n)));
 }
 
 // FACTDOUBLE(n) - double factorial n!! = n*(n-2)*(n-4)*...*1 or *2. By
@@ -434,23 +439,21 @@ Value Arabic(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     // A lone '-' is not a valid Roman numeral.
     return Value::error(ErrorCode::Value);
   }
-  // Left-to-right subtractive evaluation: if the current char's value is
-  // less than the next char's, subtract; otherwise add. Non-Roman char in
-  // the middle -> #VALUE!.
+  // Right-to-left evaluation: a char smaller than the largest value seen
+  // to its right subtracts, otherwise it adds (`IIM` = 998, `XXC` = 80).
+  // Non-Roman char anywhere -> #VALUE!.
   long total = 0;
-  for (std::size_t i = lo; i < hi; ++i) {
-    const int cur = roman_char_value(s[i]);
+  int largest = 0;
+  for (std::size_t i = hi; i > lo; --i) {
+    const int cur = roman_char_value(s[i - 1]);
     if (cur == 0) {
       return Value::error(ErrorCode::Value);
     }
-    const int next = (i + 1 < hi) ? roman_char_value(s[i + 1]) : 0;
-    if (next == 0 && i + 1 < hi) {
-      return Value::error(ErrorCode::Value);
-    }
-    if (cur < next) {
+    if (cur < largest) {
       total -= cur;
     } else {
       total += cur;
+      largest = cur;
     }
   }
   return Value::number(static_cast<double>(negative ? -total : total));
@@ -726,7 +729,7 @@ Value SqrtPi(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 void register_math_combinatorics_builtins(FunctionRegistry& registry) {
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       {"FACT", 1u, 1u, &Fact},
-      {"FACTDOUBLE", 1u, 1u, &FactDouble},
+      builtins_detail::analysis_toolpak({"FACTDOUBLE", 1u, 1u, &FactDouble}),
       {"COMBIN", 2u, 2u, &Combin},
       {"COMBINA", 2u, 2u, &CombinA},
       {"PERMUT", 2u, 2u, &Permut},
@@ -738,12 +741,12 @@ void register_math_combinatorics_builtins(FunctionRegistry& registry) {
       {"CEILING.PRECISE", 1u, 2u, &CeilingPrecise},
       {"FLOOR.PRECISE", 1u, 2u, &FloorPrecise},
       {"ISO.CEILING", 1u, 2u, &IsoCeiling},
-      {"SQRTPI", 1u, 1u, &SqrtPi},
-      {"MULTINOMIAL", 1u, kVariadic, &Multinomial, true, true},
-      {"GCD", 1u, kVariadic, &Gcd, true, true, false, false, false, FunctionDef::BlankScalarPolicy::RejectAnyScalar,
-       ErrorCode::Value},
-      {"LCM", 1u, kVariadic, &Lcm, true, true, false, false, false, FunctionDef::BlankScalarPolicy::RejectAnyScalar,
-       ErrorCode::Value},
+      builtins_detail::analysis_toolpak({"SQRTPI", 1u, 1u, &SqrtPi}),
+      builtins_detail::analysis_toolpak({"MULTINOMIAL", 1u, kVariadic, &Multinomial, true, true}),
+      builtins_detail::analysis_toolpak({"GCD", 1u, kVariadic, &Gcd, true, true, false, false, false,
+                                         FunctionDef::BlankScalarPolicy::RejectAnyScalar, ErrorCode::Value}),
+      builtins_detail::analysis_toolpak({"LCM", 1u, kVariadic, &Lcm, true, true, false, false, false,
+                                         FunctionDef::BlankScalarPolicy::RejectAnyScalar, ErrorCode::Value}),
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

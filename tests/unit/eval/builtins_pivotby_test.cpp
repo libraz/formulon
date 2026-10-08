@@ -15,8 +15,9 @@ using namespace pivotby_test_helpers;
 TEST(PivotBy, BasicTwoByTwoLambdaAggregatorSum) {
   // Row groups: A, B. Col groups: X, Y.
   // Body: (A,X)=1, (A,Y)=2, (B,X)=3, (B,Y)=4.
-  // With default field_headers=3, row_total_depth=1, col_total_depth=1:
-  //   header row, 2 body rows, then bottom grand-total row.
+  // The default field_headers detects the text header row and does not show
+  // it, so the corner is blank; row_total_depth=1, col_total_depth=1:
+  //   col-key row, 2 body rows, then bottom grand-total row.
   const Value v = EvalSrc(
       "=PIVOTBY({\"R\";\"A\";\"A\";\"B\";\"B\"}, {\"C\";\"X\";\"Y\";\"X\";\"Y\"},"
       "         {\"V\";1;2;3;4}, LAMBDA(v, SUM(v)))");
@@ -25,8 +26,8 @@ TEST(PivotBy, BasicTwoByTwoLambdaAggregatorSum) {
   // Cols: row label + 2 col keys + grand-total = 4 cols.
   EXPECT_EQ(v.as_array_rows(), 4U);
   EXPECT_EQ(v.as_array_cols(), 4U);
-  // Header row: ["R", "X", "Y", "合計"].
-  EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "R");
+  // Col-key row: [blank, "X", "Y", "合計"].
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 0, 0)));
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "Y");
   EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "合計");
@@ -57,7 +58,7 @@ TEST(PivotBy, FieldHeadersZeroNoHeaders) {
       "         {1;2;3;4}, SUM, 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   // Row 0 is the col-axis label row; its corner cell is blank.
-  EXPECT_TRUE(Cell(v, 0, 0).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 0, 0)));
   // First body row (row 1) carries the row key.
   EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "A");
 }
@@ -68,16 +69,16 @@ TEST(PivotBy, ZeroFieldHeadersAndZeroColTotalDepthStillEmitsColAxisRow) {
   EXPECT_EQ(v.as_array_rows(), 3U);
   EXPECT_EQ(v.as_array_cols(), 3U);
   // Row 0: blank corner, "X", "Y".
-  EXPECT_TRUE(Cell(v, 0, 0).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 0, 0)));
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "Y");
   // Row 1: "A", 1, blank (no B/X data point).
   EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "A");
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 1.0);
-  EXPECT_TRUE(Cell(v, 1, 2).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 1, 2)));
   // Row 2: "B", blank (no A/Y data point), 2.
   EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "B");
-  EXPECT_TRUE(Cell(v, 2, 1).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 2, 1)));
   EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 2.0);
 }
 
@@ -88,34 +89,36 @@ TEST(PivotBy, ZeroFieldHeadersAndZeroColTotalDepthLambdaAggregator) {
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 3U);
   EXPECT_EQ(v.as_array_cols(), 3U);
-  EXPECT_TRUE(Cell(v, 0, 0).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 0, 0)));
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "Y");
   EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "A");
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 1.0);
-  EXPECT_TRUE(Cell(v, 1, 2).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 1, 2)));
   EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "B");
-  EXPECT_TRUE(Cell(v, 2, 1).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 2, 1)));
   EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 2.0);
 }
 
-TEST(PivotBy, FieldHeadersOneCopiesInputHeaders) {
-  // Inputs have a header row; output also emits one. Top-left cell = the
-  // row_fields header label ("Row").
+TEST(PivotBy, FieldHeadersOneConsumesInputHeadersWithoutShowingThem) {
+  // Inputs have a header row; the output shows none, so the corner is blank.
   const Value v = EvalSrc(
       "=PIVOTBY({\"Row\";\"A\";\"A\";\"B\";\"B\"}, {\"Col\";\"X\";\"Y\";\"X\";\"Y\"},"
       "         {\"V\";1;2;3;4}, SUM, 1, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "Row");
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 0, 0)));
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "Y");
 }
 
 TEST(PivotBy, FieldHeadersTwoSynthesizesDefaults) {
-  // Inputs have no header row; output emits a synthesised "Field 1".
+  // Inputs have no header row; output emits generated labels, with the
+  // col-field label on top and the row-field and value labels above the body.
   const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 2, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "Field 1");
+  EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "列フィールド 1");
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "行フィールド 1");
+  EXPECT_EQ(std::string(Cell(v, 2, 1).as_text()), "値 1");
 }
 
 TEST(PivotBy, FieldHeadersThreeBothInputsHaveAndOutputEmits) {
@@ -123,7 +126,9 @@ TEST(PivotBy, FieldHeadersThreeBothInputsHaveAndOutputEmits) {
       "=PIVOTBY({\"R\";\"A\";\"B\"}, {\"C\";\"X\";\"Y\"},"
       "         {\"V\";1;2}, SUM, 3, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "R");
+  EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "C");
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "R");
+  EXPECT_EQ(std::string(Cell(v, 2, 1).as_text()), "V");
 }
 
 TEST(PivotBy, FieldHeadersOutOfRangeYieldsValueError) {
@@ -214,15 +219,15 @@ TEST(PivotBy, ColTotalDepthOutOfRangeYieldsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(PivotBy, OmittedRowSortOrderPreservesFirstOccurrence) {
-  // Row groups in input order: B, A, C. With the slot left out they stay
-  // that way. Row 0 is the col-axis label row.
+TEST(PivotBy, OmittedRowSortOrderSortsKeysAscending) {
+  // Row groups in input order: B, A, C. With the slot left out they come out
+  // A, B, C. Row 0 is the col-axis label row.
   const Value v = EvalSrc(
       "=PIVOTBY({\"B\";\"A\";\"C\";\"A\"}, {\"X\";\"X\";\"X\";\"Y\"},"
       "         {1;2;3;4}, SUM, 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "B");
-  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "A");
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "A");
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "B");
   EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "C");
 }
 
@@ -261,16 +266,16 @@ TEST(PivotBy, SuppliedColSortOrderZeroYieldsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(PivotBy, OmittedColSortOrderPreservesFirstOccurrence) {
-  // Col groups in input order: Y, X, Z.
+TEST(PivotBy, OmittedColSortOrderSortsKeysAscending) {
+  // Col groups in input order: Y, X, Z; they come out X, Y, Z.
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"A\";\"A\"}, {\"Y\";\"X\";\"Z\";\"X\"},"
       "         {1;2;3;4}, SUM, 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  // Col layout: row_label | Y | X | Z. Row 0 is the col-axis label row;
+  // Col layout: row_label | X | Y | Z. Row 0 is the col-axis label row;
   // row 1 is the single "A" body row.
-  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 1.0);  // Y
-  EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 6.0);  // X = 2+4
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 6.0);  // X = 2+4
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 1.0);  // Y
   EXPECT_DOUBLE_EQ(Cell(v, 1, 3).as_number(), 3.0);  // Z
 }
 
@@ -315,7 +320,7 @@ TEST(PivotBy, FilterArrayBasicIncludeExclude) {
   EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 2.0);
   EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "B");
   // (B, X) has no surviving rows -> Blank cell.
-  EXPECT_TRUE(Cell(v, 2, 1).is_blank()) << Cell(v, 2, 1).debug_to_string();
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 2, 1))) << Cell(v, 2, 1).debug_to_string();
   EXPECT_FALSE(Cell(v, 2, 1).blank_projects_to_zero());
   EXPECT_FALSE(Cell(v, 2, 1).blank_counts_for_counta());
   EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 4.0);
@@ -353,7 +358,7 @@ TEST(PivotBy, PerCellErrorIsolation) {
   // (A, Y) = 1/5 = 0.2.
   EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 0.2);
   // (B, X) is empty -> Blank, no aggregator call.
-  EXPECT_TRUE(Cell(v, 2, 1).is_blank());
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 2, 1)));
   // (B, Y) = 1/4 = 0.25.
   EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 0.25);
 }
@@ -392,6 +397,36 @@ TEST(PivotBy, TooFewArgsYieldsValueError) {
   const Value v = EvalSrc("=PIVOTBY({\"A\"}, {\"X\"}, {1})");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(PivotBy, OmittedDefaultsDetectHeaderRowAndSortKeysAscending) {
+  const Value v = EvalSrc("=PIVOTBY({\"r\";\"x\";\"y\";\"x\"}, {\"c\";\"p\";\"q\";\"q\"}, {\"v\";1;2;3}, SUM)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 4U);
+  EXPECT_EQ(v.as_array_cols(), 4U);
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 0, 0)));
+  EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "p");
+  EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "q");
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "x");
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 3).as_number(), 4.0);
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "y");
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 5.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 3).as_number(), 6.0);
+}
+
+TEST(PivotBy, SortOrdersOmittedSortBothAxesAscending) {
+  const Value v = EvalSrc("=PIVOTBY({\"y\";\"x\";\"y\"}, {\"q\";\"p\";\"p\"}, {1;2;3}, SUM, 0, 0,, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "p");
+  EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "q");
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "x");
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 2.0);
+  EXPECT_TRUE(IsPlaceholder(Cell(v, 1, 2)) || (Cell(v, 1, 2).is_text() && Cell(v, 1, 2).as_text().empty()));
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "y");
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 1.0);
 }
 
 }  // namespace

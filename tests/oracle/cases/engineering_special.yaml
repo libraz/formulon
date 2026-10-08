@@ -263,3 +263,59 @@ cases:
   - id: erfc_precise_two_arg_rejected
     description: "ERFC.PRECISE is strict 1-arg; 2nd arg surfaces #VALUE!"
     formula: "=ERFC.PRECISE(1,2)"
+
+  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  #    arguments, and the near-integer snap of integer arguments --------------
+  - id: atp_erf_bool
+    formula: "=ERF(TRUE)"
+
+  - id: atp_erf_omit
+    formula: "=ERF(,1)"
+
+  - id: atp_erf_boolcell
+    setup: { A1: true }
+    formula: "=ERF(A1)"
+
+  - id: atp_besselj_bool
+    formula: "=BESSELJ(TRUE,1)"
+
+  - id: atp_besselj_omit
+    formula: "=BESSELJ(,1)"
+
+  - id: atp_besselj_boolcell
+    setup: { A1: true }
+    formula: "=BESSELJ(A1,1)"
+
+  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  - id: a4_erfc_bool
+    formula: "=ERFC(TRUE)"
+
+  - id: a4_bessely_bool
+    formula: "=BESSELY(TRUE,1)"
+
+  - id: a4_bessely_omit
+    formula: "=BESSELY(,1)"
+
+  - id: a4_besseli_bool
+    formula: "=BESSELI(TRUE,1)"
+
+  - id: a4_besseli_omit
+    formula: "=BESSELI(,1)"
+
+  - id: a4_besselk_bool
+    formula: "=BESSELK(TRUE,1)"
+
+  - id: a4_besselk_omit
+    formula: "=BESSELK(,1)"
+
+  - id: a4_erf_precise_bool
+    formula: "=ERF.PRECISE(TRUE)"
+
+  - id: a4_erfc_precise_bool
+    formula: "=ERFC.PRECISE(TRUE)"
+
+  - id: opt_besselj_omit_n
+    formula: "=BESSELJ(1,)"
+
+  - id: opt_erf_upper_omit
+    formula: "=ERF(0.5,)"

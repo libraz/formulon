@@ -167,18 +167,24 @@ Value Average(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // PRODUCT(value, ...) - product of all args. Overflow to Inf -> `#NUM!`.
 // When every argument was filtered out by the range-vs-direct provenance
 // rule (e.g. `=PRODUCT(A1:A3)` over an empty / all-text range), Excel
-// returns 0 rather than the mathematical identity 1.
+// returns 0 rather than the mathematical identity 1. An omitted slot
+// (`PRODUCT(3,,6)`) is skipped, not counted as 0.
 Value Product(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  if (arity == 0) {
-    return Value::number(0.0);
-  }
   double total = 1.0;
+  bool any = false;
   for (std::uint32_t i = 0; i < arity; ++i) {
+    if (args[i].kind() == ValueKind::Blank) {
+      continue;
+    }
     auto coerced = coerce_to_number(args[i]);
     if (!coerced) {
       return Value::error(coerced.error());
     }
     total *= coerced.value();
+    any = true;
+  }
+  if (!any) {
+    return Value::number(0.0);
   }
   return to_finite_value(total);
 }

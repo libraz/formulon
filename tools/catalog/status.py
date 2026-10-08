@@ -47,7 +47,7 @@ FUNCTION_DEF_RE = re.compile(r'\{\s*"([A-Z][A-Z0-9_.]*)"\s*,\s*\d+u\s*,')
 # Inside `constexpr LazyEntry kLazyDispatch[] = { ... };` entries look like
 # `{"IF", &eval_if_lazy},`. We anchor on the leading `{` and `"` to avoid
 # catching arbitrary strings in code comments.
-LAZY_ENTRY_RE = re.compile(r'\{\s*"([A-Z][A-Z0-9_.]*)"\s*,\s*&eval_')
+LAZY_ENTRY_RE = re.compile(r'\{\s*"([A-Z_][A-Z0-9_.]*)"\s*,\s*&eval_')
 
 # Inside `special_forms_catalog.cpp` the sole source of truth is a static
 # array initialiser of the form

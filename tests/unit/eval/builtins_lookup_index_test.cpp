@@ -6,6 +6,7 @@
 
 #include "builtins_lookup_test_helpers.h"
 #include "eval/builtins.h"
+#include "test_eval_helpers.h"
 #include "util/test_eval_helpers.h"
 
 namespace formulon {
@@ -389,6 +390,153 @@ TEST(BuiltinsIndex, ArraySelectorReferenceBlankCountsInCountA) {
   const Value v = EvalSourceIn("=COUNTA(INDEX(A1:A3,D1:D3))", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
+}
+
+// Excel-measured near-integer snap, sub-integer index handling, array index
+// arguments, implicit-intersection CELL and 3-D conditional aggregates.
+
+Workbook SnapWorkbook() {
+  Workbook wb = Workbook::create();
+  for (std::uint32_t c = 0; c < 3; ++c) {
+    wb.sheet(0).set_cell_value(0, c, Value::number(10.0 * static_cast<double>(c + 1)));
+  }
+  return wb;
+}
+
+double EvalNumber(std::string_view src, const Workbook& wb) {
+  const Value v = EvalSourceIn(src, wb, wb.sheet(0));
+  EXPECT_TRUE(v.is_number()) << src << " -> " << v.debug_to_string();
+  return v.is_number() ? v.as_number() : 0.0;
+}
+
+ErrorCode EvalError(std::string_view src, const Workbook& wb) {
+  const Value v = EvalSourceIn(src, wb, wb.sheet(0));
+  EXPECT_TRUE(v.is_error()) << src << " -> " << v.debug_to_string();
+  return v.is_error() ? v.as_error() : ErrorCode::Value;
+}
+
+TEST(BuiltinsIndex, ColumnSnapsNearIntegerUp) {
+  const Workbook wb = SnapWorkbook();
+  EXPECT_DOUBLE_EQ(EvalNumber("=INDEX(A1:C1,1,1.9999999)", wb), 20.0);
+  EXPECT_DOUBLE_EQ(EvalNumber("=INDEX(A1:C1,1,1.99999977)", wb), 20.0);
+  EXPECT_DOUBLE_EQ(EvalNumber("=INDEX(A1:C1,1,1.999999761)", wb), 10.0);
+  EXPECT_DOUBLE_EQ(EvalNumber("=INDEX(A1:C1,1,1.5)", wb), 10.0);
+  EXPECT_DOUBLE_EQ(EvalNumber("=INDEX({1;2;3},1.9999999)", wb), 2.0);
+}
+
+TEST(BuiltinsIndex, TinyColumnSelectsWholeRow) {
+  const Workbook wb = SnapWorkbook();
+  Value v = EvalSourceIn("=INDEX({1,2,3},1,0.0000001)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 1U, 3U);
+  v = EvalSourceIn("=INDEX({1,2,3},1,0.4)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 1U, 3U);
+  v = EvalSourceIn("=INDEX({1,2,3},1,0.999999)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 1U, 3U);
+  EXPECT_DOUBLE_EQ(EvalNumber("=INDEX({1,2,3},1,0.9999999)", wb), 1.0);
+  v = EvalSourceIn("=INDEX({1,2,3},-0.0000001,1)", wb, wb.sheet(0));
+  EXPECT_TRUE(v.is_array() || v.is_number());
+  EXPECT_EQ(EvalError("=INDEX({1,2,3},1,-1)", wb), ErrorCode::Value);
+}
+
+TEST(BuiltinsVlookup, IndexSnapsNearIntegerUp) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(5.0));
+  wb.sheet(0).set_cell_value(0, 2, Value::number(7.0));
+  EXPECT_DOUBLE_EQ(EvalNumber("=VLOOKUP(1,A1:C1,2.9999999,FALSE)", wb), 7.0);
+  EXPECT_DOUBLE_EQ(EvalNumber("=VLOOKUP(1,A1:C1,2.999999,FALSE)", wb), 5.0);
+  EXPECT_EQ(EvalError("=HLOOKUP(1,A1:C1,1.9999999,FALSE)", wb), ErrorCode::Ref);
+  EXPECT_DOUBLE_EQ(EvalNumber("=HLOOKUP(1,A1:C1,1.999999,FALSE)", wb), 1.0);
+  EXPECT_EQ(EvalError("=VLOOKUP(1,A1:C1,3.9999999,FALSE)", wb), ErrorCode::Ref);
+}
+
+TEST(BuiltinsDatabase, FieldSnapsNearIntegerUp) {
+  Workbook wb = Workbook::create();
+  Sheet& sh = wb.sheet(0);
+  sh.set_cell_value(0, 0, Value::text("a"));
+  sh.set_cell_value(0, 1, Value::text("b"));
+  sh.set_cell_value(1, 0, Value::number(1.0));
+  sh.set_cell_value(1, 1, Value::number(100.0));
+  sh.set_cell_value(0, 3, Value::text("a"));
+  sh.set_cell_value(1, 3, Value::number(1.0));
+  EXPECT_DOUBLE_EQ(EvalNumber("=DSUM(A1:B2,1.9999999,D1:D2)", wb), 100.0);
+  EXPECT_DOUBLE_EQ(EvalNumber("=DSUM(A1:B2,1.999999,D1:D2)", wb), 1.0);
+}
+
+TEST(BuiltinsStatsOrder, LargeSnapsAndSmallTruncates) {
+  const Workbook wb = SnapWorkbook();
+  EXPECT_DOUBLE_EQ(EvalNumber("=LARGE(A1:C1,1.9999999)", wb), 20.0);
+  EXPECT_DOUBLE_EQ(EvalNumber("=SMALL(A1:C1,1.9999999)", wb), 10.0);
+  EXPECT_EQ(EvalError("=LARGE(A1:C1,0.9999999)", wb), ErrorCode::Num);
+}
+
+TEST(BuiltinsChooseLanes, ArrayIndexArguments) {
+  const Workbook wb = SnapWorkbook();
+  Value v = EvalSourceIn("=CHOOSECOLS({1,2,3},{2})", wb, wb.sheet(0));
+  ExpectArrayShape(v, 1U, 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 2.0);
+  v = EvalSourceIn("=CHOOSECOLS({1,2,3},{1,3})", wb, wb.sheet(0));
+  ExpectArrayShape(v, 1U, 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 3.0);
+  v = EvalSourceIn("=CHOOSECOLS({1,2,3},{2;3})", wb, wb.sheet(0));
+  ExpectArrayShape(v, 1U, 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 2.0);
+  v = EvalSourceIn("=CHOOSECOLS({1,2,3},{-1,1})", wb, wb.sheet(0));
+  ExpectArrayShape(v, 1U, 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 1.0);
+  v = EvalSourceIn("=CHOOSECOLS({1,2,3},1,{2,3})", wb, wb.sheet(0));
+  ExpectArrayShape(v, 1U, 3U);
+  v = EvalSourceIn("=CHOOSEROWS({1;2;3},{1,3})", wb, wb.sheet(0));
+  ExpectArrayShape(v, 2U, 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(EvalNumber("=SUM(-CHOOSECOLS(A1:C1,{1,2}))", wb), -30.0);
+  EXPECT_EQ(EvalError("=CHOOSECOLS({1,2,3},{1,2;2,3})", wb), ErrorCode::Value);
+  EXPECT_EQ(EvalError("=CHOOSECOLS({1,2,3},{1,4})", wb), ErrorCode::Value);
+}
+
+TEST(BuiltinsCell, ImplicitIntersectionArgumentKeepsTheReference) {
+  Workbook wb = Workbook::create();
+  Sheet& sh = wb.sheet(0);
+  for (std::uint32_t r = 0; r < 4; ++r) {
+    sh.set_cell_value(r, 5, Value::number(100.0 + static_cast<double>(r)));
+  }
+  const auto at_g2 = [&wb](std::string_view src) {
+    static thread_local Arena parse_arena;
+    static thread_local Arena eval_arena;
+    parse_arena.reset();
+    eval_arena.reset();
+    parser::Parser p(src, parse_arena);
+    parser::AstNode* root = p.parse();
+    EXPECT_NE(root, nullptr) << src;
+    EvalState state;
+    const EvalContext ctx = test::workbook_context(wb, wb.sheet(0), state).with_formula_cell(1, 6);
+    return evaluate(*root, eval_arena, default_registry(), ctx);
+  };
+  for (const char* wrap : {"@F1:F4", "SINGLE(F1:F4)"}) {
+    const std::string arg(wrap);
+    Value v = at_g2("=CELL(\"contents\"," + arg + ")");
+    ASSERT_TRUE(v.is_number()) << arg << " " << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), 101.0);
+    v = at_g2("=CELL(\"row\"," + arg + ")");
+    ASSERT_TRUE(v.is_number()) << arg;
+    EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+    v = at_g2("=CELL(\"address\"," + arg + ")");
+    ASSERT_TRUE(v.is_text()) << arg;
+    EXPECT_EQ(v.as_text(), "$F$2");
+    v = at_g2("=CELL(\"type\"," + arg + ")");
+    ASSERT_TRUE(v.is_text()) << arg;
+    EXPECT_EQ(v.as_text(), "v");
+  }
+}
+
+TEST(BuiltinsCountif, ThreeDimensionalReferenceIsValueError) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.add_sheet("Sheet3");
+  EXPECT_EQ(EvalError("=COUNTIF(Sheet1:Sheet3!A1,1)", wb), ErrorCode::Value);
+  EXPECT_EQ(EvalError("=SUMIF(Sheet1:Sheet3!A1,1)", wb), ErrorCode::Value);
+  EXPECT_EQ(EvalError("=COUNTIFS(Sheet1:Sheet3!A1,1)", wb), ErrorCode::Value);
 }
 
 }  // namespace

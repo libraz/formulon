@@ -28,6 +28,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/strings.h"
 #include "value.h"
 #include "value_sort_order.h"
 
@@ -47,6 +48,21 @@ std::string_view grand_total_label(const EvalContext& ctx) {
     return "合計";
   }
   return "Grand Total";
+}
+
+std::string row_field_label(const EvalContext& ctx, std::uint32_t n) {
+  const bool ja = ctx.excel_profile().locale == ExcelLocale::kJaJP;
+  return std::string(ja ? "行フィールド " : "Field ") + std::to_string(n);
+}
+
+std::string column_field_label(const EvalContext& ctx, std::uint32_t n) {
+  const bool ja = ctx.excel_profile().locale == ExcelLocale::kJaJP;
+  return std::string(ja ? "列フィールド " : "Field ") + std::to_string(n);
+}
+
+std::string value_label(const EvalContext& ctx, std::uint32_t n) {
+  const bool ja = ctx.excel_profile().locale == ExcelLocale::kJaJP;
+  return std::string(ja ? "値 " : "Value ") + std::to_string(n);
 }
 
 std::string_view hierarchy_grand_total_label(const EvalContext& ctx) {
@@ -132,7 +148,7 @@ bool read_optional_int_in_set(const parser::AstNode& call, std::uint32_t arg_ind
                               int default_value, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                               const int* allowed, std::size_t count, int* out, Value* out_err) {
   *out = default_value;
-  if (arity <= arg_index) {
+  if (arity <= arg_index || is_omitted_arg(call.as_call_arg(arg_index))) {
     return true;
   }
   return read_int_in_set(call.as_call_arg(arg_index), arena, registry, ctx, allowed, count, out, out_err);
@@ -178,10 +194,25 @@ bool read_optional_sort_order(const parser::AstNode& call, std::uint32_t arg_ind
   return true;
 }
 
+int resolve_auto_field_headers(int field_headers, const ArrayValue& values) {
+  if (field_headers != kFieldHeadersAuto) {
+    return field_headers;
+  }
+  if (values.rows < 2U) {
+    return 0;
+  }
+  for (std::uint32_t c = 0; c < values.cols; ++c) {
+    if (values.cells[c].is_text() && !values.cells[values.cols + c].is_text()) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
 Expected<HeaderLayout, ErrorCode> resolve_header_layout(int field_headers, std::uint32_t input_rows) {
   HeaderLayout layout;
   layout.inputs_have_header = (field_headers == 1 || field_headers == 3);
-  layout.output_emits_header = (field_headers == 1 || field_headers == 2 || field_headers == 3);
+  layout.output_emits_header = (field_headers == 2 || field_headers == 3);
   if (layout.inputs_have_header && input_rows < 1U) {
     return Expected<HeaderLayout, ErrorCode>::Err(ErrorCode::Value);
   }
@@ -271,7 +302,7 @@ std::vector<std::uint32_t> collect_included_rows(const std::vector<bool>& includ
 // and `Bool FALSE` form distinct groups.
 bool group_cell_equal(const Value& a, const Value& b) {
   FoldCompareOptions opts;
-  opts.case_insensitive = false;
+  opts.case_insensitive = true;
   return value_equal_folded_text(a, b, opts);
 }
 
@@ -318,7 +349,7 @@ std::string normalized_group_key(const ArrayValue& keys, std::uint32_t row) {
         out.push_back('\0');
         break;
       case ValueKind::Text: {
-        const std::string folded = fold_jp_text(v.as_text());
+        const std::string folded = strings::to_ascii_lower(fold_jp_text(v.as_text()));
         out.append(std::to_string(folded.size()));
         out.push_back(':');
         out.append(folded);
@@ -458,7 +489,7 @@ int cmp_value_asc(const Value& a, const Value& b) {
     return ba < bb ? -1 : 1;
   }
   FoldCompareOptions opts;
-  opts.case_insensitive = false;
+  opts.case_insensitive = true;
   return value_compare_folded_text(a, b, opts);
 }
 

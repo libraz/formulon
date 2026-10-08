@@ -17,6 +17,7 @@
 
 #include "eval/builtins/datetime.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -165,12 +166,17 @@ Expected<CoercedDateArg, ErrorCode> coerce_bounded_date_arg(const Value& v, bool
   return out.value();
 }
 
+// Rounds a serial to the nearest whole second; DAY / MONTH / YEAR / WEEKDAY extract the date from the rounded value.
+double round_to_second(double serial) noexcept {
+  return std::round(serial * 86400.0) / 86400.0;
+}
+
 Expected<double, ErrorCode> read_truncated_number_arg(const Value* args, std::uint32_t index) {
   auto n = coerce_to_number(args[index]);
   if (!n) {
     return std::move(n.error());
   }
-  return std::trunc(n.value());
+  return std::trunc(snap_near_integer(n.value()));
 }
 
 // Reads `args[0..3)` as truncated numbers (DATE / TIME components), left-most error first.
@@ -186,7 +192,7 @@ Expected<void, ErrorCode> read_truncated_triple(const Value* args, double* out) 
 }
 
 Expected<int, ErrorCode> read_optional_truncated_int_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
-                                                         int default_value) {
+                                                         int default_value, bool snap) {
   if (arity <= index) {
     return default_value;
   }
@@ -194,7 +200,7 @@ Expected<int, ErrorCode> read_optional_truncated_int_arg(const Value* args, std:
   if (!n) {
     return std::move(n.error());
   }
-  const double truncated = std::trunc(n.value());
+  const double truncated = snap ? std::trunc(snap_near_integer(n.value())) : std::trunc(n.value());
   if (!std::isfinite(truncated) || truncated < static_cast<double>(std::numeric_limits<int>::lowest()) ||
       truncated > static_cast<double>(std::numeric_limits<int>::max())) {
     return ErrorCode::Num;
@@ -202,8 +208,22 @@ Expected<int, ErrorCode> read_optional_truncated_int_arg(const Value* args, std:
   return static_cast<int>(truncated);
 }
 
+// Rounds an already range-checked date argument to the nearest second; a serial that rounds past the last
+// representable day is `#NUM!`.
+Expected<CoercedDateArg, ErrorCode> round_date_arg_to_second(CoercedDateArg arg, bool date1904) {
+  arg.serial = round_to_second(arg.serial);
+  if (!is_valid_date_time_serial(workbook_date_serial(arg, date1904), date1904)) {
+    return ErrorCode::Num;
+  }
+  return arg;
+}
+
 Expected<date_time::YMD, ErrorCode> coerce_serial_ymd(const Value& v, bool date1904) {
-  auto serial = coerce_bounded_date_arg(v, date1904);
+  auto bounded = coerce_bounded_date_arg(v, date1904);
+  if (!bounded) {
+    return std::move(bounded.error());
+  }
+  auto serial = round_date_arg_to_second(bounded.value(), date1904);
   if (!serial) {
     return std::move(serial.error());
   }
@@ -221,6 +241,12 @@ Expected<date_time::HMS, ErrorCode> coerce_serial_hms(const Value& v) {
   }
   return date_time::hms_from_fraction(serial.value());
 }
+
+// DATE's month argument is limited to [-32767, 32766] and its day saturates at the 16-bit bounds.
+constexpr double kDateMonthMin = -32767.0;
+constexpr double kDateMonthMax = 32766.0;
+constexpr double kDateDayMin = -32768.0;
+constexpr double kDateDayMax = 32767.0;
 
 /// DATE(year, month, day). Each argument is truncated (Excel floors toward
 /// zero for date components). Years in `[0, 1900)` are expanded by adding
@@ -253,8 +279,8 @@ Value Date_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool d
   // (C++ integer division truncates toward zero, which would map month 0
   // to the *same* year instead of the previous December).
   long long yy = yi;
-  const double min_month = static_cast<double>(12LL * (1900 - yi) + 1);
-  const double max_month = static_cast<double>(12LL * (9999 - yi) + 12);
+  const double min_month = std::max(static_cast<double>(12LL * (1900 - yi) + 1), kDateMonthMin);
+  const double max_month = std::min(static_cast<double>(12LL * (9999 - yi) + 12), kDateMonthMax);
   if (!std::isfinite(m) || m < min_month || m > max_month) {
     return Value::error(ErrorCode::Num);
   }
@@ -282,10 +308,15 @@ Value Date_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool d
   const std::int64_t max_civil_day = date_time::days_from_civil(9999, 12, 31);
   const double min_day = static_cast<double>(min_civil_day - first_civil_day + 1);
   const double max_day = static_cast<double>(max_civil_day - first_civil_day + 1);
-  if (!std::isfinite(d) || d < min_day || d > max_day) {
+  if (!std::isfinite(d)) {
     return Value::error(ErrorCode::Num);
   }
-  const auto day_value = static_cast<long long>(d);
+  // Excel saturates the day field at 32767 and reads anything below -32768 as +32767.
+  const double day = (d > kDateDayMax || d < kDateDayMin) ? kDateDayMax : d;
+  if (day < min_day || day > max_day) {
+    return Value::error(ErrorCode::Num);
+  }
+  const auto day_value = static_cast<long long>(day);
   const double serial =
       serial_from_date_components(static_cast<int>(yy), static_cast<unsigned>(mm), day_value, date1904);
   if (!is_valid_generated_date_serial(serial, date1904)) {
@@ -385,13 +416,17 @@ struct DateAndReturnType {
 
 Expected<DateAndReturnType, ErrorCode> read_date_and_return_type(const Value* args, std::uint32_t arity,
                                                                  bool date1904) {
-  auto serial = coerce_bounded_date_arg(args[0], date1904);
+  // The return_type is coerced before the serial's range is judged: `WEEKDAY(-1,"abc")` is `#VALUE!`.
+  auto serial = coerce_date_arg(args[0], date1904);
   if (!serial) {
     return std::move(serial.error());
   }
-  auto return_type = read_optional_truncated_int_arg(args, arity, 1, 1);
+  auto return_type = read_optional_truncated_int_arg(args, arity, 1, 1, /*snap=*/true);
   if (!return_type) {
     return std::move(return_type.error());
+  }
+  if (!is_valid_date_time_serial(workbook_date_serial(serial.value(), date1904), date1904)) {
+    return ErrorCode::Num;
   }
   return DateAndReturnType{serial.value(), return_type.value()};
 }
@@ -404,7 +439,11 @@ Value Weekday_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   if (!in) {
     return Value::error(in.error());
   }
-  const CoercedDateArg& serial = in.value().serial;
+  auto rounded = round_date_arg_to_second(in.value().serial, date1904);
+  if (!rounded) {
+    return Value::error(rounded.error());
+  }
+  const CoercedDateArg& serial = rounded.value();
   const int return_type = in.value().return_type;
   const int sun0 = date_time::weekday_sun0(normal_date_serial(serial, date1904));  // 0..6, Sun=0
   const int mon0 = (sun0 + 6) % 7;                                                 // 0..6, Mon=0
@@ -480,10 +519,10 @@ Expected<ShiftedMonth, ErrorCode> shift_months(const Value* args, bool date1904)
     return ErrorCode::Num;
   }
   const double truncated_months = std::trunc(months_c.value());
-  const date_time::YMD base =
-      date_time::ymd_from_serial(std::floor(normal_date_serial(serial.value(), date1904)), /*date1904=*/false);
+  // Serial 0 is 1900-01-00; a month shift from it may not leave January 1900.
+  const date_time::YMD base = date_time::legacy_1900_ymd(normal_date_serial(serial.value(), date1904));
   const long long base_months = static_cast<long long>(base.y) * 12 + static_cast<long long>(base.m - 1);
-  const long long min_target_months = (date1904 ? 1904LL : 1899LL) * 12;
+  const long long min_target_months = (date1904 ? 1904LL : (base.d == 0u ? 1900LL : 1899LL)) * 12;
   const double min_months = static_cast<double>(min_target_months - base_months);
   const double max_months = static_cast<double>(10000LL * 12 - 1 - base_months);
   if (!std::isfinite(truncated_months) || truncated_months < min_months || truncated_months > max_months) {
@@ -525,7 +564,11 @@ Value Edate_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool 
   if (!shifted) {
     return Value::error(shifted.error());
   }
-  const double serial = date_time::serial_from_ymd(shifted.value().y, shifted.value().m, shifted.value().d, date1904);
+  // A shifted day of 0 is the 1900-01-00 alias carried over from serial 0: one day before the month's first.
+  const double serial =
+      shifted.value().d == 0u
+          ? date_time::serial_from_ymd(shifted.value().y, shifted.value().m, 1u, date1904) - 1.0
+          : date_time::serial_from_ymd(shifted.value().y, shifted.value().m, shifted.value().d, date1904);
   if (!is_valid_generated_date_serial(serial, date1904)) {
     return Value::error(ErrorCode::Num);
   }
@@ -702,7 +745,7 @@ Value Yearfrac_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
   if (!end) {
     return Value::error(end.error());
   }
-  auto basis_arg = read_optional_truncated_int_arg(args, arity, 2, 0);
+  auto basis_arg = read_optional_truncated_int_arg(args, arity, 2, 0, /*snap=*/false);
   if (!basis_arg) {
     return Value::error(basis_arg.error());
   }
@@ -1093,11 +1136,11 @@ const DateEntry* find_date_entry(std::string_view name) noexcept {
       {"MONTH", {&Month_, 1u, 1u}},
       {"DAY", {&Day_, 1u, 1u}},
       {"WEEKDAY", {&Weekday_, 1u, 2u}},
-      {"EDATE", {&Edate_, 2u, 2u}},
-      {"EOMONTH", {&Eomonth_, 2u, 2u}},
+      {"EDATE", {&Edate_, 2u, 2u, nullptr, nullptr, true}},
+      {"EOMONTH", {&Eomonth_, 2u, 2u, nullptr, nullptr, true}},
       {"WEEKNUM", {&Weeknum_, 1u, 2u}},
       {"ISOWEEKNUM", {&Isoweeknum_, 1u, 1u}},
-      {"YEARFRAC", {&Yearfrac_, 2u, 3u}},
+      {"YEARFRAC", {&Yearfrac_, 2u, 3u, nullptr, nullptr, true}},
       {"DATEDIF", {&Datedif_, 3u, 3u}},
       {"DAYS360", {&Days360_, 2u, 3u}},
       {"DATEVALUE", {&DatevalueHostClock_, 1u, 1u, nullptr, &Datevalue_}},

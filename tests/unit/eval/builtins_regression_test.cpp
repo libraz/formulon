@@ -409,6 +409,26 @@ TEST(RegressionCORREL, ScalarArgIsNA) {
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
+// Asserts a numeric result within `rel` relative tolerance of `expected`.
+void ExpectRegRel(const char* formula, double expected, double rel) {
+  const Value v = EvalSource(formula);
+  ASSERT_TRUE(v.is_number()) << formula;
+  EXPECT_NEAR(v.as_number(), expected, std::abs(expected) * rel) << formula;
+}
+
+void ExpectRegErr(const char* formula, ErrorCode code) {
+  const Value v = EvalSource(formula);
+  ASSERT_TRUE(v.is_error()) << formula;
+  EXPECT_EQ(v.as_error(), code) << formula;
+}
+
+TEST(RegressionCovariance, ScalarArgumentsAreOneElementArrays) {
+  ExpectRegRel("=COVARIANCE.P(1,2)", 0.0, 0.0);
+  ExpectRegRel("=COVARIANCE.P(3,3)", 0.0, 0.0);
+  ExpectRegRel("=COVAR(1,2)", 0.0, 0.0);
+  ExpectRegErr("=COVARIANCE.S(1,2)", ErrorCode::Div0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

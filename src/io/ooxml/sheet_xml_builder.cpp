@@ -445,8 +445,9 @@ std::string BuildSheetViewXml(const SheetView& view) {
 /// silently omitting them changes pagination and visible geometry across the
 /// whole worksheet.
 std::string BuildSheetFormatPrXml(const SheetFormatDefaults& defaults) {
-  if (!defaults.has_default_col_width && !defaults.has_default_row_height &&
-      defaults.base_col_width == ooxml_defaults::kBaseColWidthChars) {
+  if (!defaults.has_default_col_width && !defaults.has_default_row_height && !defaults.custom_height &&
+      !defaults.zero_height && !defaults.thick_top && !defaults.thick_bottom && defaults.outline_level_row == 0U &&
+      defaults.outline_level_col == 0U && defaults.base_col_width == ooxml_defaults::kBaseColWidthChars) {
     return std::string();
   }
   std::string out("<sheetFormatPr");
@@ -458,6 +459,24 @@ std::string BuildSheetFormatPrXml(const SheetFormatDefaults& defaults) {
   }
   if (defaults.has_default_row_height) {
     append_xml_attr_number(out, "defaultRowHeight", defaults.default_row_height);
+  }
+  if (defaults.custom_height) {
+    out.append(" customHeight=\"1\"");
+  }
+  if (defaults.zero_height) {
+    out.append(" zeroHeight=\"1\"");
+  }
+  if (defaults.thick_top) {
+    out.append(" thickTop=\"1\"");
+  }
+  if (defaults.thick_bottom) {
+    out.append(" thickBottom=\"1\"");
+  }
+  if (defaults.outline_level_row != 0U) {
+    append_xml_attr_uint(out, "outlineLevelRow", defaults.outline_level_row);
+  }
+  if (defaults.outline_level_col != 0U) {
+    append_xml_attr_uint(out, "outlineLevelCol", defaults.outline_level_col);
   }
   out.append("/>");
   return out;

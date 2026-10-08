@@ -1058,3 +1058,57 @@ cases:
   - id: seriessum_scalar_text_coefficient
     description: "A text coefficient in the scalar position"
     formula: "=SERIESSUM(2, 0, 1, \"x\")"
+
+  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  #    arguments, and the near-integer snap of integer arguments --------------
+  - id: pf_round_d
+    formula: "=ROUND(1.23456,1.9999999)"
+
+  - id: pf_int
+    formula: "=INT(1.9999999)"
+
+  - id: pf_trunc
+    formula: "=TRUNC(1.9999999)"
+
+  - id: atp_mround_bool
+    formula: "=MROUND(TRUE,1)"
+
+  - id: atp_mround_omit
+    formula: "=MROUND(,1)"
+
+  - id: atp_mround_boolcell
+    setup: { A1: true }
+    formula: "=MROUND(A1,1)"
+
+  - id: atp_randbetween_bool
+    formula: "=RANDBETWEEN(TRUE,TRUE)"
+
+  - id: atp_randbetween_omit
+    formula: "=RANDBETWEEN(,0)"
+
+  - id: atp_randbetween_boolcell
+    setup: { A1: true }
+    formula: "=RANDBETWEEN(A1,TRUE)"
+
+  - id: atp_seriessum_bool
+    formula: "=SERIESSUM(TRUE,1,1,{1})"
+
+  - id: atp_seriessum_omit
+    formula: "=SERIESSUM(,1,1,{1})"
+
+  - id: atp_seriessum_boolcell
+    setup: { A1: true }
+    formula: "=SERIESSUM(A1,1,1,{1})"
+
+  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  - id: snap_roundup
+    formula: "=ROUNDUP(1.23456,1.9999999)"
+
+  - id: snap_rounddown
+    formula: "=ROUNDDOWN(1.23456,1.9999999)"
+
+  - id: snap_trunc_d
+    formula: "=TRUNC(1.23456,1.9999999)"
+
+  - id: snap_ceiling_math
+    formula: "=CEILING.MATH(1.5,1,0.9999999)"

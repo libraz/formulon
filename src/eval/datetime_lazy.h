@@ -70,6 +70,9 @@ struct DateEntry {
   /// invoke this instead of `impl`/`clock_impl`. `impl` remains valid,
   /// reading the host clock, for callers that have no context to offer.
   ClockAwareImplFn clock_aware_impl = nullptr;
+  /// True for the former Analysis-ToolPak members (EDATE, EOMONTH, YEARFRAC):
+  /// a boolean argument is `#VALUE!`, an omitted required one `#N/A`.
+  bool analysis_toolpak = false;
 };
 
 /// Returns the calendar entry for `name` (canonical UPPERCASE, future-prefix

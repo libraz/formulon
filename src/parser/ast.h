@@ -549,6 +549,17 @@ std::vector<const AstNode*> child_nodes(const AstNode& node);
 /// rather than a registry lookup.
 bool is_cellref_shaped_function_name(std::string_view lexeme) noexcept;
 
+/// The function a trim-reference operator is stored as: `_TRO_LEADING` for
+/// `.:`, `_TRO_TRAILING` for `:.`, `_TRO_ALL` for `.:.` (each `_xlfn.`-prefixed
+/// in a file); empty for `None`. The parser builds the operator as a one-argument
+/// call to it over the plain range, and the formatter prints it back as the
+/// operator.
+std::string_view trim_ref_function_name(TrimRefMode mode) noexcept;
+
+/// The mode of `node` when it is a one-argument call to a
+/// `trim_ref_function_name`, ASCII case-insensitively; `None` otherwise.
+TrimRefMode trim_ref_call_mode(const AstNode& node) noexcept;
+
 /// True for one of Excel's volatile functions (NOW, TODAY, RAND,
 /// RANDBETWEEN, RANDARRAY, OFFSET, INDIRECT, INFO, CELL, FORMULATEXT, SHEET,
 /// SHEETS), ASCII case-insensitively: a formula calling one is recalculated

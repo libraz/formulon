@@ -34,7 +34,7 @@ namespace eval {
 namespace {
 
 using text_detail::read_int_arg;
-using text_detail::read_optional_int_arg;
+using text_detail::read_snapped_int_arg;
 using text_detail::read_text_window_args;
 
 // UPPER(text) / LOWER(text) - ASCII case fold. Multi-byte UTF-8 bytes are
@@ -116,8 +116,8 @@ Value Trim(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return Value::text(arena.intern(out));
 }
 
-// The `(text, [n])` arguments of LEFT / RIGHT; `n` defaults to 1 and a
-// negative `n` is `#VALUE!`.
+// The `(text, [n])` arguments of LEFT / RIGHT; `n` defaults to 1, snaps to
+// a near integer, and a negative raw `n` is `#VALUE!`.
 struct TextAndCount {
   std::string text;
   int count;
@@ -128,12 +128,9 @@ Expected<TextAndCount, ErrorCode> read_text_and_count(const Value* args, std::ui
   if (!text) {
     return std::move(text.error());
   }
-  auto parsed = read_optional_int_arg(args, arity, 1u, 1);
+  auto parsed = arity > 1u ? read_snapped_int_arg(args[1], 0.0) : Expected<int, ErrorCode>(1);
   if (!parsed) {
     return std::move(parsed.error());
-  }
-  if (parsed.value() < 0) {
-    return ErrorCode::Value;
   }
   return TextAndCount{std::string(text.value()), parsed.value()};
 }
@@ -173,7 +170,7 @@ Value Right(const Value* args, std::uint32_t arity, Arena& arena) {
 // returns `""` when `start_num` is past the end. `start_num<1` or
 // `num_chars<0` -> `#VALUE!`.
 Value Mid(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto parsed = read_text_window_args(args, arity);
+  auto parsed = read_text_window_args(args, arity, /*snap_start=*/false);
   if (!parsed) {
     return Value::error(parsed.error());
   }
@@ -246,12 +243,9 @@ Value Substitute(const Value* args, std::uint32_t arity, Arena& arena) {
   bool nth_only = false;
   int instance = 0;
   if (arity >= 4) {
-    auto parsed = read_int_arg(args[3]);
+    auto parsed = read_snapped_int_arg(args[3], 1.0);
     if (!parsed) {
       return Value::error(parsed.error());
-    }
-    if (parsed.value() < 1) {
-      return Value::error(ErrorCode::Value);
     }
     nth_only = true;
     instance = parsed.value();
@@ -307,7 +301,7 @@ Value Substitute(const Value* args, std::uint32_t arity, Arena& arena) {
 // append (the suffix is empty). `start_num < 1` or `num_chars < 0` surface
 // `#VALUE!`. The result is capped at Excel's 32,767-unit text limit.
 Value Replace_(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto parsed = read_text_window_args(args, arity);
+  auto parsed = read_text_window_args(args, arity, /*snap_start=*/true);
   if (!parsed) {
     return Value::error(parsed.error());
   }

@@ -2,11 +2,11 @@
   "suite": "hypothesis",
   "description": "T.TEST / TTEST / F.TEST / FTEST / CHISQ.TEST / CHITEST / Z.TEST / ZTEST / PROB — Excel hypothesis-test / probability builtins",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -2712,6 +2712,68 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_test_bool_pair_dropped",
+      "formula": "=CHISQ.TEST({TRUE,2},{3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.317310507862914
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 1e-12
+      }
+    },
+    {
+      "id": "chisq_test_bool_pair_dropped_2d",
+      "formula": "=CHISQ.TEST({TRUE,2;3,4},{1,2;3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "chisq_test_negative_values_allowed",
+      "formula": "=CHISQ.TEST({-1,-2},{3,-4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.03737298834065147
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 1e-12
+      }
+    },
+    {
+      "id": "chisq_test_negative_statistic_is_num",
+      "formula": "=CHISQ.TEST({-1,-2},{-3,-4})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_test_negative_expected_is_num",
+      "formula": "=CHISQ.TEST({1,2},{-3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_test_inline_zero_expected_is_div0",
+      "formula": "=CHISQ.TEST({1,2},{0,4})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
       }
     }
   ]

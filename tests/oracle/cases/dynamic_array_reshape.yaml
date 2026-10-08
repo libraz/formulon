@@ -415,3 +415,80 @@ cases:
   - id: tocol_all_blank_counta
     description: "COUNTA(TOCOL(A1:D1)) over a blank range, the sibling that already promotes"
     formula: '=COUNTA(TOCOL(A1:D1))'
+
+  # =========================================================================
+  # Trim-reference operators: `:.` trims trailing blanks, `.:` leading ones,
+  # `.:.` both, on rows and columns alike (TRIMRANGE with one mode).
+  # =========================================================================
+  - id: trimref_trailing_sum
+    description: "SUM over A1:.A10 with A1:A3 filled"
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: '=SUM(A1:.A10)'
+  - id: trimref_trailing_rows
+    description: "ROWS of A1:.A10 with A1:A3 filled -> 3"
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: '=ROWS(A1:.A10)'
+  - id: trimref_both_rows
+    description: "ROWS of A1.:.A10 with A2:A3 filled -> 2"
+    setup: { A2: 1, A3: 2 }
+    formula: '=ROWS(A1.:.A10)'
+  - id: trimref_leading_rows
+    description: "ROWS of A1.:A10 with A2:A3 filled -> 9"
+    setup: { A2: 1, A3: 2 }
+    formula: '=ROWS(A1.:A10)'
+  - id: trimref_trimrange_rows
+    description: "The same range through TRIMRANGE"
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: '=ROWS(TRIMRANGE(A1:A10))'
+  - id: trimref_whole_column
+    description: "ROWS of A:.A with A1:A3 filled -> 3"
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: '=ROWS(A:.A)'
+  - id: trimref_columns
+    description: "COLUMNS of A1:.E1 with A1:C1 filled -> 3"
+    setup: { A1: 1, B1: 2, C1: 3 }
+    formula: '=COLUMNS(A1:.E1)'
+  - id: trimref_whole_column_leading
+    description: "ROWS of A.:A with A2:A3 filled -> 1048575"
+    setup: { A2: 1, A3: 2 }
+    formula: '=ROWS(A.:A)'
+  - id: trimref_whole_column_both
+    description: "ROWS of A.:.A with A2:A3 filled -> 2"
+    setup: { A2: 1, A3: 2 }
+    formula: '=ROWS(A.:.A)'
+  - id: trimref_two_dimensional
+    description: "A1:.C10 with A1 and B2 filled trims rows and columns -> 2x2"
+    setup: { A1: 1, B2: 2 }
+    formula: '=ROWS(A1:.C10)&"x"&COLUMNS(A1:.C10)'
+  - id: trimref_all_blank
+    description: "A trim reference over blanks only -> #REF!"
+    formula: '=ROWS(A1:.A10)'
+  - id: trimref_interior_gap
+    description: "An interior blank is kept: A1 and A5 filled -> 5"
+    setup: { A1: 1, A5: 2 }
+    formula: '=ROWS(A1:.A10)'
+  - id: trimref_both_sum
+    description: "SUM over A1.:.A10 with A2:A3 filled"
+    setup: { A2: 1, A3: 2 }
+    formula: '=SUM(A1.:.A10)'
+  - id: trimref_whole_row
+    description: "COLUMNS of 1:.1 with A1 and C1 filled; the formula's own cell in row 1 counts"
+    setup: { A1: 1, C1: 2 }
+    formula: '=COLUMNS(1:.1)'
+  - id: trimref_whole_row_outside
+    description: "COLUMNS of 1:.1 with A1 and C1 filled, the formula outside row 1 -> 3"
+    setup: { A1: 1, C1: 2 }
+    formula_cell: Z2
+    formula: '=COLUMNS(1:.1)'
+  - id: trimref_whole_columns_two
+    description: "ROWS of A:.B with A1 and B4 filled -> 4"
+    setup: { A1: 1, B4: 2 }
+    formula: '=ROWS(A:.B)'
+  - id: trimref_formula_empty_text
+    description: "A formula returning \"\" is not blank"
+    setup: { A1: 1, A2: '=""' }
+    formula: '=ROWS(A1:.A10)'
+  - id: trimref_sheet_qualified
+    description: "A sheet-qualified trim reference"
+    setup: { Sheet2!A1: 1, Sheet2!A2: 2 }
+    formula: '=ROWS(Sheet2!A1:.A10)'

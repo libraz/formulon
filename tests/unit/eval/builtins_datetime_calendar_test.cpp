@@ -396,6 +396,185 @@ TEST(DateTimeWorkday, ErrorPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// ---------------------------------------------------------------------------
+// Excel-measured near-integer snap, second rounding, DATE limits, serial 0 and
+// the Analysis-ToolPak argument rule for the calendar family.
+// ---------------------------------------------------------------------------
+
+void ExpectNumber(std::string_view src, double expected) {
+  const Value v = EvalSource(src);
+  ASSERT_TRUE(v.is_number()) << src;
+  EXPECT_DOUBLE_EQ(v.as_number(), expected) << src;
+}
+
+void ExpectError(std::string_view src, ErrorCode code) {
+  const Value v = EvalSource(src);
+  ASSERT_TRUE(v.is_error()) << src;
+  EXPECT_EQ(v.as_error(), code) << src;
+}
+
+TEST(DateTimeSnap, DateParts) {
+  ExpectNumber("=DATE(2025,1,14.9999997616)", 45672.0);
+  ExpectNumber("=DATE(2025,1,14.999999761)", 45671.0);
+  ExpectNumber("=DATE(2025,1,10000.9999997616)", 55658.0);
+  ExpectNumber("=DATE(2025,1,0.9999999)", 45658.0);
+  ExpectNumber("=DATE(2025,3,-1.9999999)", 45714.0);
+  ExpectNumber("=DATE(2025,3,-1.0000001)", 45715.0);
+  ExpectNumber("=DATE(1899.9999999,1,1)", 1.0);
+  ExpectNumber("=DATE(2025,12.9999999,1)", 46023.0);
+}
+
+TEST(DateTimeSnap, TimeParts) {
+  ExpectNumber("=TIME(0,0,0.99999995)*86400", 1.0);
+  ExpectNumber("=TIME(1,-0.9999999,0)*1440", 59.0);
+  ExpectNumber("=TIME(0,0,0.5)*86400", 0.0);
+}
+
+TEST(DateTimeSnap, ReturnTypes) {
+  ExpectNumber("=WEEKDAY(1,1.9999999)", 7.0);
+  ExpectNumber("=WEEKDAY(1,1.999999)", 1.0);
+  ExpectNumber("=WEEKNUM(10,1.9999999)", 3.0);
+}
+
+TEST(DateTimeSnap, DoesNotSnapElsewhere) {
+  ExpectNumber("=EOMONTH(DATE(2025,1,15),0.9999999)", 45688.0);
+  ExpectNumber("=EDATE(DATE(2025,1,15),1.9999999)", 45703.0);
+}
+
+TEST(DateTimeSecondRounding, DayMonthYearWeekday) {
+  ExpectNumber("=DAY(40000.9999942)", 6.0);
+  ExpectNumber("=DAY(40000.9999943)", 7.0);
+  ExpectNumber("=MONTH(45688.9999999)", 2.0);
+  ExpectNumber("=YEAR(DATE(2025,12,31)+0.9999999)", 2026.0);
+  ExpectNumber("=WEEKDAY(40000.9999999)", 3.0);
+  ExpectNumber("=WEEKDAY(40000.9999942)", 2.0);
+  ExpectError("=DAY(2958465.999999)", ErrorCode::Num);
+  ExpectNumber("=DAY(2958465.99998)", 31.0);
+}
+
+TEST(DateTimeDateLimits, MonthBounds) {
+  ExpectError("=DATE(2025,32767,1)", ErrorCode::Num);
+  ExpectError("=DATE(5000,-32768,1)", ErrorCode::Num);
+  ExpectError("=DATE(2025,32766.9999999,1)", ErrorCode::Num);
+  ExpectError("=DATE(5000,-32767.9999999,1)", ErrorCode::Num);
+  EXPECT_TRUE(EvalSource("=DATE(1900,32766,1)").is_number());
+}
+
+TEST(DateTimeDateLimits, DaySaturates) {
+  ExpectNumber("=DATE(2025,1,32767)", 78424.0);
+  ExpectNumber("=DATE(2025,1,32768)", 78424.0);
+  ExpectNumber("=DATE(2025,1,1000000)", 78424.0);
+  ExpectNumber("=DATE(2025,1,32767.5)", 78424.0);
+  ExpectNumber("=DATE(2025,1,-32768)", 12889.0);
+  ExpectNumber("=DATE(2025,1,-32769)", 78424.0);
+  ExpectNumber("=DATE(2025,1,-1000000)", 78424.0);
+  ExpectError("=DATE(10000,1,1)", ErrorCode::Num);
+}
+
+TEST(DateTimeDateLimits, TimeLimits) {
+  ExpectNumber("=TIME(32767,0,0)*24", 7.0);
+  ExpectError("=TIME(32768,0,0)", ErrorCode::Num);
+  ExpectError("=TIME(0,0,100000)", ErrorCode::Num);
+}
+
+TEST(DateTimeSerialZero, EomonthAndEdate) {
+  ExpectNumber("=EOMONTH(0,0)", 31.0);
+  ExpectNumber("=EOMONTH(0,7)", 244.0);
+  ExpectError("=EOMONTH(0,-1)", ErrorCode::Num);
+  Workbook wb = Workbook::create();
+  const Value blank_start = EvalSourceIn("=EOMONTH(A1,0)", wb, wb.sheet(0));
+  ASSERT_TRUE(blank_start.is_number());
+  EXPECT_EQ(blank_start.as_number(), 31.0);
+  ExpectNumber("=EDATE(0,1)", 31.0);
+  ExpectNumber("=EDATE(0,0)", 0.0);
+  ExpectNumber("=EOMONTH(1,-1)", 0.0);
+}
+
+TEST(DateTimeWeekday, TextReturnTypeCheckedBeforeSerialRange) {
+  ExpectError("=WEEKDAY(-1,\"abc\")", ErrorCode::Value);
+  ExpectError("=WEEKDAY(-1,1)", ErrorCode::Num);
+}
+
+TEST(DateTimeAnalysisToolPak, BooleansAreValue) {
+  ExpectError("=EDATE(TRUE,1)", ErrorCode::Value);
+  ExpectError("=EDATE(1,TRUE)", ErrorCode::Value);
+  ExpectError("=EOMONTH(TRUE,1)", ErrorCode::Value);
+  ExpectError("=NETWORKDAYS(TRUE,10)", ErrorCode::Value);
+  ExpectError("=NETWORKDAYS(1,TRUE)", ErrorCode::Value);
+  ExpectError("=WORKDAY(TRUE,1)", ErrorCode::Value);
+  ExpectError("=WORKDAY(1,TRUE)", ErrorCode::Value);
+  ExpectError("=WORKDAY(1,5,TRUE)", ErrorCode::Value);
+  ExpectError("=WORKDAY.INTL(TRUE,5)", ErrorCode::Value);
+  ExpectError("=NETWORKDAYS.INTL(TRUE,5)", ErrorCode::Value);
+  ExpectError("=YEARFRAC(TRUE,10)", ErrorCode::Value);
+  ExpectError("=YEARFRAC(1,10,TRUE)", ErrorCode::Value);
+  ExpectError("=WEEKNUM(TRUE)", ErrorCode::Value);
+  ExpectError("=WEEKNUM(10,FALSE)", ErrorCode::Value);
+}
+
+TEST(DateTimeAnalysisToolPak, OmittedRequiredIsNA) {
+  ExpectError("=EDATE(,1)", ErrorCode::NA);
+  ExpectError("=EDATE(1,)", ErrorCode::NA);
+  ExpectError("=EDATE(,)", ErrorCode::NA);
+  ExpectError("=EOMONTH(1,)", ErrorCode::NA);
+  ExpectError("=NETWORKDAYS(1,)", ErrorCode::NA);
+  ExpectError("=NETWORKDAYS(,)", ErrorCode::NA);
+  ExpectError("=WORKDAY(,)", ErrorCode::NA);
+  ExpectError("=WORKDAY(1,)", ErrorCode::NA);
+  ExpectError("=WORKDAY.INTL(,5)", ErrorCode::NA);
+  ExpectError("=NETWORKDAYS.INTL(,5)", ErrorCode::NA);
+  ExpectError("=YEARFRAC(,1)", ErrorCode::NA);
+  ExpectError("=YEARFRAC(1,)", ErrorCode::NA);
+  ExpectError("=WEEKNUM(,1)", ErrorCode::NA);
+  ExpectError("=WEEKNUM(,)", ErrorCode::NA);
+}
+
+TEST(DateTimeAnalysisToolPak, OmittedOptionalTakesDefault) {
+  ExpectNumber("=WEEKNUM(10,)", 2.0);
+  ExpectNumber("=YEARFRAC(1,400,)", 392.0 / 360.0);
+  ExpectNumber("=WORKDAY.INTL(DATE(2025,1,1),10,,)", 45672.0);
+  ExpectNumber("=WORKDAY.INTL(DATE(2025,1,1),10,,{45660})", 45673.0);
+  ExpectNumber("=WORKDAY(DATE(2025,1,1),10,)", 45672.0);
+  ExpectNumber("=NETWORKDAYS(DATE(2025,1,1),DATE(2025,1,31),)", 23.0);
+}
+
+TEST(DateTimeAnalysisToolPak, NonMembersKeepCoercion) {
+  ExpectNumber("=DAYS(,5)", -5.0);
+  ExpectNumber("=WEEKDAY(,1)", 7.0);
+  ExpectError("=DATEDIF(1,,\"d\")", ErrorCode::Num);
+  ExpectNumber("=DAY(TRUE)", 1.0);
+  ExpectNumber("=HOUR(TRUE)", 0.0);
+}
+
+TEST(DateTimeIntlWeekend, Selectors) {
+  ExpectNumber("=WORKDAY.INTL(DATE(2025,1,1),10,TRUE)", 45672.0);
+  ExpectNumber("=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2025,12,31),TRUE)", 261.0);
+  ExpectError("=WORKDAY.INTL(DATE(2025,1,1),10,FALSE)", ErrorCode::Num);
+  ExpectError("=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2025,12,31),FALSE)", ErrorCode::Num);
+  ExpectError("=WORKDAY.INTL(DATE(2025,1,1),10,\"1\")", ErrorCode::Value);
+}
+
+TEST(DateTimeIntlWeekend, BlankCellIsNumAndBlankHolidaysPass) {
+  Workbook wb = Workbook::create();
+  const Value blank_weekend = EvalSourceIn("=WORKDAY.INTL(DATE(2025,1,1),10,A1)", wb, wb.sheet(0));
+  ASSERT_TRUE(blank_weekend.is_error());
+  EXPECT_EQ(blank_weekend.as_error(), ErrorCode::Num);
+  const Value blank_holidays = EvalSourceIn("=WORKDAY.INTL(DATE(2025,1,1),10,1,A1)", wb, wb.sheet(0));
+  ASSERT_TRUE(blank_holidays.is_number());
+  EXPECT_EQ(blank_holidays.as_number(), 45672.0);
+}
+
+TEST(DateTimeAnalysisToolPak, BooleanCellsAreValue) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::boolean(true));
+  for (const char* formula : {"=EDATE(10,A1)", "=NETWORKDAYS(1,A1)", "=WORKDAY(1,5,A1)", "=YEARFRAC(1,10,A1)",
+                              "=WEEKNUM(A1)", "=WORKDAY.INTL(A1,5)"}) {
+    const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

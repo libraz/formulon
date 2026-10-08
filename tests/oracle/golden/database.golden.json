@@ -2,11 +2,11 @@
   "suite": "database",
   "description": "DSUM / DCOUNT / DCOUNTA / DAVERAGE / DMAX / DMIN / DPRODUCT / DSTDEV / DSTDEVP / DVAR / DVARP / DGET",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-10,
@@ -8123,6 +8123,90 @@
       "expect": {
         "kind": "number",
         "value": 2500.0
+      }
+    },
+    {
+      "id": "dsum_field_snaps_near_integer",
+      "formula": "=DSUM(A1:C2, 2.9999999, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "dsum_field_below_snap_distance_truncates",
+      "formula": "=DSUM(A1:C2, 1.999999, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
       }
     }
   ]

@@ -790,6 +790,97 @@ TEST(TextArrayToText, SpillRangeStrictUsesCommittedSpillShape) {
   EXPECT_EQ(v.as_text(), "{10;20;30}");
 }
 
+// ---------------------------------------------------------------------------
+// Near-integer snap of integer arguments
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsTextSnap, LeftRightCountSnaps) {
+  const Value left = EvalSource("=LEN(LEFT(\"abcdef\",2.9999999))");
+  ASSERT_TRUE(left.is_number());
+  EXPECT_EQ(left.as_number(), 3.0);
+  const Value right = EvalSource("=LEN(RIGHT(\"abcdef\",2.9999999))");
+  ASSERT_TRUE(right.is_number());
+  EXPECT_EQ(right.as_number(), 3.0);
+}
+
+TEST(BuiltinsTextSnap, LeftNegativeRawCountIsValue) {
+  const Value v = EvalSource("=LEFT(\"abc\",-0.0000001)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsTextSnap, FindStartSnaps) {
+  const Value v = EvalSource("=FIND(\"b\",\"abcb\",2.9999999)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 4.0);
+}
+
+TEST(BuiltinsTextSnap, ReplaceStartSnaps) {
+  const Value v = EvalSource("=REPLACE(\"abcdef\",1.9999999,1,\"x\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "axcdef");
+}
+
+TEST(BuiltinsTextSnap, SubstituteInstanceSnaps) {
+  const Value v = EvalSource("=SUBSTITUTE(\"aaa\",\"a\",\"b\",1.9999999)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "aba");
+}
+
+TEST(BuiltinsTextSnap, MidLengthDoesNotSnap) {
+  const Value v = EvalSource("=LEN(MID(\"abcdef\",1,2.9999999))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsTextSnap, SearchStartSnaps) {
+  const Value v = EvalSource("=SEARCH(\"b\",\"abcb\",2.9999999)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 4.0);
+}
+
+TEST(BuiltinsTextSnap, SearchbStartSnaps) {
+  const Value v = EvalSource("=SEARCHB(\"b\",\"abcb\",2.9999999)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 4.0);
+}
+
+TEST(BuiltinsTextSnap, FindbStartSnaps) {
+  const Value v = EvalSource("=FINDB(\"b\",\"abcb\",2.9999999)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 4.0);
+}
+
+TEST(BuiltinsTextSnap, LeftbCountSnaps) {
+  const Value v = EvalSource("=LENB(LEFTB(\"abcdef\",2.9999999))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsTextSnap, RightbCountSnaps) {
+  const Value v = EvalSource("=LENB(RIGHTB(\"abcdef\",2.9999999))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsTextSnap, ReplacebStartSnaps) {
+  const Value v = EvalSource("=REPLACEB(\"abcdef\",1.9999999,1,\"x\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "axcdef");
+}
+
+TEST(BuiltinsTextSnap, TextBeforeInstanceSnaps) {
+  const Value v = EvalSource("=TEXTBEFORE(\"a-b-c\",\"-\",1.9999999)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "a-b");
+}
+
+TEST(BuiltinsTextSnap, TextAfterInstanceSnaps) {
+  const Value v = EvalSource("=TEXTAFTER(\"a-b-c\",\"-\",1.9999999)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "c");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -2,11 +2,11 @@
   "suite": "lookup",
   "description": "MATCH / INDEX / CHOOSE / VLOOKUP / HLOOKUP / XLOOKUP / XMATCH",
   "environment": {
-    "excel_version": "16.113.2",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-09-29T08:02:07Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -4358,6 +4358,163 @@
       "expect": {
         "kind": "number",
         "value": 3.0
+      }
+    },
+    {
+      "id": "index_column_snaps_near_integer",
+      "formula": "=INDEX(A1:C1,1,1.9999999)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "index_column_below_snap_distance_truncates",
+      "formula": "=INDEX(A1:C1,1,1.999999761)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "index_column_tiny_selects_whole_row",
+      "formula": "=INDEX({1,2,3},1,0.0000001)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "vlookup_index_snaps_near_integer",
+      "formula": "=VLOOKUP(1,A1:C1,2.9999999,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "choosecols_array_index_horizontal",
+      "formula": "=CHOOSECOLS({1,2,3},{1,3})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "choosecols_array_index_vertical_negative",
+      "formula": "=CHOOSECOLS({1,2,3},{-1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          3.0,
+          1.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "choosecols_scalar_and_array_index",
+      "formula": "=CHOOSECOLS({1,2,3},1,{2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "chooserows_array_index_horizontal",
+      "formula": "=CHOOSEROWS({1;2;3},{1,3})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "choosecols_array_index_two_dimensional",
+      "formula": "=CHOOSECOLS({1,2,3},{1,2;2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
       }
     }
   ]

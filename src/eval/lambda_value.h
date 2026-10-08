@@ -36,7 +36,8 @@ namespace eval {
 
 class NameEnv;
 
-/// Runtime closure for an Excel `LAMBDA` form.
+/// Runtime closure for an Excel `LAMBDA` form, or a built-in function named
+/// as a value.
 ///
 /// Built by the evaluator when it walks a `Lambda` AST node and consumed by
 /// `LambdaCall`. The `captured_env` slot lets a lambda close over the
@@ -72,6 +73,10 @@ struct LambdaValue {
   /// in (see `EvalContext::name_scope_sheet`), captured where the lambda
   /// was built; -1 keeps the caller's scope.
   std::int32_t name_scope_sheet = -1;
+  /// The built-in a bare function name denotes (`=TYPE(SUM)`), as written;
+  /// empty for a `LAMBDA`. Such a value has no params or body of its own: a
+  /// call with n arguments runs `LAMBDA(p1, ..., pn, NAME(p1, ..., pn))`.
+  std::string_view builtin;
 };
 
 // Trivially-copyable invariant: `Value` carries a `const LambdaValue*` and

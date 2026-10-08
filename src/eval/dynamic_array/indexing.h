@@ -3,7 +3,7 @@
 // `CHOOSEROWS`, `TAKE`, `DROP`. These builtins return a sub-array
 // addressed either by enumerated 1-based / negative axis indices
 // (CHOOSECOLS / CHOOSEROWS) or by signed edge-counted slice arguments
-// (TAKE / DROP). They share `resolve_choose_index`, `resolve_take_drop_range`,
+// (TAKE / DROP). They share `resolve_take_drop_range`,
 // `materialise_selected_lanes`, and `materialise_slice` with the rest of
 // the dynamic-array family (see `dynamic_array/common.h`).
 //

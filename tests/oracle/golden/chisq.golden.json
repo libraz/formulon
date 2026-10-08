@@ -2,11 +2,11 @@
   "suite": "chisq",
   "description": "CHISQ.DIST / CHISQ.DIST.RT / CHISQ.INV / CHISQ.INV.RT — chi-squared distribution family",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -362,6 +362,45 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "chisq_dist_rt_df_1e10",
+      "formula": "=CHISQ.DIST.RT(1E10,1E10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.4999981193680548
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 1e-12
+      }
+    },
+    {
+      "id": "chisq_inv_round_trip_df_1e10",
+      "formula": "=CHISQ.INV(CHISQ.DIST(1E10,1E10,TRUE),1E10)/1E10",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 1e-12
+      }
+    },
+    {
+      "id": "chisq_inv_rt_round_trip_df_1e10",
+      "formula": "=CHISQ.INV.RT(CHISQ.DIST.RT(1E10,1E10),1E10)/1E10",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 1e-12
       }
     }
   ]

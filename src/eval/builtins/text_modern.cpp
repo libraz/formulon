@@ -149,8 +149,9 @@ struct TextBeforeAfterOpts {
 Expected<TextBeforeAfterOpts, ErrorCode> read_tba_opts(const Value* args, std::uint32_t arity) {
   TextBeforeAfterOpts opts;
   if (arity >= 3) {
-    // instance_num uses floor-toward-negative-infinity (Excel INT semantics),
-    // not truncation: -1.6 -> -2 selects the second-to-last occurrence.
+    // instance_num snaps to a near integer, then uses floor-toward-negative-
+    // infinity (Excel INT semantics), not truncation: -1.6 -> -2 selects the
+    // second-to-last occurrence.
     auto coerced = coerce_to_number(args[2]);
     if (!coerced) {
       return std::move(coerced.error());
@@ -159,7 +160,7 @@ Expected<TextBeforeAfterOpts, ErrorCode> read_tba_opts(const Value* args, std::u
     if (std::isnan(d) || std::isinf(d)) {
       return ErrorCode::Num;
     }
-    opts.instance_num = static_cast<int>(std::floor(d));
+    opts.instance_num = static_cast<int>(std::floor(snap_near_integer(d)));
   }
   auto match_mode = text_detail::read_optional_int_arg(args, arity, 3u, 0);
   if (!match_mode) {

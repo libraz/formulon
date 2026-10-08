@@ -2,11 +2,11 @@
   "suite": "distributions_ext",
   "description": "BETA / GAMMA / WEIBULL / LOGNORM / HYPGEOM extended distribution family",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -646,6 +646,82 @@
     {
       "id": "gammaln_precise_negative_is_num",
       "formula": "=GAMMALN.PRECISE(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gamma_dist_pdf_zero_alpha_half",
+      "formula": "=GAMMA.DIST(0,0.5,2,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gamma_dist_pdf_zero_alpha_one",
+      "formula": "=GAMMA.DIST(0,1,2,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gammadist_pdf_zero_alpha_one",
+      "formula": "=GAMMADIST(0,1,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gamma_dist_pdf_zero_alpha_above_one",
+      "formula": "=GAMMA.DIST(0,1.5,2,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gamma_inv_small_p_round_trip",
+      "formula": "=GAMMA.INV(GAMMA.DIST(1E-5,9,2,TRUE),9,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.999999999999992e-06
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 1e-12
+      }
+    },
+    {
+      "id": "binom_inv_probability_zero_is_num",
+      "formula": "=BINOM.INV(10,0,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "binom_inv_probability_one_is_num",
+      "formula": "=BINOM.INV(10,1,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "binom_inv_probability_omitted_is_num",
+      "formula": "=BINOM.INV(10,,0.5)",
       "setup": {},
       "expect": {
         "kind": "error",

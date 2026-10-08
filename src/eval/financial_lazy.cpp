@@ -28,6 +28,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -310,13 +311,20 @@ double mirr_closed_form(const std::vector<double>& flows, double finance_rate, d
 }
 
 // Reads an optional guess argument into `*guess`; a blank leaves the caller's default so a trailing
-// comma matches an omitted argument. Returns false with the error in `*out_err` on error or non-numeric.
+// comma matches an omitted argument. `analysis_toolpak` (XIRR) rejects a boolean guess with #VALUE!.
+// Returns false with the error in `*out_err` on error or non-numeric.
 bool read_optional_guess(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, double* guess, Value* out_err) {
+                         const EvalContext& ctx, bool analysis_toolpak, double* guess, Value* out_err) {
   const Value guess_v = eval_node(arg, arena, registry, ctx);
   if (guess_v.is_error()) {
     *out_err = guess_v;
     return false;
+  }
+  if (analysis_toolpak) {
+    if (const Value atp = atp_arg_error(arg, guess_v, /*required=*/false); atp.is_error()) {
+      *out_err = atp;
+      return false;
+    }
   }
   if (!guess_v.is_blank()) {
     auto coerced = coerce_to_number(guess_v);
@@ -353,7 +361,8 @@ Value eval_irr_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
 
   double rate = 0.1;  // default guess per Excel.
   Value guess_err = Value::blank();
-  if (arity == 2U && !read_optional_guess(call.as_call_arg(1), arena, registry, ctx, &rate, &guess_err)) {
+  if (arity == 2U &&
+      !read_optional_guess(call.as_call_arg(1), arena, registry, ctx, /*analysis_toolpak=*/false, &rate, &guess_err)) {
     return guess_err;
   }
   // An explicit out-of-domain guess (the NPV expansion needs 1 + rate > 0) is an input error, so
@@ -670,6 +679,12 @@ Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Value);
   }
 
+  for (std::uint32_t i = 0; i < 2U; ++i) {
+    const Value omitted = atp_arg_error(call.as_call_arg(i), Value::blank(), /*required=*/true);
+    if (omitted.is_error()) {
+      return omitted;
+    }
+  }
   std::vector<double> values;
   std::vector<double> dates;
   Value err = Value::blank();
@@ -689,7 +704,8 @@ Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   }
 
   double guess = 0.1;  // default guess per Excel.
-  if (arity == 3U && !read_optional_guess(call.as_call_arg(2), arena, registry, ctx, &guess, &err)) {
+  if (arity == 3U &&
+      !read_optional_guess(call.as_call_arg(2), arena, registry, ctx, /*analysis_toolpak=*/true, &guess, &err)) {
     return err;
   }
   // Mac Excel rejects any negative guess; Newton-Raphson would still
@@ -729,6 +745,9 @@ Value eval_xnpv_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (rate_v.is_error()) {
     return rate_v;
   }
+  if (const Value atp = atp_arg_error(call.as_call_arg(0), rate_v, /*required=*/true); atp.is_error()) {
+    return atp;
+  }
   auto rate = coerce_to_number(rate_v);
   if (!rate) {
     return Value::error(rate.error());
@@ -740,6 +759,12 @@ Value eval_xnpv_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Num);
   }
 
+  for (std::uint32_t i = 1; i < 3U; ++i) {
+    const Value omitted = atp_arg_error(call.as_call_arg(i), Value::blank(), /*required=*/true);
+    if (omitted.is_error()) {
+      return omitted;
+    }
+  }
   std::vector<double> values;
   std::vector<double> dates;
   Value err = Value::blank();
@@ -774,7 +799,7 @@ const FinancialDateEntry* find_financial_date_entry(std::string_view name) noexc
       {"COUPDAYBS", {&financial_detail::CoupDayBs, 3u, 4u}},
       {"COUPDAYSNC", {&financial_detail::CoupDaysNc, 3u, 4u}},
       {"COUPDAYS", {&financial_detail::CoupDays, 3u, 4u}},
-      {"ACCRINT", {&financial_detail::Accrint, 6u, 8u}},
+      {"ACCRINT", {&financial_detail::Accrint, 6u, 8u, 1u << 7}},
       {"ACCRINTM", {&financial_detail::Accrintm, 4u, 5u}},
       {"DISC", {&financial_detail::Disc, 4u, 5u}},
       {"INTRATE", {&financial_detail::Intrate, 4u, 5u}},
@@ -816,19 +841,26 @@ Value eval_financial_date_lazy(const parser::AstNode& call, Arena& arena, const 
   if (arity < entry->min_arity || arity > entry->max_arity) {
     return Value::error(ErrorCode::Value);
   }
-  // This family is scalar-only and propagates the left-most argument
-  // error (none opt out of that rule), matching the eager dispatcher's
-  // pre-evaluation contract.
+  // This family is scalar-only, follows the Analysis-ToolPak argument
+  // rule, and propagates the left-most argument error (none opt out of
+  // that rule), matching the eager dispatcher's pre-evaluation contract.
+  const std::uint32_t evaluated = atp_evaluated_arity(call, entry->min_arity, entry->max_arity);
   std::vector<Value> args;
-  args.reserve(arity);
-  for (std::uint32_t i = 0; i < arity; ++i) {
+  args.reserve(evaluated);
+  for (std::uint32_t i = 0; i < evaluated; ++i) {
     Value v = eval_node(call.as_call_arg(i), arena, registry, ctx);
     if (v.is_error()) {
       return v;
     }
+    const bool logical = ((entry->logical_args >> i) & 1U) != 0U;
+    const Value atp =
+        atp_arg_error(call.as_call_arg(i), v, atp_slot_required(i, entry->min_arity, entry->max_arity), logical);
+    if (atp.is_error()) {
+      return atp;
+    }
     args.push_back(v);
   }
-  return entry->impl(args.empty() ? nullptr : args.data(), arity, arena, ctx.date1904());
+  return entry->impl(args.empty() ? nullptr : args.data(), evaluated, arena, ctx.date1904());
 }
 
 }  // namespace eval

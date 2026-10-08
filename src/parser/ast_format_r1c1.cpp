@@ -217,6 +217,14 @@ struct Emitter {
         emit(node.as_implicit_intersection_operand(), out);
         return;
       case NodeKind::Call:
+        if (const TrimRefMode mode = trim_ref_call_mode(node); mode != TrimRefMode::None &&
+                                                               node.as_call_arg(0).kind() == NodeKind::RangeOp &&
+                                                               parens.count(&node.as_call_arg(0)) == 0U) {
+          emit(node.as_call_arg(0).as_range_lhs(), out);
+          out.append(mode == TrimRefMode::Leading ? ".:" : mode == TrimRefMode::Trailing ? ":." : ".:.");
+          emit(node.as_call_arg(0).as_range_rhs(), out);
+          return;
+        }
         out.append(node.as_call_name());
         out.push_back('(');
         emit_args(node.as_call_arity(), &AstNode::as_call_arg, node, out);

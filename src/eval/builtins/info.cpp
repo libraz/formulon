@@ -335,6 +335,7 @@ Value Info(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 //   Bool    -> 4
 //   Error   -> 16
 //   Array   -> 64
+//   Lambda  -> 128 (a LAMBDA, or a built-in named as a value)
 //   Blank   -> 1 (Excel treats an empty cell as Number for TYPE purposes)
 //
 // Registered with `propagate_errors = false` so `TYPE(#DIV/0!) = 16`
@@ -352,11 +353,12 @@ Value Type(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
       return Value::number(16.0);
     case ValueKind::Array:
       return Value::number(64.0);
-    case ValueKind::Ref:
     case ValueKind::Lambda:
-      // Ref / Lambda are not user-visible scalar kinds in Excel; fall
-      // through to `#VALUE!` so unexpected shapes surface rather than
-      // silently returning a misleading type code.
+      return Value::number(128.0);
+    case ValueKind::Ref:
+      // Ref is not a user-visible scalar kind in Excel; fall through to
+      // `#VALUE!` so an unexpected shape surfaces rather than silently
+      // returning a misleading type code.
       return Value::error(ErrorCode::Value);
   }
   return Value::error(ErrorCode::Value);
@@ -380,8 +382,8 @@ void register_info_builtins(FunctionRegistry& registry) {
       {"NA", 0u, 0u, &Na},
       {"N", 1u, 1u, &N},
       {"T", 1u, 1u, &T},
-      {"ISEVEN", 1u, 1u, &IsEven},
-      {"ISODD", 1u, 1u, &IsOdd},
+      builtins_detail::analysis_toolpak({"ISEVEN", 1u, 1u, &IsEven}),
+      builtins_detail::analysis_toolpak({"ISODD", 1u, 1u, &IsOdd}),
       {"ISNONTEXT", 1u, 1u, &IsNonText, false},
       {"ERROR.TYPE", 1u, 1u, &ErrorType, false},
       {"TYPE", 1u, 1u, &Type, false},

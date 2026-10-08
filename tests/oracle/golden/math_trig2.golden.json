@@ -2,11 +2,11 @@
   "suite": "math_trig2",
   "description": "Hyperbolic, reciprocal-trig, and parity-rounding builtins (SINH, COSH, TANH, ASINH, ACOSH, ATANH, SEC, CSC, COT, ACOT, SECH, CSCH, COTH, ACOTH, EVEN, ODD, QUOTIENT). Kept in a separate suite from math_trig so the existing golden JSON stays bit-stable and only the new cases need to be populated by `make oracle-gen` on macOS.\n",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -803,6 +803,56 @@
       "expect": {
         "kind": "error",
         "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "pf_quotient",
+      "formula": "=QUOTIENT(7.9999999,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "atp_quotient_bool",
+      "formula": "=QUOTIENT(TRUE,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_quotient_omit",
+      "formula": "=QUOTIENT(,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_quotient_boolcell",
+      "formula": "=QUOTIENT(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "opt_quotient_arr_bool",
+      "formula": "=QUOTIENT({TRUE},1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
       }
     }
   ]

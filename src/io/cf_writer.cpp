@@ -8,12 +8,14 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "cf/cf_types.h"
 #include "io/cf_attr_names.h"
 #include "io/color_spec_xml.h"
 #include "io/future_functions.h"
 #include "io/ooxml/external_link_writer.h"
+#include "io/xlsb/ptg_writer.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "parser/ast.h"
@@ -495,7 +497,9 @@ std::string storage_feature_formula(std::string_view formula, const parser::Exte
   if (root == nullptr || !parser.errors().empty()) {
     return std::string(formula);
   }
-  std::string storage = parser::format_formula_storage(*root, &storage_call_name, /*omitted_at=*/nullptr, indexer);
+  const std::vector<const parser::AstNode*> function_values = xlsb::function_value_refs(*root, {});
+  std::string storage =
+      parser::format_formula_storage(*root, &storage_call_name, /*omitted_at=*/nullptr, indexer, &function_values);
   // A classic formula is written verbatim, keeping its exact spelling.
   return NeedsStorageSpelling(*root, storage) ? storage : std::string(formula);
 }

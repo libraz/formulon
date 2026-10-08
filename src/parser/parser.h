@@ -169,6 +169,9 @@ class Parser {
 
   // Atom / null-denotation dispatch.
   AstNode* parse_atom(SyncContext ctx);
+  // Wraps `range` in the `_TRO_*` call a trim-reference operator denotes;
+  // null on arena exhaustion.
+  AstNode* wrap_trim_ref(AstNode* range, TrimRefMode mode);
 
   // Per-atom helpers.
   AstNode* parse_number_atom();

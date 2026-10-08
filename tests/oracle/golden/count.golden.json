@@ -2,11 +2,11 @@
   "suite": "count",
   "description": "COUNT / COUNTA / COUNTBLANK aggregators",
   "environment": {
-    "excel_version": "16.112.1",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-20T19:36:12Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -458,6 +458,69 @@
       "expect": {
         "kind": "number",
         "value": 3.0
+      }
+    },
+    {
+      "id": "count_omitted_slot_counts",
+      "formula": "=COUNT(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "count_only_omitted_slots",
+      "formula": "=COUNT(,)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "counta_omitted_slot_counts",
+      "formula": "=COUNTA(3,,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "counta_only_omitted_slots",
+      "formula": "=COUNTA(,)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "product_omitted_slot_skipped",
+      "formula": "=PRODUCT(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 504.0
+      }
+    },
+    {
+      "id": "product_leading_omitted_slot",
+      "formula": "=PRODUCT(,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "product_only_omitted_slots",
+      "formula": "=PRODUCT(,)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
       }
     }
   ]

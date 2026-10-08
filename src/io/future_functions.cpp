@@ -50,7 +50,9 @@ constexpr std::string_view kXlfnFunctions =
     "ANCHORARRAY|ARRAYTOTEXT|BYCOL|BYROW|CHOOSECOLS|CHOOSEROWS|COPILOT|DETECTLANGUAGE|DROP|EXPAND|GROUPBY|"
     "HSTACK|IMAGE|ISOMITTED|LAMBDA|LET|MAKEARRAY|MAP|PERCENTOF|PIVOTBY|PY|RANDARRAY|REDUCE|REGEXEXTRACT|"
     "REGEXREPLACE|REGEXTEST|SCAN|SEQUENCE|SINGLE|SORTBY|STOCKHISTORY|TAKE|TEXTAFTER|TEXTBEFORE|TEXTSPLIT|"
-    "TOCOL|TOROW|TRANSLATE|TRIMRANGE|UNIQUE|VALUETOTEXT|VSTACK|WRAPCOLS|WRAPROWS|XLOOKUP|XMATCH|";
+    "TOCOL|TOROW|TRANSLATE|TRIMRANGE|UNIQUE|VALUETOTEXT|VSTACK|WRAPCOLS|WRAPROWS|XLOOKUP|XMATCH|"
+    // The trim-reference operators `.:`, `:.`, `.:.`.
+    "_TRO_ALL|_TRO_LEADING|_TRO_TRAILING|";
 
 /// Functions Excel spells bare in the OOXML `<f>` text but has no
 /// classic function id for, so an XLSB call to one has to go through the
@@ -166,6 +168,10 @@ bool xlsb_uses_hidden_name(std::string_view canonical_name) {
 bool has_storage_prefix(std::string_view canonical_name) {
   return classify_storage_prefix(canonical_name) != parser::StoragePrefixKind::None ||
          xlsb_uses_hidden_name(canonical_name);
+}
+
+std::string function_value_storage_name(std::string_view name) {
+  return "_xleta." + AsciiUpper(canonical_function_name(name));
 }
 
 std::string xlsb_hidden_function_name(std::string_view canonical_name) {

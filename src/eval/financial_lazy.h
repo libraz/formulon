@@ -105,10 +105,13 @@ using FinancialDateImplFn = Value (*)(const Value* args, std::uint32_t arity, Ar
 
 /// One financial-date-family entry: the impl plus its arity bounds (the
 /// eager dispatcher's arity guard is replicated by the callers below).
+/// `logical_args` has bit `i` set for a logical parameter (ACCRINT's
+/// `calc_method`), which accepts a boolean under the Analysis-ToolPak rule.
 struct FinancialDateEntry {
   FinancialDateImplFn impl;
   std::uint32_t min_arity;
   std::uint32_t max_arity;
+  std::uint32_t logical_args = 0;
 };
 
 /// Returns the financial-date entry for `name` (canonical UPPERCASE) or

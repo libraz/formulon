@@ -66,12 +66,12 @@ struct GridShape {
   std::uint32_t cols;
 };
 
-// Truncates the requested dimensions toward zero and validates them: a
-// non-positive dimension is `#VALUE!` (`#CALC!` when `zero_is_calc` and one
+// Snaps the requested dimensions to a near integer, truncates them toward
+// zero and validates them: a non-positive dimension is `#VALUE!` (`#CALC!` when `zero_is_calc` and one
 // truncates to exactly zero), an over-sheet dimension is `#NUM!`.
 Expected<GridShape, ErrorCode> validate_grid_shape(double rows_d, double cols_d, bool zero_is_calc) {
-  const double rows_t = std::trunc(rows_d);
-  const double cols_t = std::trunc(cols_d);
+  const double rows_t = std::trunc(snap_near_integer(rows_d));
+  const double cols_t = std::trunc(snap_near_integer(cols_d));
   if (zero_is_calc && (rows_t == 0.0 || cols_t == 0.0)) {
     return ErrorCode::Calc;
   }
@@ -93,7 +93,8 @@ Expected<GridShape, ErrorCode> validate_grid_shape(double rows_d, double cols_d,
 ///   * Each argument coerces via `coerce_to_number` (the dispatcher's
 ///     `propagate_errors=true` covers any propagated error before the impl
 ///     runs; this guard is for the explicit Text -> #VALUE! path).
-///   * `rows` / `cols` are truncated toward zero. Either being `<= 0`
+///   * `rows` / `cols` snap to a near integer, then truncate toward zero
+///     (`validate_grid_shape`). Either being `<= 0`
 ///     surfaces `#VALUE!`; either exceeding `Sheet::kMaxRows` /
 ///     `Sheet::kMaxCols`, or `rows*cols` exceeding `kMaxSequenceCells`,
 ///     surfaces `#NUM!`.

@@ -2,11 +2,11 @@
   "suite": "datevalue_timevalue",
   "description": "DATEVALUE / TIMEVALUE text-to-serial parsing (ISO / slash / kanji forms, AM-PM, embedded date-time)",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-10,
@@ -682,6 +682,240 @@
     {
       "id": "datevalue_excel_serial_text",
       "formula": "=DATEVALUE(\"45383\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_hour_only_pm",
+      "formula": "=TIMEVALUE(\"6 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "timevalue_hour_only_am",
+      "formula": "=TIMEVALUE(\"6 AM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.25
+      }
+    },
+    {
+      "id": "timevalue_hour_only_p",
+      "formula": "=TIMEVALUE(\"6 P\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "timevalue_12_pm",
+      "formula": "=TIMEVALUE(\"12 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "timevalue_12_am",
+      "formula": "=TIMEVALUE(\"12 AM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "timevalue_0_pm",
+      "formula": "=TIMEVALUE(\"0 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "timevalue_lowercase_pm",
+      "formula": "=TIMEVALUE(\"4 pm\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6666666666666666
+      }
+    },
+    {
+      "id": "timevalue_trailing_dot",
+      "formula": "=TIMEVALUE(\"6:00 PM.\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "timevalue_minutes_trailing_dot",
+      "formula": "=TIMEVALUE(\"6:30 pm.\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7708333333333334
+      }
+    },
+    {
+      "id": "timevalue_space_dot",
+      "formula": "=TIMEVALUE(\"6 pm .\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "timevalue_date_then_hour_pm",
+      "formula": "=TIMEVALUE(\"2026/7/7 6 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "timevalue_date_then_hour_pm_dot",
+      "formula": "=TIMEVALUE(\"2026/7/7 6 pm.\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "timevalue_hour_pm_then_date",
+      "formula": "=TIMEVALUE(\"6 PM 2026/7/7\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "datevalue_date_then_hour_pm",
+      "formula": "=DATEVALUE(\"2026/7/7 6 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46210.0
+      }
+    },
+    {
+      "id": "value_hour_only_pm",
+      "formula": "=VALUE(\"6 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "value_minutes_trailing_dot",
+      "formula": "=VALUE(\"6:30 PM.\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7708333333333334
+      }
+    },
+    {
+      "id": "coerce_hour_only_pm",
+      "formula": "=\"6 PM\"+0",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "timevalue_no_space_before_marker",
+      "formula": "=TIMEVALUE(\"6PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_hour_over_12_pm",
+      "formula": "=TIMEVALUE(\"18 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_13_00_pm",
+      "formula": "=TIMEVALUE(\"13:00 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_hour_dot",
+      "formula": "=TIMEVALUE(\"6.\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_hour_alone",
+      "formula": "=TIMEVALUE(\"6\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_dotted_am",
+      "formula": "=TIMEVALUE(\"6 a.m.\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_dotted_pm",
+      "formula": "=TIMEVALUE(\"6 p.m.\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_marker_first",
+      "formula": "=TIMEVALUE(\"AM 6\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_marker_suffix",
+      "formula": "=TIMEVALUE(\"6 pmx\")",
       "setup": {},
       "expect": {
         "kind": "error",

@@ -584,3 +584,89 @@ cases:
   - id: imsech_negative_real
     description: "sech(-1) = sech(1) — even function"
     formula: "=IMSECH(\"-1\")"
+
+  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  #    arguments, and the near-integer snap of integer arguments --------------
+  - id: atp_imabs_bool
+    formula: "=IMABS(TRUE)"
+
+  - id: atp_imabs_boolcell
+    setup: { A1: true }
+    formula: "=IMABS(A1)"
+
+  - id: atp_complex_bool
+    formula: "=COMPLEX(TRUE,1)"
+
+  - id: atp_complex_omit
+    formula: "=COMPLEX(,1)"
+
+  - id: atp_complex_boolcell
+    setup: { A1: true }
+    formula: "=COMPLEX(A1,1)"
+
+  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  - id: a4_imreal_bool
+    formula: "=IMREAL(TRUE)"
+
+  - id: a4_imaginary_bool
+    formula: "=IMAGINARY(TRUE)"
+
+  - id: a4_imconjugate_bool
+    formula: "=IMCONJUGATE(TRUE)"
+
+  - id: a4_imargument_bool
+    formula: "=IMARGUMENT(TRUE)"
+
+  - id: a4_imsum_bool
+    formula: "=IMSUM(TRUE,1)"
+
+  - id: a4_imsum_omit
+    formula: "=IMSUM(,1)"
+
+  - id: a4_imsub_bool
+    formula: "=IMSUB(TRUE,1)"
+
+  - id: a4_imsub_omit
+    formula: "=IMSUB(,1)"
+
+  - id: a4_improduct_bool
+    formula: "=IMPRODUCT(TRUE,1)"
+
+  - id: a4_improduct_omit
+    formula: "=IMPRODUCT(,1)"
+
+  - id: a4_imdiv_bool
+    formula: "=IMDIV(TRUE,1)"
+
+  - id: a4_imdiv_omit
+    formula: "=IMDIV(,1)"
+
+  - id: a4_impower_bool
+    formula: "=IMPOWER(TRUE,2)"
+
+  - id: a4_impower_omit
+    formula: "=IMPOWER(,2)"
+
+  - id: a4_imexp_bool
+    formula: "=IMEXP(TRUE)"
+
+  - id: a4_imln_bool
+    formula: "=IMLN(TRUE)"
+
+  - id: a4_imsqrt_bool
+    formula: "=IMSQRT(TRUE)"
+
+  - id: a4_imsin_bool
+    formula: "=IMSIN(TRUE)"
+
+  - id: a4_imcos_bool
+    formula: "=IMCOS(TRUE)"
+
+  - id: a4_imtan_bool
+    formula: "=IMTAN(TRUE)"
+
+  - id: a4_imsinh_bool
+    formula: "=IMSINH(TRUE)"
+
+  - id: opt_complex_suffix_omit
+    formula: "=COMPLEX(1,1,)"

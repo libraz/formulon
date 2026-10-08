@@ -65,7 +65,7 @@ Value RandBetween_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/)
 void register_math_rng_builtins(FunctionRegistry& registry) {
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       {"RAND", 0u, 0u, &Rand_},
-      {"RANDBETWEEN", 2u, 2u, &RandBetween_},
+      builtins_detail::analysis_toolpak({"RANDBETWEEN", 2u, 2u, &RandBetween_}),
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

@@ -330,3 +330,22 @@ cases:
 
   - id: quotient_zero_denominator_is_div0
     formula: "=QUOTIENT(5, 0)"
+
+  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  #    arguments, and the near-integer snap of integer arguments --------------
+  - id: pf_quotient
+    formula: "=QUOTIENT(7.9999999,2)"
+
+  - id: atp_quotient_bool
+    formula: "=QUOTIENT(TRUE,1)"
+
+  - id: atp_quotient_omit
+    formula: "=QUOTIENT(,1)"
+
+  - id: atp_quotient_boolcell
+    setup: { A1: true }
+    formula: "=QUOTIENT(A1,1)"
+
+  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  - id: opt_quotient_arr_bool
+    formula: "=QUOTIENT({TRUE},1)"

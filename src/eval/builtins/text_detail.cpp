@@ -19,7 +19,9 @@ namespace formulon {
 namespace eval {
 namespace text_detail {
 
-Expected<int, ErrorCode> read_int_arg(const Value& v) {
+namespace {
+
+Expected<double, ErrorCode> read_finite_number(const Value& v) {
   auto coerced = coerce_to_number(v);
   if (!coerced) {
     return std::move(coerced.error());
@@ -28,6 +30,10 @@ Expected<int, ErrorCode> read_int_arg(const Value& v) {
   if (std::isnan(d) || std::isinf(d)) {
     return ErrorCode::Num;
   }
+  return d;
+}
+
+int truncate_saturated(double d) {
   // Converting a double outside `int`'s range is undefined, and the two
   // architectures disagree on what they produce: x86-64 yields INT_MIN
   // while WASM's `--enable-nontrapping-float-to-int` saturates to
@@ -52,6 +58,27 @@ Expected<int, ErrorCode> read_int_arg(const Value& v) {
   return static_cast<int>(truncated);
 }
 
+}  // namespace
+
+Expected<int, ErrorCode> read_int_arg(const Value& v) {
+  auto d = read_finite_number(v);
+  if (!d) {
+    return std::move(d.error());
+  }
+  return truncate_saturated(d.value());
+}
+
+Expected<int, ErrorCode> read_snapped_int_arg(const Value& v, double min) {
+  auto d = read_finite_number(v);
+  if (!d) {
+    return std::move(d.error());
+  }
+  if (d.value() < min) {
+    return ErrorCode::Value;
+  }
+  return truncate_saturated(snap_near_integer(d.value()));
+}
+
 Expected<int, ErrorCode> read_optional_int_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
                                                int default_value) {
   if (arity <= index) {
@@ -71,7 +98,7 @@ bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, S
     *out_result = Value::error(haystack.error());
     return false;
   }
-  auto parsed = read_optional_int_arg(args, arity, 2u, 1);
+  auto parsed = arity > 2u ? read_snapped_int_arg(args[2], 1.0) : Expected<int, ErrorCode>(1);
   if (!parsed) {
     *out_result = Value::error(parsed.error());
     return false;
@@ -113,12 +140,12 @@ std::size_t find_folded(const std::string& haystack, const std::string& needle, 
   return start_byte + rel;
 }
 
-Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std::uint32_t arity) {
+Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std::uint32_t arity, bool snap_start) {
   auto text = coerce_to_text(args[0]);
   if (!text) {
     return std::move(text.error());
   }
-  auto start = read_int_arg(args[1]);
+  auto start = snap_start ? read_snapped_int_arg(args[1], 1.0) : read_int_arg(args[1]);
   if (!start) {
     return std::move(start.error());
   }

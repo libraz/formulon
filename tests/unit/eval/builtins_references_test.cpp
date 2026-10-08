@@ -162,6 +162,15 @@ TEST(BuiltinsAddress, NumericCoercionOnRowCol) {
   EXPECT_EQ(std::string(v.as_text()), "$B$3");
 }
 
+TEST(BuiltinsAddress, RowSnapsToNearInteger) {
+  ExpectText(EvalSource("=ADDRESS(1.9999999,1)"), "$A$2", "=ADDRESS(1.9999999,1)");
+  ExpectText(EvalSource("=ADDRESS(1.999999,1)"), "$A$1", "=ADDRESS(1.999999,1)");
+}
+
+TEST(BuiltinsAddress, ColumnSnapsToNearInteger) {
+  ExpectText(EvalSource("=ADDRESS(1,1.9999999)"), "$B$1", "=ADDRESS(1,1.9999999)");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

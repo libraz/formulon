@@ -2,11 +2,11 @@
   "suite": "xirr_xnpv",
   "description": "XIRR / XNPV — irregular cash-flow NPV and IRR over date schedules",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T01:14:00Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-09,
@@ -869,6 +869,74 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_xnpv_bool",
+      "formula": "=XNPV(TRUE,{1,2},{1,2})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_xnpv_omit",
+      "formula": "=XNPV(,{-1,2},{1,2})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_xnpv_boolcell",
+      "formula": "=XNPV(A1,{1,2},{1,2})",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_xirr_bool",
+      "formula": "=XIRR({-100,110},{TRUE,400})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_xirr_omit",
+      "formula": "=XIRR(,{1,400})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "opt_xirr_guess_bool",
+      "formula": "=XIRR({-100,110},{1,400},TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "opt_xirr_guess_omit",
+      "formula": "=XIRR({-100,110},{1,400},)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09110234677791595
       }
     }
   ]

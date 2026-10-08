@@ -2333,3 +2333,28 @@ cases:
       E2: Apple
     formula: "=DVARP(A1:C5, C1, E1:E2)"
 
+
+  # -- field number near-integer snap ---------------------------------------
+  - id: dsum_field_snaps_near_integer
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      E1: Fruit
+      E2: Apple
+    formula: "=DSUM(A1:C2, 2.9999999, E1:E2)"
+
+  - id: dsum_field_below_snap_distance_truncates
+    setup:
+      A1: Fruit
+      B1: Sales
+      C1: Region
+      A2: Apple
+      B2: 100
+      C2: East
+      E1: Fruit
+      E2: Apple
+    formula: "=DSUM(A1:C2, 1.999999, E1:E2)"

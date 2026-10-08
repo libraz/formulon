@@ -257,10 +257,9 @@ TEST(HypothesisChisqTest, ShapeMismatchIsNA) {
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
-TEST(HypothesisChisqTest, NonNumericCellIsValue) {
-  // Excel inline arrays don't accept string literals, so build the
-  // contingency table in a workbook with text in A2 to exercise the
-  // non-numeric-cell rejection.
+TEST(HypothesisChisqTest, NonNumericCellDropsItsPair) {
+  // Text in A2 drops the (A2, B2) pair; the remaining pairs agree exactly, so
+  // the statistic is 0 and the p-value 1 with the declared 3x1 shape's df.
   Workbook wb = Workbook::create();
   Sheet& s = wb.sheet(0);
   s.set_cell_value(0, 0, Value::number(1.0));
@@ -270,8 +269,8 @@ TEST(HypothesisChisqTest, NonNumericCellIsValue) {
   s.set_cell_value(1, 1, Value::number(2.0));
   s.set_cell_value(2, 1, Value::number(3.0));
   const Value v = EvalSourceIn("=CHISQ.TEST(A1:A3, B1:B3)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error()) << "kind=" << static_cast<int>(v.kind());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_number()) << "kind=" << static_cast<int>(v.kind());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
 TEST(HypothesisChisqTest, ExpectedZeroIsDiv0) {
@@ -456,6 +455,36 @@ TEST(HypothesisProb, WithRanges) {
   const Value v = EvalSourceIn("=PROB(A1:A4, B1:B4, 2, 3)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number()) << "kind=" << static_cast<int>(v.kind());
   EXPECT_NEAR(v.as_number(), 0.5, 1e-12);
+}
+
+// Asserts a numeric result within `rel` relative tolerance of `expected`.
+void ExpectHypRel(const char* formula, double expected, double rel) {
+  const Value v = EvalSource(formula);
+  ASSERT_TRUE(v.is_number()) << formula;
+  EXPECT_NEAR(v.as_number(), expected, std::abs(expected) * rel) << formula;
+}
+
+void ExpectHypErr(const char* formula, ErrorCode code) {
+  const Value v = EvalSource(formula);
+  ASSERT_TRUE(v.is_error()) << formula;
+  EXPECT_EQ(v.as_error(), code) << formula;
+}
+
+TEST(BuiltinsChisqTestPairs, NonNumericPairIsDroppedButShapeKeepsDegreesOfFreedom) {
+  ExpectHypRel("=CHISQ.TEST({TRUE,2},{3,4})", 0.317310507862914, 1e-12);
+  ExpectHypRel("=CHISQ.TEST({TRUE,2;3,4},{1,2;3,4})", 1.0, 1e-12);
+  ExpectHypRel("=CHITEST({TRUE,2},{3,4})", 0.317310507862914, 1e-12);
+}
+
+TEST(BuiltinsChisqTestPairs, NegativeValuesOnlyFailOnNegativeStatistic) {
+  ExpectHypRel("=CHISQ.TEST({-1,-2},{3,-4})", 0.03737298834065147, 1e-12);
+  ExpectHypErr("=CHISQ.TEST({-1,-2},{-3,-4})", ErrorCode::Num);
+  ExpectHypErr("=CHISQ.TEST({1,2},{-3,4})", ErrorCode::Num);
+}
+
+TEST(BuiltinsChisqTestPairs, ZeroExpectedAndAllDroppedAreDiv0) {
+  ExpectHypErr("=CHISQ.TEST({1,2},{0,4})", ErrorCode::Div0);
+  ExpectHypErr("=CHISQ.TEST({TRUE,FALSE},{1,2})", ErrorCode::Div0);
 }
 
 }  // namespace

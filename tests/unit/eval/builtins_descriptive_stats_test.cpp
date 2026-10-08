@@ -125,7 +125,7 @@ TEST(BuiltinsAveDev, SymmetricFive) {
 }
 
 TEST(BuiltinsAveDev, EmptyIsNum) {
-  const Value v = EvalSource("=AVEDEV(\"a\")");
+  const Value v = EvalSource("=AVEDEV({TRUE})");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
@@ -308,6 +308,67 @@ TEST(BuiltinsDescriptiveStatsRegistry, AllNamesRegistered) {
        {"GEOMEAN", "HARMEAN", "DEVSQ", "AVEDEV", "TRIMMEAN", "SKEW", "SKEW.P", "KURT", "STANDARDIZE"}) {
     EXPECT_NE(default_registry().lookup(name), nullptr) << "missing: " << name;
   }
+}
+
+// Asserts a numeric result within `rel` relative tolerance of `expected`.
+void ExpectStatRel(const char* formula, double expected, double rel) {
+  const Value v = EvalSource(formula);
+  ASSERT_TRUE(v.is_number()) << formula;
+  EXPECT_NEAR(v.as_number(), expected, std::abs(expected) * rel) << formula;
+}
+
+void ExpectStatErr(const char* formula, ErrorCode code) {
+  const Value v = EvalSource(formula);
+  ASSERT_TRUE(v.is_error()) << formula;
+  EXPECT_EQ(v.as_error(), code) << formula;
+}
+
+// ---------------------------------------------------------------------------
+// Direct arguments: omitted slots and coercion (Excel-measured)
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsDirectStatArgs, OmittedSlotCountsAsZero) {
+  ExpectStatRel("=MEDIAN(,)", 0.0, 0.0);
+  ExpectStatRel("=AVEDEV(,)", 0.0, 0.0);
+  ExpectStatRel("=DEVSQ(,)", 0.0, 0.0);
+  ExpectStatRel("=STDEV(3,,6)", 3.0, 1e-12);
+  ExpectStatRel("=VARP(3,,6)", 6.0, 1e-12);
+  ExpectStatRel("=MEDIAN(3,,6)", 3.0, 1e-12);
+  ExpectStatErr("=GEOMEAN(,)", ErrorCode::Num);
+  ExpectStatErr("=HARMEAN(2,,4)", ErrorCode::Num);
+}
+
+TEST(BuiltinsDirectStatArgs, ProductSkipsOmittedSlot) {
+  ExpectStatRel("=PRODUCT(3,4,,6,7)", 504.0, 0.0);
+  ExpectStatRel("=PRODUCT(,2)", 2.0, 0.0);
+  ExpectStatRel("=PRODUCT(,)", 0.0, 0.0);
+}
+
+TEST(BuiltinsDirectStatArgs, ModeFamilyRejectsOmittedSlot) {
+  ExpectStatErr("=MODE(3,3,,6)", ErrorCode::Value);
+  ExpectStatErr("=MODE.SNGL(3,3,,6)", ErrorCode::Value);
+  ExpectStatErr("=MODE.MULT(3,3,,6)", ErrorCode::Value);
+}
+
+TEST(BuiltinsDirectStatArgs, BooleanAndNumericTextCountAsDirectArguments) {
+  ExpectStatRel("=AVEDEV(10,20,TRUE,FALSE)", 7.25, 1e-14);
+  ExpectStatRel("=AVEDEV(1,2,\"10\",\"20\")", 6.75, 1e-14);
+  ExpectStatErr("=AVEDEV(1,2,\"x\")", ErrorCode::Value);
+  ExpectStatRel("=DEVSQ(1,2,\"10\",\"20\")", 232.75, 1e-14);
+  ExpectStatRel("=KURT(10,20,TRUE,FALSE)", -1.0448178009999545, 1e-12);
+  ExpectStatRel("=SKEW(1,2,\"10\",\"20\")", 0.9778816913890982, 1e-12);
+  ExpectStatRel("=SKEW.P(10,20,TRUE,FALSE)", 0.5113967694826014, 1e-12);
+  ExpectStatRel("=GEOMEAN(1,2,\"10\",\"20\")", 4.47213595499958, 1e-12);
+  ExpectStatRel("=GEOMEAN(\"4\",\"9\")", 6.0, 1e-12);
+  ExpectStatRel("=HARMEAN(1,2,\"10\",\"20\")", 2.424242424242424, 1e-12);
+  ExpectStatRel("=MEDIAN(10,20,TRUE,FALSE)", 5.5, 0.0);
+  ExpectStatRel("=MEDIAN(1,2,\"10\",\"20\")", 6.0, 0.0);
+  ExpectStatErr("=GEOMEAN(10,20,TRUE,FALSE)", ErrorCode::Num);
+}
+
+TEST(BuiltinsDirectStatArgs, RangeSourcedBooleansStillSkipped) {
+  ExpectStatRel("=MEDIAN({1,2,TRUE,\"7\"})", 1.5, 0.0);
+  ExpectStatRel("=AVEDEV({1,2,TRUE})", 0.5, 1e-14);
 }
 
 }  // namespace

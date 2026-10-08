@@ -136,8 +136,8 @@ static Value BinomInvBisect(double n, double p, double alpha) noexcept {
 
 // BINOM.INV(trials, probability_s, alpha) - smallest integer k in [0, trials]
 // with CDF(k) >= alpha. `trials` floors toward -inf. Domain:
-// trials >= 0, prob in [0, 1], alpha in (0, 1) -- Excel rejects alpha == 0
-// and alpha == 1 with #NUM!. Alpha very close to 1 may saturate the
+// trials >= 0, prob in (0, 1), alpha in (0, 1) -- Excel rejects both
+// endpoints of either probability with #NUM!. Alpha very close to 1 may saturate the
 // cumulative sum a hair below it due to floating-point roundoff; the correct
 // answer is then trials.
 //
@@ -154,7 +154,7 @@ Value BinomInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double n = std::floor(input.value().first);
   const double p = input.value().second;
   const double alpha = input.value().third;
-  if (n < 0.0 || p < 0.0 || p > 1.0 || alpha <= 0.0 || alpha >= 1.0) {
+  if (n < 0.0 || p <= 0.0 || p >= 1.0 || alpha <= 0.0 || alpha >= 1.0) {
     return Value::error(ErrorCode::Num);
   }
   // Stepped as a double rather than an integer counter: `trials` is an

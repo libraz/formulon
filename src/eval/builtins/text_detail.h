@@ -32,6 +32,12 @@ namespace text_detail {
 // REPT/FIND/SEARCH/SUBSTITUTE for their integer-typed parameters.
 Expected<int, ErrorCode> read_int_arg(const Value& v);
 
+// `read_int_arg` for the arguments Excel snaps up to the next integer
+// within `kNearIntegerSnap` (LEFT / RIGHT / LEFTB / RIGHTB count, the
+// FIND / SEARCH / REPLACE families' start, SUBSTITUTE instance). A raw value below `min` is `#VALUE!` before the
+// snap, so `LEFT("abc",-0.0000001)` does not snap to 0.
+Expected<int, ErrorCode> read_snapped_int_arg(const Value& v, double min);
+
 // Reads optional integer argument `args[index]`, returning `default_value`
 // when the caller omitted it. Used by LEFT/RIGHT/FIND/SEARCH and their DBCS
 // variants so the defaulting rule stays in one place.
@@ -54,7 +60,8 @@ struct SearchArgs {
 // including the two answers Excel gives before it ever looks at the
 // haystack: a `start_num` outside `[1, length + 1]` is `#VALUE!`, and an
 // empty `find_text` returns `start_num` itself. `unit` selects the unit
-// the length bound is measured in.
+// the length bound is measured in. `start_num` is read through
+// `read_snapped_int_arg`.
 //
 // Returns `true` with `*out` filled when the caller should go on to
 // search; `false` when the caller must return `*out_result` verbatim.
@@ -77,8 +84,9 @@ struct TextWindowArgs {
 };
 
 // Coerces the arguments left to right (`new_text` only when `arity > 3`),
-// then rejects `start < 1` or `count < 0` with `#VALUE!`.
-Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std::uint32_t arity);
+// then rejects `start < 1` or `count < 0` with `#VALUE!`. `snap_start`
+// reads `start` through `read_snapped_int_arg`.
+Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std::uint32_t arity, bool snap_start);
 
 // Per-character record: UTF-8 byte offset, byte length, 1-based DBCS
 // position (byte position under the ja-JP DBCS rule), and DBCS cost.

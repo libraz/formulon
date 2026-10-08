@@ -768,6 +768,19 @@ TEST(BuiltinsType, BlankIsOne) {
   EXPECT_EQ(v.as_number(), 1.0);
 }
 
+// ISEVEN / ISODD follow the Analysis-ToolPak rule: a boolean is #VALUE!.
+TEST(BuiltinsInfoAnalysisToolPak, IsEvenBoolIsValue) {
+  const Value v = EvalSource("=ISEVEN(TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsInfoAnalysisToolPak, IsOddBoolIsValue) {
+  const Value v = EvalSource("=ISODD(FALSE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

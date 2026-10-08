@@ -219,10 +219,10 @@ TEST(BuiltinsComplex, ImAbsInvalidIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(BuiltinsComplex, ImAbsTrueIsOne) {
+TEST(BuiltinsComplex, ImAbsTrueIsValue) {
   const Value v = EvalSource("=IMABS(TRUE)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsComplex, ImAbsNumberIsMagnitude) {
@@ -660,6 +660,34 @@ TEST(BuiltinsComplex, ErrorPropagatesThroughIMSUM) {
   const Value v = EvalSource("=IMSUM(\"1+i\",#DIV/0!)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+// ---------------------------------------------------------------------------
+// Analysis-ToolPak argument rule (COMPLEX / IMABS)
+// ---------------------------------------------------------------------------
+
+TEST(ComplexAnalysisToolPak, ComplexBoolIsValue) {
+  const Value v = EvalSource("=COMPLEX(TRUE,1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(ComplexAnalysisToolPak, ComplexOmittedRequiredIsNA) {
+  const Value v = EvalSource("=COMPLEX(,1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(ComplexAnalysisToolPak, ImtanBoolIsValue) {
+  const Value v = EvalSource("=IMTAN(TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(ComplexAnalysisToolPak, ImsinhBoolIsValue) {
+  const Value v = EvalSource("=IMSINH(TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 }  // namespace

@@ -150,3 +150,31 @@ cases:
     description: "2D range with mixed blanks"
     setup: { A1: 1, B1: 2, A3: 3 }
     formula: "=COUNTBLANK(A1:B3)"
+
+  - id: count_omitted_slot_counts
+    description: "COUNT counts an omitted argument slot as the number 0"
+    formula: "=COUNT(3,4,,6,7)"
+
+  - id: count_only_omitted_slots
+    description: "COUNT(,) counts both omitted slots"
+    formula: "=COUNT(,)"
+
+  - id: counta_omitted_slot_counts
+    description: "COUNTA counts an omitted argument slot"
+    formula: "=COUNTA(3,,4)"
+
+  - id: counta_only_omitted_slots
+    description: "COUNTA(,) counts both omitted slots"
+    formula: "=COUNTA(,)"
+
+  - id: product_omitted_slot_skipped
+    description: "PRODUCT skips an omitted argument slot"
+    formula: "=PRODUCT(3,4,,6,7)"
+
+  - id: product_leading_omitted_slot
+    description: "PRODUCT(,2) skips the omitted slot"
+    formula: "=PRODUCT(,2)"
+
+  - id: product_only_omitted_slots
+    description: "PRODUCT(,) with no counted argument is 0"
+    formula: "=PRODUCT(,)"

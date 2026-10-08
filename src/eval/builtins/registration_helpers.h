@@ -32,7 +32,24 @@ struct BuiltinRegistration {
   // array-valued children. A registration may override this for a less
   // common shape, including an intrinsic array producer.
   FunctionDef::ResultShape result_shape = FunctionDef::ResultShape::kAuto;
+  bool analysis_toolpak_args = false;
+  bool atp_omitted_optional_is_na = false;
 };
+
+/// Marks `def` as a former Analysis-ToolPak function; see
+/// `FunctionDef::analysis_toolpak_args`.
+constexpr BuiltinRegistration analysis_toolpak(BuiltinRegistration def) noexcept {
+  def.analysis_toolpak_args = true;
+  return def;
+}
+
+/// `analysis_toolpak` whose omitted optional slots are `#N/A` as well; see
+/// `FunctionDef::atp_omitted_optional_is_na`.
+constexpr BuiltinRegistration analysis_toolpak_no_omitted_default(BuiltinRegistration def) noexcept {
+  def.analysis_toolpak_args = true;
+  def.atp_omitted_optional_is_na = true;
+  return def;
+}
 
 inline bool registration_name_is(std::string_view name, std::string_view expected) noexcept {
   if (name.size() != expected.size()) {
@@ -86,6 +103,8 @@ inline void register_builtin_functions(FunctionRegistry& registry, const Builtin
     fn.result_shape = def.result_shape == FunctionDef::ResultShape::kAuto
                           ? infer_builtin_result_shape(def.name, def.accepts_ranges)
                           : def.result_shape;
+    fn.analysis_toolpak_args = def.analysis_toolpak_args;
+    fn.atp_omitted_optional_is_na = def.atp_omitted_optional_is_na;
     registry.register_function(fn);
   }
 }

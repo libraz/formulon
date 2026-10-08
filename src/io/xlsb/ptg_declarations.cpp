@@ -107,7 +107,7 @@ bool InParamScope(const std::vector<std::string_view>& scope, std::string_view n
 /// NUL `name` (`kSheetQualified`).
 void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& names,
                         std::unordered_set<std::string>& seen, std::vector<std::string_view>& scope,
-                        NameCollectMode mode) {
+                        NameCollectMode mode, const std::vector<const parser::AstNode*>* values) {
   // Hidden `_xlfn.*` / `_xlpm.*` records and unqualified names.
   auto add = [&](std::string_view name) {
     if (mode != NameCollectMode::kSheetQualified) {
@@ -128,6 +128,10 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       if (InParamScope(scope, name)) {
         return;  // LET / LAMBDA parameter: encoded via its _xlpm. placeholder.
       }
+      if (values != nullptr && std::find(values->begin(), values->end(), &node) != values->end()) {
+        add(function_value_storage_name(name));
+        return;
+      }
       add(name);
       return;
     }
@@ -140,42 +144,42 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       }
       const std::uint32_t arity = node.as_call_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
-        CollectNamesScoped(node.as_call_arg(i), names, seen, scope, mode);
+        CollectNamesScoped(node.as_call_arg(i), names, seen, scope, mode, values);
       }
       return;
     }
     case parser::NodeKind::UnaryOp:
-      CollectNamesScoped(node.as_unary_operand(), names, seen, scope, mode);
+      CollectNamesScoped(node.as_unary_operand(), names, seen, scope, mode, values);
       return;
     case parser::NodeKind::BinaryOp:
-      CollectNamesScoped(node.as_binary_lhs(), names, seen, scope, mode);
-      CollectNamesScoped(node.as_binary_rhs(), names, seen, scope, mode);
+      CollectNamesScoped(node.as_binary_lhs(), names, seen, scope, mode, values);
+      CollectNamesScoped(node.as_binary_rhs(), names, seen, scope, mode, values);
       return;
     case parser::NodeKind::RangeOp:
-      CollectNamesScoped(node.as_range_lhs(), names, seen, scope, mode);
-      CollectNamesScoped(node.as_range_rhs(), names, seen, scope, mode);
+      CollectNamesScoped(node.as_range_lhs(), names, seen, scope, mode, values);
+      CollectNamesScoped(node.as_range_rhs(), names, seen, scope, mode, values);
       return;
     case parser::NodeKind::IntersectOp:
-      CollectNamesScoped(node.as_intersect_lhs(), names, seen, scope, mode);
-      CollectNamesScoped(node.as_intersect_rhs(), names, seen, scope, mode);
+      CollectNamesScoped(node.as_intersect_lhs(), names, seen, scope, mode, values);
+      CollectNamesScoped(node.as_intersect_rhs(), names, seen, scope, mode, values);
       return;
     case parser::NodeKind::UnionOp: {
       const std::uint32_t arity = node.as_union_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
-        CollectNamesScoped(node.as_union_child(i), names, seen, scope, mode);
+        CollectNamesScoped(node.as_union_child(i), names, seen, scope, mode, values);
       }
       return;
     }
     case parser::NodeKind::ImplicitIntersection:
       add(xlsb_hidden_function_name("SINGLE"));
-      CollectNamesScoped(node.as_implicit_intersection_operand(), names, seen, scope, mode);
+      CollectNamesScoped(node.as_implicit_intersection_operand(), names, seen, scope, mode, values);
       return;
     case parser::NodeKind::ArrayLiteral: {
       const std::uint32_t rows = node.as_array_rows();
       const std::uint32_t cols = node.as_array_cols();
       for (std::uint32_t r = 0; r < rows; ++r) {
         for (std::uint32_t c = 0; c < cols; ++c) {
-          CollectNamesScoped(node.as_array_element(r, c), names, seen, scope, mode);
+          CollectNamesScoped(node.as_array_element(r, c), names, seen, scope, mode, values);
         }
       }
       return;
@@ -186,7 +190,7 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       // registration any other future-function callee gets.
       add(xlsb_hidden_function_name("ANCHORARRAY"));
       if (const parser::AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
-        CollectNamesScoped(*anchor, names, seen, scope, mode);
+        CollectNamesScoped(*anchor, names, seen, scope, mode, values);
       }
       return;
     }
@@ -198,10 +202,10 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       }
       return;
     case parser::NodeKind::LambdaCall: {
-      CollectNamesScoped(node.as_lambda_call_callee(), names, seen, scope, mode);
+      CollectNamesScoped(node.as_lambda_call_callee(), names, seen, scope, mode, values);
       const std::uint32_t arity = node.as_lambda_call_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
-        CollectNamesScoped(node.as_lambda_call_arg(i), names, seen, scope, mode);
+        CollectNamesScoped(node.as_lambda_call_arg(i), names, seen, scope, mode, values);
       }
       return;
     }
@@ -213,10 +217,10 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
         add(std::string("_xlpm.") + std::string(node.as_let_binding_name(i)));
         // Excel LET binds sequentially: a value expression sees only the
         // earlier bindings, so collect it before pushing this parameter.
-        CollectNamesScoped(node.as_let_binding_expr(i), names, seen, scope, mode);
+        CollectNamesScoped(node.as_let_binding_expr(i), names, seen, scope, mode, values);
         scope.push_back(node.as_let_binding_name(i));
       }
-      CollectNamesScoped(node.as_let_body(), names, seen, scope, mode);
+      CollectNamesScoped(node.as_let_body(), names, seen, scope, mode, values);
       scope.resize(scope_base);
       return;
     }
@@ -228,7 +232,7 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
         add(std::string("_xlpm.") + std::string(node.as_lambda_param(i)));
         scope.push_back(node.as_lambda_param(i));
       }
-      CollectNamesScoped(node.as_lambda_body(), names, seen, scope, mode);
+      CollectNamesScoped(node.as_lambda_body(), names, seen, scope, mode, values);
       scope.resize(scope_base);
       return;
     }
@@ -250,15 +254,16 @@ std::string sheet_scoped_name_key(std::int32_t itab, std::string_view name) {
 }
 
 void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names,
-                       std::unordered_set<std::string>& seen) {
+                       std::unordered_set<std::string>& seen,
+                       const std::vector<const parser::AstNode*>* function_values) {
   std::vector<std::string_view> scope;
-  CollectNamesScoped(node, names, seen, scope, NameCollectMode::kPtg);
+  CollectNamesScoped(node, names, seen, scope, NameCollectMode::kPtg, function_values);
 }
 
 void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::string>& names,
                                   std::unordered_set<std::string>& seen) {
   std::vector<std::string_view> scope;
-  CollectNamesScoped(node, names, seen, scope, NameCollectMode::kScopeResolved);
+  CollectNamesScoped(node, names, seen, scope, NameCollectMode::kScopeResolved, nullptr);
 }
 
 void collect_sheet_qualified_names(const parser::AstNode& node,
@@ -266,7 +271,7 @@ void collect_sheet_qualified_names(const parser::AstNode& node,
   std::vector<std::string> keys;
   std::unordered_set<std::string> seen;
   std::vector<std::string_view> scope;
-  CollectNamesScoped(node, keys, seen, scope, NameCollectMode::kSheetQualified);
+  CollectNamesScoped(node, keys, seen, scope, NameCollectMode::kSheetQualified, nullptr);
   for (const std::string& key : keys) {
     const std::size_t split = key.find('\0');
     qualified.emplace_back(key.substr(0, split), key.substr(split + 1));

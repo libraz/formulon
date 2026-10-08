@@ -275,7 +275,7 @@ TEST(XlsbWriter, EmitsCanonicalAbsentWorksheetFormatDefaults) {
   ASSERT_TRUE(dx_or && cch_or && miy_or && flags_or);
   EXPECT_EQ(dx_or.value(), 0xFFFFFFFFU);
   EXPECT_EQ(cch_or.value(), 8U);
-  EXPECT_EQ(miy_or.value(), 300U);
+  EXPECT_EQ(miy_or.value(), 291U);  // engine default 102/7 pt in twips
   EXPECT_EQ(flags_or.value(), 0U);
   EXPECT_EQ(cursor.size, 0U);
 }
@@ -288,6 +288,7 @@ TEST(XlsbWriter, EncodesWorksheetFormatDefaultsAndPresenceFlags) {
   defaults.has_default_col_width = true;
   defaults.default_row_height = 18.75;
   defaults.has_default_row_height = true;
+  defaults.custom_height = true;
 
   auto bytes_or = write_xlsb(wb);
   ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
@@ -308,6 +309,7 @@ TEST(XlsbWriter, EncodesWorksheetFormatDefaultsAndPresenceFlags) {
   EXPECT_EQ(miy_or.value(), 375U);
   EXPECT_EQ(flags_or.value(), 1U);
 
+  defaults.custom_height = false;
   defaults.default_col_width = 0.0;
   defaults.default_row_height = 0.0;
   auto zero_or = write_xlsb(wb);
@@ -448,7 +450,11 @@ TEST(XlsbWriter, AbsentFormatDefaultsPreservePaginationAcrossRoundTrip) {
   auto read_or = read_xlsb(SpanOf(bytes_or.value()));
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
   const Sheet& round_tripped = read_or.value().workbook.sheet(0);
-  EXPECT_FALSE(round_tripped.format_defaults().has_default_row_height);
+  // The record always carries a row height: the engine default comes back
+  // as an explicit default quantized to twips (102/7 pt -> 291 twips).
+  EXPECT_TRUE(round_tripped.format_defaults().has_default_row_height);
+  EXPECT_DOUBLE_EQ(round_tripped.format_defaults().default_row_height, 291.0 / 20.0);
+  EXPECT_FALSE(round_tripped.format_defaults().custom_height);
   EXPECT_FALSE(round_tripped.format_defaults().has_default_col_width);
 
   auto after_or = print::paginate(read_or.value().workbook, 0U);

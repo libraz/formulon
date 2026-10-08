@@ -86,3 +86,211 @@ cases:
   - id: pivotby_row_subtotal_depth_two
     description: 'PIVOTBY with row_total_depth=2 over multi-column row_fields -> per-outer-group row subtotals under a 総計 row'
     formula: '=PIVOTBY({"A","x";"A","y";"B","x"}, {"X";"Y";"X"}, {10;20;30}, SUM, 0, 2)'
+
+  # field_headers omitted: header row detected and not shown.
+  - id: pivotby_field_headers_auto_header_row
+    setup:
+      A1: r
+      B1: c
+      C1: v
+      A2: x
+      B2: p
+      C2: 1
+      A3: y
+      B3: q
+      C3: 2
+      A4: x
+      B4: q
+      C4: 3
+    formula: '=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM)'
+
+  - id: pivotby_field_headers_auto_no_header_row
+    setup:
+      A1: x
+      B1: p
+      C1: 1
+      A2: y
+      B2: q
+      C2: 2
+      A3: x
+      B3: q
+      C3: 3
+    formula: '=PIVOTBY(A1:A3,B1:B3,C1:C3,SUM)'
+
+  # sort orders omitted: row and column keys ascending.
+  - id: pivotby_sort_orders_omitted_keys_ascending
+    formula: '=PIVOTBY({"y";"x";"y"},{"q";"p";"p"},{1;2;3},SUM,0,0,,0)'
+
+  # PIVOTBY defaults and header handling, placeholder text cells, key ordering.
+  - id: pivotby_measured_fh0_hdr
+    setup:
+      A1: "r"
+      B1: "c"
+      C1: "v"
+      A2: "x"
+      B2: "p"
+      C2: 1
+      A3: "y"
+      B3: "q"
+      C3: 2
+      A4: "x"
+      B4: "q"
+      C4: 3
+    formula: '=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,0)'
+
+  - id: pivotby_measured_fh0_nohdr
+    setup:
+      A1: "r"
+      B1: "c"
+      C1: "v"
+      A2: "x"
+      B2: "p"
+      C2: 1
+      A3: "y"
+      B3: "q"
+      C3: 2
+      A4: "x"
+      B4: "q"
+      C4: 3
+    formula: '=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,0)'
+
+  - id: pivotby_measured_fh1_hdr
+    setup:
+      A1: "r"
+      B1: "c"
+      C1: "v"
+      A2: "x"
+      B2: "p"
+      C2: 1
+      A3: "y"
+      B3: "q"
+      C3: 2
+      A4: "x"
+      B4: "q"
+      C4: 3
+    formula: '=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,1)'
+
+  - id: pivotby_measured_fh1_nohdr
+    setup:
+      A1: "r"
+      B1: "c"
+      C1: "v"
+      A2: "x"
+      B2: "p"
+      C2: 1
+      A3: "y"
+      B3: "q"
+      C3: 2
+      A4: "x"
+      B4: "q"
+      C4: 3
+    formula: '=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,1)'
+
+  - id: pivotby_measured_fh2_hdr
+    setup:
+      A1: "r"
+      B1: "c"
+      C1: "v"
+      A2: "x"
+      B2: "p"
+      C2: 1
+      A3: "y"
+      B3: "q"
+      C3: 2
+      A4: "x"
+      B4: "q"
+      C4: 3
+    formula: '=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,2)'
+
+  - id: pivotby_measured_fh2_nohdr
+    setup:
+      A1: "r"
+      B1: "c"
+      C1: "v"
+      A2: "x"
+      B2: "p"
+      C2: 1
+      A3: "y"
+      B3: "q"
+      C3: 2
+      A4: "x"
+      B4: "q"
+      C4: 3
+    formula: '=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,2)'
+
+  - id: pivotby_measured_fh3_hdr
+    setup:
+      A1: "r"
+      B1: "c"
+      C1: "v"
+      A2: "x"
+      B2: "p"
+      C2: 1
+      A3: "y"
+      B3: "q"
+      C3: 2
+      A4: "x"
+      B4: "q"
+      C4: 3
+    formula: '=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,3)'
+
+  - id: pivotby_measured_fh3_nohdr
+    setup:
+      A1: "r"
+      B1: "c"
+      C1: "v"
+      A2: "x"
+      B2: "p"
+      C2: 1
+      A3: "y"
+      B3: "q"
+      C3: 2
+      A4: "x"
+      B4: "q"
+      C4: 3
+    formula: '=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,3)'
+
+  - id: pivotby_measured_lit_fh0
+    formula: '=PIVOTBY({"x";"y";"x"},{"p";"q";"q"},{1;2;3},SUM,0)'
+
+  - id: pivotby_measured_rng_fh0
+    setup:
+      A2: "x"
+      B2: "p"
+      C2: 1
+      A3: "y"
+      B3: "q"
+      C3: 2
+      A4: "x"
+      B4: "q"
+      C4: 3
+    formula: '=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,0)'
+
+  - id: pivotby_measured_rng_fh0_isblank
+    setup:
+      A2: "x"
+      B2: "p"
+      C2: 1
+      A3: "y"
+      B3: "q"
+      C3: 2
+      A4: "x"
+      B4: "q"
+      C4: 3
+    formula: '=ISBLANK(INDEX(PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,0),1,1))'
+
+  - id: pivotby_measured_lit_isblank
+    formula: '=ISBLANK(INDEX(PIVOTBY({"x";"y";"x"},{"p";"q";"q"},{1;2;3},SUM,0),1,1))'
+
+  - id: pivotby_measured_rng_type
+    setup:
+      A2: "x"
+      B2: "p"
+      C2: 1
+      A3: "y"
+      B3: "q"
+      C3: 2
+      A4: "x"
+      B4: "q"
+      C4: 3
+    formula: '=TYPE(INDEX(PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,0),1,1))'

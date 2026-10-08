@@ -28,6 +28,7 @@
 #include "eval/reference/common.h"
 #include "eval/special_forms_lazy.h"
 #include "eval/tree_walker/dispatch.h"
+#include "eval/trimrange_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet_name.h"
@@ -290,6 +291,11 @@ constexpr ReferenceCall kReferenceCalls[] = {
     {"SWITCH", &resolve_switch_call, &carries_switch_result},
     {"INDEX", &resolve_lookup_call<&resolve_index_reference>, &carries_first},
     {"XLOOKUP", &resolve_lookup_call<&resolve_xlookup_reference>, &carries_xlookup_result},
+    // Rebuilt from the source's populated extent, so no argument is carried.
+    {"TRIMRANGE", &resolve_trim_reference, &carries_none},
+    {"_TRO_ALL", &resolve_trim_reference, &carries_none},
+    {"_TRO_LEADING", &resolve_trim_reference, &carries_none},
+    {"_TRO_TRAILING", &resolve_trim_reference, &carries_none},
 };
 
 const ReferenceCall* find_reference_call(std::string_view name) noexcept {

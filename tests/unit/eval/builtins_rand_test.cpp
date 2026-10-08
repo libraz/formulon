@@ -143,16 +143,17 @@ TEST(BuiltinsRandBetween, NegativeRange) {
   }
 }
 
-TEST(BuiltinsRandBetween, BoolBottomCoercesToOne) {
-  // Excel coerces TRUE to 1, so the effective range is [1, 5].
-  for (int i = 0; i < 500; ++i) {
-    const Value v = EvalSource("=RANDBETWEEN(TRUE,5)");
-    ASSERT_TRUE(v.is_number()) << "iter=" << i;
-    const double x = v.as_number();
-    EXPECT_GE(x, 1.0) << "iter=" << i;
-    EXPECT_LE(x, 5.0) << "iter=" << i;
-    EXPECT_EQ(x, static_cast<double>(static_cast<long long>(x))) << "iter=" << i << " value=" << x;
-  }
+TEST(BuiltinsRandBetween, BoolBottomIsValue) {
+  // RANDBETWEEN follows the Analysis-ToolPak rule: a boolean is #VALUE!.
+  const Value v = EvalSource("=RANDBETWEEN(TRUE,5)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsRandBetween, OmittedBottomIsNA) {
+  const Value v = EvalSource("=RANDBETWEEN(,0)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
 TEST(BuiltinsRandBetween, HugeIntegralSingletonsArePreserved) {

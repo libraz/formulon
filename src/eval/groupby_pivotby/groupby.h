@@ -6,7 +6,7 @@
 // GROUPBY signature (Mac Excel 365):
 //
 //   GROUPBY(row_fields, values, function,
-//           [field_headers=0], [total_depth=-1], [sort_order=0],
+//           [field_headers=auto], [total_depth=1], [sort_order=ascending keys],
 //           [filter_array])
 //
 //   * `row_fields` is a 1D or 2D rectangle whose rows are the group keys.
@@ -28,12 +28,14 @@
 //         resolved aggregator is a Lambda value or a registry-defined
 //         function.
 //   * `field_headers` ∈ {0,1,2,3} controls header handling (0=none,
-//     1=inputs only, 2=synthesise output, 3=both).
+//     1=input header row, not shown, 2=synthesise output, 3=input header
+//     row shown). Omitted detects a header row: text first row of `values`
+//     over a non-text row.
 //   * `total_depth` ∈ {-2,-1,0,1,2} controls grand-total + subtotal
 //     placement. The sign governs position (negative = above, positive =
 //     below). Subtotals (±2) only meaningful when `row_fields` has >= 2
 //     columns; with single-column keys ±2 silently degrade to ±1.
-//   * `sort_order` is 0 (preserve first-occurrence order), N>0 (sort
+//   * `sort_order` omitted sorts ascending by the key columns, N>0 (sort
 //     ascending by N-th aggregated value column, 1-based), or N<0
 //     (descending by |N|-th column).
 //   * `filter_array`, when supplied, is a column-shaped boolean mask over

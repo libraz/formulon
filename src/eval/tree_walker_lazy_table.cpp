@@ -69,6 +69,12 @@ struct LazyEntry {
 // by canonical UPPERCASE name so a quick visual diff catches accidental
 // duplicates. Comments preserved verbatim from the prior in-place table.
 constexpr LazyEntry kLazyDispatch[] = {
+    // The trim-reference operators `.:`, `:.`, `.:.` (see
+    // `parser::trim_ref_function_name`); `_` sorts first under the lookup's
+    // lower-case folding.
+    {"_TRO_ALL", &eval_trim_ref_lazy, LazyResultShape::kArray},
+    {"_TRO_LEADING", &eval_trim_ref_lazy, LazyResultShape::kArray},
+    {"_TRO_TRAILING", &eval_trim_ref_lazy, LazyResultShape::kArray},
     // Financial date1904-sensitive family: shares one lazy impl
     // (`eval_financial_date_lazy`) the same way the calendar family shares
     // `eval_datetime_lazy` -- see `eval/financial_lazy.h`.
@@ -311,15 +317,18 @@ constexpr LazyEntry kLazyDispatch[] = {
 
 constexpr std::size_t kLazyDispatchCount = sizeof(kLazyDispatch) / sizeof(kLazyDispatch[0]);
 
+// The order `find_lazy_entry` searches in: bytes compared ASCII-lower-cased.
 constexpr int compare_canonical_names(const char* lhs, const char* rhs) {
   for (std::size_t i = 0;; ++i) {
-    if (lhs[i] < rhs[i]) {
+    const char l = (lhs[i] >= 'A' && lhs[i] <= 'Z') ? static_cast<char>(lhs[i] - 'A' + 'a') : lhs[i];
+    const char r = (rhs[i] >= 'A' && rhs[i] <= 'Z') ? static_cast<char>(rhs[i] - 'A' + 'a') : rhs[i];
+    if (l < r) {
       return -1;
     }
-    if (lhs[i] > rhs[i]) {
+    if (l > r) {
       return 1;
     }
-    if (lhs[i] == '\0') {
+    if (l == '\0') {
       return 0;
     }
   }

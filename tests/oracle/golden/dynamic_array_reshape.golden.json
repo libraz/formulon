@@ -2,11 +2,11 @@
   "suite": "dynamic_array_reshape",
   "description": "dynamic_array_reshape family — TAKE, DROP, EXPAND, TOCOL, TOROW, WRAPCOLS, WRAPROWS, HSTACK, VSTACK, CHOOSECOLS, CHOOSEROWS, TRIMRANGE. Spill outputs and scalar errors are captured live by the array-aware oracle harness.",
   "environment": {
-    "excel_version": "16.112.1",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-21T15:50:34Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -620,11 +620,11 @@
         "kind": "array",
         "value": [
           1.0,
-          null,
+          "",
           2.0,
-          null,
+          "",
           3.0,
-          null
+          ""
         ],
         "shape": [
           6,
@@ -657,7 +657,7 @@
         "kind": "array",
         "value": [
           1.0,
-          null,
+          "",
           3.0
         ],
         "shape": [
@@ -673,8 +673,8 @@
       "expect": {
         "kind": "array",
         "value": [
-          null,
-          null
+          "",
+          ""
         ],
         "shape": [
           2,
@@ -742,9 +742,9 @@
       "expect": {
         "kind": "array",
         "value": [
-          null,
+          "",
           1.0,
-          null,
+          "",
           2.0
         ],
         "shape": [
@@ -776,7 +776,7 @@
       "expect": {
         "kind": "array",
         "value": [
-          null,
+          "",
           1.0,
           2.0
         ],
@@ -1873,6 +1873,342 @@
       "expect": {
         "kind": "number",
         "value": 4.0
+      }
+    },
+    {
+      "id": "trimref_trailing_sum",
+      "formula": "=SUM(A1:.A10)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "trimref_trailing_rows",
+      "formula": "=ROWS(A1:.A10)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trimref_both_rows",
+      "formula": "=ROWS(A1.:.A10)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "trimref_leading_rows",
+      "formula": "=ROWS(A1.:A10)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "trimref_trimrange_rows",
+      "formula": "=ROWS(TRIMRANGE(A1:A10))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trimref_whole_column",
+      "formula": "=ROWS(A:.A)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trimref_columns",
+      "formula": "=COLUMNS(A1:.E1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trimref_whole_column_leading",
+      "formula": "=ROWS(A.:A)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1048575.0
+      }
+    },
+    {
+      "id": "trimref_whole_column_both",
+      "formula": "=ROWS(A.:.A)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "trimref_two_dimensional",
+      "formula": "=ROWS(A1:.C10)&\"x\"&COLUMNS(A1:.C10)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2x2"
+      }
+    },
+    {
+      "id": "trimref_all_blank",
+      "formula": "=ROWS(A1:.A10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "trimref_interior_gap",
+      "formula": "=ROWS(A1:.A10)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "trimref_both_sum",
+      "formula": "=SUM(A1.:.A10)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trimref_whole_row",
+      "formula": "=COLUMNS(1:.1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 26.0
+      }
+    },
+    {
+      "id": "trimref_whole_row_outside",
+      "formula": "=COLUMNS(1:.1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "formula_cell": "Z2",
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trimref_whole_columns_two",
+      "formula": "=ROWS(A:.B)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "trimref_formula_empty_text",
+      "formula": "=ROWS(A1:.A10)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "trimref_sheet_qualified",
+      "formula": "=ROWS(Sheet2!A1:.A10)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!A2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
       }
     }
   ]

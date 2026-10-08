@@ -381,8 +381,7 @@ double GammaPdf(double x, double alpha, double beta_scale) noexcept {
 
 // GAMMA.DIST(x, alpha, beta, cumulative). #NUM! on x < 0, alpha <= 0,
 // beta <= 0. At x == 0 the PDF is:
-//   alpha < 1: divergent -> #NUM!
-//   alpha == 1: 1 / beta (exponential rate)
+//   alpha <= 1: #NUM! (Excel rejects the exponential rate at alpha == 1 too)
 //   alpha > 1: 0
 // The CDF at x == 0 is 0 by definition.
 Value GammaDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
@@ -400,22 +399,18 @@ Value GammaDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return finalize(stats::p_gamma(alpha, x / beta_scale));
   }
   if (x == 0.0) {
-    if (alpha < 1.0) {
+    if (alpha <= 1.0) {
       return Value::error(ErrorCode::Num);
-    }
-    if (alpha == 1.0) {
-      return finalize(1.0 / beta_scale);
     }
     return finalize(0.0);
   }
   return finalize(GammaPdf(x, alpha, beta_scale));
 }
 
-// GAMMA.INV(p, alpha, beta) - inverse of GAMMA.DIST's CDF. Mathematically
-// equivalent to `beta * chisq_inv(p, 2*alpha) / 2`, i.e. a scaled
-// chi-squared inverse; we implement the Wilson-Hilferty seed + Newton
-// driver directly here (on the gamma surface) to avoid calling into
-// stats.cpp for the helper. The two paths agree to ~1e-12.
+// GAMMA.INV(p, alpha, beta) - inverse of GAMMA.DIST's CDF, `beta` times the
+// unit-scale gamma quantile. The quantile is solved on the smaller of the two
+// tails (`stats::gamma_quantile`), which keeps a tiny `p` and a `p` near 1
+// equally accurate.
 Value GammaInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto parsed = read_number_triple(args);
   if (!parsed) {
@@ -428,57 +423,12 @@ Value GammaInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (p == 0.0) {
     return finalize(0.0);
   }
-  // Wilson-Hilferty transformation seeds Newton from within a few percent
-  // of the true quantile: invert the normal approximation to the
-  // cube-root-scaled chi-squared. `df = 2*alpha` is the chi-squared
-  // equivalent; the scale factor `beta/2` recovers the gamma scale.
-  const double df = 2.0 * alpha;
-  const double h = 2.0 / (9.0 * df);
-  const double z = stats_detail::InverseStandardNormal(p);
-  const double cube_arg = 1.0 - h + z * std::sqrt(h);
-  double chi2 = df * cube_arg * cube_arg * cube_arg;
-  if (!(chi2 > 0.0)) {
-    chi2 = 0.5 * df;  // Safeguard: negative / NaN -> fall back to mean.
-  }
-  double x = 0.5 * beta_scale * chi2;
-  // Newton on GAMMA.DIST's CDF: f(x) = p_gamma(alpha, x/beta) - p.
-  // f'(x) = PDF(x) = GammaPdf(x, alpha, beta).
-  constexpr int kMaxIter = 100;
-  constexpr double kTol = 1e-12;
-  for (int i = 0; i < kMaxIter; ++i) {
-    const double cdf = stats::p_gamma(alpha, x / beta_scale);
-    if (std::isnan(cdf)) {
-      return Value::error(ErrorCode::Num);
-    }
-    const double pdf = GammaPdf(x, alpha, beta_scale);
-    if (pdf <= 0.0 || !std::isfinite(pdf)) {
-      break;
-    }
-    double step = (cdf - p) / pdf;
-    double x_new = x - step;
-    // Safeguard: Newton can overshoot into x <= 0 on steep tails; halve
-    // the step until we land inside the positive reals.
-    while (x_new <= 0.0) {
-      step *= 0.5;
-      x_new = x - step;
-      if (std::abs(step) < kTol) {
-        x_new = 0.5 * x;
-        break;
-      }
-    }
-    if (std::abs(x_new - x) < kTol * std::max(1.0, std::abs(x))) {
-      return finalize(x_new);
-    }
-    x = x_new;
-  }
-  // Final convergence check: even if the Newton loop ran out of
-  // iterations, `x` is usually close; surface #NUM! only if the CDF
-  // residual is large.
-  const double residual = std::abs(stats::p_gamma(alpha, x / beta_scale) - p);
-  if (residual > 1e-6) {
+  const double x = p < 0.5 ? stats::gamma_quantile(alpha, p, /*upper=*/false)
+                           : stats::gamma_quantile(alpha, 1.0 - p, /*upper=*/true);
+  if (std::isnan(x)) {
     return Value::error(ErrorCode::Num);
   }
-  return finalize(x);
+  return finalize(beta_scale * x);
 }
 
 // ---------------------------------------------------------------------------

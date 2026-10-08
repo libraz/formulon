@@ -400,3 +400,19 @@ cases:
     description: "Decreasing y vs increasing x; x=4 lies on slope=-2 line -> 0"
     setup: { A1: 1, A2: 2, A3: 3, B1: 6, B2: 4, B3: 2 }
     formula: "=FORECAST.LINEAR(4, B1:B3, A1:A3)"
+
+  - id: covariance_p_scalars
+    description: "COVARIANCE.P treats scalar arguments as one-element arrays"
+    formula: "=COVARIANCE.P(1,2)"
+
+  - id: covariance_p_equal_scalars
+    description: "COVARIANCE.P of two equal scalars"
+    formula: "=COVARIANCE.P(3,3)"
+
+  - id: covar_scalars
+    description: "COVAR treats scalar arguments as one-element arrays"
+    formula: "=COVAR(1,2)"
+
+  - id: covariance_s_scalars_is_div0
+    description: "COVARIANCE.S of one-element arrays is #DIV/0!"
+    formula: "=COVARIANCE.S(1,2)"

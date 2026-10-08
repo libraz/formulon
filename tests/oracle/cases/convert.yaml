@@ -31,3 +31,19 @@ cases:
   - id: convert_invalid_unit_is_na
     description: "Unknown destination unit -> #N/A"
     formula: "=CONVERT(1,\"m\",\"bogus\")"
+
+  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  #    arguments, and the near-integer snap of integer arguments --------------
+  - id: atp_convert_bool
+    formula: "=CONVERT(TRUE,\"m\",\"cm\")"
+
+  - id: atp_convert_omit
+    formula: "=CONVERT(,\"m\",\"cm\")"
+
+  - id: atp_convert_boolcell
+    setup: { A1: true }
+    formula: "=CONVERT(A1,\"m\",\"cm\")"
+
+  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  - id: opt_convert_omit_unit
+    formula: "=CONVERT(1,,\"cm\")"

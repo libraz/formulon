@@ -386,3 +386,106 @@ cases:
   - id: oct2hex_invalid_digit
     description: "Digit '8' invalid in base 8 -> #NUM!."
     formula: "=OCT2HEX(\"18\")"
+
+  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  #    arguments, and the near-integer snap of integer arguments --------------
+  - id: pf_dec2bin
+    formula: "=DEC2BIN(5,3.9999999)"
+
+  - id: pf_dec2bin_n
+    formula: "=DEC2BIN(4.9999999)"
+
+  - id: atp_dec2bin_bool
+    formula: "=DEC2BIN(TRUE)"
+
+  - id: atp_dec2bin_omit
+    formula: "=DEC2BIN(,2)"
+
+  - id: atp_dec2bin_boolcell
+    setup: { A1: true }
+    formula: "=DEC2BIN(A1)"
+
+  - id: atp_bin2dec_bool
+    formula: "=BIN2DEC(TRUE)"
+
+  - id: atp_bin2dec_boolcell
+    setup: { A1: true }
+    formula: "=BIN2DEC(A1)"
+
+  - id: atp_delta_bool
+    formula: "=DELTA(TRUE,1)"
+
+  - id: atp_delta_omit
+    formula: "=DELTA(,1)"
+
+  - id: atp_delta_boolcell
+    setup: { A1: true }
+    formula: "=DELTA(A1,1)"
+
+  - id: atp_gestep_bool
+    formula: "=GESTEP(TRUE,1)"
+
+  - id: atp_gestep_omit
+    formula: "=GESTEP(,1)"
+
+  - id: atp_gestep_boolcell
+    setup: { A1: true }
+    formula: "=GESTEP(A1,1)"
+
+  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  - id: a4_bin2oct_bool
+    formula: "=BIN2OCT(TRUE)"
+
+  - id: a4_bin2oct_omit
+    formula: "=BIN2OCT(,2)"
+
+  - id: a4_bin2hex_bool
+    formula: "=BIN2HEX(TRUE)"
+
+  - id: a4_bin2hex_omit
+    formula: "=BIN2HEX(,2)"
+
+  - id: a4_oct2dec_bool
+    formula: "=OCT2DEC(TRUE)"
+
+  - id: a4_oct2bin_bool
+    formula: "=OCT2BIN(TRUE)"
+
+  - id: a4_oct2bin_omit
+    formula: "=OCT2BIN(,2)"
+
+  - id: a4_hex2dec_bool
+    formula: "=HEX2DEC(TRUE)"
+
+  - id: a4_hex2bin_bool
+    formula: "=HEX2BIN(TRUE)"
+
+  - id: a4_hex2bin_omit
+    formula: "=HEX2BIN(,2)"
+
+  - id: a4_dec2hex_bool
+    formula: "=DEC2HEX(TRUE)"
+
+  - id: a4_dec2hex_omit
+    formula: "=DEC2HEX(,2)"
+
+  - id: a4_dec2oct_bool
+    formula: "=DEC2OCT(TRUE)"
+
+  - id: a4_dec2oct_omit
+    formula: "=DEC2OCT(,2)"
+
+  - id: a4_bitand_bool
+    formula: "=BITAND(TRUE,1)"
+
+  - id: a4_bitand_omit
+    formula: "=BITAND(,1)"
+
+  - id: a4_bitlshift_bool
+    formula: "=BITLSHIFT(TRUE,1)"
+
+  - id: a4_bitlshift_omit
+    formula: "=BITLSHIFT(,1)"
+
+  - id: opt_dec2bin_places_omit
+    formula: "=DEC2BIN(5,)"

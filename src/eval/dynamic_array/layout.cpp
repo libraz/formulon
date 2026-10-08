@@ -44,10 +44,6 @@ bool collect_tocol_torow_cells(const ArrayValue& array, std::int64_t ignore_mask
     if (skip_errors && v.is_error()) {
       return;
     }
-    if (v.is_text() && v.as_text().empty()) {
-      out.push_back(Value::blank());
-      return;
-    }
     out.push_back(v);
   };
 

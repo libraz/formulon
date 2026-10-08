@@ -47,6 +47,18 @@ struct HeaderLayout {
   std::uint32_t data_row_count = 0;
 };
 
+/// Empty-text cell Excel fills result placeholders with (pivot corners, empty
+/// intersections, key cells of total rows); it is text, not blank.
+inline Value placeholder_cell() {
+  return Value::text(std::string_view("", 0U));
+}
+
+/// Generated header labels for `field_headers == 2`, e.g. "行フィールド 1",
+/// "列フィールド 1" and "値 1" in ja-JP; `n` is 1-based.
+std::string row_field_label(const EvalContext& ctx, std::uint32_t n);
+std::string column_field_label(const EvalContext& ctx, std::uint32_t n);
+std::string value_label(const EvalContext& ctx, std::uint32_t n);
+
 /// Returns the locale-appropriate "Grand Total" label.
 std::string_view grand_total_label(const EvalContext& ctx);
 
@@ -121,7 +133,7 @@ bool read_total_depth(const parser::AstNode& call, std::uint32_t arg_index, std:
 ///
 /// Excel reads the argument as a signed column index, and that domain has no
 /// zero member: a call that spells `0` there returns #VALUE! even though
-/// leaving the argument out behaves as "preserve first-occurrence order".
+/// leaving the argument out sorts the keys ascending.
 /// The two are told apart the way the rest of the engine does it — an absent
 /// slot and a syntactically omitted one (`f(a,,c)`) both take the default,
 /// and only a supplied value is rejected. Bounds-checking the index against
@@ -129,6 +141,15 @@ bool read_total_depth(const parser::AstNode& call, std::uint32_t arg_index, std:
 /// knows the count.
 bool read_optional_sort_order(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, Arena& arena,
                               const FunctionRegistry& registry, const EvalContext& ctx, int* out, Value* out_err);
+
+/// `field_headers` value that requests header detection from the values
+/// argument; `resolve_auto_field_headers` turns it into a concrete mode.
+inline constexpr int kFieldHeadersAuto = -1;
+
+/// Returns `field_headers` unchanged unless it is `kFieldHeadersAuto`, which
+/// becomes 1 (input header row, not shown) when some column of `values` has
+/// text in its first row and a non-text cell below it, and 0 otherwise.
+int resolve_auto_field_headers(int field_headers, const ArrayValue& values);
 
 /// Computes input/output header layout from `field_headers ∈ {0,1,2,3}` and
 /// the input row count.

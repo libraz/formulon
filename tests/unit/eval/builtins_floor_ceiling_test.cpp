@@ -166,7 +166,7 @@ TEST(MRoundBlankScalar, LiteralEmptySecondArgYieldsNA) {
 
 TEST(MRoundBlankScalar, BothBlankRefsCoerceToZero) {
   // Neither A1 nor B1 has a value; both Refs resolve to Blank, which the
-  // RejectLiteralEmpty policy lets through to MRound's normal coercion.
+  // Analysis-ToolPak rule lets through to MRound's normal coercion.
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=MROUND(A1,B1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());

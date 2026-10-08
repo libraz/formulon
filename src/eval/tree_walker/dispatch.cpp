@@ -506,7 +506,10 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   // zero). Combined with `had_range_shaped_arg` to decide whether to fire
   // the deferred error after the loop completes.
   bool any_scalar_blank_for_reject_any = false;
-  for (std::uint32_t i = 0; i < arity; ++i) {
+  const std::uint32_t evaluated_arity = def->analysis_toolpak_args && !def->atp_omitted_optional_is_na
+                                            ? atp_evaluated_arity(node, def->min_arity, def->max_arity)
+                                            : arity;
+  for (std::uint32_t i = 0; i < evaluated_arity; ++i) {
     const parser::AstNode& raw_arg = node.as_call_arg(i);
     // LET-binding passthrough: when the caller wrote `SUM(r)` where `r` is
     // bound to a RangeOp / ArrayLiteral / OFFSET / CHOOSE / INDIRECT, the
@@ -532,6 +535,11 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       bool short_circuit = false;
       Value propagated_err = Value::blank();
       for (const Value& value : resolved.value().cells) {
+        // A boolean inside an array literal is #VALUE! under the
+        // Analysis-ToolPak rule (`GCD({TRUE,2})`).
+        if (def->analysis_toolpak_args && value.is_boolean()) {
+          return Value::error(ErrorCode::Value);
+        }
         if (!append_range_sourced_value(*def, value, &values, &propagated_err)) {
           short_circuit = true;
           break;
@@ -610,31 +618,9 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     // a 3-D ref is a range shape. A span endpoint that names a missing sheet
     // surfaces `#REF!`. Errors short-circuit per `propagate_errors`.
     if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Ref3D) {
-      const Workbook* wb = ctx.workbook();
-      const parser::Reference& cell = arg_node.as_ref3d_cell();
-      const bool is_range = arg_node.as_ref3d_is_range();
-      const parser::Reference& cell_end = arg_node.as_ref3d_cell_end();
-      ErrorCode ref3d_err = ErrorCode::Ref;
-      std::size_t begin_idx = static_cast<std::size_t>(-1);
-      std::size_t end_idx = static_cast<std::size_t>(-1);
-      if (wb != nullptr) {
-        begin_idx = wb->sheet_index_by_name(arg_node.as_ref3d_sheet_begin());
-        end_idx = wb->sheet_index_by_name(arg_node.as_ref3d_sheet_end());
-      }
-      const bool full_col = cell.is_full_col || (is_range && cell_end.is_full_col);
-      const bool full_row = cell.is_full_row || (is_range && cell_end.is_full_row);
-      const bool incompatible_whole_shape =
-          (full_col && full_row) ||
-          (is_range && (cell.is_full_col != cell_end.is_full_col || cell.is_full_row != cell_end.is_full_row));
-      const bool corners_out_of_bounds =
-          (full_col && (cell.col >= Sheet::kMaxCols || (is_range && cell_end.col >= Sheet::kMaxCols))) ||
-          (full_row && (cell.row >= Sheet::kMaxRows || (is_range && cell_end.row >= Sheet::kMaxRows))) ||
-          (!full_col && !full_row &&
-           (cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols ||
-            (is_range && (cell_end.row >= Sheet::kMaxRows || cell_end.col >= Sheet::kMaxCols))));
-      if (wb == nullptr || begin_idx == static_cast<std::size_t>(-1) || end_idx == static_cast<std::size_t>(-1) ||
-          incompatible_whole_shape || corners_out_of_bounds) {
-        const Value err = Value::error(ref3d_err);
+      std::vector<Value> ref3d_cells;
+      if (!expand_ref3d_cells(arg_node, arena, registry, ctx, &ref3d_cells)) {
+        const Value err = Value::error(ErrorCode::Ref);
         if (def->propagate_errors) {
           return err;
         }
@@ -642,54 +628,6 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
         continue;
       }
       had_range_shaped_arg = true;
-      const std::size_t lo = std::min(begin_idx, end_idx);
-      const std::size_t hi = std::max(begin_idx, end_idx);
-      // Tail rectangle: a single cell, or the normalised `cell:cell_end`
-      // area. Excel aggregates the same rectangle from every sheet in the
-      // span, so the cross-product (sheets * area cells) flows into the
-      // range-aware function.
-      std::vector<Value> ref3d_cells;
-      for (std::size_t s = lo; s <= hi; ++s) {
-        const std::string_view sheet_name = wb->sheet(s).name();
-        const Sheet& target_sheet = wb->sheet(s);
-        std::uint32_t r_lo = 0;
-        std::uint32_t r_hi = 0;
-        std::uint32_t c_lo = 0;
-        std::uint32_t c_hi = 0;
-        if (full_col) {
-          c_lo = is_range ? std::min(cell.col, cell_end.col) : cell.col;
-          c_hi = is_range ? std::max(cell.col, cell_end.col) : cell.col;
-          const auto extent = target_sheet.populated_extent(0U, c_lo, Sheet::kMaxRows - 1U, c_hi);
-          if (!extent.has_value()) {
-            continue;
-          }
-          r_lo = 0U;
-          r_hi = extent->last_row;
-        } else if (full_row) {
-          r_lo = is_range ? std::min(cell.row, cell_end.row) : cell.row;
-          r_hi = is_range ? std::max(cell.row, cell_end.row) : cell.row;
-          const auto extent = target_sheet.populated_extent(r_lo, 0U, r_hi, Sheet::kMaxCols - 1U);
-          if (!extent.has_value()) {
-            continue;
-          }
-          c_lo = 0U;
-          c_hi = extent->last_col;
-        } else {
-          r_lo = is_range ? std::min(cell.row, cell_end.row) : cell.row;
-          r_hi = is_range ? std::max(cell.row, cell_end.row) : cell.row;
-          c_lo = is_range ? std::min(cell.col, cell_end.col) : cell.col;
-          c_hi = is_range ? std::max(cell.col, cell_end.col) : cell.col;
-        }
-        for (std::uint32_t r = r_lo; r <= r_hi; ++r) {
-          for (std::uint32_t c = c_lo; c <= c_hi; ++c) {
-            parser::Reference per_sheet{};
-            per_sheet.sheet = sheet_name;
-            per_sheet.row = r;
-            per_sheet.col = c;
-            ref3d_cells.push_back(ctx.resolve_ref(per_sheet, arena, registry));
-          }
-        }
-      }
       Value range_err = Value::blank();
       if (!append_range_sourced_values(*def, ref3d_cells.data(), ref3d_cells.size(), &values, &range_err)) {
         return range_err;
@@ -1057,29 +995,28 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       }
       continue;
     }
-    // Blank-scalar policy. RangeOp / OFFSET-call / ArrayLiteral args were
-    // handled above and `continue`'d, so reaching this point implies a
-    // scalar arg slot (Literal, Ref, BinaryOp, ...).
-    //
-    //   * `RejectLiteralEmpty` (MROUND) fires eagerly: only a parser-injected
-    //     `Literal(blank)` for an empty arg slot triggers it. A Ref to a
-    //     blank cell still flows through to the impl as 0, matching Mac.
-    //   * `RejectAnyScalar` (GCD / LCM) defers the decision to end-of-args.
-    //     Mac surfaces #VALUE! for `=GCD(A1,B1,C1)` (all blank scalar refs)
-    //     but returns 0 for the mixed form `=GCD(A1:B1, C1)` over the same
-    //     blank cells — the range arg "rescues" the call. The flag is
-    //     consulted after the loop in conjunction with
-    //     `had_range_shaped_arg`. Direct numeric literals (including
-    //     `=GCD(0,0,0)`) are not Blank and do not set the flag.
-    if (def->blank_scalar_policy == FunctionDef::BlankScalarPolicy::RejectLiteralEmpty &&
-        v.kind() == ValueKind::Blank && arg_node.kind() == parser::NodeKind::Literal) {
-      const Value err = Value::error(def->blank_scalar_error);
-      if (def->propagate_errors) {
-        return err;
+    // RangeOp / OFFSET-call / ArrayLiteral args were handled above and
+    // `continue`'d, so reaching this point implies a scalar arg slot
+    // (Literal, Ref, BinaryOp, ...). The Analysis-ToolPak rule fires
+    // eagerly so the left-most offending slot wins.
+    if (def->analysis_toolpak_args) {
+      const bool required = def->atp_omitted_optional_is_na || atp_slot_required(i, def->min_arity, def->max_arity);
+      const Value err = atp_arg_error(arg_node, v, required);
+      if (err.is_error()) {
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
       }
-      values.push_back(err);
-      continue;
     }
+    // `RejectAnyScalar` (GCD / LCM) defers the decision to end-of-args.
+    // Mac surfaces #VALUE! for `=GCD(A1,B1,C1)` (all blank scalar refs)
+    // but returns 0 for the mixed form `=GCD(A1:B1, C1)` over the same
+    // blank cells — the range arg "rescues" the call. The flag is
+    // consulted after the loop in conjunction with `had_range_shaped_arg`.
+    // Direct numeric literals (including `=GCD(0,0,0)`) are not Blank and
+    // do not set the flag.
     if (def->blank_scalar_policy == FunctionDef::BlankScalarPolicy::RejectAnyScalar && v.kind() == ValueKind::Blank) {
       any_scalar_blank_for_reject_any = true;
     }
@@ -1094,6 +1031,11 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       if (!append_range_sourced_value(*def, v, &values, &range_err)) {
         return range_err;
       }
+      continue;
+    }
+    // An omitted slot of a range-aware aggregator is a counted 0 (COUNTA(3,,4) = 3).
+    if (def->accepts_ranges && v.kind() == ValueKind::Blank && is_omitted_arg(arg_node)) {
+      values.push_back(Value::blank(BlankGridProjection::kValueArrayZero));
       continue;
     }
     values.push_back(v);

@@ -351,3 +351,16 @@ cases:
   - id: db_invalid_month_is_num
     description: "month > 12 -> #NUM!"
     formula: "=DB(10000, 1000, 5, 1, 13)"
+
+  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  - id: a4_cumipmt_bool
+    formula: "=CUMIPMT(TRUE,10,1000,1,1,0)"
+
+  - id: a4_cumipmt_omit
+    formula: "=CUMIPMT(,10,1000,1,1,0)"
+
+  - id: a4_cumprinc_bool
+    formula: "=CUMPRINC(0.1,10,1000,1,1,TRUE)"
+
+  - id: a4_cumprinc_omit
+    formula: "=CUMPRINC(0.1,10,1000,1,1,)"

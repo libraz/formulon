@@ -313,18 +313,6 @@ Value eval_chisq_test_lazy(const parser::AstNode& call, Arena& arena, const Func
       return v;
     }
   }
-  // CHISQ.TEST expects a clean contingency table: any non-numeric cell
-  // is a structural problem, not a silent-drop case. Return `#VALUE!`.
-  for (const Value& v : actual.cells) {
-    if (!v.is_number()) {
-      return Value::error(ErrorCode::Value);
-    }
-  }
-  for (const Value& v : expected.cells) {
-    if (!v.is_number()) {
-      return Value::error(ErrorCode::Value);
-    }
-  }
   // Degrees of freedom: (r-1)(c-1) for a true 2-D contingency table;
   // `n - 1` for a 1-D sequence (a single row or a single column). Fewer
   // than one degree of freedom leaves no test to run; Mac Excel surfaces
@@ -340,22 +328,29 @@ Value eval_chisq_test_lazy(const parser::AstNode& call, Arena& arena, const Func
   if (df < 1.0) {
     return Value::error(ErrorCode::NA);
   }
-  // Any expected cell of exactly zero divides the chi-squared term by
-  // zero. Mac Excel reports this as `#DIV/0!` (strict-zero check; a tiny
-  // positive expected count is fine).
-  for (const Value& v : expected.cells) {
-    if (v.as_number() == 0.0) {
-      return Value::error(ErrorCode::Div0);
-    }
-  }
+  // A pair with a non-numeric side (Bool, Text, Blank) is dropped, though the
+  // degrees of freedom above still follow the declared shape. An expected
+  // count of exactly zero divides the term by zero; negative counts are
+  // allowed and only a negative statistic is rejected.
   double chi2 = 0.0;
+  std::size_t used = 0;
   for (std::size_t i = 0; i < actual.cells.size(); ++i) {
+    if (!actual.cells[i].is_number() || !expected.cells[i].is_number()) {
+      continue;
+    }
     const double e = expected.cells[i].as_number();
-    if (e < 0.0) {
-      return Value::error(ErrorCode::Num);
+    if (e == 0.0) {
+      return Value::error(ErrorCode::Div0);
     }
     const double diff = actual.cells[i].as_number() - e;
     chi2 += (diff * diff) / e;
+    ++used;
+  }
+  if (used == 0U) {
+    return Value::error(ErrorCode::Div0);
+  }
+  if (chi2 < 0.0) {
+    return Value::error(ErrorCode::Num);
   }
   const double p = stats::q_gamma(df / 2.0, chi2 / 2.0);
   if (std::isnan(p)) {

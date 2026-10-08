@@ -108,19 +108,14 @@ struct FunctionDef {
   /// "blank in a range = 0" rule for SUM/AVERAGE/GCD-range/etc.).
   ///
   ///   * `Allow` (default) - Blank coerces to 0 via `coerce_to_number`.
-  ///   * `RejectLiteralEmpty` - Only the literal-empty slot (parser-injected
-  ///     `Literal(blank)` for `FN(,X)` / `FN(X,)` / `FN(,)`) surfaces
-  ///     `blank_scalar_error`. A `Ref` to a blank cell still coerces to 0.
-  ///     Used by `MROUND`, where Mac returns `#N/A` for `=MROUND(,5)` but
-  ///     `0` for `=MROUND(A1,B1)` with A1/B1 blank.
   ///   * `RejectAnyScalar` - Both literal-empty slots AND `Ref`-to-blank
   ///     surface `blank_scalar_error`. Used by `GCD` / `LCM`, where Mac
   ///     surfaces `#VALUE!` for `=GCD(A1,B1,C1)` (all blank refs) but
   ///     returns `0` for `=GCD(A1:C1)` (range form, same blank cells).
+  ///     `analysis_toolpak_args` decides an omitted slot first.
   enum class BlankScalarPolicy : std::uint8_t {
     Allow = 0,
-    RejectLiteralEmpty = 1,
-    RejectAnyScalar = 2,
+    RejectAnyScalar = 1,
   };
   BlankScalarPolicy blank_scalar_policy = BlankScalarPolicy::Allow;
   /// Error code surfaced when `blank_scalar_policy` fires. Ignored when
@@ -132,6 +127,18 @@ struct FunctionDef {
   /// host code remains source-compatible. Custom FunctionDef values default
   /// to the conservative array-capable policy.
   ResultShape result_shape = ResultShape::kArray;
+
+  /// Former Analysis-ToolPak argument rule (QUOTIENT, MROUND, the
+  /// engineering and bond families, ...): a scalar argument that evaluates
+  /// to a boolean is `#VALUE!`, an omitted required slot (below
+  /// `min_arity`, or any slot of a variadic) is `#N/A`, and trailing
+  /// omitted optional slots are dropped so the impl applies its defaults.
+  /// A blank-cell reference still coerces to 0. Lazy impls apply the same
+  /// rule through the helpers in `eval/omitted_arg.h`.
+  bool analysis_toolpak_args = false;
+  /// With `analysis_toolpak_args`, an omitted optional slot is `#N/A` too
+  /// instead of taking its default (ERF's `upper_limit`: `ERF(0.5,)`).
+  bool atp_omitted_optional_is_na = false;
 };
 
 /// Case-insensitive function lookup table. Names are stored UPPERCASE

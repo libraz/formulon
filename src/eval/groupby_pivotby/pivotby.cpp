@@ -32,7 +32,7 @@ struct ColSlot {
 };
 
 // Orders one axis's groups into `*out_order`. Error-keyed groups sink to the
-// bottom; sort_order=0 otherwise keeps first-occurrence order, and ±1 sorts
+// bottom; an omitted sort_order otherwise sorts by key ascending, and ±1 sorts
 // by the first value column's axis total (aggregated on the fly when
 // `totals_emitted` is false), ties broken by key. Other values are #VALUE!.
 bool order_axis_groups(int sort_order, const ArrayValue& keys, const std::vector<std::uint32_t>& repr,
@@ -50,7 +50,7 @@ bool order_axis_groups(int sort_order, const ArrayValue& keys, const std::vector
       if (is_error[a] != is_error[b]) {
         return !is_error[a];
       }
-      return false;
+      return cmp_keys_asc(keys, repr[a], repr[b]) < 0;
     });
     return true;
   }
@@ -167,14 +167,12 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return err;
   }
 
-  // -- arg 4: field_headers ∈ {0,1,2,3}, default 3 -------------------------
-  // PIVOTBY's default differs from GROUPBY's (0): pivot output typically
-  // wants both the input row to be treated as a header AND a header to be
-  // emitted on the output's left/top edges.
-  int field_headers = 3;
-  if (!read_field_headers(call, 4, arity, 3, arena, registry, ctx, &field_headers, &err)) {
+  // -- arg 4: field_headers ∈ {0,1,2,3}; omitted detects a header row ------
+  int field_headers = kFieldHeadersAuto;
+  if (!read_field_headers(call, 4, arity, kFieldHeadersAuto, arena, registry, ctx, &field_headers, &err)) {
     return err;
   }
+  field_headers = resolve_auto_field_headers(field_headers, *values);
 
   // -- arg 5: row_total_depth ∈ {-2,-1,0,1,2}, default +1 ------------------
   // The grand-total row (showing column totals) defaults to the BOTTOM of
@@ -186,10 +184,9 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return err;
   }
 
-  // -- arg 6: row_sort_order, default 0 ------------------------------------
+  // -- arg 6: row_sort_order; omitted sorts the keys ascending -------------
   // Sort the row groups by their row totals (`SUM`-like aggregation over
-  // every (row_group, col_group) cell of the row). 0 preserves first-
-  // occurrence order; positive means ascending; negative descending.
+  // every (row_group, col_group) cell of the row). positive means ascending; negative descending.
   int row_sort_order = 0;
   if (!read_optional_sort_order(call, 6, arity, arena, registry, ctx, &row_sort_order, &err)) {
     return err;
@@ -205,7 +202,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return err;
   }
 
-  // -- arg 8: col_sort_order, default 0 ------------------------------------
+  // -- arg 8: col_sort_order; omitted sorts the keys ascending -------------
   // Excel pins the zero rejection on the row slot; this slot takes the same
   // signed-column-index domain, so the same rule is applied to both rather
   // than leaving one half of a symmetric argument pair accepting a value the
@@ -274,7 +271,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // failure for one (rg, cg, v) tuple lands in that cell; the rest of the
   // body is still computed.
   std::vector<std::vector<std::vector<Value>>> body(
-      n_rows, std::vector<std::vector<Value>>(n_cols, std::vector<Value>(val_cols, Value::blank())));
+      n_rows, std::vector<std::vector<Value>>(n_cols, std::vector<Value>(val_cols, placeholder_cell())));
   for (std::size_t rg = 0; rg < n_rows; ++rg) {
     for (std::size_t cg = 0; cg < n_cols; ++cg) {
       std::vector<std::uint32_t> intersection;
@@ -310,7 +307,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // per value column — it lives in the GRAND-TOTAL COLUMN block, whose
   // presence is governed by `col_total_depth`.
   const bool emit_row_totals_col = (col_total_depth != 0);
-  std::vector<std::vector<Value>> row_totals(n_rows, std::vector<Value>(val_cols, Value::blank()));
+  std::vector<std::vector<Value>> row_totals(n_rows, std::vector<Value>(val_cols, placeholder_cell()));
   if (emit_row_totals_col) {
     for (std::size_t rg = 0; rg < n_rows; ++rg) {
       row_totals[rg] =
@@ -323,7 +320,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // per value column — it lives in the GRAND-TOTAL ROW, whose presence is
   // governed by `row_total_depth`.
   const bool emit_col_totals_row = (row_total_depth != 0);
-  std::vector<std::vector<Value>> col_totals(n_cols, std::vector<Value>(val_cols, Value::blank()));
+  std::vector<std::vector<Value>> col_totals(n_cols, std::vector<Value>(val_cols, placeholder_cell()));
   if (emit_col_totals_row) {
     for (std::size_t cg = 0; cg < n_cols; ++cg) {
       col_totals[cg] =
@@ -333,7 +330,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // -- Compute grand totals (one per value col) ---------------------------
   // The grand total cells exist only when both axes emit totals.
-  std::vector<Value> grand_totals(val_cols, Value::blank());
+  std::vector<Value> grand_totals(val_cols, placeholder_cell());
   if (emit_row_totals_col && emit_col_totals_row) {
     const std::vector<std::uint32_t> all_rows = collect_included_rows(include_row, data_start_row);
     grand_totals = aggregate_value_columns(*values, val_cols, all_rows, agg, arena, registry, ctx, ErrorCode::Calc);
@@ -399,7 +396,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (emit_col_subtotals) {
     const std::size_t outer_count = col_hierarchy.repr_of_outer.size();
     col_subtotal_body.assign(
-        n_rows, std::vector<std::vector<Value>>(outer_count, std::vector<Value>(val_cols, Value::blank())));
+        n_rows, std::vector<std::vector<Value>>(outer_count, std::vector<Value>(val_cols, placeholder_cell())));
     for (std::size_t rg = 0; rg < n_rows; ++rg) {
       for (std::size_t outer = 0; outer < outer_count; ++outer) {
         std::vector<std::uint32_t> intersection;
@@ -416,7 +413,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       }
     }
     if (emit_col_totals_row) {
-      col_subtotal_totals.assign(outer_count, std::vector<Value>(val_cols, Value::blank()));
+      col_subtotal_totals.assign(outer_count, std::vector<Value>(val_cols, placeholder_cell()));
       for (std::size_t outer = 0; outer < outer_count; ++outer) {
         col_subtotal_totals[outer] = aggregate_value_columns(*values, val_cols, col_hierarchy.rows_of_outer[outer], agg,
                                                              arena, registry, ctx, ErrorCode::Calc);
@@ -444,21 +441,18 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       key_cols + static_cast<std::uint32_t>(col_slots.size()) * val_cols + (emit_row_totals_col ? val_cols : 0U);
 
   // Resolve the values-header label cells (V wide) once. With
-  // field_headers ∈ {1,3} we copy values->cells[v] for v=0..V-1 (the
+  // field_headers == 3 we copy values->cells[v] for v=0..V-1 (the
   // input's row 0). With field_headers == 2 we synth "Value <v+1>".
   // field_headers == 0 leaves these blank (output_emits_header is false).
-  std::vector<Value> values_header_labels(val_cols, Value::blank());
+  std::vector<Value> values_header_labels(val_cols, placeholder_cell());
   if (layout.output_emits_header) {
-    if (field_headers == 1 || field_headers == 3) {
+    if (field_headers == 3) {
       for (std::uint32_t v = 0; v < val_cols; ++v) {
         values_header_labels[v] = values->cells[v];
       }
     } else {
-      // field_headers == 2: synth English defaults. ja-JP "値 N" is a
-      // documented divergence (not emitted).
       for (std::uint32_t v = 0; v < val_cols; ++v) {
-        const std::string label = "Value " + std::to_string(v + 1U);
-        values_header_labels[v] = Value::text(arena.intern(label));
+        values_header_labels[v] = Value::text(arena.intern(value_label(ctx, v + 1U)));
       }
     }
   }
@@ -466,11 +460,11 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // Helper: render one of the L col-axis label rows. `level` is the
   // 0-based col_fields column index for this row.
   auto render_col_axis_row = [&](std::uint32_t level) {
-    std::vector<Value> row(out_cols, Value::blank());
+    std::vector<Value> row(out_cols, placeholder_cell());
     // Cells [0..K-1] stay blank.
     for (std::size_t ci = 0; ci < col_slots.size(); ++ci) {
       const ColSlot& slot = col_slots[ci];
-      Value label = Value::blank();
+      Value label = placeholder_cell();
       if (slot.kind == ColSlotKind::Leaf) {
         label = col_fields->cells[static_cast<std::size_t>(col_repr[slot.col_group]) * col_levels + level];
       } else if (slot.kind == ColSlotKind::OuterSubtotal) {
@@ -505,18 +499,15 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // Helper: render the (single) header row when output_emits_header.
   auto render_header_row = [&]() {
-    std::vector<Value> row(out_cols, Value::blank());
+    std::vector<Value> row(out_cols, placeholder_cell());
     // Row-fields header labels (cells [0..K-1]).
-    if (field_headers == 1 || field_headers == 3) {
+    if (field_headers == 3) {
       for (std::uint32_t c = 0; c < key_cols; ++c) {
         row[c] = row_fields->cells[c];
       }
     } else {
-      // field_headers == 2: synth "Field N". ja-JP "行フィールド N" is a
-      // documented divergence.
       for (std::uint32_t c = 0; c < key_cols; ++c) {
-        const std::string label = "Field " + std::to_string(c + 1U);
-        row[c] = Value::text(arena.intern(label));
+        row[c] = Value::text(arena.intern(row_field_label(ctx, c + 1U)));
       }
     }
     // Values-header labels tiled V cells per physical column slot. Subtotal
@@ -537,11 +528,12 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   };
 
   auto render_col_fields_header_row = [&]() {
-    std::vector<Value> row(out_cols, Value::blank());
+    std::vector<Value> row(out_cols, placeholder_cell());
     for (std::uint32_t level = 0; level < col_levels; ++level) {
       const std::uint32_t dst = body_block_start + level * val_cols;
       if (dst < out_cols) {
-        row[dst] = col_fields->cells[level];
+        row[dst] = field_headers == 3 ? col_fields->cells[level]
+                                      : Value::text(arena.intern(column_field_label(ctx, level + 1U)));
       }
     }
     return row;
@@ -565,7 +557,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // Helper: render one body row (per row-group rg).
   auto render_body_row = [&](std::size_t rg) {
-    std::vector<Value> row(out_cols, Value::blank());
+    std::vector<Value> row(out_cols, placeholder_cell());
     // Row keys: copy K cells from the representative row.
     for (std::uint32_t c = 0; c < key_cols; ++c) {
       row[c] = row_fields->cells[static_cast<std::size_t>(row_repr[rg]) * key_cols + c];
@@ -591,7 +583,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // Helper: render a TOP/BOTTOM grand-total row (column totals).
   auto render_totals_row = [&]() {
-    std::vector<Value> row(out_cols, Value::blank());
+    std::vector<Value> row(out_cols, placeholder_cell());
     row[0] = Value::text(arena.intern(emit_row_subtotals ? hierarchy_grand_total_label(ctx) : grand_total_label(ctx)));
     // Cells [1..K-1] stay blank (the rest of the row-keys columns).
     fill_slot_cells(row, col_totals, col_subtotal_totals);
@@ -605,43 +597,16 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return row;
   };
 
-  // The all-singletons case (K==1 AND L==1 AND V==1) uses a compact
-  // merged layout that pre-dates the multi-column extension and is
-  // preserved for backwards compatibility. Mac Excel always shows the
-  // pivot's column keys (X/Y) on this row regardless of field_headers --
-  // they identify which output column is which, independent of whether
-  // descriptive field-name headers are requested -- so this row is
-  // unconditionally emitted, mirroring the multi-column layout below:
-  //   - When output_emits_header is true: the row_fields header label
-  //     occupies col 0 alongside the col-axis labels at cols 1..; the
-  //     values-header tile collapses into the col-axis row.
-  //   - When output_emits_header is false: col 0 (the corner cell) stays
-  //     blank, but the col-axis labels and the grand-total label (if
-  //     col_total_depth != 0) still render.
-  // For K > 1 OR L > 1 OR V > 1, the multi-column layout always emits L
-  // col-axis label rows and (optionally) a separate header row beneath
-  // them.
-  const bool merged_single_col_layout = (key_cols == 1U && col_levels == 1U && val_cols == 1U);
+  // Without an output header, K==1, L==1 and V==1 use a compact layout whose
+  // single top row carries the col-axis labels (and the grand-total label),
+  // with a placeholder corner. Anything else, including every shape that
+  // emits headers, uses the multi-column layout.
+  const bool merged_single_col_layout =
+      (key_cols == 1U && col_levels == 1U && val_cols == 1U && !layout.output_emits_header);
 
-  // Helper: render the merged top row for the single-column layout. The
-  // row carries:
-  //   - col 0: row_fields header label (or "Field 1" for fh=2), left blank
-  //     when output_emits_header is false
-  //   - cols 1..nC: col-axis labels (level 0 keys), one per col group --
-  //     always rendered, independent of output_emits_header
-  //   - last col (if emit_row_totals_col): "Grand Total"
-  // V is always 1 in this branch (key_cols == 1 == col_levels), so no
-  // tiling is required.
+  // Helper: render the merged top row of the compact layout.
   auto render_merged_header_row = [&]() {
-    std::vector<Value> row(out_cols, Value::blank());
-    if (layout.output_emits_header) {
-      if (field_headers == 1 || field_headers == 3) {
-        row[0] = row_fields->cells[0];
-      } else {
-        // field_headers == 2: synth "Field 1".
-        row[0] = Value::text(arena.intern("Field 1"));
-      }
-    }
+    std::vector<Value> row(out_cols, placeholder_cell());
     for (std::size_t ci = 0; ci < n_cols; ++ci) {
       const std::size_t cg = col_order[ci];
       const std::uint32_t out_col_idx = body_block_start + static_cast<std::uint32_t>(ci);
@@ -685,7 +650,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       for (std::uint32_t row : row_hierarchy.rows_of_outer[o]) {
         by_col_group[col_tag[row - data_start_row]].push_back(row);
       }
-      std::vector<Value> row(out_cols, Value::blank());
+      std::vector<Value> row(out_cols, placeholder_cell());
       // The subtotal row restates its outer key verbatim in the first row-key
       // column and leaves the inner row-key columns blank.
       row[0] = row_fields->cells[static_cast<std::size_t>(row_hierarchy.repr_of_outer[o]) * key_cols];
@@ -736,7 +701,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   } else {
     // Multi-column layout: always emit L col-axis label rows; emit a
     // separate header row when output_emits_header is true.
-    if (layout.output_emits_header && (field_headers == 1 || field_headers == 3)) {
+    if (layout.output_emits_header) {
       out_rows.push_back(render_col_fields_header_row());
     }
     for (std::uint32_t level = 0; level < col_levels; ++level) {

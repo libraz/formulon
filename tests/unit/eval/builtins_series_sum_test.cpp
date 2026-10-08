@@ -146,6 +146,19 @@ TEST(BuiltinsSeriesSum, ErrorInXShortCircuits) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
+// SERIESSUM follows the Analysis-ToolPak rule: an omitted scalar is #N/A.
+TEST(BuiltinsSeriesSumAnalysisToolPak, OmittedXIsNA) {
+  const Value v = EvalSource("=SERIESSUM(,1,1,{1})");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsSeriesSumAnalysisToolPak, BoolXIsValue) {
+  const Value v = EvalSource("=SERIESSUM(TRUE,1,1,{1})");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

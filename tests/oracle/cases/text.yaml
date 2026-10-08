@@ -892,3 +892,63 @@ cases:
   - id: hyperlink_empty_friendly
     description: "Empty friendly_name still returns the empty string (not the URL)"
     formula: "=HYPERLINK(\"http://example.com\", \"\")"
+
+  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  #    arguments, and the near-integer snap of integer arguments --------------
+  - id: pf_right
+    formula: "=LEN(RIGHT(\"abcdef\",2.9999999))"
+
+  - id: pf_fixed
+    formula: "=FIXED(1.23456,1.9999999)"
+
+  - id: pf_substitute_n
+    formula: "=SUBSTITUTE(\"aaa\",\"a\",\"b\",1.9999999)"
+
+  - id: pf_find_start
+    formula: "=FIND(\"b\",\"abcb\",2.9999999)"
+
+  - id: pf_replace
+    formula: "=REPLACE(\"abcdef\",1.9999999,1,\"x\")"
+
+  - id: pf_char_big
+    formula: "=CODE(CHAR(64.9999999))"
+
+  - id: pf_mid_len
+    formula: "=LEN(MID(\"abcdef\",1,2.9999999))"
+
+  - id: pf_left_neg
+    formula: "=LEFT(\"abc\",-0.0000001)"
+
+  - id: near_left
+    formula: "=LEN(LEFT(\"abcdef\",2.9999999))"
+
+  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  - id: snap_search
+    formula: "=SEARCH(\"b\",\"abcb\",2.9999999)"
+
+  - id: snap_searchb
+    formula: "=SEARCHB(\"b\",\"abcb\",2.9999999)"
+
+  - id: snap_findb
+    formula: "=FINDB(\"b\",\"abcb\",2.9999999)"
+
+  - id: snap_leftb
+    formula: "=LENB(LEFTB(\"abcdef\",2.9999999))"
+
+  - id: snap_rightb
+    formula: "=LENB(RIGHTB(\"abcdef\",2.9999999))"
+
+  - id: snap_replaceb
+    formula: "=REPLACEB(\"abcdef\",1.9999999,1,\"x\")"
+
+  - id: snap_dollar
+    formula: "=DOLLAR(1.23456,1.9999999)"
+
+  - id: snap_mid_start
+    formula: "=MID(\"abcdef\",1.9999999,1)"
+
+  - id: snap_textbefore_n
+    formula: "=TEXTBEFORE(\"a-b-c\",\"-\",1.9999999)"
+
+  - id: snap_rept
+    formula: "=LEN(REPT(\"a\",2.9999999))"

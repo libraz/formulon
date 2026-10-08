@@ -2,11 +2,11 @@
   "suite": "financial_rates",
   "description": "Security-rate / T-Bill financial builtins — DISC / INTRATE / RECEIVED / TBILLPRICE / TBILLYIELD / TBILLEQ. See `eval/builtins/financial_rates.cpp`.",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-09,
@@ -461,6 +461,228 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "atp_disc_bool",
+      "formula": "=DISC(TRUE,40000,97,100)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_disc_omit",
+      "formula": "=DISC(,40000,97,100)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_disc_boolcell",
+      "formula": "=DISC(A1,40000,97,100)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_yielddisc_bool",
+      "formula": "=YIELDDISC(TRUE,40000,97,100)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_yielddisc_omit",
+      "formula": "=YIELDDISC(,40000,97,100)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_yielddisc_boolcell",
+      "formula": "=YIELDDISC(A1,40000,97,100)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_tbillprice_bool",
+      "formula": "=TBILLPRICE(TRUE,100,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_tbillprice_omit",
+      "formula": "=TBILLPRICE(,100,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_tbillprice_boolcell",
+      "formula": "=TBILLPRICE(A1,100,0.1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_intrate_bool",
+      "formula": "=INTRATE(TRUE,DATE(2030,1,15),1000,1100)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_intrate_omit",
+      "formula": "=INTRATE(,DATE(2030,1,15),1000,1100)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_received_bool",
+      "formula": "=RECEIVED(TRUE,DATE(2030,1,15),1000,0.05)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_received_omit",
+      "formula": "=RECEIVED(,DATE(2030,1,15),1000,0.05)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_tbilleq_bool",
+      "formula": "=TBILLEQ(TRUE,100,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_tbilleq_omit",
+      "formula": "=TBILLEQ(,100,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_tbillyield_bool",
+      "formula": "=TBILLYIELD(TRUE,100,98)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_tbillyield_omit",
+      "formula": "=TBILLYIELD(,100,98)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_pricedisc_bool",
+      "formula": "=PRICEDISC(TRUE,DATE(2030,1,15),0.05,100)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_pricedisc_omit",
+      "formula": "=PRICEDISC(,DATE(2030,1,15),0.05,100)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_pricemat_bool",
+      "formula": "=PRICEMAT(TRUE,DATE(2030,1,15),DATE(2024,1,15),0.05,0.06)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_pricemat_omit",
+      "formula": "=PRICEMAT(,DATE(2030,1,15),DATE(2024,1,15),0.05,0.06)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_yieldmat_bool",
+      "formula": "=YIELDMAT(TRUE,DATE(2030,1,15),DATE(2024,1,15),0.05,95)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_yieldmat_omit",
+      "formula": "=YIELDMAT(,DATE(2030,1,15),DATE(2024,1,15),0.05,95)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
       }
     }
   ]

@@ -46,7 +46,8 @@ using detail::SlotClass;
 /// Built-ins whose result can be a reference, as measured for the class of
 /// their call token.
 bool ReturnsReference(std::string_view name) {
-  for (const std::string_view fn : {"INDEX", "INDIRECT", "CHOOSE", "IF", "OFFSET", "IFS", "SWITCH", "XLOOKUP"}) {
+  for (const std::string_view fn : {"INDEX", "INDIRECT", "CHOOSE", "IF", "OFFSET", "IFS", "SWITCH", "XLOOKUP",
+                                    "TRIMRANGE", "_TRO_ALL", "_TRO_LEADING", "_TRO_TRAILING"}) {
     if (strings::case_insensitive_eq(name, fn)) {
       return true;
     }
@@ -270,6 +271,7 @@ class Encoder {
         promote_root_(root_class == PtgRootClass::kValue),
         name_body_(root_class == PtgRootClass::kReference && !base) {
     parser::collect_parenthesized_nodes(root, parens_);
+    function_values_ = function_value_refs(root, names);
     if (evaluation == PtgEvaluation::kLegacy) {
       implied_at_ = legacy_intersections(root, names);
       // With nothing to intersect, a legacy formula means what it means typed
@@ -372,6 +374,14 @@ class Encoder {
             return emit_external_ref(node, cls(measured_calls_), promote);
           }
           return emit_sheet_name_ref(node.as_name_sheet(), node.as_name(), name_cls);
+        }
+        // A built-in named as a value is its hidden `_xleta.` name, always value class.
+        if (std::find(function_values_.begin(), function_values_.end(), &node) != function_values_.end()) {
+          if (const auto it = name_table_.find(function_value_storage_name(node.as_name())); it != name_table_.end()) {
+            emit_u8(out_, ClassedPtg(0x23, kPtgValueClass));  // PtgName
+            emit_u32(out_, it->second);
+            return Expected<void, Error>::Ok();
+          }
         }
         return emit_name_ref(node.as_name(), name_cls);
       }
@@ -1331,6 +1341,8 @@ class Encoder {
   /// encoded as a dynamic-array one.
   PtgEvaluation evaluation_;
   Shapes shapes_;
+  /// The formula's built-ins named as values (`function_value_refs`).
+  std::vector<const parser::AstNode*> function_values_;
   /// A cell formula or defined name encoded as Excel 365 types it: calls take
   /// the classes measured for them there (`CallClass`), LET / LAMBDA
   /// parameters the class of their slot.

@@ -2,11 +2,11 @@
   "suite": "lambda",
   "description": "LAMBDA + ISOMITTED + BYROW / BYCOL / MAP / REDUCE / SCAN / MAKEARRAY — higher-order family closure against Mac Excel 365 (ja-JP).",
   "environment": {
-    "excel_version": "16.112.1",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-21T16:13:48Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -849,6 +849,227 @@
       "expect": {
         "kind": "bool",
         "value": true
+      }
+    },
+    {
+      "id": "function_value_bare_sum",
+      "formula": "=SUM",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "function_value_bare_lower_case",
+      "formula": "=sum",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "function_value_bare_unicode",
+      "formula": "=UNICODE",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "function_value_if_result",
+      "formula": "=IF(TRUE,SUM)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "function_value_in_arithmetic",
+      "formula": "=ABS+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "function_value_after_call",
+      "formula": "=SUM(1,2)+SUM",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "function_value_in_concat",
+      "formula": "=SUM({1,2})&ABS",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "function_value_as_argument",
+      "formula": "=ABS(SUM)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "function_value_type",
+      "formula": "=TYPE(SUM)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 128.0
+      }
+    },
+    {
+      "id": "function_value_type_lambda",
+      "formula": "=TYPE(LAMBDA(x,x))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 128.0
+      }
+    },
+    {
+      "id": "function_value_iserror",
+      "formula": "=ISERROR(SUM)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "function_value_iserror_lambda",
+      "formula": "=ISERROR(LAMBDA(x,x))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "function_value_isref",
+      "formula": "=ISREF(SUM)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "function_value_isomitted",
+      "formula": "=_xlfn.ISOMITTED(SUM)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "function_value_error_type",
+      "formula": "=ERROR.TYPE(SUM)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "function_value_index",
+      "formula": "=INDEX(ABS,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "function_value_unknown_name",
+      "formula": "=FOOBARBAZ",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "function_value_let_bound",
+      "formula": "=LET(f,ABS,f(-2))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "function_value_choose_call",
+      "formula": "=CHOOSE(1,SUM,ABS)(5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "function_value_if_call",
+      "formula": "=IF(TRUE,ABS,SUM)(-3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "function_value_reduce",
+      "formula": "=REDUCE(0,{1,2},SUM)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "function_value_byrow",
+      "formula": "=BYROW({1,2;3,4},SUM)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          3.0,
+          7.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "function_value_map",
+      "formula": "=MAP({1,2},ABS)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
       }
     }
   ]

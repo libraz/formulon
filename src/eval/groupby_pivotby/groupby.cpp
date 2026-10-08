@@ -57,15 +57,16 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return err;
   }
 
-  // -- arg 3: field_headers ∈ {0,1,2,3} ------------------------------------
-  int field_headers = 0;
-  if (!read_field_headers(call, 3, arity, 0, arena, registry, ctx, &field_headers, &err)) {
+  // -- arg 3: field_headers ∈ {0,1,2,3}; omitted detects a header row ------
+  int field_headers = kFieldHeadersAuto;
+  if (!read_field_headers(call, 3, arity, kFieldHeadersAuto, arena, registry, ctx, &field_headers, &err)) {
     return err;
   }
+  field_headers = resolve_auto_field_headers(field_headers, *values);
 
-  // -- arg 4: total_depth ∈ {-2,-1,0,1,2} ----------------------------------
-  int total_depth = -1;
-  if (!read_total_depth(call, 4, arity, -1, arena, registry, ctx, &total_depth, &err)) {
+  // -- arg 4: total_depth ∈ {-2,-1,0,1,2}; default 1 (grand total last) ----
+  int total_depth = 1;
+  if (!read_total_depth(call, 4, arity, 1, arena, registry, ctx, &total_depth, &err)) {
     return err;
   }
 
@@ -123,7 +124,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   std::vector<std::vector<Value>> agg_rows;
   agg_rows.reserve(group_repr.size());
   for (std::size_t g = 0; g < group_repr.size(); ++g) {
-    std::vector<Value> row(out_cols, Value::blank());
+    std::vector<Value> row(out_cols, placeholder_cell());
     // Key columns: copy the representative's key cells verbatim.
     const std::uint32_t repr_row = group_repr[g];
     for (std::uint32_t c = 0; c < key_cols; ++c) {
@@ -144,7 +145,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // -- Sort ---------------------------------------------------------------
   // sort_order semantics:
-  //   * 0 -> preserve first-occurrence order (already true).
+  //   * omitted -> ascending by the key columns, errors last.
   //   * N>0 -> stable-sort ascending by the N-th aggregated value column
   //     (1-based; out-of-range -> #VALUE!). Tie-break on group key.
   //   * N<0 -> stable-sort descending by |N|-th column.
@@ -177,14 +178,11 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       return cmp_keys_asc(*row_fields, group_repr[a], group_repr[b]) < 0;
     });
   } else {
-    // Even at sort_order=0, error-keyed groups sink to the bottom in stable
-    // first-occurrence order (matching Mac Excel's UNIQUE / FILTER pattern
-    // for cells whose evaluation produced an error).
     sort_group_order(order, [&](std::size_t a, std::size_t b) {
       if (group_is_error[a] != group_is_error[b]) {
         return !group_is_error[a];
       }
-      return false;  // preserve original order within bucket
+      return cmp_keys_asc(*row_fields, group_repr[a], group_repr[b]) < 0;
     });
   }
 
@@ -201,7 +199,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   std::vector<Value> grand_total_row;
   bool emit_grand_total = (total_depth != 0);
   if (emit_grand_total) {
-    grand_total_row.assign(out_cols, Value::blank());
+    grand_total_row.assign(out_cols, placeholder_cell());
     grand_total_row[0] =
         Value::text(arena.intern(emit_subtotals ? hierarchy_grand_total_label(ctx) : grand_total_label(ctx)));
     const std::vector<std::uint32_t> all_rows = collect_included_rows(include_row, data_start_row);
@@ -234,7 +232,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     }
     subtotal_rows.reserve(outer_count);
     for (std::size_t o = 0; o < outer_count; ++o) {
-      std::vector<Value> row(out_cols, Value::blank());
+      std::vector<Value> row(out_cols, placeholder_cell());
       // The subtotal row restates its outer key verbatim in the first key
       // column and leaves the inner key columns blank, so it reads as the
       // roll-up of the group rows directly above or below it.
@@ -254,8 +252,8 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // Header row (if requested).
   if (layout.output_emits_header) {
-    std::vector<Value> header(out_cols, Value::blank());
-    if (field_headers == 1 || field_headers == 3) {
+    std::vector<Value> header(out_cols, placeholder_cell());
+    if (field_headers == 3) {
       // Inputs had a header row (row 0 of each input). Copy it verbatim.
       for (std::uint32_t c = 0; c < key_cols; ++c) {
         header[c] = row_fields->cells[c];
@@ -264,16 +262,12 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
         header[key_cols + c] = values->cells[c];
       }
     } else {
-      // field_headers == 2: synthesize English defaults. Mac Excel may
-      // emit Japanese labels in ja-JP; this divergence is logged for the
-      // first oracle run.
+      // field_headers == 2: generated labels.
       for (std::uint32_t c = 0; c < key_cols; ++c) {
-        const std::string label = "Field " + std::to_string(c + 1U);
-        header[c] = Value::text(arena.intern(label));
+        header[c] = Value::text(arena.intern(row_field_label(ctx, c + 1U)));
       }
       for (std::uint32_t c = 0; c < val_cols; ++c) {
-        const std::string label = "Value " + std::to_string(c + 1U);
-        header[key_cols + c] = Value::text(arena.intern(label));
+        header[key_cols + c] = Value::text(arena.intern(value_label(ctx, c + 1U)));
       }
     }
     emit_row(&out_rows, header);

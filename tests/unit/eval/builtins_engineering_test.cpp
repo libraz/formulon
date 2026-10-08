@@ -537,6 +537,34 @@ TEST(EngineeringGestep, RejectsBoolArg) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// ---------------------------------------------------------------------------
+// Analysis-ToolPak argument rule (DEC2BIN / DELTA)
+// ---------------------------------------------------------------------------
+
+TEST(EngineeringAnalysisToolPak, Dec2BinBoolIsValue) {
+  const Value v = EvalSource("=DEC2BIN(TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(EngineeringAnalysisToolPak, Dec2BinOmittedRequiredIsNA) {
+  const Value v = EvalSource("=DEC2BIN(,2)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(EngineeringAnalysisToolPak, Dec2BinOmittedPlacesKeepsDefault) {
+  const Value v = EvalSource("=DEC2BIN(5,)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "101");
+}
+
+TEST(EngineeringAnalysisToolPak, DeltaOmittedRequiredIsNA) {
+  const Value v = EvalSource("=DELTA(,1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -69,6 +69,14 @@ struct RangeResult {
   bool from_scalar = false;
 };
 
+/// Reads the cells of a 3-D reference node (`Sheet1:Sheet3!A1:B2`): the same
+/// rectangle from every sheet of the inclusive span, sheet-major then
+/// row-major. Returns false for a missing span endpoint or a malformed
+/// rectangle (`#REF!`). The eager dispatcher's inline copy of this walk is
+/// meant to call it.
+bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx, std::vector<Value>* out);
+
 /// Resolves `arg_node` to a `RangeResult`, expanding `RangeOp` / `Ref` /
 /// `SpillRef` / range-shaped Calls (`OFFSET` / `CHOOSE` / `IF` / `ROW` /
 /// `COLUMN`) and unwrapping dynamic-array producers (`MUNIT`,

@@ -40,6 +40,27 @@ Expected<int, ErrorCode> read_int(const Value& v) {
   return static_cast<int>(std::trunc(d));
 }
 
+// `read_int` for ADDRESS's row / column, which snap to a near integer. A raw
+// value below 1 is `#VALUE!` before the snap, and above `max` after it.
+Expected<int, ErrorCode> read_snapped_coordinate(const Value& v, std::uint32_t max) {
+  auto coerced = coerce_to_number(v);
+  if (!coerced) {
+    return std::move(coerced.error());
+  }
+  const double d = coerced.value();
+  if (std::isnan(d) || std::isinf(d)) {
+    return ErrorCode::Num;
+  }
+  if (d < 1.0) {
+    return ErrorCode::Value;
+  }
+  const double coordinate = std::trunc(snap_near_integer(d));
+  if (coordinate > static_cast<double>(max)) {
+    return ErrorCode::Value;
+  }
+  return static_cast<int>(coordinate);
+}
+
 Expected<int, ErrorCode> read_optional_int(const Value* args, std::uint32_t arity, std::uint32_t index,
                                            int default_value) {
   if (arity <= index) {
@@ -118,11 +139,11 @@ void append_quoted_sheet(std::string* out, std::string_view name) {
 // non-identifier bytes) when present and non-empty.
 Value Address(const Value* args, std::uint32_t arity, Arena& arena) {
   // Row and col parameters are required.
-  auto row_exp = read_int(args[0]);
+  auto row_exp = read_snapped_coordinate(args[0], Sheet::kMaxRows);
   if (!row_exp) {
     return Value::error(row_exp.error());
   }
-  auto col_exp = read_int(args[1]);
+  auto col_exp = read_snapped_coordinate(args[1], Sheet::kMaxCols);
   if (!col_exp) {
     return Value::error(col_exp.error());
   }

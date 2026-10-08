@@ -20,6 +20,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/logical_coerce.h"
 #include "eval/name_env.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/tree_walker/broadcast.h"
 #include "parser/ast.h"
@@ -364,6 +365,11 @@ Value eval_count_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   }
   double total = 0.0;
   for (std::uint32_t i = 0; i < arity; ++i) {
+    // An omitted slot (`COUNT(3,,6)`) counts as the number 0.
+    if (is_omitted_arg(call.as_call_arg(i))) {
+      total += 1.0;
+      continue;
+    }
     LazyAggArg resolved = resolve_lazy_agg_arg(call.as_call_arg(i), arena, registry, ctx);
     if (resolved.shape == LazyArgShape::Range) {
       // Range / array / spill provenance: only Number cells count. Bool /

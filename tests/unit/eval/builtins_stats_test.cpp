@@ -106,15 +106,21 @@ TEST(BuiltinsMedian, NegativeValues) {
   EXPECT_DOUBLE_EQ(v.as_number(), -1.0);
 }
 
-TEST(BuiltinsMedian, NonNumericsAreSkipped) {
-  // MEDIAN skips text and bool, unlike SUM/AVERAGE which coerce.
-  const Value v = EvalSource("=MEDIAN(1, \"ignored\", TRUE, 3, \"5\", 5)");
+TEST(BuiltinsMedian, DirectBoolAndNumericTextCount) {
+  // Direct arguments coerce like VAR/STDEV: TRUE is 1, "5" is 5.
+  const Value v = EvalSource("=MEDIAN(1, TRUE, 3, \"5\", 5)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }
 
-TEST(BuiltinsMedian, AllNonNumericIsNum) {
-  const Value v = EvalSource("=MEDIAN(\"a\", \"b\", TRUE)");
+TEST(BuiltinsMedian, DirectNonNumericTextIsValue) {
+  const Value v = EvalSource("=MEDIAN(1, \"ignored\", 3)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsMedian, ArrayLiteralNonNumericsAreSkipped) {
+  const Value v = EvalSource("=MEDIAN({TRUE, FALSE})");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
@@ -125,16 +131,24 @@ TEST(BuiltinsMedian, DirectErrorPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
-TEST(BuiltinsMedian, BlankArgIsSkipped) {
+TEST(BuiltinsMedian, OmittedSlotCountsAsZero) {
   const Value args[] = {Value::number(1.0), Value::blank(), Value::number(3.0), Value::number(5.0)};
   const Value v = CallDirect("MEDIAN", args, 4u);
   ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
-TEST(BuiltinsMedian, AllBlankIsNum) {
-  const Value args[] = {Value::blank(), Value::blank()};
-  const Value v = CallDirect("MEDIAN", args, 2u);
+TEST(BuiltinsMedian, BlankCellReferenceIsSkipped) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 0, Value::number(4.0));
+  const Value v = EvalSourceIn("=MEDIAN(A1, A2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
+}
+
+TEST(BuiltinsMedian, AllBlankCellsIsNum) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=MEDIAN(A1:A3)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }

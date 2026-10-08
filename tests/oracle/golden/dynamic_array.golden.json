@@ -2,11 +2,11 @@
   "suite": "dynamic_array",
   "description": "Dynamic-array (spilling) functions. SEQUENCE is the first acceptance case for cell-level spill machinery; the oracle reads back the anchor scalar (top-left of the spill region) since xlwings does not surface phantom cells through a single-cell read.",
   "environment": {
-    "excel_version": "16.112.1",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-20T17:06:36Z"
+    "generated_at": "2026-10-08T03:47:54Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -354,13 +354,13 @@
           "value": 42.0
         }
       },
-      "skipped": "Excel discards `=_xlfn.ANCHORARRAY(B1)` at entry, so there is no reading to compare. Entering `=B1#` on the same sheet returns #REF!, matching Formulon; that is captured as anchorarray_hash_static_value_anchor."
+      "skipped": "Excel discards `=_xlfn.ANCHORARRAY(B1)` at entry, so there is no reading to compare. Entering `=B1#` on the same sheet returns #REF!, matching Formulon; that is captured as anchorarray_hash_static_value_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     },
     {
       "id": "anchorarray_blank_anchor",
       "formula": "=_xlfn.ANCHORARRAY(E1)",
       "setup": {},
-      "skipped": "Excel discards `=_xlfn.ANCHORARRAY(E1)` at entry. The `=E1#` spelling returns #REF! for a genuinely blank anchor, captured as anchorarray_hash_blank_anchor."
+      "skipped": "Excel discards `=_xlfn.ANCHORARRAY(E1)` at entry. The `=E1#` spelling returns #REF! for a genuinely blank anchor, captured as anchorarray_hash_blank_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     },
     {
       "id": "anchorarray_resolves_sequence_sum",
@@ -371,7 +371,7 @@
           "formula": "=SEQUENCE(3)"
         }
       },
-      "skipped": "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor."
+      "skipped": "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     },
     {
       "id": "anchorarray_resolves_sequence_rows",
@@ -382,7 +382,7 @@
           "formula": "=SEQUENCE(3)"
         }
       },
-      "skipped": "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor."
+      "skipped": "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     },
     {
       "id": "anchorarray_offset_resolved_anchor",
@@ -393,7 +393,7 @@
           "formula": "=SEQUENCE(2,2)"
         }
       },
-      "skipped": "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor."
+      "skipped": "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     },
     {
       "id": "anchorarray_hash_resolves_sequence_sum",
@@ -570,6 +570,33 @@
       "expect": {
         "kind": "error",
         "code": "#REF!"
+      }
+    },
+    {
+      "id": "pf_sequence",
+      "formula": "=ROWS(SEQUENCE(2.9999999))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "snap_sequence_cols",
+      "formula": "=COLUMNS(SEQUENCE(1,2.9999999))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "snap_randarray_rows",
+      "formula": "=ROWS(RANDARRAY(2.9999999))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
       }
     }
   ]
