@@ -35,8 +35,10 @@ _CONTRIBUTE_BANNER = """\
   Thank you for taking the time to donate Excel oracle data.
 
   Why we need this:
-    Formulon's 1-bit compatibility claim is anchored to ONE primary
-    oracle (Mac Excel 365, ja-JP). Several function families behave
+    Formulon's 1-bit compatibility claim is anchored to one primary
+    oracle per track (Mac Excel 365 ja-JP for formulas), with six more
+    Mac locales gating CI. Windows locales other than ja-JP are
+    estimated, not measured. Several function families behave
     differently across locales (BAHTTEXT, NUMBERSTRING, decimal-comma
     locales, localized TEXT format codes) and across the Mac/Windows
     ports. The maintainer team can't reproduce these from a single
