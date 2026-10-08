@@ -1,0 +1,2298 @@
+{
+  "suite": "whole_axis_spill",
+  "description": "Bare whole-axis references (`=A:A`, `=A:C`, `=1:2`) used as the whole formula, i.e. as a spilling expression rather than as a function argument. Every case declares its own `formula_cell`, because the observable result depends on where the formula sits.\nExcel 365 treats a bare whole-axis reference like any other bare range: the value is the array of the *declared* rectangle — rows 1..1048576 for a column span, columns A..XFD for a row span — and it spills from the formula cell. Nothing is trimmed to the populated extent, and cells with no content spill as 0. Three consequences are directly observable and are what this suite pins:\n\n  * the rectangle must fit inside the grid measured from the formula\n    cell, so a whole-column reference only spills from row 1 and a\n    whole-row reference only from column A; anywhere else is `#SPILL!`;\n  * any occupied cell anywhere in that rectangle blocks the spill, even\n    one far below or far to the right of the populated data, which is\n    what shows the footprint is the full declared rectangle;\n  * a formula that sits inside the axis it references is a circular\n    reference, so it never spills at all.\n\nThe four full-rectangle spills use `capture: shape`: their results are far larger than the cell-by-cell capture ceiling (the smallest is 16,384 cells against a 4,096 ceiling), so the golden records the dynamic-array shape plus the listed sample cells instead of every cell. Excel answers them normally; only the recording differs.\nThe remaining seven are recorded cell by cell and are currently registered in tests/divergence.yaml. Each `expect` block below is Excel's observed answer; deleting an entry and regenerating this suite turns the corresponding case back into a verified golden.\n",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "de-DE",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-08T10:57:56Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "whole_col_below_row_one_overflows",
+      "formula": "=A:A",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "formula_cell": "Z2",
+      "expect": {
+        "kind": "blank"
+      }
+    },
+    {
+      "id": "whole_multi_col_below_row_one_overflows",
+      "formula": "=A:C",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "formula_cell": "Z2",
+      "expect": {
+        "kind": "blank"
+      }
+    },
+    {
+      "id": "whole_row_right_of_column_a_overflows",
+      "formula": "=1:2",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "formula_cell": "B5",
+      "expect": {
+        "kind": "blank"
+      }
+    },
+    {
+      "id": "whole_col_blocked_far_below_anchor",
+      "formula": "=A:A",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Z500": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "blank"
+      }
+    },
+    {
+      "id": "whole_row_blocked_right_of_anchor",
+      "formula": "=3:3",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Z5": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "formula_cell": "A5",
+      "expect": {
+        "kind": "blank"
+      }
+    },
+    {
+      "id": "whole_col_containing_its_own_formula_cell",
+      "formula": "=A:A",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "formula_cell": "A1",
+      "skipped": "=A:A at A1 with column A otherwise empty: the rectangle fits and the runway is clear, so only the cycle stops the spill. Nothing else in column A holds a formula, so the formula cell is the sole member of the cycle and Excel seeds it with 0. Formulon returns #REF! per its cycle policy."
+    },
+    {
+      "id": "whole_row_containing_its_own_formula_cell",
+      "formula": "=5:5",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "formula_cell": "A5",
+      "skipped": "=5:5 at A5 with row 5 otherwise empty: same isolation on the row axis. Nothing else in row 5 holds a formula, so the formula cell is the sole member of the cycle and Excel seeds it with 0. Formulon returns #REF! per its cycle policy."
+    },
+    {
+      "id": "axis_self_ref_derived_col",
+      "formula": "=A:A+0",
+      "setup": {},
+      "formula_cell": "A1",
+      "skipped": "=A:A+0 at A1 with column A otherwise empty: the formula cell is the sole member of the cycle and Excel seeds it with 0, as for the bare =A:A. Formulon returns #REF! per its cycle policy (circular_reference_iterative_off_returns_ref)."
+    },
+    {
+      "id": "axis_self_ref_sum_derived_col",
+      "formula": "=SUM(C:C*1)",
+      "setup": {},
+      "formula_cell": "C1",
+      "skipped": "=SUM(C:C*1) at C1 with column C otherwise empty: the formula cell is the sole member of the cycle and Excel seeds it with 0. Formulon returns #REF! per its cycle policy (circular_reference_iterative_off_returns_ref)."
+    },
+    {
+      "id": "axis_self_ref_rows_derived_col",
+      "formula": "=ROWS(G:G+0)",
+      "setup": {},
+      "formula_cell": "G1",
+      "skipped": "=ROWS(G:G+0) at G1: G:G+0 reads the formula cell, so the cell is in a cycle; Excel seeds it and ROWS reports the declared 1048576 rows. Formulon returns #REF! per its cycle policy (circular_reference_iterative_off_returns_ref)."
+    },
+    {
+      "id": "whole_col_cycle_decided_before_blocking",
+      "formula": "=A:A",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "formula_cell": "A1",
+      "skipped": "=A:A at A1 with A2/A3 occupied: circular and blocked at once, and Excel answers 0 -- it decides the cycle before the blocking check. A2 and A3 hold literal data, not formulas, so the formula cell is the only member of this cycle and its 0 is a single readable value rather than one term of a cascade. Formulon returns #REF! per its cycle policy. The control case with the formula cell outside the referenced column is a live golden and reports #SPILL!, so the pair pins the ordering rather than the blocking."
+    },
+    {
+      "id": "whole_col_blocked_when_formula_cell_is_outside_the_axis",
+      "formula": "=B:B",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "formula_cell": "A1",
+      "expect": {
+        "kind": "blank"
+      }
+    },
+    {
+      "id": "whole_col_spills_full_declared_rectangle",
+      "formula": "=A:A",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "formula_cell": "Z1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1048576,
+          1
+        ],
+        "samples": {
+          "Z1": 1.0,
+          "Z2": 2.0,
+          "Z3": 3.0,
+          "Z4": 0.0,
+          "Z1048576": 0.0
+        }
+      }
+    },
+    {
+      "id": "whole_multi_col_spills_full_declared_rectangle",
+      "formula": "=A:C",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "formula_cell": "Z1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1048576,
+          3
+        ],
+        "samples": {
+          "Z1": 1.0,
+          "AA1": 10.0,
+          "AB1": 100.0,
+          "Z2": 2.0,
+          "AA2": 0.0,
+          "AB3": 0.0
+        }
+      }
+    },
+    {
+      "id": "whole_row_pair_spills_full_declared_rectangle",
+      "formula": "=1:2",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "formula_cell": "A5",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          2,
+          16384
+        ],
+        "samples": {
+          "A5": 1.0,
+          "B5": 10.0,
+          "C5": 100.0,
+          "A6": 2.0,
+          "B6": 0.0,
+          "XFD5": 0.0,
+          "XFD6": 0.0
+        }
+      }
+    },
+    {
+      "id": "whole_single_row_spills_full_declared_rectangle",
+      "formula": "=3:3",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "formula_cell": "A5",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1,
+          16384
+        ],
+        "samples": {
+          "A5": 3.0,
+          "B5": 30.0,
+          "C5": 0.0,
+          "XFD5": 0.0
+        }
+      }
+    },
+    {
+      "id": "bounded_full_col_spills_like_the_whole_axis_spelling",
+      "formula": "=A1:A1048576",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "formula_cell": "B1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1048576,
+          1
+        ],
+        "samples": {
+          "B1": 1.0,
+          "B2": 2.0,
+          "B3": 3.0,
+          "B1048576": 0.0
+        }
+      }
+    },
+    {
+      "id": "bounded_rectangle_containing_its_own_formula_cell",
+      "formula": "=A1:C3",
+      "setup": {},
+      "formula_cell": "B2",
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bounded_rectangle_outside_its_own_formula_cell",
+      "formula": "=A1:C3",
+      "setup": {},
+      "formula_cell": "E1",
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "id": "axis_sum_col_times_one",
+      "formula": "=SUM(Sheet2!B:B*1)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 150.0
+      }
+    },
+    {
+      "id": "axis_sum_cond_times_col",
+      "formula": "=SUM((Sheet2!A:A=\"k2\")*Sheet2!B:B)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "axis_sumproduct_cond_times_col",
+      "formula": "=SUMPRODUCT((Sheet2!A:A=\"k2\")*Sheet2!B:B)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "axis_col_plus_zero_spills_full_rectangle",
+      "formula": "=Sheet2!B:B+0",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "A1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1048576,
+          1
+        ],
+        "samples": {
+          "A1": 10.0,
+          "A2": 20.0,
+          "A5": 50.0,
+          "A6": 0.0,
+          "A1048576": 0.0
+        }
+      }
+    },
+    {
+      "id": "axis_col_plus_zero_below_row_one_overflows",
+      "formula": "=Sheet2!B:B+0",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "A2",
+      "expect": {
+        "kind": "blank"
+      }
+    },
+    {
+      "id": "axis_rows_of_col_plus_zero",
+      "formula": "=ROWS(Sheet2!B:B+0)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "axis_let_rows_of_col",
+      "formula": "=LET(x,Sheet2!B:B,ROWS(x))",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "axis_let_col_spills_full_rectangle",
+      "formula": "=LET(x,Sheet2!B:B,x)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "A1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1048576,
+          1
+        ],
+        "samples": {
+          "A1": 10.0,
+          "A5": 50.0,
+          "A6": 0.0,
+          "A1048576": 0.0
+        }
+      }
+    },
+    {
+      "id": "axis_countblank_col_c",
+      "formula": "=COUNTBLANK(Sheet2!C:C)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "axis_countblank_col_b",
+      "formula": "=COUNTBLANK(Sheet2!B:B)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048571.0
+      }
+    },
+    {
+      "id": "axis_countblank_bounded_a1_a5",
+      "formula": "=COUNTBLANK(Sheet2!A1:A5)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "axis_countblank_col_a",
+      "formula": "=COUNTBLANK(Sheet2!A:A)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048572.0
+      }
+    },
+    {
+      "id": "axis_countblank_row_1",
+      "formula": "=COUNTBLANK(Sheet2!1:1)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 16382.0
+      }
+    },
+    {
+      "id": "axis_countblank_cols_a_b",
+      "formula": "=COUNTBLANK(Sheet2!A:B)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 2097143.0
+      }
+    },
+    {
+      "id": "axis_max_col_minus_one",
+      "formula": "=MAX(Sheet2!B:B-1)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 49.0
+      }
+    },
+    {
+      "id": "axis_count_col_plus_zero",
+      "formula": "=COUNT(Sheet2!B:B+0)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "axis_average_if_col_gt_15",
+      "formula": "=AVERAGE(IF(Sheet2!B:B>15,Sheet2!B:B))",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 35.0
+      }
+    },
+    {
+      "id": "axis_same_sheet_col_times_two_spills",
+      "formula": "=B:B*2",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "D1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1048576,
+          1
+        ],
+        "samples": {
+          "D1": 20.0,
+          "D2": 40.0,
+          "D5": 100.0,
+          "D6": 0.0,
+          "D1048576": 0.0
+        }
+      }
+    },
+    {
+      "id": "axis_countif_col_a_not_k1",
+      "formula": "=COUNTIF(Sheet2!A:A,\"<>k1\")",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048575.0
+      }
+    },
+    {
+      "id": "axis_countif_col_a_empty",
+      "formula": "=COUNTIF(Sheet2!A:A,\"\")",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048572.0
+      }
+    },
+    {
+      "id": "axis_countif_col_a_nonblank",
+      "formula": "=COUNTIF(Sheet2!A:A,\"<>\")",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "axis_countifs_both_empty",
+      "formula": "=COUNTIFS(Sheet2!A:A,\"\",Sheet2!B:B,\"\")",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048571.0
+      }
+    },
+    {
+      "id": "axis_countif_col_b_lt_20",
+      "formula": "=COUNTIF(Sheet2!B:B,\"<20\")",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "axis_countif_col_b_ne_20",
+      "formula": "=COUNTIF(Sheet2!B:B,\"<>20\")",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048575.0
+      }
+    },
+    {
+      "id": "axis_sumproduct_blank_cond",
+      "formula": "=SUMPRODUCT((Sheet2!A:A=\"\")*1)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048572.0
+      }
+    },
+    {
+      "id": "axis_multi_col_plus_one_spills",
+      "formula": "=Sheet2!A:C+1",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "A1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1048576,
+          3
+        ],
+        "samples": {
+          "A1": {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          "B1": 11.0,
+          "C1": 1.0,
+          "A4": 1.0,
+          "A6": 1.0,
+          "B6": 1.0,
+          "C6": 1.0,
+          "A1048576": 1.0,
+          "C1048576": 1.0
+        }
+      }
+    },
+    {
+      "id": "axis_col_plus_column_vector_tail_na",
+      "formula": "=Sheet2!B:B+{1;2;3}",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "A1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1048576,
+          1
+        ],
+        "samples": {
+          "A1": 11.0,
+          "A2": 22.0,
+          "A3": 33.0,
+          "A4": {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "A6": {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "A1048576": {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        }
+      }
+    },
+    {
+      "id": "axis_col_plus_row_vector_two_cols",
+      "formula": "=Sheet2!B:B+{1,2}",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "A1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1048576,
+          2
+        ],
+        "samples": {
+          "A1": 11.0,
+          "B1": 12.0,
+          "A6": 1.0,
+          "B6": 2.0,
+          "A1048576": 1.0,
+          "B1048576": 2.0
+        }
+      }
+    },
+    {
+      "id": "axis_row_plus_zero_spills",
+      "formula": "=Sheet2!1:1+0",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "A1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1,
+          16384
+        ],
+        "samples": {
+          "A1": {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          "B1": 10.0,
+          "C1": 0.0,
+          "XFD1": 0.0
+        }
+      }
+    },
+    {
+      "id": "axis_col_concat_text_tail",
+      "formula": "=Sheet2!A:A&\"x\"",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "A1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1048576,
+          1
+        ],
+        "samples": {
+          "A1": "k1x",
+          "A4": "x",
+          "A6": "x",
+          "A1048576": "x"
+        }
+      }
+    },
+    {
+      "id": "axis_isblank_col_tail",
+      "formula": "=ISBLANK(Sheet2!A:A)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "A1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1048576,
+          1
+        ],
+        "samples": {
+          "A1": false,
+          "A4": true,
+          "A6": true,
+          "A1048576": true
+        }
+      }
+    },
+    {
+      "id": "axis_rows_of_abs_col",
+      "formula": "=ROWS(ABS(Sheet2!B:B))",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "axis_sum_col_times_zero_plus_one",
+      "formula": "=SUM(Sheet2!B:B*0+1)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "axis_sum_col_plus_row_axis",
+      "formula": "=SUM(Sheet2!A:A+Sheet2!1:1)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "skipped": "SUM(Sheet2!A:A+Sheet2!1:1): a whole column plus a whole row broadcasts to the full 1,048,576 x 16,384 grid. Excel answers 0 for it (measured; the rule behind the 0 is not identified). Formulon has no single repeated tail for a two-axis result, so it would have to expand ~1.7e10 cells and refuses with #NUM! at the derived-array ceiling, as for any other oversized array."
+    },
+    {
+      "id": "axis_sumproduct_col_vs_bounded_mismatch",
+      "formula": "=SUMPRODUCT(Sheet2!A:A,Sheet2!B1:B5)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "axis_sumproduct_col_b_squared",
+      "formula": "=SUMPRODUCT(Sheet2!B:B,Sheet2!B:B)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 5500.0
+      }
+    },
+    {
+      "id": "axis_sumproduct_tail_sequential_sum",
+      "formula": "=SUMPRODUCT((Sheet2!A:A=\"\")*0.1)-104857.2",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1.6156118363142014e-06
+      }
+    }
+  ]
+}

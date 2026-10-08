@@ -1,0 +1,685 @@
+{
+  "suite": "engineering_special",
+  "description": "Continuous-math engineering built-ins: error function family (ERF, ERF.PRECISE, ERFC, ERFC.PRECISE) and Bessel function family (BESSELJ, BESSELY, BESSELI, BESSELK). Cases cover canonical handbook values, oddness / integral form for ERF, order truncation for BESSEL*, and singularity / negative-domain rejection for the second-kind Bessel members. Tolerance is loose (1e-8) because BESSELK uses Abramowitz & Stegun 9.8.5-9.8.8 polynomial approximations whose rated accuracy is |epsilon| < 1.9e-7.\n",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "de-DE",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-08T09:59:36Z"
+  },
+  "tolerance": {
+    "abs": 1e-08,
+    "rel": 1e-08
+  },
+  "cases": [
+    {
+      "id": "erf_zero",
+      "formula": "=ERF(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "erf_one",
+      "formula": "=ERF(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.8427007929497149
+      }
+    },
+    {
+      "id": "erf_negative_one_odd",
+      "formula": "=ERF(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.8427007929497149
+      }
+    },
+    {
+      "id": "erf_two_arg_from_zero",
+      "formula": "=ERF(0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.8427007929497149
+      }
+    },
+    {
+      "id": "erf_two_arg_interval",
+      "formula": "=ERF(1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.15262147206923782
+      }
+    },
+    {
+      "id": "erf_precise_one",
+      "formula": "=ERF.PRECISE(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.8427007929497149
+      }
+    },
+    {
+      "id": "erfc_zero",
+      "formula": "=ERFC(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "erfc_one",
+      "formula": "=ERFC(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.15729920705028513
+      }
+    },
+    {
+      "id": "erfc_precise_one",
+      "formula": "=ERFC.PRECISE(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.15729920705028513
+      }
+    },
+    {
+      "id": "besselj_zero_zero",
+      "formula": "=BESSELJ(0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.00000000283141
+      }
+    },
+    {
+      "id": "besselj_one_zero",
+      "formula": "=BESSELJ(1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7651976837548592
+      }
+    },
+    {
+      "id": "besselj_one_one",
+      "formula": "=BESSELJ(1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.4400505856771301
+      }
+    },
+    {
+      "id": "bessely_one_zero",
+      "formula": "=BESSELY(1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.08825697139770806
+      }
+    },
+    {
+      "id": "bessely_zero_singular",
+      "formula": "=BESSELY(0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besseli_one_zero",
+      "formula": "=BESSELI(1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.2660658480342601
+      },
+      "tolerance": {
+        "abs": 1e-06,
+        "rel": 1e-07
+      }
+    },
+    {
+      "id": "besseli_two_one",
+      "formula": "=BESSELI(2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5906368572633083
+      }
+    },
+    {
+      "id": "besselk_one_zero",
+      "formula": "=BESSELK(1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.421024421083418
+      }
+    },
+    {
+      "id": "besselk_two_one",
+      "formula": "=BESSELK(2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.13986588
+      }
+    },
+    {
+      "id": "besselk_zero_singular",
+      "formula": "=BESSELK(0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "erf_large_positive_asymptote",
+      "formula": "=ERF(6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "erf_large_negative_asymptote",
+      "formula": "=ERF(-6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "erf_two_arg_negative_bounds",
+      "formula": "=ERF(-2,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.15262147206923782
+      }
+    },
+    {
+      "id": "erf_two_arg_reversed_bounds",
+      "formula": "=ERF(2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.15262147206923782
+      }
+    },
+    {
+      "id": "erf_two_arg_same_value",
+      "formula": "=ERF(1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "erf_text_numeric",
+      "formula": "=ERF(\"1.5\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "erf_bool_rejected",
+      "formula": "=ERF(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "erf_propagates_error",
+      "formula": "=ERF(#N/A)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "erf_precise_two_arg_rejected",
+      "formula": "=ERF.PRECISE(1,2)",
+      "setup": {},
+      "skipped": "Mac Excel refuses =ERF.PRECISE(1,2) at entry (the function is strict 1-arg): the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's registry enforces the (1,1) arity bound and returns #VALUE!, which is the more useful surface for tooling that consumes formula errors. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+    },
+    {
+      "id": "erfc_large_positive_to_zero",
+      "formula": "=ERFC(6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.1519736712498925e-17
+      }
+    },
+    {
+      "id": "erfc_negative",
+      "formula": "=ERFC(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.8427007929497148
+      }
+    },
+    {
+      "id": "besselj_fractional_order_truncates",
+      "formula": "=BESSELJ(1,1.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.4400505856771301
+      }
+    },
+    {
+      "id": "besselj_negative_order_rejected",
+      "formula": "=BESSELJ(1,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_zero_higher_order",
+      "formula": "=BESSELJ(0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "besselj_large_x_oscillation",
+      "formula": "=BESSELJ(10,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.2459357644412996
+      }
+    },
+    {
+      "id": "bessely_negative_x_rejected",
+      "formula": "=BESSELY(-1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bessely_large_order_decay",
+      "formula": "=BESSELY(2,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -9.935989022802502
+      },
+      "tolerance": {
+        "abs": 1e-06,
+        "rel": 1e-07
+      }
+    },
+    {
+      "id": "besseli_zero_zero",
+      "formula": "=BESSELI(0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "besseli_zero_higher_order",
+      "formula": "=BESSELI(0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "besseli_large_x_growth",
+      "formula": "=BESSELI(20,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43558285.787908286
+      },
+      "tolerance": {
+        "abs": 100.0,
+        "rel": 1e-06
+      }
+    },
+    {
+      "id": "besselk_negative_x_rejected",
+      "formula": "=BESSELK(-1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselk_small_x_log_asymptote",
+      "formula": "=BESSELK(0.01,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.721244734980139
+      }
+    },
+    {
+      "id": "besselk_large_x_decay",
+      "formula": "=BESSELK(20,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.741238366607252e-10
+      }
+    },
+    {
+      "id": "besselj_order_via_cell_ref",
+      "formula": "=BESSELJ(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.11490348499246938
+      }
+    },
+    {
+      "id": "besseli_text_x_coerces",
+      "formula": "=BESSELI(\"1\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.2660658480342601
+      },
+      "tolerance": {
+        "abs": 1e-06,
+        "rel": 1e-07
+      }
+    },
+    {
+      "id": "besselk_blank_x_rejected",
+      "formula": "=BESSELK(A1,0)",
+      "setup": {
+        "A1": {
+          "kind": "blank"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bessely_one_one",
+      "formula": "=BESSELY(1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.7812128209531197
+      }
+    },
+    {
+      "id": "erfc_negative_two",
+      "formula": "=ERFC(-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.9953222650189528
+      }
+    },
+    {
+      "id": "erf_precise_zero",
+      "formula": "=ERF.PRECISE(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "erf_precise_negative",
+      "formula": "=ERF.PRECISE(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.8427007929497149
+      }
+    },
+    {
+      "id": "erf_precise_large_positive",
+      "formula": "=ERF.PRECISE(6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "erfc_precise_zero",
+      "formula": "=ERFC.PRECISE(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "erfc_precise_negative",
+      "formula": "=ERFC.PRECISE(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.8427007929497148
+      }
+    },
+    {
+      "id": "erfc_precise_large_positive",
+      "formula": "=ERFC.PRECISE(6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.1519736712498925e-17
+      }
+    },
+    {
+      "id": "erfc_precise_two_arg_rejected",
+      "formula": "=ERFC.PRECISE(1,2)",
+      "setup": {},
+      "skipped": "Mac Excel refuses =ERFC.PRECISE(1,2) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon returns #VALUE! from arity enforcement, mirroring erf_precise_two_arg_rejected. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+    },
+    {
+      "id": "atp_erf_bool",
+      "formula": "=ERF(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_erf_omit",
+      "formula": "=ERF(,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_erf_boolcell",
+      "formula": "=ERF(A1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_besselj_bool",
+      "formula": "=BESSELJ(TRUE,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_besselj_omit",
+      "formula": "=BESSELJ(,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_besselj_boolcell",
+      "formula": "=BESSELJ(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_erfc_bool",
+      "formula": "=ERFC(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_bessely_bool",
+      "formula": "=BESSELY(TRUE,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_bessely_omit",
+      "formula": "=BESSELY(,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_besseli_bool",
+      "formula": "=BESSELI(TRUE,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_besseli_omit",
+      "formula": "=BESSELI(,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_besselk_bool",
+      "formula": "=BESSELK(TRUE,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_besselk_omit",
+      "formula": "=BESSELK(,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_erf_precise_bool",
+      "formula": "=ERF.PRECISE(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_erfc_precise_bool",
+      "formula": "=ERFC.PRECISE(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "opt_besselj_omit_n",
+      "formula": "=BESSELJ(1,)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "opt_erf_upper_omit",
+      "formula": "=ERF(0.5,)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

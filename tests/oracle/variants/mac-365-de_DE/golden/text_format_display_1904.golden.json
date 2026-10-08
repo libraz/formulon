@@ -1,0 +1,161 @@
+{
+  "suite": "text_format_display_1904",
+  "description": "TEXT() of negative serials under the 1904 date system",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "de-DE",
+    "date1904": true,
+    "iterative": false,
+    "generated_at": "2026-10-08T10:54:27Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "text1904_ymd_m1",
+      "formula": "=TEXT(-1, \"yyyy/m/d\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text1904_hms_m1",
+      "formula": "=TEXT(-1, \"h:mm:ss\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0:00:00"
+      }
+    },
+    {
+      "id": "text1904_elapsed_m1",
+      "formula": "=TEXT(-1, \"[h]:mm\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-24:00"
+      }
+    },
+    {
+      "id": "text1904_weekday_m1",
+      "formula": "=TEXT(-1, \"aaaa\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-Samstag"
+      }
+    },
+    {
+      "id": "text1904_ymd_m1_5",
+      "formula": "=TEXT(-1.5, \"yyyy/m/d\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text1904_hms_m1_5",
+      "formula": "=TEXT(-1.5, \"h:mm:ss\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-12:00:00"
+      }
+    },
+    {
+      "id": "text1904_elapsed_m1_5",
+      "formula": "=TEXT(-1.5, \"[h]:mm\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-36:00"
+      }
+    },
+    {
+      "id": "text1904_weekday_m1_5",
+      "formula": "=TEXT(-1.5, \"aaaa\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-Samstag"
+      }
+    },
+    {
+      "id": "text1904_ymd_m1462",
+      "formula": "=TEXT(-1462, \"yyyy/m/d\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text1904_hms_m1462",
+      "formula": "=TEXT(-1462, \"h:mm:ss\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0:00:00"
+      }
+    },
+    {
+      "id": "text1904_elapsed_m1462",
+      "formula": "=TEXT(-1462, \"[h]:mm\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-35088:00"
+      }
+    },
+    {
+      "id": "text1904_weekday_m1462",
+      "formula": "=TEXT(-1462, \"aaaa\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-Donnerstag"
+      }
+    },
+    {
+      "id": "text1904_ymd_m2957003",
+      "formula": "=TEXT(-2957003, \"yyyy/m/d\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text1904_hms_m2957003",
+      "formula": "=TEXT(-2957003, \"h:mm:ss\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0:00:00"
+      }
+    },
+    {
+      "id": "text1904_elapsed_m2957003",
+      "formula": "=TEXT(-2957003, \"[h]:mm\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-70968072:00"
+      }
+    },
+    {
+      "id": "text1904_weekday_m2957003",
+      "formula": "=TEXT(-2957003, \"aaaa\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-Freitag"
+      }
+    }
+  ]
+}

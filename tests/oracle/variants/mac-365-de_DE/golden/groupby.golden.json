@@ -1,0 +1,1328 @@
+{
+  "suite": "groupby",
+  "description": "GROUPBY dynamic-array group-and-aggregate (Excel 365). Perspectives spanning bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "de-DE",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-08T10:05:11Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "groupby_bare_sum",
+      "formula": "=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, SUM, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "A",
+          40.0,
+          "B",
+          20.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_lambda_sum",
+      "formula": "=GROUPBY({\"A\";\"B\";\"A\";\"C\"}, {10;20;30;40}, LAMBDA(v, SUM(v)), 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "A",
+          40.0,
+          "B",
+          20.0,
+          "C",
+          40.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_sort_order_zero_rejected",
+      "formula": "=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, SUM, 0, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "groupby_unknown_name_error",
+      "formula": "=GROUPBY({\"A\";\"B\"}, {1;2}, NOPE_THIS_IS_NOT_A_FUNCTION, 0, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "groupby_field_headers_out_of_range",
+      "formula": "=GROUPBY({\"A\";\"B\"}, {1;2}, SUM, 5, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "groupby_filter_array_length_mismatch",
+      "formula": "=GROUPBY({\"A\";\"B\";\"A\"}, {1;2;3}, SUM, 0, 0, 0, {TRUE;FALSE;TRUE;TRUE})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "groupby_filter_array_excludes_all",
+      "formula": "=GROUPBY({\"A\";\"B\"}, {1;2}, SUM, 0, 0, 0, {FALSE;FALSE})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "groupby_subtotal_depth_two",
+      "formula": "=GROUPBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"}, {10;20;30}, SUM, 0, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "A",
+          "x",
+          10.0,
+          "A",
+          "y",
+          20.0,
+          "A",
+          "",
+          30.0,
+          "B",
+          "x",
+          30.0,
+          "B",
+          "",
+          30.0,
+          "Gesamtergebnis",
+          "",
+          60.0
+        ],
+        "shape": [
+          6,
+          3
+        ]
+      }
+    },
+    {
+      "id": "groupby_total_depth_default_grand_total",
+      "formula": "=GROUPBY({\"a\";\"a\";\"b\"},{1;2;3},SUM)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          3.0,
+          "b",
+          3.0,
+          "Gesamt",
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_field_headers_auto_header_row",
+      "formula": "=GROUPBY(A1:A4,B1:B4,SUM)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          2.0,
+          "b",
+          4.0,
+          "Gesamt",
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_field_headers_auto_no_header_row",
+      "formula": "=GROUPBY(A1:A3,B1:B3,SUM)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          2.0,
+          "b",
+          4.0,
+          "Gesamt",
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_sort_order_omitted_text_keys_ascending",
+      "formula": "=GROUPBY({\"b\";\"a\";\"c\";\"a\"},{1;2;3;4},SUM,0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          6.0,
+          "b",
+          1.0,
+          "c",
+          3.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_sort_order_omitted_number_keys_ascending",
+      "formula": "=GROUPBY({3;1;2},{1;2;3},SUM,0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          2.0,
+          3.0,
+          3.0,
+          1.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_fh0_hdr",
+      "formula": "=GROUPBY(A1:A4,B1:B4,SUM,0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          2.0,
+          "b",
+          4.0,
+          "k",
+          0.0,
+          "Gesamt",
+          6.0
+        ],
+        "shape": [
+          4,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_fh0_nohdr",
+      "formula": "=GROUPBY(A2:A4,B2:B4,SUM,0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          2.0,
+          "b",
+          4.0,
+          "Gesamt",
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_fh1_hdr",
+      "formula": "=GROUPBY(A1:A4,B1:B4,SUM,1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          2.0,
+          "b",
+          4.0,
+          "Gesamt",
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_fh1_nohdr",
+      "formula": "=GROUPBY(A2:A4,B2:B4,SUM,1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          2.0,
+          "b",
+          3.0,
+          "Gesamt",
+          5.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_fh2_hdr",
+      "formula": "=GROUPBY(A1:A4,B1:B4,SUM,2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "Zeilenfeld 1",
+          "Wert 1",
+          "a",
+          2.0,
+          "b",
+          4.0,
+          "k",
+          0.0,
+          "Gesamt",
+          6.0
+        ],
+        "shape": [
+          5,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_fh2_nohdr",
+      "formula": "=GROUPBY(A2:A4,B2:B4,SUM,2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "Zeilenfeld 1",
+          "Wert 1",
+          "a",
+          2.0,
+          "b",
+          4.0,
+          "Gesamt",
+          6.0
+        ],
+        "shape": [
+          4,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_fh3_hdr",
+      "formula": "=GROUPBY(A1:A4,B1:B4,SUM,3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "k",
+          "v",
+          "a",
+          2.0,
+          "b",
+          4.0,
+          "Gesamt",
+          6.0
+        ],
+        "shape": [
+          4,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_fh3_nohdr",
+      "formula": "=GROUPBY(A2:A4,B2:B4,SUM,3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          1.0,
+          "a",
+          2.0,
+          "b",
+          3.0,
+          "Gesamt",
+          5.0
+        ],
+        "shape": [
+          4,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_auto_numhdr",
+      "formula": "=GROUPBY(A1:A3,B1:B3,SUM)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          1.0,
+          "b",
+          2.0,
+          "k",
+          5.0,
+          "Gesamt",
+          8.0
+        ],
+        "shape": [
+          4,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_auto_textvals",
+      "formula": "=GROUPBY(A1:A3,B1:B3,COUNTA)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "y"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          1.0,
+          "b",
+          1.0,
+          "k",
+          1.0,
+          "Gesamt",
+          3.0
+        ],
+        "shape": [
+          4,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_auto_rowfield_num",
+      "formula": "=GROUPBY(A1:A3,B1:B3,SUM)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          1.0,
+          3.0,
+          2.0,
+          "Gesamt",
+          3.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_auto_2valcols",
+      "formula": "=GROUPBY(A1:A3,B1:C3,SUM)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v1"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "v2"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          1.0,
+          10.0,
+          "b",
+          2.0,
+          20.0,
+          "Gesamt",
+          3.0,
+          30.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_auto_2valcols_mixed",
+      "formula": "=GROUPBY(A1:A3,B1:C3,SUM)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v1"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          1.0,
+          10.0,
+          "b",
+          2.0,
+          20.0,
+          "Gesamt",
+          3.0,
+          30.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_auto_2keycols",
+      "formula": "=GROUPBY(A1:B4,C1:C4,SUM)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "z"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "y"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "y",
+          3.0,
+          "a",
+          "z",
+          2.0,
+          "b",
+          "y",
+          1.0,
+          "Gesamt",
+          "",
+          6.0
+        ],
+        "shape": [
+          4,
+          3
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_sort_2keys",
+      "formula": "=GROUPBY(A2:B4,C2:C4,SUM,0,0)",
+      "setup": {
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "z"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "y"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "y",
+          3.0,
+          "a",
+          "z",
+          2.0,
+          "b",
+          "y",
+          1.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_sort_2keys_total",
+      "formula": "=GROUPBY(A2:B4,C2:C4,SUM,0,2)",
+      "setup": {
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "z"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "y"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "y",
+          3.0,
+          "a",
+          "z",
+          2.0,
+          "a",
+          "",
+          5.0,
+          "b",
+          "y",
+          1.0,
+          "b",
+          "",
+          1.0,
+          "Gesamtergebnis",
+          "",
+          6.0
+        ],
+        "shape": [
+          6,
+          3
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_sort_mixed_types",
+      "formula": "=GROUPBY({\"b\";2;TRUE;\"a\";1},{1;2;3;4;5},SUM,0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          5.0,
+          2.0,
+          2.0,
+          "a",
+          4.0,
+          "b",
+          1.0,
+          true,
+          3.0
+        ],
+        "shape": [
+          5,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_measured_sort_case",
+      "formula": "=GROUPBY({\"b\";\"B\";\"a\";\"A\"},{1;2;3;4},SUM,0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          7.0,
+          "b",
+          3.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "gb2_lit_total",
+      "formula": "=GROUPBY({\"b\",\"y\";\"a\",\"z\";\"a\",\"y\"},{1;2;3},SUM,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "y",
+          3.0,
+          "a",
+          "z",
+          2.0,
+          "b",
+          "y",
+          1.0,
+          "Gesamt",
+          "",
+          6.0
+        ],
+        "shape": [
+          4,
+          3
+        ]
+      }
+    },
+    {
+      "id": "gb2_lit_total_type",
+      "formula": "=TYPE(INDEX(GROUPBY({\"b\",\"y\";\"a\",\"z\";\"a\",\"y\"},{1;2;3},SUM,0),4,2))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "gb2_lit_total_len",
+      "formula": "=ISBLANK(INDEX(GROUPBY({\"b\",\"y\";\"a\",\"z\";\"a\",\"y\"},{1;2;3},SUM,0),4,2))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "groupby_hdr_default_noheader",
+      "formula": "=GROUPBY(A2:A4,B2:B4,SUM)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          2.0,
+          "b",
+          4.0,
+          "Gesamt",
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    }
+  ]
+}

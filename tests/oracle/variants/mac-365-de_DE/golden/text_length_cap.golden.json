@@ -1,0 +1,261 @@
+{
+  "suite": "text_length_cap",
+  "description": "Results that would pass Excel's 32,767 UTF-16-unit text limit. The functions do not agree on what happens there: REPT, SUBSTITUTE and REPLACE are #VALUE!, CONCAT and TEXTJOIN are #CALC!, and `&` and CONCATENATE cut the result to the limit. A cut that would split a surrogate pair leaves 32,766 units. Long results are read through LEN so no case stores text near the limit in a cell.\nThe whole-column TEXTJOIN cases show that the blank cells past the populated head take a delimiter each when empty cells are kept.\n",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "de-DE",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-08T10:54:49Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "text_cap_rept_past_cap",
+      "formula": "=REPT(\"a\",32768)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_cap_substitute_past_cap",
+      "formula": "=SUBSTITUTE(REPT(\"a\",20000),\"a\",\"bb\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_cap_replace_past_cap",
+      "formula": "=REPLACE(REPT(\"a\",32767),1,1,\"bb\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_cap_concat_at_cap",
+      "formula": "=LEN(CONCAT(REPT(\"a\",32766),\"b\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32767.0
+      }
+    },
+    {
+      "id": "text_cap_concat_past_cap",
+      "formula": "=CONCAT(REPT(\"a\",32767),\"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "text_cap_concat_pair_past_cap",
+      "formula": "=CONCAT(REPT(\"a\",32766),UNICHAR(128512))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "text_cap_textjoin_at_cap",
+      "formula": "=LEN(TEXTJOIN(\",\",TRUE,REPT(\"a\",32765),\"b\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32767.0
+      }
+    },
+    {
+      "id": "text_cap_textjoin_past_cap",
+      "formula": "=TEXTJOIN(\",\",TRUE,REPT(\"a\",32766),\"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "text_cap_ampersand_cuts",
+      "formula": "=LEN(REPT(\"a\",32767)&\"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32767.0
+      }
+    },
+    {
+      "id": "text_cap_ampersand_cuts_tail",
+      "formula": "=RIGHT(REPT(\"a\",32767)&\"b\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "text_cap_ampersand_two_full",
+      "formula": "=LEN(REPT(\"a\",32767)&REPT(\"b\",32767))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32767.0
+      }
+    },
+    {
+      "id": "text_cap_ampersand_split_pair",
+      "formula": "=LEN(REPT(\"a\",32766)&UNICHAR(128512))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32766.0
+      }
+    },
+    {
+      "id": "text_cap_concatenate_cuts",
+      "formula": "=LEN(CONCATENATE(REPT(\"a\",32767),\"b\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32767.0
+      }
+    },
+    {
+      "id": "text_cap_textjoin_whole_column_blanks",
+      "formula": "=TEXTJOIN(\",\",FALSE,Sheet2!A:A)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "text_cap_textjoin_whole_column_ignore_empty",
+      "formula": "=TEXTJOIN(\",\",TRUE,Sheet2!A:A)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "k1,k2,k3,k5"
+      }
+    },
+    {
+      "id": "text_cap_textjoin_bounded_blanks",
+      "formula": "=LEN(TEXTJOIN(\",\",FALSE,Sheet2!A1:A20000))",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20007.0
+      }
+    },
+    {
+      "id": "text_cap_concat_whole_column",
+      "formula": "=CONCAT(Sheet2!A:A)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "k1k2k3k5"
+      }
+    },
+    {
+      "id": "text_cap_textjoin_derived_whole_column",
+      "formula": "=TEXTJOIN(\",\",FALSE,Sheet2!A:A&\"\")",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        }
+      },
+      "skipped": "TEXTJOIN(\",\",FALSE,Sheet2!A:A&\"\"): Excel joins all 1,048,576 rows of the derived column, so the kept empties carry the text past the cap and the answer is #CALC!. Formulon's array arguments to lazy functions still walk only the populated head of a derived whole column, so it returns k1,k2,k3,,k5. The bare-reference spelling Sheet2!A:A counts the blank rows and is a live golden."
+    }
+  ]
+}
