@@ -9,7 +9,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.oracle.provenance import active_variant_names, cf_active, validate_targets, workbook_active
+from tools.oracle.provenance import (
+    active_variant_names,
+    cf_active,
+    gate_target_names,
+    validate_targets,
+    workbook_active,
+)
 from tools.oracle.workbook_oracle_gen import _display_path, _workbook_primary
 
 
@@ -294,3 +300,51 @@ class ProvenancePolicyTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GateTargetsTest(unittest.TestCase):
+    def _doc(self, root: Path, *, status: str = "scaffolded", with_files: bool = True) -> dict:
+        if with_files:
+            (root / "t").mkdir(parents=True, exist_ok=True)
+            (root / "t/divergence.yaml").write_text("entries: []\n", encoding="utf-8")
+            (root / "t/ENVIRONMENT.md").write_text("# env\n", encoding="utf-8")
+        return {
+            "primary": "p",
+            "tracks": {"formula": {"primary": "p", "gates": ["g"]}},
+            "targets": {
+                "p": {"status": "primary"},
+                "g": {"status": status, "divergence": "t/divergence.yaml", "environment_md": "t/ENVIRONMENT.md"},
+            },
+        }
+
+    def test_gate_names_follow_manifest_order(self) -> None:
+        doc = {"tracks": {"formula": {"gates": ["b", "a"]}}}
+        self.assertEqual(gate_target_names(doc, "formula"), ["b", "a"])
+        self.assertEqual(gate_target_names(doc, "cf"), [])
+
+    def test_committed_manifest_gates_six_mac_targets(self) -> None:
+        import yaml
+
+        doc = yaml.safe_load((Path(__file__).parent / "targets.yaml").read_text(encoding="utf-8"))
+        self.assertEqual(len(gate_target_names(doc, "formula")), 6)
+
+    def test_complete_gate_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(validate_targets(self._doc(Path(tmp)), Path(tmp)), [])
+
+    def test_wanted_gate_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            errors = validate_targets(self._doc(Path(tmp), status="wanted"), Path(tmp))
+            self.assertTrue(any("status='wanted'" in e for e in errors), errors)
+
+    def test_gate_without_files_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            errors = validate_targets(self._doc(Path(tmp), with_files=False), Path(tmp))
+            self.assertEqual(len([e for e in errors if "does not exist" in e]), 2, errors)
+
+    def test_gate_without_keys_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = self._doc(Path(tmp))
+            del doc["targets"]["g"]["divergence"]
+            errors = validate_targets(doc, Path(tmp))
+            self.assertTrue(any("divergence: required" in e for e in errors), errors)

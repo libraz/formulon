@@ -47,6 +47,8 @@ VARIANTS_DIR = REPO_ROOT / "tests" / "oracle" / "targets"
 TARGETS_FILE = REPO_ROOT / "tools" / "oracle" / "targets.yaml"
 # The explicit every-target value of `applies_to`; `oracle_gen.py` reads it too.
 APPLIES_TO_ALL = "all"
+# Host tokens accepted in an `applies_to` list; matched by oracle_gen.applies_to_matches.
+APPLIES_TO_HOSTS = ("mac",)
 NON_ORACLE_SCOPES = {
     "api-contract",
     "environment",
@@ -226,7 +228,7 @@ def applies_to_error(entry: dict, *, required: bool) -> "str | None":
         return None
     if not isinstance(applies, list) or not applies or not all(isinstance(item, str) for item in applies):
         return f"`applies_to` must be `{APPLIES_TO_ALL}` or a non-empty list of target names; got {applies!r}"
-    unknown = sorted(set(applies) - known_targets())
+    unknown = sorted(set(applies) - known_targets() - set(APPLIES_TO_HOSTS))
     if unknown:
         return f"`applies_to` names unknown target(s): {', '.join(unknown)}"
     return None

@@ -19,6 +19,7 @@ in review scripts::
     python3 tools/oracle/provenance.py active-variants
     python3 tools/oracle/provenance.py workbook-active
     python3 tools/oracle/provenance.py cf-active
+    python3 tools/oracle/provenance.py gate-targets --track formula
 
 ``check`` exits non-zero on a stale or contradictory manifest.  It does not
 delete or rewrite any golden data.
@@ -227,6 +228,48 @@ def active_variant_names(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) ->
     return names
 
 
+def gate_target_names(doc: Mapping[str, Any], track: str) -> List[str]:
+    """Targets that gate `track` in CTest, in manifest order."""
+
+    tracks = doc.get("tracks")
+    record = tracks.get(track) if isinstance(tracks, Mapping) else None
+    gates = record.get("gates") if isinstance(record, Mapping) else None
+    if not isinstance(gates, list):
+        return []
+    return [str(name) for name in gates]
+
+
+def _gate_errors(doc: Mapping[str, Any], repo_root: Path) -> List[str]:
+    """Structural errors in every track's `gates` list."""
+
+    errors: List[str] = []
+    tracks = doc.get("tracks")
+    targets = doc.get("targets")
+    if not isinstance(tracks, Mapping) or not isinstance(targets, Mapping):
+        return errors
+    for track, record in sorted(tracks.items()):
+        if not isinstance(record, Mapping) or "gates" not in record:
+            continue
+        gates = record["gates"]
+        if not isinstance(gates, list) or not all(isinstance(item, str) for item in gates):
+            errors.append(f"tracks.{track}.gates: expected a list of target names")
+            continue
+        for name in gates:
+            target = targets.get(name)
+            if not isinstance(target, Mapping):
+                errors.append(f"tracks.{track}.gates: {name!r} is not a target")
+                continue
+            if _record_status(target) == "wanted":
+                errors.append(f"tracks.{track}.gates: {name!r} has status='wanted'")
+            for key in ("divergence", "environment_md"):
+                value = target.get(key)
+                if not isinstance(value, str) or not value:
+                    errors.append(f"targets.{name}.{key}: required for a gate target")
+                elif not (repo_root / value).is_file():
+                    errors.append(f"targets.{name}.{key}: {value} does not exist")
+    return errors
+
+
 def validate_targets(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> List[str]:
     """Validate status/provenance invariants and return human errors."""
 
@@ -252,6 +295,8 @@ def validate_targets(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> Lis
                 # marker is allowed while a capture is pending, but an
                 # existing marker must be internally consistent.
                 errors.extend(_cf_provenance_errors(doc, repo_root))
+
+    errors.extend(_gate_errors(doc, repo_root))
 
     for name, raw in sorted(targets.items()):
         if not isinstance(raw, dict):
@@ -538,6 +583,17 @@ def _cmd_active(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_gate_targets(args: argparse.Namespace) -> int:
+    try:
+        doc = _load_yaml(args.targets_file)
+    except RuntimeError as exc:
+        print(f"oracle-provenance: {exc}", file=sys.stderr)
+        return 2
+    for name in gate_target_names(doc, args.track):
+        print(name)
+    return 0
+
+
 def _cmd_workbook_active(args: argparse.Namespace) -> int:
     try:
         doc = _load_yaml(args.targets_file)
@@ -566,12 +622,15 @@ def _cmd_cf_active(args: argparse.Namespace) -> int:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("check", "active-variants", "workbook-active", "cf-active"))
+    parser.add_argument("command", choices=("check", "active-variants", "workbook-active", "cf-active", "gate-targets"))
+    parser.add_argument("--track", default="formula", help="Track whose gate targets `gate-targets` prints.")
     parser.add_argument("--targets-file", type=Path, default=DEFAULT_TARGETS)
     parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
     args = parser.parse_args(argv)
     if args.command == "check":
         return _cmd_check(args)
+    if args.command == "gate-targets":
+        return _cmd_gate_targets(args)
     if args.command == "workbook-active":
         return _cmd_workbook_active(args)
     if args.command == "cf-active":

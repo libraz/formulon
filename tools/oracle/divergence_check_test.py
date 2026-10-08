@@ -257,7 +257,7 @@ class SkipScopeTest(unittest.TestCase):
         self.assertIn("needs an explicit `applies_to`", output)
 
     def test_all_and_known_target_lists_pass(self) -> None:
-        for scope in ("all", "[mac-365-ja_JP]", "[mac-365-ja_JP, win-365-ja_JP]"):
+        for scope in ("all", "[mac-365-ja_JP]", "[mac-365-ja_JP, win-365-ja_JP]", "[mac]", "[mac, win-365-ja_JP]"):
             with self.subTest(scope=scope):
                 status, output = self._run(self.SKIP + f"    applies_to: {scope}\n")
                 self.assertEqual(status, 0, output)
@@ -265,6 +265,7 @@ class SkipScopeTest(unittest.TestCase):
     def test_unknown_target_and_bad_shapes_fail(self) -> None:
         for scope, message in (
             ("[mac-365-ja-JP]", "unknown target"),
+            ("[linux]", "unknown target"),
             ("[]", "non-empty list"),
             ("everywhere", "non-empty list"),
         ):
@@ -287,6 +288,34 @@ class SkipScopeTest(unittest.TestCase):
                 if entry.get("mode") == "skip-oracle":
                     with self.subTest(path=path.name, entry=entry.get("id") or entry.get("ids") or entry.get("suite")):
                         self.assertIsNone(divergence_check.applies_to_error(entry, required=True))
+
+
+class HostTokenTest(unittest.TestCase):
+    """`applies_to: [mac]` selects every `mac-*` target and nothing else."""
+
+    def test_mac_token_matches_every_mac_target(self) -> None:
+        from tools.oracle import oracle_gen
+
+        for target in ("mac-365-ja_JP", "mac-365-en_US", "mac-365-th_TH"):
+            self.assertTrue(oracle_gen.applies_to_matches(["mac"], target), target)
+        self.assertFalse(oracle_gen.applies_to_matches(["mac"], "win-365-ja_JP"))
+        self.assertTrue(oracle_gen.applies_to_matches(["mac", "win-365-ja_JP"], "win-365-ja_JP"))
+        self.assertFalse(oracle_gen.applies_to_matches(["mac-365-ja_JP"], "mac-365-en_US"))
+
+    def test_emitted_skips_follow_the_host_token(self) -> None:
+        from tools.oracle import emit_skip_list
+
+        with tempfile.TemporaryDirectory() as tmp:
+            registry = Path(tmp) / "divergence.yaml"
+            registry.write_text(
+                "entries:\n  - id: host_case\n    mode: skip-oracle\n    skip_cause: excel-no-value\n"
+                '    reason: "r"\n    prefer: formulon\n    last_verified_excel_version: "16.112"\n'
+                "    applies_to: [mac]\n",
+                encoding="utf-8",
+            )
+            for target, expected in (("mac-365-de_DE", 1), ("win-365-ja_JP", 0)):
+                out = Path(tmp) / f"{target}.json"
+                self.assertEqual(emit_skip_list.emit(registry, target, out), expected, target)
 
 
 class AmbiguousCaseIdTest(unittest.TestCase):

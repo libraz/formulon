@@ -309,6 +309,20 @@ def _load_divergence_entries(path: Path) -> List[Dict[str, Any]]:
 
 # The explicit every-target value of a divergence entry's `applies_to`.
 APPLIES_TO_ALL = "all"
+# Host tokens: `mac` selects every `mac-*` target (an observation that rests on
+# the Mac host, not on one locale).
+APPLIES_TO_HOSTS = ("mac",)
+
+
+def applies_to_matches(applies: Sequence[str], target_name: str) -> bool:
+    """Whether a list-valued `applies_to` selects `target_name`.
+
+    An item is a target name or a host token naming every `<host>-*` target.
+    """
+
+    return any(
+        item == target_name or (item in APPLIES_TO_HOSTS and target_name.startswith(f"{item}-")) for item in applies
+    )
 
 
 def _applies_to_target(entry: Dict[str, Any], path: Path, label: str, target_name: str) -> bool:
@@ -327,7 +341,7 @@ def _applies_to_target(entry: Dict[str, Any], path: Path, label: str, target_nam
         raise RuntimeError(
             f"{path}: entry {label!r} has invalid `applies_to`: expected list of strings, got {applies!r}"
         )
-    return target_name in applies
+    return applies_to_matches(applies, target_name)
 
 
 def _iter_skip_entries(

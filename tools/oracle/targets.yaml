@@ -2,8 +2,8 @@
 # compatibility reference; variants are opt-in additional environments
 # whose goldens land under tests/oracle/targets/<name>/. The target root
 # contains the formula, CF, and workbook tracks captured for that target.
-# The mac-365-en_US target is the dedicated English oracle gate and remains
-# required CTest coverage; other non-primary targets are opt-in.
+# Every target listed in `tracks.formula.gates` is a required CTest oracle
+# (one binary per gate); other non-primary targets are opt-in.
 #
 # Target name shape: <host>-<excel-major>-<locale>
 #
@@ -19,6 +19,11 @@ primary: mac-365-ja_JP
 # the formula oracle's reference (Mac Excel 365, ja-JP). Other oracle
 # tracks may legitimately need a different reference host.
 tracks:
+  formula:
+    primary: mac-365-ja_JP
+    # Mac targets evaluated by their own CTest oracle against the profile id
+    # of the same name. The primary's own gate is formulon_oracle_tests.
+    gates: [mac-365-en_US, mac-365-de_DE, mac-365-fr_FR, mac-365-zh_CN, mac-365-ko_KR, mac-365-th_TH]
   workbook:
     # The workbook track (pivot tables + print areas) uses win-365-ja_JP
     # as its primary: reliable PivotTable COM automation is only

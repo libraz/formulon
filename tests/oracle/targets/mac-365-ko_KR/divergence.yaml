@@ -1,0 +1,7 @@
+# Mac Excel 365 (ko-KR) variant-specific divergences.
+#
+# The global registry supplies unscoped skips and entries whose applies_to
+# includes mac-365-ko_KR. No additional target-specific entries are needed
+# for the current capture.
+
+entries: []

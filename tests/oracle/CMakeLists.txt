@@ -247,45 +247,77 @@ target_compile_definitions(formulon_ironcalc_oracle_tests
     FORMULON_ORACLE_SKIP_FILE="${_formula_oracle_skip_file}"
 )
 
-# English oracle gate. Its cases keep the same names as the primary oracle.
-set(_en_us_oracle_skip_file "")
+# Formula-track oracle gates. `tracks.formula.gates` in targets.yaml lists the
+# Mac targets that each get their own binary, evaluated under the target's
+# own profile id; a gate's cases keep the primary oracle's names. The primary
+# (ja-JP) is formulon_oracle_tests above.
+set(_formula_gate_targets "")
 if(Python3_Interpreter_FOUND)
-  set(_en_us_oracle_skip_file "${CMAKE_CURRENT_BINARY_DIR}/en_us_oracle_skips.json")
+  execute_process(
+    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py
+            gate-targets --track formula --repo-root ${CMAKE_SOURCE_DIR}
+            --targets-file ${CMAKE_SOURCE_DIR}/tools/oracle/targets.yaml
+    OUTPUT_VARIABLE _formula_gate_targets_raw
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  if(_formula_gate_targets_raw)
+    string(REPLACE "\n" ";" _formula_gate_targets "${_formula_gate_targets_raw}")
+  endif()
+endif()
+if(NOT _formula_gate_targets)
+  message(WARNING "No formula oracle gates resolved from targets.yaml; only the primary oracle is registered")
+endif()
+
+foreach(_gate_target IN LISTS _formula_gate_targets)
+  # mac-365-en_US -> formulon_oracle_en_us_tests
+  string(REGEX REPLACE "^[a-z]+-[0-9]+-" "" _gate_locale "${_gate_target}")
+  string(TOLOWER "${_gate_locale}" _gate_locale_lower)
+  set(_gate_exe "formulon_oracle_${_gate_locale_lower}_tests")
+  set(_gate_divergence "${CMAKE_CURRENT_SOURCE_DIR}/targets/${_gate_target}/divergence.yaml")
+
+  set(_gate_skip_file "${CMAKE_CURRENT_BINARY_DIR}/${_gate_locale_lower}_oracle_skips.json")
   execute_process(
     COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
-            --track formula --target mac-365-en_US
-            --out ${_en_us_oracle_skip_file}
-    RESULT_VARIABLE _en_us_skip_rc
+            --track formula --target ${_gate_target}
+            --out ${_gate_skip_file}
+    RESULT_VARIABLE _gate_skip_rc
     OUTPUT_QUIET
     ERROR_QUIET
   )
-  if(NOT _en_us_skip_rc EQUAL 0)
-    set(_en_us_oracle_skip_file "")
+  if(NOT _gate_skip_rc EQUAL 0)
+    set(_gate_skip_file "")
   endif()
-endif()
-set_property(
-  DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-  "${CMAKE_CURRENT_SOURCE_DIR}/targets/mac-365-en_US/divergence.yaml"
-)
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_gate_divergence}")
 
-add_executable(formulon_oracle_en_us_tests ${FORMULON_ORACLE_TEST_SOURCES})
-target_link_libraries(formulon_oracle_en_us_tests PRIVATE formulon_static gtest_main)
-target_include_directories(formulon_oracle_en_us_tests
-  PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}
-)
-target_compile_definitions(formulon_oracle_en_us_tests
-  PRIVATE
-    FORMULON_ORACLE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/targets/mac-365-en_US/golden"
-    FORMULON_ORACLE_PRIMARY_PROFILE_ID="mac-365-en_US"
-    FORMULON_ORACLE_SKIP_FILE="${_en_us_oracle_skip_file}"
-)
-formulon_apply_warnings(formulon_oracle_en_us_tests)
+  add_executable(${_gate_exe} ${FORMULON_ORACLE_TEST_SOURCES})
+  target_link_libraries(${_gate_exe} PRIVATE formulon_static gtest_main)
+  target_include_directories(${_gate_exe}
+    PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}
+  )
+  target_compile_definitions(${_gate_exe}
+    PRIVATE
+      FORMULON_ORACLE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/targets/${_gate_target}/golden"
+      FORMULON_ORACLE_PRIMARY_PROFILE_ID="${_gate_target}"
+      FORMULON_ORACLE_SKIP_FILE="${_gate_skip_file}"
+  )
+  formulon_apply_warnings(${_gate_exe})
 
-add_test(
-  NAME formulon_oracle_en_us_tests
-  COMMAND formulon_oracle_en_us_tests --gtest_brief=1 --gtest_fail_if_no_test_selected
-)
-set_tests_properties(formulon_oracle_en_us_tests PROPERTIES LABELS "oracle")
+  add_test(
+    NAME ${_gate_exe}
+    COMMAND ${_gate_exe} --gtest_brief=1 --gtest_fail_if_no_test_selected
+  )
+  set_tests_properties(${_gate_exe} PROPERTIES LABELS "oracle")
+
+  if(DEFINED _FORMULON_BEHAVIOR_PY)
+    add_test(
+      NAME OracleGateDivergenceIntegrity_${_gate_locale}
+      COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
+              --input ${_gate_divergence} --strict
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+  endif()
+endforeach()
 
 if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(
