@@ -135,7 +135,7 @@ targets:
     divergence: tests/oracle/variants/mac-365-fr_FR/divergence.yaml
 
   mac-365-zh_CN:
-    status: wanted
+    status: scaffolded
     driver: macos_excel
     runs_on: [Darwin]
     locale: zh-CN
