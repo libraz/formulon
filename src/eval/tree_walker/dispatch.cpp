@@ -495,17 +495,17 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   // evaluated to, whose `values` slot is then a placeholder.
   std::vector<const TailArray*> tails;
   // Tracks whether any argument slot was range-shaped (RangeOp / OFFSET-call
-  // / ArrayLiteral). Used by the deferred `RejectAnyScalar` blank-scalar
-  // policy: Mac Excel only surfaces #VALUE! for `=GCD(A1,B1,C1)` (all blank
+  // / ArrayLiteral). The deferred `RejectAllScalarsBlank` policy surfaces
+  // #VALUE! for `=GCD(A1,B1,C1)` (all blank
   // scalar refs) when there is NO range-shaped arg in the call. The mixed
   // form `=GCD(A1:B1, C1)` over the same blank cells still returns 0,
   // because the range arg "rescues" the policy.
   bool had_range_shaped_arg = false;
-  // Tracks whether at least one scalar arg slot satisfied the
-  // `RejectAnyScalar` policy (a Blank-valued scalar that is not a literal
-  // zero). Combined with `had_range_shaped_arg` to decide whether to fire
-  // the deferred error after the loop completes.
-  bool any_scalar_blank_for_reject_any = false;
+  // Tracks whether a scalar reference resolved to a blank under the
+  // `RejectAllScalarsBlank` policy. Such a reference is omitted from the
+  // callee's values; the deferred error fires only when it was the entire
+  // scalar argument set.
+  bool saw_blank_scalar_ref = false;
   const std::uint32_t evaluated_arity = def->analysis_toolpak_args && !def->atp_omitted_optional_is_na
                                             ? atp_evaluated_arity(node, def->min_arity, def->max_arity)
                                             : arity;
@@ -1010,15 +1010,14 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
         continue;
       }
     }
-    // `RejectAnyScalar` (GCD / LCM) defers the decision to end-of-args.
-    // Mac surfaces #VALUE! for `=GCD(A1,B1,C1)` (all blank scalar refs)
-    // but returns 0 for the mixed form `=GCD(A1:B1, C1)` over the same
-    // blank cells — the range arg "rescues" the call. The flag is
-    // consulted after the loop in conjunction with `had_range_shaped_arg`.
-    // Direct numeric literals (including `=GCD(0,0,0)`) are not Blank and
-    // do not set the flag.
-    if (def->blank_scalar_policy == FunctionDef::BlankScalarPolicy::RejectAnyScalar && v.kind() == ValueKind::Blank) {
-      any_scalar_blank_for_reject_any = true;
+    // `RejectAllScalarsBlank` (GCD / LCM) omits blank scalar references so
+    // a blank mixed with a numeric literal or reference cannot become zero
+    // inside the callee. Range-shaped blanks are handled above and remain
+    // zero, preserving the range form's semantics.
+    if (def->blank_scalar_policy == FunctionDef::BlankScalarPolicy::RejectAllScalarsBlank &&
+        arg_node.kind() == parser::NodeKind::Ref && v.kind() == ValueKind::Blank) {
+      saw_blank_scalar_ref = true;
+      continue;
     }
     // Provenance-aware filter also applies to a single-cell `Ref` argument
     // for range-aware aggregators. Excel treats `MIN(A1, A2, A3)` the same
@@ -1040,14 +1039,13 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     }
     values.push_back(v);
   }
-  // Deferred fire-point for `RejectAnyScalar`: only surface the error when
-  // there is no range-shaped arg in the call. The mixed form
-  // `=GCD(A1:B1, C1)` keeps `had_range_shaped_arg = true` and so falls
-  // through to the impl, where the lone blank scalar coerces to 0 and the
-  // result matches Mac. Pure-scalar all-blank shapes
-  // (`=GCD(A1,B1,C1)`) surface the policy error here.
-  if (def->blank_scalar_policy == FunctionDef::BlankScalarPolicy::RejectAnyScalar && any_scalar_blank_for_reject_any &&
-      !had_range_shaped_arg) {
+  // Deferred fire-point for `RejectAllScalarsBlank`: only surface the error
+  // when blank scalar references were the entire scalar argument set. A
+  // numeric literal or reference mixed with a blank therefore proceeds with
+  // the blank omitted, while any range-shaped argument keeps its existing
+  // blank-as-zero behavior.
+  if (def->blank_scalar_policy == FunctionDef::BlankScalarPolicy::RejectAllScalarsBlank && saw_blank_scalar_ref &&
+      values.empty() && !had_range_shaped_arg) {
     return Value::error(def->blank_scalar_error);
   }
   // Dynamic-array spill for scalar (non-range-aware) functions: when any

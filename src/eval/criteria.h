@@ -9,12 +9,16 @@
 //
 //   * Bare numeric or boolean: `5`, `TRUE` -> equality comparison against
 //     that number (booleans fold to 1.0 / 0.0).
-//   * Text with no leading comparator: treated as `Op::Eq` against the
-//     text, with DOS-style wildcards (`*`, `?`, `~` escape).
+//   * Text with no leading comparator: treated as `Op::Eq` against the text,
+//     with DOS-style wildcards (`*`, `?`, `~` escape), except for the exact
+//     ASCII-case-insensitive spellings `TRUE` and `FALSE`, which become Bool
+//     criteria.
 //   * Text with a leading comparator (`<`, `<=`, `>`, `>=`, `<>`, `=`):
-//     the RHS is probed as a number (via the `Text` branch of
-//     `coerce_to_number`); on success the criterion is numeric, otherwise
-//     the RHS is compared as text (case-insensitive ASCII).
+//     for Eq / NotEq, an exact ASCII-case-insensitive `TRUE` / `FALSE` RHS is
+//     parsed as a Bool criterion; other RHS text is probed as a number (via
+//     the `Text` branch of `coerce_to_number`) and, on failure, compared as
+//     text (case-insensitive ASCII). Ordering operators always keep those
+//     spellings as text.
 //   * Blank Value: treated as `Op::Eq` against text "".
 //
 // Wildcard matching: `?` matches exactly one Unicode codepoint, `*` matches
@@ -71,7 +75,8 @@ struct ParsedCriterion {
   std::string_view rhs_text;  ///< Valid when `!rhs_is_number`; may be empty.
   bool has_wildcard = false;  ///< Unescaped `*` or `?` present in `rhs_text`.
   /// True when the numeric RHS originated from a Bool criterion (the caller
-  /// passed `TRUE` or `FALSE`, not a number or `">1"`). Excel's criterion
+  /// passed a Bool value, or an Eq / NotEq criterion whose RHS is the exact
+  /// ASCII-case-insensitive spelling `TRUE` or `FALSE`). Excel's criterion
   /// matching is type-strict: a Bool criterion matches only Bool cells, and
   /// a Number criterion matches only Number cells. The matcher branches on
   /// this flag in the numeric path.
@@ -208,8 +213,8 @@ ParsedCriterion parse_criterion_dfunc(const Value& criterion);
 ///     intentionally NOT exact complements, matching Mac Excel 365:
 ///       - `Op::Eq`: a same-kind cell compares numerically; a Text cell
 ///         whose contents coerce to the criterion number also matches
-///         (e.g. text "23" satisfies `=23`), and for a bool criterion a
-///         Text cell equal to "TRUE"/"FALSE" (case-insensitive) matches.
+///         (e.g. text "23" satisfies `=23`). A bool criterion is
+///         type-strict and matches only Bool cells.
 ///       - `Op::NotEq`: a same-kind cell compares numerically; EVERY
 ///         different-kind cell matches unconditionally ("different type is
 ///         not equal"). So a coercible text ("23") satisfies BOTH `=23` and

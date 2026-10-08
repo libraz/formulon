@@ -108,14 +108,15 @@ struct FunctionDef {
   /// "blank in a range = 0" rule for SUM/AVERAGE/GCD-range/etc.).
   ///
   ///   * `Allow` (default) - Blank coerces to 0 via `coerce_to_number`.
-  ///   * `RejectAnyScalar` - Both literal-empty slots AND `Ref`-to-blank
-  ///     surface `blank_scalar_error`. Used by `GCD` / `LCM`, where Mac
+  ///   * `RejectAllScalarsBlank` - Blank scalar `Ref` slots are omitted from
+  ///     the callee's arguments. If every scalar argument is such a blank,
+  ///     `blank_scalar_error` is surfaced. Used by `GCD` / `LCM`, where Mac
   ///     surfaces `#VALUE!` for `=GCD(A1,B1,C1)` (all blank refs) but
   ///     returns `0` for `=GCD(A1:C1)` (range form, same blank cells).
   ///     `analysis_toolpak_args` decides an omitted slot first.
   enum class BlankScalarPolicy : std::uint8_t {
     Allow = 0,
-    RejectAnyScalar = 1,
+    RejectAllScalarsBlank = 1,
   };
   BlankScalarPolicy blank_scalar_policy = BlankScalarPolicy::Allow;
   /// Error code surfaced when `blank_scalar_policy` fires. Ignored when

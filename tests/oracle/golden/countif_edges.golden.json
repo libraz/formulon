@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T04:37:32Z"
+    "generated_at": "2026-10-08T06:50:06Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -236,7 +236,7 @@
       },
       "expect": {
         "kind": "number",
-        "value": 4.0
+        "value": 3.0
       }
     },
     {
@@ -278,7 +278,7 @@
       },
       "expect": {
         "kind": "number",
-        "value": 4.0
+        "value": 3.0
       }
     },
     {
@@ -320,7 +320,7 @@
       },
       "expect": {
         "kind": "number",
-        "value": 4.0
+        "value": 3.0
       }
     },
     {
@@ -362,7 +362,7 @@
       },
       "expect": {
         "kind": "number",
-        "value": 4.0
+        "value": 5.0
       }
     },
     {
@@ -652,7 +652,7 @@
       },
       "expect": {
         "kind": "number",
-        "value": 4.0
+        "value": 3.0
       }
     },
     {
@@ -1144,7 +1144,7 @@
       },
       "expect": {
         "kind": "number",
-        "value": 4.0
+        "value": 3.0
       }
     },
     {
@@ -1190,7 +1190,7 @@
       },
       "expect": {
         "kind": "number",
-        "value": 4.0
+        "value": 3.0
       }
     },
     {
@@ -1236,7 +1236,7 @@
       },
       "expect": {
         "kind": "number",
-        "value": 6.0
+        "value": 7.0
       }
     },
     {
@@ -1278,7 +1278,7 @@
       },
       "expect": {
         "kind": "number",
-        "value": 6.0
+        "value": 7.0
       }
     },
     {

@@ -744,9 +744,9 @@ void register_math_combinatorics_builtins(FunctionRegistry& registry) {
       builtins_detail::analysis_toolpak({"SQRTPI", 1u, 1u, &SqrtPi}),
       builtins_detail::analysis_toolpak({"MULTINOMIAL", 1u, kVariadic, &Multinomial, true, true}),
       builtins_detail::analysis_toolpak({"GCD", 1u, kVariadic, &Gcd, true, true, false, false, false,
-                                         FunctionDef::BlankScalarPolicy::RejectAnyScalar, ErrorCode::Value}),
+                                         FunctionDef::BlankScalarPolicy::RejectAllScalarsBlank, ErrorCode::Value}),
       builtins_detail::analysis_toolpak({"LCM", 1u, kVariadic, &Lcm, true, true, false, false, false,
-                                         FunctionDef::BlankScalarPolicy::RejectAnyScalar, ErrorCode::Value}),
+                                         FunctionDef::BlankScalarPolicy::RejectAllScalarsBlank, ErrorCode::Value}),
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

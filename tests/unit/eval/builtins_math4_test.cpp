@@ -290,6 +290,57 @@ TEST(BuiltinsMath4GcdBlankScalar, AllBlankRefsYieldValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsMath4GcdBlankScalar, BlankRefIsIgnoredWhenMixedWithLiteral) {
+  Workbook wb = Workbook::create();
+  for (const char* formula : {"=GCD(10,A1)", "=GCD(A1,10)"}) {
+    const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << formula;
+    EXPECT_EQ(v.as_number(), 10.0) << formula;
+  }
+}
+
+TEST(BuiltinsMath4GcdBlankScalar, BlankRefIsIgnoredWhenMixedWithNumericRef) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(12.0));
+  for (const char* formula : {"=GCD(A1,B1)", "=GCD(B1,A1)"}) {
+    const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << formula;
+    EXPECT_EQ(v.as_number(), 12.0) << formula;
+  }
+}
+
+TEST(BuiltinsMath4GcdBlankScalar, BlankRefWithZeroKeepsZeroResult) {
+  Workbook wb = Workbook::create();
+  for (const char* formula : {"=GCD(0,A1)", "=GCD(A1,0)"}) {
+    const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << formula;
+    EXPECT_EQ(v.as_number(), 0.0) << formula;
+  }
+}
+
+TEST(BuiltinsMath4GcdBlankScalar, RangeAndBlankScalarKeepRangeResult) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(6.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(9.0));
+  for (const char* formula : {"=GCD(A1:A2,C1)", "=GCD(C1,A1:A2)"}) {
+    const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << formula;
+    EXPECT_EQ(v.as_number(), 3.0) << formula;
+  }
+}
+
+TEST(BuiltinsMath4GcdBlankScalar, BooleanArgumentsStillYieldValueError) {
+  const Value literal = EvalSource("=GCD(TRUE,2)");
+  ASSERT_TRUE(literal.is_error());
+  EXPECT_EQ(literal.as_error(), ErrorCode::Value);
+
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::boolean(true));
+  const Value reference = EvalSourceIn("=GCD(A1,2)", wb, wb.sheet(0));
+  ASSERT_TRUE(reference.is_error());
+  EXPECT_EQ(reference.as_error(), ErrorCode::Value);
+}
+
 TEST(BuiltinsMath4GcdBlankScalar, AllBlankRangeYieldsZero) {
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=GCD(A1:C1)", wb, wb.sheet(0));
@@ -362,6 +413,57 @@ TEST(BuiltinsMath4LcmBlankScalar, AllBlankRefsYieldValueError) {
   const Value v = EvalSourceIn("=LCM(A1,B1,C1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsMath4LcmBlankScalar, BlankRefIsIgnoredWhenMixedWithLiteral) {
+  Workbook wb = Workbook::create();
+  for (const char* formula : {"=LCM(10,A1)", "=LCM(A1,10)"}) {
+    const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << formula;
+    EXPECT_EQ(v.as_number(), 10.0) << formula;
+  }
+}
+
+TEST(BuiltinsMath4LcmBlankScalar, BlankRefIsIgnoredWhenMixedWithNumericRef) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(6.0));
+  for (const char* formula : {"=LCM(A1,B1)", "=LCM(B1,A1)"}) {
+    const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << formula;
+    EXPECT_EQ(v.as_number(), 6.0) << formula;
+  }
+}
+
+TEST(BuiltinsMath4LcmBlankScalar, BlankRefWithZeroKeepsZeroResult) {
+  Workbook wb = Workbook::create();
+  for (const char* formula : {"=LCM(0,A1)", "=LCM(A1,0)"}) {
+    const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << formula;
+    EXPECT_EQ(v.as_number(), 0.0) << formula;
+  }
+}
+
+TEST(BuiltinsMath4LcmBlankScalar, RangeAndBlankScalarKeepRangeResult) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(3.0));
+  for (const char* formula : {"=LCM(A1:A2,C1)", "=LCM(C1,A1:A2)"}) {
+    const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << formula;
+    EXPECT_EQ(v.as_number(), 6.0) << formula;
+  }
+}
+
+TEST(BuiltinsMath4LcmBlankScalar, BooleanArgumentsStillYieldValueError) {
+  const Value literal = EvalSource("=LCM(TRUE,2)");
+  ASSERT_TRUE(literal.is_error());
+  EXPECT_EQ(literal.as_error(), ErrorCode::Value);
+
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::boolean(true));
+  const Value reference = EvalSourceIn("=LCM(A1,2)", wb, wb.sheet(0));
+  ASSERT_TRUE(reference.is_error());
+  EXPECT_EQ(reference.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsMath4LcmBlankScalar, AllBlankRangeYieldsZero) {

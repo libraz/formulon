@@ -80,6 +80,23 @@ bool probe_number(std::string_view rhs, double* out_number) {
   return true;
 }
 
+// Attempts to parse the exact ASCII criterion spellings TRUE / FALSE,
+// ignoring ASCII letter case. This probe is intentionally separate from the
+// general text-to-number coercion ladder: COUNTIF's Eq / NotEq criteria treat
+// these two spellings as Bool criteria, while ordering criteria keep them as
+// text.
+bool probe_bool(std::string_view rhs, bool* out_bool) {
+  if (strings::case_insensitive_eq(rhs, "TRUE")) {
+    *out_bool = true;
+    return true;
+  }
+  if (strings::case_insensitive_eq(rhs, "FALSE")) {
+    *out_bool = false;
+    return true;
+  }
+  return false;
+}
+
 // Attempts to parse `rhs` as a date / time token, returning the Excel serial
 // on success. Used as a second-chance probe after `probe_number` fails so a
 // criterion like ">=2024-07-01" compares numerically against date-serial
@@ -273,6 +290,17 @@ ParsedCriterion parse_criterion(const Value& criterion) {
       // both end up as Eq with an empty RHS, and this is the only thing
       // that tells them apart.
       parsed.rhs_bare_comparator = prefix_stripped && rhs_view.empty();
+      // Eq / NotEq criteria with the exact ASCII spelling TRUE or FALSE are
+      // Bool criteria, regardless of letter case. Ordering criteria keep
+      // those RHS spellings on the text path. This probe must precede the
+      // numeric probe so the matcher can preserve Excel's Bool type rules.
+      bool bool_value = false;
+      if ((parsed.op == CriteriaOp::Eq || parsed.op == CriteriaOp::NotEq) && probe_bool(rhs_view, &bool_value)) {
+        parsed.rhs_is_number = true;
+        parsed.rhs_from_bool = true;
+        parsed.rhs_number = bool_value ? 1.0 : 0.0;
+        return parsed;
+      }
       // Probe for numeric RHS first — Excel treats ">5" as numeric even
       // though the RHS is textual at this layer.
       double num = 0.0;
@@ -534,11 +562,8 @@ bool matches_numeric(const Value& cell, const ParsedCriterion& c) {
   //   * Cross-kind cell for Eq: a numeric criterion `=N` matches Text
   //     cells whose string form coerces to N (Excel-visible behavior,
   //     observed on COUNTIF with mixed-type ranges — e.g. text "23"
-  //     matches numeric criterion 23). For bool criteria, Text cells
-  //     whose display form matches `TRUE`/`FALSE` (case-insensitive)
-  //     also match Eq; other non-Bool kinds still don't (a bool never
-  //     matches a purely numeric Eq, and Number cells never match a
-  //     bool criterion's Eq).
+  //     matches numeric criterion 23). Bool criteria remain type-strict:
+  //     only Bool cells can satisfy their Eq branch.
   //   * Cross-kind cell for ordering ops: no match (Excel does not
   //     implicitly coerce across kinds for ordering).
   const ValueKind required_kind = c.rhs_from_bool ? ValueKind::Bool : ValueKind::Number;
@@ -552,16 +577,6 @@ bool matches_numeric(const Value& cell, const ParsedCriterion& c) {
         return false;
       }
       return coerced.value() == c.rhs_number;
-    }
-    if (c.op == CriteriaOp::Eq && c.rhs_from_bool && cell.kind() == ValueKind::Text) {
-      // Mac Excel 365 bool criterion also matches Text cells whose display
-      // string equals "TRUE" / "FALSE" case-insensitively. Verified via
-      // tests/oracle/golden/countif_edges.golden.json cases
-      // countif_bool_true_over_mixed (literal TRUE) and
-      // countif_cell_criterion_bool_true_with_text (cell-ref TRUE) — both
-      // yield 4 in Mac on a range with 3 bool TRUE + 1 text "TRUE".
-      const std::string_view needle = (c.rhs_number != 0.0) ? "TRUE" : "FALSE";
-      return strings::case_insensitive_eq(cell.as_text(), needle);
     }
     return false;
   }

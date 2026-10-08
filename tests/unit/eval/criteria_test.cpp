@@ -32,12 +32,14 @@ TEST(CriteriaParse, BareBoolTrueBecomesEqOne) {
   const ParsedCriterion c = parse_criterion(Value::boolean(true));
   EXPECT_EQ(c.op, CriteriaOp::Eq);
   EXPECT_TRUE(c.rhs_is_number);
+  EXPECT_TRUE(c.rhs_from_bool);
   EXPECT_DOUBLE_EQ(c.rhs_number, 1.0);
 }
 
 TEST(CriteriaParse, BareBoolFalseBecomesEqZero) {
   const ParsedCriterion c = parse_criterion(Value::boolean(false));
   EXPECT_TRUE(c.rhs_is_number);
+  EXPECT_TRUE(c.rhs_from_bool);
   EXPECT_DOUBLE_EQ(c.rhs_number, 0.0);
 }
 
@@ -99,6 +101,44 @@ TEST(CriteriaParse, TextWithNotEqPrefixNumericRhs) {
   EXPECT_EQ(c.op, CriteriaOp::NotEq);
   EXPECT_TRUE(c.rhs_is_number);
   EXPECT_DOUBLE_EQ(c.rhs_number, 42.0);
+}
+
+TEST(CriteriaParse, TextBooleanLiteralsBecomeBoolCriteria) {
+  struct TestCase {
+    const char* raw;
+    CriteriaOp op;
+    double number;
+  };
+  const TestCase cases[] = {
+      {"TRUE", CriteriaOp::Eq, 1.0},      {"true", CriteriaOp::Eq, 1.0},       {"=TRUE", CriteriaOp::Eq, 1.0},
+      {"FALSE", CriteriaOp::Eq, 0.0},     {"false", CriteriaOp::Eq, 0.0},      {"=FALSE", CriteriaOp::Eq, 0.0},
+      {"<>TRUE", CriteriaOp::NotEq, 1.0}, {"<>false", CriteriaOp::NotEq, 0.0},
+  };
+
+  for (const TestCase& test : cases) {
+    const ParsedCriterion c = parse_criterion(Value::text(test.raw));
+    EXPECT_EQ(c.op, test.op) << test.raw;
+    EXPECT_TRUE(c.rhs_is_number) << test.raw;
+    EXPECT_TRUE(c.rhs_from_bool) << test.raw;
+    EXPECT_DOUBLE_EQ(c.rhs_number, test.number) << test.raw;
+    EXPECT_TRUE(c.rhs_text.empty()) << test.raw;
+  }
+}
+
+TEST(CriteriaParse, BooleanLookingWildcardAndOrderingCriteriaStayText) {
+  const ParsedCriterion wildcard = parse_criterion(Value::text("TRUE*"));
+  EXPECT_EQ(wildcard.op, CriteriaOp::Eq);
+  EXPECT_FALSE(wildcard.rhs_is_number);
+  EXPECT_FALSE(wildcard.rhs_from_bool);
+  EXPECT_TRUE(wildcard.has_wildcard);
+  EXPECT_EQ(wildcard.rhs_text, "TRUE*");
+
+  const ParsedCriterion ordering = parse_criterion(Value::text(">TRUE"));
+  EXPECT_EQ(ordering.op, CriteriaOp::Gt);
+  EXPECT_FALSE(ordering.rhs_is_number);
+  EXPECT_FALSE(ordering.rhs_from_bool);
+  EXPECT_FALSE(ordering.has_wildcard);
+  EXPECT_EQ(ordering.rhs_text, "TRUE");
 }
 
 TEST(CriteriaParse, TextWithNotEqAndEmptyIsTextNotEq) {
@@ -231,6 +271,15 @@ TEST(CriteriaMatchNumeric, NumericTextDoesNotMatchNumericCriterion) {
   const ParsedCriterion c = parse_criterion(Value::text(">5"));
   EXPECT_FALSE(matches_criterion(Value::text("10"), c));
   EXPECT_TRUE(matches_criterion(Value::number(10.0), c));
+}
+
+TEST(CriteriaMatchNumeric, ExplicitEqStillCoercesNumericText) {
+  const ParsedCriterion c = parse_criterion(Value::text("=23"));
+  ASSERT_TRUE(c.rhs_is_number);
+  EXPECT_FALSE(c.rhs_from_bool);
+  EXPECT_TRUE(matches_criterion(Value::number(23.0), c));
+  EXPECT_TRUE(matches_criterion(Value::text("23"), c));
+  EXPECT_FALSE(matches_criterion(Value::text("TRUE"), c));
 }
 
 // ---------------------------------------------------------------------------
@@ -464,51 +513,94 @@ TEST(CriteriaMatchBool, BoolCellAgainstBoolCriterion) {
   EXPECT_FALSE(matches_criterion(Value::number(1.0), c));
 }
 
-TEST(CriteriaMatchBool, BoolTrueCriterionMatchesTextTrueCaseInsensitive) {
-  // Mac Excel 365 (ja-JP) extends Bool Eq criteria to also match Text
-  // cells whose display form is "TRUE" / "FALSE" case-insensitively.
-  // Verified via tests/oracle/golden/countif_edges.golden.json cases
-  // countif_bool_true_over_mixed and countif_cell_criterion_bool_true_with_text.
+TEST(CriteriaMatchBool, BoolTrueCriterionDoesNotMatchTextTrueCaseInsensitive) {
+  // Excel's Bool Eq criteria are type-strict: Text cells whose display form
+  // is "TRUE" do not match a Bool TRUE criterion, regardless of case.
   const ParsedCriterion c = parse_criterion(Value::boolean(true));
-  EXPECT_TRUE(matches_criterion(Value::text("TRUE"), c));
-  EXPECT_TRUE(matches_criterion(Value::text("true"), c));
-  EXPECT_TRUE(matches_criterion(Value::text("True"), c));
+  EXPECT_FALSE(matches_criterion(Value::text("TRUE"), c));
+  EXPECT_FALSE(matches_criterion(Value::text("true"), c));
+  EXPECT_FALSE(matches_criterion(Value::text("True"), c));
 }
 
 TEST(CriteriaMatchBool, BoolTrueCriterionRejectsUnrelatedCells) {
-  // The bool-to-text broadening is narrow: only literal "TRUE" /
-  // "FALSE" Text cells match. Text "FALSE", Text "1", and Number 1 do
-  // NOT match a TRUE bool criterion.
+  // A TRUE Bool criterion does not match a FALSE or numeric/text value.
   const ParsedCriterion c = parse_criterion(Value::boolean(true));
   EXPECT_FALSE(matches_criterion(Value::text("FALSE"), c));
   EXPECT_FALSE(matches_criterion(Value::text("1"), c));
   EXPECT_FALSE(matches_criterion(Value::number(1.0), c));
 }
 
-TEST(CriteriaMatchBool, BoolFalseCriterionMatchesTextFalseCaseInsensitive) {
+TEST(CriteriaMatchBool, BoolFalseCriterionDoesNotMatchTextFalseCaseInsensitive) {
   const ParsedCriterion c = parse_criterion(Value::boolean(false));
-  EXPECT_TRUE(matches_criterion(Value::text("FALSE"), c));
-  EXPECT_TRUE(matches_criterion(Value::text("false"), c));
-  EXPECT_TRUE(matches_criterion(Value::text("False"), c));
+  EXPECT_FALSE(matches_criterion(Value::text("FALSE"), c));
+  EXPECT_FALSE(matches_criterion(Value::text("false"), c));
+  EXPECT_FALSE(matches_criterion(Value::text("False"), c));
   // And does NOT match Text "TRUE" or Number 0.
   EXPECT_FALSE(matches_criterion(Value::text("TRUE"), c));
   EXPECT_FALSE(matches_criterion(Value::number(0.0), c));
 }
 
+TEST(CriteriaMatchBool, ParsedBoolEqCriteriaAreTypeStrict) {
+  struct TestCase {
+    const char* raw;
+    bool expected;
+  };
+  const TestCase cases[] = {
+      {"TRUE", true}, {"true", true}, {"=TRUE", true}, {"FALSE", false}, {"false", false}, {"=FALSE", false},
+  };
+
+  for (const TestCase& test : cases) {
+    const ParsedCriterion c = parse_criterion(Value::text(test.raw));
+    ASSERT_EQ(c.op, CriteriaOp::Eq) << test.raw;
+    ASSERT_TRUE(c.rhs_is_number) << test.raw;
+    ASSERT_TRUE(c.rhs_from_bool) << test.raw;
+    EXPECT_TRUE(matches_criterion(Value::boolean(test.expected), c)) << test.raw;
+    EXPECT_FALSE(matches_criterion(Value::boolean(!test.expected), c)) << test.raw;
+    EXPECT_FALSE(matches_criterion(Value::text(test.expected ? "TRUE" : "FALSE"), c)) << test.raw;
+    EXPECT_FALSE(matches_criterion(Value::number(test.expected ? 1.0 : 0.0), c)) << test.raw;
+  }
+}
+
+TEST(CriteriaMatchBool, ParsedBoolNotEqCriteriaBroadenAcrossTypes) {
+  struct TestCase {
+    const char* raw;
+    bool excluded;
+  };
+  const TestCase cases[] = {{"<>TRUE", true}, {"<>false", false}};
+
+  for (const TestCase& test : cases) {
+    const ParsedCriterion c = parse_criterion(Value::text(test.raw));
+    ASSERT_EQ(c.op, CriteriaOp::NotEq) << test.raw;
+    ASSERT_TRUE(c.rhs_is_number) << test.raw;
+    ASSERT_TRUE(c.rhs_from_bool) << test.raw;
+    EXPECT_FALSE(matches_criterion(Value::boolean(test.excluded), c)) << test.raw;
+    EXPECT_TRUE(matches_criterion(Value::boolean(!test.excluded), c)) << test.raw;
+    EXPECT_TRUE(matches_criterion(Value::text(test.excluded ? "TRUE" : "FALSE"), c)) << test.raw;
+    EXPECT_TRUE(matches_criterion(Value::number(test.excluded ? 1.0 : 0.0), c)) << test.raw;
+  }
+}
+
+TEST(CriteriaMatchBool, BooleanLookingWildcardAndOrderingCriteriaRemainText) {
+  const ParsedCriterion wildcard = parse_criterion(Value::text("TRUE*"));
+  EXPECT_TRUE(matches_criterion(Value::text("TRUE"), wildcard));
+  EXPECT_TRUE(matches_criterion(Value::text("TRUE-ish"), wildcard));
+  EXPECT_FALSE(matches_criterion(Value::boolean(true), wildcard));
+
+  const ParsedCriterion ordering = parse_criterion(Value::text(">TRUE"));
+  EXPECT_TRUE(matches_criterion(Value::text("ZZZ"), ordering));
+  EXPECT_FALSE(matches_criterion(Value::text("TRUE"), ordering));
+  EXPECT_FALSE(matches_criterion(Value::boolean(true), ordering));
+  EXPECT_FALSE(matches_criterion(Value::number(2.0), ordering));
+}
+
 TEST(CriteriaMatchBool, BoolCriterionNotEqUnchangedForText) {
   // NotEq + cross-kind returns `true` unconditionally (see
-  // NotEqNumericCriterionBroadensToOtherTypes). The new Eq-only branch
-  // MUST NOT run for NotEq, so a bool-from-cell NotEq against a Text
-  // "TRUE" cell still returns true (cell type differs from Bool).
-  //
-  // `parse_criterion` always produces Eq for a Bool literal, so we build
-  // the ParsedCriterion by hand to reach the NotEq + rhs_from_bool path
-  // that `*IF` callers can synthesise via argument plumbing.
-  ParsedCriterion c;
-  c.op = CriteriaOp::NotEq;
-  c.rhs_is_number = true;
-  c.rhs_from_bool = true;
-  c.rhs_number = 1.0;
+  // NotEqNumericCriterionBroadensToOtherTypes). A parsed bool NotEq
+  // criterion therefore excludes only the same Bool value; text and
+  // Number cells remain in the result even when their display form/value
+  // is TRUE/1.
+  const ParsedCriterion c = parse_criterion(Value::text("<>TRUE"));
+  ASSERT_TRUE(c.rhs_from_bool);
   EXPECT_TRUE(matches_criterion(Value::text("TRUE"), c));
   EXPECT_TRUE(matches_criterion(Value::text("FALSE"), c));
   EXPECT_TRUE(matches_criterion(Value::number(1.0), c));
