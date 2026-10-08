@@ -120,7 +120,7 @@ class FunctionMetadataLocaleTests(unittest.TestCase):
 
     def test_out_of_range_locale_raises_instead_of_returning_none(self) -> None:
         """An invalid locale is an API error, not a "function not found"."""
-        for locale in (-1, 2, 99):
+        for locale in (-1, 4, 99):
             with self.subTest(locale=locale):
                 with self.assertRaises(FormulonError):
                     Workbook.function_metadata("SUM", locale)

@@ -18,6 +18,23 @@ from typing import (
 
 from ._c import ValueKind as ValueKind
 
+ExcelProfileId = Literal[
+    "mac-365-ja_JP",
+    "win-365-ja_JP",
+    "mac-365-en_US",
+    "win-365-en_US",
+    "mac-365-de_DE",
+    "win-365-de_DE",
+    "mac-365-fr_FR",
+    "win-365-fr_FR",
+    "mac-365-zh_CN",
+    "win-365-zh_CN",
+    "mac-365-ko_KR",
+    "win-365-ko_KR",
+    "mac-365-th_TH",
+    "win-365-th_TH",
+]
+
 __version__: str
 
 # ---------------------------------------------------------------------------
@@ -1526,14 +1543,13 @@ class Workbook:
         second: int = ...,
     ) -> None: ...
     def clear_pinned_now(self) -> None: ...
-    # New workbooks default to win-365-en_US. Select ja-JP behaviour with
-    # mac-365-ja_JP or win-365-ja_JP.
+    # New workbooks default to win-365-en_US.
     def excel_profile_id(
         self,
-    ) -> Literal["mac-365-ja_JP", "win-365-ja_JP", "mac-365-en_US", "win-365-en_US"]: ...
+    ) -> ExcelProfileId: ...
     def set_excel_profile_id(
         self,
-        profile_id: Literal["mac-365-ja_JP", "win-365-ja_JP", "mac-365-en_US", "win-365-en_US"],
+        profile_id: ExcelProfileId,
     ) -> None: ...
 
     # Save.

@@ -89,11 +89,10 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PinnedNow(const Napi::CallbackInfo& info);
   Napi::Value SetPinnedNow(const Napi::CallbackInfo& info);
   Napi::Value ClearPinnedNow(const Napi::CallbackInfo& info);
-  /// New workbooks default to win-365-en_US. The getter returns one of
-  /// mac-365-ja_JP, win-365-ja_JP, mac-365-en_US, and win-365-en_US.
+  /// New workbooks default to win-365-en_US. The getter returns one of the
+  /// 14 ids {mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}.
   Napi::Value ExcelProfileId(const Napi::CallbackInfo& info);
-  /// SetExcelProfileId accepts the four ids above; use either ja_JP id for
-  /// Japanese behaviour.
+  /// SetExcelProfileId accepts the same 14 ids.
   Napi::Value SetExcelProfileId(const Napi::CallbackInfo& info);
 
   // Dependency-graph trace and dynamic-array spill.

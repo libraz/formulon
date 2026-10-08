@@ -9,11 +9,11 @@
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/formulon)
 [![Docs](https://img.shields.io/badge/docs-formulon.libraz.net-2563eb)](https://formulon.libraz.net)
 
-**Formulon は Excel 互換の計算エンジンです。** C++17 製のコアエンジンが、既定では **Windows Excel 365 (ja-JP)** の挙動に合わせて数式を評価します。実 Excel から取得した oracle データで互換性を確認し、既知の差分はすべて理由つきで追跡しています。同じエンジンをブラウザ (WebAssembly)、Python、ネイティブ CLI から使えるため、どの実行環境でも同じワークブックを同じ結果に再計算できます。
+**Formulon は Excel 互換の計算エンジンです。** C++17 製のコアエンジンが、既定では **Windows Excel 365 (en-US)** の挙動に合わせて数式を評価します。実 Excel から取得した oracle データで互換性を確認し、既知の差分はすべて理由つきで追跡しています。同じエンジンをブラウザ (WebAssembly)、Python、ネイティブ CLI から使えるため、どの実行環境でも同じワークブックを同じ結果に再計算できます。
 
 Excel 本体、Microsoft ランタイム、COM オートメーションは実行時には不要です。WASM 版はブラウザと Node で動作し、Python 版は `wasmtime` 経由で同じ WASM コアを呼び出します。ネイティブ CLI は `darwin-arm64` / `linux-x64` / `linux-arm64` 向けに配布しています。
 
-数式は英語の関数名と、ファイル形式が保存する区切り文字で解析するので、数式の書き方はロケールによって変わりません。ja-JP プロファイルによって変わる挙動には、文字幅とかなの扱い、`LENB` などバイト単位で数える `*B` 系の関数、`CODE` / `CHAR`、`INFO` / `CELL` が返す環境値、`年月日` 表記や和暦などの日本語の日付文字列、ピボットテーブルのラベルなどがあります。Excel と突き合わせて取得したのは ja-JP だけなので、英語ロケールのプロファイルはまだ公開していません。詳しくは [ロケールプロファイル](https://formulon.libraz.net/ja/compatibility/locale-profiles) を参照してください。
+数式は英語の関数名と、ファイル形式が保存する区切り文字で解析するので、数式の書き方はロケールによって変わりません。ja-JP プロファイルによって変わる挙動には、文字幅とかなの扱い、`LENB` などバイト単位で数える `*B` 系の関数、`CODE` / `CHAR`、`INFO` / `CELL` が返す環境値、`年月日` 表記や和暦などの日本語の日付文字列、ピボットテーブルのラベルなどがあります。プロファイルは ja-JP / en-US / de-DE / fr-FR / zh-CN / ko-KR / th-TH を、`mac` と `win` のホスト別に計 14 個選べます。`mac-*` はすべて、そのロケールの Mac Excel 365 で採取した値に合わせています。`win-365-ja_JP` は Windows で採取した値、それ以外の `win-*` は Mac の採取値に ja-JP で測ったホスト差を重ねた推定です。ピボットテーブルのラベルは ja-JP と en-US 以外では英語、CLI の出力はロケールに依らず `TRUE`/`FALSE`・英語のエラー名・`.` のままです。詳しくは [ロケールプロファイル](https://formulon.libraz.net/ja/compatibility/locale-profiles) を参照してください。
 
 ## インストール
 
@@ -26,9 +26,9 @@ CLI バイナリは [GitHub Releases](https://github.com/libraz/formulon/release
 
 ## 特徴
 
-- **互換性は実際の Excel と照合して確かめています。** 既定の profile は `win-365-ja_JP` です。数式の結果は Mac Excel 365 (ja-JP)、ピボットテーブルと印刷レイアウトは Windows Excel 365 (ja-JP) を基準に固定しています。ピボットテーブルの作成を自動化するには Windows COM が必要なためです。いずれも検証済みの Microsoft 365 環境から採取しています。出力は実 Excel から再生成した golden と照合します。許容している差分、たとえば超越関数の ulp 差、揮発関数、Excel 側の不整合を Formulon が意図的に採らないケースは、[`tests/divergence.yaml`](tests/divergence.yaml) に理由と確認済み Excel ビルドを記録します。
+- **互換性は実際の Excel と照合して確かめています。** 既定の profile は `win-365-en_US` (推定、後述) です。数式の結果は 7 ロケールすべての Mac Excel 365、ピボットテーブルと印刷レイアウトは Windows Excel 365 (ja-JP) を基準に固定しています。ピボットテーブルの作成を自動化するには Windows COM が必要なためです。いずれも検証済みの Microsoft 365 環境から採取しています。出力は実 Excel から再生成した golden と照合します。許容している差分、たとえば超越関数の ulp 差、揮発関数、Excel 側の不整合を Formulon が意図的に採らないケースは、[`tests/divergence.yaml`](tests/divergence.yaml) に理由と確認済み Excel ビルドを記録します。
 - **どの環境でも同じ C++ コアが計算します。** ブラウザ、Python、CLI で別々の計算ロジックを持たず、同じエンジンを配布しています。実装が分かれないので、環境ごとに結果がずれることもありません。
-- **WASM のサイズに上限を設けています。** CI は非圧縮 **3.75 MiB**、Brotli **928 KiB** を超えると失敗し、**3.50 MiB** / **896 KiB** を超えると警告を出します。実際に効いてくるのは配信時の Brotli サイズなので、非圧縮と対等に検査します。現在値は `make size-check` で確認できます。
+- **WASM のサイズに上限を設けています。** CI は非圧縮 **3.75 MiB**、Brotli **960 KiB** を超えると失敗し、**3.50 MiB** / **928 KiB** を超えると警告を出します。実際に効いてくるのは配信時の Brotli サイズなので、非圧縮と対等に検査します。現在値は `make size-check` で確認できます。
 - **依存は小さく保っています。** ランタイム依存は `miniz` (zip/deflate)、`pugixml` (XML + XPath 1.0)、`PCRE2` (`REGEX*`)、`double-conversion` (Grisu3 `dtoa`) の 4 つです。線形代数、UTF-8 処理、数値変換の多くはリポジトリ内で実装しています。
 - **C++ は監査しやすさを優先して書いています。** `Expected<T, Error>` ベースのエラー処理、RAII、`-fno-exceptions -fno-rtti`、Google C++ Style を採用しています。
 
@@ -97,7 +97,7 @@ formulon paginate output.xlsx --sheet 0
 | &nbsp;&nbsp;↳ うち環境依存 | 2 | 実装済みだが、ホスト環境やワークブック状態によって値が変わるため固定 golden だけでは完全に記述できない関数。上記 508 に含まれます。 | `INFO`, `CELL` |
 | unavailable stub | 15 | Formulon が内蔵しない外部サービス、ネットワーク、COM、OLAP 接続などが必要な関数。決まったエラーを返します。 | `PY`, `WEBSERVICE`, `STOCKHISTORY`, `IMAGE`, `RTD`, `TRANSLATE`, `DETECTLANGUAGE`, `COPILOT`, `CUBE*` |
 
-oracle は **104 カテゴリ** あります。数式 track と条件付き書式 track は Mac Excel 365 ja-JP から、workbook track は Windows Excel 365 ja-JP から再生成します。workbook track の golden には採取 ID が付いていて、すべての suite が同じ検証済み Microsoft 365 セッションで採取されたことを確認できます。
+oracle は **104 カテゴリ** あります。数式 track は 7 ロケールそれぞれの Mac Excel 365 から、条件付き書式 track は Mac Excel 365 ja-JP から、workbook track は Windows Excel 365 ja-JP から再生成します。workbook track の golden には採取 ID が付いていて、すべての suite が同じ検証済み Microsoft 365 セッションで採取されたことを確認できます。
 
 現在のローカル検証結果:
 
@@ -116,7 +116,15 @@ CTest スイートを分けているラベルは 3 つです。`SLOW`（数分�
 
 数式の結果に加えて、**ピボットテーブルと印刷範囲・改ページ**には専用の **workbook oracle track** があり、WSL2 から Windows COM へ渡すブリッジ経由で採取します。skip は 10 件あり、そのうち 9 件は同じ Excel の癖によるものです。印刷倍率またはズームが 50% 以下のとき、Excel の改ページプレビューは幾何的なページ分割に従わない列の自動改ページを出すため、観測される改ページ位置は倍率を下げても縮まらず、25% では逆に増えます。この 9 件には、照合した Microsoft 365 の観測値を記録しています。残る 1 件はケースファイルの形だけを確かめるスモーク用のケースで、照合する値を持ちません。
 
-新規ワークブックはデフォルトで `win-365-ja_JP` profile を使います。必要に応じて profile-id API (`mac-365-ja_JP` / `win-365-ja_JP`) で切り替えられます。英語ロケール profile は、対応する EN oracle データとロケール固有挙動の検証が揃うまで公開しません。
+新規ワークブックはデフォルトで `win-365-en_US` profile を使います。profile-id API で切り替えられ、id は `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}` の 14 個です。
+
+| profile | 根拠 |
+|---------|------|
+| `mac-365-<ロケール>` (7 ロケールすべて) | そのロケールの Mac Excel 365 で採取。いずれも oracle の gate |
+| `win-365-ja_JP` | Windows Excel 365 (ja-JP) で採取 |
+| `win-365-en_US` (既定)、`win-365-de_DE`、`win-365-fr_FR`、`win-365-zh_CN`、`win-365-ko_KR`、`win-365-th_TH` | 推定。そのロケールの Mac 採取値に、ja-JP で測ったホスト差と文書化された Windows の挙動 (たとえば Windows の en-US では `CHAR` / `CODE` が Windows-1252) を重ねています。Windows では採取しておらず、採取できた時点で推定を置き換えます |
+
+日本語の挙動を保つには `win-365-ja_JP` か `mac-365-ja_JP` を選んでください。ピボットテーブルのラベルは、de-DE / fr-FR / zh-CN / ko-KR / th-TH では英語です。
 
 OOXML reader / writer はシート、スタイル、条件付き書式、コメント (スレッド形式を含む)、ハイパーリンク、結合セル、入力規則、定義済み名前、テーブル、ピボットテーブル、画像と図形、テーマを round-trip します。MS-XLSB reader / writer はセル値、スタイル、シート間 3-D 参照、および一般的なトークン化数式をカバーします。配列定数リテラルと 2007 年以降の future function ID は、OOXML 経路に比べてまだ限定的です。スレッド形式のコメント、挿入した画像、型付き AutoFilter の編集は XLSB へ書き出しません。ワークブック操作は C ABI と各言語バインディングから利用できます。CLI は意図的に `eval` / `recalc` / `dump` / `paginate` のみを公開します。
 

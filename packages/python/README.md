@@ -14,8 +14,10 @@ hyperlinks, data validations, conditional formats, defined names, and
 PivotTables. It also exposes recalc (full and partial), dependency-graph
 tracing (precedents / dependents), dynamic-array spill info, the function
 catalog, and per-sheet view / protection settings. The goal is 1-bit
-compatibility with the default `win-365-ja_JP` behavior profile; callers can
-select the separately supported `mac-365-ja_JP` profile when required.
+compatibility with the default `win-365-en_US` behavior profile; callers can
+select any of the 14 `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}`
+profiles. The `mac-*` profiles and `win-365-ja_JP` are measured against
+Excel; the other `win-*` profiles are estimated from the Mac measurements.
 Results are checked against real Excel, and known differences are listed in
 [`tests/divergence.yaml`](https://github.com/libraz/formulon/blob/main/tests/divergence.yaml).
 

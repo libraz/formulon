@@ -9,11 +9,11 @@
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/formulon)
 [![Docs](https://img.shields.io/badge/docs-formulon.libraz.net-2563eb)](https://formulon.libraz.net)
 
-Formulon is a headless, Excel-compatible calculation engine — a C++17 core that defaults to the **Windows Excel 365 (ja-JP)** behavior profile, with every known divergence explicitly tracked against Excel oracle data. The same engine is packaged for the browser (WebAssembly), for Python, and for native command-line use, so a workbook recalculates to the same values wherever it runs.
+Formulon is a headless, Excel-compatible calculation engine — a C++17 core that defaults to the **Windows Excel 365 (en-US)** behavior profile, with every known divergence explicitly tracked against Excel oracle data. The same engine is packaged for the browser (WebAssembly), for Python, and for native command-line use, so a workbook recalculates to the same values wherever it runs.
 
 No Excel installation, no Microsoft runtime, no COM automation required. The WASM build runs in browsers and Node, and the Python package runs the same WASM core through `wasmtime`; native CLI binaries ship for `darwin-arm64`, `linux-x64`, and `linux-arm64`.
 
-Formulas are parsed with English function names and the separators the file formats store, so formula syntax does not change with the locale. What the ja-JP profile does change includes text width and kana handling, the byte-counting `*B` functions such as `LENB`, `CODE` / `CHAR`, environment values from `INFO` / `CELL`, Japanese date text such as `年月日` forms and eras, and PivotTable labels. Only ja-JP has been captured against Excel, so no English-locale profile is exposed yet; see [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles).
+Formulas are parsed with English function names and the separators the file formats store, so formula syntax does not change with the locale. What the ja-JP profile does change includes text width and kana handling, the byte-counting `*B` functions such as `LENB`, `CODE` / `CHAR`, environment values from `INFO` / `CELL`, Japanese date text such as `年月日` forms and eras, and PivotTable labels. Profiles for ja-JP, en-US, de-DE, fr-FR, zh-CN, ko-KR and th-TH are selectable, each on a `mac` and a `win` host (14 ids). Every `mac-*` profile is captured against Mac Excel 365 in that locale; `win-365-ja_JP` is captured on Windows, and the other `win-*` profiles are estimated from the Mac captures plus the host differences measured on ja-JP. PivotTable labels are English outside ja-JP and en-US, and CLI output stays locale-invariant (`TRUE`/`FALSE`, English error names, `.`). See [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles).
 
 ## Install
 
@@ -26,9 +26,9 @@ CLI binaries are available from [GitHub Releases](https://github.com/libraz/form
 
 ## Why Formulon
 
-- **Checked against real Excel.** The runtime default is `win-365-ja_JP`, and profile-specific oracle suites pin observed Excel behavior. Formula results are pinned against Mac Excel 365 (ja-JP); pivot tables and print layout are pinned against Windows Excel 365 (ja-JP), because creating PivotTables by automation requires Windows COM. Both come from a verified Microsoft 365 install. Outputs are checked for bit-level parity against golden data regenerated from the real product; every accepted divergence (transcendental ulp drift, volatile-function snapshots, Excel quirks where Formulon deliberately keeps a saner answer) is recorded case-by-case in [`tests/divergence.yaml`](tests/divergence.yaml) with a reason and the last verified Excel build.
+- **Checked against real Excel.** The runtime default is `win-365-en_US` (an estimate; see below), and profile-specific oracle suites pin observed Excel behavior. Formula results are pinned against Mac Excel 365 in all seven locales; pivot tables and print layout are pinned against Windows Excel 365 (ja-JP), because creating PivotTables by automation requires Windows COM. Both come from a verified Microsoft 365 install. Outputs are checked for bit-level parity against golden data regenerated from the real product; every accepted divergence (transcendental ulp drift, volatile-function snapshots, Excel quirks where Formulon deliberately keeps a saner answer) is recorded case-by-case in [`tests/divergence.yaml`](tests/divergence.yaml) with a reason and the last verified Excel build.
 - **One C++ core, identical results everywhere.** The browser, Python, and CLI builds all ship the same engine rather than separate calculation logic, so there is no second implementation for results to drift against.
-- **WASM size budget.** CI enforces a **3.75 MiB** uncompressed and **928 KiB** Brotli hard ceiling, and reports **3.50 MiB** / **896 KiB** soft ceilings. Brotli is the wire size that actually binds, so it gates on equal footing. Run `make size-check` to measure the current artifact.
+- **WASM size budget.** CI enforces a **3.75 MiB** uncompressed and **960 KiB** Brotli hard ceiling, and reports **3.50 MiB** / **928 KiB** soft ceilings. Brotli is the wire size that actually binds, so it gates on equal footing. Run `make size-check` to measure the current artifact.
 - **Small dependency set.** Engine deps: `miniz` (zip/deflate), `pugixml` (XML + XPath 1.0), `PCRE2` (Excel-compatible regex for `REGEX*`), `double-conversion` (Grisu3 shortest-roundtrip `dtoa`). Linear algebra, UTF-8 handling, and most number coercion are in-tree.
 - **C++ written for auditability.** `Expected<T, Error>` error handling, RAII, `-fno-exceptions -fno-rtti`, Google C++ style.
 
@@ -122,7 +122,7 @@ additional category (508 + 15 = 523, not 525).
 | &nbsp;&nbsp;↳ of which environment-bound | 2 | A real implementation whose result depends on host or workbook state, so a fixed golden cannot fully describe it. Counted within the 508 above. | `INFO`, `CELL` |
 | Unavailable stub | 15 | Requires external services, network I/O, COM providers, or OLAP connections that Formulon does not embed; returns a fixed error. | `PY`, `WEBSERVICE`, `STOCKHISTORY`, `IMAGE`, `RTD`, `TRANSLATE`, `DETECTLANGUAGE`, `COPILOT`, `CUBE*` |
 
-**104 oracle categories** are defined. The formula and conditional-formatting tracks regenerate from Mac Excel 365 ja-JP; the workbook track regenerates from Windows Excel 365 ja-JP, and its goldens carry a capture identifier that pins every suite to a single verified Microsoft 365 session. Current local verification:
+**104 oracle categories** are defined. The formula track regenerates from Mac Excel 365 in each of the seven locales and the conditional-formatting track from Mac Excel 365 ja-JP; the workbook track regenerates from Windows Excel 365 ja-JP, and its goldens carry a capture identifier that pins every suite to a single verified Microsoft 365 session. Current local verification:
 
 | Check | Result |
 |-------|--------|
@@ -139,7 +139,15 @@ Every skip is an explicit divergence, host-service dependency, volatile/environm
 
 Beyond formula results, **pivot tables and print areas / pagination** have a dedicated **workbook oracle track**, captured through a WSL2 → Windows COM bridge. Nine of its ten skips are the same Excel quirk: at a print scale or zoom of 50% or less, Excel's page-break preview emits column auto-breaks that do not follow geometric pagination, so the observed break set stops shrinking with the scale and grows again at 25%. Each of those nine records the Microsoft 365 observation it was measured against. The tenth is a smoke case that only checks the case-file shape and has nothing to compare.
 
-New workbooks use the `win-365-ja_JP` formula profile by default; callers can switch with the profile-id API (`mac-365-ja_JP`, `win-365-ja_JP`). English-locale profiles are intentionally not exposed until matching EN oracle data and verified locale-specific behavior are available.
+New workbooks use the `win-365-en_US` formula profile by default; callers switch with the profile-id API. The 14 ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}`.
+
+| Profile | Basis |
+|---------|-------|
+| `mac-365-<locale>` (all seven locales) | Measured on Mac Excel 365 in that locale; each is a gating oracle suite |
+| `win-365-ja_JP` | Measured on Windows Excel 365 (ja-JP) |
+| `win-365-en_US` (default), `win-365-de_DE`, `win-365-fr_FR`, `win-365-zh_CN`, `win-365-ko_KR`, `win-365-th_TH` | Estimated: the Mac measurement for the locale plus the host differences measured on ja-JP and documented Windows behavior (for example `CHAR` / `CODE` use Windows-1252 on a Windows en-US host). Not captured on Windows; an eventual Windows capture replaces the estimate |
+
+Pick `win-365-ja_JP` or `mac-365-ja_JP` to keep Japanese behavior. PivotTable labels are English for de-DE, fr-FR, zh-CN, ko-KR and th-TH.
 
 The OOXML reader/writer round-trips sheets, styles, conditional formatting, comments (including threaded comments), hyperlinks, merges, data validations, defined names, tables, pivot tables, images and drawings, and the theme; an MS-XLSB reader/writer covers cell values, styles, cross-sheet 3-D references, cross-workbook references, and common tokenized formulas, with array-constant literals and post-2007 "future function" IDs still limited compared to the OOXML path. Threaded comments, inserted images and typed AutoFilter edits are not written to XLSB. Workbook operations are available through the C ABI and language bindings; the CLI deliberately exposes only `eval`, `recalc`, `dump`, and `paginate`.
 

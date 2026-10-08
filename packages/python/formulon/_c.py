@@ -25,9 +25,8 @@ Excel formula profiles
 ----------------------
 
 New workbooks use ``win-365-en_US`` by default. The profile getter returns
-one of ``mac-365-ja_JP``, ``win-365-ja_JP``, ``mac-365-en_US``, or
-``win-365-en_US``; the setter accepts those ids, with either ``ja_JP`` id
-selecting Japanese behaviour.
+one of the 14 ids ``{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}``;
+the setter accepts the same ids.
 
 The ``fm_value_t`` POD has the wasm32 layout::
 

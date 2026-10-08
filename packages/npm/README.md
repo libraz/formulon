@@ -8,8 +8,10 @@
 Excel 365 calculation engine, compiled to WebAssembly for browsers and
 Node. Evaluates formulas and loads, recalculates, and saves `.xlsx` and
 `.xlsb` workbooks without an Excel installation. It defaults to the
-`win-365-ja_JP` behavior profile; hosts can select the separately
-supported `mac-365-ja_JP` profile when required. Results are checked
+`win-365-en_US` behavior profile; hosts can select any of the 14
+`{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}` profiles. The
+`mac-*` profiles and `win-365-ja_JP` are measured against Excel; the other
+`win-*` profiles are estimated from the Mac measurements. Results are checked
 against real Excel, and known differences are listed in
 [`tests/divergence.yaml`](https://github.com/libraz/formulon/blob/main/tests/divergence.yaml).
 

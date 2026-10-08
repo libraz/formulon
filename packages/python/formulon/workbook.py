@@ -148,9 +148,27 @@ _STATUS_BINDING_NULL_POINTER = 7001
 # `fm_cell_range_next_cursor` reports UINT64_MAX when no further cell exists.
 _CELL_RANGE_NO_CURSOR = (1 << 64) - 1
 
-# Inclusive bounds of `fm_locale_t` (0 = en-US, 1 = ja-JP).
+#: Excel formula profile id accepted by `Workbook.set_excel_profile_id`.
+ExcelProfileId = Literal[
+    "mac-365-ja_JP",
+    "win-365-ja_JP",
+    "mac-365-en_US",
+    "win-365-en_US",
+    "mac-365-de_DE",
+    "win-365-de_DE",
+    "mac-365-fr_FR",
+    "win-365-fr_FR",
+    "mac-365-zh_CN",
+    "win-365-zh_CN",
+    "mac-365-ko_KR",
+    "win-365-ko_KR",
+    "mac-365-th_TH",
+    "win-365-th_TH",
+]
+
+# Inclusive bounds of `fm_locale_t` (0 = en-US, 1 = ja-JP, 2 = de-DE, 3 = fr-FR).
 _LOCALE_MIN = 0
-_LOCALE_MAX = 1
+_LOCALE_MAX = 3
 
 # `FormulonError` itself lives in `formulon._c` (imported above): its
 # constructor needs to run from inside that module's WASM call trampoline,
@@ -3515,12 +3533,11 @@ class Workbook:
 
     def excel_profile_id(
         self,
-    ) -> Literal["mac-365-ja_JP", "win-365-ja_JP", "mac-365-en_US", "win-365-en_US"]:
+    ) -> ExcelProfileId:
         """Return the active Excel formula profile id.
 
-        New workbooks default to ``win-365-en_US``. Select ja-JP behaviour
-        with ``mac-365-ja_JP`` or ``win-365-ja_JP`` using
-        :meth:`set_excel_profile_id`.
+        New workbooks default to ``win-365-en_US``. Select another host or
+        locale with :meth:`set_excel_profile_id`.
         """
         h = self._require()
         out = _alloc_out_ptr()
@@ -3530,7 +3547,7 @@ class Workbook:
                 "fm_workbook_excel_profile_id",
             )
             return cast(
-                Literal["mac-365-ja_JP", "win-365-ja_JP", "mac-365-en_US", "win-365-en_US"],
+                ExcelProfileId,
                 LIB.read_cstr(LIB.read_u32(out)),
             )
         finally:
@@ -3538,12 +3555,12 @@ class Workbook:
 
     def set_excel_profile_id(
         self,
-        profile_id: Literal["mac-365-ja_JP", "win-365-ja_JP", "mac-365-en_US", "win-365-en_US"],
+        profile_id: ExcelProfileId,
     ) -> None:
         """Set the workbook's Excel formula profile by id.
 
-        New workbooks use ``win-365-en_US`` by default. Pass
-        ``mac-365-ja_JP`` or ``win-365-ja_JP`` to select ja-JP behaviour.
+        New workbooks use ``win-365-en_US`` by default. Ids have the form
+        ``{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}``.
         """
         h = self._require()
         pid_ptr, _ = LIB.alloc_utf8(profile_id)
@@ -7941,7 +7958,8 @@ class Workbook:
     def function_metadata(name: str, locale: int = 0) -> Optional[FunctionMetadata]:
         """Return metadata for ``name`` or ``None`` when unknown.
 
-        ``locale`` is ``0`` for ``en-US`` and ``1`` for ``ja-JP``.
+        ``locale`` is ``0`` for ``en-US``, ``1`` for ``ja-JP``, ``2`` for
+        ``de-DE`` and ``3`` for ``fr-FR``.
 
         Args:
           name: canonical function name, matched case-insensitively.

@@ -11,9 +11,11 @@ it is built from the repository, as described under
 [Building from source](#building-from-source). The badges above track the
 sibling WebAssembly and Python packages, which are published.
 
-Formula evaluation uses Formulon's default `win-365-ja_JP` profile. Call
-`setExcelProfileId()` when a workbook must use the separately supported
-`mac-365-ja_JP` profile.
+Formula evaluation uses Formulon's default `win-365-en_US` profile. Call
+`setExcelProfileId()` to select any of the 14
+`{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}` profiles. The
+`mac-*` profiles and `win-365-ja_JP` are measured against Excel; the other
+`win-*` profiles are estimated from the Mac measurements.
 
 ## What this is
 

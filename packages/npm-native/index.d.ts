@@ -503,12 +503,28 @@ export const ExternalLinkKind: Readonly<{
 }>;
 
 /**
- * Full formula-behaviour profile id. New workbooks default to
- * `win-365-en_US`; select Japanese behaviour with `mac-365-ja_JP` or
- * `win-365-ja_JP`. The supported ids are `mac-365-ja_JP`,
- * `win-365-ja_JP`, `mac-365-en_US`, and `win-365-en_US`.
+ * Full formula-behaviour profile id: `mac` or `win` combined with one of
+ * `ja_JP`, `en_US`, `de_DE`, `fr_FR`, `zh_CN`, `ko_KR`, `th_TH`
+ * (for example `win-365-en_US`). New workbooks default to `win-365-en_US`.
+ * The `mac-*` ids and `win-365-ja_JP` follow Excel measurements; every other
+ * `win-*` id is estimated from the Mac measurements plus the Windows host
+ * rules.
  */
-export type ExcelProfileId = 'mac-365-ja_JP' | 'win-365-ja_JP' | 'mac-365-en_US' | 'win-365-en_US';
+export type ExcelProfileId =
+  | 'mac-365-ja_JP'
+  | 'win-365-ja_JP'
+  | 'mac-365-en_US'
+  | 'win-365-en_US'
+  | 'mac-365-de_DE'
+  | 'win-365-de_DE'
+  | 'mac-365-fr_FR'
+  | 'win-365-fr_FR'
+  | 'mac-365-zh_CN'
+  | 'win-365-zh_CN'
+  | 'mac-365-ko_KR'
+  | 'win-365-ko_KR'
+  | 'mac-365-th_TH'
+  | 'win-365-th_TH';
 
 /** A wall-clock reading in local civil fields, as read back from
  *  `Workbook.pinnedNow()`. `month` is 1-12 and `day` is 1-31; the other
@@ -2489,7 +2505,7 @@ export interface Workbook {
    *  nothing. */
   clearPinnedNow(): Status;
   /** Full formula-behaviour profile id. Defaults to `win-365-en_US`.
-   * Use `mac-365-ja_JP` or `win-365-ja_JP` to select Japanese behaviour.
+   * Pick another locale or host with any {@link ExcelProfileId}.
    */
   excelProfileId(): StringResult<ExcelProfileId>;
   setExcelProfileId(profileId: ExcelProfileId): Status;
@@ -3179,13 +3195,16 @@ export interface Workbook {
   // Function catalog.
   /** Returns metadata for the function `name` (case-insensitive). When
    *  the function is unknown, returns `{ok: false}`. `locale` selects the
-   *  catalog locale (`0` = `en-US`, `1` = `ja-JP`). */
+   *  catalog locale (`0` = `en-US`, `1` = `ja-JP`, `2` = `de-DE`,
+   *  `3` = `fr-FR`). */
   functionMetadata(name: string, locale: number): FunctionMetadataResult;
   /** Returns every registered function's canonical name in ascending
    *  sort order. */
   functionNames(): ListResult<string>;
   /** Returns the localized display name for the canonical function
-   *  `canonicalName` in `locale`. `value` is the empty string, with
+   *  `canonicalName` in `locale`. `de-DE` and `fr-FR` return Excel's
+   *  function names for that locale; the other locales return the
+   *  canonical name unchanged. `value` is the empty string, with
    *  `status.ok === false`, when the canonical name does not match a
    *  registered function. */
   localizeFunctionName(canonicalName: string, locale: number): StringResult;

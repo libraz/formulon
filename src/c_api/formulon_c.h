@@ -2297,9 +2297,9 @@ FM_API fm_status_t fm_workbook_clear_pinned_now(fm_workbook_t* wb);
  *
  * The returned pointer is a static view into Formulon's profile table and
  * remains valid for the process lifetime. New workbooks default to
- * `win-365-en_US`. The corresponding setter accepts `mac-365-ja_JP` or
- * `win-365-ja_JP` for ja-JP behaviour; the complete supported set is
- * `mac-365-ja_JP`, `win-365-ja_JP`, `mac-365-en_US`, `win-365-en_US`.
+ * `win-365-en_US`. The id is `<host>-365-<locale>` with host `mac` or `win`
+ * and locale `ja_JP`, `en_US`, `de_DE`, `fr_FR`, `zh_CN`, `ko_KR` or
+ * `th_TH` (14 ids); the corresponding setter accepts exactly that set.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb` or `out_profile_id` is NULL.
@@ -2309,9 +2309,11 @@ FM_API fm_status_t fm_workbook_excel_profile_id(const fm_workbook_t* wb, const c
 /**
  * @brief Sets the workbook's Excel formula profile by id.
  *
- * New workbooks use `win-365-en_US` by default. Pass `mac-365-ja_JP` or
- * `win-365-ja_JP` to select ja-JP behaviour. The other supported ids are
- * `mac-365-en_US` and `win-365-en_US`.
+ * New workbooks use `win-365-en_US` by default. Supported ids are
+ * `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}`. The `mac-*`
+ * ids and `win-365-ja_JP` follow Excel measurements; the other `win-*` ids
+ * are estimated from the Mac measurements plus the Windows host rules.
+ * PivotTable labels for the de/fr/zh/ko/th locales are English.
  *
  * Existing cached formula values are not recomputed until the caller drives
  * `fm_workbook_recalc` or an equivalent partial recalc.
@@ -4427,9 +4429,8 @@ typedef enum {
  * `merge_function_metadata`) for it. This
  * metadata is display-only: formula input parsing stays fixed to the
  * English canonical names, so `fm_function_localize` /
- * `fm_function_canonicalize` are unaffected by any injected document and
- * remain canonical-fallback (formula-language input localization is a
- * separate, engine-level concern outside this seam).
+ * `fm_function_canonicalize` are unaffected by any injected document
+ * (formula input parsing never accepts localized names).
  *
  * String storage is process-static (the catalog is initialised at
  * static-init time); callers do not free the returned pointers.
@@ -4450,6 +4451,8 @@ typedef struct {
  *
  *   * `0` — `en-US` (default).
  *   * `1` — `ja-JP`.
+ *   * `2` — `de-DE`.
+ *   * `3` — `fr-FR`.
  */
 typedef enum { FM_LOCALE_EN_US = 0, FM_LOCALE_JA_JP = 1, FM_LOCALE_DE_DE = 2, FM_LOCALE_FR_FR = 3 } fm_locale_t;
 
@@ -4493,13 +4496,11 @@ FM_API fm_status_t fm_function_name_at(size_t idx, const char** out_name);
  *        registered.
  *
  * `*out_localized` is a static view into process-static storage and must not
- * be freed. No alias table exists for any locale, so this always falls
- * through to `canonical_name` — for both supported locales, and by design
- * rather than pending work. The primary locale is `ja-JP`, whose function
- * names are identical to the English canonical names (the alias would be
- * the identity map); display names for any other locale belong to the
- * host's provider document, not to the engine. `locale` is still
- * validated: it is a raw signed 32-bit ordinal and unknown values return
+ * be freed. `de-DE` and `fr-FR` return the function names Excel shows in
+ * that locale; `en-US` and `ja-JP` return `canonical_name` unchanged (the
+ * ja-JP names are identical to the English ones). Display names for other
+ * locales belong to the host's provider document, not to the engine.
+ * `locale` is a raw signed 32-bit ordinal and unknown values return
  * `kInvalidArgument`.
  *
  * @return `kOk` on success;
@@ -4513,10 +4514,10 @@ FM_API fm_status_t fm_function_localize(const char* canonical_name, int32_t loca
  * @brief Returns the canonical (English UPPERCASE) name for the
  *        localized function `localized_name` in `locale`.
  *
- * With no alias table in any locale (see `fm_function_localize`), this is
- * a case-insensitive ASCII match against the canonical name list, in
- * every locale. `locale` is still validated: it is a raw signed 32-bit
- * ordinal and unknown values return `kInvalidArgument`.
+ * For `de-DE` and `fr-FR` this inverts the name table of
+ * `fm_function_localize`; for `en-US` and `ja-JP` it is a case-insensitive
+ * ASCII match against the canonical name list. `locale` is a raw signed
+ * 32-bit ordinal and unknown values return `kInvalidArgument`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when any pointer argument is `NULL`;

@@ -521,12 +521,28 @@ export enum CalcMode {
 }
 
 /**
- * Full formula-behaviour profile id. New workbooks default to
- * `win-365-en_US`; select Japanese behaviour with `mac-365-ja_JP` or
- * `win-365-ja_JP`. The supported ids are `mac-365-ja_JP`,
- * `win-365-ja_JP`, `mac-365-en_US`, and `win-365-en_US`.
+ * Full formula-behaviour profile id: `mac` or `win` combined with one of
+ * `ja_JP`, `en_US`, `de_DE`, `fr_FR`, `zh_CN`, `ko_KR`, `th_TH`
+ * (for example `win-365-en_US`). New workbooks default to `win-365-en_US`.
+ * The `mac-*` ids and `win-365-ja_JP` follow Excel measurements; every other
+ * `win-*` id is estimated from the Mac measurements plus the Windows host
+ * rules.
  */
-export type ExcelProfileId = 'mac-365-ja_JP' | 'win-365-ja_JP' | 'mac-365-en_US' | 'win-365-en_US';
+export type ExcelProfileId =
+  | 'mac-365-ja_JP'
+  | 'win-365-ja_JP'
+  | 'mac-365-en_US'
+  | 'win-365-en_US'
+  | 'mac-365-de_DE'
+  | 'win-365-de_DE'
+  | 'mac-365-fr_FR'
+  | 'win-365-fr_FR'
+  | 'mac-365-zh_CN'
+  | 'win-365-zh_CN'
+  | 'mac-365-ko_KR'
+  | 'win-365-ko_KR'
+  | 'mac-365-th_TH'
+  | 'win-365-th_TH';
 
 /**
  * A wall-clock reading in local civil fields, as read back from
@@ -2530,7 +2546,7 @@ export interface Workbook {
   clearPinnedNow(): Status;
 
   /** Full formula-behaviour profile id. Defaults to `win-365-en_US`.
-   * Use `mac-365-ja_JP` or `win-365-ja_JP` to select Japanese behaviour.
+   * Pick another locale or host with any {@link ExcelProfileId}.
    */
   excelProfileId(): StringResult<ExcelProfileId>;
   setExcelProfileId(profileId: ExcelProfileId): Status;
@@ -3243,7 +3259,7 @@ export interface Workbook {
 
   /** Returns metadata for the function `name` (case-insensitive). When
    *  the function is unknown, returns `{ok: false}`. `locale` selects
-   *  the catalog locale (`0` = `en-US`, `1` = `ja-JP`) and is validated,
+   *  the catalog locale (`0` = `en-US`, `1` = `ja-JP`, `2` = `de-DE`, `3` = `fr-FR`) and is validated,
    *  but does not change the result: the description / signature fields
    *  are always `undefined` (see {@link FunctionMetadataResult}). */
   functionMetadata(name: string, locale: number): FunctionMetadataResult;
@@ -3252,16 +3268,16 @@ export interface Workbook {
   functionNames(): ListResult<string>;
 
   /** Returns the localized display name for the canonical function
-   *  `canonicalName` in `locale`. No alias table exists in any locale,
-   *  so this always returns the canonical name unchanged; localized
-   *  display names belong to the host's provider document. `value` is
+   *  `canonicalName` in `locale`. `de-DE` and `fr-FR` return Excel's
+   *  function names for that locale; the other locales return the
+   *  canonical name unchanged. `value` is
    *  the empty string, with `status.ok === false`, when the canonical
    *  name does not match a registered function. */
   localizeFunctionName(canonicalName: string, locale: number): StringResult;
   /** Inverse of `localizeFunctionName`: returns the canonical English
-   *  name for the localized function `localizedName`. With no alias
-   *  table this is a case-insensitive canonical-name match, in every
-   *  locale. `value` is the empty string, with `status.ok === false`,
+   *  name for the localized function `localizedName`. `de-DE` and
+   *  `fr-FR` invert the localized name table; the other locales match
+   *  the canonical name case-insensitively. `value` is the empty string, with `status.ok === false`,
    *  when no function matches. */
   canonicalizeFunctionName(localizedName: string, locale: number): StringResult;
 

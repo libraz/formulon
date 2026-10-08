@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `de-DE`, `fr-FR`, `zh-CN`, `ko-KR` and `th-TH` Excel profiles, each on a
+  `mac` and a `win` host (`{mac,win}-365-{de_DE,fr_FR,zh_CN,ko_KR,th_TH}`),
+  selectable through the profile-id API in the C ABI, Node, WASM and Python.
+  The `mac-*` profiles follow Mac Excel 365 in that locale for number, date
+  and boolean text, `TEXT` format codes, R1C1 letters, `CELL` codes,
+  `FORMULATEXT`, double-byte text functions and `CHAR` / `CODE`; the `win-*`
+  profiles are estimated from them plus the Windows host rules.
+  `fm_function_localize` and `fm_function_canonicalize` translate function
+  names for `de-DE` and `fr-FR` (`fm_locale_t` gains `FM_LOCALE_DE_DE` and
+  `FM_LOCALE_FR_FR`). Formulas are still entered with English names and
+  stored separators, PivotTable labels stay English, and CLI output stays
+  locale-invariant.
 - A built-in function name written bare is a function value, as a `LAMBDA`
   is: `=TYPE(SUM)` is 128, `=SUM` shows `#CALC!`, `=ABS+1` is `#VALUE!`, and
   `=LET(f,ABS,f(-2))`, `=CHOOSE(1,SUM,ABS)(5)` and `=IF(TRUE,ABS,SUM)(-3)`
@@ -62,6 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The WASM size report's Brotli ceilings moved to 928 KiB soft and 960 KiB
+  hard; the uncompressed ceilings are unchanged.
 - A workbook without a theme part now resolves theme colors and fonts with the
   current Excel Office theme (Aptos Display / Aptos Narrow, accent1 `156082`),
   as Excel does, instead of the Office 2013-2022 theme. A generated theme part

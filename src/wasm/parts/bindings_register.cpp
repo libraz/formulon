@@ -210,9 +210,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("evaluateConditionalFormula", &JsWorkbook::evaluateConditionalFormula)
       .function("evaluateFormulaArray", &JsWorkbook::evaluateFormulaArray)
       .function("evaluateFormulaText", &JsWorkbook::evaluateFormulaText)
-      // Profile ids are mac-365-ja_JP, win-365-ja_JP, mac-365-en_US, and
-      // win-365-en_US. New workbooks default to win-365-en_US; use either
-      // ja_JP id when Japanese behaviour is required.
+      // Profile ids are {mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,
+      // th_TH}. New workbooks default to win-365-en_US.
       .function("excelProfileId", &JsWorkbook::excelProfileId)
       .function("fillCount", &JsWorkbook::fillCount)
       .function("fontCount", &JsWorkbook::fontCount)
