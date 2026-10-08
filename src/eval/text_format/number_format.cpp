@@ -15,10 +15,11 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "eval/eval_profile_scope.h"
-#include "eval/text_format/number_format_scanner.h"
+#include "eval/text_format/format_localize.h"
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_date.h"
 #include "eval/text_format/render_numeric.h"
@@ -37,35 +38,33 @@ using number_format_detail::Section;
 // `normalized`, so a `ParsedFormat` is filled in place and never moved.
 struct ParsedFormat {
   std::string normalized;
+  bool spelling_valid = true;
   std::vector<std::string_view> raw;
   std::vector<Section> sections;
 };
 
 void parse_format(std::string_view format, FormatDialect dialect, ParsedFormat& parsed) {
-  const bool localized_syntax = locale_facts(eval::current_eval_profile()).fullwidth_syntax_fold;
-  // Normalise the ja-JP full-width syntax once. All section/string views and
-  // literal offsets below refer to this owned buffer for the duration of the
-  // render; quoted and escaped payloads remain byte-for-byte unchanged.
-  parsed.normalized =
-      localized_syntax ? number_format_detail::normalize_ja_jp_format_syntax(format) : std::string(format);
+  const ExcelProfile profile = eval::current_eval_profile();
+  // All section/string views and literal offsets below refer to this owned
+  // invariant-syntax buffer for the duration of the render.
+  number_format_detail::LocalizedFormat localized = number_format_detail::localize_format(format, dialect, profile);
+  parsed.normalized = std::move(localized.text);
+  parsed.spelling_valid = localized.valid;
   parsed.raw = number_format_detail::split_sections(parsed.normalized);
-  // TEXT's format argument follows the host's UI spelling. On an en-US host
-  // that spelling is the same canonical English vocabulary used by stored
-  // cell formats, while the stored dialect remains explicit for display
-  // rendering on either locale.
-  const FormatDialect effective_dialect =
-      dialect == FormatDialect::kLocalized && !localized_syntax ? FormatDialect::kStored : dialect;
+  // A TEXT() argument reads dates in the locale's letters; a stored code in the invariant ones.
+  const FormatLetters& letters = dialect == FormatDialect::kLocalized ? locale_facts(profile).format_letters
+                                                                      : number_format_detail::kInvariantFormatLetters;
   parsed.sections.reserve(parsed.raw.size());
   for (const auto& raw : parsed.raw) {
     Section s;
-    number_format_detail::tokenize_section(raw, s, effective_dialect);
+    number_format_detail::tokenize_section(raw, s, letters);
     number_format_detail::classify(s, raw);
     parsed.sections.push_back(std::move(s));
   }
 }
 
 bool valid_format(const ParsedFormat& parsed) noexcept {
-  if (parsed.sections.size() > 4U) {
+  if (!parsed.spelling_valid || parsed.sections.size() > 4U) {
     return false;
   }
   for (std::size_t i = 0; i < parsed.sections.size(); ++i) {
@@ -276,7 +275,7 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
 
   if (section.is_text) {
     // A number selecting a text-only section (`@`, `"pre"@`) renders as General without its literals.
-    return apply_format(value, "General", out, date1904, dialect);
+    return apply_format(value, "General", out, date1904, FormatDialect::kStored);
   }
   if (section.is_date) {
     // The calendar runs from serial 0 to 9999-12-31. The 1904 system also
@@ -328,7 +327,7 @@ FormatStatus apply_text_format(std::string_view text, std::string_view format, s
 bool negative_section_has_color(std::string_view format, FormatDialect dialect) {
   ParsedFormat parsed;
   parse_format(format, dialect, parsed);
-  if (parsed.sections.empty()) {
+  if (!parsed.spelling_valid || parsed.sections.empty()) {
     return false;
   }
   return parsed.sections[parsed.sections.size() >= 2U ? 1U : 0U].has_color;

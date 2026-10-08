@@ -43,20 +43,21 @@ bool is_date_letter(char c) noexcept;
 // the caller already matched at least one character).
 std::size_t scan_run(std::string_view fmt, std::size_t& i, char letter) noexcept;
 
-// Returns true if `body` is a color qualifier in `dialect`: a named color or
-// the indexed form with N in 1..56.
-//
-// The localized dialect (a TEXT() argument) takes the ja-JP spellings `黒`,
-// `青`, `水`, `緑`, `紫`, `赤`, `白`, `黄` and `色N`; the English `Red` /
-// `ColorN` fall through to the invalid-bracket path, exactly as Excel rejects
-// `=TEXT(5,"[Red]0.00")` with #VALUE!. The stored dialect (a cell's
-// `numFmtCode`) takes the English `Black`, `Blue`, `Cyan`, `Green`,
-// `Magenta`, `Red`, `White`, `Yellow` and `ColorN`, ASCII case-insensitively.
+// Case-sensitive form of `scan_run`.
+std::size_t scan_run_exact(std::string_view fmt, std::size_t& i, char letter) noexcept;
+
+// Stored spelling of the indexed `ColorN` colour form.
+inline constexpr std::string_view kStoredColorIndexPrefix = "Color";
+
+// Returns true if `body` is a stored-spelling color qualifier: one of the
+// English `Black`, `Blue`, `Cyan`, `Green`, `Magenta`, `Red`, `White`,
+// `Yellow`, or `ColorN` with N in 1..56, ASCII case-insensitively. A
+// localized name reaches here already rewritten by `localize_format`.
 //
 // The name is a prefix: anything after it in the same bracket is ignored, so
-// `[赤色]` and `[色1x]` are both accepted. Leading whitespace is not.
+// `[Red1]` and `[Color1x]` are both accepted. Leading whitespace is not.
 // The colour itself is discarded, so a match is inert like `[$...]`.
-bool is_color_specifier(std::string_view body, FormatDialect dialect) noexcept;
+bool is_color_specifier(std::string_view body) noexcept;
 
 // Detects an Excel conditional-section directive of the form `[op N]`,
 // where `op` is one of `>`, `>=`, `<`, `<=`, `=`, `<>` and `N` is a literal

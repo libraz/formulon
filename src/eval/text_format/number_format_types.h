@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "eval/text_format/number_format.h"
+#include "excel_locale.h"
 
 namespace formulon {
 namespace text_format {
@@ -24,6 +25,10 @@ namespace number_format_detail {
 // Last serial of the 1900 calendar (9999-12-31). The 1904 system ends the
 // same day, `kDate1904EpochGap` serials earlier.
 constexpr double kMaxDateSerial1900 = 2958465.0;
+
+// Letters of the stored format syntax; also the localized letters of every
+// locale that spells dates in `y m d`.
+inline constexpr FormatLetters kInvariantFormatLetters{'y', 'm', 'd', 'h', 'm', 's', false, false, 'a'};
 
 // --- Token representation ----------------------------------------------
 
@@ -56,6 +61,7 @@ enum class Tok : std::uint8_t {
   DateElapsedS,   // `[s]` / `[ss]`
   AmPm,           // `AM/PM` / `am/pm`
   AP,             // `A/P` / `a/p`
+  AmPmChinese,    // `上午/下午`
   EraG,           // `g` -- single-letter Roman era abbrev (R/H/S/T/M).
   EraGG,          // `gg` -- single-kanji era abbrev (令/平/昭/大/明).
   EraGGG,         // `ggg` (or longer run) -- full kanji era name.
@@ -63,6 +69,8 @@ enum class Tok : std::uint8_t {
   EraEE,          // `ee` (or longer run) -- era year zero-padded to 2 digits.
   DateAaa,        // `aaa` -- 1-char ja-JP weekday (月/火/水/木/金/土/日).
   DateAaaa,       // `aaaa` (or longer run) -- full ja-JP weekday (月曜日 etc.).
+  DateB2,         // `b` / `bb` -- Buddhist-era year, 2 digits.
+  DateB4,         // `bbb` (or longer run) -- Buddhist-era year.
   FracSecDigits,  // `.0` / `.00` / ... when following a second token
   Literal,        // Arbitrary passthrough bytes (quoted / escaped / other)
   Space,          // `_X` underscore-skip: emits a single space placeholder.
@@ -213,10 +221,11 @@ struct Section {
 // split.
 std::vector<std::string_view> split_sections(std::string_view fmt);
 
-// Tokenizes one section. Writes the token list into `out.tokens` and
-// surfaces invalid bracket qualifiers (colour names outside `dialect`,
+// Tokenizes one section of an invariant-syntax code (see `localize_format`),
+// reading date letters through `letters`. Writes the token list into
+// `out.tokens` and surfaces invalid bracket qualifiers (unknown colour names,
 // malformed conditional tests, etc.) through `out.has_invalid_bracket`.
-void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect);
+void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& letters);
 
 // Populate the numeric/date summary on `section`. Also detect fractional
 // seconds `.0...` that immediately follow a second token (used to format

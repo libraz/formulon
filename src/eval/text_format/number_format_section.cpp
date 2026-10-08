@@ -476,6 +476,10 @@ void classify(Section& section, std::string_view fmt) noexcept {
           num_end >= num_begin && is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin)].kind);
       const bool has_den = fixed_denominator ? fixed_den_end > den_begin : den_end > den_begin;
       if (has_num && has_den) {
+        // A group separator before the numerator is invalid (fr-FR `# ?/?`, text_format.text_fraction_with_integer).
+        if (num_begin > 0 && section.tokens[static_cast<std::size_t>(num_begin) - 1].kind == Tok::Comma) {
+          section.has_invalid_bracket = true;
+        }
         // Optional integer group: a literal-space immediately precedes the
         // numerator group, and a digit-placeholder run precedes the space.
         int int_begin = num_begin;

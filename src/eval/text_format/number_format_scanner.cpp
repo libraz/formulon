@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "eval/text_format/number_format_types.h"
+#include "excel_locale.h"
 #include "utils/double_parse.h"
 
 namespace formulon {
@@ -463,27 +464,18 @@ std::size_t scan_run(std::string_view fmt, std::size_t& i, char letter) noexcept
   return i - start;
 }
 
+std::size_t scan_run_exact(std::string_view fmt, std::size_t& i, char letter) noexcept {
+  const std::size_t start = i;
+  while (i < fmt.size() && fmt[i] == letter) {
+    ++i;
+  }
+  return i - start;
+}
+
 namespace {
 
-// The eight color names a ja-JP format string may use, listed in the order
-// the English UI names them (black, blue, cyan, green, magenta, red, white,
-// yellow). Each is a single UTF-8 CJK character.
-constexpr std::string_view kLocalizedColorNames[] = {"黒", "青", "水", "緑", "紫", "赤", "白", "黄"};
-
-// The same eight colors as a stored format code spells them.
-constexpr std::string_view kStoredColorNames[] = {"Black",   "Blue", "Cyan",  "Green",
-                                                  "Magenta", "Red",  "White", "Yellow"};
-
-// Localized and stored spellings of the indexed `ColorN` form.
-constexpr std::string_view kLocalizedColorIndexPrefix = "色";
-constexpr std::string_view kStoredColorIndexPrefix = "Color";
-
-// Highest index the indexed form accepts; `色57` is rejected.
+// Highest index the indexed form accepts; `Color57` is rejected.
 constexpr int kMaxColorIndex = 56;
-
-bool starts_with(std::string_view s, std::string_view prefix) noexcept {
-  return s.size() >= prefix.size() && s.substr(0, prefix.size()) == prefix;
-}
 
 bool starts_with_ascii_ci(std::string_view s, std::string_view prefix) noexcept {
   if (s.size() < prefix.size()) {
@@ -520,23 +512,15 @@ int take_digit(std::string_view body, std::size_t& i) noexcept {
 
 }  // namespace
 
-bool is_color_specifier(std::string_view body, FormatDialect dialect) noexcept {
-  const bool stored = dialect == FormatDialect::kStored;
-  if (stored) {
-    for (const std::string_view name : kStoredColorNames) {
-      if (starts_with_ascii_ci(body, name)) {
-        return true;
-      }
-    }
-  } else {
-    for (const std::string_view name : kLocalizedColorNames) {
-      if (starts_with(body, name)) {
-        return true;
-      }
+bool is_color_specifier(std::string_view body) noexcept {
+  // The en-US colour names are the stored spelling.
+  for (const std::string_view name : locale_facts(mac_365_en_us_profile()).color_names) {
+    if (starts_with_ascii_ci(body, name)) {
+      return true;
     }
   }
-  const std::string_view prefix = stored ? kStoredColorIndexPrefix : kLocalizedColorIndexPrefix;
-  if (!(stored ? starts_with_ascii_ci(body, prefix) : starts_with(body, prefix))) {
+  const std::string_view prefix = kStoredColorIndexPrefix;
+  if (!starts_with_ascii_ci(body, prefix)) {
     return false;
   }
   // The index prefix then optional blanks then the index. Trailing bytes
@@ -661,6 +645,7 @@ bool is_date_tok(Tok t) noexcept {
     case Tok::DateElapsedS:
     case Tok::AmPm:
     case Tok::AP:
+    case Tok::AmPmChinese:
     case Tok::EraG:
     case Tok::EraGG:
     case Tok::EraGGG:
@@ -668,6 +653,8 @@ bool is_date_tok(Tok t) noexcept {
     case Tok::EraEE:
     case Tok::DateAaa:
     case Tok::DateAaaa:
+    case Tok::DateB2:
+    case Tok::DateB4:
     case Tok::DateM:
     case Tok::DateMM:
     case Tok::DateMin:

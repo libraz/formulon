@@ -32,62 +32,11 @@ namespace text_format {
 namespace number_format_detail {
 namespace {
 
-// --- DBNum digit tables -----------------------------------------------
-//
-// `[DBNum1]` / `[DBNum2]` / `[DBNum3]` are *per-digit* substitutions in
-// Mac Excel 365 ja-JP. Despite their popular description as "positional
-// kanji" formats, the oracle corpus shows that Excel does NOT decompose
-// integers into 千 / 百 / 十 groups -- it simply rewrites each ASCII
-// digit through a fixed table. Concretely:
-//
-//   * `=TEXT(1234, "[DBNum1]0")` -> `一二三四` (NOT `一千二百三十四`).
-//   * `=TEXT(1234, "[DBNum2]0")` -> `壱弐参四` (NOT `壱阡弐百参拾四`).
-//   * `=TEXT(1234, "[DBNum3]0")` -> `１２３４` (full-width Arabic).
-//
-// The exception is `[DBNum1]General`, whose integer part is positional
-// (`千二百三十四`); `render_numeric.cpp` owns it.
-//
-// Tables:
-//   * DBNum1: 〇一二三四五六七八九 (weak-form everyday kanji digits).
-//   * DBNum2: 零壱弐参四伍六七捌玖. Digit 4 is the everyday form 四 (not
-//     大字 肆) because Mac Excel's `1234` golden ends in 四. The 5/6/7/8/9
-//     entries are not exercised by the oracle corpus; we follow common
-//     convention (5=伍, 8=捌, 9=玖 are 大字; 6=六, 7=七 left as everyday
-//     since 4=四 sets that precedent).
-//   * DBNum3: U+FF10..U+FF19 (full-width Arabic digits).
-
-// Indexed by mode (DBNum1..DBNum3), then by ASCII digit.
-const char* const kDbnumDigits[3][10] = {
-    {
-        "\xE3\x80\x87",  // 〇
-        "\xE4\xB8\x80",  // 一
-        "\xE4\xBA\x8C",  // 二
-        "\xE4\xB8\x89",  // 三
-        "\xE5\x9B\x9B",  // 四
-        "\xE4\xBA\x94",  // 五
-        "\xE5\x85\xAD",  // 六
-        "\xE4\xB8\x83",  // 七
-        "\xE5\x85\xAB",  // 八
-        "\xE4\xB9\x9D",  // 九
-    },
-    // Mac Excel-observed 大字 mapping: 4, 6 and 7 stay everyday forms (四 / 六
-    // / 七), matching the oracle.
-    {
-        "\xE9\x9B\xB6",  // 零
-        "\xE5\xA3\xB1",  // 壱
-        "\xE5\xBC\x90",  // 弐
-        "\xE5\x8F\x82",  // 参
-        "\xE5\x9B\x9B",  // 四
-        "\xE4\xBC\x8D",  // 伍
-        "\xE5\x85\xAD",  // 六
-        "\xE4\xB8\x83",  // 七
-        "\xE6\x8D\x8C",  // 捌
-        "\xE7\x8E\x96",  // 玖
-    },
-    // Full-width Arabic digits U+FF10..U+FF19.
-    {"\xEF\xBC\x90", "\xEF\xBC\x91", "\xEF\xBC\x92", "\xEF\xBC\x93", "\xEF\xBC\x94", "\xEF\xBC\x95", "\xEF\xBC\x96",
-     "\xEF\xBC\x97", "\xEF\xBC\x98", "\xEF\xBC\x99"},
-};
+// `[DBNum1]` / `[DBNum2]` digits come from the locale facts; `[DBNum3]` is
+// the full-width Arabic block U+FF10..U+FF19 in every DBNum locale.
+const char* const kFullwidthDigits[10] = {"\xEF\xBC\x90", "\xEF\xBC\x91", "\xEF\xBC\x92", "\xEF\xBC\x93",
+                                          "\xEF\xBC\x94", "\xEF\xBC\x95", "\xEF\xBC\x96", "\xEF\xBC\x97",
+                                          "\xEF\xBC\x98", "\xEF\xBC\x99"};
 
 }  // namespace
 
@@ -97,13 +46,14 @@ std::string_view dbnum_digit_subst(DbNumMode mode, char c) noexcept {
   if (c < '0' || c > '9') {
     return {};
   }
+  const std::size_t digit = static_cast<std::size_t>(c - '0');
   switch (mode) {
     case DbNumMode::kDBNum1:
-      return kDbnumDigits[0][c - '0'];
+      return locale_facts(eval::current_eval_profile()).dbnum_digits[0][digit];
     case DbNumMode::kDBNum2:
-      return kDbnumDigits[1][c - '0'];
+      return locale_facts(eval::current_eval_profile()).dbnum_digits[1][digit];
     case DbNumMode::kDBNum3:
-      return kDbnumDigits[2][c - '0'];
+      return kFullwidthDigits[digit];
     case DbNumMode::kNone:
     default:
       return {};

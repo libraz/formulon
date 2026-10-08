@@ -6,6 +6,7 @@
 
 #include "eval/text_format/render_date.h"
 
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -13,6 +14,7 @@
 #include <string_view>
 
 #include "eval/eval_profile_scope.h"
+#include "eval/text_format/number_format_scanner.h"
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_common.h"
 #include "excel_locale.h"
@@ -25,38 +27,15 @@ namespace text_format {
 namespace number_format_detail {
 namespace {
 
-// Entry `index` of `table`, or "" when `index` is out of range.
-const char* table_entry(const char* const* table, long long count, long long index) noexcept {
-  return (index < 0 || index >= count) ? "" : table[index];
+// Entry `index` of a locale name table, or "" when `index` is out of range.
+template <std::size_t N>
+std::string_view name_entry(const std::array<std::string_view, N>& table, long long index) noexcept {
+  return (index < 0 || index >= static_cast<long long>(N)) ? std::string_view()
+                                                           : table[static_cast<std::size_t>(index)];
 }
 
-const char* month_short(unsigned m) noexcept {
-  // Mac Excel ja-JP surprisingly renders `mmm` in English (Jan/Feb/...).
-  // The Japanese `N月` form is reserved for `[DBNum2]` and friends, which
-  // are out of scope here.
-  static const char* const kTable[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-  return table_entry(kTable, 12, static_cast<long long>(m) - 1);
-}
-
-const char* month_long(unsigned m) noexcept {
-  // Matches Mac Excel ja-JP: `mmmm` renders as the English full name.
-  static const char* const kTable[12] = {"January", "February", "March",     "April",   "May",      "June",
-                                         "July",    "August",   "September", "October", "November", "December"};
-  return table_entry(kTable, 12, static_cast<long long>(m) - 1);
-}
-
-const char* weekday_short(int sun0) noexcept {
-  // Mac Excel ja-JP `ddd` returns English 3-letter weekday abbreviations.
-  static const char* const kTable[7] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-  return table_entry(kTable, 7, sun0);
-}
-
-const char* weekday_long(int sun0) noexcept {
-  // Mac Excel ja-JP `dddd` renders the English full weekday name.
-  static const char* const kTable[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-  return table_entry(kTable, 7, sun0);
-}
+// Buddhist-era year (2024 -> 2567, text_buddhist_year_bbbb).
+constexpr int kBuddhistEraOffset = 543;
 
 void append_elapsed_int_dbnum(std::string& out, long long value, std::size_t width, DbNumMode mode) {
   const std::string digits = std::to_string(value);
@@ -145,7 +124,7 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
   // If AM/PM is in use, we need to know it before formatting hours.
   bool use_am_pm = false;
   for (const Token& tk : section.tokens) {
-    if (tk.kind == Tok::AmPm || tk.kind == Tok::AP) {
+    if (tk.kind == Tok::AmPm || tk.kind == Tok::AP || tk.kind == Tok::AmPmChinese) {
       use_am_pm = true;
       break;
     }
@@ -191,18 +170,16 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
         append_pad2_dbnum(out, ymd.m, dbnum);
         break;
       case Tok::DateMMM:
-        out.append(month_short(ymd.m));
+        out.append(name_entry(facts.month_short, static_cast<long long>(ymd.m) - 1));
         break;
       case Tok::DateMMMM:
-        out.append(month_long(ymd.m));
+        out.append(name_entry(facts.month_long, static_cast<long long>(ymd.m) - 1));
         break;
       case Tok::DateMMMMM: {
-        // `mmmmm` (run length >= 5) emits the first letter of the English
-        // month name. The month-name table only contains ASCII letters, so
-        // the first byte is a complete UTF-8 code point.
-        const char* name = month_long(ymd.m);
-        if (name[0] != '\0') {
-          out.push_back(name[0]);
+        // `mmmmm` (run length >= 5) emits the first scalar of the month name.
+        const std::string_view name = name_entry(facts.month_long, static_cast<long long>(ymd.m) - 1);
+        if (!name.empty()) {
+          out.append(name.substr(0, utf8_scalar_width(name, 0)));
         }
         break;
       }
@@ -213,10 +190,10 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
         append_pad2_dbnum(out, ymd.d, dbnum);
         break;
       case Tok::DateDDD:
-        out.append(weekday_short(sun0));
+        out.append(name_entry(facts.day_short, sun0));
         break;
       case Tok::DateDDDD:
-        out.append(weekday_long(sun0));
+        out.append(name_entry(facts.day_long, sun0));
         break;
       case Tok::DateAaa:
         out.append(facts.weekday_short[static_cast<std::size_t>(sun0)]);
@@ -248,9 +225,15 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
         out.append(era.kanji2);
         break;
       }
+      case Tok::DateB2:
+        append_pad2_dbnum(out, static_cast<unsigned>(((ymd.y + kBuddhistEraOffset) % 100 + 100) % 100), dbnum);
+        break;
+      case Tok::DateB4:
+        append_int_dbnum(out, static_cast<long long>(ymd.y + kBuddhistEraOffset), dbnum);
+        break;
       case Tok::EraE: {
         if (!facts.japanese_era) {
-          append_int_dbnum(out, static_cast<long long>(ymd.y), DbNumMode::kNone);
+          append_int_dbnum(out, static_cast<long long>(ymd.y), dbnum);
           break;
         }
         const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
@@ -260,7 +243,7 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
       }
       case Tok::EraEE: {
         if (!facts.japanese_era) {
-          append_int_dbnum(out, static_cast<long long>(ymd.y), DbNumMode::kNone);
+          append_int_dbnum(out, static_cast<long long>(ymd.y), dbnum);
           break;
         }
         const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
@@ -310,11 +293,14 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
       case Tok::AP:
         out.append(pm ? "P" : "A");
         break;
+      case Tok::AmPmChinese:
+        out.append(pm ? "下午" : "上午");
+        break;
       case Tok::FracSecDigits: {
         // Render fractional seconds at the requested precision.
         const std::size_t digits = tk.width;
         if (digits > 0) {
-          out.push_back('.');
+          out.push_back(facts.decimal_separator);
           std::string fraction = std::to_string(fraction_ticks);
           if (fraction.size() < meaningful_fraction_digits) {
             fraction.insert(0, meaningful_fraction_digits - fraction.size(), '0');
@@ -334,6 +320,12 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
       case Tok::Space:
         // `_X` underscore-skip: emit a single space placeholder.
         out.push_back(' ');
+        break;
+      case Tok::Comma:
+        out.push_back(facts.group_separator);
+        break;
+      case Tok::Point:
+        out.push_back(facts.decimal_separator);
         break;
       default:
         break;

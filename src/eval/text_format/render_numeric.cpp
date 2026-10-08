@@ -14,10 +14,12 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/eval_profile_scope.h"
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_common.h"
 #include "eval/text_format/render_fraction.h"
 #include "eval/text_format/rounding.h"
+#include "excel_locale.h"
 #include "utils/number_text.h"
 
 namespace formulon {
@@ -279,7 +281,7 @@ void append_kanji_integer(std::string& out, std::string_view digits) {
 // `[DBNum1]General`: the integer part in positional kanji, the fraction digit
 // by digit. A magnitude General would show in scientific form is written out
 // to 15 significant digits instead (1E+15 -> 千兆).
-void append_dbnum1_general(std::string& out, double abs_v) {
+void append_dbnum1_general(std::string& out, double abs_v, char decimal_separator) {
   std::string general;
   format_general(general, abs_v);
   std::string int_digits;
@@ -296,12 +298,13 @@ void append_dbnum1_general(std::string& out, double abs_v) {
       frac_digits.pop_back();
     }
   } else {
+    std::replace(general.begin(), general.end(), '.', decimal_separator);
     append_chars_dbnum(out, DbNumMode::kDBNum1, general);
     return;
   }
   append_kanji_integer(out, int_digits);
   if (!frac_digits.empty()) {
-    out.push_back('.');
+    out.push_back(decimal_separator);
     append_chars_dbnum(out, DbNumMode::kDBNum1, frac_digits);
   }
 }
@@ -341,8 +344,10 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
   int exponent = 0;
   if (section.has_scientific) {
     // Engineering groups span all integer placeholders; required `0`/`?` still set minimum padding.
-    const int integer_group =
+    // A grouped mantissa spans at least four digits (`0,0E+00` -> 1,235E+00, locale_tokens.text_sci_comma).
+    const int placeholder_group =
         std::max(1, section.integer_zero_digits + section.integer_opt_digits + section.integer_pad_digits);
+    const int integer_group = section.thousands_separator ? std::max(placeholder_group, 4) : placeholder_group;
     double mantissa = scaled;
     if (mantissa != 0.0) {
       const double abs_m = std::fabs(mantissa);
@@ -406,12 +411,15 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
   }
 
   // Fraction adjustment: the formatter produced exactly `frac_digits` chars.
-  // Trim trailing zeros matching the `#` tokens (scan right-to-left).
-  int trim = section.fraction_opt_digits;
-  while (trim > 0 && !frac_digits_str.empty() && frac_digits_str.back() == '0') {
-    frac_digits_str.pop_back();
-    --trim;
+  // `?` pads the trailing zeros matching the `#` count; a `#` drops its digit
+  // when it and every later digit are zero, wherever it sits (`.##0`).
+  std::size_t frac_shown = frac_digits_str.size();
+  for (int trim = section.fraction_opt_digits; trim > 0 && frac_shown > 0 && frac_digits_str[frac_shown - 1] == '0';
+       --trim) {
+    --frac_shown;
   }
+  const std::size_t last_nonzero = frac_digits_str.find_last_not_of('0');
+  const std::size_t frac_zero_tail = last_nonzero == std::string::npos ? 0 : last_nonzero + 1;
 
   // Locate the decimal point and scientific marker inside the token stream so
   // we can partition the digit tokens into integer / fraction / exponent
@@ -534,9 +542,10 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
   bool past_point = false;
   bool in_exponent = false;
 
+  const LocaleFacts& facts = locale_facts(eval::current_eval_profile());
   auto emit_int_digit_char = [&](char digit) {
     if (section.thousands_separator && int_cursor > 0 && (n_int_digits - int_cursor) % 3 == 0) {
-      result.push_back(',');
+      result.push_back(facts.group_separator);
     }
     append_digit_dbnum(result, section.dbnum_mode, digit);
     ++int_cursor;
@@ -567,17 +576,16 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
           }
           ++exponent_token_cursor;
         } else if (past_point) {
-          if (frac_cursor < frac_digits_str.size()) {
+          if (tk.kind == Tok::DigitOpt && frac_cursor >= frac_zero_tail) {
+            // An insignificant trailing zero under `#` prints nothing.
+          } else if (frac_cursor < frac_shown) {
             emit_frac_digit_char(frac_digits_str[frac_cursor]);
-            ++frac_cursor;
-          } else {
-            // Exceeds precision; emit padding based on token kind.
-            if (tk.kind == Tok::DigitZero) {
-              emit_frac_digit_char('0');
-            } else if (tk.kind == Tok::DigitPad) {
-              result.push_back(' ');
-            }
+          } else if (tk.kind == Tok::DigitZero) {
+            emit_frac_digit_char('0');
+          } else if (tk.kind == Tok::DigitPad) {
+            result.push_back(' ');
           }
+          ++frac_cursor;
         } else {
           const std::string& slot = int_slot_text[int_token_cursor];
           if (!slot.empty()) {
@@ -600,7 +608,7 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
       case Tok::Point:
         if (section.fraction_zero_digits + section.fraction_opt_digits + section.fraction_pad_digits > 0 ||
             !frac_digits_str.empty()) {
-          result.push_back('.');
+          result.push_back(facts.decimal_separator);
         }
         past_point = true;
         break;
@@ -631,11 +639,12 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
         // substitute digit by digit, and non-digit bytes (the decimal
         // point, exponent marker, ...) pass through unchanged.
         if (section.dbnum_mode == DbNumMode::kDBNum1) {
-          append_dbnum1_general(result, std::fabs(value));
+          append_dbnum1_general(result, std::fabs(value), facts.decimal_separator);
           break;
         }
         std::string general;
         format_general(general, std::fabs(value));
+        std::replace(general.begin(), general.end(), '.', facts.decimal_separator);
         append_chars_dbnum(result, section.dbnum_mode, general);
         break;
       }

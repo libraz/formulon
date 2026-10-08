@@ -24,10 +24,71 @@
 namespace formulon {
 namespace text_format {
 namespace number_format_detail {
+namespace {
 
-void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect) {
+constexpr std::string_view kChineseAmPm = "上午/下午";
+
+char ascii_lower(char c) noexcept {
+  return c >= 'A' && c <= 'Z' ? static_cast<char>(c + ('a' - 'A')) : c;
+}
+
+enum class DateLetter : std::uint8_t {
+  kNone,
+  kYear,
+  kMonth,
+  kMinute,
+  kMonthOrMinute,
+  kDay,
+  kHour,
+  kSecond,
+};
+
+DateLetter classify_date_letter(char c, const FormatLetters& letters) noexcept {
+  const char lc = ascii_lower(c);
+  if (letters.case_sensitive) {
+    if (c == letters.month) {
+      return DateLetter::kMonth;
+    }
+    if (c == letters.minute) {
+      return letters.minute_unconditional ? DateLetter::kMinute : DateLetter::kMonthOrMinute;
+    }
+  } else if (lc == ascii_lower(letters.month)) {
+    return DateLetter::kMonthOrMinute;
+  }
+  if (lc == ascii_lower(letters.year)) {
+    return DateLetter::kYear;
+  }
+  if (lc == ascii_lower(letters.day)) {
+    return DateLetter::kDay;
+  }
+  if (lc == ascii_lower(letters.hour)) {
+    return DateLetter::kHour;
+  }
+  if (lc == ascii_lower(letters.second)) {
+    return DateLetter::kSecond;
+  }
+  return DateLetter::kNone;
+}
+
+bool same_letters(const FormatLetters& a, const FormatLetters& b) noexcept {
+  return a.year == b.year && a.month == b.month && a.day == b.day && a.hour == b.hour && a.minute == b.minute &&
+         a.second == b.second && a.case_sensitive == b.case_sensitive &&
+         a.minute_unconditional == b.minute_unconditional && a.weekday == b.weekday;
+}
+
+// A calendar letter of either the invariant or the locale table.
+bool is_calendar_letter(char c, const FormatLetters& letters) noexcept {
+  const char lc = ascii_lower(c);
+  return lc == 'y' || lc == 'm' || lc == 'd' || lc == ascii_lower(letters.year) || lc == ascii_lower(letters.month) ||
+         lc == ascii_lower(letters.day);
+}
+
+}  // namespace
+
+void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& letters) {
   std::vector<Token>& toks = out.tokens;
   const LocaleFacts& facts = locale_facts(eval::current_eval_profile());
+  const bool invariant_letters = same_letters(letters, kInvariantFormatLetters);
   auto push_literal = [&](std::size_t b, std::size_t e, bool protected_literal = false) {
     if (b == e) {
       return;
@@ -73,9 +134,9 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
     // Bracketed specifier. Recognised kinds:
     //   `[h]` / `[m]` / `[s]`   -> elapsed-time tokens (any run length).
     //   `[$...]`                -> locale-currency marker; silently dropped.
-    //   `[赤]` / `[Red]` / ...   -> named color qualifier in `dialect`;
-    //                               silently dropped (no color in text).
-    //   `[色N]` / `[ColorN]`     -> indexed color qualifier; silently dropped.
+    //   `[Red]` / ...           -> named color qualifier; silently dropped
+    //                               (no color in text).
+    //   `[ColorN]`              -> indexed color qualifier; silently dropped.
     //   `[DBNum1]` ...          -> digit style on ja-JP, inert on en-US.
     // Anything else (`[>100]`, unknown qualifiers) still trips the
     // invalid-bracket flag and surfaces as #VALUE!.
@@ -140,11 +201,11 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
         t.kind = Tok::DateElapsedS;
         t.width = body.size();
         toks.push_back(t);
-      } else if (is_color_specifier(body, dialect)) {
-        // Named colour (`[赤]`) or indexed colour (`[色12]`). Excel discards
+      } else if (is_color_specifier(body)) {
+        // Named colour (`[Red]`) or indexed colour (`[Color12]`). Excel discards
         // the colour inside TEXT, so the rest of the section still formats
         // the value. A section may carry at most one colour, though: Excel
-        // rejects `[赤][青]0.00` with #VALUE! even though either bracket
+        // rejects `[Red][Blue]0.00` with #VALUE! even though either bracket
         // alone is inert.
         if (saw_color) {
           out.has_invalid_bracket = true;
@@ -241,19 +302,6 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
         i += 7;
         continue;
       }
-      // A locale may spell the built-in General code `G/<word>` (ja-JP
-      // "G/標準") -- the literal numFmtId=0 keyword Excel stores and displays.
-      // Recognized as one unit (a case-insensitive 'G', then the alias tail)
-      // so the single-`g` era-name scan below never misreads the 'G' as `EraG`.
-      const std::string_view general_alias = facts.general_alias;
-      if (general_alias.size() > 1 && general_alias[0] == 'G' &&
-          fmt.compare(i + 1, general_alias.size() - 1, general_alias.substr(1)) == 0) {
-        Token t;
-        t.kind = Tok::GeneralNumber;
-        toks.push_back(t);
-        i += general_alias.size();
-        continue;
-      }
     }
     // AM/PM (case-insensitive). Match the longest valid prefix. We treat
     // `AM/PM`, `am/pm`, `A/P`, `a/p` as indivisible markers.
@@ -292,13 +340,20 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
         continue;
       }
     }
-    // ja-JP weekday tokens `aaa` / `aaaa` (case-insensitive). Note that
-    // `aaa` does NOT collide with `AM/PM` or `A/P` because those are
-    // matched first above; a bare run of `a`/`A` characters falls through
-    // here. A run shorter than 3 is not a weekday token in Excel and is
-    // emitted as a literal.
-    if (c == 'a' || c == 'A') {
-      const std::size_t run = scan_run(fmt, i, 'a');
+    // The Chinese designator pair is an AM/PM marker in every locale.
+    if (fmt.compare(i, kChineseAmPm.size(), kChineseAmPm) == 0) {
+      Token t;
+      t.kind = Tok::AmPmChinese;
+      toks.push_back(t);
+      i += kChineseAmPm.size();
+      continue;
+    }
+    // Weekday tokens `aaa` / `aaaa` (case-insensitive) on the locale's
+    // weekday letter. `aaa` does NOT collide with `AM/PM` or `A/P` because
+    // those are matched first above. A run shorter than 3 is not a weekday
+    // token in Excel and is emitted as a literal.
+    if (letters.weekday != '\0' && ascii_lower(c) == letters.weekday) {
+      const std::size_t run = scan_run(fmt, i, letters.weekday);
       if (run >= 3) {
         Token t;
         t.kind = (run >= 4) ? Tok::DateAaaa : Tok::DateAaa;
@@ -306,7 +361,7 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
         toks.push_back(t);
         continue;
       }
-      // Run of 1 or 2 `a` characters: emit as literal.
+      // Run of 1 or 2 weekday letters: emit as literal.
       push_literal(i - run, i);
       continue;
     }
@@ -327,31 +382,47 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
       toks.push_back(t);
       continue;
     }
-    // Date letters.
-    if (is_date_letter(c)) {
-      const char lc = (c >= 'A' && c <= 'Z') ? static_cast<char>(c + 32) : c;
-      const std::size_t run = scan_run(fmt, i, lc);
+    // Buddhist-era year `bb` / `bbbb`, the same letter in every locale.
+    if (c == 'b') {
+      const std::size_t run = scan_run_exact(fmt, i, 'b');
+      Token t;
+      t.width = run;
+      t.kind = run <= 2 ? Tok::DateB2 : Tok::DateB4;
+      toks.push_back(t);
+      continue;
+    }
+    // Date letters, read through the locale's letter table.
+    if (const DateLetter letter = classify_date_letter(c, letters); letter != DateLetter::kNone) {
+      const bool exact = letters.case_sensitive && (letter == DateLetter::kMonth || letter == DateLetter::kMinute ||
+                                                    letter == DateLetter::kMonthOrMinute);
+      const std::size_t run = exact ? scan_run_exact(fmt, i, c) : scan_run(fmt, i, ascii_lower(c));
       Token t;
       t.width = static_cast<std::uint8_t>(run);
-      switch (lc) {
-        case 'y':
+      switch (letter) {
+        case DateLetter::kYear:
           t.kind = (run <= 2) ? Tok::DateY2 : Tok::DateY4;
           break;
-        case 'm':
-          // Month/minute disambiguation happens in pass 2. A run of 5 or
-          // more `m` characters means "first letter of the English month
-          // name" (Excel's `mmmmm` convention).
+        case DateLetter::kMonthOrMinute:
+        case DateLetter::kMonth:
+          // A run of 5 or more means "first letter of the month name"
+          // (Excel's `mmmmm` convention). A contextual `m`/`mm` is resolved
+          // between month and minute in pass 2.
           if (run >= 5) {
             t.kind = Tok::DateMMMMM;
           } else if (run == 4) {
             t.kind = Tok::DateMMMM;
           } else if (run == 3) {
             t.kind = Tok::DateMMM;
+          } else if (letter == DateLetter::kMonth) {
+            t.kind = run == 2 ? Tok::DateMM : Tok::DateM;
           } else {
             t.kind = Tok::DateMOrMin;
           }
           break;
-        case 'd':
+        case DateLetter::kMinute:
+          t.kind = (run >= 2) ? Tok::DateMMMin : Tok::DateMin;
+          break;
+        case DateLetter::kDay:
           if (run >= 4) {
             t.kind = Tok::DateDDDD;
           } else if (run == 3) {
@@ -362,19 +433,22 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
             t.kind = Tok::DateD;
           }
           break;
-        case 'h':
+        case DateLetter::kHour:
           t.kind = (run >= 2) ? Tok::DateHH : Tok::DateH;
           break;
-        case 's':
+        case DateLetter::kSecond:
           t.kind = (run >= 2) ? Tok::DateSS : Tok::DateS;
           break;
-        default:
-          t.kind = Tok::Literal;
-          t.lit_begin = i - run;
-          t.lit_end = i;
+        case DateLetter::kNone:
           break;
       }
       toks.push_back(t);
+      continue;
+    }
+    // An invariant date letter the locale spells differently prints as text.
+    if (is_date_letter(c)) {
+      const std::size_t run = scan_run(fmt, i, ascii_lower(c));
+      push_literal(i - run, i);
       continue;
     }
     // Scientific notation `E+` / `E-` / `e+` / `e-`. Must immediately
@@ -455,6 +529,11 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
     }
     // Keep the slash's source range so the classifier can tell it from a quoted slash.
     if (c == '/') {
+      // A locale with its own date letters rejects `/` between calendar letters (`yyyy/m/d`).
+      if (!invariant_letters && i > 0 && i + 1 < fmt.size() && is_calendar_letter(fmt[i - 1], letters) &&
+          is_calendar_letter(fmt[i + 1], letters)) {
+        out.has_invalid_bracket = true;
+      }
       Token t;
       t.kind = Tok::Literal;
       t.lit_begin = i;
