@@ -1,10 +1,12 @@
 // PIVOTBY tests grouped by output layout and argument surface.
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <string_view>
 
 #include "builtins_pivotby_test_helpers.h"
+#include "excel_profile.h"
 #include "util/test_log_recorder.h"
 
 namespace formulon {
@@ -119,6 +121,39 @@ TEST(PivotBy, FieldHeadersTwoSynthesizesDefaults) {
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "列フィールド 1");
   EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "行フィールド 1");
   EXPECT_EQ(std::string(Cell(v, 2, 1).as_text()), "値 1");
+}
+
+TEST(PivotByProfile, GeneratedLabelsFollowWorkbookProfile) {
+  struct ProfileCase {
+    ExcelProfile profile;
+    const char* id;
+    const char* row_field;
+    const char* column_field;
+    const char* value;
+    const char* grand_total;
+    const char* hierarchy_grand_total;
+  };
+  constexpr std::array<ProfileCase, 4> profiles = {{
+      {mac_365_ja_jp_profile(), "mac-365-ja_JP", "行フィールド 1", "列フィールド 1", "値 1", "合計", "総計"},
+      {win_365_ja_jp_profile(), "win-365-ja_JP", "行フィールド 1", "列フィールド 1", "値 1", "合計", "総計"},
+      {mac_365_en_us_profile(), "mac-365-en_US", "Row Field 1", "Column Field 1", "Value 1", "Total", "Grand Total"},
+      {win_365_en_us_profile(), "win-365-en_US", "Row Field 1", "Column Field 1", "Value 1", "Total", "Grand Total"},
+  }};
+  for (const ProfileCase& test_case : profiles) {
+    SCOPED_TRACE(test_case.id);
+    const Value v = EvalSrcWithProfile(
+        "=PIVOTBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"},{\"X\";\"Y\";\"X\"},"
+        "{10;20;30},SUM,2,2,,1)",
+        test_case.profile);
+    ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+    ASSERT_EQ(v.as_array_rows(), 9U);
+    ASSERT_EQ(v.as_array_cols(), 5U);
+    EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), test_case.column_field);
+    EXPECT_EQ(std::string(Cell(v, 1, 4).as_text()), test_case.grand_total);
+    EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), test_case.row_field);
+    EXPECT_EQ(std::string(Cell(v, 2, 2).as_text()), test_case.value);
+    EXPECT_EQ(std::string(Cell(v, 8, 0).as_text()), test_case.hierarchy_grand_total);
+  }
 }
 
 TEST(PivotBy, FieldHeadersThreeBothInputsHaveAndOutputEmits) {

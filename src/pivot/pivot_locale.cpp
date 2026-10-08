@@ -53,8 +53,31 @@ constexpr std::array<std::string_view, kAggregationCount> kEnglishAggregationLab
     "CountNumbers", "StdDev", "StdDevP", "Var", "VarP",
 };
 
-bool is_ja_jp(ExcelProfile profile) noexcept {
-  return profile.locale == ExcelLocale::kJaJP;
+struct PivotLocaleLabels {
+  std::array<std::string_view, kAggregationCount> aggregation_labels;
+  std::string_view grand_total_label;
+  std::string_view values_label;
+  std::string_view row_labels_label;
+  std::string_view column_labels_label;
+  std::string_view subtotal_suffix;
+  std::string_view blank_item_label;
+  std::string_view all_pages_label;
+  std::string_view multiple_items_label;
+  std::string_view data_field_separator;
+};
+
+constexpr std::array<PivotLocaleLabels, 2> kLocaleLabels{{
+    {kJaJpAggregationLabels, "総計", "値", "行ラベル", "列ラベル", " 集計", "(空白)", "(すべて)", "(複数のアイテム)",
+     " / "},
+    {kEnglishAggregationLabels, "Grand Total", "Values", "", "", "", "(blank)", "(All)", "(Multiple Items)", " of "},
+}};
+
+const PivotLocaleLabels& locale_labels(ExcelLocale locale) noexcept {
+  const auto index = static_cast<std::size_t>(locale);
+  if (index < kLocaleLabels.size()) {
+    return kLocaleLabels[index];
+  }
+  return kLocaleLabels[static_cast<std::size_t>(ExcelLocale::kEnUS)];
 }
 
 std::string_view label_at(const std::array<std::string_view, kAggregationCount>& table, pivot::Aggregation agg) {
@@ -72,31 +95,25 @@ std::string_view label_at(const std::array<std::string_view, kAggregationCount>&
 }  // namespace
 
 pivot::PivotLayoutOptions pivot_layout_options_for(ExcelProfile profile) {
+  const PivotLocaleLabels& labels = locale_labels(profile.locale);
   pivot::PivotLayoutOptions options;
-  if (is_ja_jp(profile)) {
-    options.grand_total_label = "総計";
-    options.values_label = "値";
-    options.row_labels_label = "行ラベル";
-    options.column_labels_label = "列ラベル";
-    options.subtotal_suffix = " 集計";
-    options.blank_item_label = "(空白)";
-    // `(すべて)` is measured: Excel cached it into the page-field header of
-    // the `getpivotdata_page_data` workbook-oracle capture. The
-    // several-items spelling has never been captured — no oracle case
-    // selects more than one page item — so it reproduces Excel's UI
-    // wording and nothing more.
-    options.all_pages_label = "(すべて)";
-    options.multiple_items_label = "(複数のアイテム)";
-  }
+  options.grand_total_label = labels.grand_total_label;
+  options.values_label = labels.values_label;
+  options.row_labels_label = labels.row_labels_label;
+  options.column_labels_label = labels.column_labels_label;
+  options.subtotal_suffix = labels.subtotal_suffix;
+  options.blank_item_label = labels.blank_item_label;
+  options.all_pages_label = labels.all_pages_label;
+  options.multiple_items_label = labels.multiple_items_label;
   return options;
 }
 
 std::string_view aggregation_label(pivot::Aggregation agg, ExcelProfile profile) {
-  return is_ja_jp(profile) ? label_at(kJaJpAggregationLabels, agg) : label_at(kEnglishAggregationLabels, agg);
+  return label_at(locale_labels(profile.locale).aggregation_labels, agg);
 }
 
 std::string_view data_field_separator(ExcelProfile profile) {
-  return is_ja_jp(profile) ? " / " : " of ";
+  return locale_labels(profile.locale).data_field_separator;
 }
 
 std::string data_field_display_name(pivot::Aggregation agg, std::string_view field_name, ExcelProfile profile) {

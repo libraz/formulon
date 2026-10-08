@@ -25,6 +25,7 @@
 //   * Group-key equality with ja-JP text (`fold_jp_text`).
 //   * Aggregator returning array -> #CALC! for that cell.
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -33,6 +34,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "excel_profile.h"
 #include "groupby_pivotby_measured_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
@@ -69,6 +71,20 @@ Value EvalSrc(std::string_view src) {
     return Value::error(ErrorCode::Name);
   }
   return evaluate(*root, eval_arena, default_registry(), test::mac_context());
+}
+
+Value EvalSrcWithProfile(std::string_view src, ExcelProfile profile) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_TRUE(p.errors().empty()) << "unexpected parse errors for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate(*root, eval_arena, default_registry(), test::context_with_profile(profile));
 }
 
 // Same as `EvalSrc`, evaluated against a caller-supplied workbook/sheet so
@@ -266,6 +282,32 @@ TEST(GroupBy, FieldHeadersThreeBothInputsHaveAndOutputEmits) {
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "H1");
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "V1");
+}
+
+TEST(GroupByProfile, GeneratedLabelsFollowWorkbookProfile) {
+  struct ProfileCase {
+    ExcelProfile profile;
+    const char* id;
+    const char* row_field;
+    const char* value;
+    const char* grand_total;
+  };
+  constexpr std::array<ProfileCase, 4> profiles = {{
+      {mac_365_ja_jp_profile(), "mac-365-ja_JP", "行フィールド 1", "値 1", "合計"},
+      {win_365_ja_jp_profile(), "win-365-ja_JP", "行フィールド 1", "値 1", "合計"},
+      {mac_365_en_us_profile(), "mac-365-en_US", "Row Field 1", "Value 1", "Total"},
+      {win_365_en_us_profile(), "win-365-en_US", "Row Field 1", "Value 1", "Total"},
+  }};
+  for (const ProfileCase& test_case : profiles) {
+    SCOPED_TRACE(test_case.id);
+    const Value v = EvalSrcWithProfile("=GROUPBY({\"A\";\"B\"},{1;2},SUM,2,1)", test_case.profile);
+    ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+    ASSERT_EQ(v.as_array_rows(), 4U);
+    ASSERT_EQ(v.as_array_cols(), 2U);
+    EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), test_case.row_field);
+    EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), test_case.value);
+    EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), test_case.grand_total);
+  }
 }
 
 TEST(GroupBy, FieldHeadersOutOfRangeYieldsValueError) {

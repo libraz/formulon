@@ -24,6 +24,7 @@
 #include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "eval/tree_walker/dispatch.h"
+#include "excel_locale.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -44,35 +45,26 @@ constexpr std::uint32_t kAggregatorCallArity = 1U;
 }  // namespace
 
 std::string_view grand_total_label(const EvalContext& ctx) {
-  if (ctx.excel_profile().locale == ExcelLocale::kJaJP) {
-    return "合計";
-  }
-  return "Grand Total";
+  return locale_facts(ctx.excel_profile()).grand_total;
 }
 
 std::string row_field_label(const EvalContext& ctx, std::uint32_t n) {
-  const bool ja = ctx.excel_profile().locale == ExcelLocale::kJaJP;
-  return std::string(ja ? "行フィールド " : "Field ") + std::to_string(n);
+  const std::string_view prefix = locale_facts(ctx.excel_profile()).row_field_prefix;
+  return std::string(prefix) + std::to_string(n);
 }
 
 std::string column_field_label(const EvalContext& ctx, std::uint32_t n) {
-  const bool ja = ctx.excel_profile().locale == ExcelLocale::kJaJP;
-  return std::string(ja ? "列フィールド " : "Field ") + std::to_string(n);
+  const std::string_view prefix = locale_facts(ctx.excel_profile()).column_field_prefix;
+  return std::string(prefix) + std::to_string(n);
 }
 
 std::string value_label(const EvalContext& ctx, std::uint32_t n) {
-  const bool ja = ctx.excel_profile().locale == ExcelLocale::kJaJP;
-  return std::string(ja ? "値 " : "Value ") + std::to_string(n);
+  const std::string_view prefix = locale_facts(ctx.excel_profile()).value_field_prefix;
+  return std::string(prefix) + std::to_string(n);
 }
 
 std::string_view hierarchy_grand_total_label(const EvalContext& ctx) {
-  // A subtotal row carries its outer key verbatim rather than a derived
-  // label, so the grand total is what has to move out of the way: ja-JP
-  // promotes it from "合計" to "総計" once subtotals share the column.
-  if (ctx.excel_profile().locale == ExcelLocale::kJaJP) {
-    return "総計";
-  }
-  return grand_total_label(ctx);
+  return locale_facts(ctx.excel_profile()).hierarchy_grand_total;
 }
 
 OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
