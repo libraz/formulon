@@ -135,13 +135,6 @@ ColumnWidthGeometry ResolveColumnPrintGeometry(const std::string& family, double
                              display.calibrated};
 }
 
-/// Excel's default row height, in points, measured the same way as the
-/// column constants above (`applied_geometry.row_heights_pt`). Used when
-/// neither a `<row ht>` override nor `<sheetFormatPr defaultRowHeight>`
-/// applies. The nominal 15.0 is the 96-DPI screen figure; Excel resolves
-/// 102/7.
-constexpr double kStandardRowHeightPt = 102.0 / 7.0;
-
 /// Height of one row override: hidden is zero, an explicit height wins,
 /// anything else keeps the sheet default.
 double OverrideRowHeight(const RowLayout& layout, double default_height) {
@@ -226,7 +219,7 @@ double default_column_width_chars(const Sheet& sheet) {
 
 double default_row_height_pt(const Sheet& sheet) {
   const SheetFormatDefaults& defaults = sheet.format_defaults();
-  return defaults.has_default_row_height ? defaults.default_row_height : kStandardRowHeightPt;
+  return defaults.has_default_row_height ? defaults.default_row_height : ooxml_defaults::kStandardRowHeightPt;
 }
 
 double effective_column_width_chars(const Sheet& sheet, std::uint32_t col) {

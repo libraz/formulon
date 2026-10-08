@@ -114,13 +114,13 @@ set(FORMULON_CORE_SOURCES
   src/utils/index_sort.cpp
   src/utils/japanese_era.cpp
   src/utils/number_text.cpp
-  src/utils/sbcs_codepage.cpp
   src/utils/structured_log.cpp
   src/utils/text_ops.cpp
   src/utils/thread_launch.cpp
   src/utils/utf8_length.cpp
   src/external_book.cpp
   src/excel_locale.cpp
+  src/sbcs_codepage.cpp
   src/auto_filter.cpp
   src/styles.cpp
   src/threaded_comment.cpp

@@ -1,5 +1,5 @@
-#ifndef FORMULON_UTILS_SBCS_CODEPAGE_H_
-#define FORMULON_UTILS_SBCS_CODEPAGE_H_
+#ifndef FORMULON_SBCS_CODEPAGE_H_
+#define FORMULON_SBCS_CODEPAGE_H_
 
 #include <cstdint>
 
@@ -18,4 +18,4 @@ int sbcs_encode_codepoint(SbcsCodepage codepage, std::uint32_t codepoint) noexce
 
 }  // namespace formulon
 
-#endif  // FORMULON_UTILS_SBCS_CODEPAGE_H_
+#endif  // FORMULON_SBCS_CODEPAGE_H_

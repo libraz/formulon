@@ -86,6 +86,11 @@ namespace ooxml_defaults {
 /// `<sheetFormatPr baseColWidth>` default (characters).
 inline constexpr double kBaseColWidthChars = 8.0;
 
+/// Excel's row height, in points, when neither a `<row ht>` override nor
+/// `<sheetFormatPr defaultRowHeight>` applies. The nominal 15.0 is the
+/// 96-DPI screen figure; Excel resolves 102/7.
+inline constexpr double kStandardRowHeightPt = 102.0 / 7.0;
+
 /// `<pageSetup paperSize>` default (9 = A4).
 inline constexpr std::uint32_t kPaperSize = 9;
 
