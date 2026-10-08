@@ -8,7 +8,8 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T13:02:05Z"
+    "generated_at": "2026-10-08T19:58:15Z",
+    "profile_id": "win-365-en_US"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -799,7 +800,7 @@
           "value": "26-01-01"
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =DATEVALUE(A48)"
+      "skipped": "=DATEVALUE(\"26-01-01\"): the cached 36917 follows the saving machine's regional date order, which the fixture does not record; Mac Excel gives #VALUE! in en, 46023 in ja and 36917 in de. Probe: datevalue_timevalue.datevalue_yy_mm_dd_hyphen."
     },
     {
       "id": "B49",

@@ -8,7 +8,8 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T08:32:30Z"
+    "generated_at": "2026-10-08T18:36:08Z",
+    "profile_id": "win-365-en_US"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -24,7 +25,10 @@
           "value": "2026-01-01 24:00:00"
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =DATEVALUE(A2)"
+      "expect": {
+        "kind": "number",
+        "value": 46024.0
+      }
     },
     {
       "id": "B3",
@@ -35,7 +39,10 @@
           "value": "2026-01-01 25:00:00"
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =DATEVALUE(A3)"
+      "expect": {
+        "kind": "number",
+        "value": 46024.0
+      }
     },
     {
       "id": "B4",

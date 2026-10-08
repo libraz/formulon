@@ -61,7 +61,14 @@ TEST_P(OracleTest, Matches) {
   // Build an in-memory workbook seeded with the case's setup cells.
   Workbook wb = Workbook::create();
   ExcelProfile profile;
-  if (param.variant.empty()) {
+  // A golden may name its own evaluation profile (IronCalc corpus: the profile
+  // of the host that saved the workbook); otherwise the binary's primary applies.
+  const JsonValue* golden_profile_v = param.environment.find("profile_id");
+  if (param.variant.empty() && golden_profile_v != nullptr && golden_profile_v->is_string()) {
+    ASSERT_TRUE(parse_excel_profile_id(golden_profile_v->as_string(), &profile))
+        << "invalid golden profile_id: " << golden_profile_v->as_string();
+    wb.set_excel_profile(profile);
+  } else if (param.variant.empty()) {
     ASSERT_TRUE(parse_excel_profile_id(FORMULON_ORACLE_PRIMARY_PROFILE_ID, &profile))
         << "invalid primary oracle profile: " << FORMULON_ORACLE_PRIMARY_PROFILE_ID;
     wb.set_excel_profile(profile);

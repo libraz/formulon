@@ -8,7 +8,8 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T06:30:47Z"
+    "generated_at": "2026-10-08T18:35:55Z",
+    "profile_id": "mac-365-en_US"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -65,6 +66,10 @@
       "id": "E3",
       "formula": "=ROWS(OFFSET(A1,5,5,13,30))",
       "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "Columns"
+        },
         "A1": {
           "kind": "text",
           "value": "Rows"
@@ -72,10 +77,6 @@
         "E2": {
           "kind": "text",
           "value": "ROWS/COLUMNS and OFFSET"
-        },
-        "B1": {
-          "kind": "text",
-          "value": "Columns"
         }
       },
       "expect": {
@@ -87,6 +88,10 @@
       "id": "F3",
       "formula": "=COLUMNS(OFFSET(B1,5,5,13,30))",
       "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "Columns"
+        },
         "A1": {
           "kind": "text",
           "value": "Rows"
@@ -94,10 +99,6 @@
         "E2": {
           "kind": "text",
           "value": "ROWS/COLUMNS and OFFSET"
-        },
-        "B1": {
-          "kind": "text",
-          "value": "Columns"
         }
       },
       "expect": {
@@ -132,10 +133,6 @@
       "id": "E4",
       "formula": "=ROWS(OFFSET(N16:U21,4,7))",
       "setup": {
-        "E2": {
-          "kind": "text",
-          "value": "ROWS/COLUMNS and OFFSET"
-        },
         "A1": {
           "kind": "text",
           "value": "Rows"
@@ -143,6 +140,10 @@
         "B1": {
           "kind": "text",
           "value": "Columns"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ROWS/COLUMNS and OFFSET"
         }
       },
       "expect": {
@@ -154,13 +155,13 @@
       "id": "F4",
       "formula": "=COLUMNS(OFFSET(B18:I39,2,3))",
       "setup": {
-        "E2": {
-          "kind": "text",
-          "value": "ROWS/COLUMNS and OFFSET"
-        },
         "A1": {
           "kind": "text",
           "value": "Rows"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ROWS/COLUMNS and OFFSET"
         },
         "B1": {
           "kind": "text",
@@ -176,10 +177,6 @@
       "id": "E5",
       "formula": "=ROWS(OFFSET(E13:U19,3,5,7))",
       "setup": {
-        "E2": {
-          "kind": "text",
-          "value": "ROWS/COLUMNS and OFFSET"
-        },
         "A1": {
           "kind": "text",
           "value": "Rows"
@@ -187,6 +184,10 @@
         "B1": {
           "kind": "text",
           "value": "Columns"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ROWS/COLUMNS and OFFSET"
         }
       },
       "expect": {
@@ -198,10 +199,6 @@
       "id": "F5",
       "formula": "=COLUMNS(OFFSET(S8:Y16,1,1,7))",
       "setup": {
-        "E2": {
-          "kind": "text",
-          "value": "ROWS/COLUMNS and OFFSET"
-        },
         "A1": {
           "kind": "text",
           "value": "Rows"
@@ -209,6 +206,10 @@
         "B1": {
           "kind": "text",
           "value": "Columns"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ROWS/COLUMNS and OFFSET"
         }
       },
       "expect": {
@@ -220,10 +221,6 @@
       "id": "E6",
       "formula": "=ROWS(OFFSET(S8:X19, 3.5, 7.2, 14.9, 2.3))",
       "setup": {
-        "E2": {
-          "kind": "text",
-          "value": "ROWS/COLUMNS and OFFSET"
-        },
         "A1": {
           "kind": "text",
           "value": "Rows"
@@ -231,6 +228,10 @@
         "B1": {
           "kind": "text",
           "value": "Columns"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ROWS/COLUMNS and OFFSET"
         }
       },
       "expect": {
@@ -242,10 +243,6 @@
       "id": "F6",
       "formula": "=COLUMNS(OFFSET(S8:X19, 3.5, 7.2, 14.9, 2.3))",
       "setup": {
-        "E2": {
-          "kind": "text",
-          "value": "ROWS/COLUMNS and OFFSET"
-        },
         "A1": {
           "kind": "text",
           "value": "Rows"
@@ -253,6 +250,10 @@
         "B1": {
           "kind": "text",
           "value": "Columns"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ROWS/COLUMNS and OFFSET"
         }
       },
       "expect": {
@@ -264,10 +265,6 @@
       "id": "G6",
       "formula": "=ROW(OFFSET(S8:X19, 3.5, 7.2, 14.9, 2.3))",
       "setup": {
-        "E2": {
-          "kind": "text",
-          "value": "ROWS/COLUMNS and OFFSET"
-        },
         "A1": {
           "kind": "text",
           "value": "Rows"
@@ -275,6 +272,10 @@
         "B1": {
           "kind": "text",
           "value": "Columns"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ROWS/COLUMNS and OFFSET"
         }
       },
       "expect": {
@@ -286,10 +287,6 @@
       "id": "H6",
       "formula": "=COLUMN(OFFSET(S8:X19, 3.5, 7.2, 14.9, 2.3))",
       "setup": {
-        "E2": {
-          "kind": "text",
-          "value": "ROWS/COLUMNS and OFFSET"
-        },
         "A1": {
           "kind": "text",
           "value": "Rows"
@@ -297,6 +294,10 @@
         "B1": {
           "kind": "text",
           "value": "Columns"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ROWS/COLUMNS and OFFSET"
         }
       },
       "expect": {

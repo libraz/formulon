@@ -617,6 +617,9 @@ def validate(path: Path, *, strict: bool) -> int:
 #                      Excel in both locales, and contradicts no
 #                      win-365-ja_JP golden; remove the entry when the
 #                      corresponding win-* implementation lands.
+#   unrecorded-region  The cached value follows the saving machine's regional
+#                      settings (date order, separators), which the fixture
+#                      does not record, so no profile reproduces it.
 #   importer-decode    The importer changed the represented input while
 #                      decoding the fixture (CHAR `_x0001_`, a row shift,
 #                      or lost reference dependencies). Repair the import
@@ -631,6 +634,7 @@ IRONCALC_CAUSES = {
     "stale-cache",
     "locale",
     "host",
+    "unrecorded-region",
     "importer-decode",
     "unadjudicated",
 }

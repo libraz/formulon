@@ -8,7 +8,8 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T11:05:54Z"
+    "generated_at": "2026-10-08T18:35:55Z",
+    "profile_id": "mac-365-en_US"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -142,10 +143,6 @@
       "id": "F4",
       "formula": "=ISREF(INDIRECT(\"A1\"))",
       "setup": {
-        "B1": {
-          "kind": "text",
-          "value": "ISREF"
-        },
         "G7": {
           "kind": "text",
           "value": "<= This is NOT a circular dependency"
@@ -153,6 +150,10 @@
         "F1": {
           "kind": "text",
           "value": "ISREF returns true if it is a reference or evaluates to a reference"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ISREF"
         },
         "C1": {
           "kind": "text",
@@ -181,10 +182,6 @@
       "id": "F5",
       "formula": "=ISREF(OFFSET(A1,6,5))",
       "setup": {
-        "B1": {
-          "kind": "text",
-          "value": "ISREF"
-        },
         "G7": {
           "kind": "text",
           "value": "<= This is NOT a circular dependency"
@@ -192,6 +189,10 @@
         "F1": {
           "kind": "text",
           "value": "ISREF returns true if it is a reference or evaluates to a reference"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ISREF"
         },
         "C1": {
           "kind": "text",
@@ -229,10 +230,6 @@
       "id": "F7",
       "formula": "=ISREF(OFFSET(A1,6,5))",
       "setup": {
-        "B1": {
-          "kind": "text",
-          "value": "ISREF"
-        },
         "G7": {
           "kind": "text",
           "value": "<= This is NOT a circular dependency"
@@ -240,6 +237,10 @@
         "F1": {
           "kind": "text",
           "value": "ISREF returns true if it is a reference or evaluates to a reference"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ISREF"
         },
         "C1": {
           "kind": "text",
@@ -268,10 +269,6 @@
       "id": "F8",
       "formula": "=ISREF(A1:OFFSET(A1,1,1))",
       "setup": {
-        "B1": {
-          "kind": "text",
-          "value": "ISREF"
-        },
         "G7": {
           "kind": "text",
           "value": "<= This is NOT a circular dependency"
@@ -279,6 +276,10 @@
         "F1": {
           "kind": "text",
           "value": "ISREF returns true if it is a reference or evaluates to a reference"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ISREF"
         },
         "C1": {
           "kind": "text",
@@ -298,10 +299,6 @@
       "id": "C9",
       "formula": "=_xlfn.ISFORMULA(INDIRECT(\"C9\"))",
       "setup": {
-        "B1": {
-          "kind": "text",
-          "value": "ISREF"
-        },
         "G7": {
           "kind": "text",
           "value": "<= This is NOT a circular dependency"
@@ -309,6 +306,10 @@
         "F1": {
           "kind": "text",
           "value": "ISREF returns true if it is a reference or evaluates to a reference"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ISREF"
         },
         "C1": {
           "kind": "text",

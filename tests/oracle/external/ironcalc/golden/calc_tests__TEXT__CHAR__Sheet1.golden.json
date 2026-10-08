@@ -8,7 +8,8 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T11:05:54Z"
+    "generated_at": "2026-10-08T18:36:08Z",
+    "profile_id": "win-365-en_US"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -1816,7 +1817,10 @@
           "value": 129.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A129)"
+      "expect": {
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "B130",
@@ -1981,7 +1985,10 @@
           "value": 141.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A141)"
+      "expect": {
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "B142",
@@ -2006,7 +2013,10 @@
           "value": 143.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A143)"
+      "expect": {
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "B144",
@@ -2017,7 +2027,10 @@
           "value": 144.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A144)"
+      "expect": {
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "B145",
@@ -2196,7 +2209,10 @@
           "value": 157.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A157)"
+      "expect": {
+        "kind": "text",
+        "value": ""
+      }
     },
     {
       "id": "B158",
@@ -2249,7 +2265,10 @@
           "value": 161.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A161)"
+      "expect": {
+        "kind": "text",
+        "value": "¡"
+      }
     },
     {
       "id": "B162",
@@ -2260,7 +2279,10 @@
           "value": 162.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A162)"
+      "expect": {
+        "kind": "text",
+        "value": "¢"
+      }
     },
     {
       "id": "B163",
@@ -2271,7 +2293,10 @@
           "value": 163.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A163)"
+      "expect": {
+        "kind": "text",
+        "value": "£"
+      }
     },
     {
       "id": "B164",
@@ -2282,7 +2307,10 @@
           "value": 164.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A164)"
+      "expect": {
+        "kind": "text",
+        "value": "¤"
+      }
     },
     {
       "id": "B165",
@@ -2293,7 +2321,10 @@
           "value": 165.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A165)"
+      "expect": {
+        "kind": "text",
+        "value": "¥"
+      }
     },
     {
       "id": "B166",
@@ -2304,7 +2335,10 @@
           "value": 166.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A166)"
+      "expect": {
+        "kind": "text",
+        "value": "¦"
+      }
     },
     {
       "id": "B167",
@@ -2315,7 +2349,10 @@
           "value": 167.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A167)"
+      "expect": {
+        "kind": "text",
+        "value": "§"
+      }
     },
     {
       "id": "B168",
@@ -2326,7 +2363,10 @@
           "value": 168.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A168)"
+      "expect": {
+        "kind": "text",
+        "value": "¨"
+      }
     },
     {
       "id": "B169",
@@ -2337,7 +2377,10 @@
           "value": 169.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A169)"
+      "expect": {
+        "kind": "text",
+        "value": "©"
+      }
     },
     {
       "id": "B170",
@@ -2348,7 +2391,10 @@
           "value": 170.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A170)"
+      "expect": {
+        "kind": "text",
+        "value": "ª"
+      }
     },
     {
       "id": "B171",
@@ -2359,7 +2405,10 @@
           "value": 171.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A171)"
+      "expect": {
+        "kind": "text",
+        "value": "«"
+      }
     },
     {
       "id": "B172",
@@ -2370,7 +2419,10 @@
           "value": 172.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A172)"
+      "expect": {
+        "kind": "text",
+        "value": "¬"
+      }
     },
     {
       "id": "B173",
@@ -2381,7 +2433,10 @@
           "value": 173.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A173)"
+      "expect": {
+        "kind": "text",
+        "value": "­"
+      }
     },
     {
       "id": "B174",
@@ -2392,7 +2447,10 @@
           "value": 174.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A174)"
+      "expect": {
+        "kind": "text",
+        "value": "®"
+      }
     },
     {
       "id": "B175",
@@ -2403,7 +2461,10 @@
           "value": 175.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A175)"
+      "expect": {
+        "kind": "text",
+        "value": "¯"
+      }
     },
     {
       "id": "B176",
@@ -2414,7 +2475,10 @@
           "value": 176.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A176)"
+      "expect": {
+        "kind": "text",
+        "value": "°"
+      }
     },
     {
       "id": "B177",
@@ -2425,7 +2489,10 @@
           "value": 177.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A177)"
+      "expect": {
+        "kind": "text",
+        "value": "±"
+      }
     },
     {
       "id": "B178",
@@ -2436,7 +2503,10 @@
           "value": 178.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A178)"
+      "expect": {
+        "kind": "text",
+        "value": "²"
+      }
     },
     {
       "id": "B179",
@@ -2447,7 +2517,10 @@
           "value": 179.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A179)"
+      "expect": {
+        "kind": "text",
+        "value": "³"
+      }
     },
     {
       "id": "B180",
@@ -2458,7 +2531,10 @@
           "value": 180.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A180)"
+      "expect": {
+        "kind": "text",
+        "value": "´"
+      }
     },
     {
       "id": "B181",
@@ -2469,7 +2545,10 @@
           "value": 181.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A181)"
+      "expect": {
+        "kind": "text",
+        "value": "µ"
+      }
     },
     {
       "id": "B182",
@@ -2480,7 +2559,10 @@
           "value": 182.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A182)"
+      "expect": {
+        "kind": "text",
+        "value": "¶"
+      }
     },
     {
       "id": "B183",
@@ -2491,7 +2573,10 @@
           "value": 183.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A183)"
+      "expect": {
+        "kind": "text",
+        "value": "·"
+      }
     },
     {
       "id": "B184",
@@ -2502,7 +2587,10 @@
           "value": 184.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A184)"
+      "expect": {
+        "kind": "text",
+        "value": "¸"
+      }
     },
     {
       "id": "B185",
@@ -2513,7 +2601,10 @@
           "value": 185.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A185)"
+      "expect": {
+        "kind": "text",
+        "value": "¹"
+      }
     },
     {
       "id": "B186",
@@ -2524,7 +2615,10 @@
           "value": 186.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A186)"
+      "expect": {
+        "kind": "text",
+        "value": "º"
+      }
     },
     {
       "id": "B187",
@@ -2535,7 +2629,10 @@
           "value": 187.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A187)"
+      "expect": {
+        "kind": "text",
+        "value": "»"
+      }
     },
     {
       "id": "B188",
@@ -2546,7 +2643,10 @@
           "value": 188.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A188)"
+      "expect": {
+        "kind": "text",
+        "value": "¼"
+      }
     },
     {
       "id": "B189",
@@ -2557,7 +2657,10 @@
           "value": 189.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A189)"
+      "expect": {
+        "kind": "text",
+        "value": "½"
+      }
     },
     {
       "id": "B190",
@@ -2568,7 +2671,10 @@
           "value": 190.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A190)"
+      "expect": {
+        "kind": "text",
+        "value": "¾"
+      }
     },
     {
       "id": "B191",
@@ -2579,7 +2685,10 @@
           "value": 191.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A191)"
+      "expect": {
+        "kind": "text",
+        "value": "¿"
+      }
     },
     {
       "id": "B192",
@@ -2590,7 +2699,10 @@
           "value": 192.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A192)"
+      "expect": {
+        "kind": "text",
+        "value": "À"
+      }
     },
     {
       "id": "B193",
@@ -2601,7 +2713,10 @@
           "value": 193.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A193)"
+      "expect": {
+        "kind": "text",
+        "value": "Á"
+      }
     },
     {
       "id": "B194",
@@ -2612,7 +2727,10 @@
           "value": 194.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A194)"
+      "expect": {
+        "kind": "text",
+        "value": "Â"
+      }
     },
     {
       "id": "B195",
@@ -2623,7 +2741,10 @@
           "value": 195.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A195)"
+      "expect": {
+        "kind": "text",
+        "value": "Ã"
+      }
     },
     {
       "id": "B196",
@@ -2634,7 +2755,10 @@
           "value": 196.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A196)"
+      "expect": {
+        "kind": "text",
+        "value": "Ä"
+      }
     },
     {
       "id": "B197",
@@ -2645,7 +2769,10 @@
           "value": 197.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A197)"
+      "expect": {
+        "kind": "text",
+        "value": "Å"
+      }
     },
     {
       "id": "B198",
@@ -2656,7 +2783,10 @@
           "value": 198.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A198)"
+      "expect": {
+        "kind": "text",
+        "value": "Æ"
+      }
     },
     {
       "id": "B199",
@@ -2667,7 +2797,10 @@
           "value": 199.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A199)"
+      "expect": {
+        "kind": "text",
+        "value": "Ç"
+      }
     },
     {
       "id": "B200",
@@ -2678,7 +2811,10 @@
           "value": 200.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A200)"
+      "expect": {
+        "kind": "text",
+        "value": "È"
+      }
     },
     {
       "id": "B201",
@@ -2689,7 +2825,10 @@
           "value": 201.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A201)"
+      "expect": {
+        "kind": "text",
+        "value": "É"
+      }
     },
     {
       "id": "B202",
@@ -2700,7 +2839,10 @@
           "value": 202.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A202)"
+      "expect": {
+        "kind": "text",
+        "value": "Ê"
+      }
     },
     {
       "id": "B203",
@@ -2711,7 +2853,10 @@
           "value": 203.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A203)"
+      "expect": {
+        "kind": "text",
+        "value": "Ë"
+      }
     },
     {
       "id": "B204",
@@ -2722,7 +2867,10 @@
           "value": 204.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A204)"
+      "expect": {
+        "kind": "text",
+        "value": "Ì"
+      }
     },
     {
       "id": "B205",
@@ -2733,7 +2881,10 @@
           "value": 205.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A205)"
+      "expect": {
+        "kind": "text",
+        "value": "Í"
+      }
     },
     {
       "id": "B206",
@@ -2744,7 +2895,10 @@
           "value": 206.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A206)"
+      "expect": {
+        "kind": "text",
+        "value": "Î"
+      }
     },
     {
       "id": "B207",
@@ -2755,7 +2909,10 @@
           "value": 207.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A207)"
+      "expect": {
+        "kind": "text",
+        "value": "Ï"
+      }
     },
     {
       "id": "B208",
@@ -2766,7 +2923,10 @@
           "value": 208.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A208)"
+      "expect": {
+        "kind": "text",
+        "value": "Ð"
+      }
     },
     {
       "id": "B209",
@@ -2777,7 +2937,10 @@
           "value": 209.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A209)"
+      "expect": {
+        "kind": "text",
+        "value": "Ñ"
+      }
     },
     {
       "id": "B210",
@@ -2788,7 +2951,10 @@
           "value": 210.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A210)"
+      "expect": {
+        "kind": "text",
+        "value": "Ò"
+      }
     },
     {
       "id": "B211",
@@ -2799,7 +2965,10 @@
           "value": 211.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A211)"
+      "expect": {
+        "kind": "text",
+        "value": "Ó"
+      }
     },
     {
       "id": "B212",
@@ -2810,7 +2979,10 @@
           "value": 212.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A212)"
+      "expect": {
+        "kind": "text",
+        "value": "Ô"
+      }
     },
     {
       "id": "B213",
@@ -2821,7 +2993,10 @@
           "value": 213.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A213)"
+      "expect": {
+        "kind": "text",
+        "value": "Õ"
+      }
     },
     {
       "id": "B214",
@@ -2832,7 +3007,10 @@
           "value": 214.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A214)"
+      "expect": {
+        "kind": "text",
+        "value": "Ö"
+      }
     },
     {
       "id": "B215",
@@ -2843,7 +3021,10 @@
           "value": 215.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A215)"
+      "expect": {
+        "kind": "text",
+        "value": "×"
+      }
     },
     {
       "id": "B216",
@@ -2854,7 +3035,10 @@
           "value": 216.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A216)"
+      "expect": {
+        "kind": "text",
+        "value": "Ø"
+      }
     },
     {
       "id": "B217",
@@ -2865,7 +3049,10 @@
           "value": 217.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A217)"
+      "expect": {
+        "kind": "text",
+        "value": "Ù"
+      }
     },
     {
       "id": "B218",
@@ -2876,7 +3063,10 @@
           "value": 218.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A218)"
+      "expect": {
+        "kind": "text",
+        "value": "Ú"
+      }
     },
     {
       "id": "B219",
@@ -2887,7 +3077,10 @@
           "value": 219.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A219)"
+      "expect": {
+        "kind": "text",
+        "value": "Û"
+      }
     },
     {
       "id": "B220",
@@ -2898,7 +3091,10 @@
           "value": 220.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A220)"
+      "expect": {
+        "kind": "text",
+        "value": "Ü"
+      }
     },
     {
       "id": "B221",
@@ -2909,7 +3105,10 @@
           "value": 221.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A221)"
+      "expect": {
+        "kind": "text",
+        "value": "Ý"
+      }
     },
     {
       "id": "B222",
@@ -2920,7 +3119,10 @@
           "value": 222.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A222)"
+      "expect": {
+        "kind": "text",
+        "value": "Þ"
+      }
     },
     {
       "id": "B223",
@@ -2931,7 +3133,10 @@
           "value": 223.0
         }
       },
-      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A223)"
+      "expect": {
+        "kind": "text",
+        "value": "ß"
+      }
     },
     {
       "id": "B224",

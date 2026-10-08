@@ -8,7 +8,8 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T07:47:24Z"
+    "generated_at": "2026-10-08T18:35:55Z",
+    "profile_id": "mac-365-en_US"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -61,121 +62,121 @@
       "id": "F5",
       "formula": "=SUM(INDIRECT(\"R[-4]C[-5]:R[-3]C[-3]\", FALSE))",
       "setup": {
-        "D1": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "J3": {
-          "kind": "text",
-          "value": "C3"
-        },
-        "K4": {
-          "kind": "text",
-          "value": "6"
-        },
-        "F6": {
-          "kind": "number",
-          "value": 0.0
-        },
-        "J7": {
-          "kind": "text",
-          "value": "F5"
-        },
-        "B2": {
-          "kind": "number",
-          "value": 5.0
-        },
-        "E2": {
-          "kind": "number",
-          "value": 4.0
-        },
-        "B3": {
-          "kind": "number",
-          "value": 5.0
-        },
-        "K5": {
-          "kind": "text",
-          "value": "6"
-        },
-        "C3": {
-          "kind": "number",
-          "value": 4.0
-        },
-        "A1": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "K6": {
-          "kind": "text",
-          "value": "4"
-        },
-        "B1": {
-          "kind": "number",
-          "value": 2.0
-        },
-        "C2": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "K2": {
-          "kind": "text",
-          "value": "5"
-        },
-        "K8": {
-          "kind": "error",
-          "code": "#REF!"
-        },
-        "J5": {
-          "kind": "text",
-          "value": "D1"
-        },
-        "C1": {
-          "kind": "number",
-          "value": 3.0
-        },
-        "D2": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "K1": {
-          "kind": "text",
-          "value": "Expected"
-        },
-        "A2": {
-          "kind": "number",
-          "value": 4.0
-        },
-        "J4": {
-          "kind": "text",
-          "value": "D2"
-        },
         "J1": {
           "kind": "text",
           "value": "Cell"
-        },
-        "J8": {
-          "kind": "text",
-          "value": "F6"
         },
         "J2": {
           "kind": "text",
           "value": "B3"
         },
-        "L1": {
+        "K2": {
           "kind": "text",
-          "value": "Actual"
+          "value": "5"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "C3"
         },
         "K7": {
           "kind": "text",
           "value": "21"
         },
+        "J4": {
+          "kind": "text",
+          "value": "D2"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "K8": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "L1": {
+          "kind": "text",
+          "value": "Actual"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "F5"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "D1"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "K4": {
+          "kind": "text",
+          "value": "6"
+        },
         "K3": {
           "kind": "text",
           "value": "4"
         },
+        "K1": {
+          "kind": "text",
+          "value": "Expected"
+        },
         "J6": {
           "kind": "text",
           "value": "E2"
+        },
+        "K5": {
+          "kind": "text",
+          "value": "6"
+        },
+        "K6": {
+          "kind": "text",
+          "value": "4"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J8": {
+          "kind": "text",
+          "value": "F6"
         }
       },
       "expect": {

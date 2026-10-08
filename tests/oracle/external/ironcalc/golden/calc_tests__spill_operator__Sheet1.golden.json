@@ -8,7 +8,8 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T06:30:47Z"
+    "generated_at": "2026-10-08T18:35:55Z",
+    "profile_id": "mac-365-en_US"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -55,97 +56,97 @@
       "id": "I2",
       "formula": "=SUM(_xlfn.ANCHORARRAY(OFFSET(A1,1,1)))",
       "setup": {
-        "B2": {
-          "kind": "number",
-          "value": 12.0
-        },
         "C5": {
           "kind": "number",
           "value": 123.0
-        },
-        "K2": {
-          "kind": "text",
-          "value": "Hola"
-        },
-        "E1": {
-          "kind": "text",
-          "value": "Error, because A2 is a number"
-        },
-        "E5": {
-          "kind": "text",
-          "value": "Error, because there is nothing in there"
-        },
-        "A5": {
-          "kind": "number",
-          "value": 1245.0
-        },
-        "C1": {
-          "kind": "text",
-          "value": "Array Formula"
-        },
-        "L2": {
-          "kind": "text",
-          "value": "Hola"
-        },
-        "B1": {
-          "kind": "text",
-          "value": "Dynamic array"
-        },
-        "A2": {
-          "kind": "number",
-          "value": 12.0
-        },
-        "C3": {
-          "kind": "number",
-          "value": 123.0
-        },
-        "K3": {
-          "kind": "text",
-          "value": "Mundo"
-        },
-        "A4": {
-          "kind": "number",
-          "value": 34.0
-        },
-        "B5": {
-          "kind": "number",
-          "value": 1245.0
-        },
-        "E3": {
-          "kind": "text",
-          "value": "Error, because C3 is a spill"
-        },
-        "I1": {
-          "kind": "text",
-          "value": "This is B2# :)"
-        },
-        "C2": {
-          "kind": "number",
-          "value": 123.0
-        },
-        "A3": {
-          "kind": "number",
-          "value": 24.0
-        },
-        "C4": {
-          "kind": "number",
-          "value": 123.0
-        },
-        "L3": {
-          "kind": "text",
-          "value": "Mundo"
-        },
-        "A1": {
-          "kind": "text",
-          "value": "Array"
         },
         "B4": {
           "kind": "number",
           "value": 34.0
         },
+        "K2": {
+          "kind": "text",
+          "value": "Hola"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 12.0
+        },
         "B3": {
           "kind": "number",
           "value": 24.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 1245.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Array Formula"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "I1": {
+          "kind": "text",
+          "value": "This is B2# :)"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1245.0
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Array"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Dynamic array"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Error, because there is nothing in there"
+        },
+        "L2": {
+          "kind": "text",
+          "value": "Hola"
+        },
+        "K3": {
+          "kind": "text",
+          "value": "Mundo"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Error, because A2 is a number"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Error, because C3 is a spill"
+        },
+        "L3": {
+          "kind": "text",
+          "value": "Mundo"
         }
       },
       "skipped": "=SUM(_xlfn.ANCHORARRAY(OFFSET(A1,1,1))) resolves OFFSET to B2 then expects the same B2:B5 spill as F2; Mac=1315, Formulon=#REF! because importer flattened the spill source. Probe: ironcalc_drift_probes (spill_operator_sum_b2_to_b5_array_literal)."

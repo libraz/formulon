@@ -8,7 +8,8 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T06:30:47Z"
+    "generated_at": "2026-10-08T18:35:55Z",
+    "profile_id": "mac-365-en_US"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -19,113 +20,113 @@
       "id": "C1",
       "formula": "=OFFSET(A1,0,0)",
       "setup": {
-        "B2": {
-          "kind": "number",
-          "value": 7.0
-        },
-        "A12": {
-          "kind": "number",
-          "value": 12.0
-        },
-        "A5": {
-          "kind": "number",
-          "value": 5.0
-        },
-        "A15": {
-          "kind": "number",
-          "value": 15.0
-        },
-        "B1": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "D2": {
-          "kind": "text",
-          "value": "<= Pointing to A5"
-        },
-        "A2": {
-          "kind": "number",
-          "value": 2.0
-        },
         "G6": {
           "kind": "text",
           "value": "=SUM(A1:OFFSET(A1,4,1,4))"
-        },
-        "A6": {
-          "kind": "number",
-          "value": 100.0
-        },
-        "D1": {
-          "kind": "text",
-          "value": "<= Pointing to A1"
-        },
-        "A4": {
-          "kind": "number",
-          "value": 4.0
-        },
-        "B8": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "D15": {
-          "kind": "text",
-          "value": "<= INDIRECT"
-        },
-        "B5": {
-          "kind": "number",
-          "value": 10.0
-        },
-        "H4": {
-          "kind": "text",
-          "value": "<= This is like SUM(A1:B5)"
-        },
-        "G7": {
-          "kind": "text",
-          "value": "=SUM(A1:A7:B8)"
-        },
-        "D13": {
-          "kind": "text",
-          "value": "<= CHOOSE"
-        },
-        "B6": {
-          "kind": "number",
-          "value": 200.0
-        },
-        "A3": {
-          "kind": "number",
-          "value": 3.0
-        },
-        "A14": {
-          "kind": "number",
-          "value": 14.0
-        },
-        "J7": {
-          "kind": "text",
-          "value": "<= This will not work in EqualTo Calc"
-        },
-        "J6": {
-          "kind": "text",
-          "value": "<= This will not work in EqualTo Calc"
-        },
-        "A1": {
-          "kind": "number",
-          "value": 1.0
         },
         "B4": {
           "kind": "number",
           "value": 9.0
         },
-        "A8": {
+        "H4": {
+          "kind": "text",
+          "value": "<= This is like SUM(A1:B5)"
+        },
+        "B2": {
           "kind": "number",
-          "value": 1.0
+          "value": 7.0
         },
         "A13": {
           "kind": "number",
           "value": 13.0
         },
+        "D15": {
+          "kind": "text",
+          "value": "<= INDIRECT"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G7": {
+          "kind": "text",
+          "value": "=SUM(A1:A7:B8)"
+        },
         "B3": {
           "kind": "number",
           "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "J7": {
+          "kind": "text",
+          "value": "<= This will not work in EqualTo Calc"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "<= Pointing to A5"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "<= Pointing to A1"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "J6": {
+          "kind": "text",
+          "value": "<= This will not work in EqualTo Calc"
+        },
+        "D13": {
+          "kind": "text",
+          "value": "<= CHOOSE"
         }
       },
       "expect": {
@@ -137,113 +138,113 @@
       "id": "C2",
       "formula": "=OFFSET(A1,5,0)",
       "setup": {
-        "B2": {
-          "kind": "number",
-          "value": 7.0
-        },
-        "A12": {
-          "kind": "number",
-          "value": 12.0
-        },
-        "A5": {
-          "kind": "number",
-          "value": 5.0
-        },
-        "A15": {
-          "kind": "number",
-          "value": 15.0
-        },
-        "B1": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "D2": {
-          "kind": "text",
-          "value": "<= Pointing to A5"
-        },
-        "A2": {
-          "kind": "number",
-          "value": 2.0
-        },
         "G6": {
           "kind": "text",
           "value": "=SUM(A1:OFFSET(A1,4,1,4))"
-        },
-        "A6": {
-          "kind": "number",
-          "value": 100.0
-        },
-        "D1": {
-          "kind": "text",
-          "value": "<= Pointing to A1"
-        },
-        "A4": {
-          "kind": "number",
-          "value": 4.0
-        },
-        "B8": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "D15": {
-          "kind": "text",
-          "value": "<= INDIRECT"
-        },
-        "B5": {
-          "kind": "number",
-          "value": 10.0
-        },
-        "H4": {
-          "kind": "text",
-          "value": "<= This is like SUM(A1:B5)"
-        },
-        "G7": {
-          "kind": "text",
-          "value": "=SUM(A1:A7:B8)"
-        },
-        "D13": {
-          "kind": "text",
-          "value": "<= CHOOSE"
-        },
-        "B6": {
-          "kind": "number",
-          "value": 200.0
-        },
-        "A3": {
-          "kind": "number",
-          "value": 3.0
-        },
-        "A14": {
-          "kind": "number",
-          "value": 14.0
-        },
-        "J7": {
-          "kind": "text",
-          "value": "<= This will not work in EqualTo Calc"
-        },
-        "J6": {
-          "kind": "text",
-          "value": "<= This will not work in EqualTo Calc"
-        },
-        "A1": {
-          "kind": "number",
-          "value": 1.0
         },
         "B4": {
           "kind": "number",
           "value": 9.0
         },
-        "A8": {
+        "H4": {
+          "kind": "text",
+          "value": "<= This is like SUM(A1:B5)"
+        },
+        "B2": {
           "kind": "number",
-          "value": 1.0
+          "value": 7.0
         },
         "A13": {
           "kind": "number",
           "value": 13.0
         },
+        "D15": {
+          "kind": "text",
+          "value": "<= INDIRECT"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G7": {
+          "kind": "text",
+          "value": "=SUM(A1:A7:B8)"
+        },
         "B3": {
           "kind": "number",
           "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "J7": {
+          "kind": "text",
+          "value": "<= This will not work in EqualTo Calc"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "<= Pointing to A5"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "<= Pointing to A1"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "J6": {
+          "kind": "text",
+          "value": "<= This will not work in EqualTo Calc"
+        },
+        "D13": {
+          "kind": "text",
+          "value": "<= CHOOSE"
         }
       },
       "expect": {
@@ -255,113 +256,113 @@
       "id": "C3",
       "formula": "=SUM(OFFSET(A1,0,0):OFFSET(A1,4,0))",
       "setup": {
-        "B2": {
-          "kind": "number",
-          "value": 7.0
-        },
-        "A12": {
-          "kind": "number",
-          "value": 12.0
-        },
-        "A5": {
-          "kind": "number",
-          "value": 5.0
-        },
-        "A15": {
-          "kind": "number",
-          "value": 15.0
-        },
-        "B1": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "D2": {
-          "kind": "text",
-          "value": "<= Pointing to A5"
-        },
-        "A2": {
-          "kind": "number",
-          "value": 2.0
-        },
         "G6": {
           "kind": "text",
           "value": "=SUM(A1:OFFSET(A1,4,1,4))"
-        },
-        "A6": {
-          "kind": "number",
-          "value": 100.0
-        },
-        "D1": {
-          "kind": "text",
-          "value": "<= Pointing to A1"
-        },
-        "A4": {
-          "kind": "number",
-          "value": 4.0
-        },
-        "B8": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "D15": {
-          "kind": "text",
-          "value": "<= INDIRECT"
-        },
-        "B5": {
-          "kind": "number",
-          "value": 10.0
-        },
-        "H4": {
-          "kind": "text",
-          "value": "<= This is like SUM(A1:B5)"
-        },
-        "G7": {
-          "kind": "text",
-          "value": "=SUM(A1:A7:B8)"
-        },
-        "D13": {
-          "kind": "text",
-          "value": "<= CHOOSE"
-        },
-        "B6": {
-          "kind": "number",
-          "value": 200.0
-        },
-        "A3": {
-          "kind": "number",
-          "value": 3.0
-        },
-        "A14": {
-          "kind": "number",
-          "value": 14.0
-        },
-        "J7": {
-          "kind": "text",
-          "value": "<= This will not work in EqualTo Calc"
-        },
-        "J6": {
-          "kind": "text",
-          "value": "<= This will not work in EqualTo Calc"
-        },
-        "A1": {
-          "kind": "number",
-          "value": 1.0
         },
         "B4": {
           "kind": "number",
           "value": 9.0
         },
-        "A8": {
+        "H4": {
+          "kind": "text",
+          "value": "<= This is like SUM(A1:B5)"
+        },
+        "B2": {
           "kind": "number",
-          "value": 1.0
+          "value": 7.0
         },
         "A13": {
           "kind": "number",
           "value": 13.0
         },
+        "D15": {
+          "kind": "text",
+          "value": "<= INDIRECT"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G7": {
+          "kind": "text",
+          "value": "=SUM(A1:A7:B8)"
+        },
         "B3": {
           "kind": "number",
           "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "J7": {
+          "kind": "text",
+          "value": "<= This will not work in EqualTo Calc"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "<= Pointing to A5"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "<= Pointing to A1"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "J6": {
+          "kind": "text",
+          "value": "<= This will not work in EqualTo Calc"
+        },
+        "D13": {
+          "kind": "text",
+          "value": "<= CHOOSE"
         }
       },
       "expect": {
@@ -373,113 +374,113 @@
       "id": "D3",
       "formula": "=SUM(A1:OFFSET(A1,4,0))",
       "setup": {
-        "B2": {
-          "kind": "number",
-          "value": 7.0
-        },
-        "A12": {
-          "kind": "number",
-          "value": 12.0
-        },
-        "A5": {
-          "kind": "number",
-          "value": 5.0
-        },
-        "A15": {
-          "kind": "number",
-          "value": 15.0
-        },
-        "B1": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "D2": {
-          "kind": "text",
-          "value": "<= Pointing to A5"
-        },
-        "A2": {
-          "kind": "number",
-          "value": 2.0
-        },
         "G6": {
           "kind": "text",
           "value": "=SUM(A1:OFFSET(A1,4,1,4))"
-        },
-        "A6": {
-          "kind": "number",
-          "value": 100.0
-        },
-        "D1": {
-          "kind": "text",
-          "value": "<= Pointing to A1"
-        },
-        "A4": {
-          "kind": "number",
-          "value": 4.0
-        },
-        "B8": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "D15": {
-          "kind": "text",
-          "value": "<= INDIRECT"
-        },
-        "B5": {
-          "kind": "number",
-          "value": 10.0
-        },
-        "H4": {
-          "kind": "text",
-          "value": "<= This is like SUM(A1:B5)"
-        },
-        "G7": {
-          "kind": "text",
-          "value": "=SUM(A1:A7:B8)"
-        },
-        "D13": {
-          "kind": "text",
-          "value": "<= CHOOSE"
-        },
-        "B6": {
-          "kind": "number",
-          "value": 200.0
-        },
-        "A3": {
-          "kind": "number",
-          "value": 3.0
-        },
-        "A14": {
-          "kind": "number",
-          "value": 14.0
-        },
-        "J7": {
-          "kind": "text",
-          "value": "<= This will not work in EqualTo Calc"
-        },
-        "J6": {
-          "kind": "text",
-          "value": "<= This will not work in EqualTo Calc"
-        },
-        "A1": {
-          "kind": "number",
-          "value": 1.0
         },
         "B4": {
           "kind": "number",
           "value": 9.0
         },
-        "A8": {
+        "H4": {
+          "kind": "text",
+          "value": "<= This is like SUM(A1:B5)"
+        },
+        "B2": {
           "kind": "number",
-          "value": 1.0
+          "value": 7.0
         },
         "A13": {
           "kind": "number",
           "value": 13.0
         },
+        "D15": {
+          "kind": "text",
+          "value": "<= INDIRECT"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G7": {
+          "kind": "text",
+          "value": "=SUM(A1:A7:B8)"
+        },
         "B3": {
           "kind": "number",
           "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "J7": {
+          "kind": "text",
+          "value": "<= This will not work in EqualTo Calc"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "<= Pointing to A5"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "<= Pointing to A1"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "J6": {
+          "kind": "text",
+          "value": "<= This will not work in EqualTo Calc"
+        },
+        "D13": {
+          "kind": "text",
+          "value": "<= CHOOSE"
         }
       },
       "expect": {
@@ -491,113 +492,113 @@
       "id": "G4",
       "formula": "=SUM(A1:OFFSET(A1,4,1))",
       "setup": {
-        "B2": {
-          "kind": "number",
-          "value": 7.0
-        },
-        "A12": {
-          "kind": "number",
-          "value": 12.0
-        },
-        "A5": {
-          "kind": "number",
-          "value": 5.0
-        },
-        "A15": {
-          "kind": "number",
-          "value": 15.0
-        },
-        "B1": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "D2": {
-          "kind": "text",
-          "value": "<= Pointing to A5"
-        },
-        "A2": {
-          "kind": "number",
-          "value": 2.0
-        },
         "G6": {
           "kind": "text",
           "value": "=SUM(A1:OFFSET(A1,4,1,4))"
-        },
-        "A6": {
-          "kind": "number",
-          "value": 100.0
-        },
-        "D1": {
-          "kind": "text",
-          "value": "<= Pointing to A1"
-        },
-        "A4": {
-          "kind": "number",
-          "value": 4.0
-        },
-        "B8": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "D15": {
-          "kind": "text",
-          "value": "<= INDIRECT"
-        },
-        "B5": {
-          "kind": "number",
-          "value": 10.0
-        },
-        "H4": {
-          "kind": "text",
-          "value": "<= This is like SUM(A1:B5)"
-        },
-        "G7": {
-          "kind": "text",
-          "value": "=SUM(A1:A7:B8)"
-        },
-        "D13": {
-          "kind": "text",
-          "value": "<= CHOOSE"
-        },
-        "B6": {
-          "kind": "number",
-          "value": 200.0
-        },
-        "A3": {
-          "kind": "number",
-          "value": 3.0
-        },
-        "A14": {
-          "kind": "number",
-          "value": 14.0
-        },
-        "J7": {
-          "kind": "text",
-          "value": "<= This will not work in EqualTo Calc"
-        },
-        "J6": {
-          "kind": "text",
-          "value": "<= This will not work in EqualTo Calc"
-        },
-        "A1": {
-          "kind": "number",
-          "value": 1.0
         },
         "B4": {
           "kind": "number",
           "value": 9.0
         },
-        "A8": {
+        "H4": {
+          "kind": "text",
+          "value": "<= This is like SUM(A1:B5)"
+        },
+        "B2": {
           "kind": "number",
-          "value": 1.0
+          "value": 7.0
         },
         "A13": {
           "kind": "number",
           "value": 13.0
         },
+        "D15": {
+          "kind": "text",
+          "value": "<= INDIRECT"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G7": {
+          "kind": "text",
+          "value": "=SUM(A1:A7:B8)"
+        },
         "B3": {
           "kind": "number",
           "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "J7": {
+          "kind": "text",
+          "value": "<= This will not work in EqualTo Calc"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "<= Pointing to A5"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "<= Pointing to A1"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "J6": {
+          "kind": "text",
+          "value": "<= This will not work in EqualTo Calc"
+        },
+        "D13": {
+          "kind": "text",
+          "value": "<= CHOOSE"
         }
       },
       "expect": {
@@ -639,113 +640,113 @@
       "id": "C15",
       "formula": "=SUM(INDIRECT(\"A12\"):INDIRECT(\"A15\"))",
       "setup": {
-        "B2": {
-          "kind": "number",
-          "value": 7.0
-        },
-        "A12": {
-          "kind": "number",
-          "value": 12.0
-        },
-        "A5": {
-          "kind": "number",
-          "value": 5.0
-        },
-        "A15": {
-          "kind": "number",
-          "value": 15.0
-        },
-        "B1": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "D2": {
-          "kind": "text",
-          "value": "<= Pointing to A5"
-        },
-        "A2": {
-          "kind": "number",
-          "value": 2.0
-        },
         "G6": {
           "kind": "text",
           "value": "=SUM(A1:OFFSET(A1,4,1,4))"
-        },
-        "A6": {
-          "kind": "number",
-          "value": 100.0
-        },
-        "D1": {
-          "kind": "text",
-          "value": "<= Pointing to A1"
-        },
-        "A4": {
-          "kind": "number",
-          "value": 4.0
-        },
-        "B8": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "D15": {
-          "kind": "text",
-          "value": "<= INDIRECT"
-        },
-        "B5": {
-          "kind": "number",
-          "value": 10.0
-        },
-        "H4": {
-          "kind": "text",
-          "value": "<= This is like SUM(A1:B5)"
-        },
-        "G7": {
-          "kind": "text",
-          "value": "=SUM(A1:A7:B8)"
-        },
-        "D13": {
-          "kind": "text",
-          "value": "<= CHOOSE"
-        },
-        "B6": {
-          "kind": "number",
-          "value": 200.0
-        },
-        "A3": {
-          "kind": "number",
-          "value": 3.0
-        },
-        "A14": {
-          "kind": "number",
-          "value": 14.0
-        },
-        "J7": {
-          "kind": "text",
-          "value": "<= This will not work in EqualTo Calc"
-        },
-        "J6": {
-          "kind": "text",
-          "value": "<= This will not work in EqualTo Calc"
-        },
-        "A1": {
-          "kind": "number",
-          "value": 1.0
         },
         "B4": {
           "kind": "number",
           "value": 9.0
         },
-        "A8": {
+        "H4": {
+          "kind": "text",
+          "value": "<= This is like SUM(A1:B5)"
+        },
+        "B2": {
           "kind": "number",
-          "value": 1.0
+          "value": 7.0
         },
         "A13": {
           "kind": "number",
           "value": 13.0
         },
+        "D15": {
+          "kind": "text",
+          "value": "<= INDIRECT"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G7": {
+          "kind": "text",
+          "value": "=SUM(A1:A7:B8)"
+        },
         "B3": {
           "kind": "number",
           "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J7": {
+          "kind": "text",
+          "value": "<= This will not work in EqualTo Calc"
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "D2": {
+          "kind": "text",
+          "value": "<= Pointing to A5"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "<= Pointing to A1"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "J6": {
+          "kind": "text",
+          "value": "<= This will not work in EqualTo Calc"
+        },
+        "D13": {
+          "kind": "text",
+          "value": "<= CHOOSE"
         }
       },
       "expect": {

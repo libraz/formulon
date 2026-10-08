@@ -8,7 +8,8 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T06:30:47Z"
+    "generated_at": "2026-10-08T18:35:55Z",
+    "profile_id": "mac-365-en_US"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -304,9 +305,9 @@
       "id": "A14",
       "formula": "=_xlfn.FORMULATEXT(OFFSET(A1,2,1))",
       "setup": {
-        "A3": {
-          "kind": "bool",
-          "value": true
+        "A1": {
+          "kind": "text",
+          "value": "value"
         },
         "A2": {
           "kind": "number",
@@ -316,17 +317,17 @@
           "kind": "text",
           "value": "=1+1"
         },
-        "A1": {
+        "B1": {
           "kind": "text",
-          "value": "value"
+          "value": "FORMULATEXT"
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
         },
         "A4": {
           "kind": "text",
           "value": "Hello"
-        },
-        "B1": {
-          "kind": "text",
-          "value": "FORMULATEXT"
         }
       },
       "skipped": "=_xlfn.FORMULATEXT(OFFSET(A1,2,1)) -> resolves to A3 -> expects \"=FORMULATEXT(A3)\". IronCalc importer flattened A3's formula to bool=true in golden setup; live Mac workbook has A3 as a formula cell."

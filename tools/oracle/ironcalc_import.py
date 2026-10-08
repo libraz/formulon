@@ -186,6 +186,21 @@ def _is_excel_product(app: Optional[str]) -> bool:
     return bool(app and re.search(r"\bExcel\b", app))
 
 
+def _evaluation_profile_id(saved_by: Optional[str], locale: str) -> Optional[str]:
+    """Returns the Formulon profile id a fixture is evaluated under.
+
+    Mac-saved workbooks map to the Mac en-US profile and every other Excel
+    product to the Windows en-US profile. None (the harness default) is
+    returned for en-GB, which has no profile, and for unrecognised products.
+    """
+
+    if locale == "en-GB" or not _is_excel_product(saved_by):
+        return None
+    if saved_by and "Macintosh" in saved_by:
+        return "mac-365-en_US"
+    return "win-365-en_US"
+
+
 def _load_divergence_skips(path: Path) -> Dict[str, str]:
     """Loads composite-id -> reason from `tests/ironcalc_divergence.yaml`.
 
@@ -845,6 +860,9 @@ def _convert_sheet(
         "tolerance": {"abs": abs_tol, "rel": rel_tol},
         "cases": cases,
     }
+    profile_id = _evaluation_profile_id(saved_by, locale)
+    if profile_id is not None:
+        doc["environment"]["profile_id"] = profile_id
     return doc, stats
 
 
