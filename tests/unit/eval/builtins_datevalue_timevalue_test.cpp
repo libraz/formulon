@@ -746,6 +746,26 @@ TEST(TimeTextMeridiem, MonthWordAfterTimeIsNotAMarker) {
   EXPECT_NEAR(v.as_number(), 10.0 / 24.0, 1e-15);
 }
 
+TEST(DateTextLenientShapes, HourBeyondTwentyThreeRollsTheDateForward) {
+  for (const char* text : {"2026-01-01 24:00:00", "2026-01-01 25:00:00"}) {
+    const Value v = EvalSource(std::string("=DATEVALUE(\"") + text + "\")");
+    ASSERT_TRUE(v.is_number()) << text;
+    EXPECT_EQ(v.as_number(), 46024.0) << text;
+  }
+}
+
+TEST(DateTextLenientShapes, BlanksAroundDateSeparators) {
+  const Value v = EvalSource("=DATEVALUE(\"2026 - 01 - 01\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 46023.0);
+}
+
+TEST(DateTextLenientShapes, BlanksAroundTimeSeparator) {
+  const Value v = EvalSource("=TIMEVALUE(\"4 : 35\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 0.1909722222222222, 1e-15);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

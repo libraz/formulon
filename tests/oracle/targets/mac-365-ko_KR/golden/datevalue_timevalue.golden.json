@@ -6,7 +6,7 @@
     "excel_locale": "ko-KR",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T15:30:38Z"
+    "generated_at": "2026-10-08T19:34:10Z"
   },
   "tolerance": {
     "abs": 1e-10,
@@ -929,6 +929,51 @@
       "expect": {
         "kind": "number",
         "value": 0.7710069444444444
+      }
+    },
+    {
+      "id": "datevalue_yy_mm_dd_hyphen",
+      "formula": "=DATEVALUE(\"26-01-01\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46023.0
+      }
+    },
+    {
+      "id": "datevalue_hour_24_rolls_over",
+      "formula": "=DATEVALUE(\"2026-01-01 24:00:00\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46024.0
+      }
+    },
+    {
+      "id": "datevalue_hour_25_rolls_over",
+      "formula": "=DATEVALUE(\"2026-01-01 25:00:00\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46024.0
+      }
+    },
+    {
+      "id": "datevalue_spaced_hyphens",
+      "formula": "=DATEVALUE(\"2026 - 01 - 01\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46023.0
+      }
+    },
+    {
+      "id": "timevalue_spaced_colon",
+      "formula": "=TIMEVALUE(\"4 : 35\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.1909722222222222
       }
     }
   ]

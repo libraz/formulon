@@ -6,6 +6,7 @@
 
 #include "eval/date_text_parse.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -41,6 +42,33 @@ constexpr char kEraTaisho[7] = {'\xE5', '\xA4', '\xA7', '\xE6', '\xAD', '\xA3', 
 constexpr char kEraMeiji[7] = {'\xE6', '\x98', '\x8E', '\xE6', '\xB2', '\xBB', '\0'};   // 明治
 
 // Returns true iff `s` begins with the given 3-byte UTF-8 sequence.
+// Consumes a date/time separator, accepting blanks on either side of it.
+// Leaves `s` untouched and returns false when the separator is absent.
+template <typename IsSep>
+bool consume_spaced_sep(std::string_view* s, IsSep is_sep) noexcept {
+  std::string_view t = *s;
+  while (!t.empty() && t[0] == ' ') {
+    t.remove_prefix(1);
+  }
+  if (t.empty() || !is_sep(t[0])) {
+    return false;
+  }
+  t.remove_prefix(1);
+  while (!t.empty() && t[0] == ' ') {
+    t.remove_prefix(1);
+  }
+  *s = t;
+  return true;
+}
+
+bool is_date_sep(char c) noexcept {
+  return c == '-' || c == '/';
+}
+
+bool is_time_sep(char c) noexcept {
+  return c == ':';
+}
+
 bool starts_with_utf8(std::string_view s, const char (&expected)[4]) noexcept {
   return s.size() >= 3 && s[0] == expected[0] && s[1] == expected[1] && s[2] == expected[2];
 }
@@ -440,19 +468,17 @@ NumericDateParseResult parse_ymd_text(std::string_view s, double* out_serial, st
 
   // The two ASCII separators are intentionally interchangeable, preserving
   // the existing leniency for mixed forms such as `2024-03/15`.
-  if (s.empty() || (s[0] != '-' && s[0] != '/')) {
+  if (!consume_spaced_sep(&s, is_date_sep)) {
     return NumericDateParseResult::kNoMatch;
   }
-  s.remove_prefix(1);
   int second = 0;
   if (scan_digits(s, 2, &second) == 0) {
     return NumericDateParseResult::kNoMatch;
   }
-  if (s.empty() || (s[0] != '-' && s[0] != '/')) {
+  if (!consume_spaced_sep(&s, is_date_sep)) {
     // This is the year-less M/D shape; let parse_md_text handle it.
     return NumericDateParseResult::kNoMatch;
   }
-  s.remove_prefix(1);
   int third = 0;
   const std::size_t third_digits = scan_digits(s, 4, &third);
   if (third_digits == 0) {
@@ -697,18 +723,16 @@ bool parse_time_text(std::string_view s, double* out_frac, std::string_view* res
     return false;
   }
   // `H` alone is a time only with a 12-hour marker ("6 PM").
-  const bool hour_only = s.empty() || s[0] != ':';
+  const bool hour_only = !consume_spaced_sep(&s, is_time_sep);
   int minute = 0;
   int second = 0;
   double sub_seconds = 0.0;
   if (!hour_only) {
-    s.remove_prefix(1);
     if (scan_digits(s, 3, &minute) == 0 || minute < 0) {
       return false;
     }
     bool has_seconds = false;
-    if (!s.empty() && s[0] == ':') {
-      s.remove_prefix(1);
+    if (consume_spaced_sep(&s, is_time_sep)) {
       if (scan_digits(s, 3, &second) == 0 || second < 0) {
         return false;
       }
@@ -793,7 +817,11 @@ bool parse_date_time_text(std::string_view s, double* out_date_serial, double* o
       std::string_view after = rest;
       double f = 0.0;
       if (parse_time_text(rest, &f, &after)) {
-        frac = f;
+        // An hour of 24 or more rolls the date forward; only the day
+        // fraction stays in `frac`, so the serial + fraction sum is unchanged.
+        const double whole_days = std::floor(f);
+        serial += whole_days;
+        frac = f - whole_days;
         has_time = true;
         rest = after;
       }

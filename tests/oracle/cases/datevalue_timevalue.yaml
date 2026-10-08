@@ -409,3 +409,15 @@ cases:
   - id: tv_6_30_15pm
     description: "Excel 365: 0.7710069444444444"
     formula: "=TIMEVALUE(\"6:30:15 PM\")"
+
+  # -- Lenient date/time text shapes --------------------------------------
+  - id: datevalue_yy_mm_dd_hyphen
+    formula: "=DATEVALUE(\"26-01-01\")"
+  - id: datevalue_hour_24_rolls_over
+    formula: "=DATEVALUE(\"2026-01-01 24:00:00\")"
+  - id: datevalue_hour_25_rolls_over
+    formula: "=DATEVALUE(\"2026-01-01 25:00:00\")"
+  - id: datevalue_spaced_hyphens
+    formula: "=DATEVALUE(\"2026 - 01 - 01\")"
+  - id: timevalue_spaced_colon
+    formula: "=TIMEVALUE(\"4 : 35\")"
