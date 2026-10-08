@@ -49,6 +49,7 @@ void print_eval_usage(std::ostream& out) {
       << "Evaluate <formula> on a fresh empty workbook and print the result.\n"
       << "Cell-level Excel errors (#NAME?, #DIV/0!, ...) print to stdout and\n"
       << "do NOT cause a non-zero exit code; only structural failures do.\n";
+  print_profile_option(out);
 }
 
 // Parses `--repeat` argument from `args[idx]`. Returns the parsed
@@ -132,11 +133,12 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
   std::string_view formula;
   bool formula_seen = false;
   bool options_ended = false;
+  std::optional<std::string_view> profile_id;
   int exit_code = 0;
 
   for (std::size_t i = 0; i < args.size(); ++i) {
     const std::string_view a = args[i];
-    switch (handle_common_option(a, options_ended, print_eval_usage, "eval", out, err, exit_code)) {
+    switch (handle_common_option(args, i, options_ended, profile_id, print_eval_usage, "eval", out, err, exit_code)) {
       case CommonOption::kConsumed:
         continue;
       case CommonOption::kExit:
@@ -185,6 +187,10 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
 
   WorkbookGuard wb;
   if (auto rc = fm_workbook_create_empty(&wb.handle); rc != 0) {
+    emit_last_error(err, "eval");
+    return rc;
+  }
+  if (auto rc = apply_excel_profile(wb.handle, profile_id); rc != 0) {
     emit_last_error(err, "eval");
     return rc;
   }

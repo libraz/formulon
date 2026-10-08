@@ -26,7 +26,7 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Dict, Iterator, List, NamedTuple, Optional, Sequence, Union
+from typing import Dict, Iterator, List, Literal, NamedTuple, Optional, Sequence, Union, cast
 
 from . import _structs as S
 from ._c import LIB, FormulonError, ValueKind, _sint, _uint, fm_value_t_size
@@ -3513,8 +3513,15 @@ class Workbook:
         h = self._require()
         _check(LIB.fm_workbook_clear_pinned_now(h), "fm_workbook_clear_pinned_now")
 
-    def excel_profile_id(self) -> str:
-        """Return the workbook's active Excel formula profile id."""
+    def excel_profile_id(
+        self,
+    ) -> Literal["mac-365-ja_JP", "win-365-ja_JP", "mac-365-en_US", "win-365-en_US"]:
+        """Return the active Excel formula profile id.
+
+        New workbooks default to ``win-365-en_US``. Select ja-JP behaviour
+        with ``mac-365-ja_JP`` or ``win-365-ja_JP`` using
+        :meth:`set_excel_profile_id`.
+        """
         h = self._require()
         out = _alloc_out_ptr()
         try:
@@ -3522,12 +3529,22 @@ class Workbook:
                 LIB.fm_workbook_excel_profile_id(h, out),
                 "fm_workbook_excel_profile_id",
             )
-            return LIB.read_cstr(LIB.read_u32(out))
+            return cast(
+                Literal["mac-365-ja_JP", "win-365-ja_JP", "mac-365-en_US", "win-365-en_US"],
+                LIB.read_cstr(LIB.read_u32(out)),
+            )
         finally:
             LIB.free(out)
 
-    def set_excel_profile_id(self, profile_id: str) -> None:
-        """Set the workbook's Excel formula profile by id."""
+    def set_excel_profile_id(
+        self,
+        profile_id: Literal["mac-365-ja_JP", "win-365-ja_JP", "mac-365-en_US", "win-365-en_US"],
+    ) -> None:
+        """Set the workbook's Excel formula profile by id.
+
+        New workbooks use ``win-365-en_US`` by default. Pass
+        ``mac-365-ja_JP`` or ``win-365-ja_JP`` to select ja-JP behaviour.
+        """
         h = self._require()
         pid_ptr, _ = LIB.alloc_utf8(profile_id)
         try:

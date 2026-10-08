@@ -32,6 +32,7 @@ void print_paginate_usage(std::ostream& out) {
       << "Resolve a worksheet's print area, automatic page breaks, and physical page count.\n"
       << "INDEX is zero-based and defaults to 0. Output coordinates are zero-based inclusive.\n"
       << "  --           end options; the next token is the input path\n";
+  print_profile_option(out);
 }
 
 bool parse_sheet_index(std::string_view text, std::size_t& out) {
@@ -51,10 +52,12 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   std::size_t sheet_index = 0;
   bool input_seen = false;
   bool options_ended = false;
+  std::optional<std::string_view> profile_id;
   int exit_code = 0;
   for (std::size_t i = 0; i < args.size(); ++i) {
     const std::string_view arg = args[i];
-    switch (handle_common_option(arg, options_ended, print_paginate_usage, "paginate", out, err, exit_code)) {
+    switch (handle_common_option(args, i, options_ended, profile_id, print_paginate_usage, "paginate", out, err,
+                                 exit_code)) {
       case CommonOption::kConsumed:
         continue;
       case CommonOption::kExit:
@@ -94,6 +97,10 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
   WorkbookGuard workbook;
   if (const auto status = fm_workbook_load(bytes.data(), bytes.size(), &workbook.handle); status != 0) {
+    emit_last_error(err, "paginate");
+    return exit_code_for_status(status);
+  }
+  if (const auto status = apply_excel_profile(workbook.handle, profile_id); status != 0) {
     emit_last_error(err, "paginate");
     return exit_code_for_status(status);
   }

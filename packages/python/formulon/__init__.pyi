@@ -6,6 +6,7 @@ from typing import (
     Dict,
     Iterator,
     List,
+    Literal,
     Mapping,
     NamedTuple,
     Optional,
@@ -1525,8 +1526,15 @@ class Workbook:
         second: int = ...,
     ) -> None: ...
     def clear_pinned_now(self) -> None: ...
-    def excel_profile_id(self) -> str: ...
-    def set_excel_profile_id(self, profile_id: str) -> None: ...
+    # New workbooks default to win-365-en_US. Select ja-JP behaviour with
+    # mac-365-ja_JP or win-365-ja_JP.
+    def excel_profile_id(
+        self,
+    ) -> Literal["mac-365-ja_JP", "win-365-ja_JP", "mac-365-en_US", "win-365-en_US"]: ...
+    def set_excel_profile_id(
+        self,
+        profile_id: Literal["mac-365-ja_JP", "win-365-ja_JP", "mac-365-en_US", "win-365-en_US"],
+    ) -> None: ...
 
     # Save.
     def save(self) -> bytes: ...

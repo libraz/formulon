@@ -2296,8 +2296,10 @@ FM_API fm_status_t fm_workbook_clear_pinned_now(fm_workbook_t* wb);
  * @brief Returns the workbook's active Excel formula profile id.
  *
  * The returned pointer is a static view into Formulon's profile table and
- * remains valid for the process lifetime. Current ids are:
- * `mac-365-ja_JP`, `win-365-ja_JP`.
+ * remains valid for the process lifetime. New workbooks default to
+ * `win-365-en_US`. The corresponding setter accepts `mac-365-ja_JP` or
+ * `win-365-ja_JP` for ja-JP behaviour; the complete supported set is
+ * `mac-365-ja_JP`, `win-365-ja_JP`, `mac-365-en_US`, `win-365-en_US`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb` or `out_profile_id` is NULL.
@@ -2306,6 +2308,10 @@ FM_API fm_status_t fm_workbook_excel_profile_id(const fm_workbook_t* wb, const c
 
 /**
  * @brief Sets the workbook's Excel formula profile by id.
+ *
+ * New workbooks use `win-365-en_US` by default. Pass `mac-365-ja_JP` or
+ * `win-365-ja_JP` to select ja-JP behaviour. The other supported ids are
+ * `mac-365-en_US` and `win-365-en_US`.
  *
  * Existing cached formula values are not recomputed until the caller drives
  * `fm_workbook_recalc` or an equivalent partial recalc.

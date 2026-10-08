@@ -29,8 +29,9 @@ void print_top_usage(std::ostream& out) {
       << "  paginate <in> [--sheet N]\n"
       << "                          Resolve print area, page breaks, and page count.\n"
       << "\n"
-      << "Common options:\n"
-      << "  -h, --help              Show this help (or per-subcommand help).\n"
+      << "Common options:\n";
+  formulon::cli::print_profile_option(out);
+  out << "  -h, --help              Show this help (or per-subcommand help).\n"
       << "  --version               Print the engine version and exit.\n";
 }
 

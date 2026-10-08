@@ -7,6 +7,7 @@
 
 set(FORMULON_CLI_TEST_SOURCES
   cli_commands_version_eval_test.cpp
+  cli_profile_test.cpp
   cli_recalc_semantics_test.cpp
   cli_atomic_paths_test.cpp
   cli_dump_paginate_test.cpp

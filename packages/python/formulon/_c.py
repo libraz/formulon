@@ -21,6 +21,14 @@ WASM function returns. Borrowed return pointers (e.g. text from
 decoded eagerly into Python ``str`` so the result outlives any
 subsequent WASM mutation.
 
+Excel formula profiles
+----------------------
+
+New workbooks use ``win-365-en_US`` by default. The profile getter returns
+one of ``mac-365-ja_JP``, ``win-365-ja_JP``, ``mac-365-en_US``, or
+``win-365-en_US``; the setter accepts those ids, with either ``ja_JP`` id
+selecting Japanese behaviour.
+
 The ``fm_value_t`` POD has the wasm32 layout::
 
     offset 0: int32  kind

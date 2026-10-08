@@ -28,11 +28,14 @@
 #ifndef FORMULON_CLI_CLI_H_
 #define FORMULON_CLI_CLI_H_
 
+#include <optional>
 #include <ostream>
+#include <string>
 #include <string_view>
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "excel_profile.h"
 #include "utils/error.h"
 
 namespace formulon {
@@ -42,6 +45,31 @@ namespace cli {
 /// by the call frame in `main`; handlers must not retain the views
 /// across function boundaries.
 using ArgList = std::vector<std::string_view>;
+
+/// Writes the supported profile ids, comma-separated, from the engine's table.
+inline void print_profile_ids(std::ostream& out) {
+  const char* separator = "";
+  for (const detail::ExcelProfileIdEntry& entry : detail::kExcelProfileIds) {
+    out << separator << entry.id;
+    separator = ", ";
+  }
+}
+
+inline void print_profile_option(std::ostream& out) {
+  out << "  --profile <id>        Select the Excel formula profile (default: "
+      << excel_profile_id(default_excel_profile()) << ").\n"
+      << "                        Supported ids: ";
+  print_profile_ids(out);
+  out << ".\n";
+}
+
+inline fm_status_t apply_excel_profile(fm_workbook_t* workbook, const std::optional<std::string_view>& profile_id) {
+  if (!profile_id.has_value()) {
+    return 0;
+  }
+  const std::string id(*profile_id);
+  return fm_workbook_set_excel_profile_id(workbook, id.c_str());
+}
 
 /// Generic usage exit code. Mirrors sysexits(3) `EX_USAGE = 64`.
 inline constexpr int kExitUsage = 64;
@@ -86,16 +114,21 @@ inline int print_version(std::ostream& out, std::ostream& err) {
 /// Outcome of `handle_common_option`.
 enum class CommonOption {
   kNotCommon,  ///< The argument is not a shared option; the handler keeps parsing it.
-  kConsumed,   ///< The argument was a shared option with no further effect (`--`).
+  kConsumed,   ///< The argument was a shared option (`--`, or `--profile` and its value).
   kExit,       ///< The invocation is finished; return `exit_code`.
 };
 
 /// Handles the options every subcommand shares: `--` (ends option parsing,
 /// recorded in `options_ended`), `-h | --help` (prints `print_usage_fn` to
-/// `out`) and `--version`. Once `options_ended` is set nothing is shared.
-inline CommonOption handle_common_option(std::string_view arg, bool& options_ended,
+/// `out`), `--version`, and `--profile <id>`. The profile option validates
+/// one of the four supported ids, stores it in `profile_id`, and advances
+/// `index` over its value; repeating it replaces the previous value. Once
+/// `options_ended` is set nothing is shared.
+inline CommonOption handle_common_option(const ArgList& args, std::size_t& index, bool& options_ended,
+                                         std::optional<std::string_view>& profile_id,
                                          void (*print_usage_fn)(std::ostream&), std::string_view subcommand,
                                          std::ostream& out, std::ostream& err, int& exit_code) {
+  const std::string_view arg = args[index];
   if (options_ended) {
     return CommonOption::kNotCommon;
   }
@@ -112,6 +145,26 @@ inline CommonOption handle_common_option(std::string_view arg, bool& options_end
     exit_code = print_version(out, err);
     return CommonOption::kExit;
   }
+  if (arg == "--profile") {
+    if (index + 1 >= args.size()) {
+      err << "formulon: " << subcommand << ": --profile requires a value\n";
+      exit_code = kExitUsage;
+      return CommonOption::kExit;
+    }
+    const std::string_view value = args[index + 1];
+    ExcelProfile parsed{};
+    if (!parse_excel_profile_id(value, &parsed)) {
+      err << "formulon: " << subcommand << ": invalid Excel profile id '" << value << "'\n"
+          << "formulon: " << subcommand << ": supported ids: ";
+      print_profile_ids(err);
+      err << "\n";
+      exit_code = kExitUsage;
+      return CommonOption::kExit;
+    }
+    profile_id = value;
+    ++index;
+    return CommonOption::kConsumed;
+  }
   return CommonOption::kNotCommon;
 }
 
@@ -120,7 +173,7 @@ inline CommonOption handle_common_option(std::string_view arg, bool& options_end
 /// `args` carries the post-`eval` arguments. The first non-flag argument
 /// is the formula text (with or without a leading `=`).
 ///
-/// Supported flags: `--json`, `--repeat N` (re-evaluate `N` times and
+/// Supported flags: the common options above, `--json`, `--repeat N` (re-evaluate `N` times and
 /// report timing on stderr for every `N` the flag accepts, including 1),
 /// `-h | --help`, and `--` to end option parsing before a formula
 /// beginning with `-`.
@@ -145,7 +198,7 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err);
 /// `args` carries the post-`recalc` arguments. The first non-flag
 /// argument is the input path.
 ///
-/// Supported flags: `-o | --output PATH` (required), `--iterative`
+/// Supported flags: the common options above, `-o | --output PATH` (required), `--iterative`
 /// (enable iterative calc), `--threads N` (opt in to parallel recalc with
 /// an inclusive 0..8 worker setting), `--quiet`, `-h | --help`, and `--` to
 /// end option parsing before the input path. All options, including `-o`,
@@ -158,15 +211,15 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err);
 /// `args` carries the post-`dump` arguments. The first non-flag argument
 /// is the input path.
 ///
-/// Supported flags (mutually exclusive): `--formulas` (default),
+/// Supported flags: the common options above and (mutually exclusive): `--formulas` (default),
 /// `--values`, `--sheets`, `--metadata`, `-h | --help`, and `--` to end
 /// option parsing before an input path.
 int run_dump(const ArgList& args, std::ostream& out, std::ostream& err);
 
 /// `paginate` handler: resolve the print geometry of one worksheet.
 ///
-/// Supported flags: `--sheet INDEX` (0-based, default 0), `-h | --help`, and
-/// `--` to end option parsing before an input path.
+/// Supported flags: the common options above, `--sheet INDEX` (0-based,
+/// default 0), and `--` to end option parsing before an input path.
 int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err);
 
 /// Prints the top-level usage banner to `out`. Requested help is a

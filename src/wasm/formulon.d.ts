@@ -520,7 +520,13 @@ export enum CalcMode {
   AutoNoTable = 2,
 }
 
-export type ExcelProfileId = 'mac-365-ja_JP' | 'win-365-ja_JP';
+/**
+ * Full formula-behaviour profile id. New workbooks default to
+ * `win-365-en_US`; select Japanese behaviour with `mac-365-ja_JP` or
+ * `win-365-ja_JP`. The supported ids are `mac-365-ja_JP`,
+ * `win-365-ja_JP`, `mac-365-en_US`, and `win-365-en_US`.
+ */
+export type ExcelProfileId = 'mac-365-ja_JP' | 'win-365-ja_JP' | 'mac-365-en_US' | 'win-365-en_US';
 
 /**
  * A wall-clock reading in local civil fields, as read back from
@@ -2523,8 +2529,8 @@ export interface Workbook {
   setPinnedNow(year: number, month: number, day: number, hour: number, minute: number, second: number): Status;
   clearPinnedNow(): Status;
 
-  /**
-   * Full formula-behaviour profile id. Defaults to `win-365-ja_JP`.
+  /** Full formula-behaviour profile id. Defaults to `win-365-en_US`.
+   * Use `mac-365-ja_JP` or `win-365-ja_JP` to select Japanese behaviour.
    */
   excelProfileId(): StringResult<ExcelProfileId>;
   setExcelProfileId(profileId: ExcelProfileId): Status;

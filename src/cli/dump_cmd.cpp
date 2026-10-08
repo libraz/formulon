@@ -54,6 +54,7 @@ void print_dump_usage(std::ostream& out) {
       << "  --sheets    list sheet names in document order\n"
       << "  --metadata  list defined names, tables and passthrough parts\n"
       << "  --           end options; the next token is the input path\n";
+  print_profile_option(out);
 }
 
 // Emits every formula cell (`Sheet!A1 =formula`) or, for `kValues`, every
@@ -183,6 +184,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   std::string input_path;
   bool input_seen = false;
   bool options_ended = false;
+  std::optional<std::string_view> profile_id;
   int exit_code = 0;
 
   auto select_mode = [&](DumpMode m, std::string_view flag) -> bool {
@@ -197,7 +199,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
 
   for (std::size_t i = 0; i < args.size(); ++i) {
     const std::string_view a = args[i];
-    switch (handle_common_option(a, options_ended, print_dump_usage, "dump", out, err, exit_code)) {
+    switch (handle_common_option(args, i, options_ended, profile_id, print_dump_usage, "dump", out, err, exit_code)) {
       case CommonOption::kConsumed:
         continue;
       case CommonOption::kExit:
@@ -243,6 +245,11 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
 
   WorkbookGuard wb;
   if (auto rc = fm_workbook_load(bytes.data(), bytes.size(), &wb.handle); rc != 0) {
+    emit_last_error(err, "dump");
+    return rc;
+  }
+
+  if (auto rc = apply_excel_profile(wb.handle, profile_id); rc != 0) {
     emit_last_error(err, "dump");
     return rc;
   }
