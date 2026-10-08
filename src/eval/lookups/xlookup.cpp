@@ -23,6 +23,7 @@
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
 #include "eval/wildcard.h"
+#include "excel_locale.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/strings.h"
@@ -97,7 +98,7 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, i
     // case-insensitive compare so kana variants order together in
     // XLOOKUP / XMATCH approximate paths. Full-width digits are NOT
     // folded for lookups (Mac asymmetry — see jp_fold.h).
-    if (uses_mac_jp_text_folding(profile)) {
+    if (width_folding(profile) == WidthFolding::kMac) {
       *out_cmp = strings::case_insensitive_compare(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false),
                                                    fold_jp_text(lookup.as_text(), /*fold_fullwidth_digits=*/false));
     } else {
@@ -147,7 +148,7 @@ bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards, Ex
     // voicing mark onto its base (`ｶﾞ` -> `ガ`): a base + standalone ﾞ /
     // ﾟ is a malformed encoding both Windows and Mac compose before the
     // exact-match compare.
-    const bool jp_fold = uses_mac_jp_text_folding(profile);
+    const bool jp_fold = width_folding(profile) == WidthFolding::kMac;
     const std::string pat_lower = jp_fold ? fold_and_lower(lookup.as_text(), /*fold_fullwidth_digits=*/false)
                                           : strings::to_ascii_lower(compose_jp_halfwidth_voicing(lookup.as_text()));
     const std::string cell_lower = jp_fold ? fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/false)

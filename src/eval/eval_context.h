@@ -147,8 +147,7 @@ class EvalContext {
   /// `current_sheet` MUST be a sheet owned by `workbook` (no check is
   /// enforced). `workbook`, `current_sheet`, and `state` must outlive the
   /// context.
-  EvalContext(const Workbook& workbook, const Sheet& current_sheet, EvalState& state) noexcept
-      : current_sheet_(&current_sheet), state_(&state), workbook_(&workbook) {}
+  EvalContext(const Workbook& workbook, const Sheet& current_sheet, EvalState& state) noexcept;
 
   /// Workbook-aware, *state-less* factory. Unqualified refs resolve
   /// against `current_sheet`, qualified refs are looked up in `workbook`,
@@ -161,12 +160,7 @@ class EvalContext {
   /// `#REF!` on any back-edge inside the cycle.
   ///
   /// Both `workbook` and `current_sheet` must outlive the context.
-  static EvalContext workbook_only(const Workbook& workbook, const Sheet& current_sheet) noexcept {
-    EvalContext out;
-    out.current_sheet_ = &current_sheet;
-    out.workbook_ = &workbook;
-    return out;
-  }
+  static EvalContext workbook_only(const Workbook& workbook, const Sheet& current_sheet) noexcept;
 
   /// Resolves an A1 reference to the cell's cached `Value` (non-recursive).
   ///

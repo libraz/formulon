@@ -15,6 +15,10 @@
 #include "gtest/gtest.h"
 #include "tests/oracle/oracle_test_support.h"
 
+#ifndef FORMULON_ORACLE_PRIMARY_PROFILE_ID
+#define FORMULON_ORACLE_PRIMARY_PROFILE_ID "mac-365-ja_JP"
+#endif
+
 namespace formulon {
 namespace tests {
 namespace oracle {
@@ -57,10 +61,14 @@ TEST_P(OracleTest, Matches) {
   // Build an in-memory workbook seeded with the case's setup cells.
   Workbook wb = Workbook::create();
   ExcelProfile profile;
-  if (!param.variant.empty() && parse_excel_profile_id(param.variant, &profile)) {
+  if (param.variant.empty()) {
+    ASSERT_TRUE(parse_excel_profile_id(FORMULON_ORACLE_PRIMARY_PROFILE_ID, &profile))
+        << "invalid primary oracle profile: " << FORMULON_ORACLE_PRIMARY_PROFILE_ID;
+    wb.set_excel_profile(profile);
+  } else if (parse_excel_profile_id(param.variant, &profile)) {
     wb.set_excel_profile(profile);
   } else if (param.variant.rfind("win-", 0) == 0) {
-    wb.set_excel_profile(profile_from_host(ExcelHost::kWin365));
+    wb.set_excel_profile(win_365_ja_jp_profile());
   } else {
     wb.set_excel_profile(mac_365_ja_jp_profile());
   }

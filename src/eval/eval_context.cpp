@@ -35,6 +35,18 @@
 
 namespace formulon {
 namespace eval {
+
+EvalContext::EvalContext(const Workbook& workbook, const Sheet& current_sheet, EvalState& state) noexcept
+    : current_sheet_(&current_sheet), state_(&state), workbook_(&workbook), excel_profile_(workbook.excel_profile()) {}
+
+EvalContext EvalContext::workbook_only(const Workbook& workbook, const Sheet& current_sheet) noexcept {
+  EvalContext out;
+  out.current_sheet_ = &current_sheet;
+  out.workbook_ = &workbook;
+  out.excel_profile_ = workbook.excel_profile();
+  return out;
+}
+
 namespace {
 
 // Resolves the target sheet for a reference given a (possibly empty) sheet

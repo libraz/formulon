@@ -27,6 +27,7 @@
 #include "eval/jp_fold.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
+#include "excel_locale.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -113,7 +114,7 @@ bool resolve_field_column(const Value& field_value, const std::vector<Value>& db
     // `dsum_field_arg_halfwidth_vs_fullwidth_header` (expects #VALUE!,
     // i.e. no match) versus the hira/full-width-Latin/full-width-digit
     // sibling cases (which all match).
-    const bool jp_fold = uses_mac_jp_text_folding(profile);
+    const bool jp_fold = width_folding(profile) == WidthFolding::kMac;
     const std::string folded_needle =
         jp_fold ? fold_jp_text(field_value.as_text(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false)
                 : std::string(field_value.as_text());
@@ -164,7 +165,7 @@ std::uint32_t find_db_column(const Value& header_needle, const std::vector<Value
   // `dsum_criteria_header_halfwidth_vs_fullwidth_db_header` (expects 0,
   // i.e. no match) versus the hira and full-width-Latin sibling cases
   // (which both match).
-  const bool jp_fold = uses_mac_jp_text_folding(profile);
+  const bool jp_fold = width_folding(profile) == WidthFolding::kMac;
   const std::string folded_needle =
       jp_fold ? fold_jp_text(needle_coerced.value(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false)
               : needle_coerced.value();

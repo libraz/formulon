@@ -156,6 +156,7 @@ endforeach()
 # parameter with `__<tag>` so primary and variant test names never collide.
 # Built only when FORMULON_ORACLE_VARIANTS=ON; defaults to OFF so the
 # baseline build tree stays unchanged.
+# The dedicated en-US oracle below is built independently of this option.
 #
 # Variant directories are scanned at configure time. The discovered list is
 # baked into the binary as a compile-time default; the env var
@@ -241,6 +242,41 @@ target_compile_definitions(formulon_ironcalc_oracle_tests
   PRIVATE
     FORMULON_ORACLE_SKIP_FILE="${_formula_oracle_skip_file}"
 )
+
+# Build-only English oracle for measuring locale differences before it joins
+# CTest coverage. Its cases keep the same names as the primary oracle.
+set(_en_us_oracle_skip_file "")
+if(Python3_Interpreter_FOUND)
+  set(_en_us_oracle_skip_file "${CMAKE_CURRENT_BINARY_DIR}/en_us_oracle_skips.json")
+  execute_process(
+    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
+            --track formula --target mac-365-en_US
+            --out ${_en_us_oracle_skip_file}
+    RESULT_VARIABLE _en_us_skip_rc
+    OUTPUT_QUIET
+    ERROR_QUIET
+  )
+  if(NOT _en_us_skip_rc EQUAL 0)
+    set(_en_us_oracle_skip_file "")
+  endif()
+endif()
+set_property(
+  DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/variants/mac-365-en_US/divergence.yaml"
+)
+
+add_executable(formulon_oracle_en_us_tests ${FORMULON_ORACLE_TEST_SOURCES})
+target_link_libraries(formulon_oracle_en_us_tests PRIVATE formulon_static gtest_main)
+target_include_directories(formulon_oracle_en_us_tests
+  PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}
+)
+target_compile_definitions(formulon_oracle_en_us_tests
+  PRIVATE
+    FORMULON_ORACLE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/variants/mac-365-en_US/golden"
+    FORMULON_ORACLE_PRIMARY_PROFILE_ID="mac-365-en_US"
+    FORMULON_ORACLE_SKIP_FILE="${_en_us_oracle_skip_file}"
+)
+formulon_apply_warnings(formulon_oracle_en_us_tests)
 
 # A directory under variants/ is not automatically an active oracle.  In
 # particular, the historical win-365-ja_JP capture is deliberately kept for

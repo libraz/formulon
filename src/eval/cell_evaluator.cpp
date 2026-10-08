@@ -68,7 +68,6 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
   // chain. Ad-hoc evaluation, which does want recursive resolution, builds
   // its own `EvalContext` rather than coming through this recalc helper.
   EvalContext ctx = EvalContext::workbook_only(workbook, sheet)
-                        .with_excel_profile(workbook.excel_profile())
                         .with_date1904(workbook.date1904())
                         .with_pinned_now(workbook.pinned_now())
                         .with_mutable_sheet(sheet)

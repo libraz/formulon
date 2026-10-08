@@ -13,6 +13,7 @@
 #include "eval/date_text_parse.h"
 #include "eval/jp_fold.h"
 #include "eval/wildcard.h"
+#include "excel_locale.h"
 #include "utils/strings.h"
 #include "utils/text_ops.h"
 #include "value.h"
@@ -154,7 +155,7 @@ std::string fold_fullwidth_digits_only(std::string_view input) {
 }
 
 std::string fold_criteria_text_for_profile(std::string_view input, ExcelProfile profile) {
-  if (uses_mac_jp_text_folding(profile)) {
+  if (width_folding(profile) == WidthFolding::kMac) {
     return fold_jp_text(input);
   }
   return fold_fullwidth_digits_only(input);

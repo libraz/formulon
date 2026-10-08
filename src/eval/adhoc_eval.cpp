@@ -53,7 +53,6 @@ Value reduce_to_scalar(Value v) {
 EvalContext make_readonly_context(const Workbook& workbook, const Sheet& sheet, EvalState& state, std::uint32_t row,
                                   std::uint32_t col) {
   return EvalContext(workbook, sheet, state)
-      .with_excel_profile(workbook.excel_profile())
       .with_date1904(workbook.date1904())
       .with_pinned_now(workbook.pinned_now())
       .with_formula_cell(row, col)

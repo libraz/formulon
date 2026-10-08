@@ -51,7 +51,7 @@ inline EvalContext win_context() {
 }
 
 inline EvalContext host_context(ExcelHost host) {
-  return context_with_profile(profile_from_host(host));
+  return context_with_profile(host == ExcelHost::kMac365 ? mac_365_ja_jp_profile() : win_365_ja_jp_profile());
 }
 
 inline EvalContext context_with_profile(const Workbook& wb, const Sheet& sheet, EvalState& state,

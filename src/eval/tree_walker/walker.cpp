@@ -27,6 +27,7 @@
 #include "eval/defined_name_resolve.h"
 #include "eval/dynamic_array/anchor.h"
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/eval_state.h"
 #include "eval/external_ref.h"
 #include "eval/function_registry.h"
@@ -840,6 +841,8 @@ namespace {
 // spill handling, `first_element_only` reduces it to its first element.
 Value evaluate_top(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                    bool first_element_only) {
+  const ScopedEvalProfile profile_scope(ctx.excel_profile());
+
   // Allocate the depth counters on this stack frame iff the inbound
   // context does not already carry them. `EvalContext::resolve_ref`
   // recursively re-enters `evaluate()` when a referenced cell is a

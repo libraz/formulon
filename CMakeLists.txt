@@ -119,6 +119,7 @@ set(FORMULON_CORE_SOURCES
   src/utils/thread_launch.cpp
   src/utils/utf8_length.cpp
   src/external_book.cpp
+  src/excel_locale.cpp
   src/auto_filter.cpp
   src/styles.cpp
   src/threaded_comment.cpp

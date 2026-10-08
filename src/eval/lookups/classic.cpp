@@ -25,6 +25,7 @@
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "eval/wildcard.h"
+#include "excel_locale.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -41,7 +42,7 @@ namespace {
 // voicing mark onto its base (`ｶﾞ` -> `ガ`) before ASCII-lowercasing, matching
 // XLOOKUP's `xlookup_exact_eq` so VLOOKUP / HLOOKUP / MATCH agree with it.
 std::string lookup_text_key(std::string_view s, ExcelProfile profile) {
-  if (uses_mac_jp_text_folding(profile)) {
+  if (width_folding(profile) == WidthFolding::kMac) {
     return fold_and_lower(s, /*fold_fullwidth_digits=*/false);
   }
   return strings::to_ascii_lower(compose_jp_halfwidth_voicing(s));
@@ -53,7 +54,7 @@ std::string lookup_text_key(std::string_view s, ExcelProfile profile) {
 // folds broadly (`fold_jp_text`); other profiles compose the half-width
 // voicing mark, mirroring `lookup_text_key`.
 std::string lookup_text_cmp_key(std::string_view s, ExcelProfile profile) {
-  if (uses_mac_jp_text_folding(profile)) {
+  if (width_folding(profile) == WidthFolding::kMac) {
     return fold_jp_text(s, /*fold_fullwidth_digits=*/false);
   }
   return compose_jp_halfwidth_voicing(s);

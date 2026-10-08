@@ -162,6 +162,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/scalar_ops_test.cpp
   unit/eval/eval_context_test.cpp
   unit/eval/formula_profile_test.cpp
+  unit/eval/excel_locale_test.cpp
+  unit/eval/eval_profile_scope_test.cpp
   unit/eval/eval_recursion_depth_test.cpp
   unit/eval/eval_state_test.cpp
   unit/eval/dep_graph_test.cpp
