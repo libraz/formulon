@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T04:37:32Z"
+    "generated_at": "2026-10-08T06:50:06Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -866,6 +866,55 @@
       "expect": {
         "kind": "number",
         "value": 0.0670859628790318
+      }
+    },
+    {
+      "id": "binominv_p0",
+      "formula": "=BINOM.INV(10,0,0.8)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "binominv_p1",
+      "formula": "=BINOM.INV(10,1,0.8)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "binominv_p_blank",
+      "formula": "=BINOM.INV(10,A1,0.8)",
+      "setup": {
+        "A1": {
+          "kind": "blank"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "binominv_p_omit",
+      "formula": "=BINOM.INV(10,,0.8)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "pf_binomdist",
+      "formula": "=BINOM.DIST(1,2.9999999,0.5,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.49999999999999994
       }
     }
   ]

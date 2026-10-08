@@ -380,3 +380,35 @@ cases:
     description: "Error in an operand propagates: 1 + #DIV/0! -> #DIV/0!."
     setup: { C1: 1, C2: "=1/0", C3: 3 }
     formula: "=SUM(C1:C3)"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: near_offset
+    description: "Excel 365: 2"
+    formula: "=ROWS(OFFSET(A1,0,0,2.9999999,1))"
+
+  - id: tr_trimrange_args
+    description: "Excel 365: 3"
+    setup: { A2: 1, A3: 2 }
+    formula: "=ROWS(TRIMRANGE(A1:A10,2))"
+
+  - id: tr_trimrange_args0
+    description: "Excel 365: 10"
+    setup: { A2: 1, A3: 2 }
+    formula: "=ROWS(TRIMRANGE(A1:A10,0))"
+
+  - id: pf_take
+    description: "Excel 365: 1"
+    formula: "=ROWS(TAKE({1;2;3},1.9999999))"
+
+  - id: snap_index_area
+    description: "Excel 365: 1"
+    setup: { A1: 1, A2: 2, B1: 3, B2: 4, B3: 5 }
+    formula: "=ROWS(INDEX((A1:A2,B1:B3),1,1,1.9999999))"
+
+  - id: snap_drop_n
+    description: "Excel 365: 3"
+    formula: "=ROWS(DROP({1;2;3},0.9999999))"
+
+  - id: snap_wrapcols
+    description: "Excel 365: 1"
+    formula: "=ROWS(WRAPCOLS({1,2,3,4},1.9999999))"

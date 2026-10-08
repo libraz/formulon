@@ -362,3 +362,32 @@ cases:
   - id: binom_inv_probability_omitted_is_num
     description: "BINOM.INV with probability_s omitted is #NUM!"
     formula: "=BINOM.INV(10,,0.5)"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: gammadist_zero_a1
+    description: "Excel 365: #NUM!"
+    formula: "=GAMMA.DIST(0,1,1,FALSE)"
+
+  - id: gammadist_zero_a2
+    description: "Excel 365: 0"
+    formula: "=GAMMA.DIST(0,2,1,FALSE)"
+
+  - id: gammadist_zero_a05
+    description: "Excel 365: #NUM!"
+    formula: "=GAMMA.DIST(0,0.5,1,FALSE)"
+
+  - id: betainv_roundtrip
+    description: "Excel 365: 0.9000004941424153"
+    formula: "=BETA.INV(BETA.DIST(0.9,0.1,10,TRUE),0.1,10)"
+
+  - id: gd_0_15
+    description: "Excel 365: 0"
+    formula: "=GAMMA.DIST(0,1.5,1,FALSE)"
+
+  - id: gd_0_1_cdf
+    description: "Excel 365: 0"
+    formula: "=GAMMA.DIST(0,1,1,TRUE)"
+
+  - id: gd_0_05_cdf
+    description: "Excel 365: 0"
+    formula: "=GAMMA.DIST(0,0.5,1,TRUE)"

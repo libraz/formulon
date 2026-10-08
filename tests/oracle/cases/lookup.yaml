@@ -996,3 +996,113 @@ cases:
 
   - id: choosecols_array_index_two_dimensional
     formula: "=CHOOSECOLS({1,2,3},{1,2;2,3})"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: index_col_near
+    description: "Excel 365: 2"
+    setup: { A1: 1, B1: 2 }
+    formula: "=INDEX(A1:B1,1,1.9999999)"
+
+  - id: choose_near
+    description: "Excel 365: \"a\""
+    formula: "=CHOOSE(1.9999999,\"a\",\"b\")"
+
+  - id: index_col_6
+    description: "Excel 365: 1"
+    setup: { A1: 1, B1: 2, C1: 3 }
+    formula: "=INDEX(A1:C1,1,1.999999)"
+
+  - id: index_col_95
+    description: "Excel 365: 1"
+    setup: { A1: 1, B1: 2, C1: 3 }
+    formula: "=INDEX(A1:C1,1,1.9999995)"
+
+  - id: index_col_5
+    description: "Excel 365: 1"
+    setup: { A1: 1, B1: 2, C1: 3 }
+    formula: "=INDEX(A1:C1,1,1.5)"
+
+  - id: index_col_8
+    description: "Excel 365: 2"
+    setup: { A1: 1, B1: 2, C1: 3 }
+    formula: "=INDEX(A1:C1,1,1.99999999)"
+
+  - id: near_choose
+    description: "Excel 365: \"b\""
+    formula: "=CHOOSE(2.9999999,\"a\",\"b\",\"c\")"
+
+  - id: th_idx_230
+    description: "Excel 365: 2"
+    formula: "=INDEX({1,2,3},1,1.99999977)"
+
+  - id: th_idx_235
+    description: "Excel 365: 2"
+    formula: "=INDEX({1,2,3},1,1.999999765)"
+
+  - id: th_idx_238
+    description: "Excel 365: 2"
+    formula: "=INDEX({1,2,3},1,1.9999997616)"
+
+  - id: th_idx_239
+    description: "Excel 365: 1"
+    formula: "=INDEX({1,2,3},1,1.999999761)"
+
+  - id: th_idx_240
+    description: "Excel 365: 1"
+    formula: "=INDEX({1,2,3},1,1.99999976)"
+
+  - id: th_idx_245
+    description: "Excel 365: 1"
+    formula: "=INDEX({1,2,3},1,1.999999755)"
+
+  - id: th_idx_250
+    description: "Excel 365: 1"
+    formula: "=INDEX({1,2,3},1,1.99999975)"
+
+  - id: th_idx_260
+    description: "Excel 365: 1"
+    formula: "=INDEX({1,2,3},1,1.99999974)"
+
+  - id: pf_index_row
+    description: "Excel 365: 2"
+    formula: "=INDEX({1;2;3},1.9999999)"
+
+  - id: pf_match_type
+    description: "Excel 365: 2"
+    formula: "=MATCH(2,{1,2,3},0.9999999)"
+
+  - id: pf_vlookup_col
+    description: "Excel 365: 2"
+    formula: "=VLOOKUP(1,{1,2,3},1.9999999,FALSE)"
+
+  - id: pf_hlookup_row
+    description: "Excel 365: 2"
+    formula: "=HLOOKUP(1,{1;2;3},1.9999999,FALSE)"
+
+  - id: index_col_04
+    description: "Excel 365: 1x3 array [1, 2, 3]"
+    formula: "=INDEX({1,2,3},1,0.4)"
+
+  - id: index_col_09999999
+    description: "Excel 365: 1"
+    formula: "=INDEX({1,2,3},1,0.9999999)"
+
+  - id: index_col_0999999
+    description: "Excel 365: 1x3 array [1, 2, 3]"
+    formula: "=INDEX({1,2,3},1,0.999999)"
+
+  - id: index_row_neg_tiny
+    description: "Excel 365: 1"
+    formula: "=INDEX({1,2,3},-0.0000001,1)"
+
+  - id: vlookup_col_09999999
+    description: "Excel 365: 1"
+    formula: "=VLOOKUP(1,{1,2},0.9999999,FALSE)"
+
+  - id: vlookup_col_0999999
+    description: "Excel 365: #VALUE!"
+    formula: "=VLOOKUP(1,{1,2},0.999999,FALSE)"
+
+  - id: vlookup_col_25
+    description: "Excel 365: 2"
+    formula: "=VLOOKUP(1,{1,2},2.5,FALSE)"

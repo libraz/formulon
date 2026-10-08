@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T03:47:54Z"
+    "generated_at": "2026-10-08T06:50:06Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -521,6 +521,145 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "count_3d",
+      "formula": "=COUNT(Sheet1:Sheet3!A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "Sheet2!A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "Sheet2!A2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sheet3!A2": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "count_3d_range",
+      "formula": "=COUNT(Sheet1:Sheet3!A1:A2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "Sheet2!A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "Sheet2!A2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sheet3!A2": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "da_count_bool",
+      "formula": "=COUNT(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "da_count_numtext",
+      "formula": "=COUNT(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "da_count_badtext",
+      "formula": "=COUNT(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "count_3d_err",
+      "formula": "=COUNT(Sheet1:Sheet2!A1:A2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "Sheet2!A2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "count_3d_bool",
+      "formula": "=COUNT(Sheet1:Sheet2!A1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "Sheet2!A1": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
       }
     }
   ]

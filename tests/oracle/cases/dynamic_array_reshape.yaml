@@ -492,3 +492,32 @@ cases:
     description: "A sheet-qualified trim reference"
     setup: { Sheet2!A1: 1, Sheet2!A2: 2 }
     formula: '=ROWS(Sheet2!A1:.A10)'
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: choosecols_arr1
+    description: "Excel 365: 2"
+    formula: "=CHOOSECOLS({1,2,3},{2})"
+
+  - id: chooserows_arr1
+    description: "Excel 365: 2"
+    formula: "=CHOOSEROWS({1;2;3},{2})"
+
+  - id: trimrange_empty
+    description: "Excel 365: #REF!"
+    formula: "=TRIMRANGE(A1:A10)"
+
+  - id: cc_vertical_idx
+    description: "Excel 365: 1x2 array [2, 3]"
+    formula: "=CHOOSECOLS({1,2,3},{2;3})"
+
+  - id: cc_2d_idx
+    description: "Excel 365: #VALUE!"
+    formula: "=CHOOSECOLS({1,2,3},{1,2;3,1})"
+
+  - id: cc_neg_arr
+    description: "Excel 365: 1x2 array [3, 1]"
+    formula: "=CHOOSECOLS({1,2,3},{-1,1})"
+
+  - id: snap_choosecols_idx
+    description: "Excel 365: 1"
+    formula: "=CHOOSECOLS({1,2,3},1.9999999)"

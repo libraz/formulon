@@ -237,3 +237,9 @@ cases:
       'Sheet2!A1': 1
       'Sheet3!A1': 1
     formula: '=COUNTIF(Sheet1:Sheet3!A1,1)'
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: countblank_3d
+    description: "Excel 365: #VALUE!"
+    setup: { A1: 1, Sheet2!A1: 1 }
+    formula: "=COUNTIF(Sheet1:Sheet2!A1,1)"

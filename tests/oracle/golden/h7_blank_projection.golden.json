@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T04:37:32Z"
+    "generated_at": "2026-10-08T06:50:06Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -685,6 +685,40 @@
       "expect": {
         "kind": "number",
         "value": 4.0
+      }
+    },
+    {
+      "id": "counta_3d_range",
+      "formula": "=COUNTA(Sheet1:Sheet3!A1:A2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "Sheet2!A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "Sheet2!A2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sheet3!A2": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
       }
     }
   ]

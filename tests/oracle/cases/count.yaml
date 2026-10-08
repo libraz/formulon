@@ -178,3 +178,36 @@ cases:
   - id: product_only_omitted_slots
     description: "PRODUCT(,) with no counted argument is 0"
     formula: "=PRODUCT(,)"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: count_3d
+    description: "Excel 365: 3"
+    setup: { A1: 1, A2: "x", Sheet2!A1: 2, Sheet2!A2: 5, Sheet3!A1: 3, Sheet3!A2: 6 }
+    formula: "=COUNT(Sheet1:Sheet3!A1)"
+
+  - id: count_3d_range
+    description: "Excel 365: 5"
+    setup: { A1: 1, A2: "x", Sheet2!A1: 2, Sheet2!A2: 5, Sheet3!A1: 3, Sheet3!A2: 6 }
+    formula: "=COUNT(Sheet1:Sheet3!A1:A2)"
+
+  - id: da_count_bool
+    description: "Excel 365: 4"
+    formula: "=COUNT(10,20,TRUE,FALSE)"
+
+  - id: da_count_numtext
+    description: "Excel 365: 4"
+    formula: "=COUNT(1,2,\"10\",\"20\")"
+
+  - id: da_count_badtext
+    description: "Excel 365: 2"
+    formula: "=COUNT(1,2,\"x\")"
+
+  - id: count_3d_err
+    description: "Excel 365: 2"
+    setup: { A1: 1, A2: "=1/0", Sheet2!A1: "x", Sheet2!A2: 4 }
+    formula: "=COUNT(Sheet1:Sheet2!A1:A2)"
+
+  - id: count_3d_bool
+    description: "Excel 365: 1"
+    setup: { A1: true, Sheet2!A1: 2 }
+    formula: "=COUNT(Sheet1:Sheet2!A1)"

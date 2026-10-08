@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T04:37:32Z"
+    "generated_at": "2026-10-08T06:50:06Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -191,6 +191,87 @@
       "expect": {
         "kind": "error",
         "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "da_stdev_omit",
+      "formula": "=STDEV(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.7386127875258306
+      }
+    },
+    {
+      "id": "da_stdev_bool",
+      "formula": "=STDEV(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.322910847297997
+      }
+    },
+    {
+      "id": "da_stdev_numtext",
+      "formula": "=STDEV(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.80814017448254
+      }
+    },
+    {
+      "id": "da_stdev_badtext",
+      "formula": "=STDEV(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_var_omit",
+      "formula": "=VAR(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.5
+      }
+    },
+    {
+      "id": "da_var_bool",
+      "formula": "=VAR(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 86.91666666666667
+      }
+    },
+    {
+      "id": "da_var_numtext",
+      "formula": "=VAR(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 77.58333333333333
+      }
+    },
+    {
+      "id": "da_var_badtext",
+      "formula": "=VAR(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "quartile_omit",
+      "formula": "=QUARTILE({3,4,6,7},)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
       }
     }
   ]

@@ -404,3 +404,8 @@ cases:
 
   - id: timevalue_marker_suffix
     formula: "=TIMEVALUE(\"6 pmx\")"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: tv_6_30_15pm
+    description: "Excel 365: 0.7710069444444444"
+    formula: "=TIMEVALUE(\"6:30:15 PM\")"

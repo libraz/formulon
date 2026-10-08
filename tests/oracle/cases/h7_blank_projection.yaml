@@ -120,3 +120,9 @@ cases:
     formula: "=COUNT(HSTACK(EXPAND({1},2,1,),{2;3}))"
   - id: hstack_expand_empty_pad_counta
     formula: "=COUNTA(HSTACK(EXPAND({1},2,1,),{2;3}))"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: counta_3d_range
+    description: "Excel 365: 6"
+    setup: { A1: 1, A2: "x", Sheet2!A1: 2, Sheet2!A2: 5, Sheet3!A1: 3, Sheet3!A2: 6 }
+    formula: "=COUNTA(Sheet1:Sheet3!A1:A2)"

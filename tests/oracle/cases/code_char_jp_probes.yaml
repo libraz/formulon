@@ -203,3 +203,8 @@ cases:
   - id: round_trip_char_code_kata
     description: "CHAR(CODE('ア')) = 'ア'"
     formula: '=CHAR(CODE("ア"))'
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: near_char
+    description: "Excel 365: 65"
+    formula: "=CODE(CHAR(65.9999999))"

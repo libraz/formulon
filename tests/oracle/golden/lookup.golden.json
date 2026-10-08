@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T03:47:54Z"
+    "generated_at": "2026-10-08T06:50:06Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -4515,6 +4515,317 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "index_col_near",
+      "formula": "=INDEX(A1:B1,1,1.9999999)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "choose_near",
+      "formula": "=CHOOSE(1.9999999,\"a\",\"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "index_col_6",
+      "formula": "=INDEX(A1:C1,1,1.999999)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "index_col_95",
+      "formula": "=INDEX(A1:C1,1,1.9999995)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "index_col_5",
+      "formula": "=INDEX(A1:C1,1,1.5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "index_col_8",
+      "formula": "=INDEX(A1:C1,1,1.99999999)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "near_choose",
+      "formula": "=CHOOSE(2.9999999,\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "th_idx_230",
+      "formula": "=INDEX({1,2,3},1,1.99999977)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "th_idx_235",
+      "formula": "=INDEX({1,2,3},1,1.999999765)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "th_idx_238",
+      "formula": "=INDEX({1,2,3},1,1.9999997616)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "th_idx_239",
+      "formula": "=INDEX({1,2,3},1,1.999999761)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "th_idx_240",
+      "formula": "=INDEX({1,2,3},1,1.99999976)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "th_idx_245",
+      "formula": "=INDEX({1,2,3},1,1.999999755)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "th_idx_250",
+      "formula": "=INDEX({1,2,3},1,1.99999975)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "th_idx_260",
+      "formula": "=INDEX({1,2,3},1,1.99999974)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "pf_index_row",
+      "formula": "=INDEX({1;2;3},1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "pf_match_type",
+      "formula": "=MATCH(2,{1,2,3},0.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "pf_vlookup_col",
+      "formula": "=VLOOKUP(1,{1,2,3},1.9999999,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "pf_hlookup_row",
+      "formula": "=HLOOKUP(1,{1;2;3},1.9999999,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "index_col_04",
+      "formula": "=INDEX({1,2,3},1,0.4)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "index_col_09999999",
+      "formula": "=INDEX({1,2,3},1,0.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "index_col_0999999",
+      "formula": "=INDEX({1,2,3},1,0.999999)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "index_row_neg_tiny",
+      "formula": "=INDEX({1,2,3},-0.0000001,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "vlookup_col_09999999",
+      "formula": "=VLOOKUP(1,{1,2},0.9999999,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "vlookup_col_0999999",
+      "formula": "=VLOOKUP(1,{1,2},0.999999,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "vlookup_col_25",
+      "formula": "=VLOOKUP(1,{1,2},2.5,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
       }
     }
   ]

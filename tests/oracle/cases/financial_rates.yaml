@@ -302,3 +302,8 @@ cases:
 
   - id: a4_yieldmat_omit
     formula: "=YIELDMAT(,DATE(2030,1,15),DATE(2024,1,15),0.05,95)"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: pricemat_settle_eq_issue
+    description: "Excel 365: #NUM!"
+    formula: "=PRICEMAT(DATE(2008,2,15),DATE(2008,4,13),DATE(2008,2,15),0.061,0.061,0)"

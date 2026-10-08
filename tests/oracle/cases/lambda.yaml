@@ -364,3 +364,8 @@ cases:
   - id: function_value_map
     description: "A bare built-in as MAP's function"
     formula: "=MAP({1,2},ABS)"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: bf_islambda
+    description: "Excel 365: FALSE"
+    formula: "=ISOMITTED(SUM)"

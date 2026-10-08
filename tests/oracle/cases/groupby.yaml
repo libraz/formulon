@@ -299,3 +299,9 @@ cases:
 
   - id: gb2_lit_total_len
     formula: '=ISBLANK(INDEX(GROUPBY({"b","y";"a","z";"a","y"},{1;2;3},SUM,0),4,2))'
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: groupby_hdr_default_noheader
+    description: "Excel 365: 3x2 array [\"a\", 2, \"b\", 4, \"合計\", 6]"
+    setup: { A1: "k", B1: "v", A2: "b", B2: 1, A3: "a", B3: 2, A4: "b", B4: 3 }
+    formula: "=GROUPBY(A2:A4,B2:B4,SUM)"

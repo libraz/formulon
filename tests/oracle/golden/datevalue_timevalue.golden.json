@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T03:47:54Z"
+    "generated_at": "2026-10-08T06:50:06Z"
   },
   "tolerance": {
     "abs": 1e-10,
@@ -920,6 +920,15 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tv_6_30_15pm",
+      "formula": "=TIMEVALUE(\"6:30:15 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7710069444444444
       }
     }
   ]

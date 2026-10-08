@@ -406,3 +406,64 @@ cases:
     description: "spill whose anchor holds SUBTOTAL"
     setup: { X10: 512, C1: "=SUBTOTAL(9,X10)+SEQUENCE(3)*0" }
     formula: "=AGGREGATE(9,4,C1:C3)"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: average_omit
+    description: "Excel 365: 4"
+    formula: "=AVERAGE(3,4,,6,7)"
+
+  - id: da_average_bool
+    description: "Excel 365: 7.75"
+    formula: "=AVERAGE(10,20,TRUE,FALSE)"
+
+  - id: da_average_numtext
+    description: "Excel 365: 8.25"
+    formula: "=AVERAGE(1,2,\"10\",\"20\")"
+
+  - id: da_average_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=AVERAGE(1,2,\"x\")"
+
+  - id: da_max_omit
+    description: "Excel 365: 7"
+    formula: "=MAX(3,4,,6,7)"
+
+  - id: da_max_bool
+    description: "Excel 365: 20"
+    formula: "=MAX(10,20,TRUE,FALSE)"
+
+  - id: da_max_numtext
+    description: "Excel 365: 20"
+    formula: "=MAX(1,2,\"10\",\"20\")"
+
+  - id: da_max_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=MAX(1,2,\"x\")"
+
+  - id: da_min_omit
+    description: "Excel 365: 0"
+    formula: "=MIN(3,4,,6,7)"
+
+  - id: da_min_bool
+    description: "Excel 365: 0"
+    formula: "=MIN(10,20,TRUE,FALSE)"
+
+  - id: da_min_numtext
+    description: "Excel 365: 1"
+    formula: "=MIN(1,2,\"10\",\"20\")"
+
+  - id: da_min_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=MIN(1,2,\"x\")"
+
+  - id: da_product_bool
+    description: "Excel 365: 0"
+    formula: "=PRODUCT(10,20,TRUE,FALSE)"
+
+  - id: da_product_numtext
+    description: "Excel 365: 400"
+    formula: "=PRODUCT(1,2,\"10\",\"20\")"
+
+  - id: da_product_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=PRODUCT(1,2,\"x\")"

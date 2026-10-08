@@ -400,3 +400,25 @@ cases:
   - id: poisson_dist_large_mean
     description: "Poisson(10) CDF at 5 ~ 0.067086"
     formula: "=POISSON.DIST(5, 10, TRUE)"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: binominv_p0
+    description: "Excel 365: #NUM!"
+    formula: "=BINOM.INV(10,0,0.8)"
+
+  - id: binominv_p1
+    description: "Excel 365: #NUM!"
+    formula: "=BINOM.INV(10,1,0.8)"
+
+  - id: binominv_p_blank
+    description: "Excel 365: #NUM!"
+    setup: { A1: null }
+    formula: "=BINOM.INV(10,A1,0.8)"
+
+  - id: binominv_p_omit
+    description: "Excel 365: #NUM!"
+    formula: "=BINOM.INV(10,,0.8)"
+
+  - id: pf_binomdist
+    description: "Excel 365: 0.49999999999999994"
+    formula: "=BINOM.DIST(1,2.9999999,0.5,FALSE)"

@@ -251,3 +251,18 @@ cases:
 
   - id: snap_randarray_rows
     formula: "=ROWS(RANDARRAY(2.9999999))"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: choosecols_neg_sum
+    description: "Excel 365: -30"
+    setup: { A1: 10, B1: 20, C1: 30 }
+    formula: "=SUM(-CHOOSECOLS(A1:C1,{1,2}))"
+
+  - id: sum_3d_range
+    description: "Excel 365: 17"
+    setup: { A1: 1, A2: "x", Sheet2!A1: 2, Sheet2!A2: 5, Sheet3!A1: 3, Sheet3!A2: 6 }
+    formula: "=SUM(Sheet1:Sheet3!A1:A2)"
+
+  - id: sum_omit
+    description: "Excel 365: 7"
+    formula: "=SUM(3,,4)"

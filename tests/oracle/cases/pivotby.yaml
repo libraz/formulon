@@ -294,3 +294,9 @@ cases:
       B4: "q"
       C4: 3
     formula: '=TYPE(INDEX(PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,0),1,1))'
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: pivotby_hdr_default_noheader
+    description: "Excel 365: 4x4 array [\"\", \"p\", \"q\", \"合計\", \"x\", 1, ...]"
+    setup: { A1: "r", B1: "c", C1: "v", A2: "x", B2: "p", C2: 1, A3: "y", B3: "q", C3: 2, A4: "x", B4: "q", C4: 3 }
+    formula: "=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM)"

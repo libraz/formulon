@@ -828,3 +828,258 @@ cases:
 
   - id: small_k_truncates_near_integer
     formula: "=SMALL({10;5;30;20},1.9999999)"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: avedev_omit
+    description: "Excel 365: 2"
+    formula: "=AVEDEV(3,4,,6,7)"
+
+  - id: devsq_omit
+    description: "Excel 365: 30"
+    formula: "=DEVSQ(3,4,,6,7)"
+
+  - id: devsq_bools
+    description: "Excel 365: 260.75"
+    formula: "=DEVSQ(10,20,TRUE,FALSE)"
+
+  - id: da_devsq_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=DEVSQ(1,2,\"x\")"
+
+  - id: da_stdev_s_omit
+    description: "Excel 365: 2.7386127875258306"
+    formula: "=STDEV.S(3,4,,6,7)"
+
+  - id: da_stdev_s_bool
+    description: "Excel 365: 9.322910847297997"
+    formula: "=STDEV.S(10,20,TRUE,FALSE)"
+
+  - id: da_stdev_s_numtext
+    description: "Excel 365: 8.80814017448254"
+    formula: "=STDEV.S(1,2,\"10\",\"20\")"
+
+  - id: da_stdev_s_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=STDEV.S(1,2,\"x\")"
+
+  - id: da_stdev_p_omit
+    description: "Excel 365: 2.449489742783178"
+    formula: "=STDEV.P(3,4,,6,7)"
+
+  - id: da_stdev_p_bool
+    description: "Excel 365: 8.073877630977572"
+    formula: "=STDEV.P(10,20,TRUE,FALSE)"
+
+  - id: da_stdev_p_numtext
+    description: "Excel 365: 7.628073151196179"
+    formula: "=STDEV.P(1,2,\"10\",\"20\")"
+
+  - id: da_stdev_p_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=STDEV.P(1,2,\"x\")"
+
+  - id: da_stdevp_omit
+    description: "Excel 365: 2.449489742783178"
+    formula: "=STDEVP(3,4,,6,7)"
+
+  - id: da_stdevp_bool
+    description: "Excel 365: 8.073877630977572"
+    formula: "=STDEVP(10,20,TRUE,FALSE)"
+
+  - id: da_stdevp_numtext
+    description: "Excel 365: 7.628073151196179"
+    formula: "=STDEVP(1,2,\"10\",\"20\")"
+
+  - id: da_stdevp_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=STDEVP(1,2,\"x\")"
+
+  - id: da_var_s_omit
+    description: "Excel 365: 7.5"
+    formula: "=VAR.S(3,4,,6,7)"
+
+  - id: da_var_s_bool
+    description: "Excel 365: 86.91666666666667"
+    formula: "=VAR.S(10,20,TRUE,FALSE)"
+
+  - id: da_var_s_numtext
+    description: "Excel 365: 77.58333333333333"
+    formula: "=VAR.S(1,2,\"10\",\"20\")"
+
+  - id: da_var_s_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=VAR.S(1,2,\"x\")"
+
+  - id: da_var_p_omit
+    description: "Excel 365: 6"
+    formula: "=VAR.P(3,4,,6,7)"
+
+  - id: da_var_p_bool
+    description: "Excel 365: 65.1875"
+    formula: "=VAR.P(10,20,TRUE,FALSE)"
+
+  - id: da_var_p_numtext
+    description: "Excel 365: 58.1875"
+    formula: "=VAR.P(1,2,\"10\",\"20\")"
+
+  - id: da_var_p_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=VAR.P(1,2,\"x\")"
+
+  - id: da_varp_omit
+    description: "Excel 365: 6"
+    formula: "=VARP(3,4,,6,7)"
+
+  - id: da_varp_bool
+    description: "Excel 365: 65.1875"
+    formula: "=VARP(10,20,TRUE,FALSE)"
+
+  - id: da_varp_numtext
+    description: "Excel 365: 58.1875"
+    formula: "=VARP(1,2,\"10\",\"20\")"
+
+  - id: da_varp_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=VARP(1,2,\"x\")"
+
+  - id: da_kurt_omit
+    description: "Excel 365: -0.1333333333333364"
+    formula: "=KURT(3,4,,6,7)"
+
+  - id: da_kurt_numtext
+    description: "Excel 365: -0.5639340025681765"
+    formula: "=KURT(1,2,\"10\",\"20\")"
+
+  - id: da_kurt_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=KURT(1,2,\"x\")"
+
+  - id: da_skew_omit
+    description: "Excel 365: -0.6085806194501845"
+    formula: "=SKEW(3,4,,6,7)"
+
+  - id: da_skew_bool
+    description: "Excel 365: 0.885765187570455"
+    formula: "=SKEW(10,20,TRUE,FALSE)"
+
+  - id: da_skew_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=SKEW(1,2,\"x\")"
+
+  - id: da_skew_p_omit
+    description: "Excel 365: -0.40824829046386313"
+    formula: "=SKEW.P(3,4,,6,7)"
+
+  - id: da_skew_p_numtext
+    description: "Excel 365: 0.5645802577591021"
+    formula: "=SKEW.P(1,2,\"10\",\"20\")"
+
+  - id: da_skew_p_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=SKEW.P(1,2,\"x\")"
+
+  - id: da_geomean_omit
+    description: "Excel 365: #NUM!"
+    formula: "=GEOMEAN(3,4,,6,7)"
+
+  - id: da_geomean_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=GEOMEAN(1,2,\"x\")"
+
+  - id: da_harmean_omit
+    description: "Excel 365: #NUM!"
+    formula: "=HARMEAN(3,4,,6,7)"
+
+  - id: da_harmean_bool
+    description: "Excel 365: #NUM!"
+    formula: "=HARMEAN(10,20,TRUE,FALSE)"
+
+  - id: da_harmean_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=HARMEAN(1,2,\"x\")"
+
+  - id: da_median_omit
+    description: "Excel 365: 4"
+    formula: "=MEDIAN(3,4,,6,7)"
+
+  - id: da_median_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=MEDIAN(1,2,\"x\")"
+
+  - id: da_mode_sngl_omit
+    description: "Excel 365: #VALUE!"
+    formula: "=MODE.SNGL(3,4,,6,7)"
+
+  - id: da_mode_sngl_bool
+    description: "Excel 365: #N/A"
+    formula: "=MODE.SNGL(10,20,TRUE,FALSE)"
+
+  - id: da_mode_sngl_numtext
+    description: "Excel 365: #N/A"
+    formula: "=MODE.SNGL(1,2,\"10\",\"20\")"
+
+  - id: da_mode_sngl_badtext
+    description: "Excel 365: #N/A"
+    formula: "=MODE.SNGL(1,2,\"x\")"
+
+  - id: da_mode_omit
+    description: "Excel 365: #VALUE!"
+    formula: "=MODE(3,4,,6,7)"
+
+  - id: da_mode_bool
+    description: "Excel 365: #N/A"
+    formula: "=MODE(10,20,TRUE,FALSE)"
+
+  - id: da_mode_numtext
+    description: "Excel 365: #N/A"
+    formula: "=MODE(1,2,\"10\",\"20\")"
+
+  - id: da_mode_badtext
+    description: "Excel 365: #N/A"
+    formula: "=MODE(1,2,\"x\")"
+
+  - id: averagea_3d
+    description: "Excel 365: 1.25"
+    setup: { A1: 1, A2: "x", Sheet2!A1: 3, Sheet2!A2: true }
+    formula: "=AVERAGEA(Sheet1:Sheet2!A1:A2)"
+
+  - id: averagea_omit
+    description: "Excel 365: 3"
+    formula: "=AVERAGEA(3,,6)"
+
+  - id: maxa_omit
+    description: "Excel 365: 0"
+    formula: "=MAXA(-3,,-6)"
+
+  - id: stdeva_omit
+    description: "Excel 365: 2.7386127875258306"
+    formula: "=STDEVA(3,4,,6,7)"
+
+  - id: vara_omit
+    description: "Excel 365: 7.5"
+    formula: "=VARA(3,4,,6,7)"
+
+  - id: mode_bool
+    description: "Excel 365: 1"
+    formula: "=MODE(1,1,TRUE,TRUE,TRUE)"
+
+  - id: geomean_numtext
+    description: "Excel 365: 6"
+    formula: "=GEOMEAN(\"4\",\"9\")"
+
+  - id: kurt_bool_cells
+    description: "Excel 365: #DIV/0!"
+    setup: { A1: 1, A2: true, A3: 2, A4: "x", A5: 5 }
+    formula: "=KURT(A1:A5)"
+
+  - id: trimmean_omit
+    description: "Excel 365: 5"
+    formula: "=TRIMMEAN({3,4,6,7},)"
+
+  - id: stdev_text_omit
+    description: "Excel 365: 2.5"
+    formula: "=STDEV.S(\"3\",4,,6)"
+
+  - id: devsq_omit_only
+    description: "Excel 365: 0"
+    formula: "=DEVSQ(,)"

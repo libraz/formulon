@@ -324,3 +324,20 @@ cases:
       A2: "=1/0"
       A3: 3
     formula: "=LARGE(A1:A3, 1)"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: near_large
+    description: "Excel 365: 2"
+    formula: "=LARGE({1,2,3},1.9999999)"
+
+  - id: pf_small
+    description: "Excel 365: 1"
+    formula: "=SMALL({1,2,3},1.9999999)"
+
+  - id: pf_rank
+    description: "Excel 365: 1"
+    formula: "=LARGE({5,4,3,2,1},4.9999999)"
+
+  - id: large_k_09999999
+    description: "Excel 365: #NUM!"
+    formula: "=LARGE({1,2,3},0.9999999)"

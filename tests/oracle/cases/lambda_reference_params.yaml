@@ -176,3 +176,8 @@ cases:
 
   - id: call_let_name_bound_to_value
     formula: "=LET(f, 5, f(1))"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: bare_lambda
+    description: "Excel 365: #CALC!"
+    formula: "=LAMBDA(x,x)"

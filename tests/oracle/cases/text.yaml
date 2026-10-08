@@ -952,3 +952,8 @@ cases:
 
   - id: snap_rept
     formula: "=LEN(REPT(\"a\",2.9999999))"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: pf_textjoin_dummy
+    description: "Excel 365: 1"
+    formula: "=LEN(TEXT(1,\"0\"))"

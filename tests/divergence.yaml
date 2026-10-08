@@ -1342,6 +1342,53 @@ entries:
     first_noted: 2026-10-08
     last_verified_excel_version: "16.113.3"
 
+  # Fullwidth numeric-text equality is pending in the classic lookup matcher.
+  - id: match_exact_fullwidth_digits
+    applies_to: [mac-365-ja_JP, mac-365-en_US]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: 'Mac Excel 365 ja-JP and en-US return 1 for MATCH("１２３",A1:A3,0) with text "123" in A1; Formulon returns #N/A. Remove this debt when classic lookup equality folds fullwidth numeric text.'
+    prefer: mac-excel-365
+    first_noted: 2026-10-08
+    last_verified_excel_version: "16.113.3"
+
+  # Upper-tail probability rounding is amplified by inverse beta conditioning.
+  - id: betainv_roundtrip
+    applies_to: [mac-365-ja_JP]
+    cause: accepted-divergence
+    mode: skip-oracle
+    reason: 'BETA.INV(BETA.DIST(0.9,0.1,10,TRUE),0.1,10): Mac Excel 365 returns 0.9000004941424153; Formulon returns 0.89999934430275 (difference about 1.15e-6). The CDF is within 1.44e-12 of 1 and its local density is about 1.45e-10, amplifying one probability ulp into about 7.7e-7 in x. Retain the general CDF/inverse calculation rather than bias its probability rounding to this Excel result.'
+    prefer: formulon
+    first_noted: 2026-10-08
+    last_verified_excel_version: "16.113.3"
+
+  - id: fold_match_fullwidth_digits
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: 'Mac Excel 365 ja-JP folds fullwidth numeric text "１２３" to "123" in exact MATCH lookup and returns the first matching entry (1); Formulon selects the later exact-spelling entry (2). Probe: locale_profile_measurements.fold_match_fullwidth_digits. Resolve when exact lookup equality folds fullwidth numeric text.'
+    prefer: mac-excel-365
+    first_noted: 2026-10-08
+    last_verified_excel_version: "16.113.3"
+
+  - id: fold_xlookup_fullwidth_digits
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: 'Mac Excel 365 ja-JP folds fullwidth numeric text "１２３" to "123" in exact XLOOKUP lookup and returns the first matching entry (101); Formulon selects the later exact-spelling entry (202). Probe: locale_profile_measurements.fold_xlookup_fullwidth_digits. Resolve when exact lookup equality folds fullwidth numeric text.'
+    prefer: mac-excel-365
+    first_noted: 2026-10-08
+    last_verified_excel_version: "16.113.3"
+
+  - id: fold_vlookup_fullwidth_digits
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: 'Mac Excel 365 ja-JP folds fullwidth numeric text "１２３" to "123" in exact VLOOKUP lookup and returns the first matching entry (101); Formulon selects the later exact-spelling entry (202). Probe: locale_profile_measurements.fold_vlookup_fullwidth_digits. Resolve when exact lookup equality folds fullwidth numeric text.'
+    prefer: mac-excel-365
+    first_noted: 2026-10-08
+    last_verified_excel_version: "16.113.3"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

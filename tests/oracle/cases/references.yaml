@@ -249,3 +249,9 @@ cases:
   # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
   - id: snap_address_col
     formula: "=ADDRESS(1,1.9999999)"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: snap_offset_rows
+    description: "Excel 365: 1"
+    setup: { A1: 1, A2: 2, B1: 3, B2: 4, B3: 5 }
+    formula: "=OFFSET(A1,0.9999999,0)"

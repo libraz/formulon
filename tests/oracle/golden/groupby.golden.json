@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T03:47:54Z"
+    "generated_at": "2026-10-08T06:50:06Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -1269,6 +1269,59 @@
       "expect": {
         "kind": "bool",
         "value": false
+      }
+    },
+    {
+      "id": "groupby_hdr_default_noheader",
+      "formula": "=GROUPBY(A2:A4,B2:B4,SUM)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          2.0,
+          "b",
+          4.0,
+          "合計",
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
       }
     }
   ]

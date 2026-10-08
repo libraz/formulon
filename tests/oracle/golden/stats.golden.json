@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T03:47:54Z"
+    "generated_at": "2026-10-08T07:43:53Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -2493,6 +2493,611 @@
       "expect": {
         "kind": "number",
         "value": 5.0
+      }
+    },
+    {
+      "id": "avedev_omit",
+      "formula": "=AVEDEV(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "devsq_omit",
+      "formula": "=DEVSQ(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "devsq_bools",
+      "formula": "=DEVSQ(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 260.75
+      }
+    },
+    {
+      "id": "da_devsq_badtext",
+      "formula": "=DEVSQ(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_stdev_s_omit",
+      "formula": "=STDEV.S(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.7386127875258306
+      }
+    },
+    {
+      "id": "da_stdev_s_bool",
+      "formula": "=STDEV.S(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.322910847297997
+      }
+    },
+    {
+      "id": "da_stdev_s_numtext",
+      "formula": "=STDEV.S(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.80814017448254
+      }
+    },
+    {
+      "id": "da_stdev_s_badtext",
+      "formula": "=STDEV.S(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_stdev_p_omit",
+      "formula": "=STDEV.P(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.449489742783178
+      }
+    },
+    {
+      "id": "da_stdev_p_bool",
+      "formula": "=STDEV.P(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.073877630977572
+      }
+    },
+    {
+      "id": "da_stdev_p_numtext",
+      "formula": "=STDEV.P(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.628073151196179
+      }
+    },
+    {
+      "id": "da_stdev_p_badtext",
+      "formula": "=STDEV.P(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_stdevp_omit",
+      "formula": "=STDEVP(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.449489742783178
+      }
+    },
+    {
+      "id": "da_stdevp_bool",
+      "formula": "=STDEVP(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.073877630977572
+      }
+    },
+    {
+      "id": "da_stdevp_numtext",
+      "formula": "=STDEVP(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.628073151196179
+      }
+    },
+    {
+      "id": "da_stdevp_badtext",
+      "formula": "=STDEVP(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_var_s_omit",
+      "formula": "=VAR.S(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.5
+      }
+    },
+    {
+      "id": "da_var_s_bool",
+      "formula": "=VAR.S(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 86.91666666666667
+      }
+    },
+    {
+      "id": "da_var_s_numtext",
+      "formula": "=VAR.S(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 77.58333333333333
+      }
+    },
+    {
+      "id": "da_var_s_badtext",
+      "formula": "=VAR.S(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_var_p_omit",
+      "formula": "=VAR.P(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "da_var_p_bool",
+      "formula": "=VAR.P(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 65.1875
+      }
+    },
+    {
+      "id": "da_var_p_numtext",
+      "formula": "=VAR.P(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 58.1875
+      }
+    },
+    {
+      "id": "da_var_p_badtext",
+      "formula": "=VAR.P(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_varp_omit",
+      "formula": "=VARP(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "da_varp_bool",
+      "formula": "=VARP(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 65.1875
+      }
+    },
+    {
+      "id": "da_varp_numtext",
+      "formula": "=VARP(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 58.1875
+      }
+    },
+    {
+      "id": "da_varp_badtext",
+      "formula": "=VARP(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_kurt_omit",
+      "formula": "=KURT(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.1333333333333364
+      }
+    },
+    {
+      "id": "da_kurt_numtext",
+      "formula": "=KURT(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.5639340025681765
+      }
+    },
+    {
+      "id": "da_kurt_badtext",
+      "formula": "=KURT(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_skew_omit",
+      "formula": "=SKEW(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.6085806194501845
+      }
+    },
+    {
+      "id": "da_skew_bool",
+      "formula": "=SKEW(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.885765187570455
+      }
+    },
+    {
+      "id": "da_skew_badtext",
+      "formula": "=SKEW(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_skew_p_omit",
+      "formula": "=SKEW.P(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.40824829046386313
+      }
+    },
+    {
+      "id": "da_skew_p_numtext",
+      "formula": "=SKEW.P(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5645802577591021
+      }
+    },
+    {
+      "id": "da_skew_p_badtext",
+      "formula": "=SKEW.P(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_geomean_omit",
+      "formula": "=GEOMEAN(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "da_geomean_badtext",
+      "formula": "=GEOMEAN(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_harmean_omit",
+      "formula": "=HARMEAN(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "da_harmean_bool",
+      "formula": "=HARMEAN(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "da_harmean_badtext",
+      "formula": "=HARMEAN(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_median_omit",
+      "formula": "=MEDIAN(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "da_median_badtext",
+      "formula": "=MEDIAN(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_mode_sngl_omit",
+      "formula": "=MODE.SNGL(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_mode_sngl_bool",
+      "formula": "=MODE.SNGL(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "da_mode_sngl_numtext",
+      "formula": "=MODE.SNGL(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "da_mode_sngl_badtext",
+      "formula": "=MODE.SNGL(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "da_mode_omit",
+      "formula": "=MODE(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "da_mode_bool",
+      "formula": "=MODE(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "da_mode_numtext",
+      "formula": "=MODE(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "da_mode_badtext",
+      "formula": "=MODE(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "averagea_3d",
+      "formula": "=AVERAGEA(Sheet1:Sheet2!A1:A2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "Sheet2!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sheet2!A2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.25
+      }
+    },
+    {
+      "id": "averagea_omit",
+      "formula": "=AVERAGEA(3,,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "maxa_omit",
+      "formula": "=MAXA(-3,,-6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "stdeva_omit",
+      "formula": "=STDEVA(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.7386127875258306
+      }
+    },
+    {
+      "id": "vara_omit",
+      "formula": "=VARA(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.5
+      }
+    },
+    {
+      "id": "mode_bool",
+      "formula": "=MODE(1,1,TRUE,TRUE,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "geomean_numtext",
+      "formula": "=GEOMEAN(\"4\",\"9\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "kurt_bool_cells",
+      "formula": "=KURT(A1:A5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "trimmean_omit",
+      "formula": "=TRIMMEAN({3,4,6,7},)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "stdev_text_omit",
+      "formula": "=STDEV.S(\"3\",4,,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.5
+      }
+    },
+    {
+      "id": "devsq_omit_only",
+      "formula": "=DEVSQ(,)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
       }
     }
   ]

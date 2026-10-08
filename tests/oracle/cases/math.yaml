@@ -1112,3 +1112,28 @@ cases:
 
   - id: snap_ceiling_math
     formula: "=CEILING.MATH(1.5,1,0.9999999)"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: near_mod
+    description: "Excel 365: 3.9999998999999997"
+    formula: "=MOD(7.9999999,4)"
+
+  - id: da_sumsq_omit
+    description: "Excel 365: 110"
+    formula: "=SUMSQ(3,4,,6,7)"
+
+  - id: da_sumsq_bool
+    description: "Excel 365: 501"
+    formula: "=SUMSQ(10,20,TRUE,FALSE)"
+
+  - id: da_sumsq_numtext
+    description: "Excel 365: 505"
+    formula: "=SUMSQ(1,2,\"10\",\"20\")"
+
+  - id: da_sumsq_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=SUMSQ(1,2,\"x\")"
+
+  - id: sumsq_omit
+    description: "Excel 365: 25"
+    formula: "=SUMSQ(3,,4)"

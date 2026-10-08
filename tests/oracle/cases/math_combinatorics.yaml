@@ -447,3 +447,16 @@ cases:
   # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
   - id: opt_gcd_arr_bool
     formula: "=GCD({TRUE,2})"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: near_base
+    description: "Excel 365: \"111\""
+    formula: "=BASE(7.9999999,2)"
+
+  - id: near_roman
+    description: "Excel 365: \"III\""
+    formula: "=ROMAN(3.9999999)"
+
+  - id: near_combin
+    description: "Excel 365: 10"
+    formula: "=COMBIN(5.9999999,2)"

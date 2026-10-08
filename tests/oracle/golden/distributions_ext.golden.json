@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T03:47:54Z"
+    "generated_at": "2026-10-08T06:50:06Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -726,6 +726,69 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gammadist_zero_a1",
+      "formula": "=GAMMA.DIST(0,1,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gammadist_zero_a2",
+      "formula": "=GAMMA.DIST(0,2,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gammadist_zero_a05",
+      "formula": "=GAMMA.DIST(0,0.5,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "betainv_roundtrip",
+      "formula": "=BETA.INV(BETA.DIST(0.9,0.1,10,TRUE),0.1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9000004941424153
+      }
+    },
+    {
+      "id": "gd_0_15",
+      "formula": "=GAMMA.DIST(0,1.5,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gd_0_1_cdf",
+      "formula": "=GAMMA.DIST(0,1,1,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gd_0_05_cdf",
+      "formula": "=GAMMA.DIST(0,0.5,1,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
       }
     }
   ]

@@ -98,3 +98,40 @@ cases:
   - id: var_legacy_alias_singleton_div0
     description: "VAR(5) -> #DIV/0! (sample variance needs >=2 values)"
     formula: '=VAR(5)'
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: da_stdev_omit
+    description: "Excel 365: 2.7386127875258306"
+    formula: "=STDEV(3,4,,6,7)"
+
+  - id: da_stdev_bool
+    description: "Excel 365: 9.322910847297997"
+    formula: "=STDEV(10,20,TRUE,FALSE)"
+
+  - id: da_stdev_numtext
+    description: "Excel 365: 8.80814017448254"
+    formula: "=STDEV(1,2,\"10\",\"20\")"
+
+  - id: da_stdev_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=STDEV(1,2,\"x\")"
+
+  - id: da_var_omit
+    description: "Excel 365: 7.5"
+    formula: "=VAR(3,4,,6,7)"
+
+  - id: da_var_bool
+    description: "Excel 365: 86.91666666666667"
+    formula: "=VAR(10,20,TRUE,FALSE)"
+
+  - id: da_var_numtext
+    description: "Excel 365: 77.58333333333333"
+    formula: "=VAR(1,2,\"10\",\"20\")"
+
+  - id: da_var_badtext
+    description: "Excel 365: #VALUE!"
+    formula: "=VAR(1,2,\"x\")"
+
+  - id: quartile_omit
+    description: "Excel 365: 3"
+    formula: "=QUARTILE({3,4,6,7},)"

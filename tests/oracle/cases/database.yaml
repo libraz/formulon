@@ -2358,3 +2358,39 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DSUM(A1:C2, 1.999999, E1:E2)"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: dsum_field_near7
+    description: "Excel 365: 300"
+    setup: { A1: "a", B1: "b", C1: "c", D1: "d", E1: "e", F1: "f", G1: "g", A2: 1, F2: 10, G2: 100, A3: 2, F3: 20, G3: 200, I1: "a", I2: ">0" }
+    formula: "=DSUM(A1:G3,6.9999999,I1:I2)"
+
+  - id: dsum_field_6_5
+    description: "Excel 365: 30"
+    setup: { A1: "a", B1: "b", C1: "c", D1: "d", E1: "e", F1: "f", G1: "g", A2: 1, F2: 10, G2: 100, A3: 2, F3: 20, G3: 200, I1: "a", I2: ">0" }
+    formula: "=DSUM(A1:G3,6.5,I1:I2)"
+
+  - id: dsum_field_6_0000001
+    description: "Excel 365: 30"
+    setup: { A1: "a", B1: "b", C1: "c", D1: "d", E1: "e", F1: "f", G1: "g", A2: 1, F2: 10, G2: 100, A3: 2, F3: 20, G3: 200, I1: "a", I2: ">0" }
+    formula: "=DSUM(A1:G3,6.0000001,I1:I2)"
+
+  - id: near_dsum6
+    description: "Excel 365: 30"
+    setup: { A1: "a", B1: "b", C1: "c", D1: "d", E1: "e", F1: "f", G1: "g", A2: 1, F2: 10, G2: 100, A3: 2, F3: 20, G3: 200, I1: "a", I2: ">0" }
+    formula: "=DSUM(A1:G3,6.999999,I1:I2)"
+
+  - id: near_dsum95
+    description: "Excel 365: 30"
+    setup: { A1: "a", B1: "b", C1: "c", D1: "d", E1: "e", F1: "f", G1: "g", A2: 1, F2: 10, G2: 100, A3: 2, F3: 20, G3: 200, I1: "a", I2: ">0" }
+    formula: "=DSUM(A1:G3,6.9999995,I1:I2)"
+
+  - id: dsum_field_09999999
+    description: "Excel 365: 3"
+    setup: { A1: "a", B1: "b", A2: 1, B2: 10, A3: 2, B3: 20, D1: "a", D2: ">0" }
+    formula: "=DSUM(A1:B3,0.9999999,D1:D2)"
+
+  - id: dsum_field_0999999
+    description: "Excel 365: #VALUE!"
+    setup: { A1: "a", B1: "b", A2: 1, B2: 10, A3: 2, B3: 20, D1: "a", D2: ">0" }
+    formula: "=DSUM(A1:B3,0.999999,D1:D2)"

@@ -157,3 +157,10 @@ cases:
       F3: 33
       F4: 44
     formula: '=CELL("contents",SINGLE(F1:F4))'
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: cell_contents_range
+    description: "Excel 365: 3"
+    formula_cell: "G2"
+    setup: { F1: 3, F2: 4 }
+    formula: "=CELL(\"contents\",F1:F4)"

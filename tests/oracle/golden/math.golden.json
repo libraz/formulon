@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T03:47:54Z"
+    "generated_at": "2026-10-08T06:50:06Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -3180,6 +3180,60 @@
       "expect": {
         "kind": "number",
         "value": 2.0
+      }
+    },
+    {
+      "id": "near_mod",
+      "formula": "=MOD(7.9999999,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.9999998999999997
+      }
+    },
+    {
+      "id": "da_sumsq_omit",
+      "formula": "=SUMSQ(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 110.0
+      }
+    },
+    {
+      "id": "da_sumsq_bool",
+      "formula": "=SUMSQ(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 501.0
+      }
+    },
+    {
+      "id": "da_sumsq_numtext",
+      "formula": "=SUMSQ(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 505.0
+      }
+    },
+    {
+      "id": "da_sumsq_badtext",
+      "formula": "=SUMSQ(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumsq_omit",
+      "formula": "=SUMSQ(3,,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 25.0
       }
     }
   ]

@@ -836,3 +836,430 @@ cases:
 
   - id: datedif_omitted_end
     formula: "=DATEDIF(1,,\"d\")"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: eomonth_omit_9
+    description: "Excel 365: #N/A"
+    formula: "=EOMONTH(,9)"
+
+  - id: eomonth_far
+    description: "Excel 365: 410258"
+    formula: "=EOMONTH(DATE(2023,3,2),12000)"
+
+  - id: edate_omit_5
+    description: "Excel 365: #N/A"
+    formula: "=EDATE(,5)"
+
+  - id: date_year_near
+    description: "Excel 365: 46188"
+    formula: "=DATE(2025.9999999,6,15)"
+
+  - id: date_month_near
+    description: "Excel 365: 45823"
+    formula: "=DATE(2025,5.9999999,15)"
+
+  - id: date_day_near
+    description: "Excel 365: 45823"
+    formula: "=DATE(2025,6,14.9999999)"
+
+  - id: date_day_near6
+    description: "Excel 365: 45822"
+    formula: "=DATE(2025,6,14.999999)"
+
+  - id: date_day_near9
+    description: "Excel 365: 45823"
+    formula: "=DATE(2025,6,14.999999999)"
+
+  - id: date_year_frac
+    description: "Excel 365: 45823"
+    formula: "=DATE(2025.9,6,15)"
+
+  - id: time_sec_near
+    description: "Excel 365: 0.04237268518518519"
+    formula: "=TIME(1,1,0.9999999)"
+
+  - id: time_sec_near6
+    description: "Excel 365: 0.04236111111111111"
+    formula: "=TIME(1,1,0.999999)"
+
+  - id: time_hour_near
+    description: "Excel 365: 0.041666666666666664"
+    formula: "=TIME(0.9999999,0,0)"
+
+  - id: time_min_near
+    description: "Excel 365: 0.041666666666666664"
+    formula: "=TIME(0,59.9999999,0)"
+
+  - id: day_near7
+    description: "Excel 365: 7"
+    formula: "=DAY(40000.9999999)"
+
+  - id: day_near6
+    description: "Excel 365: 7"
+    formula: "=DAY(40000.999999)"
+
+  - id: day_near5
+    description: "Excel 365: 6"
+    formula: "=DAY(40000.99999)"
+
+  - id: day_near9
+    description: "Excel 365: 7"
+    formula: "=DAY(40000.999999999)"
+
+  - id: month_near
+    description: "Excel 365: 2"
+    formula: "=MONTH(DATE(2025,1,31)+0.9999999)"
+
+  - id: hour_near
+    description: "Excel 365: 0"
+    formula: "=HOUR(0.9999999)"
+
+  - id: hour_tiny
+    description: "Excel 365: 0"
+    formula: "=HOUR(2.2250738585072014E-308)"
+
+  - id: wdintl_omit_weekend
+    description: "Excel 365: 45672"
+    formula: "=WORKDAY.INTL(DATE(2025,1,1),10,)"
+
+  - id: ndintl_blank_weekend
+    description: "Excel 365: #NUM!"
+    setup: { A1: null }
+    formula: "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2025,12,31),A1)"
+
+  - id: ndintl_omit_weekend
+    description: "Excel 365: 261"
+    formula: "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2025,12,31),)"
+
+  - id: days360_omit
+    description: "Excel 365: 5"
+    formula: "=DAYS360(,5)"
+
+  - id: networkdays_omit
+    description: "Excel 365: #N/A"
+    formula: "=NETWORKDAYS(,DATE(1989,4,22))"
+
+  - id: workday_omit_start
+    description: "Excel 365: #N/A"
+    formula: "=WORKDAY(,5)"
+
+  - id: workday_omit_days
+    description: "Excel 365: #N/A"
+    formula: "=WORKDAY(DATE(2025,1,1),)"
+
+  - id: weeknum_bool_type
+    description: "Excel 365: #VALUE!"
+    formula: "=WEEKNUM(DATE(2025,3,1),TRUE)"
+
+  - id: weeknum_bool_date
+    description: "Excel 365: #VALUE!"
+    formula: "=WEEKNUM(TRUE,1)"
+
+  - id: weeknum_neg2
+    description: "Excel 365: #NUM!"
+    formula: "=WEEKNUM(DATE(2025,3,1),-2)"
+
+  - id: yearfrac_bool_basis_m
+    description: "Excel 365: #VALUE!"
+    formula: "=YEARFRAC(DATE(2024,1,1),DATE(2025,1,1),TRUE)"
+
+  - id: yearfrac_bools
+    description: "Excel 365: #VALUE!"
+    formula: "=YEARFRAC(FALSE,TRUE)"
+
+  - id: yearfrac_blank
+    description: "Excel 365: 0.002777777777777778"
+    setup: { A1: null }
+    formula: "=YEARFRAC(A1,1)"
+
+  - id: datedif_d
+    description: "Excel 365: 366"
+    formula: "=DATEDIF(\"2024/1/10\",\"2025/1/10\",\"D\")"
+
+  - id: date_day_9e8
+    description: "Excel 365: 45672"
+    formula: "=DATE(2025,1,14.9999999)"
+
+  - id: date_day_95
+    description: "Excel 365: 45671"
+    formula: "=DATE(2025,1,14.9999995)"
+
+  - id: date_day_97
+    description: "Excel 365: 45671"
+    formula: "=DATE(2025,1,14.9999997)"
+
+  - id: date_day_92
+    description: "Excel 365: 45671"
+    formula: "=DATE(2025,1,14.9999992)"
+
+  - id: date_day_9905
+    description: "Excel 365: 45671"
+    formula: "=DATE(2025,1,14.99999905)"
+
+  - id: date_day_99
+    description: "Excel 365: 45672"
+    formula: "=DATE(2025,1,14.99999990)"
+
+  - id: date_day_989
+    description: "Excel 365: 45672"
+    formula: "=DATE(2025,1,14.99999989)"
+
+  - id: date_day_98
+    description: "Excel 365: 45672"
+    formula: "=DATE(2025,1,14.9999998)"
+
+  - id: date_day_big7
+    description: "Excel 365: 55658"
+    formula: "=DATE(2025,1,10000.9999999)"
+
+  - id: date_day_big6
+    description: "Excel 365: 55657"
+    formula: "=DATE(2025,1,10000.999999)"
+
+  - id: date_day_big8
+    description: "Excel 365: 55658"
+    formula: "=DATE(2025,1,10000.99999999)"
+
+  - id: near_time_s
+    description: "Excel 365: 0"
+    formula: "=TIME(0,0,0.9999995)*86400"
+
+  - id: datelim_m32766
+    description: "Excel 365: 1042920"
+    formula: "=DATE(2025,32766,1)"
+
+  - id: datelim_m30000
+    description: "Excel 365: 949602"
+    formula: "=DATE(2000,30000,1)"
+
+  - id: datelim_mneg32767
+    description: "Excel 365: 134897"
+    formula: "=DATE(5000,-32767,1)"
+
+  - id: datelim_d32767
+    description: "Excel 365: 78424"
+    formula: "=DATE(2025,1,32767)"
+
+  - id: datelim_y32767
+    description: "Excel 365: #NUM!"
+    formula: "=DATE(32767,1,1)"
+
+  - id: datelim_y9999_13
+    description: "Excel 365: #NUM!"
+    formula: "=DATE(9999,13,1)"
+
+  - id: weekday_bool
+    description: "Excel 365: 1"
+    formula: "=WEEKDAY(TRUE)"
+
+  - id: weekday_rt_bool
+    description: "Excel 365: 1"
+    formula: "=WEEKDAY(1,TRUE)"
+
+  - id: day_bool
+    description: "Excel 365: 1"
+    formula: "=DAY(TRUE)"
+
+  - id: month_bool
+    description: "Excel 365: 1"
+    formula: "=MONTH(TRUE)"
+
+  - id: days_bool
+    description: "Excel 365: 0"
+    formula: "=DAYS(TRUE,1)"
+
+  - id: isoweeknum_bool
+    description: "Excel 365: 52"
+    formula: "=ISOWEEKNUM(TRUE)"
+
+  - id: datedif_bool
+    description: "Excel 365: 9"
+    formula: "=DATEDIF(TRUE,10,\"d\")"
+
+  - id: days360_bool
+    description: "Excel 365: 9"
+    formula: "=DAYS360(TRUE,10)"
+
+  - id: hour_bool
+    description: "Excel 365: 0"
+    formula: "=HOUR(TRUE)"
+
+  - id: datedif_omit
+    description: "Excel 365: 5"
+    formula: "=DATEDIF(,5,\"d\")"
+
+  - id: weekday_omit_rt
+    description: "Excel 365: #NUM!"
+    formula: "=WEEKDAY(10,)"
+
+  - id: days_omit2
+    description: "Excel 365: 5"
+    formula: "=DAYS(5,)"
+
+  - id: workday_omit_hol
+    description: "Excel 365: 6"
+    formula: "=WORKDAY(1,5,)"
+
+  - id: ndintl_omit_hol
+    description: "Excel 365: 29"
+    formula: "=NETWORKDAYS.INTL(1,40,1,)"
+
+  - id: th_date14_230
+    description: "Excel 365: 45672"
+    formula: "=DATE(2025,1,14.99999977)"
+
+  - id: th_date14_235
+    description: "Excel 365: 45672"
+    formula: "=DATE(2025,1,14.999999765)"
+
+  - id: th_date14_240
+    description: "Excel 365: 45671"
+    formula: "=DATE(2025,1,14.99999976)"
+
+  - id: th_date14_245
+    description: "Excel 365: 45671"
+    formula: "=DATE(2025,1,14.999999755)"
+
+  - id: th_date14_250
+    description: "Excel 365: 45671"
+    formula: "=DATE(2025,1,14.99999975)"
+
+  - id: th_date14_260
+    description: "Excel 365: 45671"
+    formula: "=DATE(2025,1,14.99999974)"
+
+  - id: th_date10000_230
+    description: "Excel 365: 55658"
+    formula: "=DATE(2025,1,10000.99999977)"
+
+  - id: th_date10000_235
+    description: "Excel 365: 55658"
+    formula: "=DATE(2025,1,10000.999999765)"
+
+  - id: th_date10000_239
+    description: "Excel 365: 55657"
+    formula: "=DATE(2025,1,10000.999999761)"
+
+  - id: th_date10000_240
+    description: "Excel 365: 55657"
+    formula: "=DATE(2025,1,10000.99999976)"
+
+  - id: th_date10000_245
+    description: "Excel 365: 55657"
+    formula: "=DATE(2025,1,10000.999999755)"
+
+  - id: th_date10000_250
+    description: "Excel 365: 55657"
+    formula: "=DATE(2025,1,10000.99999975)"
+
+  - id: th_date10000_260
+    description: "Excel 365: 55657"
+    formula: "=DATE(2025,1,10000.99999974)"
+
+  - id: pf_eomonth_m
+    description: "Excel 365: 45688"
+    formula: "=EOMONTH(DATE(2025,1,15),0.9999999)"
+
+  - id: pf_edate_m
+    description: "Excel 365: 45672"
+    formula: "=EDATE(DATE(2025,1,15),0.9999999)"
+
+  - id: pf_workday_d
+    description: "Excel 365: 45658"
+    formula: "=WORKDAY(DATE(2025,1,1),0.9999999)"
+
+  - id: pf_ndintl_wk
+    description: "Excel 365: 23"
+    formula: "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2025,1,31),1.9999999)"
+
+  - id: pf_days360_m
+    description: "Excel 365: 30"
+    formula: "=DAYS360(0.9999999,31)"
+
+  - id: pf_weekday_serial_round
+    description: "Excel 365: 2"
+    formula: "=WEEKDAY(40000.4999943)"
+
+  - id: pf_hour_round
+    description: "Excel 365: 1"
+    formula: "=HOUR(0.0416666)"
+
+  - id: pf_isoweeknum_round
+    description: "Excel 365: 1"
+    formula: "=ISOWEEKNUM(45657.9999999)"
+
+  - id: pf_datedif_round
+    description: "Excel 365: 10"
+    formula: "=DATEDIF(0.9999999,10,\"d\")"
+
+  - id: pf_edate_serial
+    description: "Excel 365: 45672"
+    formula: "=EDATE(45672.9999999,0)"
+
+  - id: pf_eomonth_serial
+    description: "Excel 365: 45688"
+    formula: "=EOMONTH(45688.9999999,0)"
+
+  - id: pf_days_serial
+    description: "Excel 365: 10"
+    formula: "=DAYS(10,0.9999999)"
+
+  - id: pf_networkdays_serial
+    description: "Excel 365: 5"
+    formula: "=NETWORKDAYS(45658.9999999,45664)"
+
+  - id: lim_y_neg
+    description: "Excel 365: #NUM!"
+    formula: "=DATE(-1,1,1)"
+
+  - id: lim_y_1899
+    description: "Excel 365: 693962"
+    formula: "=DATE(1899,12,31)"
+
+  - id: lim_time_m_big
+    description: "Excel 365: #NUM!"
+    formula: "=TIME(0,32768,0)"
+
+  - id: lim_time_neg_total
+    description: "Excel 365: #NUM!"
+    formula: "=TIME(0,0,-1)"
+
+  - id: atp_isoweeknum_boolcell
+    description: "Excel 365: 52"
+    setup: { A1: true }
+    formula: "=ISOWEEKNUM(A1)"
+
+  - id: atp_edate_bool
+    description: "Excel 365: #VALUE!"
+    formula: "=EDATE(10,TRUE)"
+
+  - id: atp_days360_omit
+    description: "Excel 365: 10"
+    formula: "=DAYS360(,10)"
+
+  - id: atp_days360_boolcell
+    description: "Excel 365: 9"
+    setup: { A1: true }
+    formula: "=DAYS360(A1,10)"
+
+  - id: atp_networkdays_bool
+    description: "Excel 365: #VALUE!"
+    formula: "=NETWORKDAYS(1,TRUE)"
+
+  - id: atp_eomonth_bool
+    description: "Excel 365: #VALUE!"
+    formula: "=EOMONTH(10,TRUE)"
+
+  - id: atp_eomonth_boolcell
+    description: "Excel 365: #VALUE!"
+    setup: { A1: true }
+    formula: "=EOMONTH(10,A1)"
+
+  - id: atp_datedif_bool
+    description: "Excel 365: 0"
+    formula: "=DATEDIF(1,TRUE,\"d\")"
+
+  - id: atp_datedif_boolcell
+    description: "Excel 365: 0"
+    setup: { A1: true }
+    formula: "=DATEDIF(1,A1,\"d\")"

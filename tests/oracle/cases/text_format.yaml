@@ -371,3 +371,8 @@ cases:
   # backslash into the format string, so the case measured an authoring
   # bug rather than Formulon's quoted-literal handling. Add back with a
   # cleaner encoding once we have a yaml fixture for raw quoted blocks.
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: text_eur_bracket
+    description: "Excel 365: #VALUE!"
+    formula: "=TEXT(3.14,\"[€EUR]0.00\")"

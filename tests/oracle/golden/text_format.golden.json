@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T04:37:32Z"
+    "generated_at": "2026-10-08T06:50:06Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -803,6 +803,15 @@
       "expect": {
         "kind": "text",
         "value": "2024dd"
+      }
+    },
+    {
+      "id": "text_eur_bracket",
+      "formula": "=TEXT(3.14,\"[€EUR]0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
       }
     }
   ]

@@ -179,3 +179,37 @@ cases:
     description: "T.INV.2T(1.5,10) is the negative upper-tail quantile"
     tolerance: { abs: 0.0, rel: 1.0e-12 }
     formula: "=T.INV.2T(1.5,10)"
+
+  # -- Measured edge cases ------------------------------------------------
+  - id: tdist_blank
+    description: "Excel 365: #DIV/0!"
+    setup: { A1: null, B1: null, C1: null }
+    formula: "=T.DIST(A1,B1,C1)"
+
+  - id: tinv2t_big_p
+    description: "Excel 365: #NUM!"
+    formula: "=T.INV.2T(1E6,10)"
+
+  - id: tinv2t_big_df
+    description: "Excel 365: #NUM!"
+    formula: "=T.INV.2T(2,1E6)"
+
+  - id: tdist_df05
+    description: "Excel 365: #NUM!"
+    formula: "=T.DIST(1,0.5,TRUE)"
+
+  - id: tdist_df_neg
+    description: "Excel 365: #NUM!"
+    formula: "=T.DIST(1,-1,TRUE)"
+
+  - id: tdist2t_df0
+    description: "Excel 365: #NUM!"
+    formula: "=T.DIST.2T(1,0)"
+
+  - id: tdistrt_df0
+    description: "Excel 365: #NUM!"
+    formula: "=T.DIST.RT(1,0)"
+
+  - id: tinv_df0
+    description: "Excel 365: #NUM!"
+    formula: "=T.INV(0.5,0)"
