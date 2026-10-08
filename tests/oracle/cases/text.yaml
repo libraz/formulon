@@ -957,3 +957,15 @@ cases:
   - id: pf_textjoin_dummy
     description: "Excel 365: 1"
     formula: "=LEN(TEXT(1,\"0\"))"
+
+  # -- CHAR on code points the single-byte code page leaves undefined ------
+  - id: char_129_unicode
+    formula: "=UNICODE(CHAR(129))"
+  - id: char_141_unicode
+    formula: "=UNICODE(CHAR(141))"
+  - id: char_143_unicode
+    formula: "=UNICODE(CHAR(143))"
+  - id: char_144_unicode
+    formula: "=UNICODE(CHAR(144))"
+  - id: char_157_unicode
+    formula: "=UNICODE(CHAR(157))"

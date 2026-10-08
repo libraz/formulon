@@ -6,7 +6,7 @@
     "excel_locale": "fr-FR",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T12:47:36Z"
+    "generated_at": "2026-10-08T19:19:12Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -2287,6 +2287,51 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      }
+    },
+    {
+      "id": "char_129_unicode",
+      "formula": "=UNICODE(CHAR(129))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 197.0
+      }
+    },
+    {
+      "id": "char_141_unicode",
+      "formula": "=UNICODE(CHAR(141))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 231.0
+      }
+    },
+    {
+      "id": "char_143_unicode",
+      "formula": "=UNICODE(CHAR(143))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 232.0
+      }
+    },
+    {
+      "id": "char_144_unicode",
+      "formula": "=UNICODE(CHAR(144))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 234.0
+      }
+    },
+    {
+      "id": "char_157_unicode",
+      "formula": "=UNICODE(CHAR(157))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 249.0
       }
     }
   ]

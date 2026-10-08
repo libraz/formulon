@@ -526,21 +526,12 @@ Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     } else if (n >= 0xA1 && n <= 0xDF) {
       // Half-width katakana mapping: 0xA1 -> U+FF61, 0xDF -> U+FF9F.
       cp = 0xFF61u + static_cast<std::uint32_t>(n - 0xA1);
+    } else if ((n >= 0x81 && n <= 0x9F) || (n >= 0xE0 && n <= 0xFC)) {
+      // A CP932 lead byte on its own is a space (measured on Mac Excel ja-JP).
+      cp = 0x20u;
     } else {
-      // CP932 DBCS lead-byte or unassigned single-byte slot. Fall back to
-      // the CP1252 value so the character is at least printable; any
-      // divergence from Mac Excel ja-JP is captured per-case in
-      // tests/divergence.yaml.
-      static constexpr std::uint32_t kCp1252HighTable[32] = {
-          0x20ACu, 0xFFFDu, 0x201Au, 0x0192u, 0x201Eu, 0x2026u, 0x2020u, 0x2021u, 0x02C6u, 0x2030u, 0x0160u,
-          0x2039u, 0x0152u, 0xFFFDu, 0x017Du, 0xFFFDu, 0xFFFDu, 0x2018u, 0x2019u, 0x201Cu, 0x201Du, 0x2022u,
-          0x2013u, 0x2014u, 0x02DCu, 0x2122u, 0x0161u, 0x203Au, 0x0153u, 0xFFFDu, 0x017Eu, 0x0178u,
-      };
-      if (n < 0xA0) {
-        cp = kCp1252HighTable[n - 0x80];
-      } else {
-        cp = static_cast<std::uint32_t>(n);
-      }
+      // 0x80, 0xA0 and 0xFD-0xFF map to the same-numbered code point.
+      cp = static_cast<std::uint32_t>(n);
     }
   } else if (n < 0x2121 || n > 0xFFFF) {
     // Gap between SBCS and DBCS, or wider than two bytes. Mac returns
