@@ -1,0 +1,3698 @@
+{
+  "suite": "ironcalc_calc_tests__STATISTICAL_T_DIST_T.DIST_T.INV_T.DIST.RT",
+  "description": "Derived from IronCalc fixture calc_tests/STATISTICAL/T_DIST.xlsx, sheet 'T.DIST T.INV T.DIST.RT'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "T.DIST T.INV T.DIST.RT",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=_xlfn.T.DIST(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "bool",
+          "value": true
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 60.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9946953263673767
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=_xlfn.T.INV(D2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A2,B2,C2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 59.99999999999939
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=_xlfn.T.DIST.RT(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 60.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00530467363262327
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.T.DIST(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "bool",
+          "value": false
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0007369065209469266
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=_xlfn.T.INV(D3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "bool",
+          "value": false
+        },
+        "A3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A3,B3,C3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -11.332581353101341
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=_xlfn.T.DIST.RT(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0020382887938927333
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.T.DIST(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "bool",
+          "value": true
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.2
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9849503760512687
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=_xlfn.T.INV(D4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 5.2
+        },
+        "C4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A4,B4,C4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.9999999999999973
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=_xlfn.T.DIST.RT(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 5.2
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.015049623948731293
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.T.DIST(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "bool",
+          "value": false
+        },
+        "B5": {
+          "kind": "number",
+          "value": 5.2
+        },
+        "A5": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0650903103262165
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=_xlfn.T.INV(D5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 5.2
+        },
+        "C5": {
+          "kind": "bool",
+          "value": false
+        },
+        "A5": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A5,B5,C5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.8093538332133492
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=_xlfn.T.DIST.RT(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 5.2
+        },
+        "A5": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9490302605850708
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.T.DIST(A6,B6,C6)",
+      "setup": {
+        "C6": {
+          "kind": "bool",
+          "value": true
+        },
+        "B6": {
+          "kind": "number",
+          "value": 5.2
+        },
+        "A6": {
+          "kind": "number",
+          "value": 2.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9651137653339814
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=_xlfn.T.INV(D6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 5.2
+        },
+        "C6": {
+          "kind": "bool",
+          "value": true
+        },
+        "A6": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A6,B6,C6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.3000000000000016
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=_xlfn.T.DIST.RT(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 5.2
+        },
+        "A6": {
+          "kind": "number",
+          "value": 2.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.034886234666018645
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.T.DIST(A7,B7,C7)",
+      "setup": {
+        "C7": {
+          "kind": "bool",
+          "value": true
+        },
+        "B7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 1.959999998
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9726775350120396
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=_xlfn.T.INV(D7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "C7": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "number",
+          "value": 1.959999998
+        },
+        "D7": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A7,B7,C7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.959999997999998
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=_xlfn.T.DIST.RT(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 1.959999998
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.02732246498796048
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=_xlfn.T.DIST(A8,B8,C8)",
+      "setup": {
+        "C8": {
+          "kind": "bool",
+          "value": true
+        },
+        "B8": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.96
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9726775351317354
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=_xlfn.T.INV(D8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "C8": {
+          "kind": "bool",
+          "value": true
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.96
+        },
+        "D8": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A8,B8,C8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.9600000000000002
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=_xlfn.T.DIST.RT(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.96
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.02732246486826467
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=_xlfn.T.DIST(A9,B9,C9)",
+      "setup": {
+        "C9": {
+          "kind": "bool",
+          "value": true
+        },
+        "B9": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=_xlfn.T.INV(D9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C9": {
+          "kind": "bool",
+          "value": true
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D9": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A9,B9,C9)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=_xlfn.T.DIST.RT(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=_xlfn.T.DIST(A10,B10,C10)",
+      "setup": {
+        "C10": {
+          "kind": "bool",
+          "value": false
+        },
+        "B10": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.38910838396603115
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=_xlfn.T.INV(D10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C10": {
+          "kind": "bool",
+          "value": false
+        },
+        "A10": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D10": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A10,B10,C10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.289359313143536
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=_xlfn.T.DIST.RT(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=_xlfn.T.DIST(A11,B11,C11)",
+      "setup": {
+        "C11": {
+          "kind": "bool",
+          "value": true
+        },
+        "B11": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8295534338489701
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=_xlfn.T.INV(D11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C11": {
+          "kind": "bool",
+          "value": true
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A11,B11,C11)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000004
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=_xlfn.T.DIST.RT(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17044656615102993
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=_xlfn.T.DIST(A12,B12,C12)",
+      "setup": {
+        "C12": {
+          "kind": "bool",
+          "value": true
+        },
+        "B12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17044656615102993
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=_xlfn.T.INV(D12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C12": {
+          "kind": "bool",
+          "value": true
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "D12": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A12,B12,C12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0000000000000004
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=_xlfn.T.DIST.RT(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8295534338489701
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=_xlfn.T.DIST(A13,B13,C13)",
+      "setup": {
+        "C13": {
+          "kind": "bool",
+          "value": true
+        },
+        "B13": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9490302605850708
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=_xlfn.T.INV(D13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C13": {
+          "kind": "bool",
+          "value": true
+        },
+        "A13": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D13": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A13,B13,C13)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.999999999999999
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=_xlfn.T.DIST.RT(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.05096973941492918
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=_xlfn.T.DIST(A14,B14,C14)",
+      "setup": {
+        "C14": {
+          "kind": "bool",
+          "value": true
+        },
+        "B14": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.05096973941492918
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=_xlfn.T.INV(D14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C14": {
+          "kind": "bool",
+          "value": true
+        },
+        "A14": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "D14": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A14,B14,C14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.9999999999999996
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=_xlfn.T.DIST.RT(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9490302605850708
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=_xlfn.T.DIST(A15,B15,C15)",
+      "setup": {
+        "C15": {
+          "kind": "bool",
+          "value": true
+        },
+        "B15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=_xlfn.T.INV(D15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C15": {
+          "kind": "bool",
+          "value": true
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A15,B15,C15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=_xlfn.T.DIST.RT(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.25000000000000006
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=_xlfn.T.DIST(A16,B16,C16)",
+      "setup": {
+        "C16": {
+          "kind": "bool",
+          "value": true
+        },
+        "B16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7886751345948129
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=_xlfn.T.INV(D16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C16": {
+          "kind": "bool",
+          "value": true
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D16": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A16,B16,C16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F16",
+      "formula": "=_xlfn.T.DIST.RT(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.21132486540518708
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=_xlfn.T.DIST(A17,B17,C17)",
+      "setup": {
+        "C17": {
+          "kind": "bool",
+          "value": true
+        },
+        "B17": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8401379221079384
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=_xlfn.T.INV(D17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "C17": {
+          "kind": "bool",
+          "value": true
+        },
+        "A17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D17": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A17,B17,C17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000004
+      }
+    },
+    {
+      "id": "F17",
+      "formula": "=_xlfn.T.DIST.RT(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.15986207789206167
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=_xlfn.T.DIST(A18,B18,C18)",
+      "setup": {
+        "C18": {
+          "kind": "bool",
+          "value": true
+        },
+        "B18": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 1000000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=_xlfn.T.INV(D18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C18": {
+          "kind": "bool",
+          "value": true
+        },
+        "A18": {
+          "kind": "number",
+          "value": 1000000.0
+        },
+        "D18": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A18,B18,C18)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F18",
+      "formula": "=_xlfn.T.DIST.RT(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 1000000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.230468749943611e-56
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=_xlfn.T.DIST(A19,B19,C19)",
+      "setup": {
+        "C19": {
+          "kind": "bool",
+          "value": true
+        },
+        "B19": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": -1000000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.230468749943611e-56
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=_xlfn.T.INV(D19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C19": {
+          "kind": "bool",
+          "value": true
+        },
+        "A19": {
+          "kind": "number",
+          "value": -1000000.0
+        },
+        "D19": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A19,B19,C19)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.T.INV(D19,B19)"
+    },
+    {
+      "id": "F19",
+      "formula": "=_xlfn.T.DIST.RT(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": -1000000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=_xlfn.T.DIST(A20,B20,C20)",
+      "setup": {
+        "C20": {
+          "kind": "bool",
+          "value": true
+        },
+        "B20": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 1e-06
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.500000389989757
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=_xlfn.T.INV(D20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "C20": {
+          "kind": "bool",
+          "value": true
+        },
+        "A20": {
+          "kind": "number",
+          "value": 1e-06
+        },
+        "D20": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A20,B20,C20)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.999999999666944e-07
+      }
+    },
+    {
+      "id": "F20",
+      "formula": "=_xlfn.T.DIST.RT(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 1e-06
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.49999961001024296
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=_xlfn.T.DIST(A21,B21,C21)",
+      "setup": {
+        "C21": {
+          "kind": "bool",
+          "value": true
+        },
+        "B21": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1e-06
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4999996092736948
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=_xlfn.T.INV(D21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "C21": {
+          "kind": "bool",
+          "value": true
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1e-06
+        },
+        "D21": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A21,B21,C21)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -9.999999999397088e-07
+      }
+    },
+    {
+      "id": "F21",
+      "formula": "=_xlfn.T.DIST.RT(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1e-06
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5000003907263052
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=_xlfn.T.DIST(A22,B22,C22)",
+      "setup": {
+        "C22": {
+          "kind": "bool",
+          "value": true
+        },
+        "B22": {
+          "kind": "number",
+          "value": 10.999999
+        },
+        "A22": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8295534338489701
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=_xlfn.T.INV(D22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 10.999999
+        },
+        "C22": {
+          "kind": "bool",
+          "value": true
+        },
+        "A22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D22": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A22,B22,C22)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000004
+      }
+    },
+    {
+      "id": "F22",
+      "formula": "=_xlfn.T.DIST.RT(A22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 10.999999
+        },
+        "A22": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17044656615102993
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=_xlfn.T.DIST(A23,B23,C23)",
+      "setup": {
+        "C23": {
+          "kind": "bool",
+          "value": true
+        },
+        "B23": {
+          "kind": "number",
+          "value": 10.000001
+        },
+        "A23": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8295534338489701
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=_xlfn.T.INV(D23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": 10.000001
+        },
+        "C23": {
+          "kind": "bool",
+          "value": true
+        },
+        "A23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D23": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A23,B23,C23)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000004
+      }
+    },
+    {
+      "id": "F23",
+      "formula": "=_xlfn.T.DIST.RT(A23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": 10.000001
+        },
+        "A23": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17044656615102993
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=_xlfn.T.DIST(A24,B24,C24)",
+      "setup": {
+        "C24": {
+          "kind": "bool",
+          "value": true
+        },
+        "B24": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=_xlfn.T.INV(D24,B24)",
+      "setup": {
+        "B24": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C24": {
+          "kind": "bool",
+          "value": true
+        },
+        "A24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D24": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A24,B24,C24)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F24",
+      "formula": "=_xlfn.T.DIST.RT(A24,B24)",
+      "setup": {
+        "B24": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=_xlfn.T.DIST(A25,B25,C25)",
+      "setup": {
+        "C25": {
+          "kind": "bool",
+          "value": true
+        },
+        "B25": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=_xlfn.T.INV(D25,B25)",
+      "setup": {
+        "B25": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "C25": {
+          "kind": "bool",
+          "value": true
+        },
+        "A25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D25": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A25,B25,C25)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F25",
+      "formula": "=_xlfn.T.DIST.RT(A25,B25)",
+      "setup": {
+        "B25": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=_xlfn.T.DIST(A26,B26,C26)",
+      "setup": {
+        "C26": {
+          "kind": "bool",
+          "value": true
+        },
+        "B26": {
+          "kind": "number",
+          "value": 1e-06
+        },
+        "A26": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E26",
+      "formula": "=_xlfn.T.INV(D26,B26)",
+      "setup": {
+        "B26": {
+          "kind": "number",
+          "value": 1e-06
+        },
+        "C26": {
+          "kind": "bool",
+          "value": true
+        },
+        "A26": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D26": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A26,B26,C26)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F26",
+      "formula": "=_xlfn.T.DIST.RT(A26,B26)",
+      "setup": {
+        "B26": {
+          "kind": "number",
+          "value": 1e-06
+        },
+        "A26": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=_xlfn.T.DIST(A27,B27,C27)",
+      "setup": {
+        "C27": {
+          "kind": "bool",
+          "value": true
+        },
+        "B27": {
+          "kind": "number",
+          "value": -1e-06
+        },
+        "A27": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E27",
+      "formula": "=_xlfn.T.INV(D27,B27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": -1e-06
+        },
+        "C27": {
+          "kind": "bool",
+          "value": true
+        },
+        "A27": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D27": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A27,B27,C27)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F27",
+      "formula": "=_xlfn.T.DIST.RT(A27,B27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": -1e-06
+        },
+        "A27": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=_xlfn.T.DIST(A28,B28,C28)",
+      "setup": {
+        "C28": {
+          "kind": "bool",
+          "value": true
+        },
+        "B28": {
+          "kind": "number",
+          "value": 1.000001
+        },
+        "A28": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "E28",
+      "formula": "=_xlfn.T.INV(D28,B28)",
+      "setup": {
+        "B28": {
+          "kind": "number",
+          "value": 1.000001
+        },
+        "C28": {
+          "kind": "bool",
+          "value": true
+        },
+        "A28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D28": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A28,B28,C28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F28",
+      "formula": "=_xlfn.T.DIST.RT(A28,B28)",
+      "setup": {
+        "B28": {
+          "kind": "number",
+          "value": 1.000001
+        },
+        "A28": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.25000000000000006
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=_xlfn.T.DIST(A29,B29,C29)",
+      "setup": {
+        "C29": {
+          "kind": "bool",
+          "value": true
+        },
+        "B29": {
+          "kind": "number",
+          "value": 0.999999
+        },
+        "A29": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E29",
+      "formula": "=_xlfn.T.INV(D29,B29)",
+      "setup": {
+        "B29": {
+          "kind": "number",
+          "value": 0.999999
+        },
+        "C29": {
+          "kind": "bool",
+          "value": true
+        },
+        "A29": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D29": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A29,B29,C29)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F29",
+      "formula": "=_xlfn.T.DIST.RT(A29,B29)",
+      "setup": {
+        "B29": {
+          "kind": "number",
+          "value": 0.999999
+        },
+        "A29": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D30",
+      "formula": "=_xlfn.T.DIST(A30,B30,C30)",
+      "setup": {
+        "C30": {
+          "kind": "bool",
+          "value": true
+        },
+        "B30": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "E30",
+      "formula": "=_xlfn.T.INV(D30,A30)",
+      "setup": {
+        "C30": {
+          "kind": "bool",
+          "value": true
+        },
+        "B30": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D30": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A30,B30,C30)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F30",
+      "formula": "=_xlfn.T.DIST.RT(A30,B30)",
+      "setup": {
+        "B30": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=_xlfn.T.DIST(A31,B31,C31)",
+      "setup": {
+        "C31": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E31",
+      "formula": "=_xlfn.T.INV(D31,B31)",
+      "setup": {
+        "C31": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D31": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A31,B31,C31)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F31",
+      "formula": "=_xlfn.T.DIST.RT(A31,B31)",
+      "setup": {
+        "A31": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D32",
+      "formula": "=_xlfn.T.DIST(A32,B32,C32)",
+      "setup": {
+        "B32": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.23036198922913867
+      }
+    },
+    {
+      "id": "A33",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D33",
+      "formula": "=_xlfn.T.DIST(A33,B33,C33)",
+      "setup": {
+        "C33": {
+          "kind": "bool",
+          "value": true
+        },
+        "B33": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E33",
+      "formula": "=_xlfn.T.INV(D33,B33)",
+      "setup": {
+        "B33": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C33": {
+          "kind": "bool",
+          "value": true
+        },
+        "D33": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A33,B33,C33)"
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F33",
+      "formula": "=_xlfn.T.DIST.RT(A33,B33)",
+      "setup": {
+        "B33": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D34",
+      "formula": "=_xlfn.T.DIST(A34,B34,C34)",
+      "setup": {
+        "C34": {
+          "kind": "bool",
+          "value": true
+        },
+        "A34": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B34": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E34",
+      "formula": "=_xlfn.T.INV(D34,B34)",
+      "setup": {
+        "C34": {
+          "kind": "bool",
+          "value": true
+        },
+        "A34": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B34": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "D34": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A34,B34,C34)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F34",
+      "formula": "=_xlfn.T.DIST.RT(A34,B34)",
+      "setup": {
+        "A34": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B34": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C35",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D35",
+      "formula": "=_xlfn.T.DIST(A35,B35,C35)",
+      "setup": {
+        "B35": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C35": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E35",
+      "formula": "=_xlfn.T.INV(D35,B35)",
+      "setup": {
+        "B35": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D35": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A35,B35,C35)"
+        },
+        "C35": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F35",
+      "formula": "=_xlfn.T.DIST.RT(A35,B35)",
+      "setup": {
+        "B35": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17044656615102993
+      }
+    },
+    {
+      "id": "D36",
+      "formula": "=_xlfn.T.DIST(A36,B36,C36)",
+      "setup": {
+        "C36": {
+          "kind": "bool",
+          "value": true
+        },
+        "B36": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A36": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8295534338489701
+      }
+    },
+    {
+      "id": "E36",
+      "formula": "=_xlfn.T.INV(D36,B36)",
+      "setup": {
+        "B36": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C36": {
+          "kind": "bool",
+          "value": true
+        },
+        "A36": {
+          "kind": "bool",
+          "value": true
+        },
+        "D36": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A36,B36,C36)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000004
+      }
+    },
+    {
+      "id": "F36",
+      "formula": "=_xlfn.T.DIST.RT(A36,B36)",
+      "setup": {
+        "B36": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A36": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17044656615102993
+      }
+    },
+    {
+      "id": "D37",
+      "formula": "=_xlfn.T.DIST(A37,B37,C37)",
+      "setup": {
+        "C37": {
+          "kind": "bool",
+          "value": true
+        },
+        "B37": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A37": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "E37",
+      "formula": "=_xlfn.T.INV(D37,B37)",
+      "setup": {
+        "B37": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C37": {
+          "kind": "bool",
+          "value": true
+        },
+        "A37": {
+          "kind": "bool",
+          "value": false
+        },
+        "D37": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A37,B37,C37)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F37",
+      "formula": "=_xlfn.T.DIST.RT(A37,B37)",
+      "setup": {
+        "B37": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A37": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "D38",
+      "formula": "=_xlfn.T.DIST(A38,B38,C38)",
+      "setup": {
+        "C38": {
+          "kind": "bool",
+          "value": true
+        },
+        "B38": {
+          "kind": "bool",
+          "value": true
+        },
+        "A38": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "E38",
+      "formula": "=_xlfn.T.INV(D38,B38)",
+      "setup": {
+        "B38": {
+          "kind": "bool",
+          "value": true
+        },
+        "C38": {
+          "kind": "bool",
+          "value": true
+        },
+        "A38": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D38": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A38,B38,C38)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F38",
+      "formula": "=_xlfn.T.DIST.RT(A38,B38)",
+      "setup": {
+        "B38": {
+          "kind": "bool",
+          "value": true
+        },
+        "A38": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.25000000000000006
+      }
+    },
+    {
+      "id": "D39",
+      "formula": "=_xlfn.T.DIST(A39,B39,C39)",
+      "setup": {
+        "C39": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B39": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8295534338489701
+      }
+    },
+    {
+      "id": "E39",
+      "formula": "=_xlfn.T.INV(D39,B39)",
+      "setup": {
+        "B39": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C39": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D39": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A39,B39,C39)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000004
+      }
+    },
+    {
+      "id": "F39",
+      "formula": "=_xlfn.T.DIST.RT(A39,B39)",
+      "setup": {
+        "B39": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17044656615102993
+      }
+    },
+    {
+      "id": "D40",
+      "formula": "=_xlfn.T.DIST(A40,B40,C40)",
+      "setup": {
+        "C40": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B40": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A40": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.23036198922913867
+      }
+    },
+    {
+      "id": "E40",
+      "formula": "=_xlfn.T.INV(D40,B40)",
+      "setup": {
+        "B40": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C40": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A40": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D40": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A40,B40,C40)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.7671443819344635
+      }
+    },
+    {
+      "id": "F40",
+      "formula": "=_xlfn.T.DIST.RT(A40,B40)",
+      "setup": {
+        "B40": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A40": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17044656615102993
+      }
+    },
+    {
+      "id": "D41",
+      "formula": "=_xlfn.T.DIST(A41,B41,C41)",
+      "setup": {
+        "C41": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B41": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A41": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8295534338489701
+      }
+    },
+    {
+      "id": "E41",
+      "formula": "=_xlfn.T.INV(D41,B41)",
+      "setup": {
+        "B41": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C41": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A41": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D41": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A41,B41,C41)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000004
+      }
+    },
+    {
+      "id": "F41",
+      "formula": "=_xlfn.T.DIST.RT(A41,B41)",
+      "setup": {
+        "B41": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A41": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17044656615102993
+      }
+    },
+    {
+      "id": "D42",
+      "formula": "=_xlfn.T.DIST(A42,B42,C42)",
+      "setup": {
+        "C42": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "B42": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A42": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8295534338489701
+      }
+    },
+    {
+      "id": "E42",
+      "formula": "=_xlfn.T.INV(D42,B42)",
+      "setup": {
+        "B42": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C42": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "A42": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D42": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A42,B42,C42)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000004
+      }
+    },
+    {
+      "id": "F42",
+      "formula": "=_xlfn.T.DIST.RT(A42,B42)",
+      "setup": {
+        "B42": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A42": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17044656615102993
+      }
+    },
+    {
+      "id": "D43",
+      "formula": "=_xlfn.T.DIST(A43,B43,C43)",
+      "setup": {
+        "C43": {
+          "kind": "text",
+          "value": "true"
+        },
+        "B43": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A43": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8295534338489701
+      }
+    },
+    {
+      "id": "E43",
+      "formula": "=_xlfn.T.INV(D43,B43)",
+      "setup": {
+        "B43": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C43": {
+          "kind": "text",
+          "value": "true"
+        },
+        "A43": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D43": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A43,B43,C43)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000004
+      }
+    },
+    {
+      "id": "F43",
+      "formula": "=_xlfn.T.DIST.RT(A43,B43)",
+      "setup": {
+        "B43": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A43": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17044656615102993
+      }
+    },
+    {
+      "id": "D44",
+      "formula": "=_xlfn.T.DIST(A44,B44,C44)",
+      "setup": {
+        "C44": {
+          "kind": "text",
+          "value": "\"TRUE\""
+        },
+        "B44": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A44": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E44",
+      "formula": "=_xlfn.T.INV(D44,B44)",
+      "setup": {
+        "B44": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C44": {
+          "kind": "text",
+          "value": "\"TRUE\""
+        },
+        "A44": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D44": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A44,B44,C44)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F44",
+      "formula": "=_xlfn.T.DIST.RT(A44,B44)",
+      "setup": {
+        "B44": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A44": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17044656615102993
+      }
+    },
+    {
+      "id": "D45",
+      "formula": "=_xlfn.T.DIST(A45,B45,C45)",
+      "setup": {
+        "C45": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "B45": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A45": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E45",
+      "formula": "=_xlfn.T.INV(D45,B45)",
+      "setup": {
+        "B45": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C45": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "A45": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D45": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A45,B45,C45)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F45",
+      "formula": "=_xlfn.T.DIST.RT(A45,B45)",
+      "setup": {
+        "B45": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A45": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17044656615102993
+      }
+    },
+    {
+      "id": "D46",
+      "formula": "=_xlfn.T.DIST(A46,B46,C46)",
+      "setup": {
+        "C46": {
+          "kind": "bool",
+          "value": true
+        },
+        "B46": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A46": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8295534338489701
+      }
+    },
+    {
+      "id": "E46",
+      "formula": "=_xlfn.T.INV(D46,B46)",
+      "setup": {
+        "B46": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C46": {
+          "kind": "bool",
+          "value": true
+        },
+        "A46": {
+          "kind": "text",
+          "value": "1"
+        },
+        "D46": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A46,B46,C46)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000004
+      }
+    },
+    {
+      "id": "F46",
+      "formula": "=_xlfn.T.DIST.RT(A46,B46)",
+      "setup": {
+        "B46": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A46": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17044656615102993
+      }
+    },
+    {
+      "id": "D47",
+      "formula": "=_xlfn.T.DIST(A47,B47,C47)",
+      "setup": {
+        "C47": {
+          "kind": "bool",
+          "value": true
+        },
+        "B47": {
+          "kind": "text",
+          "value": "10"
+        },
+        "A47": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8295534338489701
+      }
+    },
+    {
+      "id": "E47",
+      "formula": "=_xlfn.T.INV(D47,B47)",
+      "setup": {
+        "B47": {
+          "kind": "text",
+          "value": "10"
+        },
+        "C47": {
+          "kind": "bool",
+          "value": true
+        },
+        "A47": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D47": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A47,B47,C47)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000004
+      }
+    },
+    {
+      "id": "F47",
+      "formula": "=_xlfn.T.DIST.RT(A47,B47)",
+      "setup": {
+        "B47": {
+          "kind": "text",
+          "value": "10"
+        },
+        "A47": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17044656615102993
+      }
+    },
+    {
+      "id": "D48",
+      "formula": "=_xlfn.T.DIST(A48,B48,C48)",
+      "setup": {
+        "C48": {
+          "kind": "bool",
+          "value": true
+        },
+        "B48": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A48": {
+          "kind": "text",
+          "value": "hi"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E48",
+      "formula": "=_xlfn.T.INV(D48,B48)",
+      "setup": {
+        "B48": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C48": {
+          "kind": "bool",
+          "value": true
+        },
+        "A48": {
+          "kind": "text",
+          "value": "hi"
+        },
+        "D48": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A48,B48,C48)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F48",
+      "formula": "=_xlfn.T.DIST.RT(A48,B48)",
+      "setup": {
+        "B48": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A48": {
+          "kind": "text",
+          "value": "hi"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D49",
+      "formula": "=_xlfn.T.DIST(A49,B49,C49)",
+      "setup": {
+        "C49": {
+          "kind": "bool",
+          "value": true
+        },
+        "B49": {
+          "kind": "number",
+          "value": 46071.0
+        },
+        "A49": {
+          "kind": "number",
+          "value": 46040.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E49",
+      "formula": "=_xlfn.T.INV(D49,B49)",
+      "setup": {
+        "B49": {
+          "kind": "number",
+          "value": 46071.0
+        },
+        "C49": {
+          "kind": "bool",
+          "value": true
+        },
+        "A49": {
+          "kind": "number",
+          "value": 46040.0
+        },
+        "D49": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A49,B49,C49)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F49",
+      "formula": "=_xlfn.T.DIST.RT(A49,B49)",
+      "setup": {
+        "B49": {
+          "kind": "number",
+          "value": 46071.0
+        },
+        "A49": {
+          "kind": "number",
+          "value": 46040.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D50",
+      "formula": "=_xlfn.T.DIST(,B50,C50)",
+      "setup": {
+        "C50": {
+          "kind": "bool",
+          "value": true
+        },
+        "B50": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "E50",
+      "formula": "=_xlfn.T.INV(,B50)",
+      "setup": {
+        "B50": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F50",
+      "formula": "=_xlfn.T.DIST.RT(,B50)",
+      "setup": {
+        "B50": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "D51",
+      "formula": "=_xlfn.T.DIST(A51,,C51)",
+      "setup": {
+        "C51": {
+          "kind": "bool",
+          "value": true
+        },
+        "A51": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E51",
+      "formula": "=_xlfn.T.INV(D51,)",
+      "setup": {
+        "C51": {
+          "kind": "bool",
+          "value": true
+        },
+        "A51": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D51": {
+          "kind": "formula",
+          "formula": "=_xlfn.T.DIST(A51,,C51)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F51",
+      "formula": "=_xlfn.T.DIST.RT(A51,)",
+      "setup": {
+        "A51": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D52",
+      "formula": "=_xlfn.T.DIST(A52,B52,)",
+      "setup": {
+        "B52": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A52": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.23036198922913867
+      }
+    },
+    {
+      "id": "E54",
+      "formula": "=_xlfn.T.INV(A54,B54)",
+      "setup": {
+        "B54": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A54": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E55",
+      "formula": "=_xlfn.T.INV(A55,B55)",
+      "setup": {
+        "B55": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A55": {
+          "kind": "number",
+          "value": 0.025
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.2281388519862744
+      }
+    },
+    {
+      "id": "E56",
+      "formula": "=_xlfn.T.INV(A56,B56)",
+      "setup": {
+        "B56": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A56": {
+          "kind": "number",
+          "value": 0.975
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.2281388519862744
+      }
+    },
+    {
+      "id": "E57",
+      "formula": "=_xlfn.T.INV(A57,B57)",
+      "setup": {
+        "B57": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A57": {
+          "kind": "number",
+          "value": 0.05
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.812461122811676
+      }
+    },
+    {
+      "id": "E58",
+      "formula": "=_xlfn.T.INV(A58,B58)",
+      "setup": {
+        "B58": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A58": {
+          "kind": "number",
+          "value": 0.95
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.8124611228116754
+      }
+    },
+    {
+      "id": "E59",
+      "formula": "=_xlfn.T.INV(A59,B59)",
+      "setup": {
+        "B59": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A59": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E60",
+      "formula": "=_xlfn.T.INV(A60,B60)",
+      "setup": {
+        "B60": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A60": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E61",
+      "formula": "=_xlfn.T.INV(A61,B61)",
+      "setup": {
+        "B61": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A61": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E62",
+      "formula": "=_xlfn.T.INV(A62,B62)",
+      "setup": {
+        "B62": {
+          "kind": "number",
+          "value": 1000000.0
+        },
+        "A62": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E63",
+      "formula": "=_xlfn.T.INV(A63,B63)",
+      "setup": {
+        "B63": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A63": {
+          "kind": "number",
+          "value": 1e-07
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -12.492209687558763
+      }
+    },
+    {
+      "id": "E64",
+      "formula": "=_xlfn.T.INV(A64,B64)",
+      "setup": {
+        "B64": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A64": {
+          "kind": "number",
+          "value": -1e-07
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E65",
+      "formula": "=_xlfn.T.INV(A65,B65)",
+      "setup": {
+        "B65": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A65": {
+          "kind": "number",
+          "value": 1.0000001
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E66",
+      "formula": "=_xlfn.T.INV(A66,B66)",
+      "setup": {
+        "B66": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A66": {
+          "kind": "number",
+          "value": 0.9999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.492209688254745
+      }
+    },
+    {
+      "id": "E67",
+      "formula": "=_xlfn.T.INV(A67,B67)",
+      "setup": {
+        "B67": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A67": {
+          "kind": "number",
+          "value": 0.999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.143700494046589
+      }
+    },
+    {
+      "id": "E68",
+      "formula": "=_xlfn.T.INV(A68,B68)",
+      "setup": {
+        "B68": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A68": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E69",
+      "formula": "=_xlfn.T.INV(A69,B69)",
+      "setup": {
+        "B69": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A69": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E70",
+      "formula": "=_xlfn.T.INV(A70,B70)",
+      "setup": {
+        "B70": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A70": {
+          "kind": "number",
+          "value": -0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E71",
+      "formula": "=_xlfn.T.INV(A71,B71)",
+      "setup": {
+        "B71": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A71": {
+          "kind": "number",
+          "value": 1.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A72",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E72",
+      "formula": "=_xlfn.T.INV(A72,B72)",
+      "setup": {
+        "B72": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A72": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E73",
+      "formula": "=_xlfn.T.INV(A73,B73)",
+      "setup": {
+        "B73": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A73": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E74",
+      "formula": "=_xlfn.T.INV(A74,B74)",
+      "setup": {
+        "B74": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A74": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E75",
+      "formula": "=_xlfn.T.INV(A75,B75)",
+      "setup": {
+        "B75": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A75": {
+          "kind": "text",
+          "value": "0.75"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6998120613124317
+      }
+    },
+    {
+      "id": "E76",
+      "formula": "=_xlfn.T.INV(A76,B76)",
+      "setup": {
+        "B76": {
+          "kind": "text",
+          "value": "10"
+        },
+        "A76": {
+          "kind": "number",
+          "value": 0.75
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6998120613124317
+      }
+    },
+    {
+      "id": "E77",
+      "formula": "=_xlfn.T.INV(A77,B77)",
+      "setup": {
+        "B77": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A77": {
+          "kind": "text",
+          "value": "hi"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

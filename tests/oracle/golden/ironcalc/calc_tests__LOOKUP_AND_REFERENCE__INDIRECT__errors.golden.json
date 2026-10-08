@@ -1,0 +1,103 @@
+{
+  "suite": "ironcalc_calc_tests__LOOKUP_AND_REFERENCE_INDIRECT_errors",
+  "description": "Derived from IronCalc fixture calc_tests/LOOKUP_AND_REFERENCE/INDIRECT.xlsx, sheet 'errors'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "errors",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "L4",
+      "formula": "=E3",
+      "setup": {
+        "E3": {
+          "kind": "error",
+          "code": "#REF!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "L5",
+      "formula": "=E4",
+      "setup": {
+        "E4": {
+          "kind": "error",
+          "code": "#REF!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "L6",
+      "formula": "=E5",
+      "setup": {
+        "E5": {
+          "kind": "error",
+          "code": "#REF!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "L7",
+      "formula": "=E6",
+      "setup": {
+        "E6": {
+          "kind": "error",
+          "code": "#VALUE!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L8",
+      "formula": "=E7",
+      "setup": {
+        "E7": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "L9",
+      "formula": "=E8",
+      "setup": {
+        "E8": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    }
+  ]
+}

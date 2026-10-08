@@ -1,0 +1,914 @@
+{
+  "suite": "ironcalc_calc_tests__STATISTICAL_TRIMMEAN_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/STATISTICAL/TRIMMEAN.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=TRIMMEAN($A$2:$A$10,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.5888888888888886
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=TRIMMEAN($H$2:$H$10,I2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "H9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "H7": {
+          "kind": "bool",
+          "value": true
+        },
+        "H6": {
+          "kind": "bool",
+          "value": false
+        },
+        "H5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "H4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "H3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 12.4
+        },
+        "H10": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=TRIMMEAN($A$2:$A$10,B3)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =TRIMMEAN($A$2:$A$10,B3)"
+    },
+    {
+      "id": "J3",
+      "formula": "=TRIMMEAN($A$2:$A$10,I3)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =TRIMMEAN($A$2:$A$10,I3)"
+    },
+    {
+      "id": "C4",
+      "formula": "=TRIMMEAN($A$2:$A$10,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.5888888888888886
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=TRIMMEAN($A$2:$A$10,I4)",
+      "setup": {
+        "I4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.5888888888888886
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=TRIMMEAN($A$2:$A$10,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=TRIMMEAN($A$2:$A$10,I5)",
+      "setup": {
+        "I5": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=TRIMMEAN($A$2:$A$10,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=TRIMMEAN($A$2:$A$10,I6)",
+      "setup": {
+        "I6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=TRIMMEAN($A$2:$A$10,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 0.9
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.3
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=TRIMMEAN($A$2:$A$10,I7)",
+      "setup": {
+        "I7": {
+          "kind": "number",
+          "value": 0.9
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.3
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=TRIMMEAN($A$2:$A$10,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.5888888888888886
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=TRIMMEAN($A$2:$A$10,I8)",
+      "setup": {
+        "I8": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.5888888888888886
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=TRIMMEAN($A$2:$A$10,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.72
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=TRIMMEAN($A$2:$A$10,I9)",
+      "setup": {
+        "I9": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.72
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=TRIMMEAN($A$2:$A$10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 0.4
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.4142857142857146
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=TRIMMEAN($A$2:$A$10,I10)",
+      "setup": {
+        "I10": {
+          "kind": "number",
+          "value": 0.4
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.4142857142857146
+      }
+    }
+  ]
+}

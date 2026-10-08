@@ -37,8 +37,8 @@ Design notes
 * **METADATA sheet.** Upstream IronCalc stashes either a bare epsilon
   (single number in `A1`) or key/value rows like `Epsilon | 5e-8` /
   `Locale | en-GB`. Both shapes are supported; absence defaults to
-  `abs=5e-8, rel=0` which matches the IronCalc runner's hard-coded
-  `EPS`.
+  `abs=5e-8, rel=1e-12`; the abs bound matches the IronCalc runner's
+  hard-coded `EPS`.
 
 * **Error names.** openpyxl returns Excel errors as strings like
   `#DIV/0!`. We keep the literal and emit `{kind: error, code: ...}`
@@ -53,6 +53,7 @@ import json
 import logging
 import re
 import sys
+import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -72,9 +73,11 @@ DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "ironcalc_divergence.yaml"
 # Formulon's existing tolerance default for xlwings-generated goldens is
 # 1e-12, but IronCalc's own runner uses 5e-8 so a lot of its fixtures
 # commit cached values that are only accurate to ~8 digits. Use the
-# upstream default unless the fixture's METADATA sheet overrides it.
+# upstream abs default unless the fixture's METADATA sheet overrides it.
+# The cached <v> is Excel's full double, so last-bit differences in
+# summation order are not mismatches: hence the small relative bound.
 DEFAULT_ABS_TOLERANCE = 5e-8
-DEFAULT_REL_TOLERANCE = 0.0
+DEFAULT_REL_TOLERANCE = 1e-12
 
 # Per-sheet cap on emitted cases. Some IronCalc fixtures (notably
 # ARABIC_ROMAN, which has ~20k formula cells laid out in a grid) would
@@ -157,6 +160,27 @@ def _ironcalc_commit() -> str:
         if m:
             return m.group(1)
     return "unknown"
+
+
+def _read_app_info(xlsx_path: Path) -> Tuple[Optional[str], Optional[str]]:
+    """Returns (Application, AppVersion) from docProps/app.xml, None when absent."""
+
+    try:
+        with zipfile.ZipFile(xlsx_path) as zf:
+            xml = zf.read("docProps/app.xml").decode("utf-8", errors="replace")
+    except (KeyError, zipfile.BadZipFile):
+        return None, None
+    vals = []
+    for tag in ("Application", "AppVersion"):
+        m = re.search(rf"<{tag}>([^<]*)</{tag}>", xml)
+        vals.append(m.group(1).strip() if m else None)
+    return vals[0], vals[1]
+
+
+def _is_excel_product(app: Optional[str]) -> bool:
+    """True for Microsoft Excel builds (desktop, Online, Android, Mac)."""
+
+    return bool(app and re.search(r"\bExcel\b", app))
 
 
 def _load_divergence_skips(path: Path) -> Dict[str, str]:
@@ -450,6 +474,8 @@ def _convert_sheet(
     locale: str,
     commit: str,
     now_iso: str,
+    saved_by: Optional[str] = None,
+    saved_by_version: Optional[str] = None,
     skip_map: Optional[Dict[str, str]] = None,
 ) -> Tuple[Optional[Dict[str, Any]], SheetConvertStats]:
     """Converts one sheet of one xlsx to a golden-JSON dict.
@@ -490,18 +516,20 @@ def _convert_sheet(
     #     the test harness, masking errors that propagate from such cells).
     non_formula_cells: Dict[str, Any] = {}
     formula_cells: Dict[str, str] = {}
-    for row in sheet.iter_rows():
-        for cell in row:
-            if cell.value is None:
-                continue
-            if cell.data_type == "f" and isinstance(cell.value, str):
-                formula_cells[cell.coordinate] = cell.value
-            elif cell.data_type == "f":
-                cached_value = cached_sheet[cell.coordinate].value
-                if cached_value is not None:
-                    non_formula_cells[cell.coordinate] = cached_value
-            else:
-                non_formula_cells[cell.coordinate] = cell.value
+    # Walk populated cells only: iter_rows() would enumerate the whole
+    # declared dimension, which is A1:XFD1048576 in some fixtures.
+    for cell in sheet._cells.values():
+        if cell.value is None:
+            continue
+        # An empty `<f/>` (spill follower) reads back as a bare "=".
+        if cell.data_type == "f" and isinstance(cell.value, str) and cell.value.strip() != "=":
+            formula_cells[cell.coordinate] = cell.value
+        elif cell.data_type == "f":
+            cached_value = cached_sheet[cell.coordinate].value
+            if cached_value is not None:
+                non_formula_cells[cell.coordinate] = cached_value
+        else:
+            non_formula_cells[cell.coordinate] = cell.value
 
     stats.formula_cells = len(formula_cells)
 
@@ -634,6 +662,8 @@ def _convert_sheet(
             "commit": commit,
             "sheet": sheet.title,
             "excel_locale": locale,
+            "saved_by": saved_by,
+            "saved_by_version": saved_by_version,
             "generated_at": now_iso,
         },
         "tolerance": {"abs": abs_tol, "rel": rel_tol},
@@ -791,6 +821,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     total_skip_unbounded = 0
     total_skip_divergence = 0
     errored_files: List[Tuple[str, str]] = []
+    skipped_non_excel: List[Tuple[str, Optional[str]]] = []
 
     # Track every golden filename we (re)produce this run so any
     # leftover files from previous runs can be pruned at the end. We
@@ -804,6 +835,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         rel_source = xlsx_path.relative_to(args.source).as_posix()
         xlsx_stem = _scrub_filename(xlsx_path.stem)
         logger.info("== %s ==", rel_source)
+        saved_by, saved_by_version = _read_app_info(xlsx_path)
+        if not _is_excel_product(saved_by):
+            logger.info(
+                "skip %s: Application=%r is not a Microsoft Excel product; cached values were not computed by Excel",
+                rel_source,
+                saved_by,
+            )
+            skipped_non_excel.append((rel_source, saved_by))
+            continue
+
         try:
             wb_formula = openpyxl.load_workbook(
                 xlsx_path,
@@ -848,6 +889,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                     locale=locale,
                     commit=commit,
                     now_iso=now_iso,
+                    saved_by=saved_by,
+                    saved_by_version=saved_by_version,
                     skip_map=skip_map,
                 )
             except Exception as exc:
@@ -907,6 +950,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         f"skipped_over_cap={total_skip_over_cap} "
         f"skipped_unbounded_ref={total_skip_unbounded} "
         f"skipped_divergence={total_skip_divergence} "
+        f"skipped_non_excel={len(skipped_non_excel)} "
         f"errors={len(errored_files)}"
     )
     if errored_files:

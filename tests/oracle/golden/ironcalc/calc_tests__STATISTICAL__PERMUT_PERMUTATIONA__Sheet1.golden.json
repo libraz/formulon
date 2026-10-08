@@ -1,0 +1,624 @@
+{
+  "suite": "ironcalc_calc_tests__STATISTICAL_PERMUT_PERMUTATIONA_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/STATISTICAL/PERMUT_PERMUTATIONA.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=PERMUT(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=_xlfn.PERMUTATIONA(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=PERMUT(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.PERMUTATIONA(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=PERMUT(A4,B4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.PERMUTATIONA(A4,B4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=PERMUT(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.PERMUTATIONA(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=PERMUT(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 665280.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.PERMUTATIONA(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2985984.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=PERMUT(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 95040.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.PERMUTATIONA(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 248832.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=PERMUT(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11880.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=_xlfn.PERMUTATIONA(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20736.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=PERMUT(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 4.6
+        },
+        "A9": {
+          "kind": "number",
+          "value": 12.7
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11880.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=_xlfn.PERMUTATIONA(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 4.6
+        },
+        "A9": {
+          "kind": "number",
+          "value": 12.7
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20736.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=PERMUT(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=_xlfn.PERMUTATIONA(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=PERMUT(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "text",
+          "value": "1"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=_xlfn.PERMUTATIONA(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "text",
+          "value": "1"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=PERMUT(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "bool",
+          "value": true
+        },
+        "A12": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=_xlfn.PERMUTATIONA(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "bool",
+          "value": true
+        },
+        "A12": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=PERMUT(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=_xlfn.PERMUTATIONA(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=PERMUT(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=_xlfn.PERMUTATIONA(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=PERMUT(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=_xlfn.PERMUTATIONA(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=PERMUT(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2520.0
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=_xlfn.PERMUTATIONA(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16807.0
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=PERMUT(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 6.8
+        },
+        "A17": {
+          "kind": "number",
+          "value": 7.7
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5040.0
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=_xlfn.PERMUTATIONA(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 6.8
+        },
+        "A17": {
+          "kind": "number",
+          "value": 7.7
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 117649.0
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=PERMUT(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 4.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=_xlfn.PERMUTATIONA(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 4.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    }
+  ]
+}

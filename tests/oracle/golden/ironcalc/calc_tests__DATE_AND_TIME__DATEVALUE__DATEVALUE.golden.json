@@ -1,0 +1,945 @@
+{
+  "suite": "ironcalc_calc_tests__DATE_AND_TIME_DATEVALUE_DATEVALUE",
+  "description": "Derived from IronCalc fixture calc_tests/DATE_AND_TIME/DATEVALUE.xlsx, sheet 'DATEVALUE'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "DATEVALUE",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T08:32:30Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=DATEVALUE(A2)",
+      "setup": {
+        "A2": {
+          "kind": "text",
+          "value": "2026-12-01"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 46357.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=DATEVALUE(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "2026-13-01"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=DATEVALUE(A4)",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "9999-12-31"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=DATEVALUE(A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "10000-01-01"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=DATEVALUE(A6)",
+      "setup": {
+        "A6": {
+          "kind": "text",
+          "value": "1789-05-05"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=DATEVALUE(A7)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "2024-02-29"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45351.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=DATEVALUE(A8)",
+      "setup": {
+        "A8": {
+          "kind": "text",
+          "value": "2025-02-29"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=DATEVALUE(A9)",
+      "setup": {
+        "A9": {
+          "kind": "text",
+          "value": "\"2026-01-12\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=DATEVALUE(A10)",
+      "setup": {
+        "A10": {
+          "kind": "text",
+          "value": "2026-07-16 4:35 PM"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 46219.0
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=DATEVALUE(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=DATEVALUE(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 72.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=DATEVALUE(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 45854.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=DATE(2024,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=DATEVALUE(A14)",
+      "setup": {
+        "A14": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A15",
+      "formula": "=\"2024-01-10\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024-01-10"
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=DATEVALUE(A15)",
+      "setup": {
+        "A15": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    },
+    {
+      "id": "A16",
+      "formula": "=\" 2024-01-10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 2024-01-10 "
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=DATEVALUE(A16)",
+      "setup": {
+        "A16": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    },
+    {
+      "id": "A17",
+      "formula": "=TIME(14,30,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6041666666666666
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=DATEVALUE(A17)",
+      "setup": {
+        "A17": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=DATEVALUE(A18)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=DATEVALUE(A19)",
+      "setup": {
+        "A19": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=DATEVALUE(A20)",
+      "setup": {
+        "A20": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=DATEVALUE(A21)",
+      "setup": {
+        "A21": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A22",
+      "formula": "=E20:E22",
+      "setup": {
+        "E22": {
+          "kind": "text",
+          "value": "2026-12-01"
+        },
+        "E21": {
+          "kind": "text",
+          "value": "2025-12-01"
+        },
+        "E20": {
+          "kind": "text",
+          "value": "2024-12-01"
+        }
+      },
+      "skipped": "Formula moved from row 22 to Z1: E20:E22 selects a different row than the cached scalar; preserve formula placement before adjudication. Formula: =E20:E22"
+    },
+    {
+      "id": "B22",
+      "formula": "=DATEVALUE(E20:E22)",
+      "setup": {
+        "E22": {
+          "kind": "text",
+          "value": "2026-12-01"
+        },
+        "E21": {
+          "kind": "text",
+          "value": "2025-12-01"
+        },
+        "E20": {
+          "kind": "text",
+          "value": "2024-12-01"
+        }
+      },
+      "skipped": "Formula moved from row 22 to Z1: E20:E22 selects a different row than the cached scalar; preserve formula placement before adjudication. Formula: =DATEVALUE(E20:E22)"
+    },
+    {
+      "id": "A23",
+      "formula": "=\"8\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "8"
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=DATEVALUE(A23)",
+      "setup": {
+        "A23": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A24",
+      "formula": "=\" 10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 10 "
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=DATEVALUE(A24)",
+      "setup": {
+        "A24": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A25",
+      "formula": "=\"0\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=DATEVALUE(A25)",
+      "setup": {
+        "A25": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A26",
+      "formula": "=\"10.0\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "10.0"
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=DATEVALUE(A26)",
+      "setup": {
+        "A26": {
+          "kind": "formula",
+          "formula": "=\"10.0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A27",
+      "formula": "=\"008\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "008"
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=DATEVALUE(A27)",
+      "setup": {
+        "A27": {
+          "kind": "formula",
+          "formula": "=\"008\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=DATEVALUE(A28)",
+      "setup": {
+        "A28": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=DATEVALUE(A29)",
+      "setup": {
+        "A29": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A30",
+      "formula": "=\"@\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "@"
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=DATEVALUE(A30)",
+      "setup": {
+        "A30": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A31",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B31",
+      "formula": "=DATEVALUE(A31)",
+      "setup": {
+        "A31": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A32",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=DATEVALUE(A32)",
+      "setup": {
+        "A32": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=DATEVALUE(A33)",
+      "setup": {
+        "A33": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "A34",
+      "formula": "=SQRT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=DATEVALUE(A34)",
+      "setup": {
+        "A34": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A35",
+      "formula": "=\"x\"+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=DATEVALUE(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=DATEVALUE(A37)",
+      "setup": {
+        "A37": {
+          "kind": "text",
+          "value": "1900-02-29"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "B38",
+      "formula": "=DATEVALUE(A38)",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "1900-03-01"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      }
+    },
+    {
+      "id": "B39",
+      "formula": "=DATEVALUE(A39)",
+      "setup": {
+        "A39": {
+          "kind": "text",
+          "value": "9999-12-30"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2958464.0
+      }
+    },
+    {
+      "id": "B40",
+      "formula": "=DATEVALUE(A40)",
+      "setup": {
+        "A40": {
+          "kind": "text",
+          "value": "9999-13-01"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B41",
+      "formula": "=DATEVALUE(A41)",
+      "setup": {
+        "A41": {
+          "kind": "text",
+          "value": "2100-02-29"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B42",
+      "formula": "=DATEVALUE(A42)",
+      "setup": {
+        "A42": {
+          "kind": "text",
+          "value": "2000-02-29"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 36585.0
+      }
+    },
+    {
+      "id": "B43",
+      "formula": "=DATEVALUE(A43)",
+      "setup": {
+        "A43": {
+          "kind": "text",
+          "value": "2026-00-01"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B44",
+      "formula": "=DATEVALUE(A44)",
+      "setup": {
+        "A44": {
+          "kind": "text",
+          "value": "2026-01-00"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B45",
+      "formula": "=DATEVALUE(A45)",
+      "setup": {
+        "A45": {
+          "kind": "text",
+          "value": "2026-01-32"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B46",
+      "formula": "=DATEVALUE(A46)",
+      "setup": {
+        "A46": {
+          "kind": "text",
+          "value": "2026-04-31"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B47",
+      "formula": "=DATEVALUE(A47)",
+      "setup": {
+        "A47": {
+          "kind": "text",
+          "value": "2026-1-1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 46023.0
+      }
+    },
+    {
+      "id": "B48",
+      "formula": "=DATEVALUE(A48)",
+      "setup": {
+        "A48": {
+          "kind": "text",
+          "value": "26-01-01"
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =DATEVALUE(A48)"
+    },
+    {
+      "id": "B49",
+      "formula": "=DATEVALUE(A49)",
+      "setup": {
+        "A49": {
+          "kind": "text",
+          "value": "2026-01-01 00:00:00"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 46023.0
+      }
+    },
+    {
+      "id": "B50",
+      "formula": "=DATEVALUE(A50)",
+      "setup": {
+        "A50": {
+          "kind": "text",
+          "value": "2026-01-01 23:59:59"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 46023.0
+      }
+    },
+    {
+      "id": "B51",
+      "formula": "=DATEVALUE(A51)",
+      "setup": {
+        "A51": {
+          "kind": "text",
+          "value": "2026/01/01"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 46023.0
+      }
+    },
+    {
+      "id": "B52",
+      "formula": "=DATEVALUE(A52)",
+      "setup": {
+        "A52": {
+          "kind": "text",
+          "value": "2026.01.01"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B53",
+      "formula": "=DATEVALUE(A53)",
+      "setup": {
+        "A53": {
+          "kind": "text",
+          "value": "2026-01-01 "
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 46023.0
+      }
+    },
+    {
+      "id": "B54",
+      "formula": "=DATEVALUE(A54)",
+      "setup": {
+        "A54": {
+          "kind": "text",
+          "value": " 2026-01-01"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 46023.0
+      }
+    },
+    {
+      "id": "B55",
+      "formula": "=DATEVALUE(A55)",
+      "setup": {
+        "A55": {
+          "kind": "text",
+          "value": "2026-01-01x"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B56",
+      "formula": "=DATEVALUE(A56)",
+      "setup": {
+        "A56": {
+          "kind": "text",
+          "value": "-2026-01-01"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B58",
+      "formula": "=DATEVALUE(A58)",
+      "setup": {
+        "A58": {
+          "kind": "text",
+          "value": "2023-1-2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44928.0
+      }
+    },
+    {
+      "id": "B59",
+      "formula": "=DATEVALUE(A59)",
+      "setup": {
+        "A59": {
+          "kind": "text",
+          "value": "2021-6-15"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44362.0
+      }
+    }
+  ]
+}

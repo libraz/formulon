@@ -1,0 +1,261 @@
+{
+  "suite": "ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_SERIESSUM_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/MATH_AND_TRIGONOMETRY/SERIESSUM.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "A1",
+      "formula": "=SERIESSUM(2,0,1,{1,2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 17.0
+      }
+    },
+    {
+      "id": "C1",
+      "formula": "=SERIESSUM(0,0,2,{1,2,3})",
+      "setup": {},
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =SERIESSUM(0,0,2,{1,2,3})"
+    },
+    {
+      "id": "A2",
+      "formula": "=SERIESSUM(0.5,1,2,{2,2,2})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.3125
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=SERIESSUM(A7,B7,C7,D9:D14)",
+      "setup": {
+        "D10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D14": {
+          "kind": "formula",
+          "formula": "=1/FACT(5)"
+        },
+        "D13": {
+          "kind": "formula",
+          "formula": "=1/FACT(4)"
+        },
+        "D12": {
+          "kind": "formula",
+          "formula": "=1/6"
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=1/2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.7166666666666663
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=SERIESSUM(TRUE,B7,C7,D9:D14)",
+      "setup": {
+        "D10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D14": {
+          "kind": "formula",
+          "formula": "=1/FACT(5)"
+        },
+        "D13": {
+          "kind": "formula",
+          "formula": "=1/FACT(4)"
+        },
+        "D12": {
+          "kind": "formula",
+          "formula": "=1/6"
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=1/2"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=SERIESSUM(G6,B7,C7,D9:D14)",
+      "setup": {
+        "D10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "G6": {
+          "kind": "bool",
+          "value": true
+        },
+        "D14": {
+          "kind": "formula",
+          "formula": "=1/FACT(5)"
+        },
+        "D13": {
+          "kind": "formula",
+          "formula": "=1/FACT(4)"
+        },
+        "D12": {
+          "kind": "formula",
+          "formula": "=1/6"
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=1/2"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=SERIESSUM(0,B7,C7,D9:D14)",
+      "setup": {
+        "D10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D14": {
+          "kind": "formula",
+          "formula": "=1/FACT(5)"
+        },
+        "D13": {
+          "kind": "formula",
+          "formula": "=1/FACT(4)"
+        },
+        "D12": {
+          "kind": "formula",
+          "formula": "=1/6"
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=1/2"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =SERIESSUM(0,B7,C7,D9:D14)"
+    },
+    {
+      "id": "I7",
+      "formula": "=SERIESSUM(-1,0,2, {1,2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=1/2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=1/6",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.16666666666666666
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=1/FACT(4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.041666666666666664
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=1/FACT(5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.008333333333333333
+      }
+    }
+  ]
+}

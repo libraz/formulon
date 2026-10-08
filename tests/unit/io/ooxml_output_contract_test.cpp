@@ -843,7 +843,7 @@ TEST(WorksheetChildren, RealExcelSheetKeepsAnUnmodelledChildAndItsRelationship) 
   // stand in here: the point is to check the placement against Excel's own
   // emission order, not against the table the writer uses.
   const std::string kCustomPropertiesWorkbook =
-      std::string(FORMULON_FIXTURES_DIR) + "/../oracle/external/ironcalc/fixtures/calc_tests/UNICODE.xlsx";
+      std::string(FORMULON_FIXTURES_DIR) + "/../oracle/external/ironcalc/fixtures/calc_tests/TEXT/UNICODE.xlsx";
   const std::vector<std::uint8_t> bytes = test::read_file_bytes(kCustomPropertiesWorkbook);
   ASSERT_FALSE(bytes.empty());
   auto loaded = io::read_ooxml(test::span_of(bytes));

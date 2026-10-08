@@ -1,0 +1,1579 @@
+{
+  "suite": "ironcalc_calc_tests__DATE_AND_TIME_DAY_MONTH_YEAR_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/DATE_AND_TIME/DAY_MONTH_YEAR.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=DAY(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 32111.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=YEAR(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 32111.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1987.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=MONTH(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 32111.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=DAY(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 32112.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=YEAR(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 32112.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1987.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=MONTH(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 32112.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=DAY(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 32113.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=YEAR(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 32113.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1987.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=MONTH(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 32113.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=DAY(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 12344.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 17.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=YEAR(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 12344.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1933.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=MONTH(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 12344.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=DAY(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=YEAR(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=MONTH(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=DAY(A7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=YEAR(A7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=MONTH(A7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=DAY(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 32112.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=YEAR(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 32112.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1987.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=MONTH(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 32112.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=DAY(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 40000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=YEAR(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 40000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2009.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=MONTH(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 40000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=DAY(A10)",
+      "setup": {
+        "A10": {
+          "kind": "text",
+          "value": "qwerty"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=YEAR(A10)",
+      "setup": {
+        "A10": {
+          "kind": "text",
+          "value": "qwerty"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=MONTH(A10)",
+      "setup": {
+        "A10": {
+          "kind": "text",
+          "value": "qwerty"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=DAY(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 40040.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=YEAR(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 40040.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2009.0
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=MONTH(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 40040.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=DAY(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 40041.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=YEAR(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 40041.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2009.0
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=MONTH(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 40041.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=DAY(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 123452.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=YEAR(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 123452.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2237.0
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=MONTH(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 123452.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=DAY(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 61.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=YEAR(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 61.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1900.0
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=MONTH(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 61.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=DAY(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 40000.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=YEAR(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 40000.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2009.0
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=MONTH(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 40000.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=DAY(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -40000.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=YEAR(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -40000.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=MONTH(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -40000.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=DAY(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": -40000.000000001
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=YEAR(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": -40000.000000001
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=MONTH(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": -40000.000000001
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=DAY(A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 40000.000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=YEAR(A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 40000.000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2009.0
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=MONTH(A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 40000.000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "A20",
+      "formula": "=DATE(9999,12,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=DAY(A20)",
+      "setup": {
+        "A20": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.0
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=YEAR(A20)",
+      "setup": {
+        "A20": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999.0
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=MONTH(A20)",
+      "setup": {
+        "A20": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=DAY(A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 2958466.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=YEAR(A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 2958466.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=MONTH(A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 2958466.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=DAY(A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 1000000000000000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=YEAR(A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 1000000000000000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=MONTH(A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 1000000000000000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A23",
+      "formula": "=DATE(2024,2,29)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45351.0
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=DAY(A23)",
+      "setup": {
+        "A23": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=YEAR(A23)",
+      "setup": {
+        "A23": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=MONTH(A23)",
+      "setup": {
+        "A23": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "A24",
+      "formula": "=DATE(2025,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45716.0
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=DAY(A24)",
+      "setup": {
+        "A24": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 28.0
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=YEAR(A24)",
+      "setup": {
+        "A24": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2025.0
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=MONTH(A24)",
+      "setup": {
+        "A24": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "A25",
+      "formula": "=DATE(2025,12,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46022.0
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=DAY(A25)",
+      "setup": {
+        "A25": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.0
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=YEAR(A25)",
+      "setup": {
+        "A25": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2025.0
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=MONTH(A25)",
+      "setup": {
+        "A25": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "A26",
+      "formula": "=DATE(2026,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46023.0
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=DAY(A26)",
+      "setup": {
+        "A26": {
+          "kind": "formula",
+          "formula": "=DATE(2026,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=YEAR(A26)",
+      "setup": {
+        "A26": {
+          "kind": "formula",
+          "formula": "=DATE(2026,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2026.0
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=MONTH(A26)",
+      "setup": {
+        "A26": {
+          "kind": "formula",
+          "formula": "=DATE(2026,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=DAY(A27)",
+      "setup": {
+        "A27": {
+          "kind": "text",
+          "value": "45658"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=YEAR(A27)",
+      "setup": {
+        "A27": {
+          "kind": "text",
+          "value": "45658"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2025.0
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=MONTH(A27)",
+      "setup": {
+        "A27": {
+          "kind": "text",
+          "value": "45658"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=DAY(A28)",
+      "setup": {
+        "A28": {
+          "kind": "text",
+          "value": "\"45658\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=YEAR(A28)",
+      "setup": {
+        "A28": {
+          "kind": "text",
+          "value": "\"45658\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=MONTH(A28)",
+      "setup": {
+        "A28": {
+          "kind": "text",
+          "value": "\"45658\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=DAY(A29)",
+      "setup": {
+        "A29": {
+          "kind": "text",
+          "value": "\" 45658\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=YEAR(A29)",
+      "setup": {
+        "A29": {
+          "kind": "text",
+          "value": "\" 45658\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=MONTH(A29)",
+      "setup": {
+        "A29": {
+          "kind": "text",
+          "value": "\" 45658\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=DAY(A30)",
+      "setup": {
+        "A30": {
+          "kind": "text",
+          "value": "2025-06-15"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "C30",
+      "formula": "=YEAR(A30)",
+      "setup": {
+        "A30": {
+          "kind": "text",
+          "value": "2025-06-15"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2025.0
+      }
+    },
+    {
+      "id": "D30",
+      "formula": "=MONTH(A30)",
+      "setup": {
+        "A30": {
+          "kind": "text",
+          "value": "2025-06-15"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "B31",
+      "formula": "=DAY(A31)",
+      "setup": {
+        "A31": {
+          "kind": "text",
+          "value": "2025-15-13"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C31",
+      "formula": "=YEAR(A31)",
+      "setup": {
+        "A31": {
+          "kind": "text",
+          "value": "2025-15-13"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=MONTH(A31)",
+      "setup": {
+        "A31": {
+          "kind": "text",
+          "value": "2025-15-13"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=DAY(A32)",
+      "setup": {
+        "A32": {
+          "kind": "text",
+          "value": "2025-02-30"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C32",
+      "formula": "=YEAR(A32)",
+      "setup": {
+        "A32": {
+          "kind": "text",
+          "value": "2025-02-30"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D32",
+      "formula": "=MONTH(A32)",
+      "setup": {
+        "A32": {
+          "kind": "text",
+          "value": "2025-02-30"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A33",
+      "formula": "=DATE(2025,1,31)+0.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45688.5
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=DAY(A33)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.0
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=YEAR(A33)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2025.0
+      }
+    },
+    {
+      "id": "D33",
+      "formula": "=MONTH(A33)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A34",
+      "formula": "=DATE(9999,12,31)+0.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958465.5
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=DAY(A34)",
+      "setup": {
+        "A34": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.0
+      }
+    },
+    {
+      "id": "C34",
+      "formula": "=YEAR(A34)",
+      "setup": {
+        "A34": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999.0
+      }
+    },
+    {
+      "id": "D34",
+      "formula": "=MONTH(A34)",
+      "setup": {
+        "A34": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "A35",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=DAY(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C35",
+      "formula": "=YEAR(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D35",
+      "formula": "=MONTH(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "A36",
+      "formula": "=DATE(2025,6,15)&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "45823"
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=DAY(A36)",
+      "setup": {
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(2025,6,15)&\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "C36",
+      "formula": "=YEAR(A36)",
+      "setup": {
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(2025,6,15)&\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2025.0
+      }
+    },
+    {
+      "id": "D36",
+      "formula": "=MONTH(A36)",
+      "setup": {
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(2025,6,15)&\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=DAY(A37)",
+      "setup": {
+        "A37": {
+          "kind": "number",
+          "value": 61.99
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C37",
+      "formula": "=YEAR(A37)",
+      "setup": {
+        "A37": {
+          "kind": "number",
+          "value": 61.99
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1900.0
+      }
+    },
+    {
+      "id": "D37",
+      "formula": "=MONTH(A37)",
+      "setup": {
+        "A37": {
+          "kind": "number",
+          "value": 61.99
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    }
+  ]
+}

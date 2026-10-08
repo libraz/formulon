@@ -1,0 +1,1844 @@
+{
+  "suite": "ironcalc_calc_tests__STATISTICAL_BINOM_BINOM.DIST",
+  "description": "Derived from IronCalc fixture calc_tests/STATISTICAL/BINOM.xlsx, sheet 'BINOM.DIST'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "BINOM.DIST",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "E2",
+      "formula": "=_xlfn.BINOM.DIST(A2,B2,C2,D2)",
+      "setup": {
+        "D2": {
+          "kind": "bool",
+          "value": true
+        },
+        "C2": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.94235199
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=_xlfn.BINOM.DIST(A3,B3,C3,D3)",
+      "setup": {
+        "D3": {
+          "kind": "bool",
+          "value": false
+        },
+        "C3": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "B3": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.23925373020405763
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=_xlfn.BINOM.DIST(A4,B4,C4,D4)",
+      "setup": {
+        "D4": {
+          "kind": "bool",
+          "value": true
+        },
+        "C4": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "B4": {
+          "kind": "number",
+          "value": 2.7
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.99
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=_xlfn.BINOM.DIST(A5,B5,C5,D5)",
+      "setup": {
+        "D5": {
+          "kind": "bool",
+          "value": true
+        },
+        "C5": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2.01
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0546875
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=_xlfn.BINOM.DIST(A6,B6,C6,D6)",
+      "setup": {
+        "D6": {
+          "kind": "bool",
+          "value": true
+        },
+        "C6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 2.99
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0546875
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=_xlfn.BINOM.DIST(A7,B7,C7,D7)",
+      "setup": {
+        "D7": {
+          "kind": "bool",
+          "value": true
+        },
+        "C7": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B7": {
+          "kind": "number",
+          "value": 10.01
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0546875
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=_xlfn.BINOM.DIST(A8,B8,C8,D8)",
+      "setup": {
+        "D8": {
+          "kind": "bool",
+          "value": true
+        },
+        "C8": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B8": {
+          "kind": "number",
+          "value": 10.99
+        },
+        "A8": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0546875
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=_xlfn.BINOM.DIST(A10,B10,C10,D10)",
+      "setup": {
+        "D10": {
+          "kind": "bool",
+          "value": true
+        },
+        "C10": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9630714665120287
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=_xlfn.BINOM.DIST(A11,B11,C11,D11)",
+      "setup": {
+        "D11": {
+          "kind": "bool",
+          "value": true
+        },
+        "C11": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "B11": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 3000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=_xlfn.BINOM.DIST(A12,B12,C12,D12)",
+      "setup": {
+        "D12": {
+          "kind": "bool",
+          "value": true
+        },
+        "C12": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.623046875
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=_xlfn.BINOM.DIST(A13,B13,C13,D13)",
+      "setup": {
+        "D13": {
+          "kind": "bool",
+          "value": true
+        },
+        "C13": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "B13": {
+          "kind": "number",
+          "value": 10000.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.508421039265265
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=_xlfn.BINOM.DIST(A14,B14,C14,D14)",
+      "setup": {
+        "D14": {
+          "kind": "bool",
+          "value": true
+        },
+        "C14": {
+          "kind": "number",
+          "value": 0.999
+        },
+        "B14": {
+          "kind": "number",
+          "value": 10000.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 9999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999548266540229
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=_xlfn.BINOM.DIST(A15,B15,C15,D15)",
+      "setup": {
+        "D15": {
+          "kind": "bool",
+          "value": true
+        },
+        "C15": {
+          "kind": "number",
+          "value": 1e-05
+        },
+        "B15": {
+          "kind": "number",
+          "value": 1000000.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0004993787976951216
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=_xlfn.BINOM.DIST(A16,B16,C16,D16)",
+      "setup": {
+        "D16": {
+          "kind": "bool",
+          "value": true
+        },
+        "C16": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "B16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=_xlfn.BINOM.DIST(A17,B17,C17,D17)",
+      "setup": {
+        "D17": {
+          "kind": "bool",
+          "value": true
+        },
+        "C17": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=_xlfn.BINOM.DIST(A18,B18,C18,D18)",
+      "setup": {
+        "D18": {
+          "kind": "bool",
+          "value": true
+        },
+        "C18": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B18": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.028247524899999994
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=_xlfn.BINOM.DIST(A19,B19,C19,D19)",
+      "setup": {
+        "D19": {
+          "kind": "bool",
+          "value": true
+        },
+        "C19": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "B19": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 1995.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=_xlfn.BINOM.DIST(A20,B20,C20,D20)",
+      "setup": {
+        "D20": {
+          "kind": "bool",
+          "value": false
+        },
+        "C20": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B20": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.10291934520000003
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=_xlfn.BINOM.DIST(A21,B21,C21,D21)",
+      "setup": {
+        "D21": {
+          "kind": "bool",
+          "value": true
+        },
+        "C21": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=_xlfn.BINOM.DIST(A22,B22,C22,D22)",
+      "setup": {
+        "D22": {
+          "kind": "bool",
+          "value": true
+        },
+        "C22": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=_xlfn.BINOM.DIST(A23,B23,C23,D23)",
+      "setup": {
+        "D23": {
+          "kind": "bool",
+          "value": true
+        },
+        "C23": {
+          "kind": "number",
+          "value": 1e-06
+        },
+        "B23": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999999999999
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=_xlfn.BINOM.DIST(A24,B24,C24,D24)",
+      "setup": {
+        "D24": {
+          "kind": "bool",
+          "value": true
+        },
+        "C24": {
+          "kind": "number",
+          "value": 0.999999
+        },
+        "B24": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.499992001038836e-47
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=_xlfn.BINOM.DIST(A25,B25,C25,D25)",
+      "setup": {
+        "D25": {
+          "kind": "bool",
+          "value": true
+        },
+        "C25": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E26",
+      "formula": "=_xlfn.BINOM.DIST(A26,B26,C26,D26)",
+      "setup": {
+        "D26": {
+          "kind": "bool",
+          "value": true
+        },
+        "C26": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E27",
+      "formula": "=_xlfn.BINOM.DIST(A27,B27,C27,D27)",
+      "setup": {
+        "D27": {
+          "kind": "bool",
+          "value": true
+        },
+        "C27": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E28",
+      "formula": "=_xlfn.BINOM.DIST(A28,B28,C28,D28)",
+      "setup": {
+        "D28": {
+          "kind": "bool",
+          "value": true
+        },
+        "C28": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E29",
+      "formula": "=_xlfn.BINOM.DIST(A29,B29,C29,D29)",
+      "setup": {
+        "D29": {
+          "kind": "bool",
+          "value": true
+        },
+        "C29": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B29": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.623046875
+      }
+    },
+    {
+      "id": "E30",
+      "formula": "=_xlfn.BINOM.DIST(A30,B30,C30,D30)",
+      "setup": {
+        "D30": {
+          "kind": "bool",
+          "value": true
+        },
+        "C30": {
+          "kind": "number",
+          "value": 0.01
+        },
+        "B30": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3660323412732295
+      }
+    },
+    {
+      "id": "E31",
+      "formula": "=_xlfn.BINOM.DIST(A31,B31,C31,D31)",
+      "setup": {
+        "D31": {
+          "kind": "bool",
+          "value": true
+        },
+        "C31": {
+          "kind": "number",
+          "value": 0.99
+        },
+        "B31": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6339676587267709
+      }
+    },
+    {
+      "id": "E32",
+      "formula": "=_xlfn.BINOM.DIST(A32,B32,C32,D32)",
+      "setup": {
+        "D32": {
+          "kind": "bool",
+          "value": true
+        },
+        "C32": {
+          "kind": "number",
+          "value": 0.99
+        },
+        "B32": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.90100000000073e-197
+      }
+    },
+    {
+      "id": "E33",
+      "formula": "=_xlfn.BINOM.DIST(A33,B33,C33,D33)",
+      "setup": {
+        "D33": {
+          "kind": "bool",
+          "value": true
+        },
+        "C33": {
+          "kind": "number",
+          "value": 0.01
+        },
+        "B33": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E34",
+      "formula": "=_xlfn.BINOM.DIST(A34,B34,C34,D34)",
+      "setup": {
+        "D34": {
+          "kind": "bool",
+          "value": true
+        },
+        "C34": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B34": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.49
+      }
+    },
+    {
+      "id": "E37",
+      "formula": "=_xlfn.BINOM.DIST(A37,B37,C37,D37)",
+      "setup": {
+        "D37": {
+          "kind": "bool",
+          "value": true
+        },
+        "C37": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B37": {
+          "kind": "number",
+          "value": 1e+30
+        },
+        "A37": {
+          "kind": "number",
+          "value": 10000000000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E38",
+      "formula": "=_xlfn.BINOM.DIST(A38,B38,C38,D38)",
+      "setup": {
+        "D38": {
+          "kind": "bool",
+          "value": true
+        },
+        "C38": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B38": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.49
+      }
+    },
+    {
+      "id": "E39",
+      "formula": "=_xlfn.BINOM.DIST(A39,B39,C39,D39)",
+      "setup": {
+        "D39": {
+          "kind": "bool",
+          "value": true
+        },
+        "C39": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B39": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E40",
+      "formula": "=_xlfn.BINOM.DIST(A40,B40,C40,D40)",
+      "setup": {
+        "D40": {
+          "kind": "bool",
+          "value": true
+        },
+        "C40": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B40": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A40": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E41",
+      "formula": "=_xlfn.BINOM.DIST(A41,B41,C41,D41)",
+      "setup": {
+        "D41": {
+          "kind": "bool",
+          "value": true
+        },
+        "C41": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B41": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "A41": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E42",
+      "formula": "=_xlfn.BINOM.DIST(A42,B42,C42,D42)",
+      "setup": {
+        "D42": {
+          "kind": "bool",
+          "value": true
+        },
+        "C42": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B42": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.028247524899999994
+      }
+    },
+    {
+      "id": "E43",
+      "formula": "=_xlfn.BINOM.DIST(A43,B43,C43,D43)",
+      "setup": {
+        "D43": {
+          "kind": "bool",
+          "value": true
+        },
+        "C43": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "A43": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E44",
+      "formula": "=_xlfn.BINOM.DIST(A44,B44,C44,D44)",
+      "setup": {
+        "D44": {
+          "kind": "bool",
+          "value": true
+        },
+        "B44": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A44": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E45",
+      "formula": "=_xlfn.BINOM.DIST(A45,B45,C45,D45)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E46",
+      "formula": "=_xlfn.BINOM.DIST(,B46,C46,D46)",
+      "setup": {
+        "D46": {
+          "kind": "bool",
+          "value": true
+        },
+        "C46": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B46": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.028247524899999994
+      }
+    },
+    {
+      "id": "E47",
+      "formula": "=_xlfn.BINOM.DIST(A47,,C47,D47)",
+      "setup": {
+        "D47": {
+          "kind": "bool",
+          "value": true
+        },
+        "C47": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "A47": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E48",
+      "formula": "=_xlfn.BINOM.DIST(A48,B48,,D48)",
+      "setup": {
+        "D48": {
+          "kind": "bool",
+          "value": true
+        },
+        "B48": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A48": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E49",
+      "formula": "=_xlfn.BINOM.DIST(,,,)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E50",
+      "formula": "=_xlfn.BINOM.DIST(A50,B50,C50,D50)",
+      "setup": {
+        "D50": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C50": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B50": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A50": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.94235199
+      }
+    },
+    {
+      "id": "E51",
+      "formula": "=_xlfn.BINOM.DIST(A51,B51,C51,D51)",
+      "setup": {
+        "D51": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C51": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B51": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A51": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.19765031999999993
+      }
+    },
+    {
+      "id": "E52",
+      "formula": "=_xlfn.BINOM.DIST(A52,B52,C52,D52)",
+      "setup": {
+        "D52": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "C52": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B52": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A52": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.94235199
+      }
+    },
+    {
+      "id": "E53",
+      "formula": "=_xlfn.BINOM.DIST(A53,B53,C53,D53)",
+      "setup": {
+        "C53": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B53": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A53": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.19765031999999993
+      }
+    },
+    {
+      "id": "E54",
+      "formula": "=_xlfn.BINOM.DIST(A54,B54,C54,)",
+      "setup": {
+        "C54": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B54": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A54": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.19765031999999993
+      }
+    },
+    {
+      "id": "E55",
+      "formula": "=_xlfn.BINOM.DIST(A55,B55,C55,D55)",
+      "setup": {
+        "D55": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "C55": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B55": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A55": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.94235199
+      }
+    },
+    {
+      "id": "E57",
+      "formula": "=_xlfn.BINOM.DIST(A57,B57,C57,D57)",
+      "setup": {
+        "D57": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "C57": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B57": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A57": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.94235199
+      }
+    },
+    {
+      "id": "E58",
+      "formula": "=_xlfn.BINOM.DIST(A58,B58,C58,D58)",
+      "setup": {
+        "D58": {
+          "kind": "text",
+          "value": "true"
+        },
+        "C58": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B58": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A58": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.94235199
+      }
+    },
+    {
+      "id": "E59",
+      "formula": "=_xlfn.BINOM.DIST(A59,B59,C59,D59)",
+      "setup": {
+        "D59": {
+          "kind": "text",
+          "value": "\"TRUE\""
+        },
+        "C59": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B59": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A59": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E60",
+      "formula": "=_xlfn.BINOM.DIST(A60,B60,C60,D60)",
+      "setup": {
+        "D60": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "C60": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B60": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A60": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E61",
+      "formula": "=_xlfn.BINOM.DIST(A61,B61,C61,D61)",
+      "setup": {
+        "D61": {
+          "kind": "bool",
+          "value": true
+        },
+        "C61": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B61": {
+          "kind": "number",
+          "value": 46028.0
+        },
+        "A61": {
+          "kind": "number",
+          "value": 36531.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A62",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E62",
+      "formula": "=_xlfn.BINOM.DIST(A62,B62,C62,D62)",
+      "setup": {
+        "D62": {
+          "kind": "bool",
+          "value": true
+        },
+        "C62": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B62": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A62": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B63",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E63",
+      "formula": "=_xlfn.BINOM.DIST(A63,B63,C63,D63)",
+      "setup": {
+        "D63": {
+          "kind": "bool",
+          "value": true
+        },
+        "C63": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A63": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B63": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C64",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E64",
+      "formula": "=_xlfn.BINOM.DIST(A64,B64,C64,D64)",
+      "setup": {
+        "D64": {
+          "kind": "bool",
+          "value": true
+        },
+        "B64": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A64": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C64": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D65",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E65",
+      "formula": "=_xlfn.BINOM.DIST(A65,B65,C65,D65)",
+      "setup": {
+        "C65": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B65": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A65": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D65": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C66",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E66",
+      "formula": "=_xlfn.BINOM.DIST(A66,B66,C66,D66)",
+      "setup": {
+        "B66": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A66": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D66": {
+          "kind": "formula",
+          "formula": "=#REF!"
+        },
+        "C66": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "E67",
+      "formula": "=_xlfn.BINOM.DIST(A67,B67,C67,D67)",
+      "setup": {
+        "D67": {
+          "kind": "bool",
+          "value": true
+        },
+        "C67": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B67": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A67": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0012903300000000034
+      }
+    },
+    {
+      "id": "E68",
+      "formula": "=_xlfn.BINOM.DIST(A68,B68,C68,D68)",
+      "setup": {
+        "D68": {
+          "kind": "bool",
+          "value": true
+        },
+        "C68": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B68": {
+          "kind": "bool",
+          "value": true
+        },
+        "A68": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E69",
+      "formula": "=_xlfn.BINOM.DIST(A69,B69,C69,D69)",
+      "setup": {
+        "D69": {
+          "kind": "bool",
+          "value": true
+        },
+        "C69": {
+          "kind": "bool",
+          "value": false
+        },
+        "B69": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A69": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E70",
+      "formula": "=_xlfn.BINOM.DIST(A70,B70,C70,D70)",
+      "setup": {
+        "D70": {
+          "kind": "bool",
+          "value": true
+        },
+        "C70": {
+          "kind": "text",
+          "value": "0.3"
+        },
+        "B70": {
+          "kind": "text",
+          "value": "10"
+        },
+        "A70": {
+          "kind": "text",
+          "value": "2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3827827863999998
+      }
+    },
+    {
+      "id": "E71",
+      "formula": "=_xlfn.BINOM.DIST(A71,B71,C71,D71)",
+      "setup": {
+        "D71": {
+          "kind": "bool",
+          "value": true
+        },
+        "C71": {
+          "kind": "text",
+          "value": "0.3"
+        },
+        "B71": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A71": {
+          "kind": "text",
+          "value": "2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3827827863999998
+      }
+    },
+    {
+      "id": "E72",
+      "formula": "=_xlfn.BINOM.DIST(A72,B72,C72,D72)",
+      "setup": {
+        "D72": {
+          "kind": "bool",
+          "value": true
+        },
+        "C72": {
+          "kind": "text",
+          "value": "\"0.3\""
+        },
+        "B72": {
+          "kind": "text",
+          "value": "\"10\""
+        },
+        "A72": {
+          "kind": "text",
+          "value": "\"2\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E76",
+      "formula": "=_xlfn.BINOM.DIST(A76,B76,C76,D76)",
+      "setup": {
+        "D76": {
+          "kind": "bool",
+          "value": false
+        },
+        "C76": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B76": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A76": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17619705200195307
+      }
+    },
+    {
+      "id": "E77",
+      "formula": "=_xlfn.BINOM.DIST(A77,B77,C77,D77)",
+      "setup": {
+        "D77": {
+          "kind": "bool",
+          "value": false
+        },
+        "C77": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B77": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A77": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.26682793200000005
+      }
+    },
+    {
+      "id": "E78",
+      "formula": "=_xlfn.BINOM.DIST(A78,B78,C78,D78)",
+      "setup": {
+        "D78": {
+          "kind": "bool",
+          "value": false
+        },
+        "C78": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B78": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A78": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.23347444050000005
+      }
+    },
+    {
+      "id": "E79",
+      "formula": "=_xlfn.BINOM.DIST(A79,B79,C79,D79)",
+      "setup": {
+        "D79": {
+          "kind": "bool",
+          "value": false
+        },
+        "C79": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B79": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A79": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.20012094900000005
+      }
+    }
+  ]
+}

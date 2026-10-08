@@ -1,0 +1,4900 @@
+{
+  "suite": "ironcalc_calc_tests__FINANCIAL_COUPDAYS_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/FINANCIAL/COUPDAYS.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "A2",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=DATE(2021,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=COUPDAYS(A2,B2,C2,D2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=COUPDAYBS(A2,B2,C2,D2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=COUPDAYSNC(A2,B2,C2,D2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=COUPNCD(A2,B2,C2,D2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=COUPNUM(A2,B2,C2,D2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=COUPPCD(A2,B2,C2,D2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "A3",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=DATE(2021,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=COUPDAYS(A3,B3,C3,D3)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 366.0
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=COUPDAYBS(A3,B3,C3,D3)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=COUPDAYSNC(A3,B3,C3,D3)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 366.0
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=COUPNCD(A3,B3,C3,D3)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=COUPNUM(A3,B3,C3,D3)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=COUPPCD(A3,B3,C3,D3)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=DATE(2021,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=COUPDAYS(A4,B4,C4,D4)",
+      "setup": {
+        "D4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=COUPDAYBS(A4,B4,C4,D4)",
+      "setup": {
+        "D4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=COUPDAYSNC(A4,B4,C4,D4)",
+      "setup": {
+        "D4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 366.0
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=COUPNCD(A4,B4,C4,D4)",
+      "setup": {
+        "D4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=COUPNUM(A4,B4,C4,D4)",
+      "setup": {
+        "D4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=COUPPCD(A4,B4,C4,D4)",
+      "setup": {
+        "D4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=DATE(2021,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=COUPDAYS(A5,B5,C5,D5)",
+      "setup": {
+        "D5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=COUPDAYBS(A5,B5,C5,D5)",
+      "setup": {
+        "D5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=COUPDAYSNC(A5,B5,C5,D5)",
+      "setup": {
+        "D5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 366.0
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=COUPNCD(A5,B5,C5,D5)",
+      "setup": {
+        "D5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=COUPNUM(A5,B5,C5,D5)",
+      "setup": {
+        "D5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=COUPPCD(A5,B5,C5,D5)",
+      "setup": {
+        "D5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=DATE(2021,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=COUPDAYS(A6,B6,C6,D6)",
+      "setup": {
+        "D6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=COUPDAYBS(A6,B6,C6,D6)",
+      "setup": {
+        "D6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=COUPDAYSNC(A6,B6,C6,D6)",
+      "setup": {
+        "D6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=COUPNCD(A6,B6,C6,D6)",
+      "setup": {
+        "D6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=COUPNUM(A6,B6,C6,D6)",
+      "setup": {
+        "D6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=COUPPCD(A6,B6,C6,D6)",
+      "setup": {
+        "D6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=DATE(2021,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=COUPDAYS(A8,B8,C8,D8)",
+      "setup": {
+        "D8": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=COUPDAYBS(A8,B8,C8,D8)",
+      "setup": {
+        "D8": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=COUPDAYSNC(A8,B8,C8,D8)",
+      "setup": {
+        "D8": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=COUPNCD(A8,B8,C8,D8)",
+      "setup": {
+        "D8": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44013.0
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=COUPNUM(A8,B8,C8,D8)",
+      "setup": {
+        "D8": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=COUPPCD(A8,B8,C8,D8)",
+      "setup": {
+        "D8": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "A9",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=DATE(2021,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=COUPDAYS(A9,B9,C9,D9)",
+      "setup": {
+        "D9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 182.0
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=COUPDAYBS(A9,B9,C9,D9)",
+      "setup": {
+        "D9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=COUPDAYSNC(A9,B9,C9,D9)",
+      "setup": {
+        "D9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 182.0
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=COUPNCD(A9,B9,C9,D9)",
+      "setup": {
+        "D9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44013.0
+      }
+    },
+    {
+      "id": "I9",
+      "formula": "=COUPNUM(A9,B9,C9,D9)",
+      "setup": {
+        "D9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=COUPPCD(A9,B9,C9,D9)",
+      "setup": {
+        "D9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=DATE(2021,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=COUPDAYS(A10,B10,C10,D10)",
+      "setup": {
+        "D10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=COUPDAYBS(A10,B10,C10,D10)",
+      "setup": {
+        "D10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=COUPDAYSNC(A10,B10,C10,D10)",
+      "setup": {
+        "D10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 182.0
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=COUPNCD(A10,B10,C10,D10)",
+      "setup": {
+        "D10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44013.0
+      }
+    },
+    {
+      "id": "I10",
+      "formula": "=COUPNUM(A10,B10,C10,D10)",
+      "setup": {
+        "D10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=COUPPCD(A10,B10,C10,D10)",
+      "setup": {
+        "D10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=DATE(2021,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=COUPDAYS(A11,B11,C11,D11)",
+      "setup": {
+        "D11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 182.5
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=COUPDAYBS(A11,B11,C11,D11)",
+      "setup": {
+        "D11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=COUPDAYSNC(A11,B11,C11,D11)",
+      "setup": {
+        "D11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 182.0
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=COUPNCD(A11,B11,C11,D11)",
+      "setup": {
+        "D11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44013.0
+      }
+    },
+    {
+      "id": "I11",
+      "formula": "=COUPNUM(A11,B11,C11,D11)",
+      "setup": {
+        "D11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "J11",
+      "formula": "=COUPPCD(A11,B11,C11,D11)",
+      "setup": {
+        "D11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=DATE(2021,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=COUPDAYS(A12,B12,C12,D12)",
+      "setup": {
+        "D12": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=COUPDAYBS(A12,B12,C12,D12)",
+      "setup": {
+        "D12": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=COUPDAYSNC(A12,B12,C12,D12)",
+      "setup": {
+        "D12": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=COUPNCD(A12,B12,C12,D12)",
+      "setup": {
+        "D12": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44013.0
+      }
+    },
+    {
+      "id": "I12",
+      "formula": "=COUPNUM(A12,B12,C12,D12)",
+      "setup": {
+        "D12": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "J12",
+      "formula": "=COUPPCD(A12,B12,C12,D12)",
+      "setup": {
+        "D12": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "A15",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=DATE(2021,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=COUPDAYS(A15,B15,C15,D15)",
+      "setup": {
+        "D15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C15": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 91.0
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=COUPDAYBS(A15,B15,C15,D15)",
+      "setup": {
+        "D15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C15": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G15",
+      "formula": "=COUPDAYSNC(A15,B15,C15,D15)",
+      "setup": {
+        "D15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C15": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 91.0
+      }
+    },
+    {
+      "id": "H15",
+      "formula": "=COUPNCD(A15,B15,C15,D15)",
+      "setup": {
+        "D15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C15": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43922.0
+      }
+    },
+    {
+      "id": "I15",
+      "formula": "=COUPNUM(A15,B15,C15,D15)",
+      "setup": {
+        "D15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C15": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "J15",
+      "formula": "=COUPPCD(A15,B15,C15,D15)",
+      "setup": {
+        "D15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C15": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "A16",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=DATE(2021,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=COUPDAYS(A16,B16,C16,D16)",
+      "setup": {
+        "D16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C16": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B16": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 90.0
+      }
+    },
+    {
+      "id": "F16",
+      "formula": "=COUPDAYBS(A16,B16,C16,D16)",
+      "setup": {
+        "D16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C16": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B16": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G16",
+      "formula": "=COUPDAYSNC(A16,B16,C16,D16)",
+      "setup": {
+        "D16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C16": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B16": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 91.0
+      }
+    },
+    {
+      "id": "H16",
+      "formula": "=COUPNCD(A16,B16,C16,D16)",
+      "setup": {
+        "D16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C16": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B16": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43922.0
+      }
+    },
+    {
+      "id": "I16",
+      "formula": "=COUPNUM(A16,B16,C16,D16)",
+      "setup": {
+        "D16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C16": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B16": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "J16",
+      "formula": "=COUPPCD(A16,B16,C16,D16)",
+      "setup": {
+        "D16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C16": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B16": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "A17",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=DATE(2021,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=COUPDAYS(A17,B17,C17,D17)",
+      "setup": {
+        "D17": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C17": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B17": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 91.25
+      }
+    },
+    {
+      "id": "F17",
+      "formula": "=COUPDAYBS(A17,B17,C17,D17)",
+      "setup": {
+        "D17": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C17": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B17": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G17",
+      "formula": "=COUPDAYSNC(A17,B17,C17,D17)",
+      "setup": {
+        "D17": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C17": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B17": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 91.0
+      }
+    },
+    {
+      "id": "H17",
+      "formula": "=COUPNCD(A17,B17,C17,D17)",
+      "setup": {
+        "D17": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C17": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B17": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43922.0
+      }
+    },
+    {
+      "id": "I17",
+      "formula": "=COUPNUM(A17,B17,C17,D17)",
+      "setup": {
+        "D17": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C17": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B17": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "J17",
+      "formula": "=COUPPCD(A17,B17,C17,D17)",
+      "setup": {
+        "D17": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C17": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B17": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "A18",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=DATE(2021,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44197.0
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=COUPDAYS(A18,B18,C18,D18)",
+      "setup": {
+        "D18": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C18": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B18": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 90.0
+      }
+    },
+    {
+      "id": "F18",
+      "formula": "=COUPDAYBS(A18,B18,C18,D18)",
+      "setup": {
+        "D18": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C18": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B18": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G18",
+      "formula": "=COUPDAYSNC(A18,B18,C18,D18)",
+      "setup": {
+        "D18": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C18": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B18": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 90.0
+      }
+    },
+    {
+      "id": "H18",
+      "formula": "=COUPNCD(A18,B18,C18,D18)",
+      "setup": {
+        "D18": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C18": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B18": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43922.0
+      }
+    },
+    {
+      "id": "I18",
+      "formula": "=COUPNUM(A18,B18,C18,D18)",
+      "setup": {
+        "D18": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C18": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B18": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "J18",
+      "formula": "=COUPPCD(A18,B18,C18,D18)",
+      "setup": {
+        "D18": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C18": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B18": {
+          "kind": "formula",
+          "formula": "=DATE(2021,1,1)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "A21",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=DATE(2024,3,17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45368.0
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=COUPDAYS(A21,B21,C21,D21)",
+      "setup": {
+        "D21": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "F21",
+      "formula": "=COUPDAYBS(A21,B21,C21,D21)",
+      "setup": {
+        "D21": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 284.0
+      }
+    },
+    {
+      "id": "G21",
+      "formula": "=COUPDAYSNC(A21,B21,C21,D21)",
+      "setup": {
+        "D21": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.0
+      }
+    },
+    {
+      "id": "H21",
+      "formula": "=COUPNCD(A21,B21,C21,D21)",
+      "setup": {
+        "D21": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "I21",
+      "formula": "=COUPNUM(A21,B21,C21,D21)",
+      "setup": {
+        "D21": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "J21",
+      "formula": "=COUPPCD(A21,B21,C21,D21)",
+      "setup": {
+        "D21": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43541.0
+      }
+    },
+    {
+      "id": "A22",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=DATE(2024,3,17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45368.0
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=COUPDAYS(A22,B22,C22,D22)",
+      "setup": {
+        "D22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 366.0
+      }
+    },
+    {
+      "id": "F22",
+      "formula": "=COUPDAYBS(A22,B22,C22,D22)",
+      "setup": {
+        "D22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 290.0
+      }
+    },
+    {
+      "id": "G22",
+      "formula": "=COUPDAYSNC(A22,B22,C22,D22)",
+      "setup": {
+        "D22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.0
+      }
+    },
+    {
+      "id": "H22",
+      "formula": "=COUPNCD(A22,B22,C22,D22)",
+      "setup": {
+        "D22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "I22",
+      "formula": "=COUPNUM(A22,B22,C22,D22)",
+      "setup": {
+        "D22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "J22",
+      "formula": "=COUPPCD(A22,B22,C22,D22)",
+      "setup": {
+        "D22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43541.0
+      }
+    },
+    {
+      "id": "A23",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=DATE(2024,3,17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45368.0
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=COUPDAYS(A23,B23,C23,D23)",
+      "setup": {
+        "D23": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B23": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "F23",
+      "formula": "=COUPDAYBS(A23,B23,C23,D23)",
+      "setup": {
+        "D23": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B23": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 290.0
+      }
+    },
+    {
+      "id": "G23",
+      "formula": "=COUPDAYSNC(A23,B23,C23,D23)",
+      "setup": {
+        "D23": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B23": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.0
+      }
+    },
+    {
+      "id": "H23",
+      "formula": "=COUPNCD(A23,B23,C23,D23)",
+      "setup": {
+        "D23": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B23": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "I23",
+      "formula": "=COUPNUM(A23,B23,C23,D23)",
+      "setup": {
+        "D23": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B23": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "J23",
+      "formula": "=COUPPCD(A23,B23,C23,D23)",
+      "setup": {
+        "D23": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B23": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43541.0
+      }
+    },
+    {
+      "id": "A24",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=DATE(2024,3,17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45368.0
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=COUPDAYS(A24,B24,C24,D24)",
+      "setup": {
+        "D24": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B24": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A24": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "F24",
+      "formula": "=COUPDAYBS(A24,B24,C24,D24)",
+      "setup": {
+        "D24": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B24": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A24": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 290.0
+      }
+    },
+    {
+      "id": "G24",
+      "formula": "=COUPDAYSNC(A24,B24,C24,D24)",
+      "setup": {
+        "D24": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B24": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A24": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.0
+      }
+    },
+    {
+      "id": "H24",
+      "formula": "=COUPNCD(A24,B24,C24,D24)",
+      "setup": {
+        "D24": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B24": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A24": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "I24",
+      "formula": "=COUPNUM(A24,B24,C24,D24)",
+      "setup": {
+        "D24": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B24": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A24": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "J24",
+      "formula": "=COUPPCD(A24,B24,C24,D24)",
+      "setup": {
+        "D24": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B24": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A24": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43541.0
+      }
+    },
+    {
+      "id": "A25",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=DATE(2024,3,17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45368.0
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=COUPDAYS(A25,B25,C25,D25)",
+      "setup": {
+        "D25": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B25": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "F25",
+      "formula": "=COUPDAYBS(A25,B25,C25,D25)",
+      "setup": {
+        "D25": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B25": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 284.0
+      }
+    },
+    {
+      "id": "G25",
+      "formula": "=COUPDAYSNC(A25,B25,C25,D25)",
+      "setup": {
+        "D25": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B25": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.0
+      }
+    },
+    {
+      "id": "H25",
+      "formula": "=COUPNCD(A25,B25,C25,D25)",
+      "setup": {
+        "D25": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B25": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "I25",
+      "formula": "=COUPNUM(A25,B25,C25,D25)",
+      "setup": {
+        "D25": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B25": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "J25",
+      "formula": "=COUPPCD(A25,B25,C25,D25)",
+      "setup": {
+        "D25": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B25": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43541.0
+      }
+    },
+    {
+      "id": "A27",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=DATE(2024,3,17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45368.0
+      }
+    },
+    {
+      "id": "E27",
+      "formula": "=COUPDAYS(A27,B27,C27,D27)",
+      "setup": {
+        "D27": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C27": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B27": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A27": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "F27",
+      "formula": "=COUPDAYBS(A27,B27,C27,D27)",
+      "setup": {
+        "D27": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C27": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B27": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A27": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 104.0
+      }
+    },
+    {
+      "id": "G27",
+      "formula": "=COUPDAYSNC(A27,B27,C27,D27)",
+      "setup": {
+        "D27": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C27": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B27": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A27": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.0
+      }
+    },
+    {
+      "id": "H27",
+      "formula": "=COUPNCD(A27,B27,C27,D27)",
+      "setup": {
+        "D27": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C27": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B27": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A27": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "I27",
+      "formula": "=COUPNUM(A27,B27,C27,D27)",
+      "setup": {
+        "D27": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C27": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B27": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A27": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "J27",
+      "formula": "=COUPPCD(A27,B27,C27,D27)",
+      "setup": {
+        "D27": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C27": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B27": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A27": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43725.0
+      }
+    },
+    {
+      "id": "A28",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=DATE(2024,3,17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45368.0
+      }
+    },
+    {
+      "id": "E28",
+      "formula": "=COUPDAYS(A28,B28,C28,D28)",
+      "setup": {
+        "D28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B28": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A28": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 182.0
+      }
+    },
+    {
+      "id": "F28",
+      "formula": "=COUPDAYBS(A28,B28,C28,D28)",
+      "setup": {
+        "D28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B28": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A28": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 106.0
+      }
+    },
+    {
+      "id": "G28",
+      "formula": "=COUPDAYSNC(A28,B28,C28,D28)",
+      "setup": {
+        "D28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B28": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A28": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.0
+      }
+    },
+    {
+      "id": "H28",
+      "formula": "=COUPNCD(A28,B28,C28,D28)",
+      "setup": {
+        "D28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B28": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A28": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "I28",
+      "formula": "=COUPNUM(A28,B28,C28,D28)",
+      "setup": {
+        "D28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B28": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A28": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "J28",
+      "formula": "=COUPPCD(A28,B28,C28,D28)",
+      "setup": {
+        "D28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B28": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A28": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43725.0
+      }
+    },
+    {
+      "id": "A29",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=DATE(2024,3,17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45368.0
+      }
+    },
+    {
+      "id": "E29",
+      "formula": "=COUPDAYS(A29,B29,C29,D29)",
+      "setup": {
+        "D29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B29": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A29": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "F29",
+      "formula": "=COUPDAYBS(A29,B29,C29,D29)",
+      "setup": {
+        "D29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B29": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A29": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 106.0
+      }
+    },
+    {
+      "id": "G29",
+      "formula": "=COUPDAYSNC(A29,B29,C29,D29)",
+      "setup": {
+        "D29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B29": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A29": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.0
+      }
+    },
+    {
+      "id": "H29",
+      "formula": "=COUPNCD(A29,B29,C29,D29)",
+      "setup": {
+        "D29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B29": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A29": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "I29",
+      "formula": "=COUPNUM(A29,B29,C29,D29)",
+      "setup": {
+        "D29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B29": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A29": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "J29",
+      "formula": "=COUPPCD(A29,B29,C29,D29)",
+      "setup": {
+        "D29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B29": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A29": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43725.0
+      }
+    },
+    {
+      "id": "A30",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=DATE(2024,3,17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45368.0
+      }
+    },
+    {
+      "id": "E30",
+      "formula": "=COUPDAYS(A30,B30,C30,D30)",
+      "setup": {
+        "D30": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B30": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 182.5
+      }
+    },
+    {
+      "id": "F30",
+      "formula": "=COUPDAYBS(A30,B30,C30,D30)",
+      "setup": {
+        "D30": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B30": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 106.0
+      }
+    },
+    {
+      "id": "G30",
+      "formula": "=COUPDAYSNC(A30,B30,C30,D30)",
+      "setup": {
+        "D30": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B30": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.0
+      }
+    },
+    {
+      "id": "H30",
+      "formula": "=COUPNCD(A30,B30,C30,D30)",
+      "setup": {
+        "D30": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B30": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "I30",
+      "formula": "=COUPNUM(A30,B30,C30,D30)",
+      "setup": {
+        "D30": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B30": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "J30",
+      "formula": "=COUPPCD(A30,B30,C30,D30)",
+      "setup": {
+        "D30": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B30": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43725.0
+      }
+    },
+    {
+      "id": "A31",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B31",
+      "formula": "=DATE(2024,3,17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45368.0
+      }
+    },
+    {
+      "id": "E31",
+      "formula": "=COUPDAYS(A31,B31,C31,D31)",
+      "setup": {
+        "D31": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C31": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B31": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "F31",
+      "formula": "=COUPDAYBS(A31,B31,C31,D31)",
+      "setup": {
+        "D31": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C31": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B31": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 104.0
+      }
+    },
+    {
+      "id": "G31",
+      "formula": "=COUPDAYSNC(A31,B31,C31,D31)",
+      "setup": {
+        "D31": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C31": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B31": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.0
+      }
+    },
+    {
+      "id": "H31",
+      "formula": "=COUPNCD(A31,B31,C31,D31)",
+      "setup": {
+        "D31": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C31": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B31": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "I31",
+      "formula": "=COUPNUM(A31,B31,C31,D31)",
+      "setup": {
+        "D31": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C31": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B31": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "J31",
+      "formula": "=COUPPCD(A31,B31,C31,D31)",
+      "setup": {
+        "D31": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C31": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B31": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43725.0
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=DATE(2024,3,17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45368.0
+      }
+    },
+    {
+      "id": "A34",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=DATE(2024,3,17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45368.0
+      }
+    },
+    {
+      "id": "E34",
+      "formula": "=COUPDAYS(A34,B34,C34,D34)",
+      "setup": {
+        "D34": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C34": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B34": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A34": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 91.0
+      }
+    },
+    {
+      "id": "F34",
+      "formula": "=COUPDAYBS(A34,B34,C34,D34)",
+      "setup": {
+        "D34": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C34": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B34": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A34": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "G34",
+      "formula": "=COUPDAYSNC(A34,B34,C34,D34)",
+      "setup": {
+        "D34": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C34": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B34": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A34": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.0
+      }
+    },
+    {
+      "id": "H34",
+      "formula": "=COUPNCD(A34,B34,C34,D34)",
+      "setup": {
+        "D34": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C34": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B34": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A34": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "I34",
+      "formula": "=COUPNUM(A34,B34,C34,D34)",
+      "setup": {
+        "D34": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C34": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B34": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A34": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 17.0
+      }
+    },
+    {
+      "id": "J34",
+      "formula": "=COUPPCD(A34,B34,C34,D34)",
+      "setup": {
+        "D34": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C34": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B34": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A34": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43816.0
+      }
+    },
+    {
+      "id": "A35",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=DATE(2024,3,17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45368.0
+      }
+    },
+    {
+      "id": "E35",
+      "formula": "=COUPDAYS(A35,B35,C35,D35)",
+      "setup": {
+        "D35": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C35": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B35": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A35": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 90.0
+      }
+    },
+    {
+      "id": "F35",
+      "formula": "=COUPDAYBS(A35,B35,C35,D35)",
+      "setup": {
+        "D35": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C35": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B35": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A35": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "G35",
+      "formula": "=COUPDAYSNC(A35,B35,C35,D35)",
+      "setup": {
+        "D35": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C35": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B35": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A35": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.0
+      }
+    },
+    {
+      "id": "H35",
+      "formula": "=COUPNCD(A35,B35,C35,D35)",
+      "setup": {
+        "D35": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C35": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B35": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A35": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "I35",
+      "formula": "=COUPNUM(A35,B35,C35,D35)",
+      "setup": {
+        "D35": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C35": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B35": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A35": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 17.0
+      }
+    },
+    {
+      "id": "J35",
+      "formula": "=COUPPCD(A35,B35,C35,D35)",
+      "setup": {
+        "D35": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C35": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B35": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A35": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43816.0
+      }
+    },
+    {
+      "id": "A36",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=DATE(2024,3,17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45368.0
+      }
+    },
+    {
+      "id": "E36",
+      "formula": "=COUPDAYS(A36,B36,C36,D36)",
+      "setup": {
+        "D36": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B36": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 91.25
+      }
+    },
+    {
+      "id": "F36",
+      "formula": "=COUPDAYBS(A36,B36,C36,D36)",
+      "setup": {
+        "D36": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B36": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "G36",
+      "formula": "=COUPDAYSNC(A36,B36,C36,D36)",
+      "setup": {
+        "D36": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B36": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.0
+      }
+    },
+    {
+      "id": "H36",
+      "formula": "=COUPNCD(A36,B36,C36,D36)",
+      "setup": {
+        "D36": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B36": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "I36",
+      "formula": "=COUPNUM(A36,B36,C36,D36)",
+      "setup": {
+        "D36": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B36": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 17.0
+      }
+    },
+    {
+      "id": "J36",
+      "formula": "=COUPPCD(A36,B36,C36,D36)",
+      "setup": {
+        "D36": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B36": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43816.0
+      }
+    },
+    {
+      "id": "A37",
+      "formula": "=DATE(2020,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43831.0
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=DATE(2024,3,17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45368.0
+      }
+    },
+    {
+      "id": "E37",
+      "formula": "=COUPDAYS(A37,B37,C37,D37)",
+      "setup": {
+        "D37": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C37": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 90.0
+      }
+    },
+    {
+      "id": "F37",
+      "formula": "=COUPDAYBS(A37,B37,C37,D37)",
+      "setup": {
+        "D37": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C37": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    },
+    {
+      "id": "G37",
+      "formula": "=COUPDAYSNC(A37,B37,C37,D37)",
+      "setup": {
+        "D37": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C37": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.0
+      }
+    },
+    {
+      "id": "H37",
+      "formula": "=COUPNCD(A37,B37,C37,D37)",
+      "setup": {
+        "D37": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C37": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "I37",
+      "formula": "=COUPNUM(A37,B37,C37,D37)",
+      "setup": {
+        "D37": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C37": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 17.0
+      }
+    },
+    {
+      "id": "J37",
+      "formula": "=COUPPCD(A37,B37,C37,D37)",
+      "setup": {
+        "D37": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C37": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,17)"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=DATE(2020,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43816.0
+      }
+    }
+  ]
+}

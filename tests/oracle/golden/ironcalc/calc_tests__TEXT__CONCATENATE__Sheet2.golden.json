@@ -1,0 +1,82 @@
+{
+  "suite": "ironcalc_calc_tests__TEXT_CONCATENATE_Sheet2",
+  "description": "Derived from IronCalc fixture calc_tests/TEXT/CONCATENATE.xlsx, sheet 'Sheet2'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet2",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "B1",
+      "formula": "=CONCATENATE(A1,A2,A3,\"!\")",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "World"
+        },
+        "A2": {
+          "kind": "text",
+          "value": " "
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Hello World!"
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=CONCATENATE(A1:A3, \"!\")",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "World"
+        },
+        "A2": {
+          "kind": "text",
+          "value": " "
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "skipped": "=CONCATENATE over a range argument -> IronCalc IIE picks the position-aligned element; Excel 365 spills, anchor=f(top-left). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
+    },
+    {
+      "id": "B3",
+      "formula": "=_xlfn.CONCAT(A1:A3,\"!\")",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "World"
+        },
+        "A2": {
+          "kind": "text",
+          "value": " "
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Hello World!"
+      }
+    }
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "suite": "ironcalc_calc_tests__LOOKUP_AND_REFERENCE_INDIRECT_r1c1_range_spills",
+  "description": "Derived from IronCalc fixture calc_tests/LOOKUP_AND_REFERENCE/INDIRECT.xlsx, sheet 'r1c1_range_spills'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "r1c1_range_spills",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "L2",
+      "formula": "=E1",
+      "setup": {
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "L3",
+      "formula": "=F1",
+      "setup": {
+        "F1": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "L4",
+      "formula": "=G1",
+      "setup": {
+        "G1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "L5",
+      "formula": "=E2",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "L6",
+      "formula": "=F2",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "L7",
+      "formula": "=G2",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "L8",
+      "formula": "=IF(ISBLANK(H1),\"(empty)\",H1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "(empty)"
+      }
+    },
+    {
+      "id": "L9",
+      "formula": "=IF(ISBLANK(E3),\"(empty)\",E3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "(empty)"
+      }
+    }
+  ]
+}

@@ -1,0 +1,939 @@
+{
+  "suite": "ironcalc_calc_tests__STATISTICAL_RANK_EQ_RANK_AVG_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/STATISTICAL/RANK_EQ_RANK_AVG.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel Online",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "C1",
+      "formula": "=_xlfn.RANK.AVG(B1,$A$2:$A$9,0)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.5
+      }
+    },
+    {
+      "id": "D1",
+      "formula": "=_xlfn.RANK.AVG(B1,$A$2:$A$9,1)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.5
+      }
+    },
+    {
+      "id": "F1",
+      "formula": "=_xlfn.RANK.EQ(B1,$A$2:$A$9,1)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "G1",
+      "formula": "=_xlfn.RANK.EQ(B1,$A$2:$A$9,0)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=_xlfn.RANK.AVG(B2,$A$2:$A$9,0)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 70.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=_xlfn.RANK.AVG(B2,$A$2:$A$9,1)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 70.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=_xlfn.RANK.EQ(B2,$A$2:$A$9,1)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 70.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=_xlfn.RANK.EQ(B2,$A$2:$A$9,0)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 70.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=_xlfn.RANK.AVG(B3,$A$2:$A$9,0)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 65.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.5
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.RANK.AVG(B3,$A$2:$A$9,1)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 65.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.5
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=_xlfn.RANK.EQ(B3,$A$2:$A$9,1)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 65.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=_xlfn.RANK.EQ(B3,$A$2:$A$9,0)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 65.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=_xlfn.RANK.AVG(B4,$A$2:$A$9,0)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.RANK.AVG(B4,$A$2:$A$9,1)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=_xlfn.RANK.EQ(B4,$A$2:$A$9,1)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=_xlfn.RANK.EQ(B4,$A$2:$A$9,0)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=_xlfn.RANK.AVG(B5,$A$2:$A$9,0)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 37.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.RANK.AVG(B5,$A$2:$A$9,1)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 37.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=_xlfn.RANK.EQ(B5,$A$2:$A$9,1)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 37.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=_xlfn.RANK.EQ(B5,$A$2:$A$9,0)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 72.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 66.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 65.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 37.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    }
+  ]
+}

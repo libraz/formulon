@@ -1,0 +1,196 @@
+{
+  "suite": "ironcalc_templates_yearly_calendar_Yearly_calendar",
+  "description": "Derived from IronCalc fixture templates/yearly_calendar.xlsx, sheet 'Yearly calendar'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Yearly calendar",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=YEAR(TODAY())",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2026.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=TEXT(DATE($B$2,1,1),\"mmmm\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=YEAR(TODAY())"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "January"
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=TEXT(DATE($B$2,2,1),\"mmmm\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=YEAR(TODAY())"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "February"
+      }
+    },
+    {
+      "id": "R4",
+      "formula": "=TEXT(DATE($B$2,3,1),\"mmmm\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=YEAR(TODAY())"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "March"
+      }
+    },
+    {
+      "id": "Z4",
+      "formula": "=TEXT(DATE($B$2,4,1),\"mmmm\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=YEAR(TODAY())"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "April"
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=TEXT(DATE($B$2,5,1),\"mmmm\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=YEAR(TODAY())"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "May"
+      }
+    },
+    {
+      "id": "J13",
+      "formula": "=TEXT(DATE($B$2,6,1),\"mmmm\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=YEAR(TODAY())"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "June"
+      }
+    },
+    {
+      "id": "R13",
+      "formula": "=TEXT(DATE($B$2,7,1),\"mmmm\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=YEAR(TODAY())"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "July"
+      }
+    },
+    {
+      "id": "Z13",
+      "formula": "=TEXT(DATE($B$2,8,1),\"mmmm\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=YEAR(TODAY())"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "August"
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=TEXT(DATE($B$2,9,1),\"mmmm\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=YEAR(TODAY())"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "September"
+      }
+    },
+    {
+      "id": "J22",
+      "formula": "=TEXT(DATE($B$2,10,1),\"mmmm\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=YEAR(TODAY())"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "October"
+      }
+    },
+    {
+      "id": "R22",
+      "formula": "=TEXT(DATE($B$2,11,1),\"mmmm\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=YEAR(TODAY())"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "November"
+      }
+    },
+    {
+      "id": "Z22",
+      "formula": "=TEXT(DATE($B$2,12,1),\"mmmm\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=YEAR(TODAY())"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "December"
+      }
+    }
+  ]
+}

@@ -1,0 +1,7284 @@
+{
+  "suite": "ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_PRODUCT_SUM_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/MATH_AND_TRIGONOMETRY/PRODUCT_SUM.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "A2",
+      "formula": "=\"7\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "7"
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=A1",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=PRODUCT(7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=SUM(7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=PRODUCT(\"7\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=SUM(\"7\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=PRODUCT(\"seven\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=SUM(\"seven\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=PRODUCT(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=SUM(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=PRODUCT(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=SUM(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=PRODUCT(A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=SUM(A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=PRODUCT(A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=\"7\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=SUM(A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=\"7\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=PRODUCT(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=SUM(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=PRODUCT(A4)",
+      "setup": {
+        "A4": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=SUM(A4)",
+      "setup": {
+        "A4": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=PRODUCT(A5)",
+      "setup": {
+        "A5": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C30",
+      "formula": "=SUM(A5)",
+      "setup": {
+        "A5": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B31",
+      "formula": "=PRODUCT(A6)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "C31",
+      "formula": "=SUM(A6)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=PRODUCT(A7)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C32",
+      "formula": "=SUM(A7)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=PRODUCT(A8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=SUM(A8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=PRODUCT(A1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "C34",
+      "formula": "=SUM(A1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=PRODUCT(A2:B2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=\"7\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C35",
+      "formula": "=SUM(A2:B2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=\"7\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=PRODUCT(A3:B3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C36",
+      "formula": "=SUM(A3:B3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=PRODUCT(A4:B4)",
+      "setup": {
+        "A4": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C37",
+      "formula": "=SUM(A4:B4)",
+      "setup": {
+        "A4": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B38",
+      "formula": "=PRODUCT(A5:B5)",
+      "setup": {
+        "A5": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C38",
+      "formula": "=SUM(A5:B5)",
+      "setup": {
+        "A5": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B39",
+      "formula": "=PRODUCT(A6:B6)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "C39",
+      "formula": "=SUM(A6:B6)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B40",
+      "formula": "=PRODUCT(A7:B7)",
+      "setup": {
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C40",
+      "formula": "=SUM(A7:B7)",
+      "setup": {
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B41",
+      "formula": "=PRODUCT(A8:B8)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C41",
+      "formula": "=SUM(A8:B8)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B42",
+      "formula": "=PRODUCT(INDIRECT(\"A1\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "C42",
+      "formula": "=SUM(INDIRECT(\"A1\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B43",
+      "formula": "=PRODUCT(INDIRECT(\"A2\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C43",
+      "formula": "=SUM(INDIRECT(\"A2\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B44",
+      "formula": "=PRODUCT(INDIRECT(\"A3\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; the INDIRECT target exists in setup, so a missing-dependency diagnosis is not established. Mac Excel measurement is pending. Formula: =PRODUCT(INDIRECT(\"A3\"))"
+    },
+    {
+      "id": "C44",
+      "formula": "=SUM(INDIRECT(\"A3\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; the INDIRECT target exists in setup, so a missing-dependency diagnosis is not established. Mac Excel measurement is pending. Formula: =SUM(INDIRECT(\"A3\"))"
+    },
+    {
+      "id": "B45",
+      "formula": "=PRODUCT(INDIRECT(\"A4\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; the INDIRECT target exists in setup, so a missing-dependency diagnosis is not established. Mac Excel measurement is pending. Formula: =PRODUCT(INDIRECT(\"A4\"))"
+    },
+    {
+      "id": "C45",
+      "formula": "=SUM(INDIRECT(\"A4\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; the INDIRECT target exists in setup, so a missing-dependency diagnosis is not established. Mac Excel measurement is pending. Formula: =SUM(INDIRECT(\"A4\"))"
+    },
+    {
+      "id": "B46",
+      "formula": "=PRODUCT(INDIRECT(\"A5\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "skipped": "INDIRECT target formula dependencies A5=1/0 and A6=A1 are absent from the imported setup; repair dependency capture before adjudication. Formula: =PRODUCT(INDIRECT(\"A5\"))"
+    },
+    {
+      "id": "C46",
+      "formula": "=SUM(INDIRECT(\"A5\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "skipped": "INDIRECT target formula dependencies A5=1/0 and A6=A1 are absent from the imported setup; repair dependency capture before adjudication. Formula: =SUM(INDIRECT(\"A5\"))"
+    },
+    {
+      "id": "B47",
+      "formula": "=PRODUCT(INDIRECT(\"A6\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "skipped": "INDIRECT target formula dependencies A5=1/0 and A6=A1 are absent from the imported setup; repair dependency capture before adjudication. Formula: =PRODUCT(INDIRECT(\"A6\"))"
+    },
+    {
+      "id": "C47",
+      "formula": "=SUM(INDIRECT(\"A6\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "skipped": "INDIRECT target formula dependencies A5=1/0 and A6=A1 are absent from the imported setup; repair dependency capture before adjudication. Formula: =SUM(INDIRECT(\"A6\"))"
+    },
+    {
+      "id": "B48",
+      "formula": "=PRODUCT(INDIRECT(\"A7\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; the INDIRECT target exists in setup, so a missing-dependency diagnosis is not established. Mac Excel measurement is pending. Formula: =PRODUCT(INDIRECT(\"A7\"))"
+    },
+    {
+      "id": "C48",
+      "formula": "=SUM(INDIRECT(\"A7\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; the INDIRECT target exists in setup, so a missing-dependency diagnosis is not established. Mac Excel measurement is pending. Formula: =SUM(INDIRECT(\"A7\"))"
+    },
+    {
+      "id": "B49",
+      "formula": "=PRODUCT(INDIRECT(\"A8\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C49",
+      "formula": "=SUM(INDIRECT(\"A8\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B50",
+      "formula": "=PRODUCT(INDIRECT(\"A1:B1\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "C50",
+      "formula": "=SUM(INDIRECT(\"A1:B1\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B51",
+      "formula": "=PRODUCT(INDIRECT(\"A2:B2\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C51",
+      "formula": "=SUM(INDIRECT(\"A2:B2\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B52",
+      "formula": "=PRODUCT(INDIRECT(\"A3:B3\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C52",
+      "formula": "=SUM(INDIRECT(\"A3:B3\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B53",
+      "formula": "=PRODUCT(INDIRECT(\"A4:B4\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C53",
+      "formula": "=SUM(INDIRECT(\"A4:B4\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B54",
+      "formula": "=PRODUCT(INDIRECT(\"A5:B5\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "skipped": "INDIRECT target formula dependencies A5=1/0 and A6=A1 are absent from the imported setup; repair dependency capture before adjudication. Formula: =PRODUCT(INDIRECT(\"A5:B5\"))"
+    },
+    {
+      "id": "C54",
+      "formula": "=SUM(INDIRECT(\"A5:B5\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "skipped": "INDIRECT target formula dependencies A5=1/0 and A6=A1 are absent from the imported setup; repair dependency capture before adjudication. Formula: =SUM(INDIRECT(\"A5:B5\"))"
+    },
+    {
+      "id": "B55",
+      "formula": "=PRODUCT(INDIRECT(\"A6:B6\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "skipped": "INDIRECT target formula dependencies A5=1/0 and A6=A1 are absent from the imported setup; repair dependency capture before adjudication. Formula: =PRODUCT(INDIRECT(\"A6:B6\"))"
+    },
+    {
+      "id": "C55",
+      "formula": "=SUM(INDIRECT(\"A7:B7\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B56",
+      "formula": "=PRODUCT(INDIRECT(\"A7:B7\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C56",
+      "formula": "=SUM(INDIRECT(\"A7:B7\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B57",
+      "formula": "=PRODUCT(INDIRECT(\"A8:B8\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C57",
+      "formula": "=SUM(INDIRECT(\"A8:B8\"))",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "A5:B5"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "PRODUCT"
+        },
+        "A34": {
+          "kind": "text",
+          "value": "A1:B1"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "A4:B4"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "=TRUE"
+        },
+        "A7": {
+          "kind": "text",
+          "value": " // =A1:A2"
+        },
+        "A56": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7:A7\")"
+        },
+        "A55": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6:B6\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "=1/0"
+        },
+        "A51": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2:B2\")"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "<= Spill from A7"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "INDIRECT(\"A2\")"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8\")"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3\")"
+        },
+        "A39": {
+          "kind": "text",
+          "value": "A6:B6"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "A7"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "=\"seven\""
+        },
+        "A22": {
+          "kind": "text",
+          "value": "=\"7\""
+        },
+        "D22": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A45": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4\")"
+        },
+        "D24": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A57": {
+          "kind": "text",
+          "value": "INDIRECT(\"A8:B8\")"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "A3"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "seven"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "A5"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "A2"
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "A6"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "A3:B3"
+        },
+        "C20": {
+          "kind": "text",
+          "value": "SUM"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "Args"
+        },
+        "A53": {
+          "kind": "text",
+          "value": "INDIRECT(\"A4:B4\")"
+        },
+        "A46": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5\")"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "A41": {
+          "kind": "text",
+          "value": "A8:B8"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Function"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1\")"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "A33": {
+          "kind": "text",
+          "value": "A8"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "INDIRECT(\"A7\")"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "A7:B7"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "<= Fixed in PR #236"
+        },
+        "A35": {
+          "kind": "text",
+          "value": "A2:B2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A47": {
+          "kind": "text",
+          "value": "INDIRECT(\"A6\")"
+        },
+        "A54": {
+          "kind": "text",
+          "value": "INDIRECT(\"A5:B5\")"
+        },
+        "A52": {
+          "kind": "text",
+          "value": "INDIRECT(\"A3:B3\")"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "<= Commented out: NotImplemented(\"array formulas\")"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "INDIRECT(\"A1:B1\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "suite": "ironcalc_calc_tests__LOOKUP_AND_REFERENCE_MATCH_LOOKUP_arrays_HLOOKUP",
+  "description": "Derived from IronCalc fixture calc_tests/LOOKUP_AND_REFERENCE/MATCH_LOOKUP_arrays.xlsx, sheet 'HLOOKUP'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "HLOOKUP",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "D4",
+      "formula": "=HLOOKUP(2,{1,2,3;\"a\",\"b\",\"c\"},2,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=HLOOKUP(\"b\",_xlfn.VSTACK({\"a\",\"b\",\"c\"},{10,20,30}),2,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=HLOOKUP(3,_xlfn.SEQUENCE(2,3),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=HLOOKUP(\"c\",_xlfn.HSTACK({\"a\";1},{\"b\";2},{\"c\";3}),2,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=HLOOKUP(20,_xlfn._xlws.SORT({30,10,20;3,1,2},1,1,TRUE),2,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    }
+  ]
+}

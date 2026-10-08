@@ -1,0 +1,65 @@
+{
+  "suite": "ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_MUNIT_MDETERM_MINVERSE_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/MATH_AND_TRIGONOMETRY/MUNIT_MDETERM_MINVERSE.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "F18",
+      "formula": "=MDETERM(A16:C18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A18": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C17": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C16": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -5.5
+      }
+    }
+  ]
+}

@@ -1,0 +1,4229 @@
+{
+  "suite": "ironcalc_calc_tests__FINANCIAL_PRICE_YIELD_ODDFPRICE_ODDFYIELD",
+  "description": "Derived from IronCalc fixture calc_tests/FINANCIAL/PRICE_YIELD.xlsx, sheet 'ODDFPRICE_ODDFYIELD'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "ODDFPRICE_ODDFYIELD",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "A2",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=ODDFPRICE(A2,B2,C2,D2,E2,F2,G2,H2,I2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E2": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A2,B2,C2,D2,E2,F2,G2,H2,I2)"
+    },
+    {
+      "id": "K2",
+      "formula": "=ODDFYIELD(A2,B2,C2,D2,E2,J2,G2,H2,I2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E2": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J2": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A2,B2,C2,D2,E2,F2,G2,H2,I2)"
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04999999999851281
+      }
+    },
+    {
+      "id": "A3",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=ODDFPRICE(A3,B3,C3,D3,E3,F3,G3,H3,I3)",
+      "setup": {
+        "I3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E3": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C3": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A3,B3,C3,D3,E3,F3,G3,H3,I3)"
+    },
+    {
+      "id": "K3",
+      "formula": "=ODDFYIELD(A3,B3,C3,D3,E3,J3,G3,H3,I3)",
+      "setup": {
+        "I3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E3": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J3": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A3,B3,C3,D3,E3,F3,G3,H3,I3)"
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C3": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0669999999983297
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=ODDFPRICE(A4,B4,C4,D4,E4,F4,G4,H4,I4)",
+      "setup": {
+        "I4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "E4": {
+          "kind": "number",
+          "value": 0.08
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C4": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A4,B4,C4,D4,E4,F4,G4,H4,I4)"
+    },
+    {
+      "id": "K4",
+      "formula": "=ODDFYIELD(A4,B4,C4,D4,E4,J4,G4,H4,I4)",
+      "setup": {
+        "I4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "E4": {
+          "kind": "number",
+          "value": 0.08
+        },
+        "J4": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A4,B4,C4,D4,E4,F4,G4,H4,I4)"
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C4": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.05999999999854355
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=ODDFPRICE(A5,B5,C5,D5,E5,F5,G5,H5,I5)",
+      "setup": {
+        "I5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 0.03
+        },
+        "E5": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C5": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A5,B5,C5,D5,E5,F5,G5,H5,I5)"
+    },
+    {
+      "id": "K5",
+      "formula": "=ODDFYIELD(A5,B5,C5,D5,E5,J5,G5,H5,I5)",
+      "setup": {
+        "I5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 0.03
+        },
+        "E5": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J5": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A5,B5,C5,D5,E5,F5,G5,H5,I5)"
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C5": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.02999999999858436
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=DATE(2040,3,15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 51210.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=ODDFPRICE(A6,B6,C6,D6,E6,F6,G6,H6,I6)",
+      "setup": {
+        "I6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G6": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "E6": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C6": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2040,3,15)"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K6",
+      "formula": "=ODDFYIELD(A6,B6,C6,D6,E6,J6,G6,H6,I6)",
+      "setup": {
+        "I6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G6": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "E6": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J6": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A6,B6,C6,D6,E6,F6,G6,H6,I6)"
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C6": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2040,3,15)"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=ODDFPRICE(A8,B8,C8,D8,E8,F8,G8,H8,I8)",
+      "setup": {
+        "I8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G8": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E8": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D8": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C8": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A8,B8,C8,D8,E8,F8,G8,H8,I8)"
+    },
+    {
+      "id": "K8",
+      "formula": "=ODDFYIELD(A8,B8,C8,D8,E8,J8,G8,H8,I8)",
+      "setup": {
+        "I8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G8": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E8": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J8": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A8,B8,C8,D8,E8,F8,G8,H8,I8)"
+        },
+        "D8": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C8": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0499999999321231
+      }
+    },
+    {
+      "id": "A9",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=ODDFPRICE(A9,B9,C9,D9,E9,F9,G9,H9,I9)",
+      "setup": {
+        "I9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G9": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E9": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D9": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C9": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A9,B9,C9,D9,E9,F9,G9,H9,I9)"
+    },
+    {
+      "id": "K9",
+      "formula": "=ODDFYIELD(A9,B9,C9,D9,E9,J9,G9,H9,I9)",
+      "setup": {
+        "I9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G9": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E9": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J9": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A9,B9,C9,D9,E9,F9,G9,H9,I9)"
+        },
+        "D9": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C9": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06699999997811412
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=ODDFPRICE(A10,B10,C10,D10,E10,F10,G10,H10,I10)",
+      "setup": {
+        "I10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G10": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "E10": {
+          "kind": "number",
+          "value": 0.08
+        },
+        "D10": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C10": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A10,B10,C10,D10,E10,F10,G10,H10,I10)"
+    },
+    {
+      "id": "K10",
+      "formula": "=ODDFYIELD(A10,B10,C10,D10,E10,J10,G10,H10,I10)",
+      "setup": {
+        "I10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G10": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "E10": {
+          "kind": "number",
+          "value": 0.08
+        },
+        "J10": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A10,B10,C10,D10,E10,F10,G10,H10,I10)"
+        },
+        "D10": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C10": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.059999999963442845
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J11",
+      "formula": "=ODDFPRICE(A11,B11,C11,D11,E11,F11,G11,H11,I11)",
+      "setup": {
+        "I11": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G11": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 0.03
+        },
+        "E11": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C11": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A11,B11,C11,D11,E11,F11,G11,H11,I11)"
+    },
+    {
+      "id": "K11",
+      "formula": "=ODDFYIELD(A11,B11,C11,D11,E11,J11,G11,H11,I11)",
+      "setup": {
+        "I11": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G11": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 0.03
+        },
+        "E11": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J11": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A11,B11,C11,D11,E11,F11,G11,H11,I11)"
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C11": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.02999999998938324
+      }
+    },
+    {
+      "id": "A23",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J23",
+      "formula": "=ODDFPRICE(A23,B23,C23,D23,E23,F23,G23,H23,I23)",
+      "setup": {
+        "I23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G23": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F23": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E23": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D23": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C23": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B23": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A23,B23,C23,D23,E23,F23,G23,H23,I23)"
+    },
+    {
+      "id": "K23",
+      "formula": "=ODDFYIELD(A23,B23,C23,D23,E23,J23,G23,H23,I23)",
+      "setup": {
+        "I23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G23": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F23": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E23": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J23": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A23,B23,C23,D23,E23,F23,G23,H23,I23)"
+        },
+        "D23": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C23": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B23": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.05000000000085884
+      }
+    },
+    {
+      "id": "A24",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J24",
+      "formula": "=ODDFPRICE(A24,B24,C24,D24,E24,F24,G24,H24,I24)",
+      "setup": {
+        "I24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G24": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "F24": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E24": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D24": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C24": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B24": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A24": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A24,B24,C24,D24,E24,F24,G24,H24,I24)"
+    },
+    {
+      "id": "K24",
+      "formula": "=ODDFYIELD(A24,B24,C24,D24,E24,J24,G24,H24,I24)",
+      "setup": {
+        "I24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G24": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "F24": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E24": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J24": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A24,B24,C24,D24,E24,F24,G24,H24,I24)"
+        },
+        "D24": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C24": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B24": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A24": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04999999997861731
+      }
+    },
+    {
+      "id": "A25",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J25",
+      "formula": "=ODDFPRICE(A25,B25,C25,D25,E25,F25,G25,H25,I25)",
+      "setup": {
+        "I25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G25": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "F25": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E25": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D25": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C25": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B25": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A25,B25,C25,D25,E25,F25,G25,H25,I25)"
+    },
+    {
+      "id": "K25",
+      "formula": "=ODDFYIELD(A25,B25,C25,D25,E25,J25,G25,H25,I25)",
+      "setup": {
+        "I25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G25": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "F25": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E25": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J25": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A25,B25,C25,D25,E25,F25,G25,H25,I25)"
+        },
+        "D25": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C25": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B25": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04999999995945541
+      }
+    },
+    {
+      "id": "A26",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J26",
+      "formula": "=ODDFPRICE(A26,B26,C26,D26,E26,F26,G26,H26,I26)",
+      "setup": {
+        "I26": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H26": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G26": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "F26": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E26": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D26": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C26": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B26": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A26,B26,C26,D26,E26,F26,G26,H26,I26)"
+    },
+    {
+      "id": "K26",
+      "formula": "=ODDFYIELD(A26,B26,C26,D26,E26,J26,G26,H26,I26)",
+      "setup": {
+        "I26": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H26": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G26": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "F26": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E26": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J26": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A26,B26,C26,D26,E26,F26,G26,H26,I26)"
+        },
+        "D26": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C26": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B26": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.05000000000017462
+      }
+    },
+    {
+      "id": "A27",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J27",
+      "formula": "=ODDFPRICE(A27,B27,C27,D27,E27,F27,G27,H27,I27)",
+      "setup": {
+        "I27": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H27": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G27": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "F27": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E27": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D27": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C27": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B27": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A27": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A27,B27,C27,D27,E27,F27,G27,H27,I27)"
+    },
+    {
+      "id": "K27",
+      "formula": "=ODDFYIELD(A27,B27,C27,D27,E27,J27,G27,H27,I27)",
+      "setup": {
+        "I27": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H27": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G27": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "F27": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E27": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J27": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A27,B27,C27,D27,E27,F27,G27,H27,I27)"
+        },
+        "D27": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C27": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B27": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A27": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0500000000037563
+      }
+    },
+    {
+      "id": "A29",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J29",
+      "formula": "=ODDFPRICE(A29,B29,C29,D29,E29,F29,G29,H29,I29)",
+      "setup": {
+        "I29": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G29": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F29": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E29": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D29": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C29": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B29": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A29": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A29,B29,C29,D29,E29,F29,G29,H29,I29)"
+    },
+    {
+      "id": "K29",
+      "formula": "=ODDFYIELD(A29,B29,C29,D29,E29,J29,G29,H29,I29)",
+      "setup": {
+        "I29": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G29": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F29": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E29": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J29": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A29,B29,C29,D29,E29,F29,G29,H29,I29)"
+        },
+        "D29": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C29": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B29": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A29": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04999999999115527
+      }
+    },
+    {
+      "id": "A30",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C30",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D30",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J30",
+      "formula": "=ODDFPRICE(A30,B30,C30,D30,E30,F30,G30,H30,I30)",
+      "setup": {
+        "I30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H30": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G30": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "F30": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E30": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D30": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C30": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B30": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A30,B30,C30,D30,E30,F30,G30,H30,I30)"
+    },
+    {
+      "id": "K30",
+      "formula": "=ODDFYIELD(A30,B30,C30,D30,E30,J30,G30,H30,I30)",
+      "setup": {
+        "I30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H30": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G30": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "F30": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E30": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J30": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A30,B30,C30,D30,E30,F30,G30,H30,I30)"
+        },
+        "D30": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C30": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B30": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.049999999978608704
+      }
+    },
+    {
+      "id": "A31",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B31",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C31",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J31",
+      "formula": "=ODDFPRICE(A31,B31,C31,D31,E31,F31,G31,H31,I31)",
+      "setup": {
+        "I31": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H31": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G31": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "F31": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E31": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D31": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C31": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B31": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A31,B31,C31,D31,E31,F31,G31,H31,I31)"
+    },
+    {
+      "id": "K31",
+      "formula": "=ODDFYIELD(A31,B31,C31,D31,E31,J31,G31,H31,I31)",
+      "setup": {
+        "I31": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H31": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G31": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "F31": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E31": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J31": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A31,B31,C31,D31,E31,F31,G31,H31,I31)"
+        },
+        "D31": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C31": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B31": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04999999993257216
+      }
+    },
+    {
+      "id": "A32",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C32",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D32",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J32",
+      "formula": "=ODDFPRICE(A32,B32,C32,D32,E32,F32,G32,H32,I32)",
+      "setup": {
+        "I32": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H32": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G32": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "F32": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E32": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D32": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C32": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B32": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A32": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A32,B32,C32,D32,E32,F32,G32,H32,I32)"
+    },
+    {
+      "id": "K32",
+      "formula": "=ODDFYIELD(A32,B32,C32,D32,E32,J32,G32,H32,I32)",
+      "setup": {
+        "I32": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H32": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G32": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "F32": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E32": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J32": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A32,B32,C32,D32,E32,F32,G32,H32,I32)"
+        },
+        "D32": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C32": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B32": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A32": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04999999997571302
+      }
+    },
+    {
+      "id": "A33",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D33",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J33",
+      "formula": "=ODDFPRICE(A33,B33,C33,D33,E33,F33,G33,H33,I33)",
+      "setup": {
+        "I33": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H33": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G33": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "F33": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E33": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D33": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C33": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B33": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A33,B33,C33,D33,E33,F33,G33,H33,I33)"
+    },
+    {
+      "id": "K33",
+      "formula": "=ODDFYIELD(A33,B33,C33,D33,E33,J33,G33,H33,I33)",
+      "setup": {
+        "I33": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H33": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G33": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "F33": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E33": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J33": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A33,B33,C33,D33,E33,F33,G33,H33,I33)"
+        },
+        "D33": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C33": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B33": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04999999999180594
+      }
+    },
+    {
+      "id": "A35",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C35",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D35",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J35",
+      "formula": "=ODDFPRICE(A35,B35,C35,D35,E35,F35,G35,H35,I35)",
+      "setup": {
+        "I35": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H35": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G35": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F35": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E35": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D35": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C35": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B35": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A35": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A35,B35,C35,D35,E35,F35,G35,H35,I35)"
+    },
+    {
+      "id": "K35",
+      "formula": "=ODDFYIELD(A35,B35,C35,D35,E35,J35,G35,H35,I35)",
+      "setup": {
+        "I35": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H35": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G35": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F35": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E35": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J35": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A35,B35,C35,D35,E35,F35,G35,H35,I35)"
+        },
+        "D35": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C35": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B35": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A35": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0670000000005875
+      }
+    },
+    {
+      "id": "A36",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C36",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D36",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J36",
+      "formula": "=ODDFPRICE(A36,B36,C36,D36,E36,F36,G36,H36,I36)",
+      "setup": {
+        "I36": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H36": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G36": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "F36": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E36": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D36": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C36": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B36": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A36,B36,C36,D36,E36,F36,G36,H36,I36)"
+    },
+    {
+      "id": "K36",
+      "formula": "=ODDFYIELD(A36,B36,C36,D36,E36,J36,G36,H36,I36)",
+      "setup": {
+        "I36": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H36": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G36": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "F36": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E36": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J36": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A36,B36,C36,D36,E36,F36,G36,H36,I36)"
+        },
+        "D36": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C36": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B36": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06699999998875864
+      }
+    },
+    {
+      "id": "A37",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C37",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D37",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J37",
+      "formula": "=ODDFPRICE(A37,B37,C37,D37,E37,F37,G37,H37,I37)",
+      "setup": {
+        "I37": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H37": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G37": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "F37": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E37": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D37": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C37": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A37,B37,C37,D37,E37,F37,G37,H37,I37)"
+    },
+    {
+      "id": "K37",
+      "formula": "=ODDFYIELD(A37,B37,C37,D37,E37,J37,G37,H37,I37)",
+      "setup": {
+        "I37": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H37": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G37": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "F37": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E37": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J37": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A37,B37,C37,D37,E37,F37,G37,H37,I37)"
+        },
+        "D37": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C37": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06700000000048457
+      }
+    },
+    {
+      "id": "A38",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B38",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C38",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D38",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J38",
+      "formula": "=ODDFPRICE(A38,B38,C38,D38,E38,F38,G38,H38,I38)",
+      "setup": {
+        "I38": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H38": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G38": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "F38": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E38": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D38": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C38": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B38": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A38": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A38,B38,C38,D38,E38,F38,G38,H38,I38)"
+    },
+    {
+      "id": "K38",
+      "formula": "=ODDFYIELD(A38,B38,C38,D38,E38,J38,G38,H38,I38)",
+      "setup": {
+        "I38": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H38": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G38": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "F38": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E38": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J38": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A38,B38,C38,D38,E38,F38,G38,H38,I38)"
+        },
+        "D38": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C38": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B38": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A38": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06700000000025602
+      }
+    },
+    {
+      "id": "A39",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B39",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C39",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D39",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J39",
+      "formula": "=ODDFPRICE(A39,B39,C39,D39,E39,F39,G39,H39,I39)",
+      "setup": {
+        "I39": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H39": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G39": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "F39": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E39": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D39": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C39": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B39": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A39": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A39,B39,C39,D39,E39,F39,G39,H39,I39)"
+    },
+    {
+      "id": "K39",
+      "formula": "=ODDFYIELD(A39,B39,C39,D39,E39,J39,G39,H39,I39)",
+      "setup": {
+        "I39": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H39": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G39": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "F39": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E39": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J39": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A39,B39,C39,D39,E39,F39,G39,H39,I39)"
+        },
+        "D39": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C39": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B39": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A39": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0669999999990669
+      }
+    },
+    {
+      "id": "A40",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B40",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C40",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D40",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J40",
+      "formula": "=ODDFPRICE(A40,B40,C40,D40,E40,F40,G40,H40,I40)",
+      "setup": {
+        "I40": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H40": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G40": {
+          "kind": "number",
+          "value": 1e-19
+        },
+        "F40": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E40": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D40": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C40": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B40": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A40": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A40,B40,C40,D40,E40,F40,G40,H40,I40)"
+    },
+    {
+      "id": "A43",
+      "formula": "=DATE(2020, 3, 17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "B43",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C43",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D43",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J43",
+      "formula": "=ODDFPRICE(A43,B43,C43,D43,E43,F43,G43,H43,I43)",
+      "setup": {
+        "I43": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H43": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G43": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F43": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E43": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D43": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C43": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B43": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A43": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A43,B43,C43,D43,E43,F43,G43,H43,I43)"
+    },
+    {
+      "id": "K43",
+      "formula": "=ODDFYIELD(A43,B43,C43,D43,E43,J43,G43,H43,I43)",
+      "setup": {
+        "I43": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H43": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G43": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F43": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E43": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J43": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A43,B43,C43,D43,E43,F43,G43,H43,I43)"
+        },
+        "D43": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C43": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B43": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A43": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.049999999998588576
+      }
+    },
+    {
+      "id": "A44",
+      "formula": "=DATE(2020, 3, 17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "B44",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C44",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D44",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J44",
+      "formula": "=ODDFPRICE(A44,B44,C44,D44,E44,F44,G44,H44,I44)",
+      "setup": {
+        "I44": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H44": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G44": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F44": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E44": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D44": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C44": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B44": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A44": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A44,B44,C44,D44,E44,F44,G44,H44,I44)"
+    },
+    {
+      "id": "K44",
+      "formula": "=ODDFYIELD(A44,B44,C44,D44,E44,J44,G44,H44,I44)",
+      "setup": {
+        "I44": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H44": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G44": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F44": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E44": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J44": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A44,B44,C44,D44,E44,F44,G44,H44,I44)"
+        },
+        "D44": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C44": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B44": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A44": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06699999999841882
+      }
+    },
+    {
+      "id": "A45",
+      "formula": "=DATE(2020, 3, 17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "B45",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C45",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D45",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J45",
+      "formula": "=ODDFPRICE(A45,B45,C45,D45,E45,F45,G45,H45,I45)",
+      "setup": {
+        "I45": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H45": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G45": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F45": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "E45": {
+          "kind": "number",
+          "value": 0.08
+        },
+        "D45": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C45": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B45": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A45": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A45,B45,C45,D45,E45,F45,G45,H45,I45)"
+    },
+    {
+      "id": "K45",
+      "formula": "=ODDFYIELD(A45,B45,C45,D45,E45,J45,G45,H45,I45)",
+      "setup": {
+        "I45": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H45": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G45": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F45": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "E45": {
+          "kind": "number",
+          "value": 0.08
+        },
+        "J45": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A45,B45,C45,D45,E45,F45,G45,H45,I45)"
+        },
+        "D45": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C45": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B45": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A45": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.059999999998609166
+      }
+    },
+    {
+      "id": "A46",
+      "formula": "=DATE(2020, 3, 17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "B46",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C46",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D46",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J46",
+      "formula": "=ODDFPRICE(A46,B46,C46,D46,E46,F46,G46,H46,I46)",
+      "setup": {
+        "I46": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H46": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G46": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F46": {
+          "kind": "number",
+          "value": 0.03
+        },
+        "E46": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D46": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C46": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B46": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A46": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A46,B46,C46,D46,E46,F46,G46,H46,I46)"
+    },
+    {
+      "id": "K46",
+      "formula": "=ODDFYIELD(A46,B46,C46,D46,E46,J46,G46,H46,I46)",
+      "setup": {
+        "I46": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H46": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G46": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F46": {
+          "kind": "number",
+          "value": 0.03
+        },
+        "E46": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J46": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A46,B46,C46,D46,E46,F46,G46,H46,I46)"
+        },
+        "D46": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C46": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B46": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A46": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.029999999998664335
+      }
+    },
+    {
+      "id": "A49",
+      "formula": "=DATE(2020, 3, 17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "B49",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C49",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D49",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J49",
+      "formula": "=ODDFPRICE(A49,B49,C49,D49,E49,F49,G49,H49,I49)",
+      "setup": {
+        "I49": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H49": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G49": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F49": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E49": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D49": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C49": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B49": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A49": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A49,B49,C49,D49,E49,F49,G49,H49,I49)"
+    },
+    {
+      "id": "K49",
+      "formula": "=ODDFYIELD(A49,B49,C49,D49,E49,J49,G49,H49,I49)",
+      "setup": {
+        "I49": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H49": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G49": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F49": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "E49": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J49": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A49,B49,C49,D49,E49,F49,G49,H49,I49)"
+        },
+        "D49": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C49": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B49": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A49": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04999999992785185
+      }
+    },
+    {
+      "id": "A50",
+      "formula": "=DATE(2020, 3, 17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "B50",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C50",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D50",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J50",
+      "formula": "=ODDFPRICE(A50,B50,C50,D50,E50,F50,G50,H50,I50)",
+      "setup": {
+        "I50": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H50": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "G50": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F50": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E50": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D50": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C50": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B50": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A50": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A50,B50,C50,D50,E50,F50,G50,H50,I50)"
+    },
+    {
+      "id": "K50",
+      "formula": "=ODDFYIELD(A50,B50,C50,D50,E50,J50,G50,H50,I50)",
+      "setup": {
+        "I50": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H50": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "G50": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F50": {
+          "kind": "number",
+          "value": 0.067
+        },
+        "E50": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J50": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A50,B50,C50,D50,E50,F50,G50,H50,I50)"
+        },
+        "D50": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C50": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B50": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A50": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06699999997639562
+      }
+    },
+    {
+      "id": "A51",
+      "formula": "=DATE(2020, 3, 17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "B51",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C51",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D51",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J51",
+      "formula": "=ODDFPRICE(A51,B51,C51,D51,E51,F51,G51,H51,I51)",
+      "setup": {
+        "I51": {
+          "kind": "number",
+          "value": 3.3
+        },
+        "H51": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G51": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F51": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "E51": {
+          "kind": "number",
+          "value": 0.08
+        },
+        "D51": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C51": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B51": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A51": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A51,B51,C51,D51,E51,F51,G51,H51,I51)"
+    },
+    {
+      "id": "K51",
+      "formula": "=ODDFYIELD(A51,B51,C51,D51,E51,J51,G51,H51,I51)",
+      "setup": {
+        "I51": {
+          "kind": "number",
+          "value": 3.3
+        },
+        "H51": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G51": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F51": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "E51": {
+          "kind": "number",
+          "value": 0.08
+        },
+        "J51": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A51,B51,C51,D51,E51,F51,G51,H51,I51)"
+        },
+        "D51": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C51": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B51": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A51": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.05999999996075945
+      }
+    },
+    {
+      "id": "A52",
+      "formula": "=DATE(2020, 3, 17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43907.0
+      }
+    },
+    {
+      "id": "B52",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "C52",
+      "formula": "=DATE(2020, 1, 15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43845.0
+      }
+    },
+    {
+      "id": "D52",
+      "formula": "=DATE(2021, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44256.0
+      }
+    },
+    {
+      "id": "J52",
+      "formula": "=ODDFPRICE(A52,B52,C52,D52,E52,F52,G52,H52,I52)",
+      "setup": {
+        "I52": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H52": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G52": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F52": {
+          "kind": "number",
+          "value": 0.03
+        },
+        "E52": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "D52": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C52": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B52": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A52": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A52,B52,C52,D52,E52,F52,G52,H52,I52)"
+    },
+    {
+      "id": "K52",
+      "formula": "=ODDFYIELD(A52,B52,C52,D52,E52,J52,G52,H52,I52)",
+      "setup": {
+        "I52": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H52": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G52": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F52": {
+          "kind": "number",
+          "value": 0.03
+        },
+        "E52": {
+          "kind": "number",
+          "value": 0.075
+        },
+        "J52": {
+          "kind": "formula",
+          "formula": "=ODDFPRICE(A52,B52,C52,D52,E52,F52,G52,H52,I52)"
+        },
+        "D52": {
+          "kind": "formula",
+          "formula": "=DATE(2021, 3, 1)"
+        },
+        "C52": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 1, 15)"
+        },
+        "B52": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A52": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.029999999988761832
+      }
+    }
+  ]
+}

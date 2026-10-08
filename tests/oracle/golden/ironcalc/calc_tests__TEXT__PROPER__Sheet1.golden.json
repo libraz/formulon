@@ -1,0 +1,75 @@
+{
+  "suite": "ironcalc_calc_tests__TEXT_PROPER_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/TEXT/PROPER.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "B1",
+      "formula": "=PROPER(A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "democracy dies in the shadows"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Democracy Dies In The Shadows"
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=PROPER(A2)",
+      "setup": {
+        "A2": {
+          "kind": "text",
+          "value": "Comeback in broad day\nTo the same place, the same face, the same brute "
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Comeback In Broad Day\nTo The Same Place, The Same Face, The Same Brute "
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=PROPER(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "1 gentelman 3 links"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1 Gentelman 3 Links"
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=PROPER(A4)",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "三体"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "三体"
+      }
+    }
+  ]
+}

@@ -1,0 +1,239 @@
+{
+  "suite": "ironcalc_calc_tests__FINANCIAL_INTRATE_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/FINANCIAL/INTRATE.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=C2*1.02",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 2000000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2040000.0
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=INTRATE(A2,B2,C2,D2,E2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2000000.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 46522.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 46433.0
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=C2*1.02"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.08
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=C3*1.02",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 2000001.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2040001.02
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=INTRATE(A3,B3,C3,D3,E3)",
+      "setup": {
+        "E3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2000001.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 46522.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 46433.0
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=C3*1.02"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0820224719101124
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=C4*1.02",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 2000002.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2040002.04
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=INTRATE(A4,B4,C4,D4,E4)",
+      "setup": {
+        "E4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 2000002.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 46522.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 46433.0
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=C4*1.02"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.08089887640449446
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=C5*1.02",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 2000003.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2040003.06
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=INTRATE(A5,B5,C5,D5,E5)",
+      "setup": {
+        "E5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 2000003.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 46522.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 46433.0
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=C5*1.02"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.08202247191011247
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=C6*1.02",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 2000004.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2040004.08
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=INTRATE(A6,B6,C6,D6,E6)",
+      "setup": {
+        "E6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 2000004.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 46522.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 46433.0
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=C6*1.02"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.08000000000000015
+      }
+    }
+  ]
+}

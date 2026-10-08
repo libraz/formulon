@@ -1,0 +1,30 @@
+{
+  "suite": "ironcalc_calc_tests__LOOKUP_AND_REFERENCE_TRIMRANGE_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/LOOKUP_AND_REFERENCE/TRIMRANGE.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "K3",
+      "formula": "=SUM(_xlfn.ANCHORARRAY(J3))",
+      "setup": {
+        "J3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =SUM(_xlfn.ANCHORARRAY(J3))"
+    }
+  ]
+}

@@ -1,0 +1,2870 @@
+{
+  "suite": "ironcalc_calc_tests__DATE_AND_TIME_YEARFRAC_DATEDIF_YEARFRAC_DATEDIF",
+  "description": "Derived from IronCalc fixture calc_tests/DATE_AND_TIME/YEARFRAC_DATEDIF.xlsx, sheet 'YEARFRAC_DATEDIF'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "YEARFRAC_DATEDIF",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "A2",
+      "formula": "=DATE(2025,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.0
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=YEARFRAC(B2,A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.025
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=DATEDIF(B2,A2,\"D\")",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=YEARFRAC($B$3,$A$3,H2)",
+      "setup": {
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9972677595628415
+      }
+    },
+    {
+      "id": "K2",
+      "formula": "=DATEDIF($B$3,$A$3,L2)",
+      "setup": {
+        "L2": {
+          "kind": "text",
+          "value": "D"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "A3",
+      "formula": "=DATE(2024,12,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45657.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=DATE(2024,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45292.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=YEARFRAC(B3,A3)",
+      "setup": {
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=DATEDIF(B3,A3,\"D\")",
+      "setup": {
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=YEARFRAC($B$3,$A$3,H3)",
+      "setup": {
+        "H3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0138888888888888
+      }
+    },
+    {
+      "id": "K3",
+      "formula": "=DATEDIF($B$3,$A$3,L3)",
+      "setup": {
+        "L3": {
+          "kind": "text",
+          "value": "M"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=DATE(9999,10,12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958385.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=DATE(1990,5,12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 33005.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=YEARFRAC(B4,A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(9999,10,12)"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(1990,5,12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8009.416666666667
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=DATEDIF(B4,A4,\"D\")",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(9999,10,12)"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(1990,5,12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2925380.0
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=YEARFRAC($B$3,$A$3,H4)",
+      "setup": {
+        "H4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K4",
+      "formula": "=DATEDIF($B$3,$A$3,L4)",
+      "setup": {
+        "L4": {
+          "kind": "text",
+          "value": "Y"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=DATE(2025,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=YEARFRAC(B5,A5)",
+      "setup": {
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.025
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=DATEDIF(B5,A5,\"D\")",
+      "setup": {
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=YEARFRAC($B$3,$A$3,H5)",
+      "setup": {
+        "H5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9972222222222222
+      }
+    },
+    {
+      "id": "K5",
+      "formula": "=DATEDIF($B$3,$A$3,L5)",
+      "setup": {
+        "L5": {
+          "kind": "text",
+          "value": "MD"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=DATE(2026,2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46057.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=DATE(2025,10,12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45942.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=YEARFRAC(B6,A6)",
+      "setup": {
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2026,2,4)"
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2025,10,12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3111111111111111
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=DATEDIF(B6,A6,\"D\")",
+      "setup": {
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2026,2,4)"
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2025,10,12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 115.0
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=YEARFRAC($B$3,$A$3,H6)",
+      "setup": {
+        "H6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K6",
+      "formula": "=DATEDIF($B$3,$A$3,L6)",
+      "setup": {
+        "L6": {
+          "kind": "text",
+          "value": "YM"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=DATE(2025,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.0
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=DATE(2025,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=YEARFRAC(B7,A7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=DATEDIF(B7,A7,\"D\")",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=YEARFRAC($B$3,$A$3,H7)",
+      "setup": {
+        "H7": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K7",
+      "formula": "=DATEDIF($B$3,$A$3,L7)",
+      "setup": {
+        "L7": {
+          "kind": "text",
+          "value": "YD"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=DATE(2024,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45352.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=DATE(2024,2,29)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45351.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=YEARFRAC(B8,A8)",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,1)"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.002777777777777778
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=DATEDIF(B8,A8,\"D\")",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,1)"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=YEARFRAC($B$3,$A$3,H8)",
+      "setup": {
+        "H8": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K8",
+      "formula": "=DATEDIF($B$3,$A$3,L8)",
+      "setup": {
+        "L8": {
+          "kind": "text",
+          "value": "yd"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "A9",
+      "formula": "=DATE(2025,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45716.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=DATE(2024,2,29)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45351.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=YEARFRAC(B9,A9)",
+      "setup": {
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=DATEDIF(B9,A9,\"D\")",
+      "setup": {
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=YEARFRAC($B$3,$A$3,H9)",
+      "setup": {
+        "H9": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K9",
+      "formula": "=DATEDIF($B$3,$A$3,L9)",
+      "setup": {
+        "L9": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "L9",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=DATE(2025,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45716.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=DATE(2025,1,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45688.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=YEARFRAC(B10,A10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.07777777777777778
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=DATEDIF(B10,A10,\"D\")",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 28.0
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=YEARFRAC($B$3,$A$3,H10)",
+      "setup": {
+        "H10": {
+          "kind": "number",
+          "value": 1.5
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9972677595628415
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=DATE(2025,1,10)+TIME(16,30,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.6875
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=DATE(2025,1,1)+TIME(20,30,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.854166666664
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=YEARFRAC(B11,A11)",
+      "setup": {
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(16,30,0)"
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+TIME(20,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.025
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=DATEDIF(B11,A11,\"D\")",
+      "setup": {
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(16,30,0)"
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+TIME(20,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=YEARFRAC($B$3,$A$3,H11)",
+      "setup": {
+        "H11": {
+          "kind": "number",
+          "value": 1.001
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9972677595628415
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=DATE(2025,1,10)+TIME(16,30,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.6875
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=DATE(2025,1,10)+TIME(20,30,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.854166666664
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=YEARFRAC(B12,A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(16,30,0)"
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(20,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=DATEDIF(B12,A12,\"D\")",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(16,30,0)"
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(20,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=YEARFRAC($B$3,$A$3,H12)",
+      "setup": {
+        "H12": {
+          "kind": "number",
+          "value": 1.9999999
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9972677595628415
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=DATE(2025,1,11)+TIME(0,1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45668.00069444445
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=DATE(2025,1,10)+TIME(23,59,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.99930555555
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=YEARFRAC(B13,A13)",
+      "setup": {
+        "A13": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,11)+TIME(0,1,0)"
+        },
+        "B13": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(23,59,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.002777777777777778
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=DATEDIF(B13,A13,\"D\")",
+      "setup": {
+        "A13": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,11)+TIME(0,1,0)"
+        },
+        "B13": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(23,59,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G13",
+      "formula": "=YEARFRAC($B$3,$A$3,H13)",
+      "setup": {
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=YEARFRAC(B14,A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.008333333333333333
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=DATEDIF(B14,A14,\"D\")",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "G14",
+      "formula": "=YEARFRAC($B$3,$A$3,H14)",
+      "setup": {
+        "H14": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,12,31)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=YEARFRAC(B15,A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.008333333333333333
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=DATEDIF(B15,A15,\"D\")",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=YEARFRAC(B16,A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 9.25
+        },
+        "B16": {
+          "kind": "number",
+          "value": 6.25
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.008333333333333333
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=DATEDIF(B16,A16,\"D\")",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 9.25
+        },
+        "B16": {
+          "kind": "number",
+          "value": 6.25
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=YEARFRAC(B17,A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": -5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=DATEDIF(B17,A17,\"D\")",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": -5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=YEARFRAC(B18,A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": -50.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=DATEDIF(B18,A18,\"D\")",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": -50.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=YEARFRAC(B19,A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": -50.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=DATEDIF(B19,A19,\"D\")",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": -50.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A20",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=YEARFRAC(B20,A20)",
+      "setup": {
+        "A20": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=DATEDIF(B20,A20,\"D\")",
+      "setup": {
+        "A20": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A21",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=YEARFRAC(B21,A21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=DATEDIF(B21,A21,\"D\")",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=YEARFRAC(B22,A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=DATEDIF(B22,A22,\"D\")",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A23",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=YEARFRAC(B23,A23)",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=DATEDIF(B23,A23,\"D\")",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=YEARFRAC(B24,A24)",
+      "setup": {
+        "A24": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "B24": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=DATEDIF(B24,A24,\"D\")",
+      "setup": {
+        "A24": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "B24": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "A25",
+      "formula": "=SQRT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=YEARFRAC(B25,A25)",
+      "setup": {
+        "B25": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=DATEDIF(B25,A25,\"D\")",
+      "setup": {
+        "B25": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A26",
+      "formula": "=\"x\"+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=YEARFRAC(B26,A26)",
+      "setup": {
+        "B26": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=DATEDIF(B26,A26,\"D\")",
+      "setup": {
+        "B26": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A27",
+      "formula": "=\"2026-01-10\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2026-01-10"
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=\"2024-01-10\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024-01-10"
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=YEARFRAC(B27,A27)",
+      "setup": {
+        "A27": {
+          "kind": "formula",
+          "formula": "=\"2026-01-10\""
+        },
+        "B27": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=DATEDIF(B27,A27,\"D\")",
+      "setup": {
+        "A27": {
+          "kind": "formula",
+          "formula": "=\"2026-01-10\""
+        },
+        "B27": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 731.0
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=YEARFRAC(B28,A28)",
+      "setup": {
+        "A28": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "B28": {
+          "kind": "text",
+          "value": "def"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=DATEDIF(B28,A28,\"D\")",
+      "setup": {
+        "A28": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "B28": {
+          "kind": "text",
+          "value": "def"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=YEARFRAC(B29,A29)",
+      "setup": {
+        "A29": {
+          "kind": "text",
+          "value": "one"
+        },
+        "B29": {
+          "kind": "text",
+          "value": "ten"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=DATEDIF(B29,A29,\"D\")",
+      "setup": {
+        "A29": {
+          "kind": "text",
+          "value": "one"
+        },
+        "B29": {
+          "kind": "text",
+          "value": "ten"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A30",
+      "formula": "=F28:F31",
+      "setup": {
+        "F31": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F30": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "skipped": "Formula moved from row 30 to Z1: F28:F31 selects a different row than the cached scalar; preserve formula placement before adjudication. Formula: =F28:F31"
+    },
+    {
+      "id": "B31",
+      "formula": "=F28:F31",
+      "setup": {
+        "F31": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F30": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "skipped": "Formula moved from row 31 to Z1: F28:F31 selects a different row than the cached scalar; preserve formula placement before adjudication. Formula: =F28:F31"
+    },
+    {
+      "id": "A35",
+      "formula": "=DATE(2008,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39508.0
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=DATE(2008,8,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39691.0
+      }
+    },
+    {
+      "id": "D35",
+      "formula": "=YEARFRAC(A35,B35,C35)",
+      "setup": {
+        "C35": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B35": {
+          "kind": "formula",
+          "formula": "=DATE(2008,8,31)"
+        },
+        "A35": {
+          "kind": "formula",
+          "formula": "=DATE(2008,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "A36",
+      "formula": "=DATE(2008,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39508.0
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=DATE(2008,8,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39691.0
+      }
+    },
+    {
+      "id": "D36",
+      "formula": "=YEARFRAC(A36,B36,C36)",
+      "setup": {
+        "C36": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B36": {
+          "kind": "formula",
+          "formula": "=DATE(2008,8,31)"
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(2008,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "A37",
+      "formula": "=DATE(2008,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39508.0
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=DATE(2008,8,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39691.0
+      }
+    },
+    {
+      "id": "D37",
+      "formula": "=YEARFRAC(A37,B37,C37)",
+      "setup": {
+        "C37": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=DATE(2008,8,31)"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=DATE(2008,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5083333333333333
+      }
+    },
+    {
+      "id": "A38",
+      "formula": "=DATE(2008,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39508.0
+      }
+    },
+    {
+      "id": "B38",
+      "formula": "=DATE(2008,8,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39691.0
+      }
+    },
+    {
+      "id": "D38",
+      "formula": "=YEARFRAC(A38,B38,C38)",
+      "setup": {
+        "C38": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B38": {
+          "kind": "formula",
+          "formula": "=DATE(2008,8,31)"
+        },
+        "A38": {
+          "kind": "formula",
+          "formula": "=DATE(2008,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5013698630136987
+      }
+    },
+    {
+      "id": "A39",
+      "formula": "=DATE(2008,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39508.0
+      }
+    },
+    {
+      "id": "B39",
+      "formula": "=DATE(2008,8,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39691.0
+      }
+    },
+    {
+      "id": "D39",
+      "formula": "=YEARFRAC(A39,B39,C39)",
+      "setup": {
+        "C39": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B39": {
+          "kind": "formula",
+          "formula": "=DATE(2008,8,31)"
+        },
+        "A39": {
+          "kind": "formula",
+          "formula": "=DATE(2008,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.49722222222222223
+      }
+    },
+    {
+      "id": "A40",
+      "formula": "=DATE(2007,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39142.0
+      }
+    },
+    {
+      "id": "B40",
+      "formula": "=DATE(2007,8,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39325.0
+      }
+    },
+    {
+      "id": "D40",
+      "formula": "=YEARFRAC(A40,B40,C40)",
+      "setup": {
+        "C40": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B40": {
+          "kind": "formula",
+          "formula": "=DATE(2007,8,31)"
+        },
+        "A40": {
+          "kind": "formula",
+          "formula": "=DATE(2007,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "A41",
+      "formula": "=DATE(2007,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39142.0
+      }
+    },
+    {
+      "id": "B41",
+      "formula": "=DATE(2007,8,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39325.0
+      }
+    },
+    {
+      "id": "D41",
+      "formula": "=YEARFRAC(A41,B41,C41)",
+      "setup": {
+        "C41": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B41": {
+          "kind": "formula",
+          "formula": "=DATE(2007,8,31)"
+        },
+        "A41": {
+          "kind": "formula",
+          "formula": "=DATE(2007,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5013698630136987
+      }
+    },
+    {
+      "id": "A42",
+      "formula": "=DATE(2017,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42769.0
+      }
+    },
+    {
+      "id": "B42",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "D42",
+      "formula": "=YEARFRAC(A42,B42,C42)",
+      "setup": {
+        "C42": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B42": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A42": {
+          "kind": "formula",
+          "formula": "=DATE(2017,2,3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8277777777777777
+      }
+    },
+    {
+      "id": "A43",
+      "formula": "=DATE(2017,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42769.0
+      }
+    },
+    {
+      "id": "B43",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "D43",
+      "formula": "=YEARFRAC(A43,B43,C43)",
+      "setup": {
+        "C43": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B43": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A43": {
+          "kind": "formula",
+          "formula": "=DATE(2017,2,3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8246575342465754
+      }
+    },
+    {
+      "id": "A44",
+      "formula": "=DATE(2017,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42769.0
+      }
+    },
+    {
+      "id": "B44",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "D44",
+      "formula": "=YEARFRAC(A44,B44,C44)",
+      "setup": {
+        "C44": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B44": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A44": {
+          "kind": "formula",
+          "formula": "=DATE(2017,2,3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8361111111111111
+      }
+    },
+    {
+      "id": "A45",
+      "formula": "=DATE(2017,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42769.0
+      }
+    },
+    {
+      "id": "B45",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "D45",
+      "formula": "=YEARFRAC(A45,B45,C45)",
+      "setup": {
+        "C45": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B45": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A45": {
+          "kind": "formula",
+          "formula": "=DATE(2017,2,3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8246575342465754
+      }
+    },
+    {
+      "id": "A46",
+      "formula": "=DATE(2017,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42769.0
+      }
+    },
+    {
+      "id": "B46",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "D46",
+      "formula": "=YEARFRAC(A46,B46,C46)",
+      "setup": {
+        "C46": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B46": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A46": {
+          "kind": "formula",
+          "formula": "=DATE(2017,2,3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8277777777777777
+      }
+    },
+    {
+      "id": "A47",
+      "formula": "=DATE(2007,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39177.0
+      }
+    },
+    {
+      "id": "B47",
+      "formula": "=DATE(2007,8,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39301.0
+      }
+    },
+    {
+      "id": "D47",
+      "formula": "=YEARFRAC(A47,B47,C47)",
+      "setup": {
+        "C47": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B47": {
+          "kind": "formula",
+          "formula": "=DATE(2007,8,7)"
+        },
+        "A47": {
+          "kind": "formula",
+          "formula": "=DATE(2007,4,5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3388888888888889
+      }
+    },
+    {
+      "id": "A48",
+      "formula": "=DATE(2007,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39177.0
+      }
+    },
+    {
+      "id": "B48",
+      "formula": "=DATE(2007,8,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39301.0
+      }
+    },
+    {
+      "id": "D48",
+      "formula": "=YEARFRAC(A48,B48,C48)",
+      "setup": {
+        "C48": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B48": {
+          "kind": "formula",
+          "formula": "=DATE(2007,8,7)"
+        },
+        "A48": {
+          "kind": "formula",
+          "formula": "=DATE(2007,4,5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.33972602739726027
+      }
+    },
+    {
+      "id": "A49",
+      "formula": "=DATE(2007,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39177.0
+      }
+    },
+    {
+      "id": "B49",
+      "formula": "=DATE(2007,8,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39301.0
+      }
+    },
+    {
+      "id": "D49",
+      "formula": "=YEARFRAC(A49,B49,C49)",
+      "setup": {
+        "C49": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B49": {
+          "kind": "formula",
+          "formula": "=DATE(2007,8,7)"
+        },
+        "A49": {
+          "kind": "formula",
+          "formula": "=DATE(2007,4,5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.34444444444444444
+      }
+    },
+    {
+      "id": "A50",
+      "formula": "=DATE(2007,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39177.0
+      }
+    },
+    {
+      "id": "B50",
+      "formula": "=DATE(2007,8,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39301.0
+      }
+    },
+    {
+      "id": "D50",
+      "formula": "=YEARFRAC(A50,B50,C50)",
+      "setup": {
+        "C50": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B50": {
+          "kind": "formula",
+          "formula": "=DATE(2007,8,7)"
+        },
+        "A50": {
+          "kind": "formula",
+          "formula": "=DATE(2007,4,5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.33972602739726027
+      }
+    },
+    {
+      "id": "A51",
+      "formula": "=DATE(2007,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39177.0
+      }
+    },
+    {
+      "id": "B51",
+      "formula": "=DATE(2007,8,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 39301.0
+      }
+    },
+    {
+      "id": "D51",
+      "formula": "=YEARFRAC(A51,B51,C51)",
+      "setup": {
+        "C51": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B51": {
+          "kind": "formula",
+          "formula": "=DATE(2007,8,7)"
+        },
+        "A51": {
+          "kind": "formula",
+          "formula": "=DATE(2007,4,5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3388888888888889
+      }
+    },
+    {
+      "id": "A52",
+      "formula": "=DATE(1995,5,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 34824.0
+      }
+    },
+    {
+      "id": "B52",
+      "formula": "=DATE(2026,6,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46179.0
+      }
+    },
+    {
+      "id": "D52",
+      "formula": "=YEARFRAC(A52,B52,C52)",
+      "setup": {
+        "C52": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B52": {
+          "kind": "formula",
+          "formula": "=DATE(2026,6,6)"
+        },
+        "A52": {
+          "kind": "formula",
+          "formula": "=DATE(1995,5,5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.086111111111112
+      }
+    },
+    {
+      "id": "A53",
+      "formula": "=DATE(1995,5,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 34824.0
+      }
+    },
+    {
+      "id": "B53",
+      "formula": "=DATE(2026,6,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46179.0
+      }
+    },
+    {
+      "id": "D53",
+      "formula": "=YEARFRAC(A53,B53,C53)",
+      "setup": {
+        "C53": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B53": {
+          "kind": "formula",
+          "formula": "=DATE(2026,6,6)"
+        },
+        "A53": {
+          "kind": "formula",
+          "formula": "=DATE(1995,5,5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.08829568788501
+      }
+    },
+    {
+      "id": "A54",
+      "formula": "=DATE(1995,5,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 34824.0
+      }
+    },
+    {
+      "id": "B54",
+      "formula": "=DATE(2026,6,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46179.0
+      }
+    },
+    {
+      "id": "D54",
+      "formula": "=YEARFRAC(A54,B54,C54)",
+      "setup": {
+        "C54": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B54": {
+          "kind": "formula",
+          "formula": "=DATE(2026,6,6)"
+        },
+        "A54": {
+          "kind": "formula",
+          "formula": "=DATE(1995,5,5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.541666666666668
+      }
+    },
+    {
+      "id": "A55",
+      "formula": "=DATE(1995,5,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 34824.0
+      }
+    },
+    {
+      "id": "B55",
+      "formula": "=DATE(2026,6,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46179.0
+      }
+    },
+    {
+      "id": "D55",
+      "formula": "=YEARFRAC(A55,B55,C55)",
+      "setup": {
+        "C55": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B55": {
+          "kind": "formula",
+          "formula": "=DATE(2026,6,6)"
+        },
+        "A55": {
+          "kind": "formula",
+          "formula": "=DATE(1995,5,5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.10958904109589
+      }
+    },
+    {
+      "id": "A56",
+      "formula": "=DATE(1995,5,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 34824.0
+      }
+    },
+    {
+      "id": "B56",
+      "formula": "=DATE(2026,6,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46179.0
+      }
+    },
+    {
+      "id": "D56",
+      "formula": "=YEARFRAC(A56,B56,C56)",
+      "setup": {
+        "C56": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B56": {
+          "kind": "formula",
+          "formula": "=DATE(2026,6,6)"
+        },
+        "A56": {
+          "kind": "formula",
+          "formula": "=DATE(1995,5,5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.086111111111112
+      }
+    },
+    {
+      "id": "A58",
+      "formula": "=DATE(2026,6,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46179.0
+      }
+    },
+    {
+      "id": "B58",
+      "formula": "=DATE(2026,3,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46084.0
+      }
+    },
+    {
+      "id": "D58",
+      "formula": "=YEARFRAC(A58,B58,C58)",
+      "setup": {
+        "C58": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B58": {
+          "kind": "formula",
+          "formula": "=DATE(2026,3,3)"
+        },
+        "A58": {
+          "kind": "formula",
+          "formula": "=DATE(2026,6,6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.25833333333333336
+      }
+    },
+    {
+      "id": "A61",
+      "formula": "=DATE(1998,8,8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 36015.0
+      }
+    },
+    {
+      "id": "B61",
+      "formula": "=DATE(2024,4,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45386.0
+      }
+    },
+    {
+      "id": "D61",
+      "formula": "=YEARFRAC(A61,B61,C61)",
+      "setup": {
+        "C61": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B61": {
+          "kind": "formula",
+          "formula": "=DATE(2024,4,4)"
+        },
+        "A61": {
+          "kind": "formula",
+          "formula": "=DATE(1998,8,8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 25.65574934090448
+      }
+    },
+    {
+      "id": "A62",
+      "formula": "=DATE(2023,3,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44988.0
+      }
+    },
+    {
+      "id": "B62",
+      "formula": "=DATE(2024,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45350.0
+      }
+    },
+    {
+      "id": "D62",
+      "formula": "=YEARFRAC(A62,B62,C62)",
+      "setup": {
+        "C62": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B62": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,28)"
+        },
+        "A62": {
+          "kind": "formula",
+          "formula": "=DATE(2023,3,3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9917808219178083
+      }
+    },
+    {
+      "id": "A63",
+      "formula": "=DATE(2022,2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44594.0
+      }
+    },
+    {
+      "id": "B63",
+      "formula": "=DATE(2024,2,29)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45351.0
+      }
+    },
+    {
+      "id": "D63",
+      "formula": "=YEARFRAC(A63,B63,C63)",
+      "setup": {
+        "C63": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B63": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        },
+        "A63": {
+          "kind": "formula",
+          "formula": "=DATE(2022,2,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0720802919708032
+      }
+    }
+  ]
+}

@@ -1,0 +1,189 @@
+{
+  "suite": "ironcalc_calc_tests_arithmetic_Sheet2",
+  "description": "Derived from IronCalc fixture calc_tests/arithmetic.xlsx, sheet 'Sheet2'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet2",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "B1",
+      "formula": "=ISNUMBER(A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1e400"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C1",
+      "formula": "=A1+1",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1e400"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =A1+1"
+    },
+    {
+      "id": "D1",
+      "formula": "=COUNTIF(A1:A12, \"inf\")",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "A9": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "nan"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "inf"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "1e400"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(\"NaN\",1,1)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=COUNT(\"NaN\", 1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=_xlfn.NUMBERVALUE(\"inf\")"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=VALUE(\"1e400\")"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=\"inf\"+1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E1",
+      "formula": "=COUNTIF(A1:A10, \"<1e400\")",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "A9": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "nan"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "inf"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "1e400"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(\"NaN\",1,1)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=COUNT(\"NaN\", 1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=_xlfn.NUMBERVALUE(\"inf\")"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=VALUE(\"1e400\")"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=\"inf\"+1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A2",
+      "formula": "=\"inf\"+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A3",
+      "formula": "=VALUE(\"1e400\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=_xlfn.NUMBERVALUE(\"inf\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=COUNT(\"NaN\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=DATE(\"NaN\",1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

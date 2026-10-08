@@ -1,0 +1,57 @@
+{
+  "suite": "ironcalc_calc_tests__STATISTICAL_AVEDEV_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/STATISTICAL/AVEDEV.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "A8",
+      "formula": "=AVEDEV(A1:A4,A5:A6,A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 1.4
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8489795918367348
+      }
+    }
+  ]
+}

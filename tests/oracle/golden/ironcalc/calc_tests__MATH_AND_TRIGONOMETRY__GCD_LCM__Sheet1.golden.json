@@ -1,0 +1,6132 @@
+{
+  "suite": "ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_GCD_LCM_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/MATH_AND_TRIGONOMETRY/GCD_LCM.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T08:32:30Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=LCM(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=GCD(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=A2",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=B2",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=LCM(G2:H2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H2": {
+          "kind": "formula",
+          "formula": "=B2"
+        },
+        "G2": {
+          "kind": "formula",
+          "formula": "=A2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=GCD(G2:H2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H2": {
+          "kind": "formula",
+          "formula": "=B2"
+        },
+        "G2": {
+          "kind": "formula",
+          "formula": "=A2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K2",
+      "formula": "=LCM({4,8,12})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "L2",
+      "formula": "=GCD({4,8,12})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=LCM(A3,B3,C3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=GCD(A3,B3,C3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=A3",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=B3",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=LCM(G3:H3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "H3": {
+          "kind": "formula",
+          "formula": "=B3"
+        },
+        "G3": {
+          "kind": "formula",
+          "formula": "=A3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=GCD(G3:H3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "H3": {
+          "kind": "formula",
+          "formula": "=B3"
+        },
+        "G3": {
+          "kind": "formula",
+          "formula": "=A3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K3",
+      "formula": "=LCM({4,8,12;1,2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "L3",
+      "formula": "=GCD({4,8,12;1,2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=LCM(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=GCD(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=A4",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=B4",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=LCM(G4:H4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "H4": {
+          "kind": "formula",
+          "formula": "=B4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=A4"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=GCD(G4:H4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "H4": {
+          "kind": "formula",
+          "formula": "=B4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=A4"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=LCM(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 7.7
+        },
+        "B5": {
+          "kind": "number",
+          "value": 4.5
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 28.0
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=GCD(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 7.7
+        },
+        "B5": {
+          "kind": "number",
+          "value": 4.5
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=A5",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.5
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=B5",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 4.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.5
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=LCM(G5:H5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 4.5
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.5
+        },
+        "H5": {
+          "kind": "formula",
+          "formula": "=B5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=A5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 28.0
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=GCD(G5:H5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 4.5
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.5
+        },
+        "H5": {
+          "kind": "formula",
+          "formula": "=B5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=A5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K5",
+      "formula": "=LCM({4.8,8.4,12})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "L5",
+      "formula": "=GCD({4.8,8.4,12})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=LCM(A6,B6,C6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 4.9
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 28.0
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=GCD(A6,B6,C6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 4.9
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=A6",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.9
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=B6",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 4.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.9
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=LCM(G6:H6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 4.9
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "H6": {
+          "kind": "formula",
+          "formula": "=B6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=A6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 28.0
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=GCD(G6:H6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 4.9
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "H6": {
+          "kind": "formula",
+          "formula": "=B6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=A6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=LCM(A7,B7,C7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 4.1
+        },
+        "A7": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 28.0
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=GCD(A7,B7,C7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 4.1
+        },
+        "A7": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=A7",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.1
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=B7",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 4.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.1
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=LCM(G7:H7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 4.1
+        },
+        "A7": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "H7": {
+          "kind": "formula",
+          "formula": "=B7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=A7"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 28.0
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=GCD(G7:H7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 4.1
+        },
+        "A7": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "H7": {
+          "kind": "formula",
+          "formula": "=B7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=A7"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=LCM(A8,B8,C8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=GCD(A8,B8,C8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=A8",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.5
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=B8",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=LCM(G8:H8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.5
+        },
+        "H8": {
+          "kind": "formula",
+          "formula": "=B8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=A8"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=GCD(G8:H8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.5
+        },
+        "H8": {
+          "kind": "formula",
+          "formula": "=B8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=A8"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K8",
+      "formula": "=LCM({4,-8,12})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "L8",
+      "formula": "=GCD({4,-8,12})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=LCM(A9,B9,C9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -7.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=GCD(A9,B9,C9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -7.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=A9",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": -7.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.5
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=B9",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": -5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "I9",
+      "formula": "=LCM(G9:H9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -7.5
+        },
+        "H9": {
+          "kind": "formula",
+          "formula": "=B9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=A9"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=GCD(G9:H9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -7.5
+        },
+        "H9": {
+          "kind": "formula",
+          "formula": "=B9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=A9"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K9",
+      "formula": "=LCM({-4,-8,-12})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "L9",
+      "formula": "=GCD({-4,-8,-12})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=LCM(A10,B10,C10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=GCD(A10,B10,C10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=A10",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=B10",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": -5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "I10",
+      "formula": "=LCM(G10:H10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H10": {
+          "kind": "formula",
+          "formula": "=B10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=A10"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=GCD(G10:H10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H10": {
+          "kind": "formula",
+          "formula": "=B10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=A10"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=LCM(A11,B11,C11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=GCD(A11,B11,C11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=A11",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=B11",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "I11",
+      "formula": "=LCM(G11:H11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H11": {
+          "kind": "formula",
+          "formula": "=B11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=A11"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J11",
+      "formula": "=GCD(G11:H11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H11": {
+          "kind": "formula",
+          "formula": "=B11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=A11"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "K11",
+      "formula": "=LCM({4,0,12})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "L11",
+      "formula": "=GCD({4,0,12})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=LCM(A12,B12,C12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=GCD(A12,B12,C12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=A12",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=B12",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "I12",
+      "formula": "=LCM(G12:H12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H12": {
+          "kind": "formula",
+          "formula": "=B12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=A12"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J12",
+      "formula": "=GCD(G12:H12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H12": {
+          "kind": "formula",
+          "formula": "=B12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=A12"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "K12",
+      "formula": "=LCM({0,0,0})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "L12",
+      "formula": "=GCD({0,0,0})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=LCM(A13,B13,C13)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=GCD(A13,B13,C13)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I13",
+      "formula": "=LCM(G13:H13)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J13",
+      "formula": "=GCD(G13:H13)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=LCM(A14,B14,C14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=GCD(A14,B14,C14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G14",
+      "formula": "=A14",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=B14",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "I14",
+      "formula": "=LCM(G14:H14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H14": {
+          "kind": "formula",
+          "formula": "=B14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=A14"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "J14",
+      "formula": "=GCD(G14:H14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H14": {
+          "kind": "formula",
+          "formula": "=B14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=A14"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A15",
+      "formula": "=2^20",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=2^15",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32768.0
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=LCM(A15,B15,C15)",
+      "setup": {
+        "B15": {
+          "kind": "formula",
+          "formula": "=2^15"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=2^20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=GCD(A15,B15,C15)",
+      "setup": {
+        "B15": {
+          "kind": "formula",
+          "formula": "=2^15"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=2^20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32768.0
+      }
+    },
+    {
+      "id": "G15",
+      "formula": "=A15",
+      "setup": {
+        "A15": {
+          "kind": "formula",
+          "formula": "=2^20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "H15",
+      "formula": "=B15",
+      "setup": {
+        "B15": {
+          "kind": "formula",
+          "formula": "=2^15"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32768.0
+      }
+    },
+    {
+      "id": "I15",
+      "formula": "=LCM(G15:H15)",
+      "setup": {
+        "H15": {
+          "kind": "formula",
+          "formula": "=B15"
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=2^15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=A15"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=2^20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "J15",
+      "formula": "=GCD(G15:H15)",
+      "setup": {
+        "H15": {
+          "kind": "formula",
+          "formula": "=B15"
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=2^15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=A15"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=2^20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32768.0
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=LCM(A16:C16)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=GCD(A16:C16)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G16",
+      "formula": "=A16",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "H16",
+      "formula": "=B16",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "I16",
+      "formula": "=LCM(G16:H16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "H16": {
+          "kind": "formula",
+          "formula": "=B16"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=A16"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "J16",
+      "formula": "=GCD(G16:H16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "H16": {
+          "kind": "formula",
+          "formula": "=B16"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=A16"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=LCM(A17,B17,C17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B17": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=GCD(A17,B17,C17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B17": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G17",
+      "formula": "=A17",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "I17",
+      "formula": "=LCM(G17:H17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "H17": {
+          "kind": "formula",
+          "formula": "=B17"
+        },
+        "B17": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=A17"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J17",
+      "formula": "=GCD(G17:H17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "H17": {
+          "kind": "formula",
+          "formula": "=B17"
+        },
+        "B17": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=A17"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=LCM(A18,B18,C18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 0.01
+        },
+        "A18": {
+          "kind": "number",
+          "value": 2.675
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=GCD(A18,B18,C18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 0.01
+        },
+        "A18": {
+          "kind": "number",
+          "value": 2.675
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "G18",
+      "formula": "=A18",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 2.675
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.675
+      }
+    },
+    {
+      "id": "H18",
+      "formula": "=B18",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 0.01
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.01
+      }
+    },
+    {
+      "id": "I18",
+      "formula": "=LCM(G18:H18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 0.01
+        },
+        "A18": {
+          "kind": "number",
+          "value": 2.675
+        },
+        "H18": {
+          "kind": "formula",
+          "formula": "=B18"
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=A18"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J18",
+      "formula": "=GCD(G18:H18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 0.01
+        },
+        "A18": {
+          "kind": "number",
+          "value": 2.675
+        },
+        "H18": {
+          "kind": "formula",
+          "formula": "=B18"
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=A18"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=LCM(A19,B19,C19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "A19": {
+          "kind": "number",
+          "value": 1.23456789
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=GCD(A19,B19,C19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "A19": {
+          "kind": "number",
+          "value": 1.23456789
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G19",
+      "formula": "=A19",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 1.23456789
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.23456789
+      }
+    },
+    {
+      "id": "H19",
+      "formula": "=B19",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 0.0001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0001
+      }
+    },
+    {
+      "id": "I19",
+      "formula": "=LCM(G19:H19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "A19": {
+          "kind": "number",
+          "value": 1.23456789
+        },
+        "H19": {
+          "kind": "formula",
+          "formula": "=B19"
+        },
+        "G19": {
+          "kind": "formula",
+          "formula": "=A19"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J19",
+      "formula": "=GCD(G19:H19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "A19": {
+          "kind": "number",
+          "value": 1.23456789
+        },
+        "H19": {
+          "kind": "formula",
+          "formula": "=B19"
+        },
+        "G19": {
+          "kind": "formula",
+          "formula": "=A19"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=LCM(A20,B20,C20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 123456789.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 123456789000.0
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=GCD(A20,B20,C20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 123456789.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G20",
+      "formula": "=A20",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 123456789.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 123456789.0
+      }
+    },
+    {
+      "id": "H20",
+      "formula": "=B20",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1000.0
+      }
+    },
+    {
+      "id": "I20",
+      "formula": "=LCM(G20:H20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 123456789.0
+        },
+        "H20": {
+          "kind": "formula",
+          "formula": "=B20"
+        },
+        "G20": {
+          "kind": "formula",
+          "formula": "=A20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 123456789000.0
+      }
+    },
+    {
+      "id": "J20",
+      "formula": "=GCD(G20:H20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 123456789.0
+        },
+        "H20": {
+          "kind": "formula",
+          "formula": "=B20"
+        },
+        "G20": {
+          "kind": "formula",
+          "formula": "=A20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=LCM(A21,B21,C21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99999999999990.0
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=GCD(A21,B21,C21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G21",
+      "formula": "=A21",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999999999999.0
+      }
+    },
+    {
+      "id": "H21",
+      "formula": "=B21",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "I21",
+      "formula": "=LCM(G21:H21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "H21": {
+          "kind": "formula",
+          "formula": "=B21"
+        },
+        "G21": {
+          "kind": "formula",
+          "formula": "=A21"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99999999999990.0
+      }
+    },
+    {
+      "id": "J21",
+      "formula": "=GCD(G21:H21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "H21": {
+          "kind": "formula",
+          "formula": "=B21"
+        },
+        "G21": {
+          "kind": "formula",
+          "formula": "=A21"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=LCM(A22,B22,C22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "A22": {
+          "kind": "number",
+          "value": 0.00037
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=GCD(A22,B22,C22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "A22": {
+          "kind": "number",
+          "value": 0.00037
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G22",
+      "formula": "=A22",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 0.00037
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00037
+      }
+    },
+    {
+      "id": "H22",
+      "formula": "=B22",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 0.0001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0001
+      }
+    },
+    {
+      "id": "I22",
+      "formula": "=LCM(G22:H22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "A22": {
+          "kind": "number",
+          "value": 0.00037
+        },
+        "H22": {
+          "kind": "formula",
+          "formula": "=B22"
+        },
+        "G22": {
+          "kind": "formula",
+          "formula": "=A22"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J22",
+      "formula": "=GCD(G22:H22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "A22": {
+          "kind": "number",
+          "value": 0.00037
+        },
+        "H22": {
+          "kind": "formula",
+          "formula": "=B22"
+        },
+        "G22": {
+          "kind": "formula",
+          "formula": "=A22"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G23",
+      "formula": "=A23",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": -0.00037
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.00037
+      }
+    },
+    {
+      "id": "H23",
+      "formula": "=B23",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": 0.0001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0001
+      }
+    },
+    {
+      "id": "A24",
+      "formula": "=\"8\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "8"
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=LCM(A24,B24,C24)",
+      "setup": {
+        "B24": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A24": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=GCD(A24,B24,C24)",
+      "setup": {
+        "B24": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A24": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "G24",
+      "formula": "=A24",
+      "setup": {
+        "A24": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "8"
+      }
+    },
+    {
+      "id": "H24",
+      "formula": "=B24",
+      "setup": {
+        "B24": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "I24",
+      "formula": "=LCM(G24:H24)",
+      "setup": {
+        "B24": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H24": {
+          "kind": "formula",
+          "formula": "=B24"
+        },
+        "G24": {
+          "kind": "formula",
+          "formula": "=A24"
+        },
+        "A24": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "J24",
+      "formula": "=GCD(G24:H24)",
+      "setup": {
+        "B24": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H24": {
+          "kind": "formula",
+          "formula": "=B24"
+        },
+        "G24": {
+          "kind": "formula",
+          "formula": "=A24"
+        },
+        "A24": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "K24",
+      "formula": "=LCM({4,\"8\",12})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "L24",
+      "formula": "=GCD({4,\"8\",12})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=\"8\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "8"
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=LCM(A25,B25,C25)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B25": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=GCD(A25,B25,C25)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B25": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "G25",
+      "formula": "=A25",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "H25",
+      "formula": "=B25",
+      "setup": {
+        "B25": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "8"
+      }
+    },
+    {
+      "id": "I25",
+      "formula": "=LCM(G25:H25)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H25": {
+          "kind": "formula",
+          "formula": "=B25"
+        },
+        "B25": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        },
+        "G25": {
+          "kind": "formula",
+          "formula": "=A25"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "J25",
+      "formula": "=GCD(G25:H25)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H25": {
+          "kind": "formula",
+          "formula": "=B25"
+        },
+        "B25": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        },
+        "G25": {
+          "kind": "formula",
+          "formula": "=A25"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "A26",
+      "formula": "=\" 10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 10 "
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=LCM(A26,B26,C26)",
+      "setup": {
+        "B26": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "E26",
+      "formula": "=GCD(A26,B26,C26)",
+      "setup": {
+        "B26": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G26",
+      "formula": "=A26",
+      "setup": {
+        "A26": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": " 10 "
+      }
+    },
+    {
+      "id": "H26",
+      "formula": "=B26",
+      "setup": {
+        "B26": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "I26",
+      "formula": "=LCM(G26:H26)",
+      "setup": {
+        "B26": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H26": {
+          "kind": "formula",
+          "formula": "=B26"
+        },
+        "G26": {
+          "kind": "formula",
+          "formula": "=A26"
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "J26",
+      "formula": "=GCD(G26:H26)",
+      "setup": {
+        "B26": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H26": {
+          "kind": "formula",
+          "formula": "=B26"
+        },
+        "G26": {
+          "kind": "formula",
+          "formula": "=A26"
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=LCM(A27,B27,C27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A27": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E27",
+      "formula": "=GCD(A27,B27,C27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A27": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G27",
+      "formula": "=A27",
+      "setup": {
+        "A27": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "eight"
+      }
+    },
+    {
+      "id": "H27",
+      "formula": "=B27",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "I27",
+      "formula": "=LCM(G27:H27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A27": {
+          "kind": "text",
+          "value": "eight"
+        },
+        "H27": {
+          "kind": "formula",
+          "formula": "=B27"
+        },
+        "G27": {
+          "kind": "formula",
+          "formula": "=A27"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J27",
+      "formula": "=GCD(G27:H27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A27": {
+          "kind": "text",
+          "value": "eight"
+        },
+        "H27": {
+          "kind": "formula",
+          "formula": "=B27"
+        },
+        "G27": {
+          "kind": "formula",
+          "formula": "=A27"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K27",
+      "formula": "=LCM({4,\"eight\",12})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L27",
+      "formula": "=GCD({4,\"eight\",12})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A28",
+      "formula": "=\"0\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=\"5\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5"
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=LCM(A28,B28,C28)",
+      "setup": {
+        "B28": {
+          "kind": "formula",
+          "formula": "=\"5\""
+        },
+        "A28": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E28",
+      "formula": "=GCD(A28,B28,C28)",
+      "setup": {
+        "B28": {
+          "kind": "formula",
+          "formula": "=\"5\""
+        },
+        "A28": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "G28",
+      "formula": "=A28",
+      "setup": {
+        "A28": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "H28",
+      "formula": "=B28",
+      "setup": {
+        "B28": {
+          "kind": "formula",
+          "formula": "=\"5\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "5"
+      }
+    },
+    {
+      "id": "I28",
+      "formula": "=LCM(G28:H28)",
+      "setup": {
+        "H28": {
+          "kind": "formula",
+          "formula": "=B28"
+        },
+        "B28": {
+          "kind": "formula",
+          "formula": "=\"5\""
+        },
+        "G28": {
+          "kind": "formula",
+          "formula": "=A28"
+        },
+        "A28": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J28",
+      "formula": "=GCD(G28:H28)",
+      "setup": {
+        "H28": {
+          "kind": "formula",
+          "formula": "=B28"
+        },
+        "B28": {
+          "kind": "formula",
+          "formula": "=\"5\""
+        },
+        "G28": {
+          "kind": "formula",
+          "formula": "=A28"
+        },
+        "A28": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "A29",
+      "formula": "=\"@\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "@"
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=LCM(A29,B29,C29)",
+      "setup": {
+        "B29": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A29": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E29",
+      "formula": "=GCD(A29,B29,C29)",
+      "setup": {
+        "B29": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A29": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G29",
+      "formula": "=A29",
+      "setup": {
+        "A29": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "@"
+      }
+    },
+    {
+      "id": "H29",
+      "formula": "=B29",
+      "setup": {
+        "B29": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "I29",
+      "formula": "=LCM(G29:H29)",
+      "setup": {
+        "B29": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H29": {
+          "kind": "formula",
+          "formula": "=B29"
+        },
+        "G29": {
+          "kind": "formula",
+          "formula": "=A29"
+        },
+        "A29": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J29",
+      "formula": "=GCD(G29:H29)",
+      "setup": {
+        "B29": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H29": {
+          "kind": "formula",
+          "formula": "=B29"
+        },
+        "G29": {
+          "kind": "formula",
+          "formula": "=A29"
+        },
+        "A29": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A30",
+      "formula": "=DATE(2024,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    },
+    {
+      "id": "D30",
+      "formula": "=LCM(A30,B30,C30)",
+      "setup": {
+        "B30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    },
+    {
+      "id": "E30",
+      "formula": "=GCD(A30,B30,C30)",
+      "setup": {
+        "B30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G30",
+      "formula": "=A30",
+      "setup": {
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    },
+    {
+      "id": "H30",
+      "formula": "=B30",
+      "setup": {
+        "B30": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I30",
+      "formula": "=LCM(G30:H30)",
+      "setup": {
+        "B30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H30": {
+          "kind": "formula",
+          "formula": "=B30"
+        },
+        "G30": {
+          "kind": "formula",
+          "formula": "=A30"
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    },
+    {
+      "id": "J30",
+      "formula": "=GCD(G30:H30)",
+      "setup": {
+        "B30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H30": {
+          "kind": "formula",
+          "formula": "=B30"
+        },
+        "G30": {
+          "kind": "formula",
+          "formula": "=A30"
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A31",
+      "formula": "=\"2024-01-10\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024-01-10"
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=LCM(A31,B31,C31)",
+      "setup": {
+        "B31": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 317107.0
+      }
+    },
+    {
+      "id": "E31",
+      "formula": "=GCD(A31,B31,C31)",
+      "setup": {
+        "B31": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G31",
+      "formula": "=A31",
+      "setup": {
+        "A31": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2024-01-10"
+      }
+    },
+    {
+      "id": "H31",
+      "formula": "=B31",
+      "setup": {
+        "B31": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "I31",
+      "formula": "=LCM(G31:H31)",
+      "setup": {
+        "B31": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H31": {
+          "kind": "formula",
+          "formula": "=B31"
+        },
+        "G31": {
+          "kind": "formula",
+          "formula": "=A31"
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 317107.0
+      }
+    },
+    {
+      "id": "J31",
+      "formula": "=GCD(G31:H31)",
+      "setup": {
+        "B31": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H31": {
+          "kind": "formula",
+          "formula": "=B31"
+        },
+        "G31": {
+          "kind": "formula",
+          "formula": "=A31"
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K31",
+      "formula": "=LCM({4,\"2024-01-10\",12})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 543612.0
+      }
+    },
+    {
+      "id": "L31",
+      "formula": "=GCD({4,\"2024-01-10\",12})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A32",
+      "formula": "=\" 2024-01-10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 2024-01-10 "
+      }
+    },
+    {
+      "id": "D32",
+      "formula": "=LCM(A32,B32,C32)",
+      "setup": {
+        "B32": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A32": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E32",
+      "formula": "=GCD(A32,B32,C32)",
+      "setup": {
+        "B32": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A32": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G32",
+      "formula": "=A32",
+      "setup": {
+        "A32": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": " 2024-01-10 "
+      }
+    },
+    {
+      "id": "H32",
+      "formula": "=B32",
+      "setup": {
+        "B32": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "I32",
+      "formula": "=LCM(G32:H32)",
+      "setup": {
+        "B32": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H32": {
+          "kind": "formula",
+          "formula": "=B32"
+        },
+        "G32": {
+          "kind": "formula",
+          "formula": "=A32"
+        },
+        "A32": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J32",
+      "formula": "=GCD(G32:H32)",
+      "setup": {
+        "B32": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H32": {
+          "kind": "formula",
+          "formula": "=B32"
+        },
+        "G32": {
+          "kind": "formula",
+          "formula": "=A32"
+        },
+        "A32": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A33",
+      "formula": "=TIME(14,30,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6041666666666666
+      }
+    },
+    {
+      "id": "D33",
+      "formula": "=LCM(A33,B33,C33)",
+      "setup": {
+        "B33": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E33",
+      "formula": "=GCD(A33,B33,C33)",
+      "setup": {
+        "B33": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "G33",
+      "formula": "=A33",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6041666666666666
+      }
+    },
+    {
+      "id": "H33",
+      "formula": "=B33",
+      "setup": {
+        "B33": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "I33",
+      "formula": "=LCM(G33:H33)",
+      "setup": {
+        "B33": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H33": {
+          "kind": "formula",
+          "formula": "=B33"
+        },
+        "G33": {
+          "kind": "formula",
+          "formula": "=A33"
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J33",
+      "formula": "=GCD(G33:H33)",
+      "setup": {
+        "B33": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H33": {
+          "kind": "formula",
+          "formula": "=B33"
+        },
+        "G33": {
+          "kind": "formula",
+          "formula": "=A33"
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "D34",
+      "formula": "=LCM(,B34,C34)",
+      "setup": {
+        "B34": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E34",
+      "formula": "=GCD(,B34,C34)",
+      "setup": {
+        "B34": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G34",
+      "formula": "=A34",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H34",
+      "formula": "=B34",
+      "setup": {
+        "B34": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "I34",
+      "formula": "=LCM(G34:H34)",
+      "setup": {
+        "B34": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H34": {
+          "kind": "formula",
+          "formula": "=B34"
+        },
+        "G34": {
+          "kind": "formula",
+          "formula": "=A34"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J34",
+      "formula": "=GCD(G34:H34)",
+      "setup": {
+        "B34": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H34": {
+          "kind": "formula",
+          "formula": "=B34"
+        },
+        "G34": {
+          "kind": "formula",
+          "formula": "=A34"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "D35",
+      "formula": "=LCM(A35,B35,C35)",
+      "setup": {
+        "B35": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "E35",
+      "formula": "=GCD(A35,B35,C35)",
+      "setup": {
+        "B35": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "H35",
+      "formula": "=B35",
+      "setup": {
+        "B35": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "I35",
+      "formula": "=LCM(G35:H35)",
+      "setup": {
+        "B35": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H35": {
+          "kind": "formula",
+          "formula": "=B35"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J35",
+      "formula": "=GCD(G35:H35)",
+      "setup": {
+        "B35": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H35": {
+          "kind": "formula",
+          "formula": "=B35"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "D36",
+      "formula": "=LCM(A36,B36,C36)",
+      "setup": {
+        "B36": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E36",
+      "formula": "=GCD(A36,B36,C36)",
+      "setup": {
+        "B36": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I36",
+      "formula": "=LCM(G36:H36)",
+      "setup": {
+        "H36": {
+          "kind": "formula",
+          "formula": "=B36"
+        },
+        "B36": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "G36": {
+          "kind": "formula",
+          "formula": "=A36"
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J36",
+      "formula": "=GCD(G36:H36)",
+      "setup": {
+        "H36": {
+          "kind": "formula",
+          "formula": "=B36"
+        },
+        "B36": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "G36": {
+          "kind": "formula",
+          "formula": "=A36"
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A37",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D37",
+      "formula": "=LCM(A37,B37,C37)",
+      "setup": {
+        "B37": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E37",
+      "formula": "=GCD(A37,B37,C37)",
+      "setup": {
+        "B37": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G37",
+      "formula": "=A37",
+      "setup": {
+        "A37": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H37",
+      "formula": "=B37",
+      "setup": {
+        "B37": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "I37",
+      "formula": "=LCM(G37:H37)",
+      "setup": {
+        "B37": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H37": {
+          "kind": "formula",
+          "formula": "=B37"
+        },
+        "G37": {
+          "kind": "formula",
+          "formula": "=A37"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "J37",
+      "formula": "=GCD(G37:H37)",
+      "setup": {
+        "B37": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H37": {
+          "kind": "formula",
+          "formula": "=B37"
+        },
+        "G37": {
+          "kind": "formula",
+          "formula": "=A37"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A38",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D38",
+      "formula": "=LCM(A38,B38,C38)",
+      "setup": {
+        "B38": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A38": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E38",
+      "formula": "=GCD(A38,B38,C38)",
+      "setup": {
+        "B38": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A38": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G38",
+      "formula": "=A38",
+      "setup": {
+        "A38": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H38",
+      "formula": "=B38",
+      "setup": {
+        "B38": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "I38",
+      "formula": "=LCM(G38:H38)",
+      "setup": {
+        "B38": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H38": {
+          "kind": "formula",
+          "formula": "=B38"
+        },
+        "G38": {
+          "kind": "formula",
+          "formula": "=A38"
+        },
+        "A38": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "J38",
+      "formula": "=GCD(G38:H38)",
+      "setup": {
+        "B38": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H38": {
+          "kind": "formula",
+          "formula": "=B38"
+        },
+        "G38": {
+          "kind": "formula",
+          "formula": "=A38"
+        },
+        "A38": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D39",
+      "formula": "=LCM(A39,B39,C39)",
+      "setup": {
+        "B39": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A39": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "E39",
+      "formula": "=GCD(A39,B39,C39)",
+      "setup": {
+        "B39": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A39": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "G39",
+      "formula": "=A39",
+      "setup": {
+        "A39": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "H39",
+      "formula": "=B39",
+      "setup": {
+        "B39": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "I39",
+      "formula": "=LCM(G39:H39)",
+      "setup": {
+        "B39": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A39": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "H39": {
+          "kind": "formula",
+          "formula": "=B39"
+        },
+        "G39": {
+          "kind": "formula",
+          "formula": "=A39"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "J39",
+      "formula": "=GCD(G39:H39)",
+      "setup": {
+        "B39": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A39": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "H39": {
+          "kind": "formula",
+          "formula": "=B39"
+        },
+        "G39": {
+          "kind": "formula",
+          "formula": "=A39"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "A40",
+      "formula": "=SQRT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D40",
+      "formula": "=LCM(A40,B40,C40)",
+      "setup": {
+        "B40": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A40": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E40",
+      "formula": "=GCD(A40,B40,C40)",
+      "setup": {
+        "B40": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A40": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G40",
+      "formula": "=A40",
+      "setup": {
+        "A40": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H40",
+      "formula": "=B40",
+      "setup": {
+        "B40": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "I40",
+      "formula": "=LCM(G40:H40)",
+      "setup": {
+        "B40": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H40": {
+          "kind": "formula",
+          "formula": "=B40"
+        },
+        "G40": {
+          "kind": "formula",
+          "formula": "=A40"
+        },
+        "A40": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J40",
+      "formula": "=GCD(G40:H40)",
+      "setup": {
+        "B40": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H40": {
+          "kind": "formula",
+          "formula": "=B40"
+        },
+        "G40": {
+          "kind": "formula",
+          "formula": "=A40"
+        },
+        "A40": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A41",
+      "formula": "=\"x\"+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D41",
+      "formula": "=LCM(A41,B41,C41)",
+      "setup": {
+        "B41": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A41": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E41",
+      "formula": "=GCD(A41,B41,C41)",
+      "setup": {
+        "B41": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A41": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G41",
+      "formula": "=A41",
+      "setup": {
+        "A41": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H41",
+      "formula": "=B41",
+      "setup": {
+        "B41": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "I41",
+      "formula": "=LCM(G41:H41)",
+      "setup": {
+        "B41": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H41": {
+          "kind": "formula",
+          "formula": "=B41"
+        },
+        "G41": {
+          "kind": "formula",
+          "formula": "=A41"
+        },
+        "A41": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J41",
+      "formula": "=GCD(G41:H41)",
+      "setup": {
+        "B41": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H41": {
+          "kind": "formula",
+          "formula": "=B41"
+        },
+        "G41": {
+          "kind": "formula",
+          "formula": "=A41"
+        },
+        "A41": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D42",
+      "formula": "=LCM(A42,B42,C42)",
+      "setup": {
+        "B42": {
+          "kind": "number",
+          "value": 1e+50
+        },
+        "A42": {
+          "kind": "number",
+          "value": 1e+100
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E42",
+      "formula": "=GCD(A42,B42,C42)",
+      "setup": {
+        "B42": {
+          "kind": "number",
+          "value": 1e+50
+        },
+        "A42": {
+          "kind": "number",
+          "value": 1e+100
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G42",
+      "formula": "=A42",
+      "setup": {
+        "A42": {
+          "kind": "number",
+          "value": 1e+100
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e+100
+      }
+    },
+    {
+      "id": "H42",
+      "formula": "=B42",
+      "setup": {
+        "B42": {
+          "kind": "number",
+          "value": 1e+50
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e+50
+      }
+    },
+    {
+      "id": "I42",
+      "formula": "=LCM(G42:H42)",
+      "setup": {
+        "B42": {
+          "kind": "number",
+          "value": 1e+50
+        },
+        "A42": {
+          "kind": "number",
+          "value": 1e+100
+        },
+        "H42": {
+          "kind": "formula",
+          "formula": "=B42"
+        },
+        "G42": {
+          "kind": "formula",
+          "formula": "=A42"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J42",
+      "formula": "=GCD(G42:H42)",
+      "setup": {
+        "B42": {
+          "kind": "number",
+          "value": 1e+50
+        },
+        "A42": {
+          "kind": "number",
+          "value": 1e+100
+        },
+        "H42": {
+          "kind": "formula",
+          "formula": "=B42"
+        },
+        "G42": {
+          "kind": "formula",
+          "formula": "=A42"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H43",
+      "formula": "=B43",
+      "setup": {
+        "B43": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D44",
+      "formula": "=LCM(A44,B44,C44)",
+      "setup": {
+        "B44": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A44": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E44",
+      "formula": "=GCD(A44,B44,C44)",
+      "setup": {
+        "B44": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A44": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G44",
+      "formula": "=A44",
+      "setup": {
+        "A44": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H44",
+      "formula": "=B44",
+      "setup": {
+        "B44": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "I44",
+      "formula": "=LCM(G44:H44)",
+      "setup": {
+        "B44": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A44": {
+          "kind": "bool",
+          "value": true
+        },
+        "H44": {
+          "kind": "formula",
+          "formula": "=B44"
+        },
+        "G44": {
+          "kind": "formula",
+          "formula": "=A44"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =LCM(G44:H44)"
+    },
+    {
+      "id": "J44",
+      "formula": "=GCD(G44:H44)",
+      "setup": {
+        "B44": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A44": {
+          "kind": "bool",
+          "value": true
+        },
+        "H44": {
+          "kind": "formula",
+          "formula": "=B44"
+        },
+        "G44": {
+          "kind": "formula",
+          "formula": "=A44"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =GCD(G44:H44)"
+    },
+    {
+      "id": "K44",
+      "formula": "=LCM({4,TRUE,12})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L44",
+      "formula": "=GCD({4,TRUE,12})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D45",
+      "formula": "=LCM(A45,B45,C45)",
+      "setup": {
+        "B45": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A45": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E45",
+      "formula": "=GCD(A45,B45,C45)",
+      "setup": {
+        "B45": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A45": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G45",
+      "formula": "=A45",
+      "setup": {
+        "A45": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H45",
+      "formula": "=B45",
+      "setup": {
+        "B45": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "I45",
+      "formula": "=LCM(G45:H45)",
+      "setup": {
+        "B45": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A45": {
+          "kind": "bool",
+          "value": false
+        },
+        "H45": {
+          "kind": "formula",
+          "formula": "=B45"
+        },
+        "G45": {
+          "kind": "formula",
+          "formula": "=A45"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =LCM(G45:H45)"
+    },
+    {
+      "id": "J45",
+      "formula": "=GCD(G45:H45)",
+      "setup": {
+        "B45": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A45": {
+          "kind": "bool",
+          "value": false
+        },
+        "H45": {
+          "kind": "formula",
+          "formula": "=B45"
+        },
+        "G45": {
+          "kind": "formula",
+          "formula": "=A45"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =GCD(G45:H45)"
+    },
+    {
+      "id": "D46",
+      "formula": "=LCM(A46,B46,C46)",
+      "setup": {
+        "B46": {
+          "kind": "bool",
+          "value": false
+        },
+        "A46": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E46",
+      "formula": "=GCD(A46,B46,C46)",
+      "setup": {
+        "B46": {
+          "kind": "bool",
+          "value": false
+        },
+        "A46": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G46",
+      "formula": "=A46",
+      "setup": {
+        "A46": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H46",
+      "formula": "=B46",
+      "setup": {
+        "B46": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "I46",
+      "formula": "=LCM(G46:H46)",
+      "setup": {
+        "B46": {
+          "kind": "bool",
+          "value": false
+        },
+        "A46": {
+          "kind": "bool",
+          "value": true
+        },
+        "H46": {
+          "kind": "formula",
+          "formula": "=B46"
+        },
+        "G46": {
+          "kind": "formula",
+          "formula": "=A46"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =LCM(G46:H46)"
+    },
+    {
+      "id": "J46",
+      "formula": "=GCD(G46:H46)",
+      "setup": {
+        "B46": {
+          "kind": "bool",
+          "value": false
+        },
+        "A46": {
+          "kind": "bool",
+          "value": true
+        },
+        "H46": {
+          "kind": "formula",
+          "formula": "=B46"
+        },
+        "G46": {
+          "kind": "formula",
+          "formula": "=A46"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =GCD(G46:H46)"
+    },
+    {
+      "id": "A47",
+      "formula": "=1.05*(0.0284+0.0046)-0.0284",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "B47",
+      "formula": "=1.05*(0.0284+0.0046)-0.0284",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "D47",
+      "formula": "=LCM(A47,B47,C47)",
+      "setup": {
+        "B47": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        },
+        "A47": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E47",
+      "formula": "=GCD(A47,B47,C47)",
+      "setup": {
+        "B47": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        },
+        "A47": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G47",
+      "formula": "=A47",
+      "setup": {
+        "A47": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "H47",
+      "formula": "=B47",
+      "setup": {
+        "B47": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "I47",
+      "formula": "=LCM(G47:H47)",
+      "setup": {
+        "H47": {
+          "kind": "formula",
+          "formula": "=B47"
+        },
+        "B47": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        },
+        "G47": {
+          "kind": "formula",
+          "formula": "=A47"
+        },
+        "A47": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J47",
+      "formula": "=GCD(G47:H47)",
+      "setup": {
+        "H47": {
+          "kind": "formula",
+          "formula": "=B47"
+        },
+        "B47": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        },
+        "G47": {
+          "kind": "formula",
+          "formula": "=A47"
+        },
+        "A47": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A48",
+      "formula": "=N48",
+      "setup": {
+        "N48": {
+          "kind": "number",
+          "value": 1.75
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.75
+      }
+    },
+    {
+      "id": "D48",
+      "formula": "=LCM(A48,B48,C48)",
+      "setup": {
+        "B48": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "N48": {
+          "kind": "number",
+          "value": 1.75
+        },
+        "A48": {
+          "kind": "formula",
+          "formula": "=N48"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E48",
+      "formula": "=GCD(A48,B48,C48)",
+      "setup": {
+        "B48": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "N48": {
+          "kind": "number",
+          "value": 1.75
+        },
+        "A48": {
+          "kind": "formula",
+          "formula": "=N48"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G48",
+      "formula": "=A48",
+      "setup": {
+        "N48": {
+          "kind": "number",
+          "value": 1.75
+        },
+        "A48": {
+          "kind": "formula",
+          "formula": "=N48"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.75
+      }
+    },
+    {
+      "id": "H48",
+      "formula": "=B48",
+      "setup": {
+        "B48": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I48",
+      "formula": "=LCM(G48:H48)",
+      "setup": {
+        "B48": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "N48": {
+          "kind": "number",
+          "value": 1.75
+        },
+        "H48": {
+          "kind": "formula",
+          "formula": "=B48"
+        },
+        "G48": {
+          "kind": "formula",
+          "formula": "=A48"
+        },
+        "A48": {
+          "kind": "formula",
+          "formula": "=N48"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J48",
+      "formula": "=GCD(G48:H48)",
+      "setup": {
+        "B48": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "N48": {
+          "kind": "number",
+          "value": 1.75
+        },
+        "H48": {
+          "kind": "formula",
+          "formula": "=B48"
+        },
+        "G48": {
+          "kind": "formula",
+          "formula": "=A48"
+        },
+        "A48": {
+          "kind": "formula",
+          "formula": "=N48"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A49",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "D49",
+      "formula": "=LCM(A49,B49,C49)",
+      "setup": {
+        "B49": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A49": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "E49",
+      "formula": "=GCD(A49,B49,C49)",
+      "setup": {
+        "B49": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A49": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G49",
+      "formula": "=A49",
+      "setup": {
+        "A49": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "H49",
+      "formula": "=B49",
+      "setup": {
+        "B49": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I49",
+      "formula": "=LCM(G49:H49)",
+      "setup": {
+        "B49": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H49": {
+          "kind": "formula",
+          "formula": "=B49"
+        },
+        "G49": {
+          "kind": "formula",
+          "formula": "=A49"
+        },
+        "A49": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "J49",
+      "formula": "=GCD(G49:H49)",
+      "setup": {
+        "B49": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H49": {
+          "kind": "formula",
+          "formula": "=B49"
+        },
+        "G49": {
+          "kind": "formula",
+          "formula": "=A49"
+        },
+        "A49": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B50",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "D50",
+      "formula": "=LCM(A50,B50,C50)",
+      "setup": {
+        "A50": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B50": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "E50",
+      "formula": "=GCD(A50,B50,C50)",
+      "setup": {
+        "A50": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B50": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G50",
+      "formula": "=A50",
+      "setup": {
+        "A50": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H50",
+      "formula": "=B50",
+      "setup": {
+        "B50": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "I50",
+      "formula": "=LCM(G50:H50)",
+      "setup": {
+        "A50": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H50": {
+          "kind": "formula",
+          "formula": "=B50"
+        },
+        "B50": {
+          "kind": "formula",
+          "formula": "=PI()"
+        },
+        "G50": {
+          "kind": "formula",
+          "formula": "=A50"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "J50",
+      "formula": "=GCD(G50:H50)",
+      "setup": {
+        "A50": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H50": {
+          "kind": "formula",
+          "formula": "=B50"
+        },
+        "B50": {
+          "kind": "formula",
+          "formula": "=PI()"
+        },
+        "G50": {
+          "kind": "formula",
+          "formula": "=A50"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D51",
+      "formula": "=LCM(A51,B51,C51)",
+      "setup": {
+        "B51": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A51": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E51",
+      "formula": "=GCD(A51,B51,C51)",
+      "setup": {
+        "B51": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A51": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G51",
+      "formula": "=A51",
+      "setup": {
+        "A51": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Banana"
+      }
+    },
+    {
+      "id": "H51",
+      "formula": "=B51",
+      "setup": {
+        "B51": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I51",
+      "formula": "=LCM(G51:H51)",
+      "setup": {
+        "B51": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A51": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "H51": {
+          "kind": "formula",
+          "formula": "=B51"
+        },
+        "G51": {
+          "kind": "formula",
+          "formula": "=A51"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J51",
+      "formula": "=GCD(G51:H51)",
+      "setup": {
+        "B51": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A51": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "H51": {
+          "kind": "formula",
+          "formula": "=B51"
+        },
+        "G51": {
+          "kind": "formula",
+          "formula": "=A51"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D52",
+      "formula": "=LCM(A52,B52,C52-1)",
+      "setup": {
+        "C52": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B52": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A52": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "E52",
+      "formula": "=GCD(A52,B52,C52-1)",
+      "setup": {
+        "C52": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B52": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A52": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G52",
+      "formula": "=A52",
+      "setup": {
+        "A52": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "H52",
+      "formula": "=B52",
+      "setup": {
+        "B52": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "I52",
+      "formula": "=LCM(G52:H52)",
+      "setup": {
+        "B52": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A52": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "H52": {
+          "kind": "formula",
+          "formula": "=B52"
+        },
+        "G52": {
+          "kind": "formula",
+          "formula": "=A52"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "J52",
+      "formula": "=GCD(G52:H52)",
+      "setup": {
+        "B52": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A52": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "H52": {
+          "kind": "formula",
+          "formula": "=B52"
+        },
+        "G52": {
+          "kind": "formula",
+          "formula": "=A52"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "A53",
+      "formula": "=2^31-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2147483647.0
+      }
+    },
+    {
+      "id": "B53",
+      "formula": "=2^30-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1073741823.0
+      }
+    },
+    {
+      "id": "D53",
+      "formula": "=LCM(A53,B53,C53-1)",
+      "setup": {
+        "B53": {
+          "kind": "formula",
+          "formula": "=2^30-1"
+        },
+        "A53": {
+          "kind": "formula",
+          "formula": "=2^31-1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E53",
+      "formula": "=GCD(A53,B53,C53-1)",
+      "setup": {
+        "B53": {
+          "kind": "formula",
+          "formula": "=2^30-1"
+        },
+        "A53": {
+          "kind": "formula",
+          "formula": "=2^31-1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G53",
+      "formula": "=A53",
+      "setup": {
+        "A53": {
+          "kind": "formula",
+          "formula": "=2^31-1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2147483647.0
+      }
+    },
+    {
+      "id": "H53",
+      "formula": "=B53",
+      "setup": {
+        "B53": {
+          "kind": "formula",
+          "formula": "=2^30-1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1073741823.0
+      }
+    },
+    {
+      "id": "I53",
+      "formula": "=LCM(G53:H53)",
+      "setup": {
+        "H53": {
+          "kind": "formula",
+          "formula": "=B53"
+        },
+        "B53": {
+          "kind": "formula",
+          "formula": "=2^30-1"
+        },
+        "G53": {
+          "kind": "formula",
+          "formula": "=A53"
+        },
+        "A53": {
+          "kind": "formula",
+          "formula": "=2^31-1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J53",
+      "formula": "=GCD(G53:H53)",
+      "setup": {
+        "H53": {
+          "kind": "formula",
+          "formula": "=B53"
+        },
+        "B53": {
+          "kind": "formula",
+          "formula": "=2^30-1"
+        },
+        "G53": {
+          "kind": "formula",
+          "formula": "=A53"
+        },
+        "A53": {
+          "kind": "formula",
+          "formula": "=2^31-1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    }
+  ]
+}

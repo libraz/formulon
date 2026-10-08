@@ -1,0 +1,355 @@
+{
+  "suite": "ironcalc_calc_tests__LOOKUP_AND_REFERENCE_INDIRECT_r1c1_notation",
+  "description": "Derived from IronCalc fixture calc_tests/LOOKUP_AND_REFERENCE/INDIRECT.xlsx, sheet 'r1c1_notation'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "r1c1_notation",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "L2",
+      "formula": "=E1",
+      "setup": {
+        "E1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "L3",
+      "formula": "=E2",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=SUM(INDIRECT(\"R1C1:R2C3\", FALSE))",
+      "setup": {
+        "J3": {
+          "kind": "text",
+          "value": "E2"
+        },
+        "K4": {
+          "kind": "text",
+          "value": "4"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "E6"
+        },
+        "E3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "K5": {
+          "kind": "text",
+          "value": "21"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K6": {
+          "kind": "text",
+          "value": "16"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "K2": {
+          "kind": "text",
+          "value": "5"
+        },
+        "K8": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "E7": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "E6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "text",
+          "value": "E4"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "K1": {
+          "kind": "text",
+          "value": "Expected"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "text",
+          "value": "E3"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "E7"
+        },
+        "J1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "J2": {
+          "kind": "text",
+          "value": "E1"
+        },
+        "E1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "L1": {
+          "kind": "text",
+          "value": "Actual"
+        },
+        "K7": {
+          "kind": "text",
+          "value": "5"
+        },
+        "K3": {
+          "kind": "text",
+          "value": "3"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "E5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 21.0
+      }
+    },
+    {
+      "id": "L4",
+      "formula": "=E3",
+      "setup": {
+        "E3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=SUM(INDIRECT(\"R2C3:R1C2\", FALSE))",
+      "setup": {
+        "J3": {
+          "kind": "text",
+          "value": "E2"
+        },
+        "K4": {
+          "kind": "text",
+          "value": "4"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "E6"
+        },
+        "E3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "K5": {
+          "kind": "text",
+          "value": "21"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K6": {
+          "kind": "text",
+          "value": "16"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "K2": {
+          "kind": "text",
+          "value": "5"
+        },
+        "K8": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "E7": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "E6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "text",
+          "value": "E4"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "K1": {
+          "kind": "text",
+          "value": "Expected"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "text",
+          "value": "E3"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "E7"
+        },
+        "J1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "J2": {
+          "kind": "text",
+          "value": "E1"
+        },
+        "E1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "L1": {
+          "kind": "text",
+          "value": "Actual"
+        },
+        "K7": {
+          "kind": "text",
+          "value": "5"
+        },
+        "K3": {
+          "kind": "text",
+          "value": "3"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "E5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "L5",
+      "formula": "=E4",
+      "setup": {
+        "E4": {
+          "kind": "formula",
+          "formula": "=SUM(INDIRECT(\"R1C1:R2C3\", FALSE))"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =E4"
+    },
+    {
+      "id": "L6",
+      "formula": "=E5",
+      "setup": {
+        "E5": {
+          "kind": "formula",
+          "formula": "=SUM(INDIRECT(\"R2C3:R1C2\", FALSE))"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =E5"
+    },
+    {
+      "id": "L7",
+      "formula": "=E6",
+      "setup": {
+        "E6": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "L8",
+      "formula": "=E7",
+      "setup": {
+        "E7": {
+          "kind": "error",
+          "code": "#REF!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    }
+  ]
+}

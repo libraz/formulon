@@ -1,0 +1,4024 @@
+{
+  "suite": "ironcalc_calc_tests__DATE_AND_TIME_NETWORKDAYS_NETWORKDAYS.INTL_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/DATE_AND_TIME/NETWORKDAYS_NETWORKDAYS.INTL.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "A2",
+      "formula": "=DATE(2025,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.0
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=NETWORKDAYS(B2,A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=NETWORKDAYS.INTL(B2,A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J2)",
+      "setup": {
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 262.0
+      }
+    },
+    {
+      "id": "A3",
+      "formula": "=DATE(2026,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46023.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=NETWORKDAYS(B3,A3)",
+      "setup": {
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2026,1,1)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 262.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=NETWORKDAYS.INTL(B3,A3)",
+      "setup": {
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2026,1,1)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 262.0
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J3)",
+      "setup": {
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 262.0
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=DATE(2024,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45292.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=NETWORKDAYS(B4,A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 263.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=NETWORKDAYS.INTL(B4,A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 263.0
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J4)",
+      "setup": {
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 262.0
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=DATE(9990,5,12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2954945.0
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=DATE(1990,5,12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 33005.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=NETWORKDAYS(B5,A5)",
+      "setup": {
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(9990,5,12)"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(1990,5,12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2087100.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=NETWORKDAYS.INTL(B5,A5)",
+      "setup": {
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(9990,5,12)"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(1990,5,12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2087100.0
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J5)",
+      "setup": {
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 261.0
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=DATE(2025,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=NETWORKDAYS(B6,A6)",
+      "setup": {
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=NETWORKDAYS.INTL(B6,A6)",
+      "setup": {
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J6)",
+      "setup": {
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 260.0
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=DATE(2026,2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46057.0
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=DATE(2025,10,12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45942.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=NETWORKDAYS(B7,A7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=DATE(2026,2,4)"
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=DATE(2025,10,12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 83.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=NETWORKDAYS.INTL(B7,A7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=DATE(2026,2,4)"
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=DATE(2025,10,12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 83.0
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J7)",
+      "setup": {
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 261.0
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=DATE(2025,12,8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45999.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=DATE(2025,12,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45996.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=NETWORKDAYS(B8,A8)",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=NETWORKDAYS.INTL(B8,A8)",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J8)",
+      "setup": {
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 262.0
+      }
+    },
+    {
+      "id": "A9",
+      "formula": "=DATE(2025,12,8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45999.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=DATE(2025,12,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45997.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=NETWORKDAYS(B9,A9)",
+      "setup": {
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=NETWORKDAYS.INTL(B9,A9)",
+      "setup": {
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I9",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J9)",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 11.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 314.0
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=DATE(2025,12,8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45999.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=DATE(2025,12,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45998.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=NETWORKDAYS(B10,A10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=NETWORKDAYS.INTL(B10,A10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I10",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J10)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 314.0
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=DATE(2025,12,8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45999.0
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=DATE(2025,12,8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45999.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=NETWORKDAYS(B11,A11)",
+      "setup": {
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=NETWORKDAYS.INTL(B11,A11)",
+      "setup": {
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I11",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J11)",
+      "setup": {
+        "J11": {
+          "kind": "number",
+          "value": 13.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 314.0
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=DATE(2024,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45352.0
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=DATE(2024,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45350.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=NETWORKDAYS(B12,A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,1)"
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=NETWORKDAYS.INTL(B12,A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,1)"
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "I12",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J12)",
+      "setup": {
+        "J12": {
+          "kind": "number",
+          "value": 14.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 313.0
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=DATE(2024,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45352.0
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=DATE(2024,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45323.0
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=NETWORKDAYS(B13,A13)",
+      "setup": {
+        "A13": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,1)"
+        },
+        "B13": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 22.0
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=NETWORKDAYS.INTL(B13,A13)",
+      "setup": {
+        "A13": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,1)"
+        },
+        "B13": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 22.0
+      }
+    },
+    {
+      "id": "I13",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J13)",
+      "setup": {
+        "J13": {
+          "kind": "number",
+          "value": 15.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 313.0
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=DATE(2025,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45716.0
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=DATE(2024,2,29)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45351.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=NETWORKDAYS(B14,A14)",
+      "setup": {
+        "A14": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "B14": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 262.0
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=NETWORKDAYS.INTL(B14,A14)",
+      "setup": {
+        "A14": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "B14": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 262.0
+      }
+    },
+    {
+      "id": "I14",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J14)",
+      "setup": {
+        "J14": {
+          "kind": "number",
+          "value": 16.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 314.0
+      }
+    },
+    {
+      "id": "A15",
+      "formula": "=DATE(2025,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45717.0
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=DATE(2025,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45716.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=NETWORKDAYS(B15,A15)",
+      "setup": {
+        "A15": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,1)"
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=NETWORKDAYS.INTL(B15,A15)",
+      "setup": {
+        "A15": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,1)"
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I15",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J15)",
+      "setup": {
+        "J15": {
+          "kind": "number",
+          "value": 17.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 314.0
+      }
+    },
+    {
+      "id": "A16",
+      "formula": "=DATE(2025,7,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45869.0
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=DATE(2025,6,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45838.0
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=NETWORKDAYS(B16,A16)",
+      "setup": {
+        "A16": {
+          "kind": "formula",
+          "formula": "=DATE(2025,7,31)"
+        },
+        "B16": {
+          "kind": "formula",
+          "formula": "=DATE(2025,6,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=NETWORKDAYS.INTL(B16,A16)",
+      "setup": {
+        "A16": {
+          "kind": "formula",
+          "formula": "=DATE(2025,7,31)"
+        },
+        "B16": {
+          "kind": "formula",
+          "formula": "=DATE(2025,6,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "I16",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J16)",
+      "setup": {
+        "J16": {
+          "kind": "number",
+          "value": 18.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A17",
+      "formula": "=DATE(2025,7,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45869.0
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=DATE(2025,7,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45868.0
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=NETWORKDAYS(B17,A17)",
+      "setup": {
+        "A17": {
+          "kind": "formula",
+          "formula": "=DATE(2025,7,31)"
+        },
+        "B17": {
+          "kind": "formula",
+          "formula": "=DATE(2025,7,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=NETWORKDAYS.INTL(B17,A17)",
+      "setup": {
+        "A17": {
+          "kind": "formula",
+          "formula": "=DATE(2025,7,31)"
+        },
+        "B17": {
+          "kind": "formula",
+          "formula": "=DATE(2025,7,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "I17",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J17)",
+      "setup": {
+        "J17": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A18",
+      "formula": "=DATE(2024,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45350.0
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=DATE(2024,1,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45322.0
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=NETWORKDAYS(B18,A18)",
+      "setup": {
+        "A18": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,28)"
+        },
+        "B18": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 21.0
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=NETWORKDAYS.INTL(B18,A18)",
+      "setup": {
+        "A18": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,28)"
+        },
+        "B18": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 21.0
+      }
+    },
+    {
+      "id": "I18",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J18)",
+      "setup": {
+        "J18": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A19",
+      "formula": "=DATE(2025,1,13)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45670.0
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=DATE(2025,1,10)+TIME(16,30,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.6875
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=NETWORKDAYS(B19,A19)",
+      "setup": {
+        "A19": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,13)"
+        },
+        "B19": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(16,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=NETWORKDAYS.INTL(B19,A19)",
+      "setup": {
+        "A19": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,13)"
+        },
+        "B19": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(16,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "I19",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J19)",
+      "setup": {
+        "J19": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A20",
+      "formula": "=DATE(2025,1,10)+TIME(23,59,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.99930555555
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=DATE(2025,1,10)+TIME(0,1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.00069444445
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=NETWORKDAYS(B20,A20)",
+      "setup": {
+        "A20": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(23,59,0)"
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(0,1,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=NETWORKDAYS.INTL(B20,A20)",
+      "setup": {
+        "A20": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(23,59,0)"
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(0,1,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I20",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,1,1),J20)",
+      "setup": {
+        "J20": {
+          "kind": "text",
+          "value": "0000111"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 210.0
+      }
+    },
+    {
+      "id": "A21",
+      "formula": "=DATE(2025,1,14)+TIME(0,1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45671.00069444445
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=DATE(2025,1,13)+TIME(23,59,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45670.99930555555
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=NETWORKDAYS(B21,A21)",
+      "setup": {
+        "A21": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,14)+TIME(0,1,0)"
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,13)+TIME(23,59,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=NETWORKDAYS.INTL(B21,A21)",
+      "setup": {
+        "A21": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,14)+TIME(0,1,0)"
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,13)+TIME(23,59,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "H21",
+      "formula": "=NETWORKDAYS(DATE(2025,1,1),DATE(2026,1,1),K21)",
+      "setup": {
+        "K21": {
+          "kind": "formula",
+          "formula": "=DATE(2025,5,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 261.0
+      }
+    },
+    {
+      "id": "I21",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J21,K21)",
+      "setup": {
+        "J21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K21": {
+          "kind": "formula",
+          "formula": "=DATE(2025,5,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 521.0
+      }
+    },
+    {
+      "id": "K21",
+      "formula": "=DATE(2025,5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45778.0
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=NETWORKDAYS(B22,A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=NETWORKDAYS.INTL(B22,A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "H22",
+      "formula": "=NETWORKDAYS(DATE(2025,1,1),DATE(2026,1,1),K22:K24)",
+      "setup": {
+        "K24": {
+          "kind": "formula",
+          "formula": "=DATE(2025,5,7)"
+        },
+        "K23": {
+          "kind": "formula",
+          "formula": "=DATE(2025,5,6)"
+        },
+        "K22": {
+          "kind": "formula",
+          "formula": "=DATE(2025,5,5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 259.0
+      }
+    },
+    {
+      "id": "I22",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),1,K22:K24)",
+      "setup": {
+        "K24": {
+          "kind": "formula",
+          "formula": "=DATE(2025,5,7)"
+        },
+        "K23": {
+          "kind": "formula",
+          "formula": "=DATE(2025,5,6)"
+        },
+        "K22": {
+          "kind": "formula",
+          "formula": "=DATE(2025,5,5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 519.0
+      }
+    },
+    {
+      "id": "K22",
+      "formula": "=DATE(2025,5,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45782.0
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=DATE(2025,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45992.0
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=NETWORKDAYS(B23,A23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 46000.0
+        },
+        "B23": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=NETWORKDAYS.INTL(B23,A23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 46000.0
+        },
+        "B23": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "K23",
+      "formula": "=DATE(2025,5,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45783.0
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=NETWORKDAYS(B24,A24)",
+      "setup": {
+        "A24": {
+          "kind": "number",
+          "value": 46000.999999
+        },
+        "B24": {
+          "kind": "number",
+          "value": 45992.000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=NETWORKDAYS.INTL(B24,A24)",
+      "setup": {
+        "A24": {
+          "kind": "number",
+          "value": 46000.999999
+        },
+        "B24": {
+          "kind": "number",
+          "value": 45992.000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "K24",
+      "formula": "=DATE(2025,5,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45784.0
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=NETWORKDAYS(B25,A25)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=NETWORKDAYS.INTL(B25,A25)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H25",
+      "formula": "=NETWORKDAYS(DATE(2025,1,1),DATE(2026,1,1),K25)",
+      "setup": {
+        "K25": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I25",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J25,K25)",
+      "setup": {
+        "K25": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "J25": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A26",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=NETWORKDAYS(B26,A26)",
+      "setup": {
+        "A26": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B26": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=NETWORKDAYS.INTL(B26,A26)",
+      "setup": {
+        "A26": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B26": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H26",
+      "formula": "=NETWORKDAYS(DATE(2025,1,1),DATE(2026,1,1),K26)",
+      "setup": {
+        "K26": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I26",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J26,K26)",
+      "setup": {
+        "K26": {
+          "kind": "bool",
+          "value": true
+        },
+        "J26": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A27",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=NETWORKDAYS(B27,A27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A27": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=NETWORKDAYS.INTL(B27,A27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A27": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H27",
+      "formula": "=NETWORKDAYS(DATE(2025,1,1),DATE(2026,1,1),K27)",
+      "setup": {
+        "K27": {
+          "kind": "number",
+          "value": 1.25
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 262.0
+      }
+    },
+    {
+      "id": "I27",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J27,K27)",
+      "setup": {
+        "K27": {
+          "kind": "number",
+          "value": 1.25
+        },
+        "J27": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 522.0
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=NETWORKDAYS(B28,A28)",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B28": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=NETWORKDAYS.INTL(B28,A28)",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B28": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H28",
+      "formula": "=NETWORKDAYS(DATE(2025,1,1),DATE(2026,1,1),K28)",
+      "setup": {
+        "K28": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I28",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J28,K28)",
+      "setup": {
+        "K28": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "J28": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A29",
+      "formula": "=DATE(2025,10,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45931.0
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=DATE(2025,1,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45664.0
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=NETWORKDAYS(B29,A29)",
+      "setup": {
+        "A29": {
+          "kind": "formula",
+          "formula": "=DATE(2025,10,1)"
+        },
+        "B29": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 192.0
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=NETWORKDAYS.INTL(B29,A29)",
+      "setup": {
+        "A29": {
+          "kind": "formula",
+          "formula": "=DATE(2025,10,1)"
+        },
+        "B29": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 192.0
+      }
+    },
+    {
+      "id": "I29",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J29)",
+      "setup": {
+        "J29": {
+          "kind": "text",
+          "value": "0000011"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 522.0
+      }
+    },
+    {
+      "id": "A30",
+      "formula": "=DATE(2025,10,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45931.0
+      }
+    },
+    {
+      "id": "C30",
+      "formula": "=NETWORKDAYS(B30,A30)",
+      "setup": {
+        "B30": {
+          "kind": "text",
+          "value": "\"07/01/2026\""
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2025,10,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D30",
+      "formula": "=NETWORKDAYS.INTL(B30,A30)",
+      "setup": {
+        "B30": {
+          "kind": "text",
+          "value": "\"07/01/2026\""
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2025,10,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I30",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J30)",
+      "setup": {
+        "J30": {
+          "kind": "text",
+          "value": "0000000"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 730.0
+      }
+    },
+    {
+      "id": "A31",
+      "formula": "=DATE(2025,10,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45931.0
+      }
+    },
+    {
+      "id": "C31",
+      "formula": "=NETWORKDAYS(B31,A31)",
+      "setup": {
+        "B31": {
+          "kind": "text",
+          "value": "\" 07/01/2026 \""
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=DATE(2025,10,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=NETWORKDAYS.INTL(B31,A31)",
+      "setup": {
+        "B31": {
+          "kind": "text",
+          "value": "\" 07/01/2026 \""
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=DATE(2025,10,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I31",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J31)",
+      "setup": {
+        "J31": {
+          "kind": "text",
+          "value": "1111111"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J31)"
+    },
+    {
+      "id": "C32",
+      "formula": "=NETWORKDAYS(B32,A32)",
+      "setup": {
+        "A32": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "B32": {
+          "kind": "text",
+          "value": "def"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D32",
+      "formula": "=NETWORKDAYS.INTL(B32,A32)",
+      "setup": {
+        "A32": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "B32": {
+          "kind": "text",
+          "value": "def"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I32",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J32)",
+      "setup": {
+        "J32": {
+          "kind": "text",
+          "value": "00000111"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=NETWORKDAYS(B33,A33)",
+      "setup": {
+        "A33": {
+          "kind": "bool",
+          "value": true
+        },
+        "B33": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D33",
+      "formula": "=NETWORKDAYS.INTL(B33,A33)",
+      "setup": {
+        "A33": {
+          "kind": "bool",
+          "value": true
+        },
+        "B33": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I33",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J33)",
+      "setup": {
+        "J33": {
+          "kind": "text",
+          "value": "000001"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=DATE(1900,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      }
+    },
+    {
+      "id": "C34",
+      "formula": "=NETWORKDAYS(B34,A34)",
+      "setup": {
+        "A34": {
+          "kind": "bool",
+          "value": true
+        },
+        "B34": {
+          "kind": "formula",
+          "formula": "=DATE(1900,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D34",
+      "formula": "=NETWORKDAYS.INTL(B34,A34)",
+      "setup": {
+        "A34": {
+          "kind": "bool",
+          "value": true
+        },
+        "B34": {
+          "kind": "formula",
+          "formula": "=DATE(1900,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I34",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J34)",
+      "setup": {
+        "J34": {
+          "kind": "text",
+          "value": "0000012"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=DATE(1900,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      }
+    },
+    {
+      "id": "C35",
+      "formula": "=NETWORKDAYS(B35,A35)",
+      "setup": {
+        "A35": {
+          "kind": "bool",
+          "value": false
+        },
+        "B35": {
+          "kind": "formula",
+          "formula": "=DATE(1900,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D35",
+      "formula": "=NETWORKDAYS.INTL(B35,A35)",
+      "setup": {
+        "A35": {
+          "kind": "bool",
+          "value": false
+        },
+        "B35": {
+          "kind": "formula",
+          "formula": "=DATE(1900,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I35",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J35)",
+      "setup": {
+        "J35": {
+          "kind": "text",
+          "value": "1100000"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 522.0
+      }
+    },
+    {
+      "id": "A36",
+      "formula": "=DATE(1900,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      }
+    },
+    {
+      "id": "C36",
+      "formula": "=NETWORKDAYS(B36,A36)",
+      "setup": {
+        "B36": {
+          "kind": "bool",
+          "value": true
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(1900,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D36",
+      "formula": "=NETWORKDAYS.INTL(B36,A36)",
+      "setup": {
+        "B36": {
+          "kind": "bool",
+          "value": true
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(1900,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I36",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J36)",
+      "setup": {
+        "J36": {
+          "kind": "text",
+          "value": "1101111"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 105.0
+      }
+    },
+    {
+      "id": "A37",
+      "formula": "=DATE(1900,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      }
+    },
+    {
+      "id": "C37",
+      "formula": "=NETWORKDAYS(B37,A37)",
+      "setup": {
+        "B37": {
+          "kind": "bool",
+          "value": false
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=DATE(1900,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D37",
+      "formula": "=NETWORKDAYS.INTL(B37,A37)",
+      "setup": {
+        "B37": {
+          "kind": "bool",
+          "value": false
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=DATE(1900,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I37",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2025,1,13),J37,K37)",
+      "setup": {
+        "J37": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K37": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,13)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "K37",
+      "formula": "=DATE(2025,1,13)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45670.0
+      }
+    },
+    {
+      "id": "H38",
+      "formula": "=NETWORKDAYS(DATE(2025,1,1),DATE(2026,12,31),K38:K40)",
+      "setup": {
+        "K40": {
+          "kind": "number",
+          "value": 45673.0
+        },
+        "K39": {
+          "kind": "number",
+          "value": 45672.0
+        },
+        "K38": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 519.0
+      }
+    },
+    {
+      "id": "I38",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J38,K38:K40)",
+      "setup": {
+        "K40": {
+          "kind": "number",
+          "value": 45673.0
+        },
+        "K39": {
+          "kind": "number",
+          "value": 45672.0
+        },
+        "J38": {
+          "kind": "text",
+          "value": "1"
+        },
+        "K38": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,14)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K38",
+      "formula": "=DATE(2025,1,14)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45671.0
+      }
+    },
+    {
+      "id": "A41",
+      "formula": "=DATE(2025,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45716.0
+      }
+    },
+    {
+      "id": "B41",
+      "formula": "=DATE(2025,1,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45688.0
+      }
+    },
+    {
+      "id": "C41",
+      "formula": "=NETWORKDAYS(B41,A41)",
+      "setup": {
+        "A41": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "B41": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 21.0
+      }
+    },
+    {
+      "id": "D41",
+      "formula": "=NETWORKDAYS.INTL(B41,A41)",
+      "setup": {
+        "A41": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "B41": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 21.0
+      }
+    },
+    {
+      "id": "H41",
+      "formula": "=NETWORKDAYS(DATE(2025,1,1),DATE(2026,12,31),K41:K43)",
+      "setup": {
+        "K43": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "K42": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "K41": {
+          "kind": "number",
+          "value": 45671.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "I41",
+      "formula": "=NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J41,K41:K43)",
+      "setup": {
+        "K43": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "K42": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "K41": {
+          "kind": "number",
+          "value": 45671.0
+        },
+        "J41": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A42",
+      "formula": "=DATE(2024,2,29)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45351.0
+      }
+    },
+    {
+      "id": "B42",
+      "formula": "=DATE(2024,1,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45322.0
+      }
+    },
+    {
+      "id": "C42",
+      "formula": "=NETWORKDAYS(B42,A42)",
+      "setup": {
+        "A42": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        },
+        "B42": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 22.0
+      }
+    },
+    {
+      "id": "D42",
+      "formula": "=NETWORKDAYS.INTL(B42,A42)",
+      "setup": {
+        "A42": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        },
+        "B42": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 22.0
+      }
+    },
+    {
+      "id": "A43",
+      "formula": "=DATE(2025,3,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45747.0
+      }
+    },
+    {
+      "id": "B43",
+      "formula": "=DATE(2025,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45716.0
+      }
+    },
+    {
+      "id": "C43",
+      "formula": "=NETWORKDAYS(B43,A43)",
+      "setup": {
+        "A43": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,31)"
+        },
+        "B43": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 22.0
+      }
+    },
+    {
+      "id": "D43",
+      "formula": "=NETWORKDAYS.INTL(B43,A43)",
+      "setup": {
+        "A43": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,31)"
+        },
+        "B43": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 22.0
+      }
+    },
+    {
+      "id": "A44",
+      "formula": "=DATE(2024,3,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45382.0
+      }
+    },
+    {
+      "id": "B44",
+      "formula": "=DATE(2024,2,29)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45351.0
+      }
+    },
+    {
+      "id": "C44",
+      "formula": "=NETWORKDAYS(B44,A44)",
+      "setup": {
+        "A44": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,31)"
+        },
+        "B44": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 22.0
+      }
+    },
+    {
+      "id": "D44",
+      "formula": "=NETWORKDAYS.INTL(B44,A44)",
+      "setup": {
+        "A44": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,31)"
+        },
+        "B44": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 22.0
+      }
+    },
+    {
+      "id": "A45",
+      "formula": "=DATE(2025,3,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45747.0
+      }
+    },
+    {
+      "id": "B45",
+      "formula": "=DATE(2025,1,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45688.0
+      }
+    },
+    {
+      "id": "C45",
+      "formula": "=NETWORKDAYS(B45,A45)",
+      "setup": {
+        "A45": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,31)"
+        },
+        "B45": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "D45",
+      "formula": "=NETWORKDAYS.INTL(B45,A45)",
+      "setup": {
+        "A45": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,31)"
+        },
+        "B45": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "A46",
+      "formula": "=DATE(2025,5,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45808.0
+      }
+    },
+    {
+      "id": "B46",
+      "formula": "=DATE(2025,3,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45747.0
+      }
+    },
+    {
+      "id": "C46",
+      "formula": "=NETWORKDAYS(B46,A46)",
+      "setup": {
+        "A46": {
+          "kind": "formula",
+          "formula": "=DATE(2025,5,31)"
+        },
+        "B46": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45.0
+      }
+    },
+    {
+      "id": "D46",
+      "formula": "=NETWORKDAYS.INTL(B46,A46)",
+      "setup": {
+        "A46": {
+          "kind": "formula",
+          "formula": "=DATE(2025,5,31)"
+        },
+        "B46": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45.0
+      }
+    },
+    {
+      "id": "A47",
+      "formula": "=DATE(2025,4,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45777.0
+      }
+    },
+    {
+      "id": "B47",
+      "formula": "=DATE(2025,1,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45687.0
+      }
+    },
+    {
+      "id": "C47",
+      "formula": "=NETWORKDAYS(B47,A47)",
+      "setup": {
+        "A47": {
+          "kind": "formula",
+          "formula": "=DATE(2025,4,30)"
+        },
+        "B47": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 65.0
+      }
+    },
+    {
+      "id": "D47",
+      "formula": "=NETWORKDAYS.INTL(B47,A47)",
+      "setup": {
+        "A47": {
+          "kind": "formula",
+          "formula": "=DATE(2025,4,30)"
+        },
+        "B47": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 65.0
+      }
+    },
+    {
+      "id": "A48",
+      "formula": "=DATE(2025,4,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45777.0
+      }
+    },
+    {
+      "id": "B48",
+      "formula": "=DATE(2025,1,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45688.0
+      }
+    },
+    {
+      "id": "C48",
+      "formula": "=NETWORKDAYS(B48,A48)",
+      "setup": {
+        "A48": {
+          "kind": "formula",
+          "formula": "=DATE(2025,4,30)"
+        },
+        "B48": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "D48",
+      "formula": "=NETWORKDAYS.INTL(B48,A48)",
+      "setup": {
+        "A48": {
+          "kind": "formula",
+          "formula": "=DATE(2025,4,30)"
+        },
+        "B48": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "A49",
+      "formula": "=DATE(2025,1,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45688.0
+      }
+    },
+    {
+      "id": "B49",
+      "formula": "=DATE(2025,1,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45687.0
+      }
+    },
+    {
+      "id": "C49",
+      "formula": "=NETWORKDAYS(B49,A49)",
+      "setup": {
+        "A49": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        },
+        "B49": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D49",
+      "formula": "=NETWORKDAYS.INTL(B49,A49)",
+      "setup": {
+        "A49": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        },
+        "B49": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "A50",
+      "formula": "=DATE(2025,12,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46022.0
+      }
+    },
+    {
+      "id": "B50",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "C50",
+      "formula": "=NETWORKDAYS(B50,A50)",
+      "setup": {
+        "A50": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,31)"
+        },
+        "B50": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 261.0
+      }
+    },
+    {
+      "id": "D50",
+      "formula": "=NETWORKDAYS.INTL(B50,A50)",
+      "setup": {
+        "A50": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,31)"
+        },
+        "B50": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 261.0
+      }
+    },
+    {
+      "id": "A51",
+      "formula": "=DATE(2026,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46023.0
+      }
+    },
+    {
+      "id": "B51",
+      "formula": "=DATE(2025,12,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46022.0
+      }
+    },
+    {
+      "id": "C51",
+      "formula": "=NETWORKDAYS(B51,A51)",
+      "setup": {
+        "A51": {
+          "kind": "formula",
+          "formula": "=DATE(2026,1,1)"
+        },
+        "B51": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D51",
+      "formula": "=NETWORKDAYS.INTL(B51,A51)",
+      "setup": {
+        "A51": {
+          "kind": "formula",
+          "formula": "=DATE(2026,1,1)"
+        },
+        "B51": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "A52",
+      "formula": "=DATE(2025,6,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45838.0
+      }
+    },
+    {
+      "id": "B52",
+      "formula": "=DATE(2025,6,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45838.0
+      }
+    },
+    {
+      "id": "C52",
+      "formula": "=NETWORKDAYS(B52,A52)",
+      "setup": {
+        "A52": {
+          "kind": "formula",
+          "formula": "=DATE(2025,6,30)"
+        },
+        "B52": {
+          "kind": "formula",
+          "formula": "=DATE(2025,6,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D52",
+      "formula": "=NETWORKDAYS.INTL(B52,A52)",
+      "setup": {
+        "A52": {
+          "kind": "formula",
+          "formula": "=DATE(2025,6,30)"
+        },
+        "B52": {
+          "kind": "formula",
+          "formula": "=DATE(2025,6,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A53",
+      "formula": "=DATE(2025,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45716.0
+      }
+    },
+    {
+      "id": "B53",
+      "formula": "=DATE(2025,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45716.0
+      }
+    },
+    {
+      "id": "C53",
+      "formula": "=NETWORKDAYS(B53,A53)",
+      "setup": {
+        "A53": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "B53": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D53",
+      "formula": "=NETWORKDAYS.INTL(B53,A53)",
+      "setup": {
+        "A53": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "B53": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A54",
+      "formula": "=DATE(9999,12,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      }
+    },
+    {
+      "id": "B54",
+      "formula": "=DATE(9999,12,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958464.0
+      }
+    },
+    {
+      "id": "C54",
+      "formula": "=NETWORKDAYS(B54,A54)",
+      "setup": {
+        "A54": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)"
+        },
+        "B54": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D54",
+      "formula": "=NETWORKDAYS.INTL(B54,A54)",
+      "setup": {
+        "A54": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)"
+        },
+        "B54": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "B55",
+      "formula": "=DATE(9999,12,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      }
+    },
+    {
+      "id": "C55",
+      "formula": "=NETWORKDAYS(B55,A55)",
+      "setup": {
+        "A55": {
+          "kind": "number",
+          "value": 2958466.0
+        },
+        "B55": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D55",
+      "formula": "=NETWORKDAYS.INTL(B55,A55)",
+      "setup": {
+        "A55": {
+          "kind": "number",
+          "value": 2958466.0
+        },
+        "B55": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A56",
+      "formula": "=DATE(2025,1,1)+0.9999",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.9999
+      }
+    },
+    {
+      "id": "B56",
+      "formula": "=DATE(2025,1,1)+0.0001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0001
+      }
+    },
+    {
+      "id": "C56",
+      "formula": "=NETWORKDAYS(B56,A56)",
+      "setup": {
+        "A56": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999"
+        },
+        "B56": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.0001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D56",
+      "formula": "=NETWORKDAYS.INTL(B56,A56)",
+      "setup": {
+        "A56": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999"
+        },
+        "B56": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.0001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A57",
+      "formula": "=DATE(2025,1,2)+0.4",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45659.4
+      }
+    },
+    {
+      "id": "B57",
+      "formula": "=DATE(2025,1,1)+0.6",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.6
+      }
+    },
+    {
+      "id": "C57",
+      "formula": "=NETWORKDAYS(B57,A57)",
+      "setup": {
+        "A57": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.4"
+        },
+        "B57": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D57",
+      "formula": "=NETWORKDAYS.INTL(B57,A57)",
+      "setup": {
+        "A57": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.4"
+        },
+        "B57": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "A58",
+      "formula": "=-(DATE(2025,1,1)+0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -45658.5
+      }
+    },
+    {
+      "id": "B58",
+      "formula": "=-(DATE(2025,1,2)+0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -45659.5
+      }
+    },
+    {
+      "id": "C58",
+      "formula": "=NETWORKDAYS(B58,A58)",
+      "setup": {
+        "A58": {
+          "kind": "formula",
+          "formula": "=-(DATE(2025,1,1)+0.5)"
+        },
+        "B58": {
+          "kind": "formula",
+          "formula": "=-(DATE(2025,1,2)+0.5)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D58",
+      "formula": "=NETWORKDAYS.INTL(B58,A58)",
+      "setup": {
+        "A58": {
+          "kind": "formula",
+          "formula": "=-(DATE(2025,1,1)+0.5)"
+        },
+        "B58": {
+          "kind": "formula",
+          "formula": "=-(DATE(2025,1,2)+0.5)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C59",
+      "formula": "=NETWORKDAYS(B59,A59)",
+      "setup": {
+        "A59": {
+          "kind": "text",
+          "value": "2026-07-01"
+        },
+        "B59": {
+          "kind": "text",
+          "value": "2026-06-01"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 23.0
+      }
+    },
+    {
+      "id": "D59",
+      "formula": "=NETWORKDAYS.INTL(B59,A59)",
+      "setup": {
+        "A59": {
+          "kind": "text",
+          "value": "2026-07-01"
+        },
+        "B59": {
+          "kind": "text",
+          "value": "2026-06-01"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 23.0
+      }
+    },
+    {
+      "id": "C60",
+      "formula": "=NETWORKDAYS(B60,A60)",
+      "setup": {
+        "A60": {
+          "kind": "text",
+          "value": "July 1, 2026"
+        },
+        "B60": {
+          "kind": "text",
+          "value": "June 1, 2026"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =NETWORKDAYS(B60,A60)"
+    },
+    {
+      "id": "D60",
+      "formula": "=NETWORKDAYS.INTL(B60,A60)",
+      "setup": {
+        "A60": {
+          "kind": "text",
+          "value": "July 1, 2026"
+        },
+        "B60": {
+          "kind": "text",
+          "value": "June 1, 2026"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =NETWORKDAYS.INTL(B60,A60)"
+    },
+    {
+      "id": "C61",
+      "formula": "=NETWORKDAYS(B61,A61)",
+      "setup": {
+        "A61": {
+          "kind": "text",
+          "value": "1/1/29"
+        },
+        "B61": {
+          "kind": "text",
+          "value": "1/1/28"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =NETWORKDAYS(B61,A61)"
+    },
+    {
+      "id": "D61",
+      "formula": "=NETWORKDAYS.INTL(B61,A61)",
+      "setup": {
+        "A61": {
+          "kind": "text",
+          "value": "1/1/29"
+        },
+        "B61": {
+          "kind": "text",
+          "value": "1/1/28"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =NETWORKDAYS.INTL(B61,A61)"
+    },
+    {
+      "id": "C62",
+      "formula": "=NETWORKDAYS(B62,A62)",
+      "setup": {
+        "A62": {
+          "kind": "text",
+          "value": "1/1/30"
+        },
+        "B62": {
+          "kind": "text",
+          "value": "1/1/29"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =NETWORKDAYS(B62,A62)"
+    },
+    {
+      "id": "D62",
+      "formula": "=NETWORKDAYS.INTL(B62,A62)",
+      "setup": {
+        "A62": {
+          "kind": "text",
+          "value": "1/1/30"
+        },
+        "B62": {
+          "kind": "text",
+          "value": "1/1/29"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =NETWORKDAYS.INTL(B62,A62)"
+    },
+    {
+      "id": "C63",
+      "formula": "=NETWORKDAYS(B63,A63)",
+      "setup": {
+        "A63": {
+          "kind": "text",
+          "value": "45000"
+        },
+        "B63": {
+          "kind": "text",
+          "value": "44999"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D63",
+      "formula": "=NETWORKDAYS.INTL(B63,A63)",
+      "setup": {
+        "A63": {
+          "kind": "text",
+          "value": "45000"
+        },
+        "B63": {
+          "kind": "text",
+          "value": "44999"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C64",
+      "formula": "=NETWORKDAYS(B64,A64)",
+      "setup": {
+        "A64": {
+          "kind": "text",
+          "value": "2025-02-29"
+        },
+        "B64": {
+          "kind": "text",
+          "value": "2025-02-01"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D64",
+      "formula": "=NETWORKDAYS.INTL(B64,A64)",
+      "setup": {
+        "A64": {
+          "kind": "text",
+          "value": "2025-02-29"
+        },
+        "B64": {
+          "kind": "text",
+          "value": "2025-02-01"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A66",
+      "formula": "=DATE(2025,1,1)+0.9999999",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.99999989583
+      }
+    },
+    {
+      "id": "B66",
+      "formula": "=DATE(2025,1,1)+0.0000001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.00000010417
+      }
+    },
+    {
+      "id": "C66",
+      "formula": "=NETWORKDAYS(B66,A66)",
+      "setup": {
+        "A66": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999999"
+        },
+        "B66": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.0000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D66",
+      "formula": "=NETWORKDAYS.INTL(B66,A66)",
+      "setup": {
+        "A66": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999999"
+        },
+        "B66": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.0000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A67",
+      "formula": "=DATE(2025,1,2)+0.0000001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45659.00000010417
+      }
+    },
+    {
+      "id": "B67",
+      "formula": "=DATE(2025,1,1)+0.9999999",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.99999989583
+      }
+    },
+    {
+      "id": "C67",
+      "formula": "=NETWORKDAYS(B67,A67)",
+      "setup": {
+        "A67": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.0000001"
+        },
+        "B67": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999999"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D67",
+      "formula": "=NETWORKDAYS.INTL(B67,A67)",
+      "setup": {
+        "A67": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.0000001"
+        },
+        "B67": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999999"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "A68",
+      "formula": "=DATE(2025,1,2)+0.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45659.5
+      }
+    },
+    {
+      "id": "B68",
+      "formula": "=DATE(2025,1,1)+0.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.5
+      }
+    },
+    {
+      "id": "C68",
+      "formula": "=NETWORKDAYS(B68,A68)",
+      "setup": {
+        "A68": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.5"
+        },
+        "B68": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D68",
+      "formula": "=NETWORKDAYS.INTL(B68,A68)",
+      "setup": {
+        "A68": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.5"
+        },
+        "B68": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "A69",
+      "formula": "=DATE(2025,1,2)+0.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45659.5
+      }
+    },
+    {
+      "id": "B69",
+      "formula": "=DATE(2025,1,1)+0.4999999",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.49999989583
+      }
+    },
+    {
+      "id": "C69",
+      "formula": "=NETWORKDAYS(B69,A69)",
+      "setup": {
+        "A69": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.5"
+        },
+        "B69": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.4999999"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D69",
+      "formula": "=NETWORKDAYS.INTL(B69,A69)",
+      "setup": {
+        "A69": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.5"
+        },
+        "B69": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.4999999"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "A70",
+      "formula": "=DATE(2025,1,1)+0.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.5
+      }
+    },
+    {
+      "id": "B70",
+      "formula": "=DATE(2025,1,2)+0.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45659.5
+      }
+    },
+    {
+      "id": "C70",
+      "formula": "=NETWORKDAYS(B70,A70)",
+      "setup": {
+        "A70": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.5"
+        },
+        "B70": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "D70",
+      "formula": "=NETWORKDAYS.INTL(B70,A70)",
+      "setup": {
+        "A70": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.5"
+        },
+        "B70": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "A71",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "B71",
+      "formula": "=DATE(2025,1,1)+0.9999999",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.99999989583
+      }
+    },
+    {
+      "id": "C71",
+      "formula": "=NETWORKDAYS(B71,A71)",
+      "setup": {
+        "A71": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        },
+        "B71": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999999"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D71",
+      "formula": "=NETWORKDAYS.INTL(B71,A71)",
+      "setup": {
+        "A71": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        },
+        "B71": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999999"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    }
+  ]
+}

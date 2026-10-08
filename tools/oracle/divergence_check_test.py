@@ -416,6 +416,18 @@ class IronCalcRegistryTest(unittest.TestCase):
         self.assertEqual(status, 0, output)
         self.assertIn("importer-flatten: 1", output)
 
+    def test_no_probe_causes_are_accepted_and_tallied_without_probe(self) -> None:
+        for cause in ("stale-cache", "locale", "host", "importer-decode", "unadjudicated"):
+            with self.subTest(cause=cause):
+                status, output = self._run(self._entry(reason='"Classified without a Mac probe."', cause=cause))
+                self.assertEqual(status, 0, output)
+                self.assertIn(f"{cause}: 1", output)
+
+    def test_mac_probe_cause_requires_probe_citation(self) -> None:
+        status, output = self._run(self._entry(reason='"No probe citation here."', cause="mac-probe"))
+        self.assertEqual(status, 1)
+        self.assertIn("cause mac-probe requires a probe citation", output)
+
     def test_unknown_cause_fails(self) -> None:
         status, output = self._run(self._entry(cause="because"))
         self.assertEqual(status, 1)

@@ -1,0 +1,167 @@
+{
+  "suite": "ironcalc_templates_invoice_Invoice",
+  "description": "Derived from IronCalc fixture templates/invoice.xlsx, sheet 'Invoice'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Invoice",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "H4",
+      "formula": "=TODAY()",
+      "setup": {},
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =TODAY()"
+    },
+    {
+      "id": "H15",
+      "formula": "=IF(AND(ISNUMBER(F15),ISNUMBER(G15),F15>0),F15*G15,\"\")",
+      "setup": {
+        "G15": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 160.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16000.0
+      }
+    },
+    {
+      "id": "H16",
+      "formula": "=IF(AND(ISNUMBER(F16),ISNUMBER(G16),F16>0),F16*G16,\"\")",
+      "setup": {
+        "G16": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4000.0
+      }
+    },
+    {
+      "id": "H17",
+      "formula": "=IF(AND(ISNUMBER(F17),ISNUMBER(G17),F17>0),F17*G17,\"\")",
+      "setup": {
+        "G17": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F17": {
+          "kind": "number",
+          "value": 22.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2640.0
+      }
+    },
+    {
+      "id": "H26",
+      "formula": "=SUM(H15:H24)",
+      "setup": {
+        "G17": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "F17": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "G16": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "G15": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 160.0
+        },
+        "H24": {
+          "kind": "formula",
+          "formula": "=IF(AND(ISNUMBER(F24),ISNUMBER(G24),F24>0),F24*G24,\"\")"
+        },
+        "H23": {
+          "kind": "formula",
+          "formula": "=IF(AND(ISNUMBER(F23),ISNUMBER(G23),F23>0),F23*G23,\"\")"
+        },
+        "H22": {
+          "kind": "formula",
+          "formula": "=IF(AND(ISNUMBER(F22),ISNUMBER(G22),F22>0),F22*G22,\"\")"
+        },
+        "H21": {
+          "kind": "formula",
+          "formula": "=IF(AND(ISNUMBER(F21),ISNUMBER(G21),F21>0),F21*G21,\"\")"
+        },
+        "H20": {
+          "kind": "formula",
+          "formula": "=IF(AND(ISNUMBER(F20),ISNUMBER(G20),F20>0),F20*G20,\"\")"
+        },
+        "H19": {
+          "kind": "formula",
+          "formula": "=IF(AND(ISNUMBER(F19),ISNUMBER(G19),F19>0),F19*G19,\"\")"
+        },
+        "H18": {
+          "kind": "formula",
+          "formula": "=IF(AND(ISNUMBER(F18),ISNUMBER(G18),F18>0),F18*G18,\"\")"
+        },
+        "H17": {
+          "kind": "formula",
+          "formula": "=IF(AND(ISNUMBER(F17),ISNUMBER(G17),F17>0),F17*G17,\"\")"
+        },
+        "H16": {
+          "kind": "formula",
+          "formula": "=IF(AND(ISNUMBER(F16),ISNUMBER(G16),F16>0),F16*G16,\"\")"
+        },
+        "H15": {
+          "kind": "formula",
+          "formula": "=IF(AND(ISNUMBER(F15),ISNUMBER(G15),F15>0),F15*G15,\"\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 22640.0
+      }
+    },
+    {
+      "id": "D36",
+      "formula": "=H3",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "INV-2026-001"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "INV-2026-001"
+      }
+    }
+  ]
+}

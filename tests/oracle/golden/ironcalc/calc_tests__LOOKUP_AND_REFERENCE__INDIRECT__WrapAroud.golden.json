@@ -1,0 +1,145 @@
+{
+  "suite": "ironcalc_calc_tests__LOOKUP_AND_REFERENCE_INDIRECT_WrapAroud",
+  "description": "Derived from IronCalc fixture calc_tests/LOOKUP_AND_REFERENCE/INDIRECT.xlsx, sheet 'WrapAroud'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "WrapAroud",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "H3",
+      "formula": "=SUM(INDIRECT(\"R[-4]\", FALSE))",
+      "setup": {
+        "XFD2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H7": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "F1048576": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "A1048576": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "F1048575": {
+          "kind": "number",
+          "value": 41.0
+        },
+        "J12": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G6": {
+          "kind": "number",
+          "value": 41.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D1048576": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H8": {
+          "kind": "error",
+          "code": "#REF!"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =SUM(INDIRECT(\"R[-4]\", FALSE))"
+    },
+    {
+      "id": "H5",
+      "formula": "=SUM(INDIRECT(\"R[-5]C[-4]:R[-3]C[-4]\", FALSE))",
+      "setup": {
+        "XFD2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H7": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "F1048576": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "A1048576": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "F1048575": {
+          "kind": "number",
+          "value": 41.0
+        },
+        "J12": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G6": {
+          "kind": "number",
+          "value": 41.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D1048576": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H8": {
+          "kind": "error",
+          "code": "#REF!"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =SUM(INDIRECT(\"R[-5]C[-4]:R[-3]C[-4]\", FALSE))"
+    }
+  ]
+}

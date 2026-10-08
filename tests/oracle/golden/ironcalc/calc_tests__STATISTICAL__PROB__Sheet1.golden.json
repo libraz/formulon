@@ -1,0 +1,1697 @@
+{
+  "suite": "ironcalc_calc_tests__STATISTICAL_PROB_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/STATISTICAL/PROB.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.2
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=PROB(A2:A7,B2:B6,1)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=PROB(A2:A6,B2:B7,3)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,H2,I2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.361
+      }
+    },
+    {
+      "id": "O2",
+      "formula": "=PROB(L2:L3,M2:M3,N2)",
+      "setup": {
+        "N2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "M3": {
+          "kind": "text",
+          "value": "ho"
+        },
+        "M2": {
+          "kind": "text",
+          "value": "hi"
+        },
+        "L3": {
+          "kind": "text",
+          "value": "ho"
+        },
+        "L2": {
+          "kind": "text",
+          "value": "Hi"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =PROB(L2:L3,M2:M3,N2)"
+    },
+    {
+      "id": "D3",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.111
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,H3,I3)",
+      "setup": {
+        "I3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.231
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.05
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,H4,I4)",
+      "setup": {
+        "I4": {
+          "kind": "number",
+          "value": 5.3
+        },
+        "H4": {
+          "kind": "number",
+          "value": 2.4
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.62
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.07
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,H5,I5)",
+      "setup": {
+        "I5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "H5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.639
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,C6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,H6,I6)",
+      "setup": {
+        "I6": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.689
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=1-SUM(B2:B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06899999999999995
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,C7)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06899999999999995
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,H7,I7)",
+      "setup": {
+        "I7": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.569
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,C8)",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,H8,I8)",
+      "setup": {
+        "I8": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "H8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.569
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,C9)",
+      "setup": {
+        "C9": {
+          "kind": "number",
+          "value": 2.4
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,H9,I9)",
+      "setup": {
+        "I9": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "H9": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,C10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,H10,I10)",
+      "setup": {
+        "I10": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "H10": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,C11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J11",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,H11,I11)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =PROB($A$2:$A$7,$B$2:$B$7,H11,I11)"
+    },
+    {
+      "id": "D12",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,C12)",
+      "setup": {
+        "C12": {
+          "kind": "text",
+          "value": "Hola"
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J12",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,H12,I12)",
+      "setup": {
+        "I12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J13",
+      "formula": "=PROB($A$2:$A$7,$B$2:$B$7,H13,I13)",
+      "setup": {
+        "I13": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H13": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1-SUM(B2:B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.111
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=PROB(A2:A6,B2:B6,2)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.111
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

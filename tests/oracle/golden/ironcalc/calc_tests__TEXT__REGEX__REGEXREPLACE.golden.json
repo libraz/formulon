@@ -1,0 +1,33 @@
+{
+  "suite": "ironcalc_calc_tests__TEXT_REGEX_REGEXREPLACE",
+  "description": "Derived from IronCalc fixture calc_tests/TEXT/REGEX.xlsx, sheet 'REGEXREPLACE'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "REGEXREPLACE",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "B3",
+      "formula": "=_xlfn.REGEXREPLACE(A3,\"([A-Z][a-z]+)([A-Z][a-z]+)\",\"$2, $1 $2\")",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "JamesBond"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Bond, James Bond"
+      }
+    }
+  ]
+}

@@ -8,8 +8,8 @@ secondary golden source against Formulon's evaluator.
 ## Source
 
 - Upstream: https://github.com/ironcalc/IronCalc
-- Commit:   `5c9f145b4a8d2b23972b5c4bea3f27d4b0604652`
-- Path in upstream: `xlsx/tests/{calc_tests,statistical,docs,templates,calc_test_no_export}/*.xlsx`
+- Commit:   `106c587d797ff5c2c135ae43b066520a8736be6f`
+- Path in upstream: `xlsx/tests/{calc_tests,docs,templates,calc_test_no_export}/**/*.xlsx`
 
 ## License
 
@@ -30,10 +30,12 @@ combined notice.
 
 ```
 fixtures/
-  calc_tests/           # 111 function-correctness xlsx cases
-  statistical/          # 28 statistical functions
+  calc_tests/           # 218 function-correctness xlsx, grouped by category
+    DATABASE/ DATE_AND_TIME/ ENGINEERING/ FINANCIAL/ INFORMATION/
+    LOGICAL/ LOOKUP_AND_REFERENCE/ MATH_AND_TRIGONOMETRY/
+    STATISTICAL/ TEXT/  # plus a few files at the top level
   docs/                 # 14 documentation-example xlsx
-  templates/            # 2 larger workbook templates
+  templates/            # 8 larger workbook templates
   calc_test_no_export/  # 1 xlsx that is not round-tripped
 ```
 
@@ -49,8 +51,9 @@ currently target.
 These fixtures are a point-in-time snapshot. To update:
 
 1. Clone IronCalc at the new commit.
-2. Copy the four subdirectories listed above over the ones here,
-   preserving relative paths.
+2. Copy the `.xlsx` files of the subdirectories listed above over the
+   ones here, preserving relative paths (upstream has since folded
+   `statistical/` into `calc_tests/STATISTICAL/`).
 3. Update the commit SHA above and re-run
    `make ironcalc-import && make ironcalc-verify` to refresh goldens.
 

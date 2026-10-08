@@ -1,0 +1,3326 @@
+{
+  "suite": "ironcalc_calc_tests__TEXT_CHAR_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/TEXT/CHAR.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T08:32:30Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "B1",
+      "formula": "=CHAR(A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A1)"
+    },
+    {
+      "id": "B2",
+      "formula": "=CHAR(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A2)"
+    },
+    {
+      "id": "B3",
+      "formula": "=CHAR(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A3)"
+    },
+    {
+      "id": "B4",
+      "formula": "=CHAR(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A4)"
+    },
+    {
+      "id": "B5",
+      "formula": "=CHAR(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A5)"
+    },
+    {
+      "id": "B6",
+      "formula": "=CHAR(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A6)"
+    },
+    {
+      "id": "B7",
+      "formula": "=CHAR(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A7)"
+    },
+    {
+      "id": "B8",
+      "formula": "=CHAR(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A8)"
+    },
+    {
+      "id": "B9",
+      "formula": "=CHAR(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "\t"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=CHAR(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "\n"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=CHAR(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 11.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A11)"
+    },
+    {
+      "id": "B12",
+      "formula": "=CHAR(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A12)"
+    },
+    {
+      "id": "B13",
+      "formula": "=CHAR(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 13.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A13)"
+    },
+    {
+      "id": "B14",
+      "formula": "=CHAR(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 14.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A14)"
+    },
+    {
+      "id": "B15",
+      "formula": "=CHAR(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 15.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A15)"
+    },
+    {
+      "id": "B16",
+      "formula": "=CHAR(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 16.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A16)"
+    },
+    {
+      "id": "B17",
+      "formula": "=CHAR(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": 17.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A17)"
+    },
+    {
+      "id": "B18",
+      "formula": "=CHAR(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 18.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A18)"
+    },
+    {
+      "id": "B19",
+      "formula": "=CHAR(A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 19.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A19)"
+    },
+    {
+      "id": "B20",
+      "formula": "=CHAR(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A20)"
+    },
+    {
+      "id": "B21",
+      "formula": "=CHAR(A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 21.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A21)"
+    },
+    {
+      "id": "B22",
+      "formula": "=CHAR(A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 22.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A22)"
+    },
+    {
+      "id": "B23",
+      "formula": "=CHAR(A23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A23)"
+    },
+    {
+      "id": "B24",
+      "formula": "=CHAR(A24)",
+      "setup": {
+        "A24": {
+          "kind": "number",
+          "value": 24.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A24)"
+    },
+    {
+      "id": "B25",
+      "formula": "=CHAR(A25)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 25.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A25)"
+    },
+    {
+      "id": "B26",
+      "formula": "=CHAR(A26)",
+      "setup": {
+        "A26": {
+          "kind": "number",
+          "value": 26.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A26)"
+    },
+    {
+      "id": "B27",
+      "formula": "=CHAR(A27)",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": 27.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A27)"
+    },
+    {
+      "id": "B28",
+      "formula": "=CHAR(A28)",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 28.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A28)"
+    },
+    {
+      "id": "B29",
+      "formula": "=CHAR(A29)",
+      "setup": {
+        "A29": {
+          "kind": "number",
+          "value": 29.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A29)"
+    },
+    {
+      "id": "B30",
+      "formula": "=CHAR(A30)",
+      "setup": {
+        "A30": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A30)"
+    },
+    {
+      "id": "B31",
+      "formula": "=CHAR(A31)",
+      "setup": {
+        "A31": {
+          "kind": "number",
+          "value": 31.0
+        }
+      },
+      "skipped": "OOXML ST_Xstring control-character escape is retained as literal text in the imported cached value; decode the escape before comparison. Formula: =CHAR(A31)"
+    },
+    {
+      "id": "B32",
+      "formula": "=CHAR(A32)",
+      "setup": {
+        "A32": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": " "
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=CHAR(A33)",
+      "setup": {
+        "A33": {
+          "kind": "number",
+          "value": 33.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "!"
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=CHAR(A34)",
+      "setup": {
+        "A34": {
+          "kind": "number",
+          "value": 34.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "\""
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=CHAR(A35)",
+      "setup": {
+        "A35": {
+          "kind": "number",
+          "value": 35.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#"
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=CHAR(A36)",
+      "setup": {
+        "A36": {
+          "kind": "number",
+          "value": 36.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$"
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=CHAR(A37)",
+      "setup": {
+        "A37": {
+          "kind": "number",
+          "value": 37.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "%"
+      }
+    },
+    {
+      "id": "B38",
+      "formula": "=CHAR(A38)",
+      "setup": {
+        "A38": {
+          "kind": "number",
+          "value": 38.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "&"
+      }
+    },
+    {
+      "id": "B39",
+      "formula": "=CHAR(A39)",
+      "setup": {
+        "A39": {
+          "kind": "number",
+          "value": 39.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "'"
+      }
+    },
+    {
+      "id": "B40",
+      "formula": "=CHAR(A40)",
+      "setup": {
+        "A40": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "("
+      }
+    },
+    {
+      "id": "B41",
+      "formula": "=CHAR(A41)",
+      "setup": {
+        "A41": {
+          "kind": "number",
+          "value": 41.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ")"
+      }
+    },
+    {
+      "id": "B42",
+      "formula": "=CHAR(A42)",
+      "setup": {
+        "A42": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "*"
+      }
+    },
+    {
+      "id": "B43",
+      "formula": "=CHAR(A43)",
+      "setup": {
+        "A43": {
+          "kind": "number",
+          "value": 43.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "+"
+      }
+    },
+    {
+      "id": "B44",
+      "formula": "=CHAR(A44)",
+      "setup": {
+        "A44": {
+          "kind": "number",
+          "value": 44.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ","
+      }
+    },
+    {
+      "id": "B45",
+      "formula": "=CHAR(A45)",
+      "setup": {
+        "A45": {
+          "kind": "number",
+          "value": 45.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-"
+      }
+    },
+    {
+      "id": "B46",
+      "formula": "=CHAR(A46)",
+      "setup": {
+        "A46": {
+          "kind": "number",
+          "value": 46.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "."
+      }
+    },
+    {
+      "id": "B47",
+      "formula": "=CHAR(A47)",
+      "setup": {
+        "A47": {
+          "kind": "number",
+          "value": 47.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "/"
+      }
+    },
+    {
+      "id": "B48",
+      "formula": "=CHAR(A48)",
+      "setup": {
+        "A48": {
+          "kind": "number",
+          "value": 48.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "B49",
+      "formula": "=CHAR(A49)",
+      "setup": {
+        "A49": {
+          "kind": "number",
+          "value": 49.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "B50",
+      "formula": "=CHAR(A50)",
+      "setup": {
+        "A50": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2"
+      }
+    },
+    {
+      "id": "B51",
+      "formula": "=CHAR(A51)",
+      "setup": {
+        "A51": {
+          "kind": "number",
+          "value": 51.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3"
+      }
+    },
+    {
+      "id": "B52",
+      "formula": "=CHAR(A52)",
+      "setup": {
+        "A52": {
+          "kind": "number",
+          "value": 52.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "4"
+      }
+    },
+    {
+      "id": "B53",
+      "formula": "=CHAR(A53)",
+      "setup": {
+        "A53": {
+          "kind": "number",
+          "value": 53.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "5"
+      }
+    },
+    {
+      "id": "B54",
+      "formula": "=CHAR(A54)",
+      "setup": {
+        "A54": {
+          "kind": "number",
+          "value": 54.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "6"
+      }
+    },
+    {
+      "id": "B55",
+      "formula": "=CHAR(A55)",
+      "setup": {
+        "A55": {
+          "kind": "number",
+          "value": 55.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7"
+      }
+    },
+    {
+      "id": "B56",
+      "formula": "=CHAR(A56)",
+      "setup": {
+        "A56": {
+          "kind": "number",
+          "value": 56.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "8"
+      }
+    },
+    {
+      "id": "B57",
+      "formula": "=CHAR(A57)",
+      "setup": {
+        "A57": {
+          "kind": "number",
+          "value": 57.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9"
+      }
+    },
+    {
+      "id": "B58",
+      "formula": "=CHAR(A58)",
+      "setup": {
+        "A58": {
+          "kind": "number",
+          "value": 58.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ":"
+      }
+    },
+    {
+      "id": "B59",
+      "formula": "=CHAR(A59)",
+      "setup": {
+        "A59": {
+          "kind": "number",
+          "value": 59.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ";"
+      }
+    },
+    {
+      "id": "B60",
+      "formula": "=CHAR(A60)",
+      "setup": {
+        "A60": {
+          "kind": "number",
+          "value": 60.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "<"
+      }
+    },
+    {
+      "id": "B61",
+      "formula": "=CHAR(A61)",
+      "setup": {
+        "A61": {
+          "kind": "number",
+          "value": 61.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "="
+      }
+    },
+    {
+      "id": "B62",
+      "formula": "=CHAR(A62)",
+      "setup": {
+        "A62": {
+          "kind": "number",
+          "value": 62.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ">"
+      }
+    },
+    {
+      "id": "B63",
+      "formula": "=CHAR(A63)",
+      "setup": {
+        "A63": {
+          "kind": "number",
+          "value": 63.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "?"
+      }
+    },
+    {
+      "id": "B64",
+      "formula": "=CHAR(A64)",
+      "setup": {
+        "A64": {
+          "kind": "number",
+          "value": 64.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "@"
+      }
+    },
+    {
+      "id": "B65",
+      "formula": "=CHAR(A65)",
+      "setup": {
+        "A65": {
+          "kind": "number",
+          "value": 65.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "A"
+      }
+    },
+    {
+      "id": "B66",
+      "formula": "=CHAR(A66)",
+      "setup": {
+        "A66": {
+          "kind": "number",
+          "value": 66.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "B"
+      }
+    },
+    {
+      "id": "B67",
+      "formula": "=CHAR(A67)",
+      "setup": {
+        "A67": {
+          "kind": "number",
+          "value": 67.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "C"
+      }
+    },
+    {
+      "id": "B68",
+      "formula": "=CHAR(A68)",
+      "setup": {
+        "A68": {
+          "kind": "number",
+          "value": 68.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "D"
+      }
+    },
+    {
+      "id": "B69",
+      "formula": "=CHAR(A69)",
+      "setup": {
+        "A69": {
+          "kind": "number",
+          "value": 69.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "E"
+      }
+    },
+    {
+      "id": "B70",
+      "formula": "=CHAR(A70)",
+      "setup": {
+        "A70": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "F"
+      }
+    },
+    {
+      "id": "B71",
+      "formula": "=CHAR(A71)",
+      "setup": {
+        "A71": {
+          "kind": "number",
+          "value": 71.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "G"
+      }
+    },
+    {
+      "id": "B72",
+      "formula": "=CHAR(A72)",
+      "setup": {
+        "A72": {
+          "kind": "number",
+          "value": 72.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "H"
+      }
+    },
+    {
+      "id": "B73",
+      "formula": "=CHAR(A73)",
+      "setup": {
+        "A73": {
+          "kind": "number",
+          "value": 73.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "B74",
+      "formula": "=CHAR(A74)",
+      "setup": {
+        "A74": {
+          "kind": "number",
+          "value": 74.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "J"
+      }
+    },
+    {
+      "id": "B75",
+      "formula": "=CHAR(A75)",
+      "setup": {
+        "A75": {
+          "kind": "number",
+          "value": 75.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "K"
+      }
+    },
+    {
+      "id": "B76",
+      "formula": "=CHAR(A76)",
+      "setup": {
+        "A76": {
+          "kind": "number",
+          "value": 76.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "L"
+      }
+    },
+    {
+      "id": "B77",
+      "formula": "=CHAR(A77)",
+      "setup": {
+        "A77": {
+          "kind": "number",
+          "value": 77.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "M"
+      }
+    },
+    {
+      "id": "B78",
+      "formula": "=CHAR(A78)",
+      "setup": {
+        "A78": {
+          "kind": "number",
+          "value": 78.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "N"
+      }
+    },
+    {
+      "id": "B79",
+      "formula": "=CHAR(A79)",
+      "setup": {
+        "A79": {
+          "kind": "number",
+          "value": 79.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "O"
+      }
+    },
+    {
+      "id": "B80",
+      "formula": "=CHAR(A80)",
+      "setup": {
+        "A80": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "P"
+      }
+    },
+    {
+      "id": "B81",
+      "formula": "=CHAR(A81)",
+      "setup": {
+        "A81": {
+          "kind": "number",
+          "value": 81.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Q"
+      }
+    },
+    {
+      "id": "B82",
+      "formula": "=CHAR(A82)",
+      "setup": {
+        "A82": {
+          "kind": "number",
+          "value": 82.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "R"
+      }
+    },
+    {
+      "id": "B83",
+      "formula": "=CHAR(A83)",
+      "setup": {
+        "A83": {
+          "kind": "number",
+          "value": 83.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "S"
+      }
+    },
+    {
+      "id": "B84",
+      "formula": "=CHAR(A84)",
+      "setup": {
+        "A84": {
+          "kind": "number",
+          "value": 84.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "T"
+      }
+    },
+    {
+      "id": "B85",
+      "formula": "=CHAR(A85)",
+      "setup": {
+        "A85": {
+          "kind": "number",
+          "value": 85.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "U"
+      }
+    },
+    {
+      "id": "B86",
+      "formula": "=CHAR(A86)",
+      "setup": {
+        "A86": {
+          "kind": "number",
+          "value": 86.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "B87",
+      "formula": "=CHAR(A87)",
+      "setup": {
+        "A87": {
+          "kind": "number",
+          "value": 87.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "W"
+      }
+    },
+    {
+      "id": "B88",
+      "formula": "=CHAR(A88)",
+      "setup": {
+        "A88": {
+          "kind": "number",
+          "value": 88.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "B89",
+      "formula": "=CHAR(A89)",
+      "setup": {
+        "A89": {
+          "kind": "number",
+          "value": 89.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Y"
+      }
+    },
+    {
+      "id": "B90",
+      "formula": "=CHAR(A90)",
+      "setup": {
+        "A90": {
+          "kind": "number",
+          "value": 90.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Z"
+      }
+    },
+    {
+      "id": "B91",
+      "formula": "=CHAR(A91)",
+      "setup": {
+        "A91": {
+          "kind": "number",
+          "value": 91.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "["
+      }
+    },
+    {
+      "id": "B92",
+      "formula": "=CHAR(A92)",
+      "setup": {
+        "A92": {
+          "kind": "number",
+          "value": 92.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "\\"
+      }
+    },
+    {
+      "id": "B93",
+      "formula": "=CHAR(A93)",
+      "setup": {
+        "A93": {
+          "kind": "number",
+          "value": 93.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "]"
+      }
+    },
+    {
+      "id": "B94",
+      "formula": "=CHAR(A94)",
+      "setup": {
+        "A94": {
+          "kind": "number",
+          "value": 94.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "^"
+      }
+    },
+    {
+      "id": "B95",
+      "formula": "=CHAR(A95)",
+      "setup": {
+        "A95": {
+          "kind": "number",
+          "value": 95.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "_"
+      }
+    },
+    {
+      "id": "B96",
+      "formula": "=CHAR(A96)",
+      "setup": {
+        "A96": {
+          "kind": "number",
+          "value": 96.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "`"
+      }
+    },
+    {
+      "id": "B97",
+      "formula": "=CHAR(A97)",
+      "setup": {
+        "A97": {
+          "kind": "number",
+          "value": 97.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "B98",
+      "formula": "=CHAR(A98)",
+      "setup": {
+        "A98": {
+          "kind": "number",
+          "value": 98.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "B99",
+      "formula": "=CHAR(A99)",
+      "setup": {
+        "A99": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "c"
+      }
+    },
+    {
+      "id": "B100",
+      "formula": "=CHAR(A100)",
+      "setup": {
+        "A100": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "d"
+      }
+    },
+    {
+      "id": "B101",
+      "formula": "=CHAR(A101)",
+      "setup": {
+        "A101": {
+          "kind": "number",
+          "value": 101.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "e"
+      }
+    },
+    {
+      "id": "B102",
+      "formula": "=CHAR(A102)",
+      "setup": {
+        "A102": {
+          "kind": "number",
+          "value": 102.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "f"
+      }
+    },
+    {
+      "id": "B103",
+      "formula": "=CHAR(A103)",
+      "setup": {
+        "A103": {
+          "kind": "number",
+          "value": 103.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "g"
+      }
+    },
+    {
+      "id": "B104",
+      "formula": "=CHAR(A104)",
+      "setup": {
+        "A104": {
+          "kind": "number",
+          "value": 104.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "h"
+      }
+    },
+    {
+      "id": "B105",
+      "formula": "=CHAR(A105)",
+      "setup": {
+        "A105": {
+          "kind": "number",
+          "value": 105.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "i"
+      }
+    },
+    {
+      "id": "B106",
+      "formula": "=CHAR(A106)",
+      "setup": {
+        "A106": {
+          "kind": "number",
+          "value": 106.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "j"
+      }
+    },
+    {
+      "id": "B107",
+      "formula": "=CHAR(A107)",
+      "setup": {
+        "A107": {
+          "kind": "number",
+          "value": 107.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "k"
+      }
+    },
+    {
+      "id": "B108",
+      "formula": "=CHAR(A108)",
+      "setup": {
+        "A108": {
+          "kind": "number",
+          "value": 108.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "l"
+      }
+    },
+    {
+      "id": "B109",
+      "formula": "=CHAR(A109)",
+      "setup": {
+        "A109": {
+          "kind": "number",
+          "value": 109.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "m"
+      }
+    },
+    {
+      "id": "B110",
+      "formula": "=CHAR(A110)",
+      "setup": {
+        "A110": {
+          "kind": "number",
+          "value": 110.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "n"
+      }
+    },
+    {
+      "id": "B111",
+      "formula": "=CHAR(A111)",
+      "setup": {
+        "A111": {
+          "kind": "number",
+          "value": 111.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "o"
+      }
+    },
+    {
+      "id": "B112",
+      "formula": "=CHAR(A112)",
+      "setup": {
+        "A112": {
+          "kind": "number",
+          "value": 112.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "p"
+      }
+    },
+    {
+      "id": "B113",
+      "formula": "=CHAR(A113)",
+      "setup": {
+        "A113": {
+          "kind": "number",
+          "value": 113.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "q"
+      }
+    },
+    {
+      "id": "B114",
+      "formula": "=CHAR(A114)",
+      "setup": {
+        "A114": {
+          "kind": "number",
+          "value": 114.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "r"
+      }
+    },
+    {
+      "id": "B115",
+      "formula": "=CHAR(A115)",
+      "setup": {
+        "A115": {
+          "kind": "number",
+          "value": 115.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "s"
+      }
+    },
+    {
+      "id": "B116",
+      "formula": "=CHAR(A116)",
+      "setup": {
+        "A116": {
+          "kind": "number",
+          "value": 116.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "t"
+      }
+    },
+    {
+      "id": "B117",
+      "formula": "=CHAR(A117)",
+      "setup": {
+        "A117": {
+          "kind": "number",
+          "value": 117.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "u"
+      }
+    },
+    {
+      "id": "B118",
+      "formula": "=CHAR(A118)",
+      "setup": {
+        "A118": {
+          "kind": "number",
+          "value": 118.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "v"
+      }
+    },
+    {
+      "id": "B119",
+      "formula": "=CHAR(A119)",
+      "setup": {
+        "A119": {
+          "kind": "number",
+          "value": 119.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "w"
+      }
+    },
+    {
+      "id": "B120",
+      "formula": "=CHAR(A120)",
+      "setup": {
+        "A120": {
+          "kind": "number",
+          "value": 120.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "B121",
+      "formula": "=CHAR(A121)",
+      "setup": {
+        "A121": {
+          "kind": "number",
+          "value": 121.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "y"
+      }
+    },
+    {
+      "id": "B122",
+      "formula": "=CHAR(A122)",
+      "setup": {
+        "A122": {
+          "kind": "number",
+          "value": 122.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "z"
+      }
+    },
+    {
+      "id": "B123",
+      "formula": "=CHAR(A123)",
+      "setup": {
+        "A123": {
+          "kind": "number",
+          "value": 123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "{"
+      }
+    },
+    {
+      "id": "B124",
+      "formula": "=CHAR(A124)",
+      "setup": {
+        "A124": {
+          "kind": "number",
+          "value": 124.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "|"
+      }
+    },
+    {
+      "id": "B125",
+      "formula": "=CHAR(A125)",
+      "setup": {
+        "A125": {
+          "kind": "number",
+          "value": 125.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "}"
+      }
+    },
+    {
+      "id": "B126",
+      "formula": "=CHAR(A126)",
+      "setup": {
+        "A126": {
+          "kind": "number",
+          "value": 126.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "~"
+      }
+    },
+    {
+      "id": "B127",
+      "formula": "=CHAR(A127)",
+      "setup": {
+        "A127": {
+          "kind": "number",
+          "value": 127.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ""
+      }
+    },
+    {
+      "id": "B128",
+      "formula": "=CHAR(A128)",
+      "setup": {
+        "A128": {
+          "kind": "number",
+          "value": 128.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "€"
+      }
+    },
+    {
+      "id": "B129",
+      "formula": "=CHAR(A129)",
+      "setup": {
+        "A129": {
+          "kind": "number",
+          "value": 129.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A129)"
+    },
+    {
+      "id": "B130",
+      "formula": "=CHAR(A130)",
+      "setup": {
+        "A130": {
+          "kind": "number",
+          "value": 130.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "‚"
+      }
+    },
+    {
+      "id": "B131",
+      "formula": "=CHAR(A131)",
+      "setup": {
+        "A131": {
+          "kind": "number",
+          "value": 131.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ƒ"
+      }
+    },
+    {
+      "id": "B132",
+      "formula": "=CHAR(A132)",
+      "setup": {
+        "A132": {
+          "kind": "number",
+          "value": 132.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "„"
+      }
+    },
+    {
+      "id": "B133",
+      "formula": "=CHAR(A133)",
+      "setup": {
+        "A133": {
+          "kind": "number",
+          "value": 133.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "…"
+      }
+    },
+    {
+      "id": "B134",
+      "formula": "=CHAR(A134)",
+      "setup": {
+        "A134": {
+          "kind": "number",
+          "value": 134.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "†"
+      }
+    },
+    {
+      "id": "B135",
+      "formula": "=CHAR(A135)",
+      "setup": {
+        "A135": {
+          "kind": "number",
+          "value": 135.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "‡"
+      }
+    },
+    {
+      "id": "B136",
+      "formula": "=CHAR(A136)",
+      "setup": {
+        "A136": {
+          "kind": "number",
+          "value": 136.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ˆ"
+      }
+    },
+    {
+      "id": "B137",
+      "formula": "=CHAR(A137)",
+      "setup": {
+        "A137": {
+          "kind": "number",
+          "value": 137.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "‰"
+      }
+    },
+    {
+      "id": "B138",
+      "formula": "=CHAR(A138)",
+      "setup": {
+        "A138": {
+          "kind": "number",
+          "value": 138.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Š"
+      }
+    },
+    {
+      "id": "B139",
+      "formula": "=CHAR(A139)",
+      "setup": {
+        "A139": {
+          "kind": "number",
+          "value": 139.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "‹"
+      }
+    },
+    {
+      "id": "B140",
+      "formula": "=CHAR(A140)",
+      "setup": {
+        "A140": {
+          "kind": "number",
+          "value": 140.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Œ"
+      }
+    },
+    {
+      "id": "B141",
+      "formula": "=CHAR(A141)",
+      "setup": {
+        "A141": {
+          "kind": "number",
+          "value": 141.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A141)"
+    },
+    {
+      "id": "B142",
+      "formula": "=CHAR(A142)",
+      "setup": {
+        "A142": {
+          "kind": "number",
+          "value": 142.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Ž"
+      }
+    },
+    {
+      "id": "B143",
+      "formula": "=CHAR(A143)",
+      "setup": {
+        "A143": {
+          "kind": "number",
+          "value": 143.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A143)"
+    },
+    {
+      "id": "B144",
+      "formula": "=CHAR(A144)",
+      "setup": {
+        "A144": {
+          "kind": "number",
+          "value": 144.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A144)"
+    },
+    {
+      "id": "B145",
+      "formula": "=CHAR(A145)",
+      "setup": {
+        "A145": {
+          "kind": "number",
+          "value": 145.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "‘"
+      }
+    },
+    {
+      "id": "B146",
+      "formula": "=CHAR(A146)",
+      "setup": {
+        "A146": {
+          "kind": "number",
+          "value": 146.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "’"
+      }
+    },
+    {
+      "id": "B147",
+      "formula": "=CHAR(A147)",
+      "setup": {
+        "A147": {
+          "kind": "number",
+          "value": 147.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "“"
+      }
+    },
+    {
+      "id": "B148",
+      "formula": "=CHAR(A148)",
+      "setup": {
+        "A148": {
+          "kind": "number",
+          "value": 148.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "”"
+      }
+    },
+    {
+      "id": "B149",
+      "formula": "=CHAR(A149)",
+      "setup": {
+        "A149": {
+          "kind": "number",
+          "value": 149.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "•"
+      }
+    },
+    {
+      "id": "B150",
+      "formula": "=CHAR(A150)",
+      "setup": {
+        "A150": {
+          "kind": "number",
+          "value": 150.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "–"
+      }
+    },
+    {
+      "id": "B151",
+      "formula": "=CHAR(A151)",
+      "setup": {
+        "A151": {
+          "kind": "number",
+          "value": 151.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "—"
+      }
+    },
+    {
+      "id": "B152",
+      "formula": "=CHAR(A152)",
+      "setup": {
+        "A152": {
+          "kind": "number",
+          "value": 152.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "˜"
+      }
+    },
+    {
+      "id": "B153",
+      "formula": "=CHAR(A153)",
+      "setup": {
+        "A153": {
+          "kind": "number",
+          "value": 153.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "™"
+      }
+    },
+    {
+      "id": "B154",
+      "formula": "=CHAR(A154)",
+      "setup": {
+        "A154": {
+          "kind": "number",
+          "value": 154.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "š"
+      }
+    },
+    {
+      "id": "B155",
+      "formula": "=CHAR(A155)",
+      "setup": {
+        "A155": {
+          "kind": "number",
+          "value": 155.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "›"
+      }
+    },
+    {
+      "id": "B156",
+      "formula": "=CHAR(A156)",
+      "setup": {
+        "A156": {
+          "kind": "number",
+          "value": 156.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "œ"
+      }
+    },
+    {
+      "id": "B157",
+      "formula": "=CHAR(A157)",
+      "setup": {
+        "A157": {
+          "kind": "number",
+          "value": 157.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A157)"
+    },
+    {
+      "id": "B158",
+      "formula": "=CHAR(A158)",
+      "setup": {
+        "A158": {
+          "kind": "number",
+          "value": 158.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ž"
+      }
+    },
+    {
+      "id": "B159",
+      "formula": "=CHAR(A159)",
+      "setup": {
+        "A159": {
+          "kind": "number",
+          "value": 159.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Ÿ"
+      }
+    },
+    {
+      "id": "B160",
+      "formula": "=CHAR(A160)",
+      "setup": {
+        "A160": {
+          "kind": "number",
+          "value": 160.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": " "
+      }
+    },
+    {
+      "id": "B161",
+      "formula": "=CHAR(A161)",
+      "setup": {
+        "A161": {
+          "kind": "number",
+          "value": 161.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A161)"
+    },
+    {
+      "id": "B162",
+      "formula": "=CHAR(A162)",
+      "setup": {
+        "A162": {
+          "kind": "number",
+          "value": 162.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A162)"
+    },
+    {
+      "id": "B163",
+      "formula": "=CHAR(A163)",
+      "setup": {
+        "A163": {
+          "kind": "number",
+          "value": 163.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A163)"
+    },
+    {
+      "id": "B164",
+      "formula": "=CHAR(A164)",
+      "setup": {
+        "A164": {
+          "kind": "number",
+          "value": 164.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A164)"
+    },
+    {
+      "id": "B165",
+      "formula": "=CHAR(A165)",
+      "setup": {
+        "A165": {
+          "kind": "number",
+          "value": 165.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A165)"
+    },
+    {
+      "id": "B166",
+      "formula": "=CHAR(A166)",
+      "setup": {
+        "A166": {
+          "kind": "number",
+          "value": 166.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A166)"
+    },
+    {
+      "id": "B167",
+      "formula": "=CHAR(A167)",
+      "setup": {
+        "A167": {
+          "kind": "number",
+          "value": 167.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A167)"
+    },
+    {
+      "id": "B168",
+      "formula": "=CHAR(A168)",
+      "setup": {
+        "A168": {
+          "kind": "number",
+          "value": 168.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A168)"
+    },
+    {
+      "id": "B169",
+      "formula": "=CHAR(A169)",
+      "setup": {
+        "A169": {
+          "kind": "number",
+          "value": 169.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A169)"
+    },
+    {
+      "id": "B170",
+      "formula": "=CHAR(A170)",
+      "setup": {
+        "A170": {
+          "kind": "number",
+          "value": 170.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A170)"
+    },
+    {
+      "id": "B171",
+      "formula": "=CHAR(A171)",
+      "setup": {
+        "A171": {
+          "kind": "number",
+          "value": 171.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A171)"
+    },
+    {
+      "id": "B172",
+      "formula": "=CHAR(A172)",
+      "setup": {
+        "A172": {
+          "kind": "number",
+          "value": 172.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A172)"
+    },
+    {
+      "id": "B173",
+      "formula": "=CHAR(A173)",
+      "setup": {
+        "A173": {
+          "kind": "number",
+          "value": 173.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A173)"
+    },
+    {
+      "id": "B174",
+      "formula": "=CHAR(A174)",
+      "setup": {
+        "A174": {
+          "kind": "number",
+          "value": 174.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A174)"
+    },
+    {
+      "id": "B175",
+      "formula": "=CHAR(A175)",
+      "setup": {
+        "A175": {
+          "kind": "number",
+          "value": 175.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A175)"
+    },
+    {
+      "id": "B176",
+      "formula": "=CHAR(A176)",
+      "setup": {
+        "A176": {
+          "kind": "number",
+          "value": 176.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A176)"
+    },
+    {
+      "id": "B177",
+      "formula": "=CHAR(A177)",
+      "setup": {
+        "A177": {
+          "kind": "number",
+          "value": 177.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A177)"
+    },
+    {
+      "id": "B178",
+      "formula": "=CHAR(A178)",
+      "setup": {
+        "A178": {
+          "kind": "number",
+          "value": 178.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A178)"
+    },
+    {
+      "id": "B179",
+      "formula": "=CHAR(A179)",
+      "setup": {
+        "A179": {
+          "kind": "number",
+          "value": 179.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A179)"
+    },
+    {
+      "id": "B180",
+      "formula": "=CHAR(A180)",
+      "setup": {
+        "A180": {
+          "kind": "number",
+          "value": 180.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A180)"
+    },
+    {
+      "id": "B181",
+      "formula": "=CHAR(A181)",
+      "setup": {
+        "A181": {
+          "kind": "number",
+          "value": 181.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A181)"
+    },
+    {
+      "id": "B182",
+      "formula": "=CHAR(A182)",
+      "setup": {
+        "A182": {
+          "kind": "number",
+          "value": 182.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A182)"
+    },
+    {
+      "id": "B183",
+      "formula": "=CHAR(A183)",
+      "setup": {
+        "A183": {
+          "kind": "number",
+          "value": 183.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A183)"
+    },
+    {
+      "id": "B184",
+      "formula": "=CHAR(A184)",
+      "setup": {
+        "A184": {
+          "kind": "number",
+          "value": 184.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A184)"
+    },
+    {
+      "id": "B185",
+      "formula": "=CHAR(A185)",
+      "setup": {
+        "A185": {
+          "kind": "number",
+          "value": 185.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A185)"
+    },
+    {
+      "id": "B186",
+      "formula": "=CHAR(A186)",
+      "setup": {
+        "A186": {
+          "kind": "number",
+          "value": 186.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A186)"
+    },
+    {
+      "id": "B187",
+      "formula": "=CHAR(A187)",
+      "setup": {
+        "A187": {
+          "kind": "number",
+          "value": 187.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A187)"
+    },
+    {
+      "id": "B188",
+      "formula": "=CHAR(A188)",
+      "setup": {
+        "A188": {
+          "kind": "number",
+          "value": 188.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A188)"
+    },
+    {
+      "id": "B189",
+      "formula": "=CHAR(A189)",
+      "setup": {
+        "A189": {
+          "kind": "number",
+          "value": 189.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A189)"
+    },
+    {
+      "id": "B190",
+      "formula": "=CHAR(A190)",
+      "setup": {
+        "A190": {
+          "kind": "number",
+          "value": 190.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A190)"
+    },
+    {
+      "id": "B191",
+      "formula": "=CHAR(A191)",
+      "setup": {
+        "A191": {
+          "kind": "number",
+          "value": 191.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A191)"
+    },
+    {
+      "id": "B192",
+      "formula": "=CHAR(A192)",
+      "setup": {
+        "A192": {
+          "kind": "number",
+          "value": 192.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A192)"
+    },
+    {
+      "id": "B193",
+      "formula": "=CHAR(A193)",
+      "setup": {
+        "A193": {
+          "kind": "number",
+          "value": 193.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A193)"
+    },
+    {
+      "id": "B194",
+      "formula": "=CHAR(A194)",
+      "setup": {
+        "A194": {
+          "kind": "number",
+          "value": 194.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A194)"
+    },
+    {
+      "id": "B195",
+      "formula": "=CHAR(A195)",
+      "setup": {
+        "A195": {
+          "kind": "number",
+          "value": 195.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A195)"
+    },
+    {
+      "id": "B196",
+      "formula": "=CHAR(A196)",
+      "setup": {
+        "A196": {
+          "kind": "number",
+          "value": 196.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A196)"
+    },
+    {
+      "id": "B197",
+      "formula": "=CHAR(A197)",
+      "setup": {
+        "A197": {
+          "kind": "number",
+          "value": 197.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A197)"
+    },
+    {
+      "id": "B198",
+      "formula": "=CHAR(A198)",
+      "setup": {
+        "A198": {
+          "kind": "number",
+          "value": 198.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A198)"
+    },
+    {
+      "id": "B199",
+      "formula": "=CHAR(A199)",
+      "setup": {
+        "A199": {
+          "kind": "number",
+          "value": 199.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A199)"
+    },
+    {
+      "id": "B200",
+      "formula": "=CHAR(A200)",
+      "setup": {
+        "A200": {
+          "kind": "number",
+          "value": 200.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A200)"
+    },
+    {
+      "id": "B201",
+      "formula": "=CHAR(A201)",
+      "setup": {
+        "A201": {
+          "kind": "number",
+          "value": 201.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A201)"
+    },
+    {
+      "id": "B202",
+      "formula": "=CHAR(A202)",
+      "setup": {
+        "A202": {
+          "kind": "number",
+          "value": 202.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A202)"
+    },
+    {
+      "id": "B203",
+      "formula": "=CHAR(A203)",
+      "setup": {
+        "A203": {
+          "kind": "number",
+          "value": 203.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A203)"
+    },
+    {
+      "id": "B204",
+      "formula": "=CHAR(A204)",
+      "setup": {
+        "A204": {
+          "kind": "number",
+          "value": 204.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A204)"
+    },
+    {
+      "id": "B205",
+      "formula": "=CHAR(A205)",
+      "setup": {
+        "A205": {
+          "kind": "number",
+          "value": 205.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A205)"
+    },
+    {
+      "id": "B206",
+      "formula": "=CHAR(A206)",
+      "setup": {
+        "A206": {
+          "kind": "number",
+          "value": 206.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A206)"
+    },
+    {
+      "id": "B207",
+      "formula": "=CHAR(A207)",
+      "setup": {
+        "A207": {
+          "kind": "number",
+          "value": 207.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A207)"
+    },
+    {
+      "id": "B208",
+      "formula": "=CHAR(A208)",
+      "setup": {
+        "A208": {
+          "kind": "number",
+          "value": 208.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A208)"
+    },
+    {
+      "id": "B209",
+      "formula": "=CHAR(A209)",
+      "setup": {
+        "A209": {
+          "kind": "number",
+          "value": 209.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A209)"
+    },
+    {
+      "id": "B210",
+      "formula": "=CHAR(A210)",
+      "setup": {
+        "A210": {
+          "kind": "number",
+          "value": 210.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A210)"
+    },
+    {
+      "id": "B211",
+      "formula": "=CHAR(A211)",
+      "setup": {
+        "A211": {
+          "kind": "number",
+          "value": 211.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A211)"
+    },
+    {
+      "id": "B212",
+      "formula": "=CHAR(A212)",
+      "setup": {
+        "A212": {
+          "kind": "number",
+          "value": 212.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A212)"
+    },
+    {
+      "id": "B213",
+      "formula": "=CHAR(A213)",
+      "setup": {
+        "A213": {
+          "kind": "number",
+          "value": 213.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A213)"
+    },
+    {
+      "id": "B214",
+      "formula": "=CHAR(A214)",
+      "setup": {
+        "A214": {
+          "kind": "number",
+          "value": 214.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A214)"
+    },
+    {
+      "id": "B215",
+      "formula": "=CHAR(A215)",
+      "setup": {
+        "A215": {
+          "kind": "number",
+          "value": 215.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A215)"
+    },
+    {
+      "id": "B216",
+      "formula": "=CHAR(A216)",
+      "setup": {
+        "A216": {
+          "kind": "number",
+          "value": 216.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A216)"
+    },
+    {
+      "id": "B217",
+      "formula": "=CHAR(A217)",
+      "setup": {
+        "A217": {
+          "kind": "number",
+          "value": 217.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A217)"
+    },
+    {
+      "id": "B218",
+      "formula": "=CHAR(A218)",
+      "setup": {
+        "A218": {
+          "kind": "number",
+          "value": 218.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A218)"
+    },
+    {
+      "id": "B219",
+      "formula": "=CHAR(A219)",
+      "setup": {
+        "A219": {
+          "kind": "number",
+          "value": 219.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A219)"
+    },
+    {
+      "id": "B220",
+      "formula": "=CHAR(A220)",
+      "setup": {
+        "A220": {
+          "kind": "number",
+          "value": 220.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A220)"
+    },
+    {
+      "id": "B221",
+      "formula": "=CHAR(A221)",
+      "setup": {
+        "A221": {
+          "kind": "number",
+          "value": 221.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A221)"
+    },
+    {
+      "id": "B222",
+      "formula": "=CHAR(A222)",
+      "setup": {
+        "A222": {
+          "kind": "number",
+          "value": 222.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A222)"
+    },
+    {
+      "id": "B223",
+      "formula": "=CHAR(A223)",
+      "setup": {
+        "A223": {
+          "kind": "number",
+          "value": 223.0
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =CHAR(A223)"
+    },
+    {
+      "id": "B224",
+      "formula": "=CHAR(A224)",
+      "setup": {
+        "A224": {
+          "kind": "number",
+          "value": 224.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "à"
+      }
+    },
+    {
+      "id": "B225",
+      "formula": "=CHAR(A225)",
+      "setup": {
+        "A225": {
+          "kind": "number",
+          "value": 225.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "á"
+      }
+    },
+    {
+      "id": "B226",
+      "formula": "=CHAR(A226)",
+      "setup": {
+        "A226": {
+          "kind": "number",
+          "value": 226.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "â"
+      }
+    },
+    {
+      "id": "B227",
+      "formula": "=CHAR(A227)",
+      "setup": {
+        "A227": {
+          "kind": "number",
+          "value": 227.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ã"
+      }
+    },
+    {
+      "id": "B228",
+      "formula": "=CHAR(A228)",
+      "setup": {
+        "A228": {
+          "kind": "number",
+          "value": 228.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ä"
+      }
+    },
+    {
+      "id": "B229",
+      "formula": "=CHAR(A229)",
+      "setup": {
+        "A229": {
+          "kind": "number",
+          "value": 229.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "å"
+      }
+    },
+    {
+      "id": "B230",
+      "formula": "=CHAR(A230)",
+      "setup": {
+        "A230": {
+          "kind": "number",
+          "value": 230.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "æ"
+      }
+    },
+    {
+      "id": "B231",
+      "formula": "=CHAR(A231)",
+      "setup": {
+        "A231": {
+          "kind": "number",
+          "value": 231.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ç"
+      }
+    },
+    {
+      "id": "B232",
+      "formula": "=CHAR(A232)",
+      "setup": {
+        "A232": {
+          "kind": "number",
+          "value": 232.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "è"
+      }
+    },
+    {
+      "id": "B233",
+      "formula": "=CHAR(A233)",
+      "setup": {
+        "A233": {
+          "kind": "number",
+          "value": 233.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "é"
+      }
+    },
+    {
+      "id": "B234",
+      "formula": "=CHAR(A234)",
+      "setup": {
+        "A234": {
+          "kind": "number",
+          "value": 234.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ê"
+      }
+    },
+    {
+      "id": "B235",
+      "formula": "=CHAR(A235)",
+      "setup": {
+        "A235": {
+          "kind": "number",
+          "value": 235.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ë"
+      }
+    },
+    {
+      "id": "B236",
+      "formula": "=CHAR(A236)",
+      "setup": {
+        "A236": {
+          "kind": "number",
+          "value": 236.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ì"
+      }
+    },
+    {
+      "id": "B237",
+      "formula": "=CHAR(A237)",
+      "setup": {
+        "A237": {
+          "kind": "number",
+          "value": 237.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "í"
+      }
+    },
+    {
+      "id": "B238",
+      "formula": "=CHAR(A238)",
+      "setup": {
+        "A238": {
+          "kind": "number",
+          "value": 238.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "î"
+      }
+    },
+    {
+      "id": "B239",
+      "formula": "=CHAR(A239)",
+      "setup": {
+        "A239": {
+          "kind": "number",
+          "value": 239.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ï"
+      }
+    },
+    {
+      "id": "B240",
+      "formula": "=CHAR(A240)",
+      "setup": {
+        "A240": {
+          "kind": "number",
+          "value": 240.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ð"
+      }
+    },
+    {
+      "id": "B241",
+      "formula": "=CHAR(A241)",
+      "setup": {
+        "A241": {
+          "kind": "number",
+          "value": 241.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ñ"
+      }
+    },
+    {
+      "id": "B242",
+      "formula": "=CHAR(A242)",
+      "setup": {
+        "A242": {
+          "kind": "number",
+          "value": 242.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ò"
+      }
+    },
+    {
+      "id": "B243",
+      "formula": "=CHAR(A243)",
+      "setup": {
+        "A243": {
+          "kind": "number",
+          "value": 243.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ó"
+      }
+    },
+    {
+      "id": "B244",
+      "formula": "=CHAR(A244)",
+      "setup": {
+        "A244": {
+          "kind": "number",
+          "value": 244.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ô"
+      }
+    },
+    {
+      "id": "B245",
+      "formula": "=CHAR(A245)",
+      "setup": {
+        "A245": {
+          "kind": "number",
+          "value": 245.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "õ"
+      }
+    },
+    {
+      "id": "B246",
+      "formula": "=CHAR(A246)",
+      "setup": {
+        "A246": {
+          "kind": "number",
+          "value": 246.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ö"
+      }
+    },
+    {
+      "id": "B247",
+      "formula": "=CHAR(A247)",
+      "setup": {
+        "A247": {
+          "kind": "number",
+          "value": 247.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "÷"
+      }
+    },
+    {
+      "id": "B248",
+      "formula": "=CHAR(A248)",
+      "setup": {
+        "A248": {
+          "kind": "number",
+          "value": 248.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ø"
+      }
+    },
+    {
+      "id": "B249",
+      "formula": "=CHAR(A249)",
+      "setup": {
+        "A249": {
+          "kind": "number",
+          "value": 249.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ù"
+      }
+    },
+    {
+      "id": "B250",
+      "formula": "=CHAR(A250)",
+      "setup": {
+        "A250": {
+          "kind": "number",
+          "value": 250.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ú"
+      }
+    },
+    {
+      "id": "B251",
+      "formula": "=CHAR(A251)",
+      "setup": {
+        "A251": {
+          "kind": "number",
+          "value": 251.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "û"
+      }
+    },
+    {
+      "id": "B252",
+      "formula": "=CHAR(A252)",
+      "setup": {
+        "A252": {
+          "kind": "number",
+          "value": 252.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ü"
+      }
+    },
+    {
+      "id": "B253",
+      "formula": "=CHAR(A253)",
+      "setup": {
+        "A253": {
+          "kind": "number",
+          "value": 253.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ý"
+      }
+    },
+    {
+      "id": "B254",
+      "formula": "=CHAR(A254)",
+      "setup": {
+        "A254": {
+          "kind": "number",
+          "value": 254.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "þ"
+      }
+    },
+    {
+      "id": "B255",
+      "formula": "=CHAR(A255)",
+      "setup": {
+        "A255": {
+          "kind": "number",
+          "value": 255.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ÿ"
+      }
+    },
+    {
+      "id": "B256",
+      "formula": "=CHAR(A256)",
+      "setup": {
+        "A256": {
+          "kind": "number",
+          "value": 256.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B257",
+      "formula": "=CHAR(A257)",
+      "setup": {
+        "A257": {
+          "kind": "number",
+          "value": 257.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

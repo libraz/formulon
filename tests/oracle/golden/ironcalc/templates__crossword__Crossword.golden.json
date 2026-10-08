@@ -1,0 +1,37 @@
+{
+  "suite": "ironcalc_templates_crossword_Crossword",
+  "description": "Derived from IronCalc fixture templates/crossword.xlsx, sheet 'Crossword'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Crossword",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "M24",
+      "formula": "=M22/M23",
+      "setup": {
+        "M23": {
+          "kind": "number",
+          "value": 41.0
+        },
+        "M22": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

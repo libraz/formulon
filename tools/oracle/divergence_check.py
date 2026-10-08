@@ -18,7 +18,10 @@ cases rather than Formulon oracle cases, and their evidence is a Mac-side
 probe golden rather than an Excel version stamp.  Both registries are
 checked the same way in the ways that matter -- every entry resolves to a
 live case, carries a machine-checkable reason for not running, and is
-tallied in cases so the removed population is visible.
+tallied in cases so the removed population is visible.  IronCalc entries
+without a probe use one of the explicit cause categories defined below;
+the cause vocabulary is deliberately closed so an unreviewed label cannot
+silently become a permanent skip.
 """
 
 from __future__ import annotations
@@ -576,8 +579,9 @@ def validate(path: Path, *, strict: bool) -> int:
 # Why an IronCalc-imported case is skipped. The registry's own header
 # requires every entry to cite a Mac-side probe golden as evidence that
 # the skip records an IronCalc divergence rather than a Formulon bug --
-# but two populations cannot cite one, and lumping them in with the rest
-# is what made the requirement unenforceable:
+# but several populations cannot cite one, and lumping them in with the rest
+# is what made the requirement unenforceable. Each no-probe population
+# has its own cause so it stays explicit and reviewable:
 #
 #   mac-probe          Formulon matches Mac Excel and IronCalc's cached
 #                      value is the outlier. Evidence is the probe golden,
@@ -597,10 +601,35 @@ def validate(path: Path, *, strict: bool) -> int:
 #                      value drifting from the arithmetically exact
 #                      result. The correct value is fixed by arithmetic,
 #                      not by what Excel displays, so a probe adds nothing.
+#   stale-cache        The imported value depends on time or an incomplete
+#                      date (NOW / TODAY / RAND families, or a date string
+#                      without a year), so a cached result cannot be
+#                      adjudicated as a stable Excel value.
+#   locale             The cached value comes from an en-locale Excel and
+#                      differs only where the locale profile does; it is
+#                      settled by evaluating under the saving host's
+#                      locale profile rather than by a per-case Mac probe.
+#   host               A Windows-only difference that recurs across two or
+#                      more Windows-saved fixtures, is the reverse of Mac
+#                      Excel in both locales, and contradicts no
+#                      win-365-ja_JP golden; remove the entry when the
+#                      corresponding win-* implementation lands.
+#   importer-decode    The importer changed the represented input while
+#                      decoding the fixture (CHAR `_x0001_`, a row shift,
+#                      or lost reference dependencies). Repair the import
+#                      before adjudicating the resulting case in Excel.
+#   unadjudicated      The remaining case has not yet been measured on Mac;
+#                      it stays visible until the separate adjudication flow
+#                      assigns a more specific cause.
 IRONCALC_CAUSES = {
     "mac-probe",
     "importer-flatten",
     "float-precision",
+    "stale-cache",
+    "locale",
+    "host",
+    "importer-decode",
+    "unadjudicated",
 }
 
 IRONCALC_PREFER = {"mac", "ironcalc"}

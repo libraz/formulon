@@ -1,0 +1,310 @@
+{
+  "suite": "ironcalc_calc_tests__STATISTICAL_MODE_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/STATISTICAL/MODE.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=_xlfn.MODE.SNGL(A2:A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 7.5
+        },
+        "A7": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 6.7
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=_xlfn.MODE.SNGL(A2:A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 7.5
+        },
+        "A7": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 6.7
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=_xlfn.MODE.SNGL({1,2,3,2,2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=_xlfn.MODE.SNGL(I2:I8)",
+      "setup": {
+        "I8": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "I7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "I5": {
+          "kind": "text",
+          "value": "1"
+        },
+        "I4": {
+          "kind": "text",
+          "value": "Munilla"
+        },
+        "I3": {
+          "kind": "bool",
+          "value": true
+        },
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "N2",
+      "formula": "=_xlfn.MODE.SNGL(M2:M7)",
+      "setup": {
+        "M7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "M6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "M5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "M4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "M3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "M2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "R2",
+      "formula": "=_xlfn.MODE.SNGL(Q2:Q9)",
+      "setup": {
+        "Q9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Q8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Q7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Q6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Q5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Q4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "Q3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "Q2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=_xlfn.MODE.SNGL(I2:I9)",
+      "setup": {
+        "I9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "I7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "I5": {
+          "kind": "text",
+          "value": "1"
+        },
+        "I4": {
+          "kind": "text",
+          "value": "Munilla"
+        },
+        "I3": {
+          "kind": "bool",
+          "value": true
+        },
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=_xlfn.MODE.SNGL(I2:I10)",
+      "setup": {
+        "I10": {
+          "kind": "bool",
+          "value": true
+        },
+        "I9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "I7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "I5": {
+          "kind": "text",
+          "value": "1"
+        },
+        "I4": {
+          "kind": "text",
+          "value": "Munilla"
+        },
+        "I3": {
+          "kind": "bool",
+          "value": true
+        },
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    }
+  ]
+}

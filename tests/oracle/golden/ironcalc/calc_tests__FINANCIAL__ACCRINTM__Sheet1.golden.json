@@ -1,0 +1,172 @@
+{
+  "suite": "ironcalc_calc_tests__FINANCIAL_ACCRINTM_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/FINANCIAL/ACCRINTM.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel Online",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=ACCRINTM(39539, 39614, 0.1, 1000, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.54794520547945
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=ACCRINTM(DATE(2024,1,15), DATE(2024,3,15), 0.1, 1000, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16.666666666666664
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=ACCRINTM(DATE(2024,1,15), DATE(2024,3,15), 0.1, 1000, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16.39344262295082
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=ACCRINTM(DATE(2024,1,15), DATE(2024,3,15), 0.1, 1000, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16.666666666666664
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=ACCRINTM(DATE(2024,1,15), DATE(2024,3,15), 0.1, 1000, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16.43835616438356
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=ACCRINTM(DATE(2024,1,15), DATE(2024,3,15), 0.1, 1000, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16.666666666666664
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=ACCRINTM(DATE(2023,1,15), DATE(2023,3,31), 0.1, 1000, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 21.11111111111111
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=ACCRINTM(DATE(2023,2,28), DATE(2023,6,15), 0.1, 1000, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 29.166666666666668
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=ACCRINTM(DATE(2024,2,28), DATE(2024,3,1), 0.1, 1000, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.546448087431694
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=ACCRINTM(DATE(2023,2,28), DATE(2023,3,1), 0.1, 1000, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.273972602739726
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=ACCRINTM(DATE(2023,1,15), DATE(2023,3,31), 0.1, 1000, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.833333333333336
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=ACCRINTM(DATE(2024,2,28), DATE(2024,6,15), 0.1, 1000, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 29.72222222222222
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=ACCRINTM(DATE(2023,11,15), DATE(2024,3,15), 0.1, 1000, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 33.060109289617486
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=ACCRINTM(39614, 39539, 0.1, 1000, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=ACCRINTM(39539, 39614, 0, 1000, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=ACCRINTM(39539, 39614, 0.1, 0, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=ACCRINTM(39539, 39614, 0.1, 1000, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

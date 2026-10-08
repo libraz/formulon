@@ -1,0 +1,1905 @@
+{
+  "suite": "ironcalc_calc_tests__STATISTICAL_BINOM_NEGBINOM.DIST",
+  "description": "Derived from IronCalc fixture calc_tests/STATISTICAL/BINOM.xlsx, sheet 'NEGBINOM.DIST'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "NEGBINOM.DIST",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "E2",
+      "formula": "=_xlfn.NEGBINOM.DIST(A2,B2,C2,D2)",
+      "setup": {
+        "D2": {
+          "kind": "bool",
+          "value": true
+        },
+        "C2": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.949987459946224
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=_xlfn.NEGBINOM.DIST(A3,B3,C3,D3)",
+      "setup": {
+        "D3": {
+          "kind": "bool",
+          "value": false
+        },
+        "C3": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "B3": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.50284892159999e-10
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=_xlfn.NEGBINOM.DIST(A4,B4,C4,D4)",
+      "setup": {
+        "D4": {
+          "kind": "bool",
+          "value": true
+        },
+        "C4": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "B4": {
+          "kind": "number",
+          "value": 2.7
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.02800000000000001
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=_xlfn.NEGBINOM.DIST(A5,B5,C5,D5)",
+      "setup": {
+        "D5": {
+          "kind": "bool",
+          "value": true
+        },
+        "C5": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2.01
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.019287109375000007
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=_xlfn.NEGBINOM.DIST(A6,B6,C6,D6)",
+      "setup": {
+        "D6": {
+          "kind": "bool",
+          "value": true
+        },
+        "C6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 2.99
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.019287109375000007
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=_xlfn.NEGBINOM.DIST(A7,B7,C7,D7)",
+      "setup": {
+        "D7": {
+          "kind": "bool",
+          "value": true
+        },
+        "C7": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B7": {
+          "kind": "number",
+          "value": 10.01
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.019287109375000007
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=_xlfn.NEGBINOM.DIST(A8,B8,C8,D8)",
+      "setup": {
+        "D8": {
+          "kind": "bool",
+          "value": true
+        },
+        "C8": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B8": {
+          "kind": "number",
+          "value": 10.99
+        },
+        "A8": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.019287109375000007
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=_xlfn.NEGBINOM.DIST(A9,B9,C9,D9)",
+      "setup": {
+        "D9": {
+          "kind": "bool",
+          "value": true
+        },
+        "C9": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B9": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=_xlfn.NEGBINOM.DIST(A10,B10,C10,D10)",
+      "setup": {
+        "D10": {
+          "kind": "bool",
+          "value": true
+        },
+        "C10": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=_xlfn.NEGBINOM.DIST(A11,B11,C11,D11)",
+      "setup": {
+        "D11": {
+          "kind": "bool",
+          "value": true
+        },
+        "C11": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "B11": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 3000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=_xlfn.NEGBINOM.DIST(A12,B12,C12,D12)",
+      "setup": {
+        "D12": {
+          "kind": "bool",
+          "value": true
+        },
+        "C12": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "B12": {
+          "kind": "number",
+          "value": 10000.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=_xlfn.NEGBINOM.DIST(A13,B13,C13,D13)",
+      "setup": {
+        "D13": {
+          "kind": "bool",
+          "value": true
+        },
+        "C13": {
+          "kind": "number",
+          "value": 0.999
+        },
+        "B13": {
+          "kind": "number",
+          "value": 10000.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 9999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=_xlfn.NEGBINOM.DIST(A14,B14,C14,D14)",
+      "setup": {
+        "D14": {
+          "kind": "bool",
+          "value": true
+        },
+        "C14": {
+          "kind": "number",
+          "value": 1e-05
+        },
+        "B14": {
+          "kind": "number",
+          "value": 1000000.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=_xlfn.NEGBINOM.DIST(A15,B15,C15,D15)",
+      "setup": {
+        "D15": {
+          "kind": "bool",
+          "value": true
+        },
+        "C15": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0009765625
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=_xlfn.NEGBINOM.DIST(A16,B16,C16,D16)",
+      "setup": {
+        "D16": {
+          "kind": "bool",
+          "value": true
+        },
+        "C16": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B16": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1000000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=_xlfn.NEGBINOM.DIST(A18,B18,C18,D18)",
+      "setup": {
+        "D18": {
+          "kind": "bool",
+          "value": true
+        },
+        "C18": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "B18": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.05230000000000003
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=_xlfn.NEGBINOM.DIST(A19,B19,C19,D19)",
+      "setup": {
+        "D19": {
+          "kind": "bool",
+          "value": true
+        },
+        "C19": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=_xlfn.NEGBINOM.DIST(A20,B20,C20,D20)",
+      "setup": {
+        "D20": {
+          "kind": "bool",
+          "value": true
+        },
+        "C20": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B20": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.904899999999995e-06
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=_xlfn.NEGBINOM.DIST(A21,B21,C21,D21)",
+      "setup": {
+        "D21": {
+          "kind": "bool",
+          "value": true
+        },
+        "C21": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "B21": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 1995.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=_xlfn.NEGBINOM.DIST(A22,B22,C22,D22)",
+      "setup": {
+        "D22": {
+          "kind": "bool",
+          "value": true
+        },
+        "C22": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B22": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=_xlfn.NEGBINOM.DIST(A23,B23,C23,D23)",
+      "setup": {
+        "D23": {
+          "kind": "bool",
+          "value": true
+        },
+        "C23": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.984375
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=_xlfn.NEGBINOM.DIST(A24,B24,C24,D24)",
+      "setup": {
+        "D24": {
+          "kind": "bool",
+          "value": true
+        },
+        "C24": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B24": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9375
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=_xlfn.NEGBINOM.DIST(A25,B25,C25,D25)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E26",
+      "formula": "=_xlfn.NEGBINOM.DIST(A26,B26,C26,D26)",
+      "setup": {
+        "D26": {
+          "kind": "bool",
+          "value": true
+        },
+        "C26": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B26": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.003652521008436003
+      }
+    },
+    {
+      "id": "E27",
+      "formula": "=_xlfn.NEGBINOM.DIST(A27,B27,C27,D27)",
+      "setup": {
+        "D27": {
+          "kind": "bool",
+          "value": false
+        },
+        "C27": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B27": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.001986857959086001
+      }
+    },
+    {
+      "id": "E28",
+      "formula": "=_xlfn.NEGBINOM.DIST(A28,B28,C28,D28)",
+      "setup": {
+        "D28": {
+          "kind": "bool",
+          "value": true
+        },
+        "C28": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "E29",
+      "formula": "=_xlfn.NEGBINOM.DIST(A29,B29,C29,D29)",
+      "setup": {
+        "D29": {
+          "kind": "bool",
+          "value": true
+        },
+        "C29": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B29": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "E30",
+      "formula": "=_xlfn.NEGBINOM.DIST(A30,B30,C30,D30)",
+      "setup": {
+        "D30": {
+          "kind": "bool",
+          "value": true
+        },
+        "C30": {
+          "kind": "number",
+          "value": 1e-06
+        },
+        "B30": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.599988000005536e-59
+      }
+    },
+    {
+      "id": "E31",
+      "formula": "=_xlfn.NEGBINOM.DIST(A31,B31,C31,D31)",
+      "setup": {
+        "D31": {
+          "kind": "bool",
+          "value": true
+        },
+        "C31": {
+          "kind": "number",
+          "value": 0.999999
+        },
+        "B31": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999999999998
+      }
+    },
+    {
+      "id": "E32",
+      "formula": "=_xlfn.NEGBINOM.DIST(A32,B32,C32,D32)",
+      "setup": {
+        "D32": {
+          "kind": "bool",
+          "value": true
+        },
+        "C32": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B32": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E33",
+      "formula": "=_xlfn.NEGBINOM.DIST(A33,B33,C33,D33)",
+      "setup": {
+        "D33": {
+          "kind": "bool",
+          "value": true
+        },
+        "C33": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E34",
+      "formula": "=_xlfn.NEGBINOM.DIST(A34,B34,C34,D34)",
+      "setup": {
+        "D34": {
+          "kind": "bool",
+          "value": true
+        },
+        "C34": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E35",
+      "formula": "=_xlfn.NEGBINOM.DIST(A35,B35,C35,D35)",
+      "setup": {
+        "D35": {
+          "kind": "bool",
+          "value": true
+        },
+        "C35": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E36",
+      "formula": "=_xlfn.NEGBINOM.DIST(A36,B36,C36,D36)",
+      "setup": {
+        "D36": {
+          "kind": "bool",
+          "value": true
+        },
+        "C36": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B36": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.15087890625000006
+      }
+    },
+    {
+      "id": "E37",
+      "formula": "=_xlfn.NEGBINOM.DIST(A37,B37,C37,D37)",
+      "setup": {
+        "D37": {
+          "kind": "bool",
+          "value": true
+        },
+        "C37": {
+          "kind": "number",
+          "value": 0.01
+        },
+        "B37": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A37": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000348e-200
+      }
+    },
+    {
+      "id": "E38",
+      "formula": "=_xlfn.NEGBINOM.DIST(A38,B38,C38,D38)",
+      "setup": {
+        "D38": {
+          "kind": "bool",
+          "value": true
+        },
+        "C38": {
+          "kind": "number",
+          "value": 0.99
+        },
+        "B38": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E39",
+      "formula": "=_xlfn.NEGBINOM.DIST(A39,B39,C39,D39)",
+      "setup": {
+        "D39": {
+          "kind": "bool",
+          "value": true
+        },
+        "C39": {
+          "kind": "number",
+          "value": 0.99
+        },
+        "B39": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7320646825464586
+      }
+    },
+    {
+      "id": "E40",
+      "formula": "=_xlfn.NEGBINOM.DIST(A40,B40,C40,D40)",
+      "setup": {
+        "D40": {
+          "kind": "bool",
+          "value": true
+        },
+        "C40": {
+          "kind": "number",
+          "value": 0.01
+        },
+        "B40": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A40": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.690659363904351e-142
+      }
+    },
+    {
+      "id": "E41",
+      "formula": "=_xlfn.NEGBINOM.DIST(A41,B41,C41,D41)",
+      "setup": {
+        "D41": {
+          "kind": "bool",
+          "value": true
+        },
+        "C41": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B41": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A41": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.08999999999999998
+      }
+    },
+    {
+      "id": "E42",
+      "formula": "=_xlfn.NEGBINOM.DIST(A42,B42,C42,D42)",
+      "setup": {
+        "D42": {
+          "kind": "bool",
+          "value": true
+        },
+        "C42": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B42": {
+          "kind": "number",
+          "value": 10000000000.0
+        },
+        "A42": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E43",
+      "formula": "=_xlfn.NEGBINOM.DIST(A43,B43,C43,D43)",
+      "setup": {
+        "D43": {
+          "kind": "bool",
+          "value": true
+        },
+        "C43": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B43": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A43": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.914974950051
+      }
+    },
+    {
+      "id": "E44",
+      "formula": "=_xlfn.NEGBINOM.DIST(A44,B44,C44,D44)",
+      "setup": {
+        "D44": {
+          "kind": "bool",
+          "value": true
+        },
+        "C44": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B44": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A44": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E45",
+      "formula": "=_xlfn.NEGBINOM.DIST(A45,B45,C45,D45)",
+      "setup": {
+        "D45": {
+          "kind": "bool",
+          "value": true
+        },
+        "C45": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B45": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "A45": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E46",
+      "formula": "=_xlfn.NEGBINOM.DIST(A46,B46,C46,D46)",
+      "setup": {
+        "D46": {
+          "kind": "bool",
+          "value": true
+        },
+        "C46": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B46": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.904899999999995e-06
+      }
+    },
+    {
+      "id": "E47",
+      "formula": "=_xlfn.NEGBINOM.DIST(A47,B47,C47,D47)",
+      "setup": {
+        "D47": {
+          "kind": "bool",
+          "value": true
+        },
+        "C47": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "A47": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E48",
+      "formula": "=_xlfn.NEGBINOM.DIST(A48,B48,C48,D48)",
+      "setup": {
+        "D48": {
+          "kind": "bool",
+          "value": true
+        },
+        "B48": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A48": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E49",
+      "formula": "=_xlfn.NEGBINOM.DIST(A49,B49,C49,D49)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E50",
+      "formula": "=_xlfn.NEGBINOM.DIST(A50,B50,C50,D50)",
+      "setup": {
+        "D50": {
+          "kind": "bool",
+          "value": true
+        },
+        "C50": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "B50": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.904899999999995e-06
+      }
+    },
+    {
+      "id": "E51",
+      "formula": "=_xlfn.NEGBINOM.DIST(A51,B51,C51,D51)",
+      "setup": {
+        "D51": {
+          "kind": "bool",
+          "value": true
+        },
+        "C51": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "A51": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E52",
+      "formula": "=_xlfn.NEGBINOM.DIST(A52,B52,C52,D52)",
+      "setup": {
+        "D52": {
+          "kind": "bool",
+          "value": true
+        },
+        "B52": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A52": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E53",
+      "formula": "=_xlfn.NEGBINOM.DIST(A53,B53,C53,D53)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E54",
+      "formula": "=_xlfn.NEGBINOM.DIST(A54,B54,C54,D54)",
+      "setup": {
+        "D54": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C54": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B54": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A54": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.949987459946224
+      }
+    },
+    {
+      "id": "E55",
+      "formula": "=_xlfn.NEGBINOM.DIST(A55,B55,C55,D55)",
+      "setup": {
+        "D55": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C55": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B55": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A55": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04326935110898399
+      }
+    },
+    {
+      "id": "E56",
+      "formula": "=_xlfn.NEGBINOM.DIST(A56,B56,C56,D56)",
+      "setup": {
+        "D56": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "C56": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B56": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A56": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.949987459946224
+      }
+    },
+    {
+      "id": "E57",
+      "formula": "=_xlfn.NEGBINOM.DIST(A57,B57,C57,D57)",
+      "setup": {
+        "C57": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B57": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A57": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04326935110898399
+      }
+    },
+    {
+      "id": "E58",
+      "formula": "=_xlfn.NEGBINOM.DIST(A58,B58,C58,D58)",
+      "setup": {
+        "C58": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B58": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A58": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04326935110898399
+      }
+    },
+    {
+      "id": "E59",
+      "formula": "=_xlfn.NEGBINOM.DIST(A59,B59,C59,D59)",
+      "setup": {
+        "D59": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "C59": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B59": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A59": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.949987459946224
+      }
+    },
+    {
+      "id": "E60",
+      "formula": "=_xlfn.NEGBINOM.DIST(A60,B60,C60,D60)",
+      "setup": {
+        "D60": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "C60": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B60": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A60": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.949987459946224
+      }
+    },
+    {
+      "id": "E61",
+      "formula": "=_xlfn.NEGBINOM.DIST(A61,B61,C61,D61)",
+      "setup": {
+        "D61": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "C61": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B61": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A61": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.949987459946224
+      }
+    },
+    {
+      "id": "E62",
+      "formula": "=_xlfn.NEGBINOM.DIST(A62,B62,C62,D62)",
+      "setup": {
+        "D62": {
+          "kind": "text",
+          "value": "true"
+        },
+        "C62": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B62": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A62": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.949987459946224
+      }
+    },
+    {
+      "id": "E63",
+      "formula": "=_xlfn.NEGBINOM.DIST(A63,B63,C63,D63)",
+      "setup": {
+        "D63": {
+          "kind": "text",
+          "value": "\"TRUE\""
+        },
+        "C63": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B63": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A63": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E64",
+      "formula": "=_xlfn.NEGBINOM.DIST(A64,B64,C64,D64)",
+      "setup": {
+        "D64": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "C64": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B64": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A64": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E65",
+      "formula": "=_xlfn.NEGBINOM.DIST(A65,B65,C65,D65)",
+      "setup": {
+        "D65": {
+          "kind": "bool",
+          "value": true
+        },
+        "C65": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B65": {
+          "kind": "number",
+          "value": 46028.0
+        },
+        "A65": {
+          "kind": "number",
+          "value": 36531.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A66",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E66",
+      "formula": "=_xlfn.NEGBINOM.DIST(A66,B66,C66,D66)",
+      "setup": {
+        "D66": {
+          "kind": "bool",
+          "value": true
+        },
+        "C66": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B66": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A66": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B67",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E67",
+      "formula": "=_xlfn.NEGBINOM.DIST(A67,B67,C67,D67)",
+      "setup": {
+        "D67": {
+          "kind": "bool",
+          "value": true
+        },
+        "C67": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A67": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B67": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C68",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E68",
+      "formula": "=_xlfn.NEGBINOM.DIST(A68,B68,C68,D68)",
+      "setup": {
+        "D68": {
+          "kind": "bool",
+          "value": true
+        },
+        "B68": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A68": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C68": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D69",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E69",
+      "formula": "=_xlfn.NEGBINOM.DIST(A69,B69,C69,D69)",
+      "setup": {
+        "C69": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B69": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A69": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D69": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C70",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E70",
+      "formula": "=_xlfn.NEGBINOM.DIST(A70,B70,C70,D70)",
+      "setup": {
+        "B70": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A70": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D70": {
+          "kind": "formula",
+          "formula": "=#REF!"
+        },
+        "C70": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "E71",
+      "formula": "=_xlfn.NEGBINOM.DIST(A71,B71,C71,D71)",
+      "setup": {
+        "D71": {
+          "kind": "bool",
+          "value": true
+        },
+        "C71": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B71": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A71": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.19600323399999986
+      }
+    },
+    {
+      "id": "E72",
+      "formula": "=_xlfn.NEGBINOM.DIST(A72,B72,C72,D72)",
+      "setup": {
+        "D72": {
+          "kind": "bool",
+          "value": true
+        },
+        "C72": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B72": {
+          "kind": "bool",
+          "value": true
+        },
+        "A72": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7
+      }
+    },
+    {
+      "id": "E73",
+      "formula": "=_xlfn.NEGBINOM.DIST(A73,B73,C73,D73)",
+      "setup": {
+        "D73": {
+          "kind": "bool",
+          "value": true
+        },
+        "C73": {
+          "kind": "bool",
+          "value": false
+        },
+        "B73": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A73": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E74",
+      "formula": "=_xlfn.NEGBINOM.DIST(A74,B74,C74,D74)",
+      "setup": {
+        "D74": {
+          "kind": "bool",
+          "value": true
+        },
+        "C74": {
+          "kind": "text",
+          "value": "0.3"
+        },
+        "B74": {
+          "kind": "text",
+          "value": "10"
+        },
+        "A74": {
+          "kind": "text",
+          "value": "2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00020637625500000018
+      }
+    },
+    {
+      "id": "E75",
+      "formula": "=_xlfn.NEGBINOM.DIST(A75,B75,C75,D75)",
+      "setup": {
+        "D75": {
+          "kind": "bool",
+          "value": true
+        },
+        "C75": {
+          "kind": "text",
+          "value": "0.3"
+        },
+        "B75": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A75": {
+          "kind": "text",
+          "value": "2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00020637625500000018
+      }
+    },
+    {
+      "id": "E76",
+      "formula": "=_xlfn.NEGBINOM.DIST(A76,B76,C76,D76)",
+      "setup": {
+        "D76": {
+          "kind": "bool",
+          "value": true
+        },
+        "C76": {
+          "kind": "text",
+          "value": "\"0.3\""
+        },
+        "B76": {
+          "kind": "text",
+          "value": "\"10\""
+        },
+        "A76": {
+          "kind": "text",
+          "value": "\"2\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

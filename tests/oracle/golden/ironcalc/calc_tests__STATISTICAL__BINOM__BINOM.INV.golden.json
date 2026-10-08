@@ -1,0 +1,848 @@
+{
+  "suite": "ironcalc_calc_tests__STATISTICAL_BINOM_BINOM.INV",
+  "description": "Derived from IronCalc fixture calc_tests/STATISTICAL/BINOM.xlsx, sheet 'BINOM.INV'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "BINOM.INV",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=_xlfn.BINOM.INV(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.BINOM.INV(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.BINOM.INV(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.BINOM.INV(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "A5": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.BINOM.INV(A6,B6,C6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "A6": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=_xlfn.BINOM.INV(A8,B8,C8)",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 0.999999
+        },
+        "B8": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "A8": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=_xlfn.BINOM.INV(A9,B9,C9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A9": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=_xlfn.BINOM.INV(A10,B10,)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A10": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=_xlfn.BINOM.INV(A12,B12,C12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B12": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=_xlfn.BINOM.INV(A13,B13,C13)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B13": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "A13": {
+          "kind": "number",
+          "value": 100000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 70122.0
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=_xlfn.BINOM.INV(A14,B14,C14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B14": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A14": {
+          "kind": "number",
+          "value": 100000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10000.0
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=_xlfn.BINOM.INV(A16,B16,C16)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B16": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "A16": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=_xlfn.BINOM.INV(A17,B17,C17)",
+      "setup": {
+        "C17": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B17": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "A17": {
+          "kind": "number",
+          "value": 10.0001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=_xlfn.BINOM.INV(A18,B18,C18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B18": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "A18": {
+          "kind": "number",
+          "value": 10.9999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=_xlfn.BINOM.INV(A22,B22,C22)",
+      "setup": {
+        "C22": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B22": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": -1e-10
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=_xlfn.BINOM.INV(A23,B23,C23)",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B23": {
+          "kind": "number",
+          "value": 0.999999
+        },
+        "A23": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=_xlfn.BINOM.INV(A25,B25,C25)",
+      "setup": {
+        "C25": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=_xlfn.BINOM.INV(A26,B26,C26)",
+      "setup": {
+        "C26": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B26": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=_xlfn.BINOM.INV(A27,B27,C27)",
+      "setup": {
+        "C27": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B27": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=_xlfn.BINOM.INV(A28,B28,C28)",
+      "setup": {
+        "C28": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B28": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A28": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=_xlfn.BINOM.INV(A31,B31,C31)",
+      "setup": {
+        "C31": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "B31": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A31": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D32",
+      "formula": "=_xlfn.BINOM.INV(A32,B32,C32)",
+      "setup": {
+        "C32": {
+          "kind": "number",
+          "value": 0.9
+        },
+        "B32": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A32": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "D33",
+      "formula": "=_xlfn.BINOM.INV(A33,B33,C33)",
+      "setup": {
+        "C33": {
+          "kind": "number",
+          "value": 0.25
+        },
+        "B33": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A33": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "D34",
+      "formula": "=_xlfn.BINOM.INV(A34,B34,C34)",
+      "setup": {
+        "C34": {
+          "kind": "number",
+          "value": 0.75
+        },
+        "B34": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A34": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "A36",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D36",
+      "formula": "=_xlfn.BINOM.INV(A36,B36,C36)",
+      "setup": {
+        "C36": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B36": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A36": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D37",
+      "formula": "=_xlfn.BINOM.INV(A37,B37,C37)",
+      "setup": {
+        "C37": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "A37": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C38",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D38",
+      "formula": "=_xlfn.BINOM.INV(A38,B38,C38)",
+      "setup": {
+        "B38": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C38": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B39",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C39",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D39",
+      "formula": "=_xlfn.BINOM.INV(A39,B39,C39)",
+      "setup": {
+        "A39": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "C39": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B39": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "D40",
+      "formula": "=_xlfn.BINOM.INV(A40,B40,C40)",
+      "setup": {
+        "C40": {
+          "kind": "text",
+          "value": "0.8"
+        },
+        "B40": {
+          "kind": "text",
+          "value": "0.3"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "10"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "D41",
+      "formula": "=_xlfn.BINOM.INV(A41,B41,C41)",
+      "setup": {
+        "C41": {
+          "kind": "text",
+          "value": "0.8"
+        },
+        "B41": {
+          "kind": "text",
+          "value": "0.3"
+        },
+        "A41": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "D42",
+      "formula": "=_xlfn.BINOM.INV(A42,B42,C42)",
+      "setup": {
+        "C42": {
+          "kind": "text",
+          "value": "\"0.8\""
+        },
+        "B42": {
+          "kind": "text",
+          "value": "\"0.3\""
+        },
+        "A42": {
+          "kind": "text",
+          "value": "\"10\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D43",
+      "formula": "=_xlfn.BINOM.INV(A43,B43,C43)",
+      "setup": {
+        "C43": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B43": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A43": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D44",
+      "formula": "=_xlfn.BINOM.INV(A44,B44,C44)",
+      "setup": {
+        "C44": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B44": {
+          "kind": "bool",
+          "value": true
+        },
+        "A44": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D45",
+      "formula": "=_xlfn.BINOM.INV(A45,B45,C45)",
+      "setup": {
+        "C45": {
+          "kind": "bool",
+          "value": true
+        },
+        "B45": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A45": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D47",
+      "formula": "=_xlfn.BINOM.INV(A47,B47,C47)",
+      "setup": {
+        "C47": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B47": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A47": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "D48",
+      "formula": "=_xlfn.BINOM.INV(A48,B48,C48)",
+      "setup": {
+        "C48": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B48": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A48": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    }
+  ]
+}

@@ -1,0 +1,522 @@
+{
+  "suite": "ironcalc_calc_tests__STATISTICAL_GAUSS_GAUSS",
+  "description": "Derived from IronCalc fixture calc_tests/STATISTICAL/GAUSS.xlsx, sheet 'GAUSS'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "GAUSS",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=_xlfn.GAUSS(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=_xlfn.GAUSS(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.34134474606854304
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=_xlfn.GAUSS(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.34134474606854304
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=_xlfn.GAUSS(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4772498680518208
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=_xlfn.GAUSS(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.4772498680518208
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=_xlfn.GAUSS(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4986501019683699
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=_xlfn.GAUSS(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.4986501019683699
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=_xlfn.GAUSS(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 1.96
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4750021048517795
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=_xlfn.GAUSS(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": -1.96
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.47500210485177957
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=_xlfn.GAUSS(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1.645
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4500150944608786
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=_xlfn.GAUSS(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.19146246127401312
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=_xlfn.GAUSS(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": -0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.19146246127401312
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=_xlfn.GAUSS(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.03982783727702899
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=_xlfn.GAUSS(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": -0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.03982783727702899
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=_xlfn.GAUSS(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 0.001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00039894221391101325
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=_xlfn.GAUSS(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4999997133484281
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=_xlfn.GAUSS(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": -5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.49999971334842813
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=_xlfn.GAUSS(A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=_xlfn.GAUSS(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.5
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=_xlfn.GAUSS(A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 1000000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=_xlfn.GAUSS(A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": -1000000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.5
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=_xlfn.GAUSS(A23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 1e-07
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.9894228032189005e-08
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=_xlfn.GAUSS(A24)",
+      "setup": {
+        "A24": {
+          "kind": "number",
+          "value": -1e-07
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3.9894228032189005e-08
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=_xlfn.GAUSS(A25)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A26",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=_xlfn.GAUSS(A26)",
+      "setup": {
+        "A26": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A27",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=_xlfn.GAUSS(A27)",
+      "setup": {
+        "A27": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=_xlfn.GAUSS(A28)",
+      "setup": {
+        "A28": {
+          "kind": "formula",
+          "formula": "=#REF!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=_xlfn.GAUSS(A29)",
+      "setup": {
+        "A29": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.34134474606854304
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=_xlfn.GAUSS(A30)",
+      "setup": {
+        "A30": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B31",
+      "formula": "=_xlfn.GAUSS(A31)",
+      "setup": {
+        "A31": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.34134474606854304
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=_xlfn.GAUSS(A32)",
+      "setup": {
+        "A32": {
+          "kind": "text",
+          "value": "\"1\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=_xlfn.GAUSS(A33)",
+      "setup": {
+        "A33": {
+          "kind": "text",
+          "value": "1.96"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4750021048517795
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=_xlfn.GAUSS(A34)",
+      "setup": {
+        "A34": {
+          "kind": "text",
+          "value": " 1 "
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.34134474606854304
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=_xlfn.GAUSS(A35)",
+      "setup": {
+        "A35": {
+          "kind": "text",
+          "value": "hello"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=_xlfn.GAUSS(A36)",
+      "setup": {
+        "A36": {
+          "kind": "number",
+          "value": 46040.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    }
+  ]
+}

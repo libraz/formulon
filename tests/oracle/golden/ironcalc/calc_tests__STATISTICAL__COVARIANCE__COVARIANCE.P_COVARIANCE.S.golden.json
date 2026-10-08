@@ -1,0 +1,1995 @@
+{
+  "suite": "ironcalc_calc_tests__STATISTICAL_COVARIANCE_COVARIANCE.P_COVARIANCE.S",
+  "description": "Derived from IronCalc fixture calc_tests/STATISTICAL/COVARIANCE.xlsx, sheet 'COVARIANCE.P COVARIANCE.S'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "COVARIANCE.P COVARIANCE.S",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "C3",
+      "formula": "=_xlfn.COVARIANCE.P({3,2,4,5,6},{9,7,12,15,17})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.2
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.COVARIANCE.S({3,2,4,5,6},{9,7,12,15,17})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.5
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=_xlfn.COVARIANCE.P({1,2,3,4,5},{1,2,3,4,5})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.COVARIANCE.S({1,2,3,4,5},{1,2,3,4,5})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.5
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=_xlfn.COVARIANCE.P({1,2,3,4,5},{5,4,3,2,1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.COVARIANCE.S({1,2,3,4,5},{5,4,3,2,1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.5
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=_xlfn.COVARIANCE.P({-2,-1,0,1,2},{4,1,0,1,4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.COVARIANCE.S({-2,-1,0,1,2},{4,1,0,1,4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=_xlfn.COVARIANCE.P({0,0,0,0,0},{1,2,3,4,5})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.COVARIANCE.S({0,0,0,0,0},{1,2,3,4,5})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=_xlfn.COVARIANCE.P({1,2,3,4,5},{3,3,3,3,3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=_xlfn.COVARIANCE.S({1,2,3,4,5},{3,3,3,3,3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=_xlfn.COVARIANCE.P({3,3,3,3,3},{3,3,3,3,3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=_xlfn.COVARIANCE.S({3,3,3,3,3},{3,3,3,3,3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=_xlfn.COVARIANCE.P({1,3},{2,4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=_xlfn.COVARIANCE.S({1,3},{2,4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=_xlfn.COVARIANCE.P({-5,-3,-1,1,3},{5,3,1,-1,-3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=_xlfn.COVARIANCE.S({-5,-3,-1,1,3},{5,3,1,-1,-3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=_xlfn.COVARIANCE.P({1,2,3,4,5,6,7,8,9,10},{2,4,6,8,10,12,14,16,18,20})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16.5
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=_xlfn.COVARIANCE.S({1,2,3,4,5,6,7,8,9,10},{2,4,6,8,10,12,14,16,18,20})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 18.333333333333332
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=_xlfn.COVARIANCE.P({0.1,0.2,0.3},{0.4,0.5,0.6})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.006666666666666665
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=_xlfn.COVARIANCE.S({0.1,0.2,0.3},{0.4,0.5,0.6})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.009999999999999998
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=_xlfn.COVARIANCE.P({1000000,2000000,3000000},{1000000,2000000,3000000})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 666666666666.6666
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=_xlfn.COVARIANCE.S({1000000,2000000,3000000},{1000000,2000000,3000000})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1000000000000.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=_xlfn.COVARIANCE.P({0.000001,0.000002,0.000003},{0.000001,0.000002,0.000003})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.666666666666668e-13
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=_xlfn.COVARIANCE.S({0.000001,0.000002,0.000003},{0.000001,0.000002,0.000003})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000002e-12
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=_xlfn.COVARIANCE.P({5},{10})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=_xlfn.COVARIANCE.S({5},{10})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=_xlfn.COVARIANCE.P({1,2,3},{1,2})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=_xlfn.COVARIANCE.S({1,2,3},{1,2})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=_xlfn.COVARIANCE.P({1,2},{1,2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=_xlfn.COVARIANCE.S({1,2},{1,2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=_xlfn.COVARIANCE.P({\"a\",\"b\",\"c\"},{1,2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=_xlfn.COVARIANCE.S({\"a\",\"b\",\"c\"},{1,2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=_xlfn.COVARIANCE.P({1,2,3},{\"x\",\"y\",\"z\"})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=_xlfn.COVARIANCE.S({1,2,3},{\"x\",\"y\",\"z\"})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=_xlfn.COVARIANCE.P({1},{2})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=_xlfn.COVARIANCE.S({1},{2})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=_xlfn.COVARIANCE.P(A23:A27,B23:B27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.04
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=_xlfn.COVARIANCE.S(A23:A27,B23:B27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.3
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=_xlfn.COVARIANCE.P(A28:A32,B28:B32)",
+      "setup": {
+        "B32": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "B31": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.2
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=_xlfn.COVARIANCE.S(A28:A32,B28:B32)",
+      "setup": {
+        "B32": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "B31": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.5
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=_xlfn.COVARIANCE.P(A33:A37,B33:B37)",
+      "setup": {
+        "B37": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A37": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D33",
+      "formula": "=_xlfn.COVARIANCE.S(A33:A37,B33:B37)",
+      "setup": {
+        "B37": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A37": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.5
+      }
+    },
+    {
+      "id": "C38",
+      "formula": "=_xlfn.COVARIANCE.P(A38:A42,B38:B42)",
+      "setup": {
+        "B42": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B41": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B40": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B39": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B38": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A42": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A41": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A40": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "D38",
+      "formula": "=_xlfn.COVARIANCE.S(A38:A42,B38:B42)",
+      "setup": {
+        "B42": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B41": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B40": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B39": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B38": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A42": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A41": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A40": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.5
+      }
+    },
+    {
+      "id": "C43",
+      "formula": "=_xlfn.COVARIANCE.P(A43:A47,B43:B47)",
+      "setup": {
+        "B47": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B46": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B45": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B44": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B43": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A46": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A45": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A44": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A43": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D43",
+      "formula": "=_xlfn.COVARIANCE.S(A43:A47,B43:B47)",
+      "setup": {
+        "B47": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B46": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B45": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B44": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B43": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A46": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A45": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A44": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A43": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C48",
+      "formula": "=_xlfn.COVARIANCE.P(A48:A48,B48:B48)",
+      "setup": {
+        "B48": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A48": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D48",
+      "formula": "=_xlfn.COVARIANCE.S(A48:A48,B48:B48)",
+      "setup": {
+        "B48": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A48": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C49",
+      "formula": "=_xlfn.COVARIANCE.P(A49:A51,B49:B51)",
+      "setup": {
+        "B51": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B50": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B49": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A51": {
+          "kind": "text",
+          "value": "c"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D49",
+      "formula": "=_xlfn.COVARIANCE.S(A49:A51,B49:B51)",
+      "setup": {
+        "B51": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B50": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B49": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A51": {
+          "kind": "text",
+          "value": "c"
+        },
+        "A50": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A49": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C52",
+      "formula": "=_xlfn.COVARIANCE.P(A52:A56,B52:B56)",
+      "setup": {
+        "B56": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "B55": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B54": {
+          "kind": "bool",
+          "value": false
+        },
+        "B53": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B52": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A56": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A55": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A54": {
+          "kind": "bool",
+          "value": true
+        },
+        "A53": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A52": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.5
+      }
+    },
+    {
+      "id": "D52",
+      "formula": "=_xlfn.COVARIANCE.S(A52:A56,B52:B56)",
+      "setup": {
+        "B56": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "B55": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B54": {
+          "kind": "bool",
+          "value": false
+        },
+        "B53": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B52": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A56": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A55": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A54": {
+          "kind": "bool",
+          "value": true
+        },
+        "A53": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A52": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.666666666666666
+      }
+    },
+    {
+      "id": "C57",
+      "formula": "=_xlfn.COVARIANCE.P(A57:A59,B57:B59)",
+      "setup": {
+        "B59": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B58": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B57": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A59": {
+          "kind": "bool",
+          "value": true
+        },
+        "A58": {
+          "kind": "bool",
+          "value": true
+        },
+        "A57": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D57",
+      "formula": "=_xlfn.COVARIANCE.S(A57:A59,B57:B59)",
+      "setup": {
+        "B59": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B58": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B57": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A59": {
+          "kind": "bool",
+          "value": true
+        },
+        "A58": {
+          "kind": "bool",
+          "value": true
+        },
+        "A57": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C60",
+      "formula": "=_xlfn.COVARIANCE.P(A60:A64,B60:B64)",
+      "setup": {
+        "B64": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "B63": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B62": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B60": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A64": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A63": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A62": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A60": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.375
+      }
+    },
+    {
+      "id": "D60",
+      "formula": "=_xlfn.COVARIANCE.S(A60:A64,B60:B64)",
+      "setup": {
+        "B64": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "B63": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B62": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B60": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A64": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A63": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A62": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A60": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.5
+      }
+    },
+    {
+      "id": "C65",
+      "formula": "=_xlfn.COVARIANCE.P(A65:A67,B65:B67)",
+      "setup": {
+        "B67": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B66": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B65": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D65",
+      "formula": "=_xlfn.COVARIANCE.S(A65:A67,B65:B67)",
+      "setup": {
+        "B67": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B66": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B65": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C68",
+      "formula": "=_xlfn.COVARIANCE.P(A68:A72,B68:B72)",
+      "setup": {
+        "B72": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "B71": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B70": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B69": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B68": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A72": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A71": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A69": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A68": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A70": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D68",
+      "formula": "=_xlfn.COVARIANCE.S(A68:A72,B68:B72)",
+      "setup": {
+        "B72": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "B71": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B70": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B69": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B68": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A72": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A71": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A69": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A68": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A70": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A70",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C73",
+      "formula": "=_xlfn.COVARIANCE.P(A73:A77,B73:B77)",
+      "setup": {
+        "B77": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "B76": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B75": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B73": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A77": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A76": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A75": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A74": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A73": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B74": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D73",
+      "formula": "=_xlfn.COVARIANCE.S(A73:A77,B73:B77)",
+      "setup": {
+        "B77": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "B76": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B75": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B73": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A77": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A76": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A75": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A74": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A73": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B74": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B74",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C78",
+      "formula": "=_xlfn.COVARIANCE.P(A78:A80,B78:B81)",
+      "setup": {
+        "B81": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B80": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B79": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B78": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A80": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A79": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A78": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D78",
+      "formula": "=_xlfn.COVARIANCE.S(A78:A80,B78:B81)",
+      "setup": {
+        "B81": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B80": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B79": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B78": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A80": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A79": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A78": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C82",
+      "formula": "=_xlfn.COVARIANCE.P(A82:A86,B82:B86)",
+      "setup": {
+        "B86": {
+          "kind": "number",
+          "value": 46048.0
+        },
+        "B85": {
+          "kind": "number",
+          "value": 46042.0
+        },
+        "B84": {
+          "kind": "number",
+          "value": 46036.0
+        },
+        "B83": {
+          "kind": "number",
+          "value": 46030.0
+        },
+        "B82": {
+          "kind": "number",
+          "value": 46024.0
+        },
+        "A86": {
+          "kind": "number",
+          "value": 46042.0
+        },
+        "A85": {
+          "kind": "number",
+          "value": 46037.0
+        },
+        "A84": {
+          "kind": "number",
+          "value": 46032.0
+        },
+        "A83": {
+          "kind": "number",
+          "value": 46027.0
+        },
+        "A82": {
+          "kind": "number",
+          "value": 46023.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 57.6
+      }
+    },
+    {
+      "id": "D82",
+      "formula": "=_xlfn.COVARIANCE.S(A82:A86,B82:B86)",
+      "setup": {
+        "B86": {
+          "kind": "number",
+          "value": 46048.0
+        },
+        "B85": {
+          "kind": "number",
+          "value": 46042.0
+        },
+        "B84": {
+          "kind": "number",
+          "value": 46036.0
+        },
+        "B83": {
+          "kind": "number",
+          "value": 46030.0
+        },
+        "B82": {
+          "kind": "number",
+          "value": 46024.0
+        },
+        "A86": {
+          "kind": "number",
+          "value": 46042.0
+        },
+        "A85": {
+          "kind": "number",
+          "value": 46037.0
+        },
+        "A84": {
+          "kind": "number",
+          "value": 46032.0
+        },
+        "A83": {
+          "kind": "number",
+          "value": 46027.0
+        },
+        "A82": {
+          "kind": "number",
+          "value": 46023.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 72.0
+      }
+    },
+    {
+      "id": "C87",
+      "formula": "=_xlfn.COVARIANCE.P(A87:A106,B87:B106)",
+      "setup": {
+        "B106": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "B105": {
+          "kind": "number",
+          "value": 38.0
+        },
+        "B104": {
+          "kind": "number",
+          "value": 36.0
+        },
+        "B103": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "B102": {
+          "kind": "number",
+          "value": 32.0
+        },
+        "B101": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B100": {
+          "kind": "number",
+          "value": 28.0
+        },
+        "B99": {
+          "kind": "number",
+          "value": 26.0
+        },
+        "B98": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "B97": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "B96": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B95": {
+          "kind": "number",
+          "value": 18.0
+        },
+        "B94": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B93": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "B92": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B91": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B90": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B89": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B88": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B87": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A106": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A105": {
+          "kind": "number",
+          "value": 19.0
+        },
+        "A104": {
+          "kind": "number",
+          "value": 18.0
+        },
+        "A103": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "A102": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "A101": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A100": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "A99": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "A98": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A97": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A96": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A95": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A94": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A93": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A92": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A91": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A90": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A89": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A88": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A87": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 66.5
+      }
+    },
+    {
+      "id": "D87",
+      "formula": "=_xlfn.COVARIANCE.S(A87:A106,B87:B106)",
+      "setup": {
+        "B106": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "B105": {
+          "kind": "number",
+          "value": 38.0
+        },
+        "B104": {
+          "kind": "number",
+          "value": 36.0
+        },
+        "B103": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "B102": {
+          "kind": "number",
+          "value": 32.0
+        },
+        "B101": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B100": {
+          "kind": "number",
+          "value": 28.0
+        },
+        "B99": {
+          "kind": "number",
+          "value": 26.0
+        },
+        "B98": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "B97": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "B96": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B95": {
+          "kind": "number",
+          "value": 18.0
+        },
+        "B94": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B93": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "B92": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B91": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B90": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B89": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B88": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B87": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A106": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A105": {
+          "kind": "number",
+          "value": 19.0
+        },
+        "A104": {
+          "kind": "number",
+          "value": 18.0
+        },
+        "A103": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "A102": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "A101": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A100": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "A99": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "A98": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A97": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A96": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A95": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A94": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A93": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A92": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A91": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A90": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A89": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A88": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A87": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 70.0
+      }
+    }
+  ]
+}

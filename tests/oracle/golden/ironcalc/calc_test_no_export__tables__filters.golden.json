@@ -3,14 +3,16 @@
   "description": "Derived from IronCalc fixture calc_test_no_export/tables.xlsx, sheet 'filters'.",
   "environment": {
     "source": "ironcalc",
-    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
     "sheet": "filters",
     "excel_locale": "unknown",
-    "generated_at": "2026-05-01T21:17:28Z"
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
   },
   "tolerance": {
     "abs": 5e-08,
-    "rel": 0.0
+    "rel": 1e-12
   },
   "cases": [
     {
@@ -34,7 +36,7 @@
           "value": 4.0
         }
       },
-      "skipped": "=SUBTOTAL(9,B3:B6) over a live filtered table; Mac=4 (only B3 visible after filter), Formulon=16 (sums all four importer-imported values). Importer drops auto-filter / hidden-row state; Formulon's SUBTOTAL math is otherwise correct."
+      "skipped": "=SUBTOTAL(9,B3:B6) over a live filtered table; Mac=4 (only B3 visible after filter), Formulon=16 (sums all four importer-imported values). Importer drops auto-filter state, which Formulon does not model either."
     },
     {
       "id": "B9",
@@ -66,9 +68,85 @@
       "id": "B11",
       "formula": "=SUBTOTAL(109, OFFSET(A1,1,1):OFFSET(A1,6,1))",
       "setup": {
-        "C6": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "M1": {
+          "kind": "text",
+          "value": "B7"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Elephants"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Cats"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E7": {
+          "kind": "text",
+          "value": "<= SUBTOTALs both 9 and 109 ignore filtered out"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Tigers"
+        },
+        "D6": {
           "kind": "number",
           "value": 7.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L1": {
+          "kind": "text",
+          "value": "B2"
+        },
+        "B6": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
         },
         "A3": {
           "kind": "number",
@@ -78,112 +156,112 @@
           "kind": "number",
           "value": 1.0
         },
-        "B1": {
-          "kind": "text",
-          "value": "Cats"
-        },
-        "M1": {
-          "kind": "text",
-          "value": "B7"
-        },
-        "A1": {
-          "kind": "text",
-          "value": "Dogs"
-        },
-        "B2": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "E7": {
-          "kind": "text",
-          "value": "<= SUBTOTALs both 9 and 109 ignore filtered out"
-        },
-        "B6": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "L1": {
-          "kind": "text",
-          "value": "B2"
-        },
-        "D6": {
+        "C6": {
           "kind": "number",
           "value": 7.0
-        },
-        "B4": {
-          "kind": "number",
-          "value": 4.0
         },
         "C4": {
           "kind": "number",
           "value": 8.0
         },
-        "A5": {
+        "A1": {
+          "kind": "text",
+          "value": "Dogs"
+        },
+        "B4": {
           "kind": "number",
-          "value": 1.0
+          "value": 4.0
         },
         "B3": {
           "kind": "number",
           "value": 4.0
-        },
-        "A4": {
-          "kind": "number",
-          "value": 7.0
-        },
-        "C1": {
-          "kind": "text",
-          "value": "Elephants"
-        },
-        "D2": {
-          "kind": "number",
-          "value": 34.0
-        },
-        "C2": {
-          "kind": "number",
-          "value": 2.0
-        },
-        "D5": {
-          "kind": "number",
-          "value": 4.0
-        },
-        "A2": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "C3": {
-          "kind": "number",
-          "value": 5.0
-        },
-        "B5": {
-          "kind": "number",
-          "value": 2.0
-        },
-        "A6": {
-          "kind": "number",
-          "value": 45.0
-        },
-        "C5": {
-          "kind": "number",
-          "value": 3.0
-        },
-        "D3": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "D1": {
-          "kind": "text",
-          "value": "Tigers"
         }
       },
-      "skipped": "=SUBTOTAL(109,OFFSET(A1,1,1):OFFSET(A1,6,1)); same hidden-row flatten issue as filters.B8; Mac=4 (visible-only), Formulon=17."
+      "skipped": "=SUBTOTAL(109,OFFSET(A1,1,1):OFFSET(A1,6,1)); Mac=4 (visible-only), Formulon=17. Importer supplies no hidden-row state, and the OFFSET endpoints carry no static row provenance for the 101..111 filter to key on."
     },
     {
       "id": "C11",
       "formula": "=SUM(OFFSET(A1,1,1):OFFSET(A1,5,1))",
       "setup": {
-        "C6": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "M1": {
+          "kind": "text",
+          "value": "B7"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Elephants"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Cats"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E7": {
+          "kind": "text",
+          "value": "<= SUBTOTALs both 9 and 109 ignore filtered out"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Tigers"
+        },
+        "D6": {
           "kind": "number",
           "value": 7.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L1": {
+          "kind": "text",
+          "value": "B2"
+        },
+        "B6": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
         },
         "A3": {
           "kind": "number",
@@ -193,101 +271,25 @@
           "kind": "number",
           "value": 1.0
         },
-        "B1": {
-          "kind": "text",
-          "value": "Cats"
-        },
-        "M1": {
-          "kind": "text",
-          "value": "B7"
-        },
-        "A1": {
-          "kind": "text",
-          "value": "Dogs"
-        },
-        "B2": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "E7": {
-          "kind": "text",
-          "value": "<= SUBTOTALs both 9 and 109 ignore filtered out"
-        },
-        "B6": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "L1": {
-          "kind": "text",
-          "value": "B2"
-        },
-        "D6": {
+        "C6": {
           "kind": "number",
           "value": 7.0
-        },
-        "B4": {
-          "kind": "number",
-          "value": 4.0
         },
         "C4": {
           "kind": "number",
           "value": 8.0
         },
-        "A5": {
+        "A1": {
+          "kind": "text",
+          "value": "Dogs"
+        },
+        "B4": {
           "kind": "number",
-          "value": 1.0
+          "value": 4.0
         },
         "B3": {
           "kind": "number",
           "value": 4.0
-        },
-        "A4": {
-          "kind": "number",
-          "value": 7.0
-        },
-        "C1": {
-          "kind": "text",
-          "value": "Elephants"
-        },
-        "D2": {
-          "kind": "number",
-          "value": 34.0
-        },
-        "C2": {
-          "kind": "number",
-          "value": 2.0
-        },
-        "D5": {
-          "kind": "number",
-          "value": 4.0
-        },
-        "A2": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "C3": {
-          "kind": "number",
-          "value": 5.0
-        },
-        "B5": {
-          "kind": "number",
-          "value": 2.0
-        },
-        "A6": {
-          "kind": "number",
-          "value": 45.0
-        },
-        "C5": {
-          "kind": "number",
-          "value": 3.0
-        },
-        "D3": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "D1": {
-          "kind": "text",
-          "value": "Tigers"
         }
       },
       "expect": {
@@ -299,9 +301,85 @@
       "id": "B12",
       "formula": "=SUM(INDIRECT(\"B2\"):INDIRECT(\"B6\"))",
       "setup": {
-        "C6": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "M1": {
+          "kind": "text",
+          "value": "B7"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Elephants"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Cats"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E7": {
+          "kind": "text",
+          "value": "<= SUBTOTALs both 9 and 109 ignore filtered out"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Tigers"
+        },
+        "D6": {
           "kind": "number",
           "value": 7.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L1": {
+          "kind": "text",
+          "value": "B2"
+        },
+        "B6": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
         },
         "A3": {
           "kind": "number",
@@ -311,101 +389,25 @@
           "kind": "number",
           "value": 1.0
         },
-        "B1": {
-          "kind": "text",
-          "value": "Cats"
-        },
-        "M1": {
-          "kind": "text",
-          "value": "B7"
-        },
-        "A1": {
-          "kind": "text",
-          "value": "Dogs"
-        },
-        "B2": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "E7": {
-          "kind": "text",
-          "value": "<= SUBTOTALs both 9 and 109 ignore filtered out"
-        },
-        "B6": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "L1": {
-          "kind": "text",
-          "value": "B2"
-        },
-        "D6": {
+        "C6": {
           "kind": "number",
           "value": 7.0
-        },
-        "B4": {
-          "kind": "number",
-          "value": 4.0
         },
         "C4": {
           "kind": "number",
           "value": 8.0
         },
-        "A5": {
+        "A1": {
+          "kind": "text",
+          "value": "Dogs"
+        },
+        "B4": {
           "kind": "number",
-          "value": 1.0
+          "value": 4.0
         },
         "B3": {
           "kind": "number",
           "value": 4.0
-        },
-        "A4": {
-          "kind": "number",
-          "value": 7.0
-        },
-        "C1": {
-          "kind": "text",
-          "value": "Elephants"
-        },
-        "D2": {
-          "kind": "number",
-          "value": 34.0
-        },
-        "C2": {
-          "kind": "number",
-          "value": 2.0
-        },
-        "D5": {
-          "kind": "number",
-          "value": 4.0
-        },
-        "A2": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "C3": {
-          "kind": "number",
-          "value": 5.0
-        },
-        "B5": {
-          "kind": "number",
-          "value": 2.0
-        },
-        "A6": {
-          "kind": "number",
-          "value": 45.0
-        },
-        "C5": {
-          "kind": "number",
-          "value": 3.0
-        },
-        "D3": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "D1": {
-          "kind": "text",
-          "value": "Tigers"
         }
       },
       "expect": {
@@ -417,9 +419,85 @@
       "id": "C12",
       "formula": "=SUBTOTAL(109, INDIRECT(\"B2\"):INDIRECT(\"B6\"))",
       "setup": {
-        "C6": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "M1": {
+          "kind": "text",
+          "value": "B7"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Elephants"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Cats"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E7": {
+          "kind": "text",
+          "value": "<= SUBTOTALs both 9 and 109 ignore filtered out"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Tigers"
+        },
+        "D6": {
           "kind": "number",
           "value": 7.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L1": {
+          "kind": "text",
+          "value": "B2"
+        },
+        "B6": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
         },
         "A3": {
           "kind": "number",
@@ -429,104 +507,28 @@
           "kind": "number",
           "value": 1.0
         },
-        "B1": {
-          "kind": "text",
-          "value": "Cats"
-        },
-        "M1": {
-          "kind": "text",
-          "value": "B7"
-        },
-        "A1": {
-          "kind": "text",
-          "value": "Dogs"
-        },
-        "B2": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "E7": {
-          "kind": "text",
-          "value": "<= SUBTOTALs both 9 and 109 ignore filtered out"
-        },
-        "B6": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "L1": {
-          "kind": "text",
-          "value": "B2"
-        },
-        "D6": {
+        "C6": {
           "kind": "number",
           "value": 7.0
-        },
-        "B4": {
-          "kind": "number",
-          "value": 4.0
         },
         "C4": {
           "kind": "number",
           "value": 8.0
         },
-        "A5": {
+        "A1": {
+          "kind": "text",
+          "value": "Dogs"
+        },
+        "B4": {
           "kind": "number",
-          "value": 1.0
+          "value": 4.0
         },
         "B3": {
           "kind": "number",
           "value": 4.0
-        },
-        "A4": {
-          "kind": "number",
-          "value": 7.0
-        },
-        "C1": {
-          "kind": "text",
-          "value": "Elephants"
-        },
-        "D2": {
-          "kind": "number",
-          "value": 34.0
-        },
-        "C2": {
-          "kind": "number",
-          "value": 2.0
-        },
-        "D5": {
-          "kind": "number",
-          "value": 4.0
-        },
-        "A2": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "C3": {
-          "kind": "number",
-          "value": 5.0
-        },
-        "B5": {
-          "kind": "number",
-          "value": 2.0
-        },
-        "A6": {
-          "kind": "number",
-          "value": 45.0
-        },
-        "C5": {
-          "kind": "number",
-          "value": 3.0
-        },
-        "D3": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "D1": {
-          "kind": "text",
-          "value": "Tigers"
         }
       },
-      "skipped": "=SUBTOTAL(109,INDIRECT(\"B2\"):INDIRECT(\"B6\")); same hidden-row flatten issue; Mac=4, Formulon=17."
+      "skipped": "=SUBTOTAL(109,INDIRECT(\"B2\"):INDIRECT(\"B6\")); Mac=4, Formulon=17. Same pair of reasons as filters.B11 — no imported hidden-row state, and INDIRECT endpoints carry no static row provenance."
     }
   ]
 }

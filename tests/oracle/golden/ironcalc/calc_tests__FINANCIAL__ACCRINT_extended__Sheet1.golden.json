@@ -1,0 +1,2883 @@
+{
+  "suite": "ironcalc_calc_tests__FINANCIAL_ACCRINT_extended_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/FINANCIAL/ACCRINT_extended.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "I2",
+      "formula": "=ACCRINT(A2,B2,C2,D2,E2,F2)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "C2": {
+          "kind": "number",
+          "value": 39569.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39691.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 39508.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.666666666666664
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=ACCRINT(A3,B3,C3,D3,E3,F3)",
+      "setup": {
+        "F3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "C3": {
+          "kind": "number",
+          "value": 39569.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39691.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 39508.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 33.33333333333333
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=ACCRINT(A4,B4,C4,D4,E4,F4)",
+      "setup": {
+        "F4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "C4": {
+          "kind": "number",
+          "value": 39569.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 39691.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 39508.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.666666666666664
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=ACCRINT(A5,B5,C5,D5,E5,F5)",
+      "setup": {
+        "F5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "C5": {
+          "kind": "number",
+          "value": 39569.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 39691.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 39508.0
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A5,B5,C5,D5,E5,F5)"
+    },
+    {
+      "id": "I6",
+      "formula": "=ACCRINT(A6,B6,C6,D6,E6,F6)",
+      "setup": {
+        "F6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E6": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "C6": {
+          "kind": "number",
+          "value": 39569.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 39691.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 39508.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.666666666666664
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=ACCRINT(A7,B7,C7,D7,E7,F7)",
+      "setup": {
+        "F7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E7": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C7": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=ACCRINT(A7,B7,C7,D7,E7,F7,G7)",
+      "setup": {
+        "G7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E7": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C7": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "K7",
+      "formula": "=ACCRINT(A7,B7,C7,D7,E7,F7,G7,H7)",
+      "setup": {
+        "H7": {
+          "kind": "bool",
+          "value": false
+        },
+        "G7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E7": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C7": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=ACCRINT(A8,B8,C8,D8,E8,F8,G8)",
+      "setup": {
+        "G8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E8": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C8": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A8,B8,C8,D8,E8,F8,G8)"
+    },
+    {
+      "id": "K8",
+      "formula": "=ACCRINT(A8,B8,C8,D8,E8,F8,G8,H8)",
+      "setup": {
+        "H8": {
+          "kind": "bool",
+          "value": false
+        },
+        "G8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E8": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C8": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A8,B8,C8,D8,E8,F8,G8,H8)"
+    },
+    {
+      "id": "A9",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=ACCRINT(A9,B9,C9,D9,E9,F9,G9)",
+      "setup": {
+        "G9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E9": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C9": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A9,B9,C9,D9,E9,F9,G9)"
+    },
+    {
+      "id": "K9",
+      "formula": "=ACCRINT(A9,B9,C9,D9,E9,F9,G9,H9)",
+      "setup": {
+        "H9": {
+          "kind": "bool",
+          "value": false
+        },
+        "G9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E9": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C9": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A9,B9,C9,D9,E9,F9,G9,H9)"
+    },
+    {
+      "id": "A10",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=ACCRINT(A10,B10,C10,D10,E10,F10,G10)",
+      "setup": {
+        "G10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E10": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C10": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A10,B10,C10,D10,E10,F10,G10)"
+    },
+    {
+      "id": "K10",
+      "formula": "=ACCRINT(A10,B10,C10,D10,E10,F10,G10,H10)",
+      "setup": {
+        "H10": {
+          "kind": "bool",
+          "value": false
+        },
+        "G10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E10": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C10": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A10,B10,C10,D10,E10,F10,G10,H10)"
+    },
+    {
+      "id": "A11",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J11",
+      "formula": "=ACCRINT(A11,B11,C11,D11,E11,F11,G11)",
+      "setup": {
+        "G11": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E11": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D11": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C11": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.49999999999997
+      }
+    },
+    {
+      "id": "K11",
+      "formula": "=ACCRINT(A11,B11,C11,D11,E11,F11,G11,H11)",
+      "setup": {
+        "H11": {
+          "kind": "bool",
+          "value": false
+        },
+        "G11": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E11": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D11": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C11": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A11,B11,C11,D11,E11,F11,G11,H11)"
+    },
+    {
+      "id": "A12",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J12",
+      "formula": "=ACCRINT(A12,B12,C12,D12,E12,F12,G12)",
+      "setup": {
+        "G12": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E12": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C12": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A12,B12,C12,D12,E12,F12,G12)"
+    },
+    {
+      "id": "K12",
+      "formula": "=ACCRINT(A12,B12,C12,D12,E12,F12,G12,H12)",
+      "setup": {
+        "H12": {
+          "kind": "bool",
+          "value": true
+        },
+        "G12": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E12": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C12": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A12,B12,C12,D12,E12,F12,G12,H12)"
+    },
+    {
+      "id": "A13",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J13",
+      "formula": "=ACCRINT(A13,B13,C13,D13,E13,F13,G13)",
+      "setup": {
+        "G13": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E13": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D13": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C13": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B13": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A13,B13,C13,D13,E13,F13,G13)"
+    },
+    {
+      "id": "K13",
+      "formula": "=ACCRINT(A13,B13,C13,D13,E13,F13,G13,H13)",
+      "setup": {
+        "H13": {
+          "kind": "bool",
+          "value": true
+        },
+        "G13": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E13": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D13": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C13": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B13": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A13,B13,C13,D13,E13,F13,G13,H13)"
+    },
+    {
+      "id": "A14",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J14",
+      "formula": "=ACCRINT(A14,B14,C14,D14,E14,F14,G14)",
+      "setup": {
+        "G14": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E14": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D14": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C14": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B14": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A14,B14,C14,D14,E14,F14,G14)"
+    },
+    {
+      "id": "K14",
+      "formula": "=ACCRINT(A14,B14,C14,D14,E14,F14,G14,H14)",
+      "setup": {
+        "H14": {
+          "kind": "bool",
+          "value": true
+        },
+        "G14": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E14": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D14": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C14": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B14": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A14,B14,C14,D14,E14,F14,G14,H14)"
+    },
+    {
+      "id": "A15",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J15",
+      "formula": "=ACCRINT(A15,B15,C15,D15,E15,F15,G15)",
+      "setup": {
+        "G15": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E15": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D15": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C15": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.49999999999997
+      }
+    },
+    {
+      "id": "K15",
+      "formula": "=ACCRINT(A15,B15,C15,D15,E15,F15,G15,H15)",
+      "setup": {
+        "H15": {
+          "kind": "bool",
+          "value": true
+        },
+        "G15": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E15": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D15": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C15": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.49999999999997
+      }
+    },
+    {
+      "id": "A18",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "I18",
+      "formula": "=ACCRINT(A18,B18,C18,D18,E18,F18)",
+      "setup": {
+        "F18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E18": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D18": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C18": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B18": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "J18",
+      "formula": "=ACCRINT(A18,B18,C18,D18,E18,F18,G18)",
+      "setup": {
+        "G18": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E18": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D18": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C18": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B18": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "K18",
+      "formula": "=ACCRINT(A18,B18,C18,D18,E18,F18,G18,H18)",
+      "setup": {
+        "H18": {
+          "kind": "bool",
+          "value": false
+        },
+        "G18": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E18": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D18": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C18": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B18": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "A19",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J19",
+      "formula": "=ACCRINT(A19,B19,C19,D19,E19,F19,G19)",
+      "setup": {
+        "G19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E19": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D19": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C19": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B19": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 244.1095890410959
+      }
+    },
+    {
+      "id": "K19",
+      "formula": "=ACCRINT(A19,B19,C19,D19,E19,F19,G19,H19)",
+      "setup": {
+        "H19": {
+          "kind": "bool",
+          "value": false
+        },
+        "G19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E19": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D19": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C19": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B19": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 244.1095890410959
+      }
+    },
+    {
+      "id": "A20",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J20",
+      "formula": "=ACCRINT(A20,B20,C20,D20,E20,F20,G20)",
+      "setup": {
+        "G20": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E20": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D20": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C20": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A20": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "K20",
+      "formula": "=ACCRINT(A20,B20,C20,D20,E20,F20,G20,H20)",
+      "setup": {
+        "H20": {
+          "kind": "bool",
+          "value": false
+        },
+        "G20": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E20": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D20": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C20": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A20": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "A21",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J21",
+      "formula": "=ACCRINT(A21,B21,C21,D21,E21,F21,G21)",
+      "setup": {
+        "G21": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E21": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D21": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C21": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 244.1095890410959
+      }
+    },
+    {
+      "id": "K21",
+      "formula": "=ACCRINT(A21,B21,C21,D21,E21,F21,G21,H21)",
+      "setup": {
+        "H21": {
+          "kind": "bool",
+          "value": false
+        },
+        "G21": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E21": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D21": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C21": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 244.1095890410959
+      }
+    },
+    {
+      "id": "A22",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J22",
+      "formula": "=ACCRINT(A22,B22,C22,D22,E22,F22,G22)",
+      "setup": {
+        "G22": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E22": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D22": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C22": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "K22",
+      "formula": "=ACCRINT(A22,B22,C22,D22,E22,F22,G22,H22)",
+      "setup": {
+        "H22": {
+          "kind": "bool",
+          "value": false
+        },
+        "G22": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E22": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D22": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C22": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "A23",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J23",
+      "formula": "=ACCRINT(A23,B23,C23,D23,E23,F23,G23)",
+      "setup": {
+        "G23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E23": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D23": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C23": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B23": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 244.1095890410959
+      }
+    },
+    {
+      "id": "K23",
+      "formula": "=ACCRINT(A23,B23,C23,D23,E23,F23,G23,H23)",
+      "setup": {
+        "H23": {
+          "kind": "bool",
+          "value": true
+        },
+        "G23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E23": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D23": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C23": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B23": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 244.1095890410959
+      }
+    },
+    {
+      "id": "A24",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J24",
+      "formula": "=ACCRINT(A24,B24,C24,D24,E24,F24,G24)",
+      "setup": {
+        "G24": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E24": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D24": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C24": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B24": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A24": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "K24",
+      "formula": "=ACCRINT(A24,B24,C24,D24,E24,F24,G24,H24)",
+      "setup": {
+        "H24": {
+          "kind": "bool",
+          "value": true
+        },
+        "G24": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E24": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D24": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C24": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B24": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A24": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "A25",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J25",
+      "formula": "=ACCRINT(A25,B25,C25,D25,E25,F25,G25)",
+      "setup": {
+        "G25": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E25": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D25": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C25": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B25": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 244.1095890410959
+      }
+    },
+    {
+      "id": "K25",
+      "formula": "=ACCRINT(A25,B25,C25,D25,E25,F25,G25,H25)",
+      "setup": {
+        "H25": {
+          "kind": "bool",
+          "value": true
+        },
+        "G25": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E25": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D25": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C25": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B25": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 244.1095890410959
+      }
+    },
+    {
+      "id": "A26",
+      "formula": "=DATE(2017,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42736.0
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=DATE(2017, 4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42826.0
+      }
+    },
+    {
+      "id": "J26",
+      "formula": "=ACCRINT(A26,B26,C26,D26,E26,F26,G26)",
+      "setup": {
+        "G26": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F26": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E26": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D26": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C26": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B26": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "K26",
+      "formula": "=ACCRINT(A26,B26,C26,D26,E26,F26,G26,H26)",
+      "setup": {
+        "H26": {
+          "kind": "bool",
+          "value": true
+        },
+        "G26": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F26": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E26": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D26": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C26": {
+          "kind": "formula",
+          "formula": "=DATE(2017, 4,1)"
+        },
+        "B26": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=DATE(2017,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "I30",
+      "formula": "=ACCRINT(A30,B30,C30,D30,E30,F30)",
+      "setup": {
+        "F30": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E30": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D30": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C30": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "J30",
+      "formula": "=ACCRINT(A30,B30,C30,D30,E30,F30,G30)",
+      "setup": {
+        "G30": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F30": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E30": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D30": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C30": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "K30",
+      "formula": "=ACCRINT(A30,B30,C30,D30,E30,F30,G30,H30)",
+      "setup": {
+        "H30": {
+          "kind": "bool",
+          "value": false
+        },
+        "G30": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F30": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E30": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D30": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C30": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "J31",
+      "formula": "=ACCRINT(A31,B31,C31,D31,E31,F31,G31)",
+      "setup": {
+        "G31": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F31": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E31": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D31": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C31": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B31": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A31,B31,C31,D31,E31,F31,G31)"
+    },
+    {
+      "id": "K31",
+      "formula": "=ACCRINT(A31,B31,C31,D31,E31,F31,G31,H31)",
+      "setup": {
+        "H31": {
+          "kind": "bool",
+          "value": false
+        },
+        "G31": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F31": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E31": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D31": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C31": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B31": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A31,B31,C31,D31,E31,F31,G31,H31)"
+    },
+    {
+      "id": "J32",
+      "formula": "=ACCRINT(A32,B32,C32,D32,E32,F32,G32)",
+      "setup": {
+        "G32": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F32": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E32": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D32": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C32": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B32": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "K32",
+      "formula": "=ACCRINT(A32,B32,C32,D32,E32,F32,G32,H32)",
+      "setup": {
+        "H32": {
+          "kind": "bool",
+          "value": false
+        },
+        "G32": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F32": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E32": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D32": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C32": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B32": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "J33",
+      "formula": "=ACCRINT(A33,B33,C33,D33,E33,F33,G33)",
+      "setup": {
+        "G33": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F33": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E33": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D33": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C33": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 244.10958904109592
+      }
+    },
+    {
+      "id": "K33",
+      "formula": "=ACCRINT(A33,B33,C33,D33,E33,F33,G33,H33)",
+      "setup": {
+        "H33": {
+          "kind": "bool",
+          "value": false
+        },
+        "G33": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F33": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E33": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D33": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C33": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 244.10958904109592
+      }
+    },
+    {
+      "id": "J34",
+      "formula": "=ACCRINT(A34,B34,C34,D34,E34,F34,G34)",
+      "setup": {
+        "G34": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F34": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E34": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D34": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C34": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "K34",
+      "formula": "=ACCRINT(A34,B34,C34,D34,E34,F34,G34,H34)",
+      "setup": {
+        "H34": {
+          "kind": "bool",
+          "value": false
+        },
+        "G34": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F34": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E34": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D34": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C34": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "J35",
+      "formula": "=ACCRINT(A35,B35,C35,D35,E35,F35,G35)",
+      "setup": {
+        "G35": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F35": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E35": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D35": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C35": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A35,B35,C35,D35,E35,F35,G35)"
+    },
+    {
+      "id": "K35",
+      "formula": "=ACCRINT(A35,B35,C35,D35,E35,F35,G35,H35)",
+      "setup": {
+        "H35": {
+          "kind": "bool",
+          "value": true
+        },
+        "G35": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F35": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E35": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D35": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C35": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(A35,B35,C35,D35,E35,F35,G35,H35)"
+    },
+    {
+      "id": "J36",
+      "formula": "=ACCRINT(A36,B36,C36,D36,E36,F36,G36)",
+      "setup": {
+        "G36": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F36": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E36": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D36": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C36": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B36": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "K36",
+      "formula": "=ACCRINT(A36,B36,C36,D36,E36,F36,G36,H36)",
+      "setup": {
+        "H36": {
+          "kind": "bool",
+          "value": true
+        },
+        "G36": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F36": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E36": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D36": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C36": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B36": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "J37",
+      "formula": "=ACCRINT(A37,B37,C37,D37,E37,F37,G37)",
+      "setup": {
+        "G37": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F37": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E37": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D37": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C37": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B37": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A37": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 244.10958904109592
+      }
+    },
+    {
+      "id": "K37",
+      "formula": "=ACCRINT(A37,B37,C37,D37,E37,F37,G37,H37)",
+      "setup": {
+        "H37": {
+          "kind": "bool",
+          "value": true
+        },
+        "G37": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F37": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E37": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D37": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C37": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B37": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A37": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 244.10958904109592
+      }
+    },
+    {
+      "id": "J38",
+      "formula": "=ACCRINT(A38,B38,C38,D38,E38,F38,G38)",
+      "setup": {
+        "G38": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F38": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E38": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D38": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C38": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B38": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    },
+    {
+      "id": "K38",
+      "formula": "=ACCRINT(A38,B38,C38,D38,E38,F38,G38,H38)",
+      "setup": {
+        "H38": {
+          "kind": "bool",
+          "value": true
+        },
+        "G38": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F38": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E38": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "D38": {
+          "kind": "number",
+          "value": 0.33
+        },
+        "C38": {
+          "kind": "number",
+          "value": 42826.0
+        },
+        "B38": {
+          "kind": "number",
+          "value": 43070.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 42736.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 247.5
+      }
+    }
+  ]
+}

@@ -1,0 +1,2266 @@
+{
+  "suite": "ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_TRIGONOMETRIC_SIN_COS_TAN",
+  "description": "Derived from IronCalc fixture calc_tests/MATH_AND_TRIGONOMETRY/TRIGONOMETRIC.xlsx, sheet 'SIN_COS_TAN'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "SIN_COS_TAN",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=SIN(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8414709848078965
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=COS(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5403023058681398
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=TAN(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5574077246549023
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=SIN(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9589242746631385
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=COS(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.28366218546322625
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=TAN(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3.380515006246586
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=SIN(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 2.8
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3349881501559051
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=COS(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 2.8
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9422223406686581
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=TAN(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 2.8
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.3555298316511761
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=SIN(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.8414709848078965
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=COS(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5403023058681398
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=TAN(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.5574077246549023
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=SIN(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5440211108893698
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=COS(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.8390715290764524
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=TAN(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.6483608274590866
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=SIN(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=COS(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=TAN(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=SIN(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7289690401258759
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=COS(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6845466664428066
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=TAN(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0648931268833821
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=SIN(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.7289690401258759
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=COS(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6845466664428066
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=TAN(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0648931268833821
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=SIN(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 0.123
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.12269009002431533
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=COS(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 0.123
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9924450321351935
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=TAN(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 0.123
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.12362406586927442
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=SIN(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": -0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.479425538604203
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=COS(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": -0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8775825618903728
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=TAN(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": -0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.5463024898437905
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=SIN(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.5063656411097588
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=COS(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8623188722876839
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=TAN(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.5872139151569291
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=SIN(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5063656411097588
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=COS(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8623188722876839
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=TAN(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5872139151569291
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=SIN(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8414709848619267
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=COS(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5403023057839926
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=TAN(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.557407724997454
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=SIN(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8414709847538663
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=COS(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5403023059522868
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=TAN(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5574077243123503
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=SIN(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": -1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.8414709848619267
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=COS(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": -1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5403023057839926
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=TAN(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": -1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.557407724997454
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=SIN(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.8414709847538663
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=COS(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5403023059522868
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=TAN(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.5574077243123503
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=SIN(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e-12
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=COS(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=TAN(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e-12
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=SIN(A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1e-12
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=COS(A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=TAN(A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1e-12
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=SIN(A20)",
+      "setup": {
+        "A20": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8414709848078965
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=COS(A20)",
+      "setup": {
+        "A20": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5403023058681398
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=TAN(A20)",
+      "setup": {
+        "A20": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5574077246549023
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=SIN(A21)",
+      "setup": {
+        "A21": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=COS(A21)",
+      "setup": {
+        "A21": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=TAN(A21)",
+      "setup": {
+        "A21": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=SIN(A22)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=COS(A22)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=TAN(A22)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=SIN(A23)",
+      "setup": {
+        "A23": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=COS(A23)",
+      "setup": {
+        "A23": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=TAN(A23)",
+      "setup": {
+        "A23": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A24",
+      "formula": "=\"8\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "8"
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=SIN(A24)",
+      "setup": {
+        "A24": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9893582466233818
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=COS(A24)",
+      "setup": {
+        "A24": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.14550003380861354
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=TAN(A24)",
+      "setup": {
+        "A24": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -6.799711455220379
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=SIN(A25)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9092974268256817
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=COS(A25)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.4161468365471424
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=TAN(A25)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.185039863261519
+      }
+    },
+    {
+      "id": "A26",
+      "formula": "=\" 10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 10 "
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=SIN(A26)",
+      "setup": {
+        "A26": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.5440211108893698
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=COS(A26)",
+      "setup": {
+        "A26": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.8390715290764524
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=TAN(A26)",
+      "setup": {
+        "A26": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6483608274590866
+      }
+    },
+    {
+      "id": "A27",
+      "formula": "=\"0\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=SIN(A27)",
+      "setup": {
+        "A27": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=COS(A27)",
+      "setup": {
+        "A27": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=TAN(A27)",
+      "setup": {
+        "A27": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=SIN(A28)",
+      "setup": {
+        "A28": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=COS(A28)",
+      "setup": {
+        "A28": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=TAN(A28)",
+      "setup": {
+        "A28": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A29",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=SIN(A29)",
+      "setup": {
+        "A29": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=COS(A29)",
+      "setup": {
+        "A29": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=TAN(A29)",
+      "setup": {
+        "A29": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A30",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=SIN(A30)",
+      "setup": {
+        "A30": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C30",
+      "formula": "=COS(A30)",
+      "setup": {
+        "A30": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D30",
+      "formula": "=TAN(A30)",
+      "setup": {
+        "A30": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B31",
+      "formula": "=SIN(A31)",
+      "setup": {
+        "A31": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "C31",
+      "formula": "=COS(A31)",
+      "setup": {
+        "A31": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=TAN(A31)",
+      "setup": {
+        "A31": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "A32",
+      "formula": "=SQRT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=SIN(A32)",
+      "setup": {
+        "A32": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C32",
+      "formula": "=COS(A32)",
+      "setup": {
+        "A32": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D32",
+      "formula": "=TAN(A32)",
+      "setup": {
+        "A32": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A33",
+      "formula": "=\"x\"+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=SIN(A33)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=COS(A33)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D33",
+      "formula": "=TAN(A33)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A34",
+      "formula": "=2^20",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=SIN(A34)",
+      "setup": {
+        "A34": {
+          "kind": "formula",
+          "formula": "=2^20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.33049314002171887
+      }
+    },
+    {
+      "id": "C34",
+      "formula": "=COS(A34)",
+      "setup": {
+        "A34": {
+          "kind": "formula",
+          "formula": "=2^20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9438083939013175
+      }
+    },
+    {
+      "id": "D34",
+      "formula": "=TAN(A34)",
+      "setup": {
+        "A34": {
+          "kind": "formula",
+          "formula": "=2^20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.35016974012659025
+      }
+    },
+    {
+      "id": "A35",
+      "formula": "=\"@\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "@"
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=SIN(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C35",
+      "formula": "=COS(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D35",
+      "formula": "=TAN(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A36",
+      "formula": "=DATE(2024,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=SIN(A36)",
+      "setup": {
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.6933047084002377
+      }
+    },
+    {
+      "id": "C36",
+      "formula": "=COS(A36)",
+      "setup": {
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7206445596201093
+      }
+    },
+    {
+      "id": "D36",
+      "formula": "=TAN(A36)",
+      "setup": {
+        "A36": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.962061947384597
+      }
+    },
+    {
+      "id": "A37",
+      "formula": "=\"2024-01-10\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024-01-10"
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=SIN(A37)",
+      "setup": {
+        "A37": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.6933047084002377
+      }
+    },
+    {
+      "id": "C37",
+      "formula": "=COS(A37)",
+      "setup": {
+        "A37": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7206445596201093
+      }
+    },
+    {
+      "id": "D37",
+      "formula": "=TAN(A37)",
+      "setup": {
+        "A37": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.962061947384597
+      }
+    },
+    {
+      "id": "A38",
+      "formula": "=\" 2024-01-10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 2024-01-10 "
+      }
+    },
+    {
+      "id": "B38",
+      "formula": "=SIN(A38)",
+      "setup": {
+        "A38": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C38",
+      "formula": "=COS(A38)",
+      "setup": {
+        "A38": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D38",
+      "formula": "=TAN(A38)",
+      "setup": {
+        "A38": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A39",
+      "formula": "=TIME(14,30,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6041666666666666
+      }
+    },
+    {
+      "id": "B39",
+      "formula": "=SIN(A39)",
+      "setup": {
+        "A39": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5680764604367166
+      }
+    },
+    {
+      "id": "C39",
+      "formula": "=COS(A39)",
+      "setup": {
+        "A39": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8229757803834153
+      }
+    },
+    {
+      "id": "D39",
+      "formula": "=TAN(A39)",
+      "setup": {
+        "A39": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6902711768407765
+      }
+    },
+    {
+      "id": "A41",
+      "formula": "=1.05*(0.0284+0.0046)-0.0284",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "B41",
+      "formula": "=SIN(A41)",
+      "setup": {
+        "A41": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.006249959309975304
+      }
+    },
+    {
+      "id": "C41",
+      "formula": "=COS(A41)",
+      "setup": {
+        "A41": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999804688135782
+      }
+    },
+    {
+      "id": "D41",
+      "formula": "=TAN(A41)",
+      "setup": {
+        "A41": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.006250081381479918
+      }
+    },
+    {
+      "id": "A42",
+      "formula": "=I43",
+      "setup": {
+        "I43": {
+          "kind": "number",
+          "value": 1.75
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.75
+      }
+    },
+    {
+      "id": "B42",
+      "formula": "=SIN(A42)",
+      "setup": {
+        "I43": {
+          "kind": "number",
+          "value": 1.75
+        },
+        "A42": {
+          "kind": "formula",
+          "formula": "=I43"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9839859468739369
+      }
+    },
+    {
+      "id": "C42",
+      "formula": "=COS(A42)",
+      "setup": {
+        "I43": {
+          "kind": "number",
+          "value": 1.75
+        },
+        "A42": {
+          "kind": "formula",
+          "formula": "=I43"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.17824605564949209
+      }
+    },
+    {
+      "id": "D42",
+      "formula": "=TAN(A42)",
+      "setup": {
+        "I43": {
+          "kind": "number",
+          "value": 1.75
+        },
+        "A42": {
+          "kind": "formula",
+          "formula": "=I43"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -5.52037992250933
+      }
+    },
+    {
+      "id": "B43",
+      "formula": "=SIN(A43)",
+      "setup": {
+        "A43": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C43",
+      "formula": "=COS(A43)",
+      "setup": {
+        "A43": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D43",
+      "formula": "=TAN(A43)",
+      "setup": {
+        "A43": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A44",
+      "formula": "=PI() - 0.000000000001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653588793
+      }
+    },
+    {
+      "id": "B44",
+      "formula": "=SIN(A44)",
+      "setup": {
+        "A44": {
+          "kind": "formula",
+          "formula": "=PI() - 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0002114154278319e-12
+      }
+    },
+    {
+      "id": "C44",
+      "formula": "=COS(A44)",
+      "setup": {
+        "A44": {
+          "kind": "formula",
+          "formula": "=PI() - 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "D44",
+      "formula": "=TAN(A44)",
+      "setup": {
+        "A44": {
+          "kind": "formula",
+          "formula": "=PI() - 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0002114154278319e-12
+      }
+    },
+    {
+      "id": "A45",
+      "formula": "=PI()/2 - 0.000000000001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267938965
+      }
+    },
+    {
+      "id": "B45",
+      "formula": "=SIN(A45)",
+      "setup": {
+        "A45": {
+          "kind": "formula",
+          "formula": "=PI()/2 - 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C45",
+      "formula": "=COS(A45)",
+      "setup": {
+        "A45": {
+          "kind": "formula",
+          "formula": "=PI()/2 - 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0001501580050864e-12
+      }
+    },
+    {
+      "id": "D45",
+      "formula": "=TAN(A45)",
+      "setup": {
+        "A45": {
+          "kind": "formula",
+          "formula": "=PI()/2 - 0.000000000001"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =TAN(A45)"
+    },
+    {
+      "id": "A46",
+      "formula": "=PI()/2 + 0.000000000001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267958966
+      }
+    },
+    {
+      "id": "B46",
+      "formula": "=SIN(A46)",
+      "setup": {
+        "A46": {
+          "kind": "formula",
+          "formula": "=PI()/2 + 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C46",
+      "formula": "=COS(A46)",
+      "setup": {
+        "A46": {
+          "kind": "formula",
+          "formula": "=PI()/2 + 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0000276431595956e-12
+      }
+    },
+    {
+      "id": "D46",
+      "formula": "=TAN(A46)",
+      "setup": {
+        "A46": {
+          "kind": "formula",
+          "formula": "=PI()/2 + 0.000000000001"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =TAN(A46)"
+    },
+    {
+      "id": "A47",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "B47",
+      "formula": "=SIN(A47)",
+      "setup": {
+        "A47": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.22514845490862e-16
+      }
+    },
+    {
+      "id": "C47",
+      "formula": "=COS(A47)",
+      "setup": {
+        "A47": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "D47",
+      "formula": "=TAN(A47)",
+      "setup": {
+        "A47": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.22514845490862e-16
+      }
+    },
+    {
+      "id": "A48",
+      "formula": "=PI()/2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "B48",
+      "formula": "=SIN(A48)",
+      "setup": {
+        "A48": {
+          "kind": "formula",
+          "formula": "=PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C48",
+      "formula": "=COS(A48)",
+      "setup": {
+        "A48": {
+          "kind": "formula",
+          "formula": "=PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.1257422745431e-17
+      }
+    },
+    {
+      "id": "A49",
+      "formula": "=2*PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.283185307179586
+      }
+    },
+    {
+      "id": "B49",
+      "formula": "=SIN(A49)",
+      "setup": {
+        "A49": {
+          "kind": "formula",
+          "formula": "=2*PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.45029690981724e-16
+      }
+    },
+    {
+      "id": "C49",
+      "formula": "=COS(A49)",
+      "setup": {
+        "A49": {
+          "kind": "formula",
+          "formula": "=2*PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D49",
+      "formula": "=TAN(A49)",
+      "setup": {
+        "A49": {
+          "kind": "formula",
+          "formula": "=2*PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.45029690981724e-16
+      }
+    },
+    {
+      "id": "A50",
+      "formula": "=PI()/4",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7853981633974483
+      }
+    },
+    {
+      "id": "B50",
+      "formula": "=SIN(A50)",
+      "setup": {
+        "A50": {
+          "kind": "formula",
+          "formula": "=PI()/4"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7071067811865475
+      }
+    },
+    {
+      "id": "C50",
+      "formula": "=COS(A50)",
+      "setup": {
+        "A50": {
+          "kind": "formula",
+          "formula": "=PI()/4"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7071067811865476
+      }
+    },
+    {
+      "id": "D50",
+      "formula": "=TAN(A50)",
+      "setup": {
+        "A50": {
+          "kind": "formula",
+          "formula": "=PI()/4"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999999999999
+      }
+    },
+    {
+      "id": "A51",
+      "formula": "=PI()/6",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5235987755982988
+      }
+    },
+    {
+      "id": "B51",
+      "formula": "=SIN(A51)",
+      "setup": {
+        "A51": {
+          "kind": "formula",
+          "formula": "=PI()/6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.49999999999999994
+      }
+    },
+    {
+      "id": "C51",
+      "formula": "=COS(A51)",
+      "setup": {
+        "A51": {
+          "kind": "formula",
+          "formula": "=PI()/6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8660254037844387
+      }
+    },
+    {
+      "id": "D51",
+      "formula": "=TAN(A51)",
+      "setup": {
+        "A51": {
+          "kind": "formula",
+          "formula": "=PI()/6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5773502691896257
+      }
+    }
+  ]
+}

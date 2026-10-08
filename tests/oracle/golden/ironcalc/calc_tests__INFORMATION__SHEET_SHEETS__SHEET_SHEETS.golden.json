@@ -1,0 +1,61 @@
+{
+  "suite": "ironcalc_calc_tests__INFORMATION_SHEET_SHEETS_SHEET_SHEETS",
+  "description": "Derived from IronCalc fixture calc_tests/INFORMATION/SHEET_SHEETS.xlsx, sheet 'SHEET_SHEETS'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "SHEET_SHEETS",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel Online",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=_xlfn.SHEET()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=_xlfn.SHEETS()",
+      "setup": {},
+      "skipped": "=SHEETS(); Mac/IronCalc=4 (live 4-sheet workbook), Formulon=1 (single-sheet flatten). Same structural flatten as no_export_tables_Escape.E17."
+    },
+    {
+      "id": "B3",
+      "formula": "=_xlfn.SHEET(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=_xlfn.SHEET(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=_xlfn.SHEET(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

@@ -1,0 +1,567 @@
+{
+  "suite": "ironcalc_calc_tests__LOOKUP_AND_REFERENCE_ADDRESS_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/LOOKUP_AND_REFERENCE/ADDRESS.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "E2",
+      "formula": "=ADDRESS(2,3,1,1,\"Sheet2\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Sheet2!$C$2"
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=ADDRESS(1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "$A$1"
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=ADDRESS(3,5,4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "E3"
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=ADDRESS(A15,B15,C15)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$G$3"
+      }
+    },
+    {
+      "id": "G15",
+      "formula": "=ADDRESS(A15,B15,C15,0)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "R3C7"
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=ADDRESS(A16,B16,C16)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G16",
+      "formula": "=ADDRESS(A16,B16,C16,0)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=ADDRESS(A17,B17,C17)",
+      "setup": {
+        "C17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 56.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 45.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$BD$45"
+      }
+    },
+    {
+      "id": "G17",
+      "formula": "=ADDRESS(A17,B17,C17,0)",
+      "setup": {
+        "C17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 56.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 45.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "R45C56"
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=ADDRESS(A18,B18,C18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$AS$23"
+      }
+    },
+    {
+      "id": "G18",
+      "formula": "=ADDRESS(A18,B18,C18,0)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "R23C45"
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=ADDRESS(A19,B19,C19)",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "AS$23"
+      }
+    },
+    {
+      "id": "G19",
+      "formula": "=ADDRESS(A19,B19,C19,0)",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "R23C[45]"
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=ADDRESS(A20,B20,C20)",
+      "setup": {
+        "C20": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B20": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$AS23"
+      }
+    },
+    {
+      "id": "G20",
+      "formula": "=ADDRESS(A20,B20,C20,0)",
+      "setup": {
+        "C20": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B20": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "R[23]C45"
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=ADDRESS(A21,B21,C21)",
+      "setup": {
+        "C21": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B21": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "AS23"
+      }
+    },
+    {
+      "id": "G21",
+      "formula": "=ADDRESS(A21,B21,C21,0)",
+      "setup": {
+        "C21": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B21": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "R[23]C[45]"
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=ADDRESS(A22,B22,C22)",
+      "setup": {
+        "C22": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G22",
+      "formula": "=ADDRESS(A22,B22,C22,0)",
+      "setup": {
+        "C22": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=ADDRESS(A23,B23,C23)",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G23",
+      "formula": "=ADDRESS(A23,B23,C23,0)",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=ADDRESS(A24,B24,C24)",
+      "setup": {
+        "C24": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 34.7
+        },
+        "A24": {
+          "kind": "number",
+          "value": 23.4
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "AH$23"
+      }
+    },
+    {
+      "id": "G24",
+      "formula": "=ADDRESS(A24,B24,C24,0)",
+      "setup": {
+        "C24": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 34.7
+        },
+        "A24": {
+          "kind": "number",
+          "value": 23.4
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "R23C[34]"
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=ADDRESS(A25,B25,C25)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G25",
+      "formula": "=ADDRESS(A25,B25,C25,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E26",
+      "formula": "=ADDRESS(A26,B26,C26)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G26",
+      "formula": "=ADDRESS(A26,B26,C26,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E27",
+      "formula": "=ADDRESS(A27,B27,C27)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G27",
+      "formula": "=ADDRESS(A27,B27,C27,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=ADDRESS(1,1,1,1,\"A Wird One$\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'A Wird One$'!$A$1"
+      }
+    },
+    {
+      "id": "B38",
+      "formula": "=ADDRESS(2,3,1,1,\"Me lo invente\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'Me lo invente'!$C$2"
+      }
+    },
+    {
+      "id": "B40",
+      "formula": "=ADDRESS(2,3,5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

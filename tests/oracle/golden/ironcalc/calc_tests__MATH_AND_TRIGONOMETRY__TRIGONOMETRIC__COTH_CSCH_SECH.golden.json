@@ -1,0 +1,2454 @@
+{
+  "suite": "ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_TRIGONOMETRIC_COTH_CSCH_SECH",
+  "description": "Derived from IronCalc fixture calc_tests/MATH_AND_TRIGONOMETRY/TRIGONOMETRIC.xlsx, sheet 'COTH_CSCH_SECH'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "COTH_CSCH_SECH",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=_xlfn.COTH(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.3130352854993315
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=_xlfn.CSCH(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8509181282393216
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=_xlfn.SECH(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6480542736638855
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=_xlfn.COTH(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000908039820195
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=_xlfn.CSCH(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.013476505830589089
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.SECH(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.013475282221304556
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=_xlfn.COTH(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 2.8
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0074231773310796
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=_xlfn.CSCH(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 2.8
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.122071529128817
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.SECH(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 2.8
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.12117204753241388
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=_xlfn.COTH(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.3130352854993315
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=_xlfn.CSCH(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.8509181282393216
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.SECH(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6480542736638855
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=_xlfn.COTH(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0000000041223074
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=_xlfn.CSCH(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -9.079985971212217e-05
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.SECH(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.079985933781724e-05
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=_xlfn.COTH(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=_xlfn.CSCH(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.SECH(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=_xlfn.COTH(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000013615971957
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=_xlfn.CSCH(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0016502109699923588
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=_xlfn.SECH(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0016502087230727892
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=_xlfn.COTH(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0000013615971957
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=_xlfn.CSCH(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.0016502109699923588
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=_xlfn.SECH(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0016502087230727892
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=_xlfn.COTH(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 0.123
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.17104000770619
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=_xlfn.CSCH(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 0.123
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.109617426706096
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=_xlfn.SECH(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 0.123
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9924828931271701
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=_xlfn.COTH(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": -0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.163953413738653
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=_xlfn.CSCH(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": -0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.9190347513349437
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=_xlfn.SECH(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": -0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.886818883970074
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=_xlfn.COTH(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=_xlfn.CSCH(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.440151952041671e-44
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=_xlfn.SECH(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.440151952041671e-44
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=_xlfn.COTH(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=_xlfn.CSCH(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.440151952041671e-44
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=_xlfn.SECH(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.440151952041671e-44
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=_xlfn.COTH(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.3130352854269252
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=_xlfn.CSCH(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.850918128127593
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=_xlfn.SECH(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6480542736145299
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=_xlfn.COTH(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.3130352855717375
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=_xlfn.CSCH(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8509181283510501
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=_xlfn.SECH(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6480542737132408
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=_xlfn.COTH(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": -1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.3130352854269252
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=_xlfn.CSCH(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": -1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.850918128127593
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=_xlfn.SECH(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": -1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6480542736145299
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=_xlfn.COTH(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.3130352855717375
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=_xlfn.CSCH(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.8509181283510501
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=_xlfn.SECH(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6480542737132408
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=_xlfn.COTH(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1000000000000.0
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=_xlfn.CSCH(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1000000000000.0
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=_xlfn.SECH(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=_xlfn.COTH(A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1000000000000.0
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=_xlfn.CSCH(A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1000000000000.0
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=_xlfn.SECH(A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=_xlfn.COTH(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=_xlfn.CSCH(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=_xlfn.SECH(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=_xlfn.COTH(A21)",
+      "setup": {
+        "A21": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.3130352854993315
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=_xlfn.CSCH(A21)",
+      "setup": {
+        "A21": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8509181282393216
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=_xlfn.SECH(A21)",
+      "setup": {
+        "A21": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6480542736638855
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=_xlfn.COTH(A22)",
+      "setup": {
+        "A22": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=_xlfn.CSCH(A22)",
+      "setup": {
+        "A22": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=_xlfn.SECH(A22)",
+      "setup": {
+        "A22": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=_xlfn.COTH(A23)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=_xlfn.CSCH(A23)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=_xlfn.SECH(A23)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=_xlfn.COTH(A24)",
+      "setup": {
+        "A24": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=_xlfn.CSCH(A24)",
+      "setup": {
+        "A24": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=_xlfn.SECH(A24)",
+      "setup": {
+        "A24": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A25",
+      "formula": "=\"8\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "8"
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=_xlfn.COTH(A25)",
+      "setup": {
+        "A25": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000002250703748
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=_xlfn.CSCH(A25)",
+      "setup": {
+        "A25": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0006709253313077231
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=_xlfn.SECH(A25)",
+      "setup": {
+        "A25": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0006709251803023413
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=_xlfn.COTH(A26)",
+      "setup": {
+        "A26": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.037314720727548
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=_xlfn.CSCH(A26)",
+      "setup": {
+        "A26": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.2757205647717832
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=_xlfn.SECH(A26)",
+      "setup": {
+        "A26": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.2658022288340797
+      }
+    },
+    {
+      "id": "A27",
+      "formula": "=\" 10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 10 "
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=_xlfn.COTH(A27)",
+      "setup": {
+        "A27": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000041223074
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=_xlfn.CSCH(A27)",
+      "setup": {
+        "A27": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.079985971212217e-05
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=_xlfn.SECH(A27)",
+      "setup": {
+        "A27": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.079985933781724e-05
+      }
+    },
+    {
+      "id": "A28",
+      "formula": "=\"0\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=_xlfn.COTH(A28)",
+      "setup": {
+        "A28": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=_xlfn.CSCH(A28)",
+      "setup": {
+        "A28": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=_xlfn.SECH(A28)",
+      "setup": {
+        "A28": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=_xlfn.COTH(A29)",
+      "setup": {
+        "A29": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=_xlfn.CSCH(A29)",
+      "setup": {
+        "A29": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=_xlfn.SECH(A29)",
+      "setup": {
+        "A29": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A30",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=_xlfn.COTH(A30)",
+      "setup": {
+        "A30": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C30",
+      "formula": "=_xlfn.CSCH(A30)",
+      "setup": {
+        "A30": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D30",
+      "formula": "=_xlfn.SECH(A30)",
+      "setup": {
+        "A30": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A31",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B31",
+      "formula": "=_xlfn.COTH(A31)",
+      "setup": {
+        "A31": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C31",
+      "formula": "=_xlfn.CSCH(A31)",
+      "setup": {
+        "A31": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=_xlfn.SECH(A31)",
+      "setup": {
+        "A31": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=_xlfn.COTH(A32)",
+      "setup": {
+        "A32": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "C32",
+      "formula": "=_xlfn.CSCH(A32)",
+      "setup": {
+        "A32": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "D32",
+      "formula": "=_xlfn.SECH(A32)",
+      "setup": {
+        "A32": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "A33",
+      "formula": "=SQRT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=_xlfn.COTH(A33)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=_xlfn.CSCH(A33)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D33",
+      "formula": "=_xlfn.SECH(A33)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A34",
+      "formula": "=\"x\"+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=_xlfn.COTH(A34)",
+      "setup": {
+        "A34": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C34",
+      "formula": "=_xlfn.CSCH(A34)",
+      "setup": {
+        "A34": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D34",
+      "formula": "=_xlfn.SECH(A34)",
+      "setup": {
+        "A34": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A35",
+      "formula": "=2^20",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=_xlfn.COTH(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=2^20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C35",
+      "formula": "=_xlfn.CSCH(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=2^20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D35",
+      "formula": "=_xlfn.SECH(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=2^20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A36",
+      "formula": "=\"@\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "@"
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=_xlfn.COTH(A36)",
+      "setup": {
+        "A36": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C36",
+      "formula": "=_xlfn.CSCH(A36)",
+      "setup": {
+        "A36": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D36",
+      "formula": "=_xlfn.SECH(A36)",
+      "setup": {
+        "A36": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A37",
+      "formula": "=DATE(2024,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=_xlfn.COTH(A37)",
+      "setup": {
+        "A37": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C37",
+      "formula": "=_xlfn.CSCH(A37)",
+      "setup": {
+        "A37": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D37",
+      "formula": "=_xlfn.SECH(A37)",
+      "setup": {
+        "A37": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A38",
+      "formula": "=\"2024-01-10\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024-01-10"
+      }
+    },
+    {
+      "id": "B38",
+      "formula": "=_xlfn.COTH(A38)",
+      "setup": {
+        "A38": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C38",
+      "formula": "=_xlfn.CSCH(A38)",
+      "setup": {
+        "A38": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D38",
+      "formula": "=_xlfn.SECH(A38)",
+      "setup": {
+        "A38": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A39",
+      "formula": "=\" 2024-01-10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 2024-01-10 "
+      }
+    },
+    {
+      "id": "B39",
+      "formula": "=_xlfn.COTH(A39)",
+      "setup": {
+        "A39": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C39",
+      "formula": "=_xlfn.CSCH(A39)",
+      "setup": {
+        "A39": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D39",
+      "formula": "=_xlfn.SECH(A39)",
+      "setup": {
+        "A39": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A40",
+      "formula": "=TIME(14,30,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6041666666666666
+      }
+    },
+    {
+      "id": "B40",
+      "formula": "=_xlfn.COTH(A40)",
+      "setup": {
+        "A40": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.8518249747338074
+      }
+    },
+    {
+      "id": "C40",
+      "formula": "=_xlfn.CSCH(A40)",
+      "setup": {
+        "A40": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.558606986076948
+      }
+    },
+    {
+      "id": "D40",
+      "formula": "=_xlfn.SECH(A40)",
+      "setup": {
+        "A40": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8416599880347716
+      }
+    },
+    {
+      "id": "A42",
+      "formula": "=1.05*(0.0284+0.0046)-0.0284",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "B42",
+      "formula": "=_xlfn.COTH(A42)",
+      "setup": {
+        "A42": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 160.00208332790808
+      }
+    },
+    {
+      "id": "C42",
+      "formula": "=_xlfn.CSCH(A42)",
+      "setup": {
+        "A42": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 159.99895833808054
+      }
+    },
+    {
+      "id": "D42",
+      "formula": "=_xlfn.SECH(A42)",
+      "setup": {
+        "A42": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999804690678863
+      }
+    },
+    {
+      "id": "A43",
+      "formula": "=I44",
+      "setup": {
+        "I44": {
+          "kind": "number",
+          "value": 1.75
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.75
+      }
+    },
+    {
+      "id": "B43",
+      "formula": "=_xlfn.COTH(A43)",
+      "setup": {
+        "I44": {
+          "kind": "number",
+          "value": 1.75
+        },
+        "A43": {
+          "kind": "formula",
+          "formula": "=I44"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0622753185155998
+      }
+    },
+    {
+      "id": "C43",
+      "formula": "=_xlfn.CSCH(A43)",
+      "setup": {
+        "I44": {
+          "kind": "number",
+          "value": 1.75
+        },
+        "A43": {
+          "kind": "formula",
+          "formula": "=I44"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.35836971457897854
+      }
+    },
+    {
+      "id": "D43",
+      "formula": "=_xlfn.SECH(A43)",
+      "setup": {
+        "I44": {
+          "kind": "number",
+          "value": 1.75
+        },
+        "A43": {
+          "kind": "formula",
+          "formula": "=I44"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.33736048304290506
+      }
+    },
+    {
+      "id": "B44",
+      "formula": "=_xlfn.COTH(A44)",
+      "setup": {
+        "A44": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C44",
+      "formula": "=_xlfn.CSCH(A44)",
+      "setup": {
+        "A44": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D44",
+      "formula": "=_xlfn.SECH(A44)",
+      "setup": {
+        "A44": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A45",
+      "formula": "=PI() - 0.000000000001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653588793
+      }
+    },
+    {
+      "id": "B45",
+      "formula": "=_xlfn.COTH(A45)",
+      "setup": {
+        "A45": {
+          "kind": "formula",
+          "formula": "=PI() - 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0037418731973289
+      }
+    },
+    {
+      "id": "C45",
+      "formula": "=_xlfn.CSCH(A45)",
+      "setup": {
+        "A45": {
+          "kind": "formula",
+          "formula": "=PI() - 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.08658953753013388
+      }
+    },
+    {
+      "id": "D45",
+      "formula": "=_xlfn.SECH(A45)",
+      "setup": {
+        "A45": {
+          "kind": "formula",
+          "formula": "=PI() - 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.08626673833414036
+      }
+    },
+    {
+      "id": "A46",
+      "formula": "=PI()/2 - 0.000000000001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267938965
+      }
+    },
+    {
+      "id": "B46",
+      "formula": "=_xlfn.COTH(A46)",
+      "setup": {
+        "A46": {
+          "kind": "formula",
+          "formula": "=PI()/2 - 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.090331410727557
+      }
+    },
+    {
+      "id": "C46",
+      "formula": "=_xlfn.CSCH(A46)",
+      "setup": {
+        "A46": {
+          "kind": "formula",
+          "formula": "=PI()/2 - 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.43453720809516966
+      }
+    },
+    {
+      "id": "D46",
+      "formula": "=_xlfn.SECH(A46)",
+      "setup": {
+        "A46": {
+          "kind": "formula",
+          "formula": "=PI()/2 - 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3985368153387523
+      }
+    },
+    {
+      "id": "A47",
+      "formula": "=PI()/2 + 0.000000000001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267958966
+      }
+    },
+    {
+      "id": "B47",
+      "formula": "=_xlfn.COTH(A47)",
+      "setup": {
+        "A47": {
+          "kind": "formula",
+          "formula": "=PI()/2 + 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0903314107271795
+      }
+    },
+    {
+      "id": "C47",
+      "formula": "=_xlfn.CSCH(A47)",
+      "setup": {
+        "A47": {
+          "kind": "formula",
+          "formula": "=PI()/2 + 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.43453720809422197
+      }
+    },
+    {
+      "id": "D47",
+      "formula": "=_xlfn.SECH(A47)",
+      "setup": {
+        "A47": {
+          "kind": "formula",
+          "formula": "=PI()/2 + 0.000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3985368153380211
+      }
+    },
+    {
+      "id": "A48",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "B48",
+      "formula": "=_xlfn.COTH(A48)",
+      "setup": {
+        "A48": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.003741873197321
+      }
+    },
+    {
+      "id": "C48",
+      "formula": "=_xlfn.CSCH(A48)",
+      "setup": {
+        "A48": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.08658953753004694
+      }
+    },
+    {
+      "id": "D48",
+      "formula": "=_xlfn.SECH(A48)",
+      "setup": {
+        "A48": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.08626673833405443
+      }
+    },
+    {
+      "id": "A49",
+      "formula": "=PI()/2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "B49",
+      "formula": "=_xlfn.COTH(A49)",
+      "setup": {
+        "A49": {
+          "kind": "formula",
+          "formula": "=PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0903314107273683
+      }
+    },
+    {
+      "id": "C49",
+      "formula": "=_xlfn.CSCH(A49)",
+      "setup": {
+        "A49": {
+          "kind": "formula",
+          "formula": "=PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4345372080946958
+      }
+    },
+    {
+      "id": "D49",
+      "formula": "=_xlfn.SECH(A49)",
+      "setup": {
+        "A49": {
+          "kind": "formula",
+          "formula": "=PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3985368153383867
+      }
+    },
+    {
+      "id": "A50",
+      "formula": "=2*PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.283185307179586
+      }
+    },
+    {
+      "id": "B50",
+      "formula": "=_xlfn.COTH(A50)",
+      "setup": {
+        "A50": {
+          "kind": "formula",
+          "formula": "=2*PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000069747090357
+      }
+    },
+    {
+      "id": "C50",
+      "formula": "=_xlfn.CSCH(A50)",
+      "setup": {
+        "A50": {
+          "kind": "formula",
+          "formula": "=2*PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.003734898488285673
+      }
+    },
+    {
+      "id": "D50",
+      "formula": "=_xlfn.SECH(A50)",
+      "setup": {
+        "A50": {
+          "kind": "formula",
+          "formula": "=2*PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.003734872438637128
+      }
+    },
+    {
+      "id": "A51",
+      "formula": "=PI()/4",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7853981633974483
+      }
+    },
+    {
+      "id": "B51",
+      "formula": "=_xlfn.COTH(A51)",
+      "setup": {
+        "A51": {
+          "kind": "formula",
+          "formula": "=PI()/4"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5248686188220641
+      }
+    },
+    {
+      "id": "C51",
+      "formula": "=_xlfn.CSCH(A51)",
+      "setup": {
+        "A51": {
+          "kind": "formula",
+          "formula": "=PI()/4"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.1511838709208486
+      }
+    },
+    {
+      "id": "D51",
+      "formula": "=_xlfn.SECH(A51)",
+      "setup": {
+        "A51": {
+          "kind": "formula",
+          "formula": "=PI()/4"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7549397087141313
+      }
+    },
+    {
+      "id": "A52",
+      "formula": "=PI()/6",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5235987755982988
+      }
+    },
+    {
+      "id": "B52",
+      "formula": "=_xlfn.COTH(A52)",
+      "setup": {
+        "A52": {
+          "kind": "formula",
+          "formula": "=PI()/6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0812833639336374
+      }
+    },
+    {
+      "id": "C52",
+      "formula": "=_xlfn.CSCH(A52)",
+      "setup": {
+        "A52": {
+          "kind": "formula",
+          "formula": "=PI()/6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.8253055746879534
+      }
+    },
+    {
+      "id": "D52",
+      "formula": "=_xlfn.SECH(A52)",
+      "setup": {
+        "A52": {
+          "kind": "formula",
+          "formula": "=PI()/6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8770096404547794
+      }
+    },
+    {
+      "id": "B53",
+      "formula": "=_xlfn.COTH(A53)",
+      "setup": {
+        "A53": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000041223074
+      }
+    },
+    {
+      "id": "C53",
+      "formula": "=_xlfn.CSCH(A53)",
+      "setup": {
+        "A53": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.079985971212217e-05
+      }
+    },
+    {
+      "id": "D53",
+      "formula": "=_xlfn.SECH(A53)",
+      "setup": {
+        "A53": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.079985933781724e-05
+      }
+    },
+    {
+      "id": "B54",
+      "formula": "=_xlfn.COTH(A54)",
+      "setup": {
+        "A54": {
+          "kind": "number",
+          "value": 0.88
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.4155898219738354
+      }
+    },
+    {
+      "id": "C54",
+      "formula": "=_xlfn.CSCH(A54)",
+      "setup": {
+        "A54": {
+          "kind": "number",
+          "value": 0.88
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0019453797867004
+      }
+    },
+    {
+      "id": "D54",
+      "formula": "=_xlfn.SECH(A54)",
+      "setup": {
+        "A54": {
+          "kind": "number",
+          "value": 0.88
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7077935742640705
+      }
+    },
+    {
+      "id": "B55",
+      "formula": "=_xlfn.COTH(A55)",
+      "setup": {
+        "A55": {
+          "kind": "number",
+          "value": 0.4406868
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.4142135310355
+      }
+    },
+    {
+      "id": "C55",
+      "formula": "=_xlfn.CSCH(A55)",
+      "setup": {
+        "A55": {
+          "kind": "number",
+          "value": 0.4406868
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.197368192505502
+      }
+    },
+    {
+      "id": "D55",
+      "formula": "=_xlfn.SECH(A55)",
+      "setup": {
+        "A55": {
+          "kind": "number",
+          "value": 0.4406868
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9101797186775815
+      }
+    }
+  ]
+}

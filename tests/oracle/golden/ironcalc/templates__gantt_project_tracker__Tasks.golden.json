@@ -1,0 +1,5018 @@
+{
+  "suite": "ironcalc_templates_gantt_project_tracker_Tasks",
+  "description": "Derived from IronCalc fixture templates/gantt_project_tracker.xlsx, sheet 'Tasks'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Tasks",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "E4",
+      "formula": "=TODAY()",
+      "setup": {},
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =TODAY()"
+    },
+    {
+      "id": "G4",
+      "formula": "=E4+F4",
+      "setup": {
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E4+F4"
+    },
+    {
+      "id": "E5",
+      "formula": "=G4",
+      "setup": {
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G4"
+    },
+    {
+      "id": "G5",
+      "formula": "=E5+F5",
+      "setup": {
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E5+F5"
+    },
+    {
+      "id": "E6",
+      "formula": "=G5",
+      "setup": {
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G5"
+    },
+    {
+      "id": "G6",
+      "formula": "=E6+F6",
+      "setup": {
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E6+F6"
+    },
+    {
+      "id": "E7",
+      "formula": "=G6",
+      "setup": {
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G6"
+    },
+    {
+      "id": "G7",
+      "formula": "=E7+F7",
+      "setup": {
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E7+F7"
+    },
+    {
+      "id": "E8",
+      "formula": "=G7",
+      "setup": {
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G7"
+    },
+    {
+      "id": "G8",
+      "formula": "=E8+F8",
+      "setup": {
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E8+F8"
+    },
+    {
+      "id": "E9",
+      "formula": "=G8",
+      "setup": {
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G8"
+    },
+    {
+      "id": "G9",
+      "formula": "=E9+F9",
+      "setup": {
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E9+F9"
+    },
+    {
+      "id": "E10",
+      "formula": "=G9",
+      "setup": {
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G9"
+    },
+    {
+      "id": "G10",
+      "formula": "=E10+F10",
+      "setup": {
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E10+F10"
+    },
+    {
+      "id": "E11",
+      "formula": "=G10",
+      "setup": {
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G10"
+    },
+    {
+      "id": "G11",
+      "formula": "=E11+F11",
+      "setup": {
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E11+F11"
+    },
+    {
+      "id": "E12",
+      "formula": "=G11",
+      "setup": {
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G11"
+    },
+    {
+      "id": "G12",
+      "formula": "=E12+F12",
+      "setup": {
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E12+F12"
+    },
+    {
+      "id": "E13",
+      "formula": "=G12",
+      "setup": {
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G12"
+    },
+    {
+      "id": "G13",
+      "formula": "=E13+F13",
+      "setup": {
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E13+F13"
+    },
+    {
+      "id": "E14",
+      "formula": "=G13",
+      "setup": {
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G13"
+    },
+    {
+      "id": "G14",
+      "formula": "=E14+F14",
+      "setup": {
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E14+F14"
+    },
+    {
+      "id": "E15",
+      "formula": "=G14",
+      "setup": {
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G14"
+    },
+    {
+      "id": "G15",
+      "formula": "=E15+F15",
+      "setup": {
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E15+F15"
+    },
+    {
+      "id": "E16",
+      "formula": "=G15",
+      "setup": {
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G15"
+    },
+    {
+      "id": "G16",
+      "formula": "=E16+F16",
+      "setup": {
+        "F16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=G15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E16+F16"
+    },
+    {
+      "id": "E17",
+      "formula": "=G16",
+      "setup": {
+        "F16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=E16+F16"
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=G15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G16"
+    },
+    {
+      "id": "G17",
+      "formula": "=E17+F17",
+      "setup": {
+        "F17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E17": {
+          "kind": "formula",
+          "formula": "=G16"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=E16+F16"
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=G15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E17+F17"
+    },
+    {
+      "id": "E18",
+      "formula": "=G17",
+      "setup": {
+        "F17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=E17+F17"
+        },
+        "E17": {
+          "kind": "formula",
+          "formula": "=G16"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=E16+F16"
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=G15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G17"
+    },
+    {
+      "id": "G18",
+      "formula": "=E18+F18",
+      "setup": {
+        "F18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E18": {
+          "kind": "formula",
+          "formula": "=G17"
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=E17+F17"
+        },
+        "E17": {
+          "kind": "formula",
+          "formula": "=G16"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=E16+F16"
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=G15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E18+F18"
+    },
+    {
+      "id": "E19",
+      "formula": "=G18",
+      "setup": {
+        "F18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=E18+F18"
+        },
+        "E18": {
+          "kind": "formula",
+          "formula": "=G17"
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=E17+F17"
+        },
+        "E17": {
+          "kind": "formula",
+          "formula": "=G16"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=E16+F16"
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=G15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G18"
+    },
+    {
+      "id": "G19",
+      "formula": "=E19+F19",
+      "setup": {
+        "F19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E19": {
+          "kind": "formula",
+          "formula": "=G18"
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=E18+F18"
+        },
+        "E18": {
+          "kind": "formula",
+          "formula": "=G17"
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=E17+F17"
+        },
+        "E17": {
+          "kind": "formula",
+          "formula": "=G16"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=E16+F16"
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=G15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E19+F19"
+    },
+    {
+      "id": "E20",
+      "formula": "=G19",
+      "setup": {
+        "F19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G19": {
+          "kind": "formula",
+          "formula": "=E19+F19"
+        },
+        "E19": {
+          "kind": "formula",
+          "formula": "=G18"
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=E18+F18"
+        },
+        "E18": {
+          "kind": "formula",
+          "formula": "=G17"
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=E17+F17"
+        },
+        "E17": {
+          "kind": "formula",
+          "formula": "=G16"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=E16+F16"
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=G15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G19"
+    },
+    {
+      "id": "G20",
+      "formula": "=E20+F20",
+      "setup": {
+        "F20": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E20": {
+          "kind": "formula",
+          "formula": "=G19"
+        },
+        "G19": {
+          "kind": "formula",
+          "formula": "=E19+F19"
+        },
+        "E19": {
+          "kind": "formula",
+          "formula": "=G18"
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=E18+F18"
+        },
+        "E18": {
+          "kind": "formula",
+          "formula": "=G17"
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=E17+F17"
+        },
+        "E17": {
+          "kind": "formula",
+          "formula": "=G16"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=E16+F16"
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=G15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E20+F20"
+    },
+    {
+      "id": "E21",
+      "formula": "=G20",
+      "setup": {
+        "F20": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G20": {
+          "kind": "formula",
+          "formula": "=E20+F20"
+        },
+        "E20": {
+          "kind": "formula",
+          "formula": "=G19"
+        },
+        "G19": {
+          "kind": "formula",
+          "formula": "=E19+F19"
+        },
+        "E19": {
+          "kind": "formula",
+          "formula": "=G18"
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=E18+F18"
+        },
+        "E18": {
+          "kind": "formula",
+          "formula": "=G17"
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=E17+F17"
+        },
+        "E17": {
+          "kind": "formula",
+          "formula": "=G16"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=E16+F16"
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=G15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G20"
+    },
+    {
+      "id": "G21",
+      "formula": "=E21+F21",
+      "setup": {
+        "F21": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F20": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E21": {
+          "kind": "formula",
+          "formula": "=G20"
+        },
+        "G20": {
+          "kind": "formula",
+          "formula": "=E20+F20"
+        },
+        "E20": {
+          "kind": "formula",
+          "formula": "=G19"
+        },
+        "G19": {
+          "kind": "formula",
+          "formula": "=E19+F19"
+        },
+        "E19": {
+          "kind": "formula",
+          "formula": "=G18"
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=E18+F18"
+        },
+        "E18": {
+          "kind": "formula",
+          "formula": "=G17"
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=E17+F17"
+        },
+        "E17": {
+          "kind": "formula",
+          "formula": "=G16"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=E16+F16"
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=G15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E21+F21"
+    },
+    {
+      "id": "E22",
+      "formula": "=G21",
+      "setup": {
+        "F21": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F20": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G21": {
+          "kind": "formula",
+          "formula": "=E21+F21"
+        },
+        "E21": {
+          "kind": "formula",
+          "formula": "=G20"
+        },
+        "G20": {
+          "kind": "formula",
+          "formula": "=E20+F20"
+        },
+        "E20": {
+          "kind": "formula",
+          "formula": "=G19"
+        },
+        "G19": {
+          "kind": "formula",
+          "formula": "=E19+F19"
+        },
+        "E19": {
+          "kind": "formula",
+          "formula": "=G18"
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=E18+F18"
+        },
+        "E18": {
+          "kind": "formula",
+          "formula": "=G17"
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=E17+F17"
+        },
+        "E17": {
+          "kind": "formula",
+          "formula": "=G16"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=E16+F16"
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=G15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G21"
+    },
+    {
+      "id": "G22",
+      "formula": "=E22+F22",
+      "setup": {
+        "F22": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F21": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F20": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E22": {
+          "kind": "formula",
+          "formula": "=G21"
+        },
+        "G21": {
+          "kind": "formula",
+          "formula": "=E21+F21"
+        },
+        "E21": {
+          "kind": "formula",
+          "formula": "=G20"
+        },
+        "G20": {
+          "kind": "formula",
+          "formula": "=E20+F20"
+        },
+        "E20": {
+          "kind": "formula",
+          "formula": "=G19"
+        },
+        "G19": {
+          "kind": "formula",
+          "formula": "=E19+F19"
+        },
+        "E19": {
+          "kind": "formula",
+          "formula": "=G18"
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=E18+F18"
+        },
+        "E18": {
+          "kind": "formula",
+          "formula": "=G17"
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=E17+F17"
+        },
+        "E17": {
+          "kind": "formula",
+          "formula": "=G16"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=E16+F16"
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=G15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E22+F22"
+    },
+    {
+      "id": "E23",
+      "formula": "=G22",
+      "setup": {
+        "F22": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F21": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F20": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G22": {
+          "kind": "formula",
+          "formula": "=E22+F22"
+        },
+        "E22": {
+          "kind": "formula",
+          "formula": "=G21"
+        },
+        "G21": {
+          "kind": "formula",
+          "formula": "=E21+F21"
+        },
+        "E21": {
+          "kind": "formula",
+          "formula": "=G20"
+        },
+        "G20": {
+          "kind": "formula",
+          "formula": "=E20+F20"
+        },
+        "E20": {
+          "kind": "formula",
+          "formula": "=G19"
+        },
+        "G19": {
+          "kind": "formula",
+          "formula": "=E19+F19"
+        },
+        "E19": {
+          "kind": "formula",
+          "formula": "=G18"
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=E18+F18"
+        },
+        "E18": {
+          "kind": "formula",
+          "formula": "=G17"
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=E17+F17"
+        },
+        "E17": {
+          "kind": "formula",
+          "formula": "=G16"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=E16+F16"
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=G15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =G22"
+    },
+    {
+      "id": "G23",
+      "formula": "=E23+F23",
+      "setup": {
+        "F23": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F22": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F21": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F20": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E23": {
+          "kind": "formula",
+          "formula": "=G22"
+        },
+        "G22": {
+          "kind": "formula",
+          "formula": "=E22+F22"
+        },
+        "E22": {
+          "kind": "formula",
+          "formula": "=G21"
+        },
+        "G21": {
+          "kind": "formula",
+          "formula": "=E21+F21"
+        },
+        "E21": {
+          "kind": "formula",
+          "formula": "=G20"
+        },
+        "G20": {
+          "kind": "formula",
+          "formula": "=E20+F20"
+        },
+        "E20": {
+          "kind": "formula",
+          "formula": "=G19"
+        },
+        "G19": {
+          "kind": "formula",
+          "formula": "=E19+F19"
+        },
+        "E19": {
+          "kind": "formula",
+          "formula": "=G18"
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=E18+F18"
+        },
+        "E18": {
+          "kind": "formula",
+          "formula": "=G17"
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=E17+F17"
+        },
+        "E17": {
+          "kind": "formula",
+          "formula": "=G16"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=E16+F16"
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=G15"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=E15+F15"
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=G14"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=E14+F14"
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=G13"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=E13+F13"
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=G12"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=E12+F12"
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=G11"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=E11+F11"
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=G10"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=E10+F10"
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=G9"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=E9+F9"
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=G8"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=E8+F8"
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=G7"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=E7+F7"
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=G6"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=E6+F6"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=G5"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=E5+F5"
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=G4"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=E4+F4"
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=TODAY()"
+        }
+      },
+      "skipped": "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =E23+F23"
+    }
+  ]
+}

@@ -1,0 +1,746 @@
+{
+  "suite": "ironcalc_calc_tests__INFORMATION_ISREF_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/INFORMATION/ISREF.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "A1",
+      "formula": "=ISREF(K1)",
+      "setup": {
+        "K1": {
+          "kind": "text",
+          "value": "text"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "A2",
+      "formula": "=ISREF(K1:K2)",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "K1": {
+          "kind": "text",
+          "value": "text"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=MAX(_xlfn._xlws.FILTER(L1:L2, M1:M2, \"\"))",
+      "setup": {
+        "M2": {
+          "kind": "bool",
+          "value": false
+        },
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "L2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "L1": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=ISREF(OFFSET(K1, 1, 0))",
+      "setup": {
+        "E20": {
+          "kind": "text",
+          "value": "isref of a successful filter"
+        },
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "E1": {
+          "kind": "text",
+          "value": "empty text fallback"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "lambda parameter, range"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "name for a constant"
+        },
+        "E6": {
+          "kind": "text",
+          "value": "error fallback"
+        },
+        "D12": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "E2": {
+          "kind": "text",
+          "value": "max of empty text fallback"
+        },
+        "B16": {
+          "kind": "text",
+          "value": "name for a lambda"
+        },
+        "B24": {
+          "kind": "text",
+          "value": "let variable, range"
+        },
+        "E14": {
+          "kind": "text",
+          "value": "sum of range fallback"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "error"
+        },
+        "D6": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E11": {
+          "kind": "text",
+          "value": "range fallback"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B26": {
+          "kind": "text",
+          "value": "let variable, name"
+        },
+        "A19": {
+          "kind": "bool",
+          "value": true
+        },
+        "B4": {
+          "kind": "text",
+          "value": "offset"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "range"
+        },
+        "K2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E5": {
+          "kind": "text",
+          "value": "zero fallback"
+        },
+        "K17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B22": {
+          "kind": "text",
+          "value": "lambda parameter, expression"
+        },
+        "D11": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E7": {
+          "kind": "text",
+          "value": "no fallback"
+        },
+        "B15": {
+          "kind": "text",
+          "value": "name for a range"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "number fallback"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "indirect"
+        },
+        "B11": {
+          "kind": "text",
+          "value": "array constant"
+        },
+        "E16": {
+          "kind": "text",
+          "value": "row of range fallback"
+        },
+        "B21": {
+          "kind": "text",
+          "value": "lambda parameter, number"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "whole column"
+        },
+        "L17": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D14": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D20": {
+          "kind": "bool",
+          "value": false
+        },
+        "D17": {
+          "kind": "bool",
+          "value": false
+        },
+        "D18": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E18": {
+          "kind": "text",
+          "value": "single cell fallback plus one"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "text"
+        },
+        "B14": {
+          "kind": "text",
+          "value": "name for a cell"
+        },
+        "E15": {
+          "kind": "text",
+          "value": "offset over range fallback"
+        },
+        "D9": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "E19": {
+          "kind": "text",
+          "value": "offset over a successful filter"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "text that looks like a reference"
+        },
+        "L1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E4": {
+          "kind": "text",
+          "value": "number fallback plus one"
+        },
+        "B13": {
+          "kind": "text",
+          "value": "sum of a range"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "index"
+        },
+        "D7": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A20": {
+          "kind": "bool",
+          "value": true
+        },
+        "A22": {
+          "kind": "bool",
+          "value": false
+        },
+        "B1": {
+          "kind": "text",
+          "value": "cell"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "unknown name"
+        },
+        "B9": {
+          "kind": "text",
+          "value": "boolean"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "number"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "lambda parameter, cell"
+        },
+        "M2": {
+          "kind": "bool",
+          "value": false
+        },
+        "B23": {
+          "kind": "text",
+          "value": "let variable, cell"
+        },
+        "B25": {
+          "kind": "text",
+          "value": "let variable, text"
+        },
+        "E9": {
+          "kind": "text",
+          "value": "array fallback"
+        },
+        "E17": {
+          "kind": "text",
+          "value": "isref of range fallback"
+        },
+        "A21": {
+          "kind": "bool",
+          "value": false
+        },
+        "B10": {
+          "kind": "text",
+          "value": "arithmetic on a cell"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=ISREF(INDIRECT(\"K1\"))",
+      "setup": {
+        "E20": {
+          "kind": "text",
+          "value": "isref of a successful filter"
+        },
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "E1": {
+          "kind": "text",
+          "value": "empty text fallback"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "lambda parameter, range"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "name for a constant"
+        },
+        "E6": {
+          "kind": "text",
+          "value": "error fallback"
+        },
+        "D12": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "E2": {
+          "kind": "text",
+          "value": "max of empty text fallback"
+        },
+        "B16": {
+          "kind": "text",
+          "value": "name for a lambda"
+        },
+        "B24": {
+          "kind": "text",
+          "value": "let variable, range"
+        },
+        "E14": {
+          "kind": "text",
+          "value": "sum of range fallback"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "error"
+        },
+        "D6": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E11": {
+          "kind": "text",
+          "value": "range fallback"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B26": {
+          "kind": "text",
+          "value": "let variable, name"
+        },
+        "A19": {
+          "kind": "bool",
+          "value": true
+        },
+        "B4": {
+          "kind": "text",
+          "value": "offset"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "range"
+        },
+        "K2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E5": {
+          "kind": "text",
+          "value": "zero fallback"
+        },
+        "K17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B22": {
+          "kind": "text",
+          "value": "lambda parameter, expression"
+        },
+        "D11": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E7": {
+          "kind": "text",
+          "value": "no fallback"
+        },
+        "B15": {
+          "kind": "text",
+          "value": "name for a range"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "number fallback"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "indirect"
+        },
+        "B11": {
+          "kind": "text",
+          "value": "array constant"
+        },
+        "E16": {
+          "kind": "text",
+          "value": "row of range fallback"
+        },
+        "B21": {
+          "kind": "text",
+          "value": "lambda parameter, number"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "whole column"
+        },
+        "L17": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D14": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D20": {
+          "kind": "bool",
+          "value": false
+        },
+        "D17": {
+          "kind": "bool",
+          "value": false
+        },
+        "D18": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E18": {
+          "kind": "text",
+          "value": "single cell fallback plus one"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "text"
+        },
+        "B14": {
+          "kind": "text",
+          "value": "name for a cell"
+        },
+        "E15": {
+          "kind": "text",
+          "value": "offset over range fallback"
+        },
+        "D9": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "E19": {
+          "kind": "text",
+          "value": "offset over a successful filter"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "text that looks like a reference"
+        },
+        "L1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E4": {
+          "kind": "text",
+          "value": "number fallback plus one"
+        },
+        "B13": {
+          "kind": "text",
+          "value": "sum of a range"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "index"
+        },
+        "D7": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A20": {
+          "kind": "bool",
+          "value": true
+        },
+        "A22": {
+          "kind": "bool",
+          "value": false
+        },
+        "B1": {
+          "kind": "text",
+          "value": "cell"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "unknown name"
+        },
+        "B9": {
+          "kind": "text",
+          "value": "boolean"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "number"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "lambda parameter, cell"
+        },
+        "M2": {
+          "kind": "bool",
+          "value": false
+        },
+        "B23": {
+          "kind": "text",
+          "value": "let variable, cell"
+        },
+        "B25": {
+          "kind": "text",
+          "value": "let variable, text"
+        },
+        "E9": {
+          "kind": "text",
+          "value": "array fallback"
+        },
+        "E17": {
+          "kind": "text",
+          "value": "isref of range fallback"
+        },
+        "A21": {
+          "kind": "bool",
+          "value": false
+        },
+        "B10": {
+          "kind": "text",
+          "value": "arithmetic on a cell"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=MAX(_xlfn._xlws.FILTER(L1:L2, M1:M2, 0))",
+      "setup": {
+        "M2": {
+          "kind": "bool",
+          "value": false
+        },
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "L2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "L1": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=ISREF(INDEX(K1:K2, 1))",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "K1": {
+          "kind": "text",
+          "value": "text"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=ISREF(5)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=ISREF(\"K1\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "A9",
+      "formula": "=ISREF(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=ISREF(K1+1)",
+      "setup": {
+        "K1": {
+          "kind": "text",
+          "value": "text"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=ISREF({1,2})",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=ISREF(NA())",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=ISREF(SUM(K1:K2))",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "K1": {
+          "kind": "text",
+          "value": "text"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    }
+  ]
+}

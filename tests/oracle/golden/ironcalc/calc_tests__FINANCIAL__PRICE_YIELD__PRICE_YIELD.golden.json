@@ -1,0 +1,1489 @@
+{
+  "suite": "ironcalc_calc_tests__FINANCIAL_PRICE_YIELD_PRICE_YIELD",
+  "description": "Derived from IronCalc fixture calc_tests/FINANCIAL/PRICE_YIELD.xlsx, sheet 'PRICE_YIELD'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "PRICE_YIELD",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "A2",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=PRICE(A2,B2,C2,D2,E2,F2,G2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 130.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "C2": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 108.22689722310892
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=YIELD(A2,B2,C2,H2,E2,F2,G2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 130.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "C2": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "H2": {
+          "kind": "formula",
+          "formula": "=PRICE(A2,B2,C2,D2,E2,F2,G2)"
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0700000000000001
+      }
+    },
+    {
+      "id": "A3",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=PRICE(A3,B3,C3,D3,E3,F3,G3)",
+      "setup": {
+        "G3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 0.065
+        },
+        "C3": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43.93504164661344
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=YIELD(A3,B3,C3,H3,E3,F3,G3)",
+      "setup": {
+        "G3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 0.065
+        },
+        "C3": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "H3": {
+          "kind": "formula",
+          "formula": "=PRICE(A3,B3,C3,D3,E3,F3,G3)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06499999999999766
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=PRICE(A4,B4,C4,D4,E4,F4,G4)",
+      "setup": {
+        "G4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 155.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "C4": {
+          "kind": "number",
+          "value": 0.04
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 126.04349401555694
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=YIELD(A4,B4,C4,H4,E4,F4,G4)",
+      "setup": {
+        "G4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 155.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "C4": {
+          "kind": "number",
+          "value": 0.04
+        },
+        "H4": {
+          "kind": "formula",
+          "formula": "=PRICE(A4,B4,C4,D4,E4,F4,G4)"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04999999999976775
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=PRICE(A5,B5,C5,D5,E5,F5,G5)",
+      "setup": {
+        "G5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "C5": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 53.83352296469412
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=YIELD(A5,B5,C5,H5,E5,F5,G5)",
+      "setup": {
+        "G5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "C5": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "H5": {
+          "kind": "formula",
+          "formula": "=PRICE(A5,B5,C5,D5,E5,F5,G5)"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06999999999999999
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=DATE(2040,3,15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 51210.0
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=PRICE(A6,B6,C6,D6,E6,F6,G6)",
+      "setup": {
+        "G6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E6": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 0.07876
+        },
+        "C6": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2040,3,15)"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 278.38557902933076
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=YIELD(A6,B6,C6,H6,E6,F6,G6)",
+      "setup": {
+        "G6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E6": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 0.07876
+        },
+        "C6": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "H6": {
+          "kind": "formula",
+          "formula": "=PRICE(A6,B6,C6,D6,E6,F6,G6)"
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2040,3,15)"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0787599999999326
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=PRICE(A8,B8,C8,D8,E8,F8,G8)",
+      "setup": {
+        "G8": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E8": {
+          "kind": "number",
+          "value": 130.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "C8": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 107.9707748819741
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=YIELD(A8,B8,C8,H8,E8,F8,G8)",
+      "setup": {
+        "G8": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E8": {
+          "kind": "number",
+          "value": 130.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "C8": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "H8": {
+          "kind": "formula",
+          "formula": "=PRICE(A8,B8,C8,D8,E8,F8,G8)"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06999999999999963
+      }
+    },
+    {
+      "id": "A9",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=PRICE(A9,B9,C9,D9,E9,F9,G9)",
+      "setup": {
+        "G9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E9": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 0.065
+        },
+        "C9": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44.26043412070515
+      }
+    },
+    {
+      "id": "I9",
+      "formula": "=YIELD(A9,B9,C9,H9,E9,F9,G9)",
+      "setup": {
+        "G9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E9": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 0.065
+        },
+        "C9": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "H9": {
+          "kind": "formula",
+          "formula": "=PRICE(A9,B9,C9,D9,E9,F9,G9)"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06499999999999924
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=PRICE(A10,B10,C10,D10,E10,F10,G10)",
+      "setup": {
+        "G10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E10": {
+          "kind": "number",
+          "value": 155.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "C10": {
+          "kind": "number",
+          "value": 0.04
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 125.77032071441235
+      }
+    },
+    {
+      "id": "I10",
+      "formula": "=YIELD(A10,B10,C10,H10,E10,F10,G10)",
+      "setup": {
+        "G10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E10": {
+          "kind": "number",
+          "value": 155.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "C10": {
+          "kind": "number",
+          "value": 0.04
+        },
+        "H10": {
+          "kind": "formula",
+          "formula": "=PRICE(A10,B10,C10,D10,E10,F10,G10)"
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04999999999986504
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=DATE(2030,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47543.0
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=PRICE(A11,B11,C11,D11,E11,F11,G11)",
+      "setup": {
+        "G11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E11": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D11": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "C11": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 54.196225247785335
+      }
+    },
+    {
+      "id": "I11",
+      "formula": "=YIELD(A11,B11,C11,H11,E11,F11,G11)",
+      "setup": {
+        "G11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E11": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D11": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "C11": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "H11": {
+          "kind": "formula",
+          "formula": "=PRICE(A11,B11,C11,D11,E11,F11,G11)"
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,1)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06999999999999966
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=DATE(2040,3,15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 51210.0
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=PRICE(A12,B12,C12,D12,E12,F12,G12)",
+      "setup": {
+        "G12": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E12": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 0.07876
+        },
+        "C12": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2040,3,15)"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 272.65197825055986
+      }
+    },
+    {
+      "id": "I12",
+      "formula": "=YIELD(A12,B12,C12,H12,E12,F12,G12)",
+      "setup": {
+        "G12": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E12": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 0.07876
+        },
+        "C12": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "H12": {
+          "kind": "formula",
+          "formula": "=PRICE(A12,B12,C12,D12,E12,F12,G12)"
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2040,3,15)"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.07875999999996885
+      }
+    },
+    {
+      "id": "A27",
+      "formula": "=DATE(2020, 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43891.0
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=DATE(2030,3,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47552.0
+      }
+    },
+    {
+      "id": "H27",
+      "formula": "=PRICE(A27,B27,C27,D27,E27,F27,G27)",
+      "setup": {
+        "G27": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F27": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E27": {
+          "kind": "number",
+          "value": 130.0
+        },
+        "D27": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "C27": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "B27": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,10)"
+        },
+        "A27": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 108.1838495987657
+      }
+    },
+    {
+      "id": "I27",
+      "formula": "=YIELD(A27,B27,C27,H27,E27,F27,G27)",
+      "setup": {
+        "G27": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F27": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E27": {
+          "kind": "number",
+          "value": 130.0
+        },
+        "D27": {
+          "kind": "number",
+          "value": 0.07
+        },
+        "C27": {
+          "kind": "number",
+          "value": 0.06
+        },
+        "H27": {
+          "kind": "formula",
+          "formula": "=PRICE(A27,B27,C27,D27,E27,F27,G27)"
+        },
+        "B27": {
+          "kind": "formula",
+          "formula": "=DATE(2030,3,10)"
+        },
+        "A27": {
+          "kind": "formula",
+          "formula": "=DATE(2020, 3, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.07000000000000012
+      }
+    },
+    {
+      "id": "A28",
+      "formula": "=DATE(2025, 4, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45748.0
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=DATE(2028,3,13)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46825.0
+      }
+    },
+    {
+      "id": "H28",
+      "formula": "=PRICE(A28,B28,C28,D28,E28,F28,G28)",
+      "setup": {
+        "G28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E28": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "D28": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "C28": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "B28": {
+          "kind": "formula",
+          "formula": "=DATE(2028,3,13)"
+        },
+        "A28": {
+          "kind": "formula",
+          "formula": "=DATE(2025, 4, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.702006194174814
+      }
+    },
+    {
+      "id": "I28",
+      "formula": "=YIELD(A28,B28,C28,H28,E28,F28,G28)",
+      "setup": {
+        "G28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E28": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "D28": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "C28": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "H28": {
+          "kind": "formula",
+          "formula": "=PRICE(A28,B28,C28,D28,E28,F28,G28)"
+        },
+        "B28": {
+          "kind": "formula",
+          "formula": "=DATE(2028,3,13)"
+        },
+        "A28": {
+          "kind": "formula",
+          "formula": "=DATE(2025, 4, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.29999999999995774
+      }
+    },
+    {
+      "id": "A29",
+      "formula": "=DATE(2025, 4, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45748.0
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=DATE(2028,3,13)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46825.0
+      }
+    },
+    {
+      "id": "H29",
+      "formula": "=PRICE(A29,B29,C29,D29,E29,F29,G29)",
+      "setup": {
+        "G29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F29": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E29": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "D29": {
+          "kind": "number",
+          "value": 0.12
+        },
+        "C29": {
+          "kind": "number",
+          "value": 0.22
+        },
+        "B29": {
+          "kind": "formula",
+          "formula": "=DATE(2028,3,13)"
+        },
+        "A29": {
+          "kind": "formula",
+          "formula": "=DATE(2025, 4, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 62.736929069290866
+      }
+    },
+    {
+      "id": "I29",
+      "formula": "=YIELD(A29,B29,C29,H29,E29,F29,G29)",
+      "setup": {
+        "G29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F29": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E29": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "D29": {
+          "kind": "number",
+          "value": 0.12
+        },
+        "C29": {
+          "kind": "number",
+          "value": 0.22
+        },
+        "H29": {
+          "kind": "formula",
+          "formula": "=PRICE(A29,B29,C29,D29,E29,F29,G29)"
+        },
+        "B29": {
+          "kind": "formula",
+          "formula": "=DATE(2028,3,13)"
+        },
+        "A29": {
+          "kind": "formula",
+          "formula": "=DATE(2025, 4, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.12000000000000001
+      }
+    },
+    {
+      "id": "A30",
+      "formula": "=DATE(2025, 4, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45748.0
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=DATE(2028,3,13)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46825.0
+      }
+    },
+    {
+      "id": "H30",
+      "formula": "=PRICE(A30,B30,C30,D30,E30,F30,G30)",
+      "setup": {
+        "G30": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E30": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "D30": {
+          "kind": "number",
+          "value": 0.065
+        },
+        "C30": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B30": {
+          "kind": "formula",
+          "formula": "=DATE(2028,3,13)"
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2025, 4, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 25.48409543503172
+      }
+    },
+    {
+      "id": "I30",
+      "formula": "=YIELD(A30,B30,C30,H30,E30,F30,G30)",
+      "setup": {
+        "G30": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E30": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "D30": {
+          "kind": "number",
+          "value": 0.065
+        },
+        "C30": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "H30": {
+          "kind": "formula",
+          "formula": "=PRICE(A30,B30,C30,D30,E30,F30,G30)"
+        },
+        "B30": {
+          "kind": "formula",
+          "formula": "=DATE(2028,3,13)"
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2025, 4, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06499999999159671
+      }
+    },
+    {
+      "id": "A31",
+      "formula": "=DATE(2025, 4, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45748.0
+      }
+    },
+    {
+      "id": "B31",
+      "formula": "=DATE(2028,3,13)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46825.0
+      }
+    },
+    {
+      "id": "H31",
+      "formula": "=PRICE(A31,B31,C31,D31,E31,F31,G31)",
+      "setup": {
+        "G31": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F31": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E31": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "D31": {
+          "kind": "number",
+          "value": 0.065
+        },
+        "C31": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "B31": {
+          "kind": "formula",
+          "formula": "=DATE(2028,3,13)"
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=DATE(2025, 4, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 25.49103829475232
+      }
+    },
+    {
+      "id": "I31",
+      "formula": "=YIELD(A31,B31,C31,H31,E31,F31,G31)",
+      "setup": {
+        "G31": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F31": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E31": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "D31": {
+          "kind": "number",
+          "value": 0.065
+        },
+        "C31": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "H31": {
+          "kind": "formula",
+          "formula": "=PRICE(A31,B31,C31,D31,E31,F31,G31)"
+        },
+        "B31": {
+          "kind": "formula",
+          "formula": "=DATE(2028,3,13)"
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=DATE(2025, 4, 1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06499999999103481
+      }
+    }
+  ]
+}

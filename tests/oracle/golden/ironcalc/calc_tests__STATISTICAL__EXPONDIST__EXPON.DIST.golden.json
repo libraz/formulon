@@ -1,0 +1,1184 @@
+{
+  "suite": "ironcalc_calc_tests__STATISTICAL_EXPONDIST_EXPON.DIST",
+  "description": "Derived from IronCalc fixture calc_tests/STATISTICAL/EXPONDIST.xlsx, sheet 'EXPON.DIST'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "EXPON.DIST",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=_xlfn.EXPON.DIST(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "bool",
+          "value": true
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8646647167633873
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.EXPON.DIST(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "bool",
+          "value": false
+        },
+        "B3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.353352832366127
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.EXPON.DIST(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "bool",
+          "value": true
+        },
+        "B4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.EXPON.DIST(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "bool",
+          "value": false
+        },
+        "B5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.EXPON.DIST(A6,B6,C6)",
+      "setup": {
+        "C6": {
+          "kind": "bool",
+          "value": false
+        },
+        "B6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.EXPON.DIST(A7,B7,C7)",
+      "setup": {
+        "C7": {
+          "kind": "bool",
+          "value": true
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6321205588285577
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=_xlfn.EXPON.DIST(A8,B8,C8)",
+      "setup": {
+        "C8": {
+          "kind": "bool",
+          "value": false
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.36787944117144233
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=_xlfn.EXPON.DIST(A9,B9,C9)",
+      "setup": {
+        "C9": {
+          "kind": "bool",
+          "value": true
+        },
+        "B9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6321205588285577
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=_xlfn.EXPON.DIST(A10,B10,C10)",
+      "setup": {
+        "C10": {
+          "kind": "bool",
+          "value": true
+        },
+        "B10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8646647167633873
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=_xlfn.EXPON.DIST(A11,B11,C11)",
+      "setup": {
+        "C11": {
+          "kind": "bool",
+          "value": true
+        },
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8646647167633873
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=_xlfn.EXPON.DIST(A12,B12,C12)",
+      "setup": {
+        "C12": {
+          "kind": "bool",
+          "value": true
+        },
+        "B12": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.950212931632136
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=_xlfn.EXPON.DIST(A13,B13,C13)",
+      "setup": {
+        "C13": {
+          "kind": "bool",
+          "value": true
+        },
+        "B13": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6321205588285577
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=_xlfn.EXPON.DIST(A14,B14,C14)",
+      "setup": {
+        "C14": {
+          "kind": "bool",
+          "value": true
+        },
+        "B14": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999546000702375
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=_xlfn.EXPON.DIST(A15,B15,C15)",
+      "setup": {
+        "C15": {
+          "kind": "bool",
+          "value": true
+        },
+        "B15": {
+          "kind": "number",
+          "value": 0.001
+        },
+        "A15": {
+          "kind": "number",
+          "value": 0.001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.999995000001667e-07
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=_xlfn.EXPON.DIST(A16,B16,C16)",
+      "setup": {
+        "C16": {
+          "kind": "bool",
+          "value": true
+        },
+        "B16": {
+          "kind": "number",
+          "value": 1e-05
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1e-05
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.999999999500002e-11
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=_xlfn.EXPON.DIST(A17,B17,C17)",
+      "setup": {
+        "C17": {
+          "kind": "bool",
+          "value": true
+        },
+        "B17": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 1e-05
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.999500016666251e-05
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=_xlfn.EXPON.DIST(A18,B18,C18)",
+      "setup": {
+        "C18": {
+          "kind": "bool",
+          "value": true
+        },
+        "B18": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": -1e-05
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=_xlfn.EXPON.DIST(A19,B19,C19)",
+      "setup": {
+        "C19": {
+          "kind": "bool",
+          "value": true
+        },
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 1000000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=_xlfn.EXPON.DIST(A20,B20,C20)",
+      "setup": {
+        "C20": {
+          "kind": "bool",
+          "value": true
+        },
+        "B20": {
+          "kind": "number",
+          "value": 0.001
+        },
+        "A20": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0009995001666250085
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=_xlfn.EXPON.DIST(A21,B21,C21)",
+      "setup": {
+        "C21": {
+          "kind": "bool",
+          "value": true
+        },
+        "B21": {
+          "kind": "number",
+          "value": 1e-05
+        },
+        "A21": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.999950000166666e-06
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=_xlfn.EXPON.DIST(A22,B22,C22)",
+      "setup": {
+        "C22": {
+          "kind": "bool",
+          "value": true
+        },
+        "B22": {
+          "kind": "number",
+          "value": -1e-05
+        },
+        "A22": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=_xlfn.EXPON.DIST(A23,B23,C23)",
+      "setup": {
+        "C23": {
+          "kind": "bool",
+          "value": true
+        },
+        "B23": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=_xlfn.EXPON.DIST(A24,B24,C24)",
+      "setup": {
+        "C24": {
+          "kind": "bool",
+          "value": true
+        },
+        "B24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=_xlfn.EXPON.DIST(A25,B25,C25)",
+      "setup": {
+        "C25": {
+          "kind": "bool",
+          "value": true
+        },
+        "B25": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=_xlfn.EXPON.DIST(A26,B26,C26)",
+      "setup": {
+        "C26": {
+          "kind": "bool",
+          "value": true
+        },
+        "B26": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=_xlfn.EXPON.DIST(A27,B27,C27)",
+      "setup": {
+        "C27": {
+          "kind": "bool",
+          "value": true
+        },
+        "B27": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=_xlfn.EXPON.DIST(A28,B28,C28)",
+      "setup": {
+        "C28": {
+          "kind": "bool",
+          "value": true
+        },
+        "B28": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=_xlfn.EXPON.DIST(A29,B29,C29)",
+      "setup": {
+        "C29": {
+          "kind": "bool",
+          "value": true
+        },
+        "A29": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D30",
+      "formula": "=_xlfn.EXPON.DIST(A30,B30,C30)",
+      "setup": {
+        "B30": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.353352832366127
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=_xlfn.EXPON.DIST(A31,B31,C31)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A32",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D32",
+      "formula": "=_xlfn.EXPON.DIST(A32,B32,C32)",
+      "setup": {
+        "C32": {
+          "kind": "bool",
+          "value": true
+        },
+        "B32": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A32": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D33",
+      "formula": "=_xlfn.EXPON.DIST(A33,B33,C33)",
+      "setup": {
+        "C33": {
+          "kind": "bool",
+          "value": true
+        },
+        "A33": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "B33": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C34",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D34",
+      "formula": "=_xlfn.EXPON.DIST(A34,B34,C34)",
+      "setup": {
+        "B34": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "C34": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D35",
+      "formula": "=_xlfn.EXPON.DIST(A35,B35,C35)",
+      "setup": {
+        "C35": {
+          "kind": "bool",
+          "value": true
+        },
+        "B35": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A35": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999546000702375
+      }
+    },
+    {
+      "id": "D36",
+      "formula": "=_xlfn.EXPON.DIST(A36,B36,C36)",
+      "setup": {
+        "C36": {
+          "kind": "bool",
+          "value": true
+        },
+        "B36": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A36": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D37",
+      "formula": "=_xlfn.EXPON.DIST(A37,B37,C37)",
+      "setup": {
+        "C37": {
+          "kind": "bool",
+          "value": true
+        },
+        "B37": {
+          "kind": "bool",
+          "value": true
+        },
+        "A37": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.18126924692201815
+      }
+    },
+    {
+      "id": "D38",
+      "formula": "=_xlfn.EXPON.DIST(A38,B38,C38)",
+      "setup": {
+        "C38": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B38": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8646647167633873
+      }
+    },
+    {
+      "id": "D39",
+      "formula": "=_xlfn.EXPON.DIST(A39,B39,C39)",
+      "setup": {
+        "C39": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B39": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.353352832366127
+      }
+    },
+    {
+      "id": "D40",
+      "formula": "=_xlfn.EXPON.DIST(A40,B40,C40)",
+      "setup": {
+        "C40": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B40": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A40": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8646647167633873
+      }
+    },
+    {
+      "id": "D41",
+      "formula": "=_xlfn.EXPON.DIST(A41,B41,C41)",
+      "setup": {
+        "C41": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "B41": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A41": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8646647167633873
+      }
+    },
+    {
+      "id": "D42",
+      "formula": "=_xlfn.EXPON.DIST(A42,B42,C42)",
+      "setup": {
+        "C42": {
+          "kind": "text",
+          "value": "true"
+        },
+        "B42": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A42": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8646647167633873
+      }
+    },
+    {
+      "id": "D43",
+      "formula": "=_xlfn.EXPON.DIST(A43,B43,C43)",
+      "setup": {
+        "C43": {
+          "kind": "text",
+          "value": "\"TRUE\""
+        },
+        "B43": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A43": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D44",
+      "formula": "=_xlfn.EXPON.DIST(A44,B44,C44)",
+      "setup": {
+        "C44": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "B44": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A44": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D45",
+      "formula": "=_xlfn.EXPON.DIST(A45,B45,C45)",
+      "setup": {
+        "C45": {
+          "kind": "bool",
+          "value": true
+        },
+        "B45": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A45": {
+          "kind": "text",
+          "value": "0.2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8646647167633873
+      }
+    },
+    {
+      "id": "D46",
+      "formula": "=_xlfn.EXPON.DIST(A46,B46,C46)",
+      "setup": {
+        "C46": {
+          "kind": "bool",
+          "value": true
+        },
+        "B46": {
+          "kind": "text",
+          "value": "10"
+        },
+        "A46": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8646647167633873
+      }
+    },
+    {
+      "id": "D47",
+      "formula": "=_xlfn.EXPON.DIST(A47,B47,C47)",
+      "setup": {
+        "C47": {
+          "kind": "bool",
+          "value": true
+        },
+        "B47": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A47": {
+          "kind": "text",
+          "value": "\"0.2\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D48",
+      "formula": "=_xlfn.EXPON.DIST(A48,B48,C48)",
+      "setup": {
+        "C48": {
+          "kind": "bool",
+          "value": true
+        },
+        "B48": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A48": {
+          "kind": "text",
+          "value": "hi"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D49",
+      "formula": "=_xlfn.EXPON.DIST(A49,B49,C49)",
+      "setup": {
+        "C49": {
+          "kind": "bool",
+          "value": true
+        },
+        "B49": {
+          "kind": "text",
+          "value": "\"0.2\""
+        },
+        "A49": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D50",
+      "formula": "=_xlfn.EXPON.DIST(A50,B50,C50)",
+      "setup": {
+        "C50": {
+          "kind": "bool",
+          "value": true
+        },
+        "B50": {
+          "kind": "text",
+          "value": "hi"
+        },
+        "A50": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D51",
+      "formula": "=_xlfn.EXPON.DIST(A51,B51,C51)",
+      "setup": {
+        "C51": {
+          "kind": "bool",
+          "value": true
+        },
+        "B51": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A51": {
+          "kind": "number",
+          "value": 46040.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D52",
+      "formula": "=_xlfn.EXPON.DIST(,B52,C52)",
+      "setup": {
+        "C52": {
+          "kind": "bool",
+          "value": true
+        },
+        "B52": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D53",
+      "formula": "=_xlfn.EXPON.DIST(A53,,C53)",
+      "setup": {
+        "C53": {
+          "kind": "bool",
+          "value": true
+        },
+        "A53": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D54",
+      "formula": "=_xlfn.EXPON.DIST(A54,B54,)",
+      "setup": {
+        "B54": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A54": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.353352832366127
+      }
+    },
+    {
+      "id": "D55",
+      "formula": "=_xlfn.EXPON.DIST(,,)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "suite": "ironcalc_calc_tests__LOOKUP_AND_REFERENCE_MATCH_LOOKUP_arrays_LOOKUP",
+  "description": "Derived from IronCalc fixture calc_tests/LOOKUP_AND_REFERENCE/MATCH_LOOKUP_arrays.xlsx, sheet 'LOOKUP'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "LOOKUP",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "D4",
+      "formula": "=LOOKUP(3,{1,2,3,4,5})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=LOOKUP(3,{1,2,3,4,5},{10,20,30,40,50})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=LOOKUP(7,_xlfn.SEQUENCE(10))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=LOOKUP(7.5,_xlfn.SEQUENCE(10))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=LOOKUP(2,_xlfn.UNIQUE({1;2;2;3}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=LOOKUP(\"c\",_xlfn._xlws.SORT({\"b\";\"a\";\"c\"}),_xlfn._xlws.SORT({\"b\";\"a\";\"c\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "c"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=LOOKUP(\"b\",{\"a\",\"b\",\"c\";1,2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    }
+  ]
+}

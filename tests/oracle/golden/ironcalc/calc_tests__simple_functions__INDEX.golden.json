@@ -3,14 +3,16 @@
   "description": "Derived from IronCalc fixture calc_tests/simple_functions.xlsx, sheet 'INDEX'.",
   "environment": {
     "source": "ironcalc",
-    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
     "sheet": "INDEX",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T08:32:30Z"
   },
   "tolerance": {
     "abs": 5e-08,
-    "rel": 0.0
+    "rel": 1e-12
   },
   "cases": [
     {
@@ -212,10 +214,7 @@
           "formula": "=INDEX(A1:D1,3)"
         }
       },
-      "expect": {
-        "kind": "error",
-        "code": "#VALUE!"
-      }
+      "skipped": "INDEX(A1:A3,0.4) truncates the row to zero and spills the column in Mac Excel 365; the legacy Windows cache contains #VALUE! from implicit intersection. Formulon matches the Mac spill. Probe: locale_profile_measurements.index_fractional_row."
     },
     {
       "id": "I6",

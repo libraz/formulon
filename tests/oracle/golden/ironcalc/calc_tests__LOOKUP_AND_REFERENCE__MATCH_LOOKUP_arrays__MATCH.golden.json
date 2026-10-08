@@ -1,0 +1,64 @@
+{
+  "suite": "ironcalc_calc_tests__LOOKUP_AND_REFERENCE_MATCH_LOOKUP_arrays_MATCH",
+  "description": "Derived from IronCalc fixture calc_tests/LOOKUP_AND_REFERENCE/MATCH_LOOKUP_arrays.xlsx, sheet 'MATCH'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "MATCH",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "D4",
+      "formula": "=MATCH(5,{1,3,5,7,9},0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=MATCH(7,_xlfn.SEQUENCE(10),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=MATCH(20,_xlfn._xlws.SORT({30;10;20}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=MATCH(\"banana\",_xlfn.UNIQUE({\"apple\";\"banana\";\"apple\";\"cherry\"}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=MATCH(15,_xlfn.SEQUENCE(5,1,5,5),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    }
+  ]
+}

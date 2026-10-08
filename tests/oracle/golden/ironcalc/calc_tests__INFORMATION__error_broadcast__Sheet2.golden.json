@@ -1,0 +1,46 @@
+{
+  "suite": "ironcalc_calc_tests__INFORMATION_error_broadcast_Sheet2",
+  "description": "Derived from IronCalc fixture calc_tests/INFORMATION/error_broadcast.xlsx, sheet 'Sheet2'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet2",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "A1",
+      "formula": "=TEXT(\"x\", NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "A2",
+      "formula": "=TEXT(TRUE, 1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A3",
+      "formula": "=TEXT(5, NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

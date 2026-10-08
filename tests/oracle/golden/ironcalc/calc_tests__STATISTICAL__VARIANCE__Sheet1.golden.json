@@ -1,0 +1,162 @@
+{
+  "suite": "ironcalc_calc_tests__STATISTICAL_VARIANCE_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/STATISTICAL/VARIANCE.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "F2",
+      "formula": "=_xlfn.VAR.P(A1:A3,A4,A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Hola"
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.888888888888889
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=VARA(A1:A7)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Hola"
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.7
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=_xlfn.VAR.P({1,2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6666666666666666
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=VARPA(A1:A7)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Hola"
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.96
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=_xlfn.VAR.S(A1:A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Hola"
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.333333333333334
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=_xlfn.VAR.S(1, {1,2,3},A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.8
+      }
+    }
+  ]
+}

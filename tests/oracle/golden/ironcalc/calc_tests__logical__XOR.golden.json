@@ -3,14 +3,16 @@
   "description": "Derived from IronCalc fixture calc_tests/logical.xlsx, sheet 'XOR'.",
   "environment": {
     "source": "ironcalc",
-    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
     "sheet": "XOR",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
   },
   "tolerance": {
     "abs": 5e-08,
-    "rel": 0.0
+    "rel": 1e-12
   },
   "cases": [
     {

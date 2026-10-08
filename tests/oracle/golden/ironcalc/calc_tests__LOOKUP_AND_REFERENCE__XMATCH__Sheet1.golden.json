@@ -1,0 +1,218 @@
+{
+  "suite": "ironcalc_calc_tests__LOOKUP_AND_REFERENCE_XMATCH_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/LOOKUP_AND_REFERENCE/XMATCH.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=_xlfn.XMATCH(C2,A2:A7)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Venezuela"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Spain"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Germany"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "India"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Indonesia"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Albania"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spain"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=_xlfn.XMATCH(\"Ind*\",A2:A7,2)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Venezuela"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Spain"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Germany"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "India"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Indonesia"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Albania"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=_xlfn.XMATCH(\"Ind*\",A2:A7,2,-1)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Venezuela"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Spain"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Germany"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "India"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Indonesia"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Albania"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.XMATCH(\"[A-Z][a-z]+y\",A2:A9,3,1)",
+      "setup": {
+        "A9": {
+          "kind": "text",
+          "value": "Francialy"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "Italy"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "Venezuela"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Spain"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Germany"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "India"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Indonesia"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Albania"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.XMATCH(\"[A-Z][a-z]+y\",A2:A9,3,1)"
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.XMATCH(\"[A-Z][a-z]+y\",A2:A9,3,-1)",
+      "setup": {
+        "A9": {
+          "kind": "text",
+          "value": "Francialy"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "Italy"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "Venezuela"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Spain"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Germany"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "India"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Indonesia"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Albania"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.XMATCH(\"[A-Z][a-z]+y\",A2:A9,3,-1)"
+    },
+    {
+      "id": "B14",
+      "formula": "=_xlfn.XMATCH(42,A14:A15,3)",
+      "setup": {
+        "A15": {
+          "kind": "text",
+          "value": "bannana"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "apple"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.XMATCH(42,A14:A15,3)"
+    }
+  ]
+}

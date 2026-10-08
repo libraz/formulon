@@ -1,0 +1,1411 @@
+{
+  "suite": "ironcalc_calc_tests__LOGICAL_IFERROR_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/LOGICAL/IFERROR.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "C6",
+      "formula": "=IFERROR(G5/H5, \"N/A\")",
+      "setup": {
+        "H5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 250.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "N/A"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=IFERROR(VLOOKUP(\"X9\",F12:G14,2,FALSE), \"Not found\")",
+      "setup": {
+        "G14": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "F14": {
+          "kind": "text",
+          "value": "X3"
+        },
+        "G13": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "F13": {
+          "kind": "text",
+          "value": "X2"
+        },
+        "G12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F12": {
+          "kind": "text",
+          "value": "X1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Not found"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=IFERROR(VLOOKUP(\"X2\",F12:G14,2,FALSE), \"Not found\")",
+      "setup": {
+        "G14": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "F14": {
+          "kind": "text",
+          "value": "X3"
+        },
+        "G13": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "F13": {
+          "kind": "text",
+          "value": "X2"
+        },
+        "G12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F12": {
+          "kind": "text",
+          "value": "X1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=IFERROR(0, \"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=IFERROR(Z99, \"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=IFERROR(VLOOKUP(\"X9\",F12:G14,2,FALSE), IFERROR(VLOOKUP(\"X2\",F12:G14,2,FALSE), \"none\"))",
+      "setup": {
+        "G14": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "F14": {
+          "kind": "text",
+          "value": "X3"
+        },
+        "G13": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "F13": {
+          "kind": "text",
+          "value": "X2"
+        },
+        "G12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F12": {
+          "kind": "text",
+          "value": "X1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=IFERROR(G5/H5, G6/H7)",
+      "setup": {
+        "H7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "G6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "H5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 250.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=IFERROR(1/0, \"caught\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "caught"
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=IFERROR(NA(), \"caught\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "caught"
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=IFERROR(\"a\"+1, \"caught\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "caught"
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=\"a\"+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=IFERROR(OFFSET(A1,-1,0), \"caught\")",
+      "setup": {
+        "E20": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "Both arrays the same size → matched element-by-element"
+        },
+        "C30": {
+          "kind": "text",
+          "value": "n/a"
+        },
+        "F12": {
+          "kind": "text",
+          "value": "X1"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Zero is NOT an error"
+        },
+        "D12": {
+          "kind": "text",
+          "value": "Empty cell evaluates to 0, not an error → returns 0, not the fallback."
+        },
+        "C20": {
+          "kind": "text",
+          "value": "caught"
+        },
+        "C50": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Guard against divide-by-zero"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "=IFERROR(Z99, \"err\")"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Notes"
+        },
+        "D37": {
+          "kind": "text",
+          "value": "value is a single #N/A, so the entire fallback range G12:G14 is returned and spills down 3 rows (10, 20, 30)."
+        },
+        "A19": {
+          "kind": "text",
+          "value": "#N/A  value not available"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "IFERROR Function — Use Cases & Corner Cases"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "Fallback is a range, but value is OK → only the single good value is returned (no spill)"
+        },
+        "C37": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F10": {
+          "kind": "text",
+          "value": "Lookup Table"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Syntax:  =IFERROR(value, value_if_error)   —   if 'value' evaluates to ANY error, return 'value_if_error'; otherwise return 'value'."
+        },
+        "B32": {
+          "kind": "text",
+          "value": "=IFERROR({10;20;30}/{2;0;5}, \"x\")"
+        },
+        "D11": {
+          "kind": "text",
+          "value": "Returns 0. IFERROR only reacts to errors — a legitimate 0 passes through."
+        },
+        "C47": {
+          "kind": "text",
+          "value": "Date"
+        },
+        "D16": {
+          "kind": "text",
+          "value": "Both 250/0 and 80/0 are #DIV/0!. IFERROR does NOT re-check the fallback — whatever it is, is returned as-is."
+        },
+        "D54": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C33": {
+          "kind": "text",
+          "value": "x"
+        },
+        "C40": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C34": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D40": {
+          "kind": "text",
+          "value": "No error, so IFERROR returns just 7. The fallback's 3×1 shape is ignored — unlike the error case above, nothing spills."
+        },
+        "B53": {
+          "kind": "text",
+          "value": "=IFERROR({1;0;2}/{0;0;0}, {7,8})"
+        },
+        "G12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B11": {
+          "kind": "text",
+          "value": "=IFERROR(0, \"err\")"
+        },
+        "F5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Live result"
+        },
+        "C38": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A49": {
+          "kind": "text",
+          "value": "Fallback SHORTER than value → leftover error positions become #N/A"
+        },
+        "D14": {
+          "kind": "text",
+          "value": "IFNA ignores the typo and still shows #NAME? — safer than IFERROR when you only expect lookup misses."
+        },
+        "D55": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A32": {
+          "kind": "text",
+          "value": "Array constants also work element-wise (spills ↓)"
+        },
+        "F53": {
+          "kind": "text",
+          "value": "value is 3×1 (all #DIV/0!), fallback is 1×2 → they broadcast to a 3×2 block (spills into C:D); every error is filled from the fallback row (7, 8)."
+        },
+        "G13": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D8": {
+          "kind": "text",
+          "value": "No error, so IFERROR just returns the real value (20)."
+        },
+        "D18": {
+          "kind": "text",
+          "value": "Raw error shown next →"
+        },
+        "C49": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A53": {
+          "kind": "text",
+          "value": "Column value × row fallback → broadcasts into a 2-D grid"
+        },
+        "F6": {
+          "kind": "text",
+          "value": "Cherry"
+        },
+        "D9": {
+          "kind": "text",
+          "value": "Returns an empty string \"\" — looks blank but is text, not a true empty cell."
+        },
+        "C54": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Scenario"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "IFERROR works element-by-element: it tests each item in the array/range and replaces ONLY the ones that error. In modern Excel the result spills automatically; in legacy Excel you must press Ctrl+Shift+Enter."
+        },
+        "B13": {
+          "kind": "text",
+          "value": "=IFERROR(SUMM(G4:G7), \"\")"
+        },
+        "B27": {
+          "kind": "text",
+          "value": "=IFERROR(G4:G7/H4:H7, \"n/a\")"
+        },
+        "D7": {
+          "kind": "text",
+          "value": "Code \"X9\" isn't in the table (#N/A) → returns the message instead of an ugly error."
+        },
+        "A27": {
+          "kind": "text",
+          "value": "Element-wise over a range (spills down 4 rows ↓)"
+        },
+        "G11": {
+          "kind": "text",
+          "value": "Price"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "#NAME?  unrecognized name/typo"
+        },
+        "C46": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D19": {
+          "kind": "text",
+          "value": "Raw error shown next →"
+        },
+        "F11": {
+          "kind": "text",
+          "value": "Code"
+        },
+        "A22": {
+          "kind": "text",
+          "value": "#REF!  invalid cell reference"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "=IFERROR(1/0, \"caught\")"
+        },
+        "B9": {
+          "kind": "text",
+          "value": "=IFERROR(G5/H5, \"\")"
+        },
+        "B31": {
+          "kind": "text",
+          "value": "=SUM(IFERROR(G4:G7/H4:H7, 0))"
+        },
+        "C27": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B19": {
+          "kind": "text",
+          "value": "=IFERROR(NA(), \"caught\")"
+        },
+        "B23": {
+          "kind": "text",
+          "value": "=IFERROR(SQRT(-1), \"caught\")"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "#NUM!  invalid number"
+        },
+        "D15": {
+          "kind": "text",
+          "value": "First lookup fails, so it falls to the second (finds X2 → 20). Add more nests for longer fallback chains."
+        },
+        "H7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "Failed lookup → friendly message"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Value"
+        },
+        "D49": {
+          "kind": "text",
+          "value": "value is 4×1 but fallback only 2×1. Row 2 error → 20; row 4 error has no matching fallback element → #N/A. Sizes should match."
+        },
+        "A16": {
+          "kind": "text",
+          "value": "The fallback can itself be an error"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "2. CORNER CASES"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "#VALUE!  wrong argument type"
+        },
+        "H3": {
+          "kind": "text",
+          "value": "Divisor"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "=IFERROR(XYZ(1), \"caught\")"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "Raw error shown next →"
+        },
+        "B44": {
+          "kind": "text",
+          "value": "=IFERROR(G4:G7/H4:H7, F4:F7)"
+        },
+        "D32": {
+          "kind": "text",
+          "value": "5, then 20/0→x, then 6. A single value_if_error is broadcast to every failing element."
+        },
+        "B16": {
+          "kind": "text",
+          "value": "=IFERROR(G5/H5, G6/H7)"
+        },
+        "C14": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "F7": {
+          "kind": "text",
+          "value": "Date"
+        },
+        "C39": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D6": {
+          "kind": "text",
+          "value": "250/0 is #DIV/0!, so the fallback \"N/A\" is returned."
+        },
+        "A36": {
+          "kind": "text",
+          "value": "5. value_if_error AS AN ARRAY OR RANGE"
+        },
+        "C51": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D13": {
+          "kind": "text",
+          "value": "SUMM is a typo (#NAME?). IFERROR silently swallows it — a real bug gets hidden. Wrap only the risky part."
+        },
+        "A9": {
+          "kind": "text",
+          "value": "Blank instead of error"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "7. DIFFERENT DIMENSIONS (broadcasting)"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "Formula (shown as text)"
+        },
+        "F13": {
+          "kind": "text",
+          "value": "X2"
+        },
+        "C32": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A12": {
+          "kind": "text",
+          "value": "Blank cell is NOT an error"
+        },
+        "H6": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B22": {
+          "kind": "text",
+          "value": "=IFERROR(OFFSET(A1,-1,0), \"caught\")"
+        },
+        "C13": {
+          "kind": "text",
+          "value": "masked!"
+        },
+        "D31": {
+          "kind": "text",
+          "value": "Errors become 0, then SUM adds the rest: 20+0+10+0 = 30. Lets you total a column that contains errors."
+        },
+        "F4": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B49": {
+          "kind": "text",
+          "value": "=IFERROR(G4:G7/H4:H7, G12:G13)"
+        },
+        "B15": {
+          "kind": "text",
+          "value": "=IFERROR(VLOOKUP(\"X9\",F12:G14,2,0), IFERROR(VLOOKUP(\"X2\",F12:G14,2,0), \"none\"))"
+        },
+        "G7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "B40": {
+          "kind": "text",
+          "value": "=IFERROR(7, G12:G14)"
+        },
+        "D22": {
+          "kind": "text",
+          "value": "Raw error shown next →"
+        },
+        "D21": {
+          "kind": "text",
+          "value": "Raw error shown next →"
+        },
+        "B21": {
+          "kind": "text",
+          "value": "=IFERROR(\"a\"+1, \"caught\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "4. ARRAYS & RANGES"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "DANGER: it hides ALL errors, even typos"
+        },
+        "G14": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D20": {
+          "kind": "text",
+          "value": "Raw error shown next →"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "1. BASIC USE CASES"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "Nested fallback chain (try, then try, then default)"
+        },
+        "C31": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B14": {
+          "kind": "text",
+          "value": "=IFNA(SUMM(G4:G7), \"\")"
+        },
+        "G6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "D27": {
+          "kind": "text",
+          "value": "100/5=20, 250/0→n/a, 80/8=10, 60/0→n/a. Each cell checked independently."
+        },
+        "C45": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "=IFERROR(VLOOKUP(\"X2\",F12:G14,2,0), \"Not found\")"
+        },
+        "C53": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B6": {
+          "kind": "text",
+          "value": "=IFERROR(G5/H5, \"N/A\")"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "#DIV/0!  divide by zero"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Use IFNA to catch ONLY #N/A"
+        },
+        "C55": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "text",
+          "value": "Successful case passes through untouched"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "6. BOTH ARGUMENTS ARE ARRAYS (same size → paired)"
+        },
+        "C29": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C44": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "H5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A17": {
+          "kind": "text",
+          "value": "3. EVERY ERROR TYPE IFERROR CATCHES"
+        },
+        "B37": {
+          "kind": "text",
+          "value": "=IFERROR(NA(), G12:G14)"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Item"
+        },
+        "C52": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A31": {
+          "kind": "text",
+          "value": "Aggregate while ignoring errors (the classic trick)"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "=IFERROR(VLOOKUP(\"X9\",F12:G14,2,0), \"Not found\")"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Sample Data (referenced by formulas at left)"
+        },
+        "F14": {
+          "kind": "text",
+          "value": "X3"
+        },
+        "D44": {
+          "kind": "text",
+          "value": "Each failing element pulls the SAME-position fallback: row 2 → \"Banana\", row 4 → \"Date\". Good values (20, 10) pass through unchanged."
+        },
+        "D53": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C28": {
+          "kind": "text",
+          "value": "n/a"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "Fallback is a range → the WHOLE range is returned when value errors"
+        },
+        "E17": {
+          "kind": "text",
+          "value": "(raw)"
+        },
+        "G4": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 250.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "caught"
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=OFFSET(A1,-1,0)",
+      "setup": {
+        "E20": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A44": {
+          "kind": "text",
+          "value": "Both arrays the same size → matched element-by-element"
+        },
+        "C30": {
+          "kind": "text",
+          "value": "n/a"
+        },
+        "F12": {
+          "kind": "text",
+          "value": "X1"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Zero is NOT an error"
+        },
+        "D12": {
+          "kind": "text",
+          "value": "Empty cell evaluates to 0, not an error → returns 0, not the fallback."
+        },
+        "C20": {
+          "kind": "text",
+          "value": "caught"
+        },
+        "C50": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Guard against divide-by-zero"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "=IFERROR(Z99, \"err\")"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Notes"
+        },
+        "D37": {
+          "kind": "text",
+          "value": "value is a single #N/A, so the entire fallback range G12:G14 is returned and spills down 3 rows (10, 20, 30)."
+        },
+        "A19": {
+          "kind": "text",
+          "value": "#N/A  value not available"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "IFERROR Function — Use Cases & Corner Cases"
+        },
+        "A40": {
+          "kind": "text",
+          "value": "Fallback is a range, but value is OK → only the single good value is returned (no spill)"
+        },
+        "C37": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F10": {
+          "kind": "text",
+          "value": "Lookup Table"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Syntax:  =IFERROR(value, value_if_error)   —   if 'value' evaluates to ANY error, return 'value_if_error'; otherwise return 'value'."
+        },
+        "B32": {
+          "kind": "text",
+          "value": "=IFERROR({10;20;30}/{2;0;5}, \"x\")"
+        },
+        "D11": {
+          "kind": "text",
+          "value": "Returns 0. IFERROR only reacts to errors — a legitimate 0 passes through."
+        },
+        "C47": {
+          "kind": "text",
+          "value": "Date"
+        },
+        "D16": {
+          "kind": "text",
+          "value": "Both 250/0 and 80/0 are #DIV/0!. IFERROR does NOT re-check the fallback — whatever it is, is returned as-is."
+        },
+        "D54": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C33": {
+          "kind": "text",
+          "value": "x"
+        },
+        "C40": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C34": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D40": {
+          "kind": "text",
+          "value": "No error, so IFERROR returns just 7. The fallback's 3×1 shape is ignored — unlike the error case above, nothing spills."
+        },
+        "B53": {
+          "kind": "text",
+          "value": "=IFERROR({1;0;2}/{0;0;0}, {7,8})"
+        },
+        "G12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B11": {
+          "kind": "text",
+          "value": "=IFERROR(0, \"err\")"
+        },
+        "F5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Live result"
+        },
+        "C38": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A49": {
+          "kind": "text",
+          "value": "Fallback SHORTER than value → leftover error positions become #N/A"
+        },
+        "D14": {
+          "kind": "text",
+          "value": "IFNA ignores the typo and still shows #NAME? — safer than IFERROR when you only expect lookup misses."
+        },
+        "D55": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A32": {
+          "kind": "text",
+          "value": "Array constants also work element-wise (spills ↓)"
+        },
+        "F53": {
+          "kind": "text",
+          "value": "value is 3×1 (all #DIV/0!), fallback is 1×2 → they broadcast to a 3×2 block (spills into C:D); every error is filled from the fallback row (7, 8)."
+        },
+        "G13": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D8": {
+          "kind": "text",
+          "value": "No error, so IFERROR just returns the real value (20)."
+        },
+        "D18": {
+          "kind": "text",
+          "value": "Raw error shown next →"
+        },
+        "C49": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A53": {
+          "kind": "text",
+          "value": "Column value × row fallback → broadcasts into a 2-D grid"
+        },
+        "F6": {
+          "kind": "text",
+          "value": "Cherry"
+        },
+        "D9": {
+          "kind": "text",
+          "value": "Returns an empty string \"\" — looks blank but is text, not a true empty cell."
+        },
+        "C54": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Scenario"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "IFERROR works element-by-element: it tests each item in the array/range and replaces ONLY the ones that error. In modern Excel the result spills automatically; in legacy Excel you must press Ctrl+Shift+Enter."
+        },
+        "B13": {
+          "kind": "text",
+          "value": "=IFERROR(SUMM(G4:G7), \"\")"
+        },
+        "B27": {
+          "kind": "text",
+          "value": "=IFERROR(G4:G7/H4:H7, \"n/a\")"
+        },
+        "D7": {
+          "kind": "text",
+          "value": "Code \"X9\" isn't in the table (#N/A) → returns the message instead of an ugly error."
+        },
+        "A27": {
+          "kind": "text",
+          "value": "Element-wise over a range (spills down 4 rows ↓)"
+        },
+        "G11": {
+          "kind": "text",
+          "value": "Price"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "#NAME?  unrecognized name/typo"
+        },
+        "C46": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D19": {
+          "kind": "text",
+          "value": "Raw error shown next →"
+        },
+        "F11": {
+          "kind": "text",
+          "value": "Code"
+        },
+        "A22": {
+          "kind": "text",
+          "value": "#REF!  invalid cell reference"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "=IFERROR(1/0, \"caught\")"
+        },
+        "B9": {
+          "kind": "text",
+          "value": "=IFERROR(G5/H5, \"\")"
+        },
+        "B31": {
+          "kind": "text",
+          "value": "=SUM(IFERROR(G4:G7/H4:H7, 0))"
+        },
+        "C27": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B19": {
+          "kind": "text",
+          "value": "=IFERROR(NA(), \"caught\")"
+        },
+        "B23": {
+          "kind": "text",
+          "value": "=IFERROR(SQRT(-1), \"caught\")"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "#NUM!  invalid number"
+        },
+        "D15": {
+          "kind": "text",
+          "value": "First lookup fails, so it falls to the second (finds X2 → 20). Add more nests for longer fallback chains."
+        },
+        "H7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "Failed lookup → friendly message"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Value"
+        },
+        "D49": {
+          "kind": "text",
+          "value": "value is 4×1 but fallback only 2×1. Row 2 error → 20; row 4 error has no matching fallback element → #N/A. Sizes should match."
+        },
+        "A16": {
+          "kind": "text",
+          "value": "The fallback can itself be an error"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "2. CORNER CASES"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "#VALUE!  wrong argument type"
+        },
+        "H3": {
+          "kind": "text",
+          "value": "Divisor"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "=IFERROR(XYZ(1), \"caught\")"
+        },
+        "D23": {
+          "kind": "text",
+          "value": "Raw error shown next →"
+        },
+        "B44": {
+          "kind": "text",
+          "value": "=IFERROR(G4:G7/H4:H7, F4:F7)"
+        },
+        "D32": {
+          "kind": "text",
+          "value": "5, then 20/0→x, then 6. A single value_if_error is broadcast to every failing element."
+        },
+        "B16": {
+          "kind": "text",
+          "value": "=IFERROR(G5/H5, G6/H7)"
+        },
+        "C14": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "F7": {
+          "kind": "text",
+          "value": "Date"
+        },
+        "C39": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D6": {
+          "kind": "text",
+          "value": "250/0 is #DIV/0!, so the fallback \"N/A\" is returned."
+        },
+        "A36": {
+          "kind": "text",
+          "value": "5. value_if_error AS AN ARRAY OR RANGE"
+        },
+        "C51": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D13": {
+          "kind": "text",
+          "value": "SUMM is a typo (#NAME?). IFERROR silently swallows it — a real bug gets hidden. Wrap only the risky part."
+        },
+        "A9": {
+          "kind": "text",
+          "value": "Blank instead of error"
+        },
+        "A48": {
+          "kind": "text",
+          "value": "7. DIFFERENT DIMENSIONS (broadcasting)"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "Formula (shown as text)"
+        },
+        "F13": {
+          "kind": "text",
+          "value": "X2"
+        },
+        "C32": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A12": {
+          "kind": "text",
+          "value": "Blank cell is NOT an error"
+        },
+        "H6": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B22": {
+          "kind": "text",
+          "value": "=IFERROR(OFFSET(A1,-1,0), \"caught\")"
+        },
+        "C13": {
+          "kind": "text",
+          "value": "masked!"
+        },
+        "D31": {
+          "kind": "text",
+          "value": "Errors become 0, then SUM adds the rest: 20+0+10+0 = 30. Lets you total a column that contains errors."
+        },
+        "F4": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B49": {
+          "kind": "text",
+          "value": "=IFERROR(G4:G7/H4:H7, G12:G13)"
+        },
+        "B15": {
+          "kind": "text",
+          "value": "=IFERROR(VLOOKUP(\"X9\",F12:G14,2,0), IFERROR(VLOOKUP(\"X2\",F12:G14,2,0), \"none\"))"
+        },
+        "G7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "B40": {
+          "kind": "text",
+          "value": "=IFERROR(7, G12:G14)"
+        },
+        "D22": {
+          "kind": "text",
+          "value": "Raw error shown next →"
+        },
+        "D21": {
+          "kind": "text",
+          "value": "Raw error shown next →"
+        },
+        "B21": {
+          "kind": "text",
+          "value": "=IFERROR(\"a\"+1, \"caught\")"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "4. ARRAYS & RANGES"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "DANGER: it hides ALL errors, even typos"
+        },
+        "G14": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D20": {
+          "kind": "text",
+          "value": "Raw error shown next →"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "1. BASIC USE CASES"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "Nested fallback chain (try, then try, then default)"
+        },
+        "C31": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B14": {
+          "kind": "text",
+          "value": "=IFNA(SUMM(G4:G7), \"\")"
+        },
+        "G6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "D27": {
+          "kind": "text",
+          "value": "100/5=20, 250/0→n/a, 80/8=10, 60/0→n/a. Each cell checked independently."
+        },
+        "C45": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "=IFERROR(VLOOKUP(\"X2\",F12:G14,2,0), \"Not found\")"
+        },
+        "C53": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B6": {
+          "kind": "text",
+          "value": "=IFERROR(G5/H5, \"N/A\")"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "#DIV/0!  divide by zero"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Use IFNA to catch ONLY #N/A"
+        },
+        "C55": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "text",
+          "value": "Successful case passes through untouched"
+        },
+        "A43": {
+          "kind": "text",
+          "value": "6. BOTH ARGUMENTS ARE ARRAYS (same size → paired)"
+        },
+        "C29": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C44": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "H5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A17": {
+          "kind": "text",
+          "value": "3. EVERY ERROR TYPE IFERROR CATCHES"
+        },
+        "B37": {
+          "kind": "text",
+          "value": "=IFERROR(NA(), G12:G14)"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Item"
+        },
+        "C52": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A31": {
+          "kind": "text",
+          "value": "Aggregate while ignoring errors (the classic trick)"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "=IFERROR(VLOOKUP(\"X9\",F12:G14,2,0), \"Not found\")"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Sample Data (referenced by formulas at left)"
+        },
+        "F14": {
+          "kind": "text",
+          "value": "X3"
+        },
+        "D44": {
+          "kind": "text",
+          "value": "Each failing element pulls the SAME-position fallback: row 2 → \"Banana\", row 4 → \"Date\". Good values (20, 10) pass through unchanged."
+        },
+        "D53": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C28": {
+          "kind": "text",
+          "value": "n/a"
+        },
+        "A37": {
+          "kind": "text",
+          "value": "Fallback is a range → the WHOLE range is returned when value errors"
+        },
+        "E17": {
+          "kind": "text",
+          "value": "(raw)"
+        },
+        "G4": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 250.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=IFERROR(SQRT(-1), \"caught\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "caught"
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=SQRT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

@@ -1,0 +1,334 @@
+{
+  "suite": "ironcalc_calc_tests__INFORMATION_ISREF_ISFORMULA_ISODD_ISEVEN_ISREF_ISFORMULA",
+  "description": "Derived from IronCalc fixture calc_tests/INFORMATION/ISREF_ISFORMULA_ISODD_ISEVEN.xlsx, sheet 'ISREF_ISFORMULA'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "ISREF_ISFORMULA",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T06:30:47Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "A1",
+      "formula": "=\"value\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "value"
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=ISREF(A2)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=_xlfn.ISFORMULA(A2)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=ISREF(12)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "A3",
+      "formula": "=1+1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=ISREF(A2:A3)",
+      "setup": {
+        "A3": {
+          "kind": "formula",
+          "formula": "=1+1"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=_xlfn.ISFORMULA(A3)",
+      "setup": {
+        "A3": {
+          "kind": "formula",
+          "formula": "=1+1"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=ISREF(1+2)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=ISREF(A3:A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1+1"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=_xlfn.ISFORMULA(A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=ISREF(INDIRECT(\"A1\"))",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ISREF returns true if it is a reference or evaluates to a reference"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "ISFORMULA"
+        },
+        "G7": {
+          "kind": "text",
+          "value": "<= This is NOT a circular dependency"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ISREF"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=_xlfn.ISFORMULA(A5)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=ISREF(OFFSET(A1,6,5))",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ISREF returns true if it is a reference or evaluates to a reference"
+        },
+        "G7": {
+          "kind": "text",
+          "value": "<= This is NOT a circular dependency"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "ISFORMULA"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ISREF"
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"value\""
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=_xlfn.ISFORMULA(A6)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=_xlfn.ISFORMULA(A7)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=ISREF(OFFSET(A1,6,5))",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ISREF returns true if it is a reference or evaluates to a reference"
+        },
+        "G7": {
+          "kind": "text",
+          "value": "<= This is NOT a circular dependency"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "ISFORMULA"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ISREF"
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"value\""
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=_xlfn.ISFORMULA(A8)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=ISREF(A1:OFFSET(A1,1,1))",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ISREF returns true if it is a reference or evaluates to a reference"
+        },
+        "G7": {
+          "kind": "text",
+          "value": "<= This is NOT a circular dependency"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "ISFORMULA"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ISREF"
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"value\""
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=_xlfn.ISFORMULA(INDIRECT(\"C9\"))",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ISREF returns true if it is a reference or evaluates to a reference"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "ISFORMULA"
+        },
+        "G7": {
+          "kind": "text",
+          "value": "<= This is NOT a circular dependency"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ISREF"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=ISREF(INDEX(A1,1,2,2))",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"value\""
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    }
+  ]
+}

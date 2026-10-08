@@ -1,0 +1,568 @@
+{
+  "suite": "ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_MAX_MIN_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/MATH_AND_TRIGONOMETRY/MAX_MIN.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Macintosh Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "C1",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H1",
+      "formula": "=MAX(_xlfn.SINGLE(A1:A6))",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "100"
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        },
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=MAX(A1:A6)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "100"
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        },
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=MIN(A1:A6)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "100"
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        },
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=MAX(A2)",
+      "setup": {
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=MAX(A2, -3)",
+      "setup": {
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=MIN(A3, 3)",
+      "setup": {
+        "A3": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=MAX(A5, 3)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "100"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=MAX(A6, -3)",
+      "setup": {
+        "A6": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=MAX(A7, -3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=MAX(G1:G5)",
+      "setup": {
+        "G5": {
+          "kind": "text",
+          "value": "ref text cell with number"
+        },
+        "G4": {
+          "kind": "text",
+          "value": "ref text cell"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "ref min range"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "ref max range"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "ref max"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H13",
+      "formula": "=MAX(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=MAX(\"abc\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H15",
+      "formula": "=MIN(1, \"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H16",
+      "formula": "=MAX(\"3\", 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "H17",
+      "formula": "=MIN(\"-3\", 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "H18",
+      "formula": "=MAX(\"1e3\", 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1000.0
+      }
+    },
+    {
+      "id": "H19",
+      "formula": "=MAX(\"50%\", 0.4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "H20",
+      "formula": "=MAX(\"12:00\", 0.4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "H21",
+      "formula": "=MAX(\"inf\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H22",
+      "formula": "=MAX(TRUE, 0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H23",
+      "formula": "=MIN(FALSE, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H24",
+      "formula": "=MAX(-1, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H25",
+      "formula": "=MAX(LEFT(\"abc\", 1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H26",
+      "formula": "=MIN(IF(TRUE, \"\", 1))",
+      "setup": {},
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =MIN(IF(TRUE, \"\", 1))"
+    },
+    {
+      "id": "H27",
+      "formula": "=MAX(LEFT(\"34\", 1), 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "H28",
+      "formula": "=MAX(A5&\"\", 0)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "100"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "H29",
+      "formula": "=MAX(A1&\"\", 0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H31",
+      "formula": "=MAX({-1,\"a\",TRUE,-7})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "H32",
+      "formula": "=MIN({3,\"a\",FALSE,7})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "H33",
+      "formula": "=MAX({\"100\",1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H45",
+      "formula": "=MAX(C1)",
+      "setup": {
+        "C1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H46",
+      "formula": "=MAX(B1:C1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H47",
+      "formula": "=MIN({1,#N/A})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H48",
+      "formula": "=MAX(NA(), \"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H49",
+      "formula": "=MAX(\"abc\", NA())",
+      "setup": {},
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =MAX(\"abc\", NA())"
+    },
+    {
+      "id": "H51",
+      "formula": "=MAX(,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H52",
+      "formula": "=MIN(5,)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H58",
+      "formula": "=MAXA(A1:A6)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "100"
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        },
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H59",
+      "formula": "=MINA(A1:A6)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "100"
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        },
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    }
+  ]
+}

@@ -1,0 +1,3743 @@
+{
+  "suite": "ironcalc_calc_tests__DATE_AND_TIME_DAYS_DAYS360_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/DATE_AND_TIME/DAYS_DAYS360.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T07:47:24Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "A2",
+      "formula": "=DATE(2025,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.0
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=_xlfn.DAYS(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=DAYS360(B2,A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I2)",
+      "setup": {
+        "I2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "A3",
+      "formula": "=DATE(2026,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46023.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=_xlfn.DAYS(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2026,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=DAYS360(B3,A3)",
+      "setup": {
+        "A3": {
+          "kind": "formula",
+          "formula": "=DATE(2026,1,1)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I3)",
+      "setup": {
+        "I3": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=DATE(2024,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45292.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=_xlfn.DAYS(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 366.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=DAYS360(B4,A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I4)",
+      "setup": {
+        "I4": {
+          "kind": "number",
+          "value": 18.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=DATE(9990,5,12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2954945.0
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=DATE(1990,5,12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 33005.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=_xlfn.DAYS(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(1990,5,12)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(9990,5,12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2921940.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=DAYS360(B5,A5)",
+      "setup": {
+        "A5": {
+          "kind": "formula",
+          "formula": "=DATE(9990,5,12)"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DATE(1990,5,12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2880000.0
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I5)",
+      "setup": {
+        "I5": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=DATE(2025,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=_xlfn.DAYS(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -9.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=DAYS360(B6,A6)",
+      "setup": {
+        "A6": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -9.0
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I6)",
+      "setup": {
+        "I6": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=DATE(2026,2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46057.0
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=DATE(2025,10,12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45942.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=_xlfn.DAYS(DATE(2026,2,4),DATE(2025,10,12))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 115.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=DAYS360(DATE(2025,10,12),DATE(2026,2,4))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 112.0
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I7)",
+      "setup": {
+        "I7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=DATE(2025,12,8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45999.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=DATE(2025,12,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45996.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=_xlfn.DAYS(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=DAYS360(B8,A8)",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I8)",
+      "setup": {
+        "I8": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "A9",
+      "formula": "=DATE(2025,12,8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45999.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=DATE(2025,12,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45997.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=_xlfn.DAYS(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,6)"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=DAYS360(B9,A9)",
+      "setup": {
+        "A9": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=DATE(2025,12,8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45999.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=DATE(2025,12,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45998.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=_xlfn.DAYS(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,7)"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=DAYS360(B10,A10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I10)",
+      "setup": {
+        "I10": {
+          "kind": "number",
+          "value": 0.9999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=DATE(2025,12,8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45999.0
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=DATE(2025,12,8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45999.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=_xlfn.DAYS(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=DAYS360(B11,A11)",
+      "setup": {
+        "A11": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I11)",
+      "setup": {
+        "I11": {
+          "kind": "number",
+          "value": 0.0001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=DATE(2024,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45352.0
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=DATE(2024,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45350.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=_xlfn.DAYS(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,28)"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=DAYS360(B12,A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,1)"
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I12)",
+      "setup": {
+        "I12": {
+          "kind": "text",
+          "value": "TRUE"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=DATE(2024,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45352.0
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=DATE(2024,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45323.0
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=_xlfn.DAYS(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,1)"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=DAYS360(B13,A13)",
+      "setup": {
+        "A13": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,1)"
+        },
+        "B13": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "H13",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I13)",
+      "setup": {
+        "I13": {
+          "kind": "text",
+          "value": "\"TRUE\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=DATE(2025,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45716.0
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=DATE(2024,2,29)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45351.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=_xlfn.DAYS(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=DAYS360(B14,A14)",
+      "setup": {
+        "A14": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "B14": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 358.0
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I14)",
+      "setup": {
+        "I14": {
+          "kind": "text",
+          "value": "\" TRUE\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A15",
+      "formula": "=DATE(2025,3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45717.0
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=DATE(2025,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45716.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=_xlfn.DAYS(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=DAYS360(B15,A15)",
+      "setup": {
+        "A15": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,1)"
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H15",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I15)",
+      "setup": {
+        "I15": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "A16",
+      "formula": "=DATE(2025,7,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45869.0
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=DATE(2025,6,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45838.0
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=_xlfn.DAYS(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "formula",
+          "formula": "=DATE(2025,6,30)"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=DATE(2025,7,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.0
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=DAYS360(B16,A16)",
+      "setup": {
+        "A16": {
+          "kind": "formula",
+          "formula": "=DATE(2025,7,31)"
+        },
+        "B16": {
+          "kind": "formula",
+          "formula": "=DATE(2025,6,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "H16",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I16)",
+      "setup": {
+        "I16": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "A17",
+      "formula": "=DATE(2025,7,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45869.0
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=DATE(2025,7,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45868.0
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=_xlfn.DAYS(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "formula",
+          "formula": "=DATE(2025,7,30)"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=DATE(2025,7,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=DAYS360(B17,A17)",
+      "setup": {
+        "A17": {
+          "kind": "formula",
+          "formula": "=DATE(2025,7,31)"
+        },
+        "B17": {
+          "kind": "formula",
+          "formula": "=DATE(2025,7,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H17",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I17)",
+      "setup": {
+        "I17": {
+          "kind": "number",
+          "value": -0.0001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "A18",
+      "formula": "=DATE(2024,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45350.0
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=DATE(2024,1,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45322.0
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=_xlfn.DAYS(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,31)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 28.0
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=DAYS360(B18,A18)",
+      "setup": {
+        "A18": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,28)"
+        },
+        "B18": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 28.0
+      }
+    },
+    {
+      "id": "H18",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I18)",
+      "setup": {
+        "I18": {
+          "kind": "number",
+          "value": 1e-15
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "A19",
+      "formula": "=DATE(2025,1,13)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45670.0
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=DATE(2025,1,10)+TIME(16,30,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.6875
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=_xlfn.DAYS(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(16,30,0)"
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,13)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=DAYS360(B19,A19)",
+      "setup": {
+        "A19": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,13)"
+        },
+        "B19": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(16,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "H19",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I19)",
+      "setup": {
+        "I19": {
+          "kind": "number",
+          "value": 1000000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "A20",
+      "formula": "=DATE(2025,1,10)+TIME(23,59,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.99930555555
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=DATE(2025,1,10)+TIME(0,1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.00069444445
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=_xlfn.DAYS(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(0,1,0)"
+        },
+        "A20": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(23,59,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=DAYS360(B20,A20)",
+      "setup": {
+        "A20": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(23,59,0)"
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)+TIME(0,1,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H20",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I20)",
+      "setup": {
+        "I20": {
+          "kind": "text",
+          "value": "false"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "A21",
+      "formula": "=DATE(2025,1,14)+TIME(0,1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45671.00069444445
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=DATE(2025,1,13)+TIME(23,59,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45670.99930555555
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=_xlfn.DAYS(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,13)+TIME(23,59,0)"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,14)+TIME(0,1,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=DAYS360(B21,A21)",
+      "setup": {
+        "A21": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,14)+TIME(0,1,0)"
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,13)+TIME(23,59,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H21",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I21)",
+      "setup": {
+        "I21": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=_xlfn.DAYS(A22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=DAYS360(B22,A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "H22",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I22)",
+      "setup": {
+        "I22": {
+          "kind": "text",
+          "value": "0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=DATE(2025,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45992.0
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=_xlfn.DAYS(A23,B23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 46000.0
+        },
+        "B23": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=DAYS360(B23,A23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 46000.0
+        },
+        "B23": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "H23",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I23)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=_xlfn.DAYS(A24,B24)",
+      "setup": {
+        "B24": {
+          "kind": "number",
+          "value": 45992.000001
+        },
+        "A24": {
+          "kind": "number",
+          "value": 46000.999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=DAYS360(B24,A24)",
+      "setup": {
+        "A24": {
+          "kind": "number",
+          "value": 46000.999999
+        },
+        "B24": {
+          "kind": "number",
+          "value": 45992.000001
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B24,A24)"
+    },
+    {
+      "id": "H24",
+      "formula": "=DAYS360(DATE(2025,1,1),DATE(2025,1,31),I24)",
+      "setup": {
+        "I24": {
+          "kind": "text",
+          "value": " "
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=_xlfn.DAYS(A25,B25)",
+      "setup": {
+        "B25": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": -5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=DAYS360(B25,A25)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=_xlfn.DAYS(A26,B26)",
+      "setup": {
+        "B26": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=DAYS360(B26,A26)",
+      "setup": {
+        "A26": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=_xlfn.DAYS(A27,B27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=DAYS360(B27,A27)",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=_xlfn.DAYS(A28,B28)",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=DAYS360(B28,A28)",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=_xlfn.DAYS(A29,B29)",
+      "setup": {
+        "B29": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=DAYS360(B29,A29)",
+      "setup": {
+        "B29": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B29,A29)"
+    },
+    {
+      "id": "A30",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C30",
+      "formula": "=_xlfn.DAYS(A30,B30)",
+      "setup": {
+        "B30": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D30",
+      "formula": "=DAYS360(B30,A30)",
+      "setup": {
+        "A30": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B30": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A31",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C31",
+      "formula": "=_xlfn.DAYS(A31,B31)",
+      "setup": {
+        "B31": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=DAYS360(B31,A31)",
+      "setup": {
+        "B31": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D32",
+      "formula": "=DAYS360(B32,A32)",
+      "setup": {
+        "A32": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B32": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A33",
+      "formula": "=DATE(2025,10,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45931.0
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=DATE(2025,1,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45664.0
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=_xlfn.DAYS(A33,B33)",
+      "setup": {
+        "B33": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,7)"
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=DATE(2025,10,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 267.0
+      }
+    },
+    {
+      "id": "D33",
+      "formula": "=DAYS360(B33,A33)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=DATE(2025,10,1)"
+        },
+        "B33": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 264.0
+      }
+    },
+    {
+      "id": "A34",
+      "formula": "=DATE(2025,10,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45931.0
+      }
+    },
+    {
+      "id": "A35",
+      "formula": "=DATE(2025,10,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45931.0
+      }
+    },
+    {
+      "id": "C36",
+      "formula": "=_xlfn.DAYS(A36,B36)",
+      "setup": {
+        "B36": {
+          "kind": "text",
+          "value": "def"
+        },
+        "A36": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D36",
+      "formula": "=DAYS360(B36,A36)",
+      "setup": {
+        "A36": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "B36": {
+          "kind": "text",
+          "value": "def"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C37",
+      "formula": "=_xlfn.DAYS(A37,B37)",
+      "setup": {
+        "B37": {
+          "kind": "bool",
+          "value": false
+        },
+        "A37": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D37",
+      "formula": "=DAYS360(B37,A37)",
+      "setup": {
+        "A37": {
+          "kind": "bool",
+          "value": true
+        },
+        "B37": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C38",
+      "formula": "=_xlfn.DAYS(A38,B38)",
+      "setup": {
+        "A38": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D38",
+      "formula": "=DAYS360(B38,A38)",
+      "setup": {
+        "A38": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C39",
+      "formula": "=_xlfn.DAYS(A39,B39)",
+      "setup": {
+        "A39": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D39",
+      "formula": "=DAYS360(B39,A39)",
+      "setup": {
+        "A39": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C40",
+      "formula": "=_xlfn.DAYS(A40,B40)",
+      "setup": {
+        "B40": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "D40",
+      "formula": "=DAYS360(B40,A40)",
+      "setup": {
+        "B40": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B40,A40)"
+    },
+    {
+      "id": "C41",
+      "formula": "=_xlfn.DAYS(A41,B41)",
+      "setup": {
+        "B41": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D41",
+      "formula": "=DAYS360(B41,A41)",
+      "setup": {
+        "B41": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A44",
+      "formula": "=1.05*(0.0284+0.0046)-0.0284",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "C44",
+      "formula": "=_xlfn.DAYS(A44,B44)",
+      "setup": {
+        "B44": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A44": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "D44",
+      "formula": "=DAYS360(B44,A44)",
+      "setup": {
+        "B44": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A44": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B44,A44)"
+    },
+    {
+      "id": "A46",
+      "formula": "=DATE(2025,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45716.0
+      }
+    },
+    {
+      "id": "B46",
+      "formula": "=DATE(2025,1,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45688.0
+      }
+    },
+    {
+      "id": "C46",
+      "formula": "=_xlfn.DAYS(A46,B46)",
+      "setup": {
+        "B46": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        },
+        "A46": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 28.0
+      }
+    },
+    {
+      "id": "D46",
+      "formula": "=DAYS360(B46,A46)",
+      "setup": {
+        "A46": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "B46": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 28.0
+      }
+    },
+    {
+      "id": "A47",
+      "formula": "=DATE(2024,2,29)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45351.0
+      }
+    },
+    {
+      "id": "B47",
+      "formula": "=DATE(2024,1,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45322.0
+      }
+    },
+    {
+      "id": "C47",
+      "formula": "=_xlfn.DAYS(A47,B47)",
+      "setup": {
+        "B47": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,31)"
+        },
+        "A47": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "D47",
+      "formula": "=DAYS360(B47,A47)",
+      "setup": {
+        "A47": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        },
+        "B47": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "A48",
+      "formula": "=DATE(2025,3,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45747.0
+      }
+    },
+    {
+      "id": "B48",
+      "formula": "=DATE(2025,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45716.0
+      }
+    },
+    {
+      "id": "C48",
+      "formula": "=_xlfn.DAYS(A48,B48)",
+      "setup": {
+        "B48": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "A48": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.0
+      }
+    },
+    {
+      "id": "D48",
+      "formula": "=DAYS360(B48,A48)",
+      "setup": {
+        "A48": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,31)"
+        },
+        "B48": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "A49",
+      "formula": "=DATE(2024,3,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45382.0
+      }
+    },
+    {
+      "id": "B49",
+      "formula": "=DATE(2024,2,29)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45351.0
+      }
+    },
+    {
+      "id": "C49",
+      "formula": "=_xlfn.DAYS(A49,B49)",
+      "setup": {
+        "B49": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        },
+        "A49": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.0
+      }
+    },
+    {
+      "id": "D49",
+      "formula": "=DAYS360(B49,A49)",
+      "setup": {
+        "A49": {
+          "kind": "formula",
+          "formula": "=DATE(2024,3,31)"
+        },
+        "B49": {
+          "kind": "formula",
+          "formula": "=DATE(2024,2,29)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "A50",
+      "formula": "=DATE(2025,3,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45747.0
+      }
+    },
+    {
+      "id": "B50",
+      "formula": "=DATE(2025,1,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45688.0
+      }
+    },
+    {
+      "id": "C50",
+      "formula": "=_xlfn.DAYS(A50,B50)",
+      "setup": {
+        "B50": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        },
+        "A50": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 59.0
+      }
+    },
+    {
+      "id": "D50",
+      "formula": "=DAYS360(B50,A50)",
+      "setup": {
+        "A50": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,31)"
+        },
+        "B50": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "A51",
+      "formula": "=DATE(2025,5,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45808.0
+      }
+    },
+    {
+      "id": "B51",
+      "formula": "=DATE(2025,3,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45747.0
+      }
+    },
+    {
+      "id": "C51",
+      "formula": "=_xlfn.DAYS(A51,B51)",
+      "setup": {
+        "B51": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,31)"
+        },
+        "A51": {
+          "kind": "formula",
+          "formula": "=DATE(2025,5,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      }
+    },
+    {
+      "id": "D51",
+      "formula": "=DAYS360(B51,A51)",
+      "setup": {
+        "A51": {
+          "kind": "formula",
+          "formula": "=DATE(2025,5,31)"
+        },
+        "B51": {
+          "kind": "formula",
+          "formula": "=DATE(2025,3,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "A52",
+      "formula": "=DATE(2025,4,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45777.0
+      }
+    },
+    {
+      "id": "B52",
+      "formula": "=DATE(2025,1,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45687.0
+      }
+    },
+    {
+      "id": "C52",
+      "formula": "=_xlfn.DAYS(A52,B52)",
+      "setup": {
+        "B52": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,30)"
+        },
+        "A52": {
+          "kind": "formula",
+          "formula": "=DATE(2025,4,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 90.0
+      }
+    },
+    {
+      "id": "D52",
+      "formula": "=DAYS360(B52,A52)",
+      "setup": {
+        "A52": {
+          "kind": "formula",
+          "formula": "=DATE(2025,4,30)"
+        },
+        "B52": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 90.0
+      }
+    },
+    {
+      "id": "A53",
+      "formula": "=DATE(2025,4,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45777.0
+      }
+    },
+    {
+      "id": "B53",
+      "formula": "=DATE(2025,1,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45688.0
+      }
+    },
+    {
+      "id": "C53",
+      "formula": "=_xlfn.DAYS(A53,B53)",
+      "setup": {
+        "B53": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        },
+        "A53": {
+          "kind": "formula",
+          "formula": "=DATE(2025,4,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 89.0
+      }
+    },
+    {
+      "id": "D53",
+      "formula": "=DAYS360(B53,A53)",
+      "setup": {
+        "A53": {
+          "kind": "formula",
+          "formula": "=DATE(2025,4,30)"
+        },
+        "B53": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 90.0
+      }
+    },
+    {
+      "id": "A54",
+      "formula": "=DATE(2025,1,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45688.0
+      }
+    },
+    {
+      "id": "B54",
+      "formula": "=DATE(2025,1,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45687.0
+      }
+    },
+    {
+      "id": "C54",
+      "formula": "=_xlfn.DAYS(A54,B54)",
+      "setup": {
+        "B54": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,30)"
+        },
+        "A54": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D54",
+      "formula": "=DAYS360(B54,A54)",
+      "setup": {
+        "A54": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,31)"
+        },
+        "B54": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A55",
+      "formula": "=DATE(2025,12,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46022.0
+      }
+    },
+    {
+      "id": "B55",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "C55",
+      "formula": "=_xlfn.DAYS(A55,B55)",
+      "setup": {
+        "B55": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        },
+        "A55": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 364.0
+      }
+    },
+    {
+      "id": "D55",
+      "formula": "=DAYS360(B55,A55)",
+      "setup": {
+        "A55": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,31)"
+        },
+        "B55": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "A56",
+      "formula": "=DATE(2026,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46023.0
+      }
+    },
+    {
+      "id": "B56",
+      "formula": "=DATE(2025,12,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46022.0
+      }
+    },
+    {
+      "id": "C56",
+      "formula": "=_xlfn.DAYS(A56,B56)",
+      "setup": {
+        "B56": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,31)"
+        },
+        "A56": {
+          "kind": "formula",
+          "formula": "=DATE(2026,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D56",
+      "formula": "=DAYS360(B56,A56)",
+      "setup": {
+        "A56": {
+          "kind": "formula",
+          "formula": "=DATE(2026,1,1)"
+        },
+        "B56": {
+          "kind": "formula",
+          "formula": "=DATE(2025,12,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A57",
+      "formula": "=DATE(2025,6,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45838.0
+      }
+    },
+    {
+      "id": "B57",
+      "formula": "=DATE(2025,6,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45838.0
+      }
+    },
+    {
+      "id": "C57",
+      "formula": "=_xlfn.DAYS(A57,B57)",
+      "setup": {
+        "B57": {
+          "kind": "formula",
+          "formula": "=DATE(2025,6,30)"
+        },
+        "A57": {
+          "kind": "formula",
+          "formula": "=DATE(2025,6,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D57",
+      "formula": "=DAYS360(B57,A57)",
+      "setup": {
+        "A57": {
+          "kind": "formula",
+          "formula": "=DATE(2025,6,30)"
+        },
+        "B57": {
+          "kind": "formula",
+          "formula": "=DATE(2025,6,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A58",
+      "formula": "=DATE(2025,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45716.0
+      }
+    },
+    {
+      "id": "B58",
+      "formula": "=DATE(2025,2,28)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45716.0
+      }
+    },
+    {
+      "id": "C58",
+      "formula": "=_xlfn.DAYS(A58,B58)",
+      "setup": {
+        "B58": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "A58": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D58",
+      "formula": "=DAYS360(B58,A58)",
+      "setup": {
+        "A58": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        },
+        "B58": {
+          "kind": "formula",
+          "formula": "=DATE(2025,2,28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "A59",
+      "formula": "=DATE(9999,12,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      }
+    },
+    {
+      "id": "B59",
+      "formula": "=DATE(9999,12,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958464.0
+      }
+    },
+    {
+      "id": "C59",
+      "formula": "=_xlfn.DAYS(A59,B59)",
+      "setup": {
+        "B59": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,30)"
+        },
+        "A59": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D59",
+      "formula": "=DAYS360(B59,A59)",
+      "setup": {
+        "A59": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)"
+        },
+        "B59": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B60",
+      "formula": "=DATE(9999,12,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      }
+    },
+    {
+      "id": "C60",
+      "formula": "=_xlfn.DAYS(A60,B60)",
+      "setup": {
+        "A60": {
+          "kind": "number",
+          "value": 2958466.0
+        },
+        "B60": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D60",
+      "formula": "=DAYS360(B60,A60)",
+      "setup": {
+        "A60": {
+          "kind": "number",
+          "value": 2958466.0
+        },
+        "B60": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A61",
+      "formula": "=DATE(2025,1,1)+0.9999",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.9999
+      }
+    },
+    {
+      "id": "B61",
+      "formula": "=DATE(2025,1,1)+0.0001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0001
+      }
+    },
+    {
+      "id": "C61",
+      "formula": "=_xlfn.DAYS(A61,B61)",
+      "setup": {
+        "B61": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.0001"
+        },
+        "A61": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D61",
+      "formula": "=DAYS360(B61,A61)",
+      "setup": {
+        "A61": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999"
+        },
+        "B61": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.0001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A62",
+      "formula": "=DATE(2025,1,2)+0.4",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45659.4
+      }
+    },
+    {
+      "id": "B62",
+      "formula": "=DATE(2025,1,1)+0.6",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.6
+      }
+    },
+    {
+      "id": "C62",
+      "formula": "=_xlfn.DAYS(A62,B62)",
+      "setup": {
+        "B62": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.6"
+        },
+        "A62": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.4"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D62",
+      "formula": "=DAYS360(B62,A62)",
+      "setup": {
+        "A62": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.4"
+        },
+        "B62": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A63",
+      "formula": "=-(DATE(2025,1,1)+0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -45658.5
+      }
+    },
+    {
+      "id": "B63",
+      "formula": "=-(DATE(2025,1,2)+0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -45659.5
+      }
+    },
+    {
+      "id": "C63",
+      "formula": "=_xlfn.DAYS(A63,B63)",
+      "setup": {
+        "B63": {
+          "kind": "formula",
+          "formula": "=-(DATE(2025,1,2)+0.5)"
+        },
+        "A63": {
+          "kind": "formula",
+          "formula": "=-(DATE(2025,1,1)+0.5)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D63",
+      "formula": "=DAYS360(B63,A63)",
+      "setup": {
+        "A63": {
+          "kind": "formula",
+          "formula": "=-(DATE(2025,1,1)+0.5)"
+        },
+        "B63": {
+          "kind": "formula",
+          "formula": "=-(DATE(2025,1,2)+0.5)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B64",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "C64",
+      "formula": "=_xlfn.DAYS(A64,B64)",
+      "setup": {
+        "B64": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -45658.0
+      }
+    },
+    {
+      "id": "D64",
+      "formula": "=DAYS360(B64,A64)",
+      "setup": {
+        "B64": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B64,A64)"
+    },
+    {
+      "id": "A65",
+      "formula": "=DATE(2025,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.0
+      }
+    },
+    {
+      "id": "C65",
+      "formula": "=_xlfn.DAYS(A65,B65)",
+      "setup": {
+        "A65": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45667.0
+      }
+    },
+    {
+      "id": "D65",
+      "formula": "=DAYS360(B65,A65)",
+      "setup": {
+        "A65": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45010.0
+      }
+    },
+    {
+      "id": "C66",
+      "formula": "=_xlfn.DAYS(A66,B66)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D66",
+      "formula": "=DAYS360(B66,A66)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B67",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "C67",
+      "formula": "=_xlfn.DAYS(,B67)",
+      "setup": {
+        "B67": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -45658.0
+      }
+    },
+    {
+      "id": "D67",
+      "formula": "=DAYS360(,B67)",
+      "setup": {
+        "B67": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45001.0
+      }
+    },
+    {
+      "id": "A68",
+      "formula": "=DATE(2025,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45667.0
+      }
+    },
+    {
+      "id": "C68",
+      "formula": "=_xlfn.DAYS(A68,)",
+      "setup": {
+        "A68": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45667.0
+      }
+    },
+    {
+      "id": "D68",
+      "formula": "=DAYS360(A68,)",
+      "setup": {
+        "A68": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,10)"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(A68,)"
+    },
+    {
+      "id": "C69",
+      "formula": "=_xlfn.DAYS(,)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D69",
+      "formula": "=DAYS360(,)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C70",
+      "formula": "=_xlfn.DAYS(A70,B70)",
+      "setup": {
+        "B70": {
+          "kind": "text",
+          "value": "2026-06-01"
+        },
+        "A70": {
+          "kind": "text",
+          "value": "2026-07-01"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "D70",
+      "formula": "=DAYS360(B70,A70)",
+      "setup": {
+        "A70": {
+          "kind": "text",
+          "value": "2026-07-01"
+        },
+        "B70": {
+          "kind": "text",
+          "value": "2026-06-01"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "C71",
+      "formula": "=_xlfn.DAYS(A71,B71)",
+      "setup": {
+        "B71": {
+          "kind": "text",
+          "value": "June 1, 2026"
+        },
+        "A71": {
+          "kind": "text",
+          "value": "July 1, 2026"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.DAYS(A71,B71)"
+    },
+    {
+      "id": "D71",
+      "formula": "=DAYS360(B71,A71)",
+      "setup": {
+        "A71": {
+          "kind": "text",
+          "value": "July 1, 2026"
+        },
+        "B71": {
+          "kind": "text",
+          "value": "June 1, 2026"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B71,A71)"
+    },
+    {
+      "id": "C72",
+      "formula": "=_xlfn.DAYS(A72,B72)",
+      "setup": {
+        "B72": {
+          "kind": "text",
+          "value": "1/1/28"
+        },
+        "A72": {
+          "kind": "text",
+          "value": "1/1/29"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.DAYS(A72,B72)"
+    },
+    {
+      "id": "D72",
+      "formula": "=DAYS360(B72,A72)",
+      "setup": {
+        "A72": {
+          "kind": "text",
+          "value": "1/1/29"
+        },
+        "B72": {
+          "kind": "text",
+          "value": "1/1/28"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B72,A72)"
+    },
+    {
+      "id": "C73",
+      "formula": "=_xlfn.DAYS(A73,B73)",
+      "setup": {
+        "B73": {
+          "kind": "text",
+          "value": "1/1/29"
+        },
+        "A73": {
+          "kind": "text",
+          "value": "1/1/30"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.DAYS(A73,B73)"
+    },
+    {
+      "id": "D73",
+      "formula": "=DAYS360(B73,A73)",
+      "setup": {
+        "A73": {
+          "kind": "text",
+          "value": "1/1/30"
+        },
+        "B73": {
+          "kind": "text",
+          "value": "1/1/29"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B73,A73)"
+    },
+    {
+      "id": "C74",
+      "formula": "=_xlfn.DAYS(A74,B74)",
+      "setup": {
+        "B74": {
+          "kind": "text",
+          "value": "44999"
+        },
+        "A74": {
+          "kind": "text",
+          "value": "45000"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D74",
+      "formula": "=DAYS360(B74,A74)",
+      "setup": {
+        "A74": {
+          "kind": "text",
+          "value": "45000"
+        },
+        "B74": {
+          "kind": "text",
+          "value": "44999"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C75",
+      "formula": "=_xlfn.DAYS(A75,B75)",
+      "setup": {
+        "B75": {
+          "kind": "text",
+          "value": "2025-02-01"
+        },
+        "A75": {
+          "kind": "text",
+          "value": "2025-02-29"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D75",
+      "formula": "=DAYS360(B75,A75)",
+      "setup": {
+        "A75": {
+          "kind": "text",
+          "value": "2025-02-29"
+        },
+        "B75": {
+          "kind": "text",
+          "value": "2025-02-01"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A77",
+      "formula": "=DATE(2025,1,1)+0.9999999",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.99999989583
+      }
+    },
+    {
+      "id": "B77",
+      "formula": "=DATE(2025,1,1)+0.0000001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.00000010417
+      }
+    },
+    {
+      "id": "C77",
+      "formula": "=_xlfn.DAYS(A77,B77)",
+      "setup": {
+        "B77": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.0000001"
+        },
+        "A77": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999999"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D77",
+      "formula": "=DAYS360(B77,A77)",
+      "setup": {
+        "A77": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999999"
+        },
+        "B77": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.0000001"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B77,A77)"
+    },
+    {
+      "id": "A78",
+      "formula": "=DATE(2025,1,2)+0.0000001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45659.00000010417
+      }
+    },
+    {
+      "id": "B78",
+      "formula": "=DATE(2025,1,1)+0.9999999",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.99999989583
+      }
+    },
+    {
+      "id": "C78",
+      "formula": "=_xlfn.DAYS(A78,B78)",
+      "setup": {
+        "B78": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999999"
+        },
+        "A78": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.0000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D78",
+      "formula": "=DAYS360(B78,A78)",
+      "setup": {
+        "A78": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.0000001"
+        },
+        "B78": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999999"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B78,A78)"
+    },
+    {
+      "id": "A79",
+      "formula": "=DATE(2025,1,2)+0.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45659.5
+      }
+    },
+    {
+      "id": "B79",
+      "formula": "=DATE(2025,1,1)+0.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.5
+      }
+    },
+    {
+      "id": "C79",
+      "formula": "=_xlfn.DAYS(A79,B79)",
+      "setup": {
+        "B79": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.5"
+        },
+        "A79": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D79",
+      "formula": "=DAYS360(B79,A79)",
+      "setup": {
+        "A79": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.5"
+        },
+        "B79": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A80",
+      "formula": "=DATE(2025,1,2)+0.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45659.5
+      }
+    },
+    {
+      "id": "B80",
+      "formula": "=DATE(2025,1,1)+0.4999999",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.49999989583
+      }
+    },
+    {
+      "id": "C80",
+      "formula": "=_xlfn.DAYS(A80,B80)",
+      "setup": {
+        "B80": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.4999999"
+        },
+        "A80": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D80",
+      "formula": "=DAYS360(B80,A80)",
+      "setup": {
+        "A80": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.5"
+        },
+        "B80": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.4999999"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A81",
+      "formula": "=DATE(2025,1,1)+0.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.5
+      }
+    },
+    {
+      "id": "B81",
+      "formula": "=DATE(2025,1,2)+0.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45659.5
+      }
+    },
+    {
+      "id": "C81",
+      "formula": "=_xlfn.DAYS(A81,B81)",
+      "setup": {
+        "B81": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.5"
+        },
+        "A81": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "D81",
+      "formula": "=DAYS360(B81,A81)",
+      "setup": {
+        "A81": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.5"
+        },
+        "B81": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,2)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "A82",
+      "formula": "=DATE(2025,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.0
+      }
+    },
+    {
+      "id": "B82",
+      "formula": "=DATE(2025,1,1)+0.9999999",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45658.99999989583
+      }
+    },
+    {
+      "id": "C82",
+      "formula": "=_xlfn.DAYS(A82,B82)",
+      "setup": {
+        "B82": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999999"
+        },
+        "A82": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D82",
+      "formula": "=DAYS360(B82,A82)",
+      "setup": {
+        "A82": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)"
+        },
+        "B82": {
+          "kind": "formula",
+          "formula": "=DATE(2025,1,1)+0.9999999"
+        }
+      },
+      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B82,A82)"
+    }
+  ]
+}

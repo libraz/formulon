@@ -1,0 +1,30 @@
+{
+  "suite": "ironcalc_calc_tests__DATE_AND_TIME_DATEVALUE_issue_1380_DATEVALUE",
+  "description": "Derived from IronCalc fixture calc_tests/DATE_AND_TIME/DATEVALUE_issue_1380.xlsx, sheet 'DATEVALUE'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "106c587d797ff5c2c135ae43b066520a8736be6f",
+    "sheet": "DATEVALUE",
+    "excel_locale": "unknown",
+    "saved_by": "Microsoft Excel",
+    "saved_by_version": "16.0300",
+    "generated_at": "2026-10-08T08:32:30Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=DATEVALUE(A2)",
+      "setup": {
+        "A2": {
+          "kind": "text",
+          "value": "2026 - 01 - 01"
+        }
+      },
+      "skipped": "Locale mismatch (en-US cached value versus current ja-JP evaluation); re-evaluate with the saving-host locale profile. Formula: =DATEVALUE(A2)"
+    }
+  ]
+}
