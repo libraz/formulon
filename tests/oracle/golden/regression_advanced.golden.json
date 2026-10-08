@@ -2,11 +2,11 @@
   "suite": "regression_advanced",
   "description": "Advanced regression family — LINEST, TREND, LOGEST, GROWTH, FREQUENCY (Excel 365). 35 perspectives (7 per function). Array-aware oracle capture makes most spill outputs live; remaining skip-oracle entries are limited to numerically unstable perfect-fit F-statistic slots and an empty bins-array literal read-back quirk. Tolerance widened to 1e-10 for stats-block fit metrics.",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-10-08T04:37:32Z"
   },
   "tolerance": {
     "abs": 1e-10,
@@ -408,7 +408,7 @@
       "id": "frequency_empty_bins",
       "formula": "=FREQUENCY({1;2;3}, {})",
       "setup": {},
-      "skipped": "Mac Excel 16.109/xlwings captures FREQUENCY({1;2;3}, {}) as blank for the empty array-literal bins argument, while Formulon treats the degenerate zero-numeric-bin case as the documented 1x1 count spill. Non-empty fully non-numeric bins remain covered by unit tests."
+      "skipped": "Mac Excel refuses =FREQUENCY({1;2;3}, {}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The empty array literal is rejected as a formula construct rather than treated as a degenerate bins argument. Formulon treats the zero-numeric-bin case as the documented 1x1 count spill. Non-empty fully non-numeric bins remain covered by unit tests. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     },
     {
       "id": "frequency_text_in_data_skipped",

@@ -2,11 +2,11 @@
   "suite": "lambda_reference_params",
   "description": "LAMBDA parameters and LET names bound to a reference stay references: ISREF, ROW / COLUMN, CELL and OFFSET inside the body see the argument's rectangle, not its value. Also pins what the helper callbacks (MAP / BYROW / BYCOL / REDUCE / SCAN / MAKEARRAY) receive for a range source.\n",
   "environment": {
-    "excel_version": "16.113.2",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-09-29T18:34:56Z"
+    "generated_at": "2026-10-08T04:37:32Z"
   },
   "tolerance": {
     "abs": 0.0,

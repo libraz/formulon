@@ -2,11 +2,11 @@
   "suite": "h7_blank_projection",
   "description": "Blank grid projection across raw references and dynamic-array wrappers (Excel 365).",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T14:12:27Z"
+    "generated_at": "2026-10-08T04:37:32Z"
   },
   "tolerance": {
     "abs": 0.0,

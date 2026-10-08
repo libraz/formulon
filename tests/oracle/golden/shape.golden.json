@@ -2,11 +2,11 @@
   "suite": "shape",
   "description": "ROWS / COLUMNS / ROW / COLUMN / SUMPRODUCT lazy-dispatched builtins. Each requires per-argument AST shape (Ref / RangeOp / ArrayLiteral) so the eager dispatcher's Value-flattening path is bypassed.",
   "environment": {
-    "excel_version": "16.112.1",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-21T15:45:40Z"
+    "generated_at": "2026-10-08T04:37:32Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -390,13 +390,13 @@
       "id": "columns_of_two_endpoint_mixed_axis",
       "formula": "=COLUMNS(A:1)",
       "setup": {},
-      "skipped": "driver skip: _FormulaRetentionError: Excel silently rejected formula for case 'columns_of_two_endpoint_mixed_axis' result: formula='=COLUMNS(A:1)'; formula2/formula readback was empty"
+      "skipped": "Mac Excel refuses the two-endpoint mixed-axis spelling (=ROWS(A:1), =COLUMNS(A:1)) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The three-endpoint spelling (=ROWS(1:3:E5) / =COLUMNS(1:3:E5), cases rows_of_whole_row_chained_with_cell / columns_of_whole_row_chained_with_cell) is accepted and has a real golden. Formulon's parser surfaces #NAME? for the rejected two-endpoint spelling. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     },
     {
       "id": "rows_of_two_endpoint_mixed_axis",
       "formula": "=ROWS(A:1)",
       "setup": {},
-      "skipped": "driver skip: _FormulaRetentionError: Excel silently rejected formula for case 'rows_of_two_endpoint_mixed_axis' result: formula='=ROWS(A:1)'; formula2/formula readback was empty"
+      "skipped": "Mac Excel refuses the two-endpoint mixed-axis spelling (=ROWS(A:1), =COLUMNS(A:1)) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The three-endpoint spelling (=ROWS(1:3:E5) / =COLUMNS(1:3:E5), cases rows_of_whole_row_chained_with_cell / columns_of_whole_row_chained_with_cell) is accepted and has a real golden. Formulon's parser surfaces #NAME? for the rejected two-endpoint spelling. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     },
     {
       "id": "row_of_ref",
@@ -663,7 +663,7 @@
       "id": "rows_of_mixed_row_array_literal",
       "formula": "=ROWS({1,2;3,4,5})",
       "setup": {},
-      "skipped": "Mac Excel refuses =ROWS({1,2;3,4,5}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's parser surfaces #NAME? for the jagged array literal."
+      "skipped": "Mac Excel refuses =ROWS({1,2;3,4,5}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's parser surfaces #NAME? for the jagged array literal. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
     },
     {
       "id": "rows_of_let_rangeop",

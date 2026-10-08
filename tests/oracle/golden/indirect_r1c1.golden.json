@@ -2,11 +2,11 @@
   "suite": "indirect_r1c1",
   "description": "INDIRECT's `a1` flag. The `a1 = FALSE` cases show the R1C1 grammar being read rather than the flag being ignored: `R2C3` resolves to the same cell `C2` names, and the string ADDRESS itself emits under `a1 = FALSE` round trips back through INDIRECT.\nThe `a1 = TRUE` cases are what make that meaningful. The first shows the reference resolves at all; the second shows Excel rejects R1C1 text when the flag says A1 -- without it, \"R2C3 resolved\" would not distinguish Excel honouring the flag from Excel ignoring ref_text's syntax entirely. Each style rejects the other's spelling, so the flag selects a grammar instead of adding a fallback.\nRelative axes (`R[1]C[-1]`, bare `RC`) are not covered here: they measure from the cell holding the formula, and the harness places every case at a fixed anchor, so a golden would pin the anchor rather than the semantics. Those live in tests/unit/eval/builtins_references_test.cpp.\n",
   "environment": {
-    "excel_version": "16.112",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-18T04:54:23Z"
+    "generated_at": "2026-10-08T04:37:32Z"
   },
   "tolerance": {
     "abs": 0.0,

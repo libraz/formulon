@@ -2,11 +2,11 @@
   "suite": "intersect_operator",
   "description": "Range-intersect operator (single space between two range refs). Excel evaluates `A1:C3 B1:B5` as the rectangle common to both operands (B1:B3 here); non-overlapping operands yield #NULL!. The operator is legal anywhere a range is expected (SUM argument, single-cell read in a 365 spill, comparison operand). Coverage spans: aligned intersection in an aggregator, non-overlapping operands, single-cell intersection, whole-column/whole-row intersection, and intersect feeding an INDEX call.\n",
   "environment": {
-    "excel_version": "16.112.1",
+    "excel_version": "16.113.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-21T15:46:48Z"
+    "generated_at": "2026-10-08T04:37:32Z"
   },
   "tolerance": {
     "abs": 0.0,
