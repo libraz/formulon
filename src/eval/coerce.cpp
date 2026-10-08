@@ -42,14 +42,15 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* f
   //   1. decimal parse(trimmed)             - plain numeric fast path
   //   2. trailing '%' stripped, parse, /100 - percent literals
   //   3. VALUE()-style locale parse          - grouping, parens, full-width,
-  //                                            currency ({$, ¥, ￥, €} on one
-  //                                            side only), currency + percent
+  //                                            currency ({$, €} everywhere;
+  //                                            ¥/￥ in Japanese, one side
+  //                                            only), currency + percent
   //   4. date / datetime fallback (raw text) - DATEVALUE-style shapes
   //   5. #VALUE!
   // Currency handling lives entirely in step 3 (`parse_excel_number`) so
   // implicit coercion and the VALUE() builtin share one code path and agree
-  // exactly (Mac Excel 365 ja-JP accepts a currency marker on the leading OR
-  // trailing side but not both, and only {$, ¥, ￥, €}). The date fallback
+  // exactly (Excel accepts a currency marker on the leading OR trailing side
+  // but not both; yen is Japanese-profile-only). The date fallback
   // runs against the raw, untrimmed text so padded date strings stay #VALUE!
   // (see WhitespacePaddedDate rejection test).
   double parsed = 0.0;

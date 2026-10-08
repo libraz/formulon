@@ -9,6 +9,8 @@
 #include <cmath>
 #include <cstdint>
 
+#include "eval/eval_profile_scope.h"
+#include "excel_locale.h"
 #include "utils/double_parse.h"
 
 namespace formulon {
@@ -29,11 +31,9 @@ std::string_view trim_ascii(std::string_view s) noexcept {
   return s;
 }
 
-// Strips a leading currency prefix. The accepted set is the host profile's
-// currency symbols; for the ja-JP profile this is {$, ¥, ￥, €} (ASCII '$',
-// UTF-8 '¥' 0xC2 0xA5, full-width '￥' 0xEF 0xBF 0xA5, '€' 0xE2 0x82 0xAC).
-// `£` / `¢` / `₩` / the kanji `円` are deliberately excluded (oracle-verified
-// against Mac Excel 365 ja-JP; a future en-GB profile would add '£').
+// Strips a leading currency prefix. Dollar and Euro are shared by the
+// profiles; the two yen spellings belong to the Japanese locale fact. `£` /
+// `¢` / `₩` / the kanji `円` remain outside the bounded vocabulary.
 // Returns the input unchanged when no accepted symbol is present.
 std::string_view strip_currency(std::string_view s) noexcept {
   if (s.empty()) {
@@ -42,11 +42,13 @@ std::string_view strip_currency(std::string_view s) noexcept {
   if (s.front() == '$') {
     return s.substr(1);
   }
-  if (s.size() >= 2 && static_cast<unsigned char>(s[0]) == 0xC2u && static_cast<unsigned char>(s[1]) == 0xA5u) {
+  const bool japanese_currency = locale_facts(current_eval_profile()).currency_symbol == "¥";
+  if (japanese_currency && s.size() >= 2 && static_cast<unsigned char>(s[0]) == 0xC2u &&
+      static_cast<unsigned char>(s[1]) == 0xA5u) {
     return s.substr(2);
   }
-  if (s.size() >= 3 && static_cast<unsigned char>(s[0]) == 0xEFu && static_cast<unsigned char>(s[1]) == 0xBFu &&
-      static_cast<unsigned char>(s[2]) == 0xA5u) {
+  if (japanese_currency && s.size() >= 3 && static_cast<unsigned char>(s[0]) == 0xEFu &&
+      static_cast<unsigned char>(s[1]) == 0xBFu && static_cast<unsigned char>(s[2]) == 0xA5u) {
     return s.substr(3);
   }
   if (s.size() >= 3 && static_cast<unsigned char>(s[0]) == 0xE2u && static_cast<unsigned char>(s[1]) == 0x82u &&
@@ -75,7 +77,7 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
   if (s.empty()) {
     return false;
   }
-  // Sign and currency may appear in either order at the front, and Mac Excel
+  // Sign and currency may appear in either order at the front, and Excel
   // accepts a currency symbol on the leading OR trailing side but NOT both:
   //   "-$100" / "$-100" / "$ 100" -> ok;  "$100" / "€100" / "100€" -> ok;
   //   "$100€" -> #VALUE! (currency on both ends).
@@ -112,8 +114,8 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
   }
   // A trailing Euro suffix is a single-sided currency: strip it only when no
   // leading currency was consumed, so "$100€" (currency on both ends) keeps a
-  // stray `€` that the numeric scan below rejects. Mac Excel 365 accepts `€`
-  // as a suffix (e.g. `"23€"`); `$` and `円` are not accepted as suffixes.
+  // stray `€` that the numeric scan below rejects. Excel accepts `€` as a
+  // suffix (e.g. `"23€"`); `$` and `円` are not accepted as suffixes.
   if (!leading_currency) {
     s = strip_trailing_euro(s);
     if (s.empty()) {
@@ -121,7 +123,7 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
     }
   }
   // Trailing percent signs. Each `%` multiplies the parsed value by 0.01,
-  // so `"50%%"` yields `0.005` (matches Mac Excel ja-JP NUMBERVALUE).
+  // so `"50%%"` yields `0.005` (matching Excel's NUMBERVALUE behavior).
   int percent_count = 0;
   while (!s.empty() && s.back() == '%') {
     ++percent_count;
@@ -225,6 +227,7 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
 
 std::string normalize_locale_numeric(std::string_view raw, bool* paren_negated) {
   *paren_negated = false;
+  const bool fold_fullwidth = locale_facts(current_eval_profile()).fullwidth_numeric_text;
   std::string out;
   out.reserve(raw.size());
   std::size_t i = 0;
@@ -234,7 +237,7 @@ std::string normalize_locale_numeric(std::string_view raw, bool* paren_negated) 
     // care about; everything else passes through verbatim so multi-byte
     // tails (e.g. `¥` 0xC2 0xA5, the kanji `円`, etc.) reach `parse_numeric`
     // unchanged.
-    if (b0 >= 0xE0u && b0 < 0xF0u && i + 2 < raw.size()) {
+    if (fold_fullwidth && b0 >= 0xE0u && b0 < 0xF0u && i + 2 < raw.size()) {
       const unsigned char b1 = static_cast<unsigned char>(raw[i + 1]);
       const unsigned char b2 = static_cast<unsigned char>(raw[i + 2]);
       const std::uint32_t cp = (static_cast<std::uint32_t>(b0 & 0x0Fu) << 12) |
@@ -273,8 +276,8 @@ std::string normalize_locale_numeric(std::string_view raw, bool* paren_negated) 
     ++i;
   }
   // Accounting-style outer parens. Trim only ASCII whitespace because
-  // `parse_numeric` does the same; full-width spaces have already been
-  // folded to ASCII above.
+  // `parse_numeric` does the same; a Japanese profile has already folded
+  // full-width spaces to ASCII above.
   std::string_view trimmed = trim_ascii(out);
   if (trimmed.size() >= 3 && trimmed.front() == '(' && trimmed.back() == ')') {
     std::string_view inner = trimmed.substr(1, trimmed.size() - 2);

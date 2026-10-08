@@ -7,11 +7,10 @@
 // the host's local wall clock via `std::chrono::system_clock` +
 // `localtime_r` / `localtime_s` and return an Excel serial directly; volatile
 // recalc semantics are the scheduler's responsibility, not this file's.
-// DATEVALUE / TIMEVALUE parse a common subset of Excel's ja-JP-locale
-// date/time strings (ISO, slash, and kanji forms — see the parser helpers
-// below). Wareki (Reiwa/Heisei/Showa/...) era dates are parsed by
-// `parse_era_text` in `eval/date_text_parse.cpp`. Shared calendar helpers
-// (serial <-> y/m/d, weekday
+// DATEVALUE / TIMEVALUE parse profile-aware date/time strings (ISO, slash,
+// and locale-gated kanji forms — see the parser helpers below). Wareki
+// (Reiwa/Heisei/Showa/...) era dates are parsed by `parse_era_text` in
+// `eval/date_text_parse.cpp`. Shared calendar helpers (serial <-> y/m/d, weekday
 // arithmetic, time-of-day decomposition) live in `eval/date_time.h`; this
 // file only layers Excel's argument-shape and error-handling rules on top.
 
@@ -1007,8 +1006,8 @@ Value Today_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/, b
 // ---------------------------------------------------------------------------
 // DATEVALUE / TIMEVALUE text parsing
 //
-// The parse grammar (ISO dashed, slash, and kanji date forms; time-of-day
-// with optional fractional seconds and AM/PM markers) is implemented in
+// The parse grammar (ISO dashed, slash, and locale-gated kanji date forms;
+// time-of-day with optional fractional seconds and AM/PM markers) is implemented in
 // `src/eval/date_text_parse.{h,cpp}` so DATEVALUE / TIMEVALUE / VALUE all
 // funnel through the same recognizer. The helpers below only add the
 // Excel-level argument-shape rules on top of that shared parser.

@@ -16,6 +16,7 @@
 //   2024-07-04 = 45477
 //   2026-04-23 = 46135
 
+#include <array>
 #include <cmath>
 #include <string>
 #include <string_view>
@@ -23,6 +24,7 @@
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -549,6 +551,98 @@ Value EvalSourcePinned(std::string_view src, date_time::CivilTime pinned = kPinn
     return Value::error(ErrorCode::Name);
   }
   return evaluate(*root, eval_arena, default_registry(), EvalContext().with_pinned_now(pinned));
+}
+
+struct DateProfileCase {
+  ExcelProfile profile;
+  const char* id;
+  bool japanese;
+};
+
+constexpr std::array<DateProfileCase, 4> kDateProfiles = {{
+    {mac_365_ja_jp_profile(), "mac-365-ja_JP", true},
+    {win_365_ja_jp_profile(), "win-365-ja_JP", true},
+    {mac_365_en_us_profile(), "mac-365-en_US", false},
+    {win_365_en_us_profile(), "win-365-en_US", false},
+}};
+
+Value EvalSourceWithProfile(std::string_view src, ExcelProfile profile) {
+  Arena& parse_arena = formulon::test::test_parse_arena();
+  Arena& eval_arena = formulon::test::test_eval_arena();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate(*root, eval_arena, default_registry(), EvalContext().with_excel_profile(profile));
+}
+
+TEST(DatevalueProfile, TwoDigitYearUsesLocaleOrderForDatevalueAndValue) {
+  for (const DateProfileCase& profile : kDateProfiles) {
+    SCOPED_TRACE(profile.id);
+    const Value date = EvalSourceWithProfile(profile.japanese ? "=DATEVALUE(\"29/3/15\")" : "=DATEVALUE(\"3/15/29\")",
+                                             profile.profile);
+    ASSERT_TRUE(date.is_number());
+    EXPECT_DOUBLE_EQ(date.as_number(), 47192.0);
+
+    const Value value =
+        EvalSourceWithProfile(profile.japanese ? "=VALUE(\"29-3-15\")" : "=VALUE(\"3-15-29\")", profile.profile);
+    ASSERT_TRUE(value.is_number());
+    EXPECT_DOUBLE_EQ(value.as_number(), 47192.0);
+  }
+}
+
+TEST(DatevalueProfile, EnglishDateOrderDoesNotFallBackToYearFirst) {
+  for (const DateProfileCase& profile : kDateProfiles) {
+    if (profile.japanese) {
+      continue;
+    }
+    SCOPED_TRACE(profile.id);
+    const Value date = EvalSourceWithProfile("=DATEVALUE(\"29/3/15\")", profile.profile);
+    ASSERT_TRUE(date.is_error());
+    EXPECT_EQ(date.as_error(), ErrorCode::Value);
+
+    const Value value = EvalSourceWithProfile("=VALUE(\"29-3-15\")", profile.profile);
+    ASSERT_TRUE(value.is_error());
+    EXPECT_EQ(value.as_error(), ErrorCode::Value);
+  }
+}
+
+TEST(DatevalueProfile, FourDigitIsoDatesRemainYearFirst) {
+  for (const DateProfileCase& profile : kDateProfiles) {
+    SCOPED_TRACE(profile.id);
+    const Value value = EvalSourceWithProfile("=DATEVALUE(\"2024/3/15\")", profile.profile);
+    ASSERT_TRUE(value.is_number());
+    EXPECT_DOUBLE_EQ(value.as_number(), 45366.0);
+  }
+}
+
+TEST(DatevalueProfile, JapaneseDateTimeFormsAreLocaleGated) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  constexpr Case cases[] = {
+      {"=DATEVALUE(\"2024年3月15日\")", 45366.0},
+      {"=DATEVALUE(\"令和6年4月1日\")", 45383.0},
+      {"=DATEVALUE(\"２０２４/３/１５\")", 45366.0},
+      {"=TIMEVALUE(\"13時30分\")", 0.5625},
+  };
+  for (const DateProfileCase& profile : kDateProfiles) {
+    for (const Case& test_case : cases) {
+      SCOPED_TRACE(profile.id);
+      SCOPED_TRACE(test_case.formula);
+      const Value value = EvalSourceWithProfile(test_case.formula, profile.profile);
+      if (profile.japanese) {
+        ASSERT_TRUE(value.is_number());
+        EXPECT_DOUBLE_EQ(value.as_number(), test_case.expected);
+      } else {
+        ASSERT_TRUE(value.is_error());
+        EXPECT_EQ(value.as_error(), ErrorCode::Value);
+      }
+    }
+  }
 }
 
 TEST(DatevalueYearLess, SlashSeparatedUsesPinnedCurrentYear) {

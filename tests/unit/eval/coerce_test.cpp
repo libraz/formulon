@@ -11,11 +11,15 @@
 
 #include <locale.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
 #include <string>
+#include <string_view>
 
+#include "eval/eval_profile_scope.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -38,6 +42,69 @@ Value MakeArray(Arena& arena, std::uint32_t rows, std::uint32_t cols, std::initi
   arr->cols = cols;
   arr->cells = cells;
   return Value::array(arr);
+}
+
+struct CoerceProfileCase {
+  ExcelProfile profile;
+  const char* id;
+  bool japanese;
+};
+
+constexpr std::array<CoerceProfileCase, 4> kCoerceProfiles = {{
+    {mac_365_ja_jp_profile(), "mac-365-ja_JP", true},
+    {win_365_ja_jp_profile(), "win-365-ja_JP", true},
+    {mac_365_en_us_profile(), "mac-365-en_US", false},
+    {win_365_en_us_profile(), "win-365-en_US", false},
+}};
+
+Expected<double, ErrorCode> CoerceTextWithProfile(std::string_view text, ExcelProfile profile) {
+  const ScopedEvalProfile scope(profile);
+  return coerce_to_number(Value::text(text));
+}
+
+TEST(CoerceToNumberTextLocale, YenAndFullwidthNumericTextFollowProfile) {
+  for (const CoerceProfileCase& profile : kCoerceProfiles) {
+    SCOPED_TRACE(profile.id);
+    const auto yen = CoerceTextWithProfile(
+        "\xC2\xA5"
+        "100",
+        profile.profile);
+    const auto fullwidth_yen = CoerceTextWithProfile(
+        "\xEF\xBF\xA5"
+        "100",
+        profile.profile);
+    const auto fullwidth_digits = CoerceTextWithProfile("\xEF\xBC\x91\xEF\xBC\x92\xEF\xBC\x93", profile.profile);
+    if (profile.japanese) {
+      ASSERT_TRUE(yen.has_value());
+      EXPECT_DOUBLE_EQ(yen.value(), 100.0);
+      ASSERT_TRUE(fullwidth_yen.has_value());
+      EXPECT_DOUBLE_EQ(fullwidth_yen.value(), 100.0);
+      ASSERT_TRUE(fullwidth_digits.has_value());
+      EXPECT_DOUBLE_EQ(fullwidth_digits.value(), 123.0);
+    } else {
+      ASSERT_FALSE(yen.has_value());
+      EXPECT_EQ(yen.error(), ErrorCode::Value);
+      ASSERT_FALSE(fullwidth_yen.has_value());
+      EXPECT_EQ(fullwidth_yen.error(), ErrorCode::Value);
+      ASSERT_FALSE(fullwidth_digits.has_value());
+      EXPECT_EQ(fullwidth_digits.error(), ErrorCode::Value);
+    }
+  }
+}
+
+TEST(CoerceToNumberTextLocale, CommonCurrencyAndAccountingFormsRemainShared) {
+  for (const CoerceProfileCase& profile : kCoerceProfiles) {
+    SCOPED_TRACE(profile.id);
+    const auto dollar = CoerceTextWithProfile("$100", profile.profile);
+    const auto euro = CoerceTextWithProfile("100\xE2\x82\xAC", profile.profile);
+    const auto accounting = CoerceTextWithProfile("(100)", profile.profile);
+    ASSERT_TRUE(dollar.has_value());
+    EXPECT_DOUBLE_EQ(dollar.value(), 100.0);
+    ASSERT_TRUE(euro.has_value());
+    EXPECT_DOUBLE_EQ(euro.value(), 100.0);
+    ASSERT_TRUE(accounting.has_value());
+    EXPECT_DOUBLE_EQ(accounting.value(), -100.0);
+  }
 }
 
 TEST(CoerceToNumberTextDate, IsoDashedDate) {

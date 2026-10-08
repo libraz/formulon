@@ -29,11 +29,11 @@ namespace eval {
 /// * `Blank` becomes 0.0.
 /// * `Text` is parsed via `std::strtod` after trimming; on strtod failure a
 ///   date / datetime fallback (`date_parse::parse_date_time_text`) accepts
-///   ISO 8601 (`"2024-01-10"`), slash (`"2024/01/10"`), kanji
-///   (`"2024年1月10日"`), and date+time (`"2024-01-10 12:00"`) shapes,
-///   matching Mac Excel 365 ja-JP coercion. Empty / whitespace-only text
-///   yields `#VALUE!`; an otherwise unparseable string yields `#VALUE!`;
-///   a parse that produces a non-finite double yields `#NUM!`.
+///   ISO 8601 (`"2024-01-10"`), slash (`"2024/01/10"`), profile-gated
+///   kanji (`"2024年1月10日"`), and date+time (`"2024-01-10 12:00"`)
+///   shapes. Empty / whitespace-only text yields `#VALUE!`; an otherwise
+///   unparseable string yields `#VALUE!`; a parse that produces a non-finite
+///   double yields `#NUM!`.
 /// * `Error` propagates its code unchanged.
 /// * `Array`, `Ref`, and `Lambda` are unsupported in scalar contexts and
 ///   yield `#VALUE!` defensively.

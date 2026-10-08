@@ -1,13 +1,11 @@
 //
 // Shared date / time text-parsing helpers used by DATEVALUE, TIMEVALUE, and
-// VALUE. The primitives here recognise the shapes that Mac Excel 365 accepts
-// in ja-JP locale without touching the clock: ISO 8601 dashed dates,
-// slash-separated dates, the kanji (年/月/日) form, the wareki era forms
-// (令和/平成/昭和/大正/明治 with strict 年/月/日 separators, plus the
-// single-letter abbreviations R/H/S/T/M with dot separators), and
-// time-of-day tokens with optional fractional seconds, AM/PM markers, and
-// the kanji time form `H時M分[S秒]`. Full-width digits (U+FF10..U+FF19)
-// are folded to ASCII before tokenisation.
+// VALUE. The active Excel profile supplies date order and gates the Japanese
+// kanji/era forms and full-width digits. Common forms include ISO 8601
+// dashed dates, slash-separated dates, English month names, and time-of-day
+// tokens with optional fractional seconds and AM/PM markers. Japanese
+// profiles additionally recognise the kanji (年/月/日) and wareki forms and
+// the kanji time form `H時M分[S秒]`.
 
 #ifndef FORMULON_EVAL_DATE_TEXT_PARSE_H_
 #define FORMULON_EVAL_DATE_TEXT_PARSE_H_
