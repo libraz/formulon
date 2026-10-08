@@ -86,9 +86,7 @@ inline LogicalCoerce logical_coerce(const Value& v, bool* out_bool, ErrorCode* o
         *out_bool = false;
         return LogicalCoerce::HasValue;
       }
-      // In a locale whose boolean names are not TRUE / FALSE, the English
-      // words are ignored like range text instead of failing the call.
-      if (facts.true_name != "TRUE" &&
+      if (facts.logical_skips_english_bool_text &&
           (strings::case_insensitive_eq(trimmed, "TRUE") || strings::case_insensitive_eq(trimmed, "FALSE"))) {
         return LogicalCoerce::Skip;
       }

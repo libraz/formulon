@@ -1,7 +1,16 @@
 # Mac Excel 365 (de-DE) variant-specific divergences.
 #
-# The global registry supplies unscoped skips and entries whose applies_to
-# includes mac-365-de_DE. No additional target-specific entries are needed
-# for the current capture.
+# Entries here merge on top of tests/divergence.yaml (which supplies unscoped
+# skips and entries whose applies_to includes mac-365-de_DE) and override it
+# on key collision. Schema is identical to tests/divergence.yaml.
 
-entries: []
+entries:
+  # A point-decimal complex argument is read as a dotted date.
+  - id: imsum_point_decimal_input
+    applies_to: [mac-365-de_DE]
+    mode: skip-oracle
+    cause: excel-no-value
+    reason: "IMSUM(\"1.5+2i\",\"1\") is 46144+2i in Mac Excel de-DE: the real part \"1.5\" is read as the day-month date 1 May of the current year (serial 46143 in 2026). The value moves with the capture year, so no golden is reproducible. Value: tests/oracle/targets/mac-365-de_DE/golden/locale_tokens.golden.json."
+    prefer: mac
+    first_noted: 2026-10-09
+    last_verified_excel_version: "16.113.3"

@@ -29,6 +29,15 @@ std::string Render(double value, std::string_view format) {
   return out;
 }
 
+// `Render` under en-US, where the English `General` keyword is accepted.
+std::string RenderEnUs(double value, std::string_view format) {
+  const eval::ScopedEvalProfile profile_scope(mac_365_en_us_profile());
+  std::string out;
+  const FormatStatus s = apply_format(value, format, out);
+  EXPECT_EQ(s, FormatStatus::kOk);
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Integer-only formats (no decimal point)
 // ---------------------------------------------------------------------------
@@ -48,7 +57,7 @@ TEST(NumberFormatIntegers, MaximumFiniteDoubleCanRoundBeyondItsBinaryRange) {
   EXPECT_EQ(Render(value, "0"), expected);
   EXPECT_EQ(Render(-value, "0"), "-" + expected);
   // General budgets 11 characters; the three-digit exponent leaves four fractional digits.
-  EXPECT_EQ(Render(value, "General"), "1.7977E+308");
+  EXPECT_EQ(RenderEnUs(value, "General"), "1.7977E+308");
 }
 
 TEST(NumberFormatPercent, ScalingOverflowReturnsOverflowWithoutAppending) {
@@ -709,23 +718,23 @@ TEST(NumberFormatEmpty, EmptyFormatYieldsEmpty) {
 TEST(NumberFormatGeneral, IntegerPositiveAndNegative) {
   // Whole numbers round-trip via the integer fast path: no decimal, sign
   // propagated by the outer walker.
-  EXPECT_EQ(Render(12.0, "General"), "12");
-  EXPECT_EQ(Render(-12.0, "General"), "-12");
+  EXPECT_EQ(RenderEnUs(12.0, "General"), "12");
+  EXPECT_EQ(RenderEnUs(-12.0, "General"), "-12");
   // Large-but-still-integral values skip scientific notation when they fit
   // within the fixed-width budget.
-  EXPECT_EQ(Render(1234567890.0, "General"), "1234567890");
+  EXPECT_EQ(RenderEnUs(1234567890.0, "General"), "1234567890");
 }
 
 TEST(NumberFormatGeneral, FractionTrimmedAndScientific) {
   // 1/3 prints 9 fractional digits (exactly what Mac Excel / IronCalc
   // goldens emit), with trailing zeros trimmed.
-  EXPECT_EQ(Render(1.0 / 3.0, "General"), "0.333333333");
-  EXPECT_EQ(Render(-1.0 / 3.0, "General"), "-0.333333333");
+  EXPECT_EQ(RenderEnUs(1.0 / 3.0, "General"), "0.333333333");
+  EXPECT_EQ(RenderEnUs(-1.0 / 3.0, "General"), "-0.333333333");
   // Large magnitudes switch to scientific with an exponent zero-padded to
   // two digits; trailing mantissa zeros still collapse.
-  EXPECT_EQ(Render(250000000000.0, "General"), "2.5E+11");
-  EXPECT_EQ(Render(123456789012.0, "General"), "1.23457E+11");
-  EXPECT_EQ(Render(-2.7e-18, "General"), "-2.7E-18");
+  EXPECT_EQ(RenderEnUs(250000000000.0, "General"), "2.5E+11");
+  EXPECT_EQ(RenderEnUs(123456789012.0, "General"), "1.23457E+11");
+  EXPECT_EQ(RenderEnUs(-2.7e-18, "General"), "-2.7E-18");
 }
 
 TEST(NumberFormatGeneral, JaJpKeywordMatchesEnglishGeneral) {
@@ -736,9 +745,11 @@ TEST(NumberFormatGeneral, JaJpKeywordMatchesEnglishGeneral) {
   // as `EraG`, a date token).
   EXPECT_EQ(Render(1234.0, "G/\xE6\xA8\x99\xE6\xBA\x96"), "1234");
   EXPECT_EQ(Render(1.0 / 3.0, "G/\xE6\xA8\x99\xE6\xBA\x96"), "0.333333333");
-  // A leading 'g'/'G' not followed by "/標準" still scans as an era code,
-  // unaffected by this keyword's addition.
-  EXPECT_EQ(Render(1234.0, "General"), Render(1234.0, "G/\xE6\xA8\x99\xE6\xBA\x96"));
+  EXPECT_EQ(RenderEnUs(1234.0, "General"), Render(1234.0, "G/\xE6\xA8\x99\xE6\xBA\x96"));
+  // ja-JP rejects the English keyword (locale_tokens.text_general_english).
+  const eval::ScopedEvalProfile profile_scope(mac_365_ja_jp_profile());
+  std::string out;
+  EXPECT_EQ(apply_format(1234.0, "General", out), FormatStatus::kValueError);
 }
 
 TEST(NumberFormatGeneral, JaJpKeywordHonoursDbNumQualifier) {

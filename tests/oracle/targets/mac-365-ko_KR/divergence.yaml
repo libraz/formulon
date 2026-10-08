@@ -1,7 +1,16 @@
 # Mac Excel 365 (ko-KR) variant-specific divergences.
 #
-# The global registry supplies unscoped skips and entries whose applies_to
-# includes mac-365-ko_KR. No additional target-specific entries are needed
-# for the current capture.
+# Entries here merge on top of tests/divergence.yaml (which supplies unscoped
+# skips and entries whose applies_to includes mac-365-ko_KR) and override it
+# on key collision. Schema is identical to tests/divergence.yaml.
 
-entries: []
+entries:
+  # One probe of a combining mark under the KS X 1001 byte count.
+  - id: lenb_combining_dakuten
+    applies_to: [mac-365-ko_KR]
+    mode: skip-oracle
+    cause: non-identifiable
+    reason: "LENB(\"か\" & UNICHAR(12441)) is 3 in Mac Excel ko-KR: U+3099 counts one byte, while every other non-ASCII probe in the capture (hiragana, hanja, U+00E2, U+3000, U+2460, U+1F600) counts two whether or not KS X 1001 encodes it. One probe cannot tell a combining-mark rule from a U+3099 special case or a code-page conversion artefact, so no byte-count rule is identified. Value: tests/oracle/targets/mac-365-ko_KR/golden/text.golden.json."
+    prefer: mac
+    first_noted: 2026-10-09
+    last_verified_excel_version: "16.113.3"

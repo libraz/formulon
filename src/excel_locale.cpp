@@ -46,6 +46,7 @@ constexpr LocaleFacts kJapaneseFacts{
     ';',                 // formulatext_array_constant
     "TRUE",              // bool_text_true
     "FALSE",             // bool_text_false
+    false,               // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
     kEnglishErrorNames,  // arraytotext.arraytotext_only_error_cells_default; others unmeasured
     'R',
     'C',
@@ -62,11 +63,17 @@ constexpr LocaleFacts kJapaneseFacts{
     kInvariantLetters,                     // months_yyyy, months_d, weekdays_aaaa
     {"¥", false, false, false, true, 0U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
     {"$", "€", "¥", "￥"},                 // value_dollar_prefix, value_euro_prefix, value_yen_prefix
+    true,                                  // usdollar.usdollar_two_decimals
     DateOrder::kYMD,
     false,  // value_dotted_ymd
     true,   // datevalue_timevalue.datevalue_kanji_with_terminator
     true,   // datevalue_timevalue.timevalue_jp_kanji_units
     true,   // datevalue_timevalue.datevalue_era_reiwa_full
+    false,  // locale_tokens.value_korean_ymd
+    true,   // value_month_name_en
+    true,   // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
+    true,   // datevalue_timevalue.timevalue_trailing_dot
+    true,   // datevalue_timevalue.timevalue_space_dot
     DbcsCodepage::kJis0208,
     true,      // code_char_jp_probes.char_halfwidth_kata_177
     true,      // value_numbervalue.value_fullwidth_digits
@@ -99,6 +106,7 @@ constexpr LocaleFacts kEnglishFacts{
     ';',      // formulatext_array_constant
     "TRUE",   // bool_text_true
     "FALSE",  // bool_text_false
+    false,    // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
     kEnglishErrorNames,
     'R',
     'C',
@@ -115,11 +123,17 @@ constexpr LocaleFacts kEnglishFacts{
     kInvariantLetters,                    // months_yyyy, months_d, weekdays_aaaa
     {"$", false, false, true, true, 2U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
     {"$", "€", "", ""},                   // value_dollar_prefix, value_euro_prefix
+    true,                                 // usdollar.usdollar_two_decimals
     DateOrder::kMDY,
     false,  // value_dotted_ymd
     false,
     false,
     false,
+    false,  // locale_tokens.value_korean_ymd
+    true,   // value_month_name_en
+    true,   // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
+    true,   // datevalue_timevalue.timevalue_trailing_dot
+    true,   // datevalue_timevalue.timevalue_space_dot
     DbcsCodepage::kNone,
     false,
     false,
@@ -149,6 +163,7 @@ constexpr LocaleFacts kGermanFacts{
     ';',       // formulatext_array_constant
     "WAHR",    // bool_text_true
     "FALSCH",  // bool_text_false
+    true,      // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
     kGermanErrorNames,
     'Z',
     'S',
@@ -168,11 +183,17 @@ constexpr LocaleFacts kGermanFacts{
     {'J', 'M', 'T', 'h', 'm', 's', true, true, 'a'},
     {"€", true, true, false, true, 2U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
     {"€", "", "", ""},                   // value_euro_prefix, value_dollar_prefix
+    false,                               // usdollar.usdollar_two_decimals
     DateOrder::kDMY,                     // value_coercion_probes.value_slash_date_short
     true,                                // value_dotted_dmy
     false,                               // datevalue_timevalue.datevalue_kanji_with_terminator
     false,                               // datevalue_timevalue.timevalue_jp_kanji_units
     false,                               // datevalue_timevalue.datevalue_era_reiwa_full
+    false,                               // locale_tokens.value_korean_ymd
+    false,                               // value_month_name_en
+    true,                                // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
+    true,                                // datevalue_timevalue.timevalue_trailing_dot
+    true,                                // datevalue_timevalue.timevalue_space_dot
     DbcsCodepage::kNone,                 // lenb_hangul
     false,
     false,       // value_numbervalue.value_fullwidth_digits
@@ -202,6 +223,7 @@ constexpr LocaleFacts kFrenchFacts{
     ';',                 // formulatext_array_constant
     "VRAI",              // bool_text_true
     "FAUX",              // bool_text_false
+    true,                // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
     kEnglishErrorNames,  // arraytotext.arraytotext_error_literal_in_array_default; others unmeasured
     'L',
     'C',
@@ -221,11 +243,17 @@ constexpr LocaleFacts kFrenchFacts{
     {'a', 'm', 'j', 'h', 'm', 's', false, false, '\0'},
     {"€", true, true, true, true, 2U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
     {"€", "", "", ""},                  // value_euro_prefix, value_dollar_prefix
+    false,                              // usdollar.usdollar_two_decimals
     DateOrder::kDMY,                    // value_coercion_probes.value_slash_date_short
     false,                              // value_dotted_dmy
     false,                              // datevalue_timevalue.datevalue_kanji_with_terminator
     false,                              // datevalue_timevalue.timevalue_jp_kanji_units
     false,                              // datevalue_timevalue.datevalue_era_reiwa_full
+    false,                              // locale_tokens.value_korean_ymd
+    false,                              // value_month_name_en
+    true,                               // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
+    false,                              // datevalue_timevalue.timevalue_trailing_dot
+    false,                              // datevalue_timevalue.timevalue_space_dot
     DbcsCodepage::kNone,                // lenb_hangul
     false,
     false,       // value_numbervalue.value_fullwidth_digits
@@ -255,6 +283,7 @@ constexpr LocaleFacts kChineseFacts{
     ';',                 // formulatext_array_constant
     "TRUE",              // bool_text_true
     "FALSE",             // bool_text_false
+    false,               // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
     kEnglishErrorNames,  // arraytotext.arraytotext_error_literal_in_array_default; others unmeasured
     'R',
     'C',
@@ -271,11 +300,17 @@ constexpr LocaleFacts kChineseFacts{
     kInvariantLetters,                    // months_yyyy, months_d, weekdays_aaaa
     {"¥", false, false, true, true, 2U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
     {"$", "€", "¥", ""},                  // value_dollar_prefix, value_euro_prefix, value_yen_prefix; ￥ unmeasured
+    true,                                 // usdollar.usdollar_two_decimals
     DateOrder::kYMD,                      // locale_profile_measurements.datevalue_two_digit_year
     false,                                // value_dotted_ymd
     true,                                 // datevalue_timevalue.datevalue_kanji_with_terminator
     false,                                // datevalue_timevalue.timevalue_jp_kanji_units
     false,                                // datevalue_timevalue.datevalue_era_reiwa_full
+    false,                                // locale_tokens.value_korean_ymd
+    true,                                 // value_month_name_en
+    true,                                 // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
+    true,                                 // datevalue_timevalue.timevalue_trailing_dot
+    true,                                 // datevalue_timevalue.timevalue_space_dot
     DbcsCodepage::kGb2312,                // lenb_kanji_not_in_gb2312
     false,                                // code_char_jp_probes.char_halfwidth_kata_177
     true,                                 // value_numbervalue.value_fullwidth_digits
@@ -308,6 +343,7 @@ constexpr LocaleFacts kKoreanFacts{
     ';',                 // formulatext_array_constant
     "TRUE",              // bool_text_true
     "FALSE",             // bool_text_false
+    false,               // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
     kEnglishErrorNames,  // arraytotext.arraytotext_error_literal_in_array_default; others unmeasured
     'R',
     'C',
@@ -324,11 +360,17 @@ constexpr LocaleFacts kKoreanFacts{
     kInvariantLetters,                    // months_yyyy, months_d, weekdays_aaaa
     {"₩", false, false, true, true, 0U},  // text.dollar_negative_minus_sign, text.dollar_zero
     {"$", "€", "₩", ""},                  // value_dollar_prefix, value_euro_prefix, value_won_prefix
+    true,                                 // usdollar.usdollar_two_decimals
     DateOrder::kYMD,                      // locale_profile_measurements.datevalue_two_digit_year
     true,                                 // value_dotted_ymd
     false,                                // datevalue_timevalue.datevalue_kanji_with_terminator
     false,                                // datevalue_timevalue.timevalue_jp_kanji_units
     false,                                // datevalue_timevalue.datevalue_era_reiwa_full
+    true,                                 // locale_tokens.value_korean_ymd
+    true,                                 // value_month_name_en
+    false,                                // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
+    true,                                 // datevalue_timevalue.timevalue_trailing_dot
+    true,                                 // datevalue_timevalue.timevalue_space_dot
     DbcsCodepage::kKsX1001,               // code_hangul
     false,                                // code_char_jp_probes.char_halfwidth_kata_177
     true,                                 // value_numbervalue.value_fullwidth_digits
@@ -341,8 +383,8 @@ constexpr LocaleFacts kKoreanFacts{
     "G/표준",  // text_general_g_pyojun
     {"", "", "", "", "", "빨강", "", ""},  // text_color_ppalgang; other colours unmeasured
     DbnumDigits{{
-        {"０", "一", "二", "三", "四", "5", "6", "7", "8", "9"},  // 5-9 unmeasured
-        {"0", "壹", "貳", "參", "四", "5", "6", "7", "8", "9"},   // 0 and 5-9 unmeasured
+        {"０", "一", "二", "三", "四", "5", "6", "7", "8", "9"},           // 5-9 unmeasured
+        {"0", "壹", "貳", "\xEF\xA5\xAB", "四", "5", "6", "7", "8", "9"},  // 3 is U+F96B; 0 and 5-9 unmeasured
     }},          // text_format.text_dbnum1_with_era, text_format.text_dbnum1, text_format.text_dbnum2
     "합계",      // groupby.groupby_measured_fh2_hdr
     "총합계",    // pivotby.pivotby_row_subtotal_depth_two
@@ -361,6 +403,7 @@ constexpr LocaleFacts kThaiFacts{
     ';',                 // formulatext_array_constant
     "TRUE",              // bool_text_true
     "FALSE",             // bool_text_false
+    false,               // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
     kEnglishErrorNames,  // arraytotext.arraytotext_error_literal_in_array_default; others unmeasured
     'R',
     'C',
@@ -378,11 +421,17 @@ constexpr LocaleFacts kThaiFacts{
     kInvariantLetters,                    // months_yyyy, months_d, weekdays_aaaa
     {"฿", false, false, true, true, 2U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
     {"€", "฿", "", ""},                   // value_euro_prefix, value_baht_prefix, value_dollar_prefix
+    false,                                // usdollar.usdollar_two_decimals
     DateOrder::kDMY,                      // value_coercion_probes.value_slash_date_short
     false,                                // value_dotted_dmy
     false,                                // datevalue_timevalue.datevalue_kanji_with_terminator
     false,                                // datevalue_timevalue.timevalue_jp_kanji_units
     false,                                // datevalue_timevalue.datevalue_era_reiwa_full
+    false,                                // locale_tokens.value_korean_ymd
+    true,                                 // value_month_name_en
+    true,                                 // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
+    false,                                // datevalue_timevalue.timevalue_trailing_dot
+    true,                                 // datevalue_timevalue.timevalue_space_dot
     DbcsCodepage::kNone,                  // lenb_hangul
     false,
     false,  // value_numbervalue.value_fullwidth_digits

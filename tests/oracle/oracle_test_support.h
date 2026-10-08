@@ -256,7 +256,9 @@ inline ParsedComplex parse_excel_complex(std::string_view s) {
     if (sv.empty())
       return false;
     // strtod requires a NUL-terminated buffer; copy into a small std::string.
-    const std::string buf(sv);
+    // Complex text has no grouping, so a comma is a locale decimal comma.
+    std::string buf(sv);
+    std::replace(buf.begin(), buf.end(), ',', '.');
     const char* begin = buf.c_str();
     char* end = nullptr;
     const double v = std::strtod(begin, &end);

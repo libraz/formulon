@@ -106,9 +106,7 @@ LocalizedFormat localize_format(std::string_view fmt, FormatDialect dialect, Exc
   const char decimal = facts.decimal_separator;
   const char group = facts.group_separator;
   const bool map_separators = decimal != '.' || group != ',';
-  // ja-JP keeps accepting the English keyword, though Excel rejects it there
-  // too (locale_tokens.text_general_english).
-  const bool english_general = facts.general_alias.empty() || profile.locale == ExcelLocale::kJaJP;
+  const bool english_general = facts.general_alias.empty();  // locale_tokens.text_general_english
   std::string& out = result.text;
   out.reserve(s.size() + 8U);
 

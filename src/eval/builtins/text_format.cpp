@@ -239,10 +239,9 @@ CurrencyStyle locale_dollar_style() {
   return CurrencyStyle{currency, static_cast<int>(currency.default_decimals)};
 }
 
-// USDOLLAR is the dollar-formatting twin of DOLLAR only where DOLLAR carries
-// the national currency (DBCS locales); elsewhere it is DOLLAR itself.
+// USDOLLAR formats in US dollars where the locale says so; elsewhere it is DOLLAR itself.
 CurrencyStyle locale_usdollar_style() {
-  if (locale_facts(current_eval_profile()).dbcs_codepage == DbcsCodepage::kNone) {
+  if (!locale_facts(current_eval_profile()).usdollar_in_dollars) {
     return locale_dollar_style();
   }
   return CurrencyStyle{Currency{"$", false, false, true, true, 2U}, 2};

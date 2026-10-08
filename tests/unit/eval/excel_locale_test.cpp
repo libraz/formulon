@@ -57,6 +57,7 @@ void ExpectFactsEqual(const LocaleFacts& lhs, const LocaleFacts& rhs) {
   EXPECT_EQ(lhs.array_row_separator, rhs.array_row_separator);
   EXPECT_EQ(lhs.true_name, rhs.true_name);
   EXPECT_EQ(lhs.false_name, rhs.false_name);
+  EXPECT_EQ(lhs.logical_skips_english_bool_text, rhs.logical_skips_english_bool_text);
   EXPECT_EQ(lhs.error_names, rhs.error_names);
   EXPECT_EQ(lhs.r1c1_row, rhs.r1c1_row);
   EXPECT_EQ(lhs.r1c1_col, rhs.r1c1_col);
@@ -86,11 +87,17 @@ void ExpectFactsEqual(const LocaleFacts& lhs, const LocaleFacts& rhs) {
   EXPECT_EQ(lhs.currency.negative_zero_signed, rhs.currency.negative_zero_signed);
   EXPECT_EQ(lhs.currency.default_decimals, rhs.currency.default_decimals);
   EXPECT_EQ(lhs.accepted_currency, rhs.accepted_currency);
+  EXPECT_EQ(lhs.usdollar_in_dollars, rhs.usdollar_in_dollars);
   EXPECT_EQ(lhs.date_order, rhs.date_order);
   EXPECT_EQ(lhs.dotted_date, rhs.dotted_date);
   EXPECT_EQ(lhs.kanji_ymd_text, rhs.kanji_ymd_text);
   EXPECT_EQ(lhs.kanji_time_text, rhs.kanji_time_text);
   EXPECT_EQ(lhs.japanese_era, rhs.japanese_era);
+  EXPECT_EQ(lhs.hangul_ymd_text, rhs.hangul_ymd_text);
+  EXPECT_EQ(lhs.english_month_names, rhs.english_month_names);
+  EXPECT_EQ(lhs.fractional_seconds, rhs.fractional_seconds);
+  EXPECT_EQ(lhs.meridiem_dot_attached, rhs.meridiem_dot_attached);
+  EXPECT_EQ(lhs.meridiem_dot_spaced, rhs.meridiem_dot_spaced);
   EXPECT_EQ(lhs.dbcs_codepage, rhs.dbcs_codepage);
   EXPECT_EQ(lhs.halfwidth_kana_single_byte, rhs.halfwidth_kana_single_byte);
   EXPECT_EQ(lhs.fullwidth_numeric_text, rhs.fullwidth_numeric_text);

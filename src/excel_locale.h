@@ -82,6 +82,9 @@ struct LocaleFacts {
   char array_row_separator;
   std::string_view true_name;
   std::string_view false_name;
+  /// AND / OR / XOR / IFS skip `TRUE` / `FALSE` text like range text
+  /// instead of failing on it.
+  bool logical_skips_english_bool_text;
   /// Indexed by `ErrorCode` ordinal, in `kErrorTable` order.
   std::array<std::string_view, kErrorNameCount> error_names;
   char r1c1_row;
@@ -101,11 +104,24 @@ struct LocaleFacts {
   Currency currency;
   /// Currency prefixes VALUE accepts; empty slots are unused.
   std::array<std::string_view, 4> accepted_currency;
+  /// USDOLLAR formats in US dollars; otherwise it is DOLLAR.
+  bool usdollar_in_dollars;
   DateOrder date_order;
   bool dotted_date;
   bool kanji_ymd_text;
   bool kanji_time_text;
   bool japanese_era;
+  /// Date text takes the `2024년 3월 15일` form.
+  bool hangul_ymd_text;
+  /// Date text takes English month names; the hyphenated `d-mmm-yy` form
+  /// takes the English abbreviations everywhere.
+  bool english_month_names;
+  /// Time text takes a fraction of a second after the decimal separator.
+  bool fractional_seconds;
+  /// A `.` may directly follow the AM / PM marker (`6 PM.`).
+  bool meridiem_dot_attached;
+  /// A `.` may follow the AM / PM marker after a space (`6 PM .`).
+  bool meridiem_dot_spaced;
   DbcsCodepage dbcs_codepage;
   bool halfwidth_kana_single_byte;
   bool fullwidth_numeric_text;
