@@ -1,0 +1,318 @@
+suite: locale_tokens
+description: >
+  Locale-dependent spellings Excel accepts or produces: date format tokens
+  across every month and weekday, General and colour keywords, AM/PM
+  designators, currency text parsing, error names in text output, and
+  formula text separators. Each case is captured under every target, so a
+  token another locale ignores still records what it does here.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: months_mmmm
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"mmmm"))'
+  - id: weekdays_mmmm
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"mmmm"))'
+  - id: months_mmm
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"mmm"))'
+  - id: weekdays_mmm
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"mmm"))'
+  - id: months_umumumum
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"MMMM"))'
+  - id: weekdays_umumumum
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"MMMM"))'
+  - id: months_umumum
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"MMM"))'
+  - id: weekdays_umumum
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"MMM"))'
+  - id: months_dddd
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"dddd"))'
+  - id: weekdays_dddd
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"dddd"))'
+  - id: months_ddd
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"ddd"))'
+  - id: weekdays_ddd
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"ddd"))'
+  - id: months_utututut
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"TTTT"))'
+  - id: weekdays_utututut
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"TTTT"))'
+  - id: months_ututut
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"TTT"))'
+  - id: weekdays_ututut
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"TTT"))'
+  - id: months_jjjj
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"jjjj"))'
+  - id: weekdays_jjjj
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"jjjj"))'
+  - id: months_jjj
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"jjj"))'
+  - id: weekdays_jjj
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"jjj"))'
+  - id: months_aaaa
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"aaaa"))'
+  - id: weekdays_aaaa
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"aaaa"))'
+  - id: months_aaa
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"aaa"))'
+  - id: weekdays_aaa
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"aaa"))'
+  - id: months_uauauaua
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"AAAA"))'
+  - id: weekdays_uauauaua
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"AAAA"))'
+  - id: months_ujujujuj
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"JJJJ"))'
+  - id: weekdays_ujujujuj
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"JJJJ"))'
+  - id: months_ujuj
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"JJ"))'
+  - id: weekdays_ujuj
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"JJ"))'
+  - id: months_yyyy
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"yyyy"))'
+  - id: weekdays_yyyy
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"yyyy"))'
+  - id: months_yy
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"yy"))'
+  - id: weekdays_yy
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"yy"))'
+  - id: months_utut
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"TT"))'
+  - id: weekdays_utut
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"TT"))'
+  - id: months_ut
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"T"))'
+  - id: weekdays_ut
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"T"))'
+  - id: months_jj
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"jj"))'
+  - id: weekdays_jj
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"jj"))'
+  - id: months_j
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"j"))'
+  - id: weekdays_j
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"j"))'
+  - id: months_dd
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"dd"))'
+  - id: weekdays_dd
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"dd"))'
+  - id: months_d
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"d"))'
+  - id: weekdays_d
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"d"))'
+  - id: months_bbbb
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"bbbb"))'
+  - id: weekdays_bbbb
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"bbbb"))'
+  - id: months_e
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"e"))'
+  - id: weekdays_e
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"e"))'
+  - id: months_ee
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"ee"))'
+  - id: weekdays_ee
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"ee"))'
+  - id: text_general_standard
+    formula: '=TEXT(-1234.5,"Standard")'
+  - id: text_general_g_tongyong
+    formula: '=TEXT(-1234.5,"G/通用格式")'
+  - id: text_general_g_pyojun
+    formula: '=TEXT(-1234.5,"G/표준")'
+  - id: text_general_g_hyojun
+    formula: '=TEXT(-1234.5,"G/標準")'
+  - id: text_general_english
+    formula: '=TEXT(-1234.5,"General")'
+  - id: text_color_red
+    formula: '=TEXT(-5,"0;[Red]0")'
+  - id: text_color_rot
+    formula: '=TEXT(-5,"0;[Rot]0")'
+  - id: text_color_rouge
+    formula: '=TEXT(-5,"0;[Rouge]0")'
+  - id: text_color_hongse
+    formula: '=TEXT(-5,"0;[红色]0")'
+  - id: text_color_ppalgang
+    formula: '=TEXT(-5,"0;[빨강]0")'
+  - id: text_color_aka
+    formula: '=TEXT(-5,"0;[赤]0")'
+  - id: text_color_thai_red
+    formula: '=TEXT(-5,"0;[สีแดง]0")'
+  - id: text_ampm_english
+    formula: '=TEXT(0.75,"h:mm AM/PM")'
+  - id: text_ampm_zh
+    formula: '=TEXT(0.75,"h:mm 上午/下午")'
+  - id: text_ampm_ko
+    formula: '=TEXT(0.75,"h:mm 오전/오후")'
+  - id: text_ampm_ja
+    formula: '=TEXT(0.75,"h:mm 午前/午後")'
+  - id: text_decimal_comma
+    formula: '=TEXT(-1234.5,"0,00")'
+  - id: text_decimal_point
+    formula: '=TEXT(-1234.5,"0.00")'
+  - id: text_group_dot_decimal_comma
+    formula: '=TEXT(-1234.5,"#.##0,00")'
+  - id: text_group_space_decimal_comma
+    formula: '=TEXT(-1234.5,"# ##0,00")'
+  - id: text_group_comma_decimal_point
+    formula: '=TEXT(-1234.5,"#,##0.00")'
+  - id: text_sci_comma
+    formula: '=TEXT(-1234.5,"0,0E+00")'
+  - id: text_sci_point
+    formula: '=TEXT(-1234.5,"0.0E+00")'
+  - id: value_won_prefix
+    formula: '=VALUE("₩1,234")'
+  - id: value_baht_prefix
+    formula: '=VALUE("฿1,234")'
+  - id: value_euro_suffix_de
+    formula: '=VALUE("1.234,50 €")'
+  - id: value_euro_suffix_fr
+    formula: '=VALUE("1 234,50 €")'
+  - id: value_yuan_suffix
+    formula: '=VALUE("1234元")'
+  - id: value_dotted_ymd
+    formula: '=VALUE("2024.3.15")'
+  - id: value_korean_ymd
+    formula: '=VALUE("2024년 3월 15일")'
+  - id: value_thai_slash_dmy
+    formula: '=VALUE("15/3/2567")'
+  - id: value_dotted_dmy
+    formula: '=VALUE("15.3.2024")'
+  - id: arraytotext_error_null
+    setup: { C1: 1, C2: 2, A1: "=C1:C2 D1:D2" }
+    formula: '=ARRAYTOTEXT(A1)'
+  - id: arraytotext_error_div0
+    setup: { C1: 1, C2: 2, A1: "=1/0" }
+    formula: '=ARRAYTOTEXT(A1)'
+  - id: arraytotext_error_value
+    setup: { C1: 1, C2: 2, A1: "=1+\"a\"" }
+    formula: '=ARRAYTOTEXT(A1)'
+  - id: arraytotext_error_ref
+    setup: { C1: 1, C2: 2, A1: "=INDEX(C1:C2,3)" }
+    formula: '=ARRAYTOTEXT(A1)'
+  - id: arraytotext_error_name
+    setup: { C1: 1, C2: 2, A1: "=nosuchname_x" }
+    formula: '=ARRAYTOTEXT(A1)'
+  - id: arraytotext_error_num
+    setup: { C1: 1, C2: 2, A1: "=SQRT(-1)" }
+    formula: '=ARRAYTOTEXT(A1)'
+  - id: arraytotext_error_na
+    setup: { C1: 1, C2: 2, A1: "=NA()" }
+    formula: '=ARRAYTOTEXT(A1)'
+  - id: arraytotext_error_calc
+    setup: { C1: 1, C2: 2, A1: "=FILTER(C1:C2,C1:C2>5)" }
+    formula: '=ARRAYTOTEXT(A1)'
+  - id: arraytotext_error_spill
+    setup: { A1: "=SEQUENCE(2)", A2: 9 }
+    formula: '=ARRAYTOTEXT(A1)'
+  - id: formulatext_decimal_number
+    setup: { A1: "=1.5+2" }
+    formula: '=FORMULATEXT(A1)'
+  - id: formulatext_array_constant
+    setup: { A1: "=SUM({1,2;3,4})" }
+    formula: '=FORMULATEXT(A1)'
+  - id: formulatext_r1c1_style_ref
+    setup: { A1: "=INDIRECT(\"R1C1\",FALSE)" }
+    formula: '=FORMULATEXT(A1)'
+  - id: indirect_r1c1_de_letters
+    setup: { C2: 7 }
+    formula: '=INDIRECT("Z2S3",FALSE)'
+  - id: indirect_r1c1_fr_letters
+    setup: { C2: 7 }
+    formula: '=INDIRECT("L2C3",FALSE)'
+  - id: cell_type_text
+    setup: { A1: "x" }
+    formula: '=CELL("type",A1)'
+  - id: cell_type_number
+    setup: { A1: 1 }
+    formula: '=CELL("type",A1)'
+  - id: cell_type_blank
+    formula: '=CELL("type",A1)'
+  - id: bool_text_true
+    formula: '=""&TRUE'
+  - id: bool_text_false
+    formula: '=""&FALSE'
+  - id: dollar_negative
+    formula: '=DOLLAR(-1234.567)'
+  - id: fixed_negative
+    formula: '=FIXED(-1234567.891,2)'
+  - id: value_month_name_de
+    formula: '=VALUE("15. März 2024")'
+  - id: value_month_name_fr
+    formula: '=VALUE("15 mars 2024")'
+  - id: value_month_name_en
+    formula: '=VALUE("15 March 2024")'
+  - id: value_month_abbrev_de
+    formula: '=VALUE("15-Mär-2024")'
+  - id: value_month_abbrev_fr
+    formula: '=VALUE("15-mars-2024")'
+  - id: value_bool_text_true_de
+    formula: '=IF("WAHR",1,0)'
+  - id: value_bool_text_true_fr
+    formula: '=IF("VRAI",1,0)'
+  - id: timevalue_ampm_zh
+    formula: '=TIMEVALUE("下午 3:30")'
+  - id: timevalue_ampm_ko
+    formula: '=TIMEVALUE("오후 3:30")'
+  - id: number_text_comma_decimal
+    formula: '=VALUE("1,5")+0'
+  - id: numbervalue_default_comma
+    formula: '=NUMBERVALUE("1.234,5")'
+  - id: general_tiny_number_text
+    formula: '=""&1.5E-20'
+  - id: char_high_bytes_unicode
+    formula: '=TEXTJOIN(",",FALSE,IFERROR(UNICODE(CHAR(SEQUENCE(128,1,128))),-1))'
+  - id: code_thai_letters
+    formula: '=TEXTJOIN(",",FALSE,CODE(MID("กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮฯะัาำิีึืฺุู฿เแโใไๅๆ็่้๊๋์ํ๎๏๐๑๒๓๔๕๖๗๘๙๚๛",SEQUENCE(88),1)))'
+  - id: text_buddhist_year_bbbb
+    formula: '=TEXT(45383,"bbbb")'
+  - id: text_buddhist_year_bb
+    formula: '=TEXT(45383,"bb")'
+  - id: value_baht_prefix_decimal
+    formula: '=VALUE("฿1,234.50")'
+  - id: formulatext_bool_literal
+    setup: { A1: "=IF(TRUE,1,0)" }
+    formula: '=FORMULATEXT(A1)'
+  - id: formulatext_sci_number
+    setup: { A1: "=1.5E-3*2" }
+    formula: '=FORMULATEXT(A1)'
+  - id: formulatext_error_literal
+    setup: { A1: "=IFERROR(#N/A,1)" }
+    formula: '=FORMULATEXT(A1)'
+  - id: formulatext_string_with_comma
+    setup: { A1: "=CONCAT(\"a,b\",\"1.5\")" }
+    formula: '=FORMULATEXT(A1)'
+  - id: formulatext_new_function
+    setup: { A1: "=XLOOKUP(1,{1,2},{3,4})" }
+    formula: '=FORMULATEXT(A1)'
+  - id: formulatext_range_union
+    setup: { A1: "=SUM((C1:C2,D1:D2))" }
+    formula: '=FORMULATEXT(A1)'
+  - id: imsum_comma_decimal_input
+    formula: '=IMSUM("1,5+2i","1")'
+  - id: imsum_point_decimal_input
+    formula: '=IMSUM("1.5+2i","1")'
+  - id: lenb_kanji_not_in_gb2312
+    formula: '=LENB("漢")'
+  - id: lenb_hangul
+    formula: '=LENB("한글")'
+  - id: code_hangul
+    formula: '=CODE("한")'
+  - id: searchb_question_kanji
+    formula: '=SEARCHB("?","漢ABC")'
+  - id: timevalue_comma_fraction
+    formula: '=TIMEVALUE("0:00:00,5")'
+  - id: text_sci_point_scaled_en
+    formula: '=TEXT(150000000000,"0.0E+00")'
+  - id: text_fraction_space
+    formula: '=TEXT(1.5,"# ?/?")'
+  - id: value_euro_prefix
+    formula: '=VALUE("€1234")'
+  - id: value_dollar_prefix
+    formula: '=VALUE("$1234")'
+  - id: value_yen_prefix
+    formula: '=VALUE("¥1234")'
+  - id: formulatext_dollar_function
+    setup: { A1: "=DOLLAR(1)+0" }
+    formula: '=FORMULATEXT(A1)'
+  - id: formulatext_dbcs_usdollar
+    setup: { A1: "=DBCS(\"a\")&USDOLLAR(1)" }
+    formula: '=FORMULATEXT(A1)'
