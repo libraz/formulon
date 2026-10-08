@@ -18,11 +18,13 @@
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
 #include "eval/number_parse.h"
 #include "eval/shape_ops_lazy.h"
 #include "eval/text_format/number_format.h"
 #include "eval/text_format/rounding.h"
+#include "excel_locale.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/date_time.h"
@@ -229,6 +231,20 @@ struct CurrencyStyle {
   bool negative_in_parentheses;
 };
 
+CurrencyStyle locale_dollar_style() {
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  const std::string_view format = facts.dollar_format;
+  const std::size_t separator = format.find(';');
+  const std::string_view positive = format.substr(0, separator);
+  const std::size_t first_placeholder = positive.find_first_of("0#?");
+  const std::string_view symbol =
+      first_placeholder == std::string_view::npos ? facts.currency_symbol : positive.substr(0, first_placeholder);
+  const std::string_view negative =
+      separator == std::string_view::npos ? std::string_view{} : format.substr(separator + 1);
+  return CurrencyStyle{symbol, static_cast<int>(facts.dollar_default_decimals),
+                       negative.find('(') != std::string_view::npos};
+}
+
 Value format_currency(const Value* args, std::uint32_t arity, Arena& arena, const CurrencyStyle& style) {
   auto num = read_finite_number_arg(args, 0);
   if (!num) {
@@ -270,7 +286,7 @@ Value format_currency(const Value* args, std::uint32_t arity, Arena& arena, cons
 }
 
 Value Dollar_(const Value* args, std::uint32_t arity, Arena& arena) {
-  return format_currency(args, arity, arena, CurrencyStyle{"\xC2\xA5", 0, false});
+  return format_currency(args, arity, arena, locale_dollar_style());
 }
 
 Value UsDollar_(const Value* args, std::uint32_t arity, Arena& arena) {

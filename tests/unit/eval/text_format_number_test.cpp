@@ -35,7 +35,7 @@ TEST(NumberFormatIntegers, LargeFiniteValuesProduceCompleteDigitsWithoutNulls) {
   const std::string digits = "1" + std::string(308, '0');
   EXPECT_EQ(Render(1E308, "0"), digits);
   EXPECT_EQ(Render(-1E308, "0.00"), "-" + digits + ".00");
-  const auto display = format_value_for_display(Value::number(1E308), "0", false);
+  const auto display = format_value_for_display(Value::number(1E308), "0", false, mac_365_ja_jp_profile());
   EXPECT_EQ(display.status, DisplayStatus::kOk);
   EXPECT_EQ(display.text, digits);
 }
@@ -53,7 +53,7 @@ TEST(NumberFormatPercent, ScalingOverflowReturnsOverflowWithoutAppending) {
   std::string out = "prefix";
   EXPECT_EQ(apply_format(1E307, "0%", out), FormatStatus::kOverflow);
   EXPECT_EQ(out, "prefix");
-  const auto display = format_value_for_display(Value::number(1E307), "0%", false);
+  const auto display = format_value_for_display(Value::number(1E307), "0%", false, mac_365_ja_jp_profile());
   EXPECT_EQ(display.status, DisplayStatus::kOverflow);
   EXPECT_EQ(display.text, "########");
 }
@@ -313,7 +313,8 @@ TEST(NumberFormatScientific, ExcelMantissaNormalizationAndStoredDisplayParity) {
     EXPECT_EQ(apply_format(test_case.value, test_case.format, out), FormatStatus::kOk) << test_case.format;
     EXPECT_EQ(out, test_case.expected) << test_case.format;
 
-    const auto display = format_value_for_display(Value::number(test_case.value), test_case.format, false);
+    const auto display =
+        format_value_for_display(Value::number(test_case.value), test_case.format, false, mac_365_ja_jp_profile());
     EXPECT_EQ(display.status, DisplayStatus::kOk) << test_case.format;
     EXPECT_EQ(display.text, test_case.expected) << test_case.format;
   }
@@ -336,7 +337,7 @@ TEST(NumberFormatSections, NumericAndTextPlaceholderIsInvalid) {
     EXPECT_EQ(apply_format(5.0, format, out), FormatStatus::kValueError) << format;
     EXPECT_EQ(out, "prefix") << format;
 
-    const auto display = format_value_for_display(Value::number(5.0), format, false);
+    const auto display = format_value_for_display(Value::number(5.0), format, false, mac_365_ja_jp_profile());
     EXPECT_EQ(display.status, DisplayStatus::kInvalidFormat) << format;
     EXPECT_EQ(display.text, "5") << format;
   }
@@ -348,7 +349,7 @@ TEST(NumberFormatSections, RepeatedPercentAndScientificPercentAreInvalid) {
     EXPECT_EQ(apply_format(5.0, format, out), FormatStatus::kValueError) << format;
     EXPECT_EQ(out, "prefix") << format;
 
-    const auto display = format_value_for_display(Value::number(5.0), format, false);
+    const auto display = format_value_for_display(Value::number(5.0), format, false, mac_365_ja_jp_profile());
     EXPECT_EQ(display.status, DisplayStatus::kInvalidFormat) << format;
     EXPECT_EQ(display.text, "5") << format;
   }
@@ -383,10 +384,10 @@ TEST(NumberFormatLiteral, IncompleteSyntaxReturnsErrorWithoutAppending) {
     EXPECT_EQ(out, "prefix");
     EXPECT_EQ(apply_text_format("hello", code, out), FormatStatus::kValueError);
     EXPECT_EQ(out, "prefix");
-    const auto number_display = format_value_for_display(Value::number(12), code, false);
+    const auto number_display = format_value_for_display(Value::number(12), code, false, mac_365_ja_jp_profile());
     EXPECT_EQ(number_display.status, DisplayStatus::kInvalidFormat);
     EXPECT_EQ(number_display.text, "12");
-    const auto text_display = format_value_for_display(Value::text("hello"), code, false);
+    const auto text_display = format_value_for_display(Value::text("hello"), code, false, mac_365_ja_jp_profile());
     EXPECT_EQ(text_display.status, DisplayStatus::kInvalidFormat);
     EXPECT_EQ(text_display.text, "hello");
   }

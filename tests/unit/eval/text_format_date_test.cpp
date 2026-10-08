@@ -27,7 +27,7 @@ std::string Render(double value, std::string_view format) {
   std::string out;
   const FormatStatus s = apply_format(value, format, out);
   EXPECT_EQ(s, FormatStatus::kOk);
-  const auto display = format_value_for_display(Value::number(value), format, false);
+  const auto display = format_value_for_display(Value::number(value), format, false, mac_365_ja_jp_profile());
   EXPECT_EQ(display.status, DisplayStatus::kOk);
   EXPECT_EQ(display.text, out);
   return out;
@@ -256,7 +256,8 @@ TEST(DateFormatRange, RoundedCalendarCannotAdvanceBeyondYear9999) {
       std::string out = "prefix";
       EXPECT_EQ(apply_format(last_day + 86399.6 / 86400.0, code, out, date1904), FormatStatus::kOverflow);
       EXPECT_EQ(out, "prefix");
-      const auto display = format_value_for_display(Value::number(last_day + 86399.6 / 86400.0), code, date1904);
+      const auto display = format_value_for_display(Value::number(last_day + 86399.6 / 86400.0), code, date1904,
+                                                    mac_365_ja_jp_profile());
       EXPECT_EQ(display.status, DisplayStatus::kOverflow);
       if (date1904) {
         EXPECT_EQ(apply_format(-(last_day + 86399.6 / 86400.0), code, out, true), FormatStatus::kOverflow);
@@ -272,7 +273,8 @@ TEST(DateFormatRange, LastCalendarDayIncludesTimeInBothEpochs) {
     std::string out;
     EXPECT_EQ(apply_format(last_day + 0.5, "yyyy/mm/dd hh:mm:ss", out, date1904), FormatStatus::kOk);
     EXPECT_EQ(out, "9999/12/31 12:00:00");
-    const auto display = format_value_for_display(Value::number(last_day + 0.5), "yyyy/mm/dd hh:mm:ss", date1904);
+    const auto display = format_value_for_display(Value::number(last_day + 0.5), "yyyy/mm/dd hh:mm:ss", date1904,
+                                                  mac_365_ja_jp_profile());
     EXPECT_EQ(display.status, DisplayStatus::kOk);
     EXPECT_EQ(display.text, "9999/12/31 12:00:00");
     if (date1904) {

@@ -20,8 +20,10 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/eval_profile_scope.h"
 #include "eval/text_format/number_format_scanner.h"
 #include "eval/text_format/number_format_types.h"
+#include "excel_locale.h"
 
 namespace formulon {
 namespace text_format {
@@ -98,6 +100,7 @@ void disambiguate_minutes(std::vector<Token>& toks) noexcept {
 
 std::vector<std::string_view> split_sections(std::string_view fmt) {
   std::vector<std::string_view> out;
+  const bool ja_syntax = locale_facts(eval::current_eval_profile()).ja_format_syntax;
   std::size_t start = 0;
   for (std::size_t i = 0; i < fmt.size();) {
     const char c = fmt[i];
@@ -112,7 +115,7 @@ std::vector<std::string_view> split_sections(std::string_view fmt) {
       }
       continue;
     }
-    if (c == '\\' || c == '!') {
+    if (c == '\\' || (c == '!' && ja_syntax)) {
       i += i + 1 < fmt.size() ? 1 + utf8_scalar_width(fmt, i + 1) : 1;
       // Skip escape + one complete UTF-8 scalar payload.
       continue;

@@ -74,7 +74,9 @@ extern "C" fm_status_t fm_workbook_format_value(const fm_workbook_t* wb, const f
   if (auto rc = value_from_fm(*value, &v, "fm_workbook_format_value"); rc != 0) {
     return rc;
   }
-  publish(wb, formulon::text_format::format_value_for_display(v, format_code, wb->workbook().date1904()), out_text,
-          out_status);
+  publish(wb,
+          formulon::text_format::format_value_for_display(v, format_code, wb->workbook().date1904(),
+                                                          wb->workbook().excel_profile()),
+          out_text, out_status);
   return 0;
 }

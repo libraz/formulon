@@ -16,8 +16,10 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/eval_profile_scope.h"
 #include "eval/text_format/number_format_scanner.h"
 #include "eval/text_format/number_format_types.h"
+#include "excel_locale.h"
 
 namespace formulon {
 namespace text_format {
@@ -25,6 +27,7 @@ namespace number_format_detail {
 
 void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect) {
   std::vector<Token>& toks = out.tokens;
+  const bool ja_syntax = locale_facts(eval::current_eval_profile()).ja_format_syntax;
   auto push_literal = [&](std::size_t b, std::size_t e, bool protected_literal = false) {
     if (b == e) {
       return;
@@ -56,12 +59,12 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
       continue;
     }
     // Escape, spacing, and fill operators each require a following scalar.
-    if ((c == '\\' || c == '!' || c == '_' || c == '*') && i + 1 == fmt.size()) {
+    if ((c == '\\' || (c == '!' && ja_syntax) || c == '_' || c == '*') && i + 1 == fmt.size()) {
       out.has_invalid_bracket = true;
       return;
     }
     // Escape `\x` or `!x` -> next UTF-8 scalar is a literal.
-    if ((c == '\\' || c == '!') && i + 1 < fmt.size()) {
+    if ((c == '\\' || (c == '!' && ja_syntax)) && i + 1 < fmt.size()) {
       const std::size_t payload_width = utf8_scalar_width(fmt, i + 1);
       push_literal(i + 1, i + 1 + payload_width, true);
       i += 1 + payload_width;
@@ -73,8 +76,9 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
     //   `[赤]` / `[Red]` / ...   -> named color qualifier in `dialect`;
     //                               silently dropped (no color in text).
     //   `[色N]` / `[ColorN]`     -> indexed color qualifier; silently dropped.
-    // Anything else (`[>100]`, `[DBNum1]`, unknown qualifiers) still trips
-    // the invalid-bracket flag and surfaces as #VALUE!.
+    //   `[DBNum1]` ...          -> digit style on ja-JP, inert on en-US.
+    // Anything else (`[>100]`, unknown qualifiers) still trips the
+    // invalid-bracket flag and surfaces as #VALUE!.
     if (c == '[') {
       const std::size_t body_begin = i + 1;
       std::size_t j = i + 1;
@@ -151,19 +155,22 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
         // `[DBNum1]` / `[DBNum2]` / `[DBNum3]`: digit-substitution mode for
         // the rest of the section. Multiple directives stack last-write-wins,
         // matching Mac Excel's behaviour. The renderer applies the chosen
-        // mapping at digit-emit time.
-        switch (dbnum) {
-          case 1:
-            out.dbnum_mode = DbNumMode::kDBNum1;
-            break;
-          case 2:
-            out.dbnum_mode = DbNumMode::kDBNum2;
-            break;
-          case 3:
-            out.dbnum_mode = DbNumMode::kDBNum3;
-            break;
-          default:
-            break;
+        // mapping at digit-emit time. The English host accepts the bracket as
+        // inert metadata and leaves the digits in their ordinary form.
+        if (ja_syntax) {
+          switch (dbnum) {
+            case 1:
+              out.dbnum_mode = DbNumMode::kDBNum1;
+              break;
+            case 2:
+              out.dbnum_mode = DbNumMode::kDBNum2;
+              break;
+            case 3:
+              out.dbnum_mode = DbNumMode::kDBNum3;
+              break;
+            default:
+              break;
+          }
         }
       } else {
         // Conditional-section directive `[>1000]`, `[<=0]`, ...
@@ -244,7 +251,8 @@ void tokenize_section(std::string_view fmt, Section& out, FormatDialect dialect)
       // 'G' as `EraG`.
       static constexpr char kJaGeneralTail[] = "/\xE6\xA8\x99\xE6\xBA\x96";
       constexpr std::size_t kJaGeneralTailLen = sizeof(kJaGeneralTail) - 1;
-      if (i + 1 + kJaGeneralTailLen <= fmt.size() && fmt.compare(i + 1, kJaGeneralTailLen, kJaGeneralTail) == 0) {
+      if (ja_syntax && i + 1 + kJaGeneralTailLen <= fmt.size() &&
+          fmt.compare(i + 1, kJaGeneralTailLen, kJaGeneralTail) == 0) {
         Token t;
         t.kind = Tok::GeneralNumber;
         toks.push_back(t);

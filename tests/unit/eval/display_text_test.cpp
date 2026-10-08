@@ -1,9 +1,15 @@
 #include "eval/text_format/display_text.h"
 
+#include <cstdint>
 #include <string>
+#include <string_view>
 
+#include "eval/eval_profile_scope.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "styles.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace text_format {
@@ -20,6 +26,20 @@ struct ProbeRow {
   DisplayStatus status;
   const char* text;
 };
+
+void SetNumberFormat(Workbook& workbook, std::string_view code) {
+  StylesTable& styles = workbook.mutable_styles();
+  constexpr std::uint16_t kFirstCustomFormatId = 164U;
+  const std::uint16_t format_id = static_cast<std::uint16_t>(kFirstCustomFormatId + styles.num_fmts.size());
+  styles.num_fmt_strings.emplace_back(code);
+  styles.num_fmts.push_back(NumFmtRecord{format_id, static_cast<std::uint32_t>(styles.num_fmt_strings.size() - 1U)});
+  CellXf xf;
+  xf.num_fmt_id = format_id;
+  xf.apply_number_format = true;
+  styles.cell_xfs.push_back(xf);
+  ASSERT_TRUE(static_cast<bool>(
+      workbook.set_cell_xf_index(0U, 0U, 0U, static_cast<std::uint32_t>(styles.cell_xfs.size() - 1U))));
+}
 
 const ProbeRow kProbeRows[] = {
     {"General/0", false, R"fmt(General)fmt", Value::number(0), DisplayStatus::kOk, "0"},
@@ -839,7 +859,7 @@ const ProbeRow kProbeRows[] = {
 TEST(DisplayText, ProbeTable) {
   for (const ProbeRow& row : kProbeRows) {
     SCOPED_TRACE(row.label);
-    const DisplayText got = format_value_for_display(row.value, row.code, row.date1904);
+    const DisplayText got = format_value_for_display(row.value, row.code, row.date1904, mac_365_ja_jp_profile());
     EXPECT_EQ(got.text, row.text);
     EXPECT_EQ(got.status, row.status);
   }
@@ -848,41 +868,117 @@ TEST(DisplayText, ProbeTable) {
 TEST(DisplayText, StoredDialectAcceptsEnglishColor) {
   // A stored format code spells colours in English; the ja-JP TEXT() spelling
   // is not a colour there and makes the code malformed.
-  const DisplayText red = format_value_for_display(Value::number(-1234.5678), "#,##0;[Red]-#,##0", false);
+  const DisplayText red =
+      format_value_for_display(Value::number(-1234.5678), "#,##0;[Red]-#,##0", false, mac_365_ja_jp_profile());
   EXPECT_EQ(red.status, DisplayStatus::kOk);
   EXPECT_EQ(red.text, "-1,235");
-  const DisplayText indexed = format_value_for_display(Value::number(5), "[Color10]0.00", false);
+  const DisplayText indexed =
+      format_value_for_display(Value::number(5), "[Color10]0.00", false, mac_365_ja_jp_profile());
   EXPECT_EQ(indexed.status, DisplayStatus::kOk);
   EXPECT_EQ(indexed.text, "5.00");
-  const DisplayText localized = format_value_for_display(Value::number(-1), "0;[赤]-0", false);
+  const DisplayText localized = format_value_for_display(Value::number(-1), "0;[赤]-0", false, mac_365_ja_jp_profile());
   EXPECT_EQ(localized.status, DisplayStatus::kInvalidFormat);
   EXPECT_EQ(localized.text, "-1");
 }
 
 TEST(DisplayText, NegativeDateOverflows) {
-  const DisplayText d = format_value_for_display(Value::number(-1.0), "yyyy/m/d", false);
+  const DisplayText d = format_value_for_display(Value::number(-1.0), "yyyy/m/d", false, mac_365_ja_jp_profile());
   EXPECT_EQ(d.status, DisplayStatus::kOverflow);
   EXPECT_EQ(d.text, "########");
-  const DisplayText t = format_value_for_display(Value::number(-1234.5678), "h:mm:ss", false);
+  const DisplayText t = format_value_for_display(Value::number(-1234.5678), "h:mm:ss", false, mac_365_ja_jp_profile());
   EXPECT_EQ(t.status, DisplayStatus::kOverflow);
   EXPECT_EQ(t.text, "########");
 }
 
 TEST(DisplayText, TextOnlyNumericFormatsStillValidateTheirTokens) {
-  const DisplayText invalid = format_value_for_display(Value::number(12), "yyyy@", false);
+  const DisplayText invalid = format_value_for_display(Value::number(12), "yyyy@", false, mac_365_ja_jp_profile());
   EXPECT_EQ(invalid.status, DisplayStatus::kInvalidFormat);
   EXPECT_EQ(invalid.text, "12");
-  const DisplayText valid = format_value_for_display(Value::number(12), "\"pre\"@", false);
+  const DisplayText valid = format_value_for_display(Value::number(12), "\"pre\"@", false, mac_365_ja_jp_profile());
   EXPECT_EQ(valid.status, DisplayStatus::kOk);
   EXPECT_EQ(valid.text, "12");
 }
 
 TEST(DisplayText, WidthIndependentKinds) {
   // Narrow-column probe rows whose text does not depend on the column width.
-  EXPECT_EQ(format_value_for_display(Value::text("abcdefghij"), "General", false).text, "abcdefghij");
-  EXPECT_EQ(format_value_for_display(Value::text("abcdefghij"), "@", false).text, "abcdefghij");
-  EXPECT_EQ(format_value_for_display(Value::blank(), "General", false).text, "");
-  EXPECT_EQ(format_value_for_display(Value::number(1234567.891), ";;;", false).text, "");
+  EXPECT_EQ(format_value_for_display(Value::text("abcdefghij"), "General", false, mac_365_ja_jp_profile()).text,
+            "abcdefghij");
+  EXPECT_EQ(format_value_for_display(Value::text("abcdefghij"), "@", false, mac_365_ja_jp_profile()).text,
+            "abcdefghij");
+  EXPECT_EQ(format_value_for_display(Value::blank(), "General", false, mac_365_ja_jp_profile()).text, "");
+  EXPECT_EQ(format_value_for_display(Value::number(1234567.891), ";;;", false, mac_365_ja_jp_profile()).text, "");
+}
+
+TEST(DisplayText, StoredColorsUseCanonicalNamesAcrossProfiles) {
+  const ExcelProfile profiles[] = {mac_365_ja_jp_profile(), win_365_ja_jp_profile(), mac_365_en_us_profile(),
+                                   win_365_en_us_profile()};
+  for (const ExcelProfile profile : profiles) {
+    SCOPED_TRACE(excel_profile_id(profile));
+    eval::ScopedEvalProfile scope(profile);
+
+    const DisplayText red = format_value_for_display(Value::number(-1234.5678), "#,##0;[Red]-#,##0", false, profile);
+    EXPECT_EQ(red.status, DisplayStatus::kOk);
+    EXPECT_EQ(red.text, "-1,235");
+
+    const DisplayText indexed = format_value_for_display(Value::number(5), "[Color10]0.00", false, profile);
+    EXPECT_EQ(indexed.status, DisplayStatus::kOk);
+    EXPECT_EQ(indexed.text, "5.00");
+
+    const DisplayText localized = format_value_for_display(Value::number(-1), "0;[赤]-0", false, profile);
+    EXPECT_EQ(localized.status, DisplayStatus::kInvalidFormat);
+    EXPECT_EQ(localized.text, "-1");
+  }
+}
+
+TEST(DisplayText, CellUsesWorkbookLocaleAndRestoresOuterProfile) {
+  struct FormatCase {
+    const char* code;
+    double value;
+    const char* ja_text;
+    const char* en_text;
+  };
+  constexpr FormatCase cases[] = {
+      {"aaaa", 45383.0, "月曜日", "Monday"},
+      {R"(ggge"年"m"月"d"日")", 45383.0, "令和6年4月1日", "2024年4月1日"},
+      {"[DBNum1]0", 1234.0, "一二三四", "1234"},
+  };
+  const ExcelProfile profiles[] = {mac_365_ja_jp_profile(), win_365_ja_jp_profile(), mac_365_en_us_profile(),
+                                   win_365_en_us_profile()};
+  const ExcelProfile baseline = eval::current_eval_profile();
+
+  for (const ExcelProfile workbook_profile : profiles) {
+    for (const FormatCase& format_case : cases) {
+      SCOPED_TRACE(excel_profile_id(workbook_profile));
+      SCOPED_TRACE(format_case.code);
+      Workbook workbook = Workbook::create();
+      workbook.set_excel_profile(workbook_profile);
+      ASSERT_TRUE(static_cast<bool>(workbook.set_cell_value(0U, 0U, 0U, Value::number(format_case.value))));
+      SetNumberFormat(workbook, format_case.code);
+
+      const ExcelProfile outer_profile =
+          workbook_profile.locale == ExcelLocale::kJaJP ? mac_365_en_us_profile() : mac_365_ja_jp_profile();
+      {
+        eval::ScopedEvalProfile outer_scope(outer_profile);
+        const DisplayText cell = format_cell_for_display(workbook, workbook.sheet(0), 0U, 0U);
+        EXPECT_EQ(cell.status, DisplayStatus::kOk);
+        EXPECT_EQ(cell.text, workbook_profile.locale == ExcelLocale::kJaJP ? format_case.ja_text : format_case.en_text);
+
+        const DisplayText direct =
+            format_value_for_display(Value::number(format_case.value), format_case.code, false, workbook_profile);
+        EXPECT_EQ(direct.status, DisplayStatus::kOk);
+        EXPECT_EQ(direct.text,
+                  workbook_profile.locale == ExcelLocale::kJaJP ? format_case.ja_text : format_case.en_text);
+        EXPECT_TRUE(same_profile(eval::current_eval_profile(), outer_profile));
+
+        const DisplayText after_cell =
+            format_value_for_display(Value::number(1234.0), "[DBNum1]0", false, outer_profile);
+        EXPECT_EQ(after_cell.status, DisplayStatus::kOk);
+        EXPECT_EQ(after_cell.text, outer_profile.locale == ExcelLocale::kJaJP ? "一二三四" : "1234");
+        EXPECT_TRUE(same_profile(eval::current_eval_profile(), outer_profile));
+      }
+      EXPECT_TRUE(same_profile(eval::current_eval_profile(), baseline));
+    }
+  }
 }
 
 }  // namespace

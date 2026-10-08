@@ -10,10 +10,12 @@
 #include <string_view>
 
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "eval/text_format/number_format.h"
 #include "eval/tree_walker.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -484,6 +486,85 @@ TEST(TextFunctionText, ErrorPropagates) {
   const Value v = EvalSource("=TEXT(#REF!, \"0\")");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(TextFunctionText, LocalizedFormatTokensFollowWorkbookLocale) {
+  const ExcelProfile profiles[] = {mac_365_ja_jp_profile(), win_365_ja_jp_profile(), mac_365_en_us_profile(),
+                                   win_365_en_us_profile()};
+  for (const ExcelProfile profile : profiles) {
+    SCOPED_TRACE(excel_profile_id(profile));
+    Workbook workbook = Workbook::create();
+    workbook.set_excel_profile(profile);
+
+    const Value localized = EvalSourceIn("=TEXT(5, \"[赤]0.00\")", workbook, workbook.sheet(0));
+    if (profile.locale == ExcelLocale::kJaJP) {
+      ASSERT_TRUE(localized.is_text());
+      const std::string localized_text(localized.as_text());
+      EXPECT_EQ(localized_text, "5.00");
+    } else {
+      ASSERT_TRUE(localized.is_error());
+      EXPECT_EQ(localized.as_error(), ErrorCode::Value);
+    }
+
+    const Value stored = EvalSourceIn("=TEXT(5, \"[Red]0.00\")", workbook, workbook.sheet(0));
+    if (profile.locale == ExcelLocale::kJaJP) {
+      ASSERT_TRUE(stored.is_error());
+      EXPECT_EQ(stored.as_error(), ErrorCode::Value);
+    } else {
+      ASSERT_TRUE(stored.is_text());
+      EXPECT_EQ(stored.as_text(), "5.00");
+    }
+  }
+}
+
+TEST(TextFunctionText, LocaleSpecificEscapesAndDbNumFollowWorkbookLocale) {
+  const ExcelProfile profiles[] = {mac_365_ja_jp_profile(), win_365_ja_jp_profile(), mac_365_en_us_profile(),
+                                   win_365_en_us_profile()};
+  for (const ExcelProfile profile : profiles) {
+    SCOPED_TRACE(excel_profile_id(profile));
+    Workbook workbook = Workbook::create();
+    workbook.set_excel_profile(profile);
+
+    const Value dbnum = EvalSourceIn("=TEXT(1234, \"[DBNum1]0\")", workbook, workbook.sheet(0));
+    ASSERT_TRUE(dbnum.is_text());
+    EXPECT_EQ(dbnum.as_text(), profile.locale == ExcelLocale::kJaJP ? "一二三四" : "1234");
+
+    const Value bang = EvalSourceIn("=TEXT(\"hello\", \"0;0;0;@!\")", workbook, workbook.sheet(0));
+    if (profile.locale == ExcelLocale::kJaJP) {
+      ASSERT_TRUE(bang.is_error());
+      EXPECT_EQ(bang.as_error(), ErrorCode::Value);
+    } else {
+      ASSERT_TRUE(bang.is_text());
+      EXPECT_EQ(bang.as_text(), "hello!");
+    }
+  }
+}
+
+TEST(TextFunctionText, DollarDefaultsAndNegativeZeroFollowWorkbookLocale) {
+  struct Expected {
+    const char* positive;
+    const char* negative;
+    const char* negative_zero;
+  };
+  const ExcelProfile profiles[] = {mac_365_ja_jp_profile(), win_365_ja_jp_profile(), mac_365_en_us_profile(),
+                                   win_365_en_us_profile()};
+  for (const ExcelProfile profile : profiles) {
+    SCOPED_TRACE(excel_profile_id(profile));
+    Workbook workbook = Workbook::create();
+    workbook.set_excel_profile(profile);
+    const Expected expected = profile.locale == ExcelLocale::kJaJP ? Expected{"¥1,235", "¥-1,235", "¥-0.00"}
+                                                                   : Expected{"$1,234.50", "($1,234.50)", "($0.00)"};
+
+    const Value positive = EvalSourceIn("=DOLLAR(1234.5)", workbook, workbook.sheet(0));
+    ASSERT_TRUE(positive.is_text());
+    EXPECT_EQ(positive.as_text(), expected.positive);
+    const Value negative = EvalSourceIn("=DOLLAR(-1234.5)", workbook, workbook.sheet(0));
+    ASSERT_TRUE(negative.is_text());
+    EXPECT_EQ(negative.as_text(), expected.negative);
+    const Value negative_zero = EvalSourceIn("=DOLLAR(-0.001,2)", workbook, workbook.sheet(0));
+    ASSERT_TRUE(negative_zero.is_text());
+    EXPECT_EQ(negative_zero.as_text(), expected.negative_zero);
+  }
 }
 
 // ---------------------------------------------------------------------------

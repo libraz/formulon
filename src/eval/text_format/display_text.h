@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 
+#include "excel_profile.h"
 #include "value.h"
 
 namespace formulon {
@@ -45,8 +46,9 @@ struct DisplayText {
 /// Blank is empty, errors show their name, booleans show `TRUE`/`FALSE`,
 /// text uses the format's text section when it has one, and numbers go
 /// through `apply_format`. An empty `code` means General. `date1904`
-/// selects the workbook date epoch.
-DisplayText format_value_for_display(const Value& value, std::string_view code, bool date1904);
+/// selects the workbook date epoch, and `profile` selects the workbook's
+/// locale and host formatting rules.
+DisplayText format_value_for_display(const Value& value, std::string_view code, bool date1904, ExcelProfile profile);
 
 /// Returns the number-format code of `xf` as resolved against `styles`
 /// (custom formats first, then the built-in table); empty for a null `xf`.

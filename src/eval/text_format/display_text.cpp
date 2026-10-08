@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/eval_profile_scope.h"
 #include "eval/text_format/number_format.h"
 #include "sheet.h"
 #include "style_resolve.h"
@@ -55,7 +56,8 @@ DisplayText render_number(double number, std::string_view code, bool date1904) {
 
 }  // namespace
 
-DisplayText format_value_for_display(const Value& value, std::string_view code, bool date1904) {
+DisplayText format_value_for_display(const Value& value, std::string_view code, bool date1904, ExcelProfile profile) {
+  eval::ScopedEvalProfile profile_scope(profile);
   switch (value.kind()) {
     case ValueKind::Number:
       return render_number(value.as_number(), code, date1904);
@@ -90,8 +92,9 @@ DisplayText format_cell_for_display(const Workbook& workbook, const Sheet& sheet
     const std::uint32_t xf_index = choice.xf_index < xfs.size() ? choice.xf_index : 0U;
     xf = &xfs[xf_index];
   }
+  eval::ScopedEvalProfile profile_scope(workbook.excel_profile());
   return format_value_for_display(sheet.resolve_cell_value(row, col), number_format_code_for_xf(workbook.styles(), xf),
-                                  workbook.date1904());
+                                  workbook.date1904(), workbook.excel_profile());
 }
 
 }  // namespace text_format

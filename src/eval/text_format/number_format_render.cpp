@@ -22,8 +22,10 @@
 #include <string_view>
 #include <utility>
 
+#include "eval/eval_profile_scope.h"
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_common.h"
+#include "excel_locale.h"
 
 namespace formulon {
 namespace text_format {
@@ -193,10 +195,11 @@ void cap_integer_significant_digits(std::string* digits) {
 // phrases (e.g. the `s` in "text is @") would have been promoted to
 // DateS tokens during tokenisation and lost their positional info. Walking
 // the raw format bytes avoids that pitfall while still honouring `"..."`
-// quoted literals, `\x` / `!x` escapes, and `[...]` bracketed discards
+// quoted literals, `\x` (and the ja-JP `!x`) escapes, and `[...]` bracketed discards
 // (e.g. colour markers).
 void render_text_section(const Section& /*section*/, std::string_view fmt, std::string_view original,
                          std::string& out) {
+  const bool ja_syntax = locale_facts(eval::current_eval_profile()).ja_format_syntax;
   std::size_t i = 0;
   while (i < fmt.size()) {
     const char c = fmt[i];
@@ -209,7 +212,7 @@ void render_text_section(const Section& /*section*/, std::string_view fmt, std::
       i = j < fmt.size() ? j + 1 : j;
       continue;
     }
-    if ((c == '\\' || c == '!') && i + 1 < fmt.size()) {
+    if ((c == '\\' || (c == '!' && ja_syntax)) && i + 1 < fmt.size()) {
       out.push_back(fmt[i + 1]);
       i += 2;
       continue;

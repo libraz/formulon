@@ -12,8 +12,10 @@
 #include <string>
 #include <string_view>
 
+#include "eval/eval_profile_scope.h"
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_common.h"
+#include "excel_locale.h"
 #include "utils/date_time.h"
 #include "utils/japanese_era.h"
 #include "utils/number_text.h"
@@ -75,29 +77,6 @@ std::uint64_t power10(std::size_t exponent) noexcept {
   return result;
 }
 
-// ja-JP weekday tokens (`aaa` / `aaaa`). Index 0 = Sunday to match the
-// `sun0` index used elsewhere in this file.
-const char* weekday_ja_short(int sun0) noexcept {
-  // 日, 月, 火, 水, 木, 金, 土 (each is a 3-byte UTF-8 code point).
-  static const char* const kTable[7] = {"\xE6\x97\xA5", "\xE6\x9C\x88", "\xE7\x81\xAB", "\xE6\xB0\xB4",
-                                        "\xE6\x9C\xA8", "\xE9\x87\x91", "\xE5\x9C\x9F"};
-  return table_entry(kTable, 7, sun0);
-}
-
-const char* weekday_ja_long(int sun0) noexcept {
-  // <weekday>曜日 — the suffix is `\xE6\x9B\x9C\xE6\x97\xA5` (曜日).
-  static const char* const kTable[7] = {
-      "\xE6\x97\xA5\xE6\x9B\x9C\xE6\x97\xA5",  // 日曜日
-      "\xE6\x9C\x88\xE6\x9B\x9C\xE6\x97\xA5",  // 月曜日
-      "\xE7\x81\xAB\xE6\x9B\x9C\xE6\x97\xA5",  // 火曜日
-      "\xE6\xB0\xB4\xE6\x9B\x9C\xE6\x97\xA5",  // 水曜日
-      "\xE6\x9C\xA8\xE6\x9B\x9C\xE6\x97\xA5",  // 木曜日
-      "\xE9\x87\x91\xE6\x9B\x9C\xE6\x97\xA5",  // 金曜日
-      "\xE5\x9C\x9F\xE6\x9B\x9C\xE6\x97\xA5",  // 土曜日
-  };
-  return table_entry(kTable, 7, sun0);
-}
-
 // Japanese era classification. The boundary table and classifier live in
 // `eval/japanese_era.{h,cpp}` so the pivot date-grouping path can share
 // the same anchors. We re-export the type as a local alias so the rest
@@ -156,6 +135,7 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
   const ::formulon::date_time::YMD ymd = date1904 ? ::formulon::date_time::ymd_from_serial(calendar_serial, true)
                                                   : ::formulon::date_time::legacy_1900_ymd(calendar_serial);
   const int sun0 = ::formulon::date_time::weekday_sun0(calendar_serial, date1904);
+  const LocaleFacts& facts = locale_facts(eval::current_eval_profile());
 
   // Elapsed fields use the same rounded second as ordinary h/m/s fields.
   // `day_floor` is only a few million in the supported date range, so this
@@ -239,33 +219,50 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
         out.append(weekday_long(sun0));
         break;
       case Tok::DateAaa:
-        out.append(weekday_ja_short(sun0));
+        out.append(facts.weekday_short[static_cast<std::size_t>(sun0)]);
         break;
       case Tok::DateAaaa:
-        out.append(weekday_ja_long(sun0));
+        out.append(facts.weekday_long[static_cast<std::size_t>(sun0)]);
         break;
       case Tok::EraG: {
+        if (!facts.japanese_era) {
+          break;
+        }
         const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
         out.append(era.roman);
         break;
       }
       case Tok::EraGG: {
+        if (!facts.japanese_era) {
+          break;
+        }
         const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
         out.append(era.kanji1);
         break;
       }
       case Tok::EraGGG: {
+        if (!facts.japanese_era) {
+          break;
+        }
         const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
         out.append(era.kanji2);
         break;
       }
       case Tok::EraE: {
+        if (!facts.japanese_era) {
+          append_int_dbnum(out, static_cast<long long>(ymd.y), DbNumMode::kNone);
+          break;
+        }
         const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
         const int era_year = ymd.y - era.year_anchor + 1;
         append_int_dbnum(out, static_cast<long long>(era_year), dbnum);
         break;
       }
       case Tok::EraEE: {
+        if (!facts.japanese_era) {
+          append_int_dbnum(out, static_cast<long long>(ymd.y), DbNumMode::kNone);
+          break;
+        }
         const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
         const int era_year = ymd.y - era.year_anchor + 1;
         if (era_year >= 0 && era_year < 100) {

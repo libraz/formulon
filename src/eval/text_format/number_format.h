@@ -12,16 +12,17 @@
 //                   `dddd`, `h`/`hh`, `m`/`mm` (minute), `s`/`ss`, `.0*`
 //                   fractional seconds, `AM/PM` / `A/P`, `[h]`/`[m]`/`[s]`
 //                   elapsed brackets.
-//   Literal:        `"..."`, `\x`, `!x`, plus any character that does not
-//                   match a token (so e.g. `円`, `-`, ` ` pass through).
+//   Literal:        `"..."`, `\x`, and the ja-JP `!x` escape, plus any
+//                   character that does not match a token (so e.g. `円`, `-`,
+//                   ` ` pass through).
 //   Section split:  `;` (up to 4 sections: positive; negative; zero; text),
 //                   and conditional selectors such as `[>100]`.
 //   Digit styles:    `[DBNum1]`, `[DBNum2]`, `[DBNum3]`.
 //   Discarded:      `[赤]` / `[Red]` / ... colour specifiers, currency
 //                   locale prefixes like `[$-409]` (treated as inert).
 //                   Colour names follow the code's `FormatDialect`: the
-//                   ja-JP spellings for a TEXT() argument, the English
-//                   ones for a stored cell format.
+//                   active locale for a TEXT() argument, and canonical
+//                   English names for a stored cell format.
 //   Text-section:   `@` substitutes the original text input in the text
 //                   section of the format.
 //
@@ -29,8 +30,8 @@
 // trip the oracle): wareki eras and locale/currency directives whose locale
 // semantics require an Excel-compatible locale database.
 //
-// The engine is stateless: a call with identical (value, format) returns
-// the same string on every thread.
+// Rendering reads the active evaluation profile for locale-dependent
+// tokens. Each evaluator or display entry point scopes that profile.
 
 #ifndef FORMULON_EVAL_TEXT_FORMAT_NUMBER_FORMAT_H_
 #define FORMULON_EVAL_TEXT_FORMAT_NUMBER_FORMAT_H_

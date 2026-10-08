@@ -17,10 +17,12 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/eval_profile_scope.h"
 #include "eval/text_format/number_format_scanner.h"
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_date.h"
 #include "eval/text_format/render_numeric.h"
+#include "excel_locale.h"
 #include "utils/date_time.h"
 
 namespace formulon {
@@ -40,15 +42,22 @@ struct ParsedFormat {
 };
 
 void parse_format(std::string_view format, FormatDialect dialect, ParsedFormat& parsed) {
+  const bool ja_syntax = locale_facts(eval::current_eval_profile()).ja_format_syntax;
   // Normalise the ja-JP full-width syntax once. All section/string views and
   // literal offsets below refer to this owned buffer for the duration of the
   // render; quoted and escaped payloads remain byte-for-byte unchanged.
-  parsed.normalized = number_format_detail::normalize_ja_jp_format_syntax(format);
+  parsed.normalized = ja_syntax ? number_format_detail::normalize_ja_jp_format_syntax(format) : std::string(format);
   parsed.raw = number_format_detail::split_sections(parsed.normalized);
+  // TEXT's format argument follows the host's UI spelling. On an en-US host
+  // that spelling is the same canonical English vocabulary used by stored
+  // cell formats, while the stored dialect remains explicit for display
+  // rendering on either locale.
+  const FormatDialect effective_dialect =
+      dialect == FormatDialect::kLocalized && !ja_syntax ? FormatDialect::kStored : dialect;
   parsed.sections.reserve(parsed.raw.size());
   for (const auto& raw : parsed.raw) {
     Section s;
-    number_format_detail::tokenize_section(raw, s, dialect);
+    number_format_detail::tokenize_section(raw, s, effective_dialect);
     number_format_detail::classify(s, raw);
     parsed.sections.push_back(std::move(s));
   }
