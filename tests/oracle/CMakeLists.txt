@@ -243,8 +243,7 @@ target_compile_definitions(formulon_ironcalc_oracle_tests
     FORMULON_ORACLE_SKIP_FILE="${_formula_oracle_skip_file}"
 )
 
-# Build-only English oracle for measuring locale differences before it joins
-# CTest coverage. Its cases keep the same names as the primary oracle.
+# English oracle gate. Its cases keep the same names as the primary oracle.
 set(_en_us_oracle_skip_file "")
 if(Python3_Interpreter_FOUND)
   set(_en_us_oracle_skip_file "${CMAKE_CURRENT_BINARY_DIR}/en_us_oracle_skips.json")
@@ -277,6 +276,12 @@ target_compile_definitions(formulon_oracle_en_us_tests
     FORMULON_ORACLE_SKIP_FILE="${_en_us_oracle_skip_file}"
 )
 formulon_apply_warnings(formulon_oracle_en_us_tests)
+
+add_test(
+  NAME formulon_oracle_en_us_tests
+  COMMAND formulon_oracle_en_us_tests --gtest_brief=1 --gtest_fail_if_no_test_selected
+)
+set_tests_properties(formulon_oracle_en_us_tests PROPERTIES LABELS "oracle")
 
 # A directory under variants/ is not automatically an active oracle.  In
 # particular, the historical win-365-ja_JP capture is deliberately kept for

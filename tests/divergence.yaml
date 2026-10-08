@@ -120,7 +120,7 @@ entries:
   # WEEKNUM return_type with #NUM! (16.0.20228); Mac Excel 365 falls back to
   # type 1 and returns the week number instead.
   - id: weeknum_invalid_type_is_num
-    applies_to: [mac-365-ja_JP]
+    applies_to: [mac-365-ja_JP, mac-365-en_US]
     mode: skip-oracle
     cause: accepted-divergence
     reason: "WEEKNUM(DATE(2024,1,1),99): Mac Excel 365 ja-JP treats the unsupported return_type as the default type 1 and returns 1, where Windows Excel 365 ja-JP returns #NUM! (tests/oracle/variants/win-365-ja_JP/golden/datetime.golden.json). Formulon follows Windows, the primary 1-bit reference, and Microsoft's documented contract (only 1, 2, 11-17 and 21 are accepted)."
@@ -408,7 +408,7 @@ entries:
   # now captured as full arrays by the spill-shape oracle probe. Mode 3
   # remains skipped until Mac Excel exposes return_mode=3.
   - id: regexextract_mode_3_all_capture_groups
-    applies_to: [mac-365-ja_JP]
+    applies_to: [mac-365-ja_JP, mac-365-en_US]
     cause: accepted-divergence
     reason: "Mac Excel 365 16.109 returns #VALUE! for REGEXEXTRACT return_mode=3; Formulon implements per MS docs and validates via unit tests."
     prefer: formulon
@@ -601,7 +601,7 @@ entries:
   # tests/unit/eval/builtins_web_test.cpp.
   - suite: filterxml
     cause: excel-no-value
-    applies_to: [mac-365-ja_JP]
+    applies_to: [mac-365-ja_JP, mac-365-en_US]
     reason: "Mac Excel 365 ja-JP does not register FILTERXML, so the primary target produces no value to compare against. Excel accepts and retains the formula verbatim, then evaluates it to #NAME?: its own ERROR.TYPE(FILTERXML(...)) returns 5 and ISERROR returns TRUE, both ordinary results carried back by the bridge. The saved workbook stores the bare name with the error cached (<f>FILTERXML(...)</f><v>#NAME?</v>, no _xlfn. prefix), and reopening that file and recalculating reproduces #NAME? with no AppleEvent involved. WEBSERVICE behaves identically, matching the documented Windows-only pairing. A control formula succeeds through every path used. Note that formula_local cannot be used to re-test this: that route is inert on the Mac xlwings bridge for every formula including controls (see tools/oracle/drivers/macos_excel.py), so a blank read from it is not an Excel observation."
     prefer: formulon
     first_noted: 2026-05-15
@@ -766,7 +766,7 @@ entries:
   # `%7E`) is pinned by tests/unit/eval/builtins_web_test.cpp.
   - id: encodeurl_space
     cause: excel-no-value
-    applies_to: [mac-365-ja_JP]
+    applies_to: [mac-365-ja_JP, mac-365-en_US]
     mode: skip-oracle
     reason: "Mac Excel 365 ja-JP does not register ENCODEURL: the name resolves to #NAME? and Excel's own ERROR.TYPE(ENCODEURL(...)) returns 5, so the primary target produces no value to compare against. Scoped to the Mac target; a Windows host has the function and can capture these cases. Historical Windows files remain reference-only until a product-verified Microsoft 365 capture exists."
     prefer: formulon
@@ -774,7 +774,7 @@ entries:
     last_verified_excel_version: "16.112"
   - id: encodeurl_query_string_chars
     cause: excel-no-value
-    applies_to: [mac-365-ja_JP]
+    applies_to: [mac-365-ja_JP, mac-365-en_US]
     mode: skip-oracle
     reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?; ERROR.TYPE = 5). Formulon: \"a/b c?d=1&e=2\" -> \"a%2Fb%20c%3Fd%3D1%26e%3D2\"."
     prefer: formulon
@@ -782,7 +782,7 @@ entries:
     last_verified_excel_version: "16.112"
   - id: encodeurl_unreserved_passthrough
     cause: excel-no-value
-    applies_to: [mac-365-ja_JP]
+    applies_to: [mac-365-ja_JP, mac-365-en_US]
     mode: skip-oracle
     reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?; ERROR.TYPE = 5). Formulon: unreserved characters pass through and `~` encodes as %7E (Excel's documented tilde behavior; pinned by tests/unit/eval/builtins_web_test.cpp, not by win-365-ja_JP which is reference-only)."
     prefer: formulon
@@ -790,7 +790,7 @@ entries:
     last_verified_excel_version: "16.112"
   - id: encodeurl_japanese_utf8
     cause: excel-no-value
-    applies_to: [mac-365-ja_JP]
+    applies_to: [mac-365-ja_JP, mac-365-en_US]
     mode: skip-oracle
     reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?; ERROR.TYPE = 5). Formulon: \"日本語\" -> \"%E6%97%A5%E6%9C%AC%E8%AA%9E\" (UTF-8 byte expansion, uppercase hex)."
     prefer: formulon
@@ -798,7 +798,7 @@ entries:
     last_verified_excel_version: "16.112"
   - id: encodeurl_bool_true
     cause: excel-no-value
-    applies_to: [mac-365-ja_JP]
+    applies_to: [mac-365-ja_JP, mac-365-en_US]
     mode: skip-oracle
     reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?; ERROR.TYPE = 5). Formulon coerces TRUE -> \"TRUE\" then percent-encodes -> \"TRUE\" (all unreserved)."
     prefer: formulon
@@ -806,7 +806,7 @@ entries:
     last_verified_excel_version: "16.112"
   - id: encodeurl_empty_string
     cause: excel-no-value
-    applies_to: [mac-365-ja_JP]
+    applies_to: [mac-365-ja_JP, mac-365-en_US]
     mode: skip-oracle
     reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?; ERROR.TYPE = 5). Formulon: \"\" -> \"\" (empty input passes through)."
     prefer: formulon
@@ -814,7 +814,7 @@ entries:
     last_verified_excel_version: "16.112"
   - id: encodeurl_percent_self_encodes
     cause: excel-no-value
-    applies_to: [mac-365-ja_JP]
+    applies_to: [mac-365-ja_JP, mac-365-en_US]
     mode: skip-oracle
     reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?; ERROR.TYPE = 5). Formulon: \"100%\" -> \"100%25\" (percent itself is reserved)."
     prefer: formulon
@@ -1354,7 +1354,7 @@ entries:
 
   # Upper-tail probability rounding is amplified by inverse beta conditioning.
   - id: betainv_roundtrip
-    applies_to: [mac-365-ja_JP]
+    applies_to: [mac-365-ja_JP, mac-365-en_US]
     cause: accepted-divergence
     mode: skip-oracle
     reason: 'BETA.INV(BETA.DIST(0.9,0.1,10,TRUE),0.1,10): Mac Excel 365 returns 0.9000004941424153; Formulon returns 0.89999934430275 (difference about 1.15e-6). The CDF is within 1.44e-12 of 1 and its local density is about 1.45e-10, amplifying one probability ulp into about 7.7e-7 in x. Retain the general CDF/inverse calculation rather than bias its probability rounding to this Excel result.'

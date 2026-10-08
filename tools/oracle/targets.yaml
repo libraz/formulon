@@ -1,6 +1,8 @@
 # Oracle generation targets. The "primary" target is the canonical 1-bit
 # compatibility reference; variants are opt-in additional environments
-# whose goldens land under tests/oracle/variants/<name>/.
+# whose goldens land under tests/oracle/variants/<name>/. The en-US oracle
+# gate is the explicit exception: mac-365-en_US remains under variants/
+# while its dedicated CTest is required coverage.
 #
 # Target name shape: <host>-<excel-major>-<locale>
 #
