@@ -39,10 +39,12 @@ class FunctionRegistry;
 /// Legacy `RANK` shares this impl; Excel keeps both names. `order = 0`
 /// (or omitted) sorts descending (largest gets rank 1); any nonzero
 /// `order` sorts ascending. Ties share the best (lowest-numbered) rank.
-/// `number` must be numeric (Bool / Text -> `#VALUE!`); `ref` must be a
-/// range, Ref, or ArrayLiteral. Errors in `ref` propagate. If `number`
-/// is not present in `ref` after filtering to numeric cells, the result
-/// is `#N/A`.
+/// `number` coerces leniently (Bool -> 1 / 0, Blank -> 0, numeric text
+/// parsed, other text -> `#VALUE!`); `order` accepts Number / Bool /
+/// Blank but rejects any text with `#VALUE!`. `ref` is any range, array
+/// literal or dynamic-array result; a lone scalar is `#VALUE!`. Errors in
+/// `ref` propagate. If `number` is not present in `ref` after filtering
+/// to numeric cells, the result is `#N/A`.
 Value eval_rank_eq_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx);
 
