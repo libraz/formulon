@@ -45,7 +45,6 @@ void append_elapsed_int_dbnum(std::string& out, long long value, std::size_t wid
   append_chars_dbnum(out, mode, digits);
 }
 
-constexpr long long kSecondsPerDay = 86400;
 constexpr std::size_t kMaxMeaningfulFractionDigits = 15;
 
 std::uint64_t power10(std::size_t exponent) noexcept {
@@ -83,7 +82,7 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
   const double day_floor_f = std::floor(serial);
   const long long day_floor = static_cast<long long>(day_floor_f);
   const double frac_day = serial - day_floor_f;
-  const double total_seconds_f = frac_day * static_cast<double>(kSecondsPerDay);
+  const double total_seconds_f = frac_day * static_cast<double>(::formulon::date_time::kSecondsPerDay);
   const double whole_seconds_f = std::floor(total_seconds_f);
   const long long whole_seconds = static_cast<long long>(whole_seconds_f);
   const double subsecond = total_seconds_f - whole_seconds_f;
@@ -104,12 +103,12 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
   // Calendar and ordinary time tokens share the rounded day. A carry beyond
   // 9999-12-31 is a date overflow even when the source serial itself still
   // lies within the final day's fractional range.
-  const long long day_carry = rounded_seconds_in_day / kSecondsPerDay;
+  const long long day_carry = rounded_seconds_in_day / ::formulon::date_time::kSecondsPerDay;
   const long long day_for_calendar = day_floor + day_carry;
   if (static_cast<double>(day_for_calendar) > max_serial) {
     return FormatStatus::kOverflow;
   }
-  const long long seconds_of_day = rounded_seconds_in_day % kSecondsPerDay;
+  const long long seconds_of_day = rounded_seconds_in_day % ::formulon::date_time::kSecondsPerDay;
   const double calendar_serial = static_cast<double>(day_for_calendar);
   const ::formulon::date_time::YMD ymd = date1904 ? ::formulon::date_time::ymd_from_serial(calendar_serial, true)
                                                   : ::formulon::date_time::legacy_1900_ymd(calendar_serial);
@@ -119,7 +118,7 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
   // Elapsed fields use the same rounded second as ordinary h/m/s fields.
   // `day_floor` is only a few million in the supported date range, so this
   // product remains well within int64_t while retaining all day carries.
-  const long long total_rounded_seconds = day_floor * kSecondsPerDay + rounded_seconds_in_day;
+  const long long total_rounded_seconds = day_floor * ::formulon::date_time::kSecondsPerDay + rounded_seconds_in_day;
 
   // If AM/PM is in use, we need to know it before formatting hours.
   bool use_am_pm = false;

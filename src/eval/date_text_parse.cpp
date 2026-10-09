@@ -16,6 +16,7 @@
 #include "eval/eval_profile_scope.h"
 #include "excel_locale.h"
 #include "utils/date_time.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace eval {
@@ -174,27 +175,6 @@ bool serial_from_parsed_ymd(int year, std::size_t year_digits, int month, int da
   return true;
 }
 
-// Case-insensitive ASCII equality for a single character.
-bool ci_equal_ascii(char a, char b) noexcept {
-  const char la = (a >= 'A' && a <= 'Z') ? static_cast<char>(a + ('a' - 'A')) : a;
-  const char lb = (b >= 'A' && b <= 'Z') ? static_cast<char>(b + ('a' - 'A')) : b;
-  return la == lb;
-}
-
-// Returns true iff `s[0..expected.size())` matches `expected` case-insensitively
-// (ASCII only).
-bool starts_with_ci(std::string_view s, std::string_view expected) noexcept {
-  if (s.size() < expected.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < expected.size(); ++i) {
-    if (!ci_equal_ascii(s[i], expected[i])) {
-      return false;
-    }
-  }
-  return true;
-}
-
 // Consumes a case-insensitive month name from the head of `s` and advances
 // `s` past it. On success writes the 1..12 month index into `*out_month` and
 // returns true. Full names are tried before the abbreviations so "June" is
@@ -216,7 +196,7 @@ bool parse_mmm_month(std::string_view& s, int* out_month, bool hyphenated) noexc
     for (std::size_t i = 0; i < 12; ++i) {
       const std::string_view candidates[2] = {local_names[i], english_tier ? english_names[i] : std::string_view()};
       for (const std::string_view name : candidates) {
-        if (!name.empty() && starts_with_ci(s, name)) {
+        if (!name.empty() && strings::case_insensitive_starts_with(s, name)) {
           s.remove_prefix(name.size());
           *out_month = static_cast<int>(i) + 1;
           return true;
@@ -723,7 +703,7 @@ bool parse_kanji_time_text(std::string_view s, double* out_frac, std::string_vie
   }
   const double total_seconds =
       static_cast<double>(hour) * 3600.0 + static_cast<double>(minute) * 60.0 + static_cast<double>(second);
-  *out_frac = total_seconds / 86400.0;
+  *out_frac = total_seconds / static_cast<double>(date_time::kSecondsPerDay);
   *rest = s;
   return true;
 }
@@ -837,7 +817,7 @@ bool parse_time_text(std::string_view s, double* out_frac, std::string_view* res
   if (total_seconds < 0.0) {
     return false;
   }
-  *out_frac = total_seconds / 86400.0;
+  *out_frac = total_seconds / static_cast<double>(date_time::kSecondsPerDay);
   *rest = s;
   return true;
 }

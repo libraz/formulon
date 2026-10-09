@@ -61,6 +61,10 @@ struct CivilTime {
   HMS time;
 };
 
+/// Number of seconds in one day. Floating-point expressions explicitly cast
+/// this value where needed; integer date rendering can use it directly.
+inline constexpr std::int64_t kSecondsPerDay = 86400;
+
 /// Reads the host's local wall clock.
 ///
 /// Lives beside the calendar primitives rather than beside `NOW` because the

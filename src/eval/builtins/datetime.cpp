@@ -51,6 +51,7 @@ namespace {
 //     leap rule. Used by EDATE / EOMONTH when clamping the day field after
 //     a month shift.
 using date_time::days_in_month;
+using date_time::kSecondsPerDay;
 
 // Excel's maximum serial value: 2958465 = 9999-12-31. Serial 2958466 would
 // map to 10000-01-01 which is outside the representable range.
@@ -167,7 +168,7 @@ Expected<CoercedDateArg, ErrorCode> coerce_bounded_date_arg(const Value& v, bool
 
 // Rounds a serial to the nearest whole second; DAY / MONTH / YEAR / WEEKDAY extract the date from the rounded value.
 double round_to_second(double serial) noexcept {
-  return std::round(serial * 86400.0) / 86400.0;
+  return std::round(serial * static_cast<double>(kSecondsPerDay)) / static_cast<double>(kSecondsPerDay);
 }
 
 Expected<double, ErrorCode> read_truncated_number_arg(const Value* args, std::uint32_t index) {
@@ -346,7 +347,8 @@ Value Time_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   // Normalise modulo a full day so `TIME(25, 0, 0) == TIME(1, 0, 0)`.
   // Mod first, then divide: dividing before the mod rounds the quotient
   // and loses bit-identity between argument triples with equal totals.
-  const double day_fraction = std::fmod(total, 86400.0) / 86400.0;
+  const double day_fraction =
+      std::fmod(total, static_cast<double>(kSecondsPerDay)) / static_cast<double>(kSecondsPerDay);
   return Value::number(day_fraction);
 }
 
@@ -974,7 +976,7 @@ SerialNow serial_from_civil(const date_time::CivilTime& now, bool date1904) noex
   const double date_serial = date_time::serial_from_ymd(now.date.y, now.date.m, now.date.d, date1904);
   const double tod = (static_cast<double>(now.time.h) * 3600.0 + static_cast<double>(now.time.m) * 60.0 +
                       static_cast<double>(now.time.s)) /
-                     86400.0;
+                     static_cast<double>(kSecondsPerDay);
   return SerialNow{date_serial, tod};
 }
 

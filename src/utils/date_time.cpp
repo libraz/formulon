@@ -42,10 +42,6 @@ constexpr std::int64_t kExcel1904Base = kExcelBaseAfterGhost - 1462;
 // base.
 constexpr std::int64_t kCivilDays1900Feb28 = -25509;
 
-// Seconds in a day. The fractional part of a serial is scaled by this to
-// recover wall-clock seconds.
-constexpr double kSecondsPerDay = 86400.0;
-
 }  // namespace
 
 std::int64_t days_from_civil(int y, unsigned m, unsigned d) noexcept {
@@ -248,10 +244,10 @@ HMS hms_from_fraction(double serial) noexcept {
   // Round to the nearest second so `HOUR(TIME(h, m, s))` is exact for
   // integer h/m/s triples. Total seconds are modulo 86,400 so we never
   // leak into the next day.
-  std::int64_t total = static_cast<std::int64_t>(std::llround(frac * kSecondsPerDay));
-  total %= 86400;
+  std::int64_t total = static_cast<std::int64_t>(std::llround(frac * static_cast<double>(kSecondsPerDay)));
+  total %= kSecondsPerDay;
   if (total < 0) {
-    total += 86400;
+    total += kSecondsPerDay;
   }
   const unsigned h = static_cast<unsigned>(total / 3600);
   const unsigned m = static_cast<unsigned>((total / 60) % 60);
