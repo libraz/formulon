@@ -19,8 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fm_function_localize` and `fm_function_canonicalize` translate function
   names for `de-DE` and `fr-FR` (`fm_locale_t` gains `FM_LOCALE_DE_DE` and
   `FM_LOCALE_FR_FR`). Formulas are still entered with English names and
-  stored separators, PivotTable labels stay English, and CLI output stays
-  locale-invariant.
+  stored separators, and CLI output stays locale-invariant.
 - A built-in function name written bare is a function value, as a `LAMBDA`
   is: `=TYPE(SUM)` is 128, `=SUM` shows `#CALC!`, `=ABS+1` is `#VALUE!`, and
   `=LET(f,ABS,f(-2))`, `=CHOOSE(1,SUM,ABS)(5)` and `=IF(TRUE,ABS,SUM)(-3)`
@@ -74,6 +73,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- PivotTable labels, data-field names and subtotal rows follow Mac Excel 365
+  in each profile's locale. An en-US pivot renders Excel's compact layout
+  (`Row Labels` / `Column Labels` headers, `North Total` subtotal rows) instead
+  of field-name headers, and names a Count Numbers, StdDevp or Varp data field
+  `Count of`, `StdDevp of` or `Varp of`; a fr-FR subtotal row reads
+  `Total North`.
 - The WASM size report's Brotli ceilings moved to 928 KiB soft and 960 KiB
   hard; the uncompressed ceilings are unchanged.
 - A workbook without a theme part now resolves theme colors and fonts with the

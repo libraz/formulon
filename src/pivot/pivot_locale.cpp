@@ -18,47 +18,61 @@ namespace {
 
 constexpr std::size_t kAggregationCount = 11;
 
-/// Excel 365 ja-JP labels per `pivot::Aggregation`, in enum order.
-///
-/// These follow Mac/Win Excel 365 ja-JP exactly: in particular `StdDev`
-/// (sample) localises as "標本標準偏差" rather than the dictionary
-/// "標準偏差", and `VarP` (population variance) renders as plain "分散"
-/// matching the observed UI. Keep in sync with `pivot::Aggregation`.
-constexpr std::array<std::string_view, kAggregationCount> kJaJpAggregationLabels{
-    "合計",          // Sum
-    "個数",          // Count
-    "平均",          // Average
-    "最大",          // Max
-    "最小",          // Min
-    "積",            // Product
-    "数値の個数",    // CountNumbers
-    "標本標準偏差",  // StdDev (sample)
-    "標準偏差",      // StdDevP (population)
-    "標本分散",      // Var (sample)
-    "分散",          // VarP (population)
-};
+using AggregationLabels = std::array<std::string_view, kAggregationCount>;
 
-/// English labels mirroring Excel's pivot UI ("Sum", "Count", ...).
-/// Combined with `data_field_separator` (" of ") this reproduces the
-/// historical "Sum of <field>" / "CountNumbers of <field>" wording
-/// used by the workbook-oracle harness and the OOXML round-trip
-/// fixtures, so default-locale callers see no churn.
-constexpr std::array<std::string_view, kAggregationCount> kEnglishAggregationLabels{
-    "Sum",      // Sum
-    "Count",    // Count
-    "Average",  // Average
-    "Max",      // Max
-    "Min",      // Min
-    "Product",  // Product
-    "CountNumbers", "StdDev", "StdDevP", "Var", "VarP",
+// Labels per `pivot::Aggregation`, in enum order, as Mac Excel 365 names a
+// data field after its function is switched in each UI locale. Only ja-JP
+// gives CountNumbers its own label; every other locale reuses Count's.
+constexpr AggregationLabels kJaJpAggregationLabels{
+    "合計", "個数", "平均", "最大", "最小", "積", "数値の個数", "標本標準偏差", "標準偏差", "標本分散", "分散",
+};
+constexpr AggregationLabels kEnUsAggregationLabels{
+    "Sum", "Count", "Average", "Max", "Min", "Product", "Count", "StdDev", "StdDevp", "Var", "Varp",
+};
+constexpr AggregationLabels kDeDeAggregationLabels{
+    "Summe",
+    "Anzahl",
+    "Mittelwert",
+    "Max.",
+    "Min.",
+    "Produkt",
+    "Anzahl",
+    "STABW",
+    "Standardabweichung (Grundgesamtheit)",
+    "Var",
+    "Varianz (Grundgesamtheit)",
+};
+constexpr AggregationLabels kFrFrAggregationLabels{
+    "Somme", "Nombre", "Moyenne", "Max.", "Min.", "Produit", "Nombre", "Écartype", "Écartypep", "Var", "Varp",
+};
+constexpr AggregationLabels kZhCnAggregationLabels{
+    "求和项", "计数项",     "平均值项",       "最大值项", "最小值项",   "乘积项",
+    "计数项", "标准偏差项", "总体标准偏差项", "方差项",   "总体方差项",
+};
+constexpr AggregationLabels kKoKrAggregationLabels{
+    "합계", "개수", "평균", "최대", "최소", "곱", "개수", "표본 표준 편차", "표준 편차", "표본 분산", "분산",
+};
+constexpr AggregationLabels kThThAggregationLabels{
+    "ผลรวม",
+    "นับจำนวน",
+    "ค่าเฉลี่ย",
+    "สูงสุด",
+    "ต่ำสุด",
+    "ผลคูณ",
+    "นับจำนวน",
+    "ส่วนเบี่ยงเบนมาตรฐาน",
+    "ส่วนเบี่ยงเบนมาตรฐานของประชากร",
+    "ค่าความแปรปรวน",
+    "ค่าความแปรปรวนของประชากร",
 };
 
 struct PivotLocaleLabels {
-  std::array<std::string_view, kAggregationCount> aggregation_labels;
+  AggregationLabels aggregation_labels;
   std::string_view grand_total_label;
   std::string_view values_label;
   std::string_view row_labels_label;
   std::string_view column_labels_label;
+  std::string_view subtotal_prefix;
   std::string_view subtotal_suffix;
   std::string_view blank_item_label;
   std::string_view all_pages_label;
@@ -66,18 +80,32 @@ struct PivotLocaleLabels {
   std::string_view data_field_separator;
 };
 
-constexpr std::array<PivotLocaleLabels, 2> kLocaleLabels{{
-    {kJaJpAggregationLabels, "総計", "値", "行ラベル", "列ラベル", " 集計", "(空白)", "(すべて)", "(複数のアイテム)",
-     " / "},
-    {kEnglishAggregationLabels, "Grand Total", "Values", "", "", "", "(blank)", "(All)", "(Multiple Items)", " of "},
+// Indexed by `ExcelLocale`. Measured on Mac Excel 365 by switching the UI
+// locale and reading what Excel renders and names, except `values_label`
+// outside ja-JP: Excel stores it as the pivot's dataCaption at creation,
+// which this host cannot drive, so the others are the UI wording.
+constexpr std::array<PivotLocaleLabels, 7> kLocaleLabels{{
+    {kJaJpAggregationLabels, "総計", "値", "行ラベル", "列ラベル", "", " 集計", "(空白)", "(すべて)",
+     "(複数のアイテム)", " / "},
+    {kEnUsAggregationLabels, "Grand Total", "Values", "Row Labels", "Column Labels", "", " Total", "(blank)", "(All)",
+     "(Multiple Items)", " of "},
+    {kDeDeAggregationLabels, "Gesamtergebnis", "Werte", "Zeilenbeschriftungen", "Spaltenbeschriftungen", "",
+     " Ergebnis", "(Leer)", "(Alle)", "(Mehrere Elemente)", " von "},
+    {kFrFrAggregationLabels, "Total général", "Valeurs", "Étiquettes de lignes", "Étiquettes de colonnes", "Total ", "",
+     "(vide)", "(Tous)", "(Plusieurs éléments)", " de "},
+    {kZhCnAggregationLabels, "总计", "值", "行标签", "列标签", "", " 汇总", "(空白)", "(全部)", "(多项)", ":"},
+    {kKoKrAggregationLabels, "총합계", "값", "행 레이블", "열 레이블", "", " 요약", "(비어 있음)", "(모두)",
+     "(다중 항목)", " : "},
+    {kThThAggregationLabels, "ผลรวมทั้งหมด", "ค่า", "ป้ายชื่อแถว", "ป้ายชื่อคอลัมน์", "", " ผลรวม", "(ว่าง)", "(ทั้งหมด)",
+     "(หลายรายการ)", " ของ "},
 }};
 
+static_assert(kLocaleLabels.size() == static_cast<std::size_t>(ExcelLocale::kThTH) + 1U,
+              "one label set per ExcelLocale");
+
 const PivotLocaleLabels& locale_labels(ExcelLocale locale) noexcept {
-  const auto index = static_cast<std::size_t>(locale);
-  if (index < kLocaleLabels.size()) {
-    return kLocaleLabels[index];
-  }
-  return kLocaleLabels[static_cast<std::size_t>(ExcelLocale::kEnUS)];
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+  return kLocaleLabels[static_cast<std::size_t>(locale)];
 }
 
 std::string_view label_at(const std::array<std::string_view, kAggregationCount>& table, pivot::Aggregation agg) {
@@ -101,6 +129,7 @@ pivot::PivotLayoutOptions pivot_layout_options_for(ExcelProfile profile) {
   options.values_label = labels.values_label;
   options.row_labels_label = labels.row_labels_label;
   options.column_labels_label = labels.column_labels_label;
+  options.subtotal_prefix = labels.subtotal_prefix;
   options.subtotal_suffix = labels.subtotal_suffix;
   options.blank_item_label = labels.blank_item_label;
   options.all_pages_label = labels.all_pages_label;

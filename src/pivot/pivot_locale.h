@@ -25,8 +25,9 @@ namespace formulon::pivot {
 ///
 /// The host (Mac vs Windows) is intentionally ignored: pivot labels
 /// follow the workbook's display locale, not the running Excel binary.
-/// For non-ja locales the function returns the default-constructed
-/// `PivotLayoutOptions{}` so callers keep the legacy English layout.
+/// Every locale renders Excel's compact / tabular / outline layout; the
+/// field-name header projection of a default-constructed
+/// `PivotLayoutOptions{}` is not reachable from a profile.
 pivot::PivotLayoutOptions pivot_layout_options_for(ExcelProfile profile);
 
 /// Returns the localized aggregation label used in pivot data-field
@@ -40,10 +41,9 @@ std::string_view aggregation_label(pivot::Aggregation agg, ExcelProfile profile)
 std::string_view data_field_separator(ExcelProfile profile);
 
 /// Formats the full data-field display name for the locale of the
-/// given profile, e.g. "合計 / Amount" (ja-JP) or "Sum of Amount"
-/// (default). The English form preserves the historical
-/// `<Agg> of <field>` shape used by the workbook-oracle harness and
-/// the OOXML round-trip layer.
+/// given profile, e.g. "合計 / Amount" (ja-JP), "Sum of Amount" (en-US)
+/// or "求和项:Amount" (zh-CN): the aggregation label, the locale's
+/// separator, then the field name.
 std::string data_field_display_name(pivot::Aggregation agg, std::string_view field_name, ExcelProfile profile);
 
 }  // namespace formulon::pivot

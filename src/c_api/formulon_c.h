@@ -2313,7 +2313,6 @@ FM_API fm_status_t fm_workbook_excel_profile_id(const fm_workbook_t* wb, const c
  * `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}`. The `mac-*`
  * ids and `win-365-ja_JP` follow Excel measurements; the other `win-*` ids
  * are estimated from the Mac measurements plus the Windows host rules.
- * PivotTable labels for the de/fr/zh/ko/th locales are English.
  *
  * Existing cached formula values are not recomputed until the caller drives
  * `fm_workbook_recalc` or an equivalent partial recalc.

@@ -47,36 +47,28 @@ enum class PivotCellKind : std::uint8_t {
 /// placeholder layout used by Excel 365 and below, where the row-field
 /// name is replaced by a single localized "Row Labels" placeholder.
 ///
-/// Subtotal rows / columns synthesise their label by appending
-/// `subtotal_suffix` to the parent group label. When the suffix is empty
-/// the projection falls back to `" " + grand_total_label` so existing
-/// English consumers see "North Grand Total" unchanged.
+/// Subtotal rows / columns label a group as `subtotal_prefix + group +
+/// subtotal_suffix` (fr-FR puts its word first). When both are empty the
+/// projection falls back to `" " + grand_total_label`.
 ///
 /// `blank_item_label` names an axis group with no source value, which
 /// must be named because an empty label can be neither drawn nor
-/// addressed by GETPIVOTDATA. The ja-JP spelling is measured — Excel
-/// cached `(空白)` into the grid of
-/// `tests/fixtures/excel/pivot_blank_item.xlsx` — but the English
-/// default is still a guess, so do not hard-code it at a use site. The
-/// label is applied after the axis is ordered: Excel sorts the blank
-/// group last by its source value, not first by this text.
-///
-/// `all_pages_label` / `multiple_items_label` name a page field's
-/// selection when no single item identifies it, and are resolved
-/// alongside `blank_item_label` for the same reason. Only the ja-JP
-/// `all_pages_label` is oracle-measured — Excel wrote `(すべて)` into the
-/// grid of the `getpivotdata_page_data` capture. The English pair and the
-/// several-items spelling reproduce Excel's UI wording but no capture
-/// pins them, so treat them the way `blank_item_label`'s English default
-/// is treated and do not hard-code either at a use site.
+/// addressed by GETPIVOTDATA. The label is applied after the axis is
+/// ordered: Excel sorts the blank group last by its source value, not
+/// first by this text. `all_pages_label` / `multiple_items_label` name a
+/// page field's selection when no single item identifies it, and are
+/// resolved alongside `blank_item_label` for the same reason. The
+/// per-locale values come from `pivot_layout_options_for`; do not
+/// hard-code them at a use site.
 struct PivotLayoutOptions {
   std::string grand_total_label = "Grand Total";
   std::string values_label = "Values";
-  std::string blank_item_label = "(blank)";  ///< Label of an axis item with no value; English is provisional.
-  std::string all_pages_label = "(All)";     ///< Page field showing every item; English is provisional.
-  std::string multiple_items_label = "(Multiple Items)";  ///< Page field showing several items; provisional.
+  std::string blank_item_label = "(blank)";               ///< Label of an axis item with no value.
+  std::string all_pages_label = "(All)";                  ///< Page field showing every item.
+  std::string multiple_items_label = "(Multiple Items)";  ///< Page field showing several items.
   std::string row_labels_label;                           ///< e.g. "行ラベル"; empty disables.
   std::string column_labels_label;                        ///< e.g. "列ラベル"; empty disables.
+  std::string subtotal_prefix;                            ///< e.g. "Total " (fr-FR); placed before the group label.
   std::string subtotal_suffix;                            ///< e.g. " 集計"; empty falls back to grand_total_label.
 };
 

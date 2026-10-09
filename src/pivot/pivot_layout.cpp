@@ -300,8 +300,12 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   const bool outline = locale_opted_in && table.layout() == PivotLayout::Outline && row_depth > 0;
   const bool multi_col_layout = tabular || outline;
   const bool compact = locale_opted_in && !multi_col_layout;
-  const std::string subtotal_suffix =
-      options.subtotal_suffix.empty() ? std::string(" ") + options.grand_total_label : options.subtotal_suffix;
+  const std::string subtotal_suffix = options.subtotal_suffix.empty() && options.subtotal_prefix.empty()
+                                          ? std::string(" ") + options.grand_total_label
+                                          : options.subtotal_suffix;
+  const auto subtotal_label = [&](const std::string& group) {
+    return options.subtotal_prefix + group + subtotal_suffix;
+  };
 
   std::vector<AxisLeaf> row_leaves = collect_axis_leaves(result.rows, row_depth);
   std::vector<AxisLeaf> col_leaves = collect_axis_leaves(result.cols, col_depth);
@@ -475,7 +479,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         label = leaf.labels[depth];
       }
       if (entry.subtotal && depth + 1 == leaf.labels.size()) {
-        label += subtotal_suffix;
+        label = subtotal_label(label);
       }
       bool emit_blank = false;
       if (!leaf_depth && !label.empty()) {
@@ -647,7 +651,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
           label = leaf.labels[depth];
         }
         if (entry.subtotal && depth + 1 == leaf.labels.size()) {
-          label += subtotal_suffix;
+          label = subtotal_label(label);
         } else if (col_depth == 0 && data_field_count == 1) {
           label = data_field_name(table, 0);
         } else if (col_depth == 0) {
@@ -702,7 +706,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
           if (depth == leaf_last_depth && depth < leaf.labels.size()) {
             label = leaf.labels[depth];
             if (tabular) {
-              label += subtotal_suffix;
+              label = subtotal_label(label);
             }
           } else {
             emit_blank = true;
@@ -752,7 +756,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
           // suffix on row subtotals: the parent-group row already
           // carries the bare group label and Excel relies on the
           // following indented child rows for visual disambiguation.
-          label += subtotal_suffix;
+          label = subtotal_label(label);
         } else if (compact && row_depth == 0 && col_depth > 0 && depth == 0 && r_entry == 0) {
           // No-row-fields compact pivot: the data-field name sits on
           // the row-label column of the single implicit data row, since
