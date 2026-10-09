@@ -26,6 +26,18 @@ bool ReadImageBytes(const Napi::CallbackInfo& info, size_t idx, const uint8_t*& 
   return true;
 }
 
+template <typename Record>
+void PullImageAnchor(CheckedSpecReader& reader, const Napi::Object& spec, Record& record) {
+  record.anchor_kind = reader.I32(spec, "anchorKind", FM_ANCHOR_KIND_ONE_CELL);
+  record.edit_as = reader.I32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
+  record.row = reader.U32(spec, "row", 0U);
+  record.col = reader.U32(spec, "col", 0U);
+  record.row_off_emu = reader.I64(spec, "rowOffEmu", 0);
+  record.col_off_emu = reader.I64(spec, "colOffEmu", 0);
+  record.width_emu = reader.I64(spec, "widthEmu", 0);
+  record.height_emu = reader.I64(spec, "heightEmu", 0);
+}
+
 }  // namespace
 
 Napi::Value Workbook::ProbeImage(const Napi::CallbackInfo& info) {
@@ -149,14 +161,7 @@ Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
   fm_image_insert opts{};
   opts.name = name.c_str();
   opts.descr = descr.c_str();
-  opts.anchor_kind = reader.I32(spec, "anchorKind", FM_ANCHOR_KIND_ONE_CELL);
-  opts.edit_as = reader.I32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
-  opts.row = reader.U32(spec, "row", 0U);
-  opts.col = reader.U32(spec, "col", 0U);
-  opts.row_off_emu = reader.I64(spec, "rowOffEmu", 0);
-  opts.col_off_emu = reader.I64(spec, "colOffEmu", 0);
-  opts.width_emu = reader.I64(spec, "widthEmu", 0);
-  opts.height_emu = reader.I64(spec, "heightEmu", 0);
+  PullImageAnchor(reader, spec, opts);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -186,14 +191,7 @@ Napi::Value Workbook::SetImageAnchor(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   const Napi::Object spec = info[2].As<Napi::Object>();
   fm_image_anchor anchor{};
-  anchor.anchor_kind = reader.I32(spec, "anchorKind", FM_ANCHOR_KIND_ONE_CELL);
-  anchor.edit_as = reader.I32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
-  anchor.row = reader.U32(spec, "row", 0U);
-  anchor.col = reader.U32(spec, "col", 0U);
-  anchor.row_off_emu = reader.I64(spec, "rowOffEmu", 0);
-  anchor.col_off_emu = reader.I64(spec, "colOffEmu", 0);
-  anchor.width_emu = reader.I64(spec, "widthEmu", 0);
-  anchor.height_emu = reader.I64(spec, "heightEmu", 0);
+  PullImageAnchor(reader, spec, anchor);
   if (!reader.ok()) {
     return env.Undefined();
   }

@@ -27,6 +27,27 @@ const char* PullOptionalString(CheckedSpecReader& reader, const Napi::Object& sp
   return storage.c_str();
 }
 
+void PullOptionalDouble(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, double dflt,
+                        double& value, int32_t& engaged) {
+  bool present = false;
+  value = reader.Double(spec, key, dflt, &present);
+  engaged = present ? 1 : 0;
+}
+
+void PullOptionalU32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, uint32_t dflt,
+                     uint32_t& value, int32_t& engaged) {
+  bool present = false;
+  value = reader.U32(spec, key, dflt, &present);
+  engaged = present ? 1 : 0;
+}
+
+void PullOptionalBool(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, bool dflt, int32_t& value,
+                      int32_t& engaged) {
+  bool present = false;
+  value = reader.Bool(spec, key, dflt, &present) ? 1 : 0;
+  engaged = present ? 1 : 0;
+}
+
 // Shared bodies of the row / column page-break add and remove entries.
 using BreakAddFn = fm_status_t (*)(fm_workbook_t*, size_t, uint32_t, int32_t);
 using BreakRemoveFn = fm_status_t (*)(fm_workbook_t*, size_t, uint32_t);
@@ -221,19 +242,12 @@ Napi::Value Workbook::SetSheetPageSetup(const Napi::CallbackInfo& info) {
   const Napi::Object spec = info[1].As<Napi::Object>();
   CheckedSpecReader reader(env);
   fm_page_setup_t out{};
-  bool present = false;
-  out.orientation = reader.U32(spec, "orientation", 0U, &present);
-  out.orientation_engaged = present ? 1 : 0;
-  out.paper_size = reader.U32(spec, "paperSize", 0U, &present);
-  out.paper_size_engaged = present ? 1 : 0;
-  out.scale = reader.U32(spec, "scale", 0U, &present);
-  out.scale_engaged = present ? 1 : 0;
-  out.fit_to_width = reader.U32(spec, "fitToWidth", 0U, &present);
-  out.fit_to_width_engaged = present ? 1 : 0;
-  out.fit_to_height = reader.U32(spec, "fitToHeight", 0U, &present);
-  out.fit_to_height_engaged = present ? 1 : 0;
-  out.fit_to_page = reader.Bool(spec, "fitToPage", false, &present) ? 1 : 0;
-  out.fit_to_page_engaged = present ? 1 : 0;
+  PullOptionalU32(reader, spec, "orientation", 0U, out.orientation, out.orientation_engaged);
+  PullOptionalU32(reader, spec, "paperSize", 0U, out.paper_size, out.paper_size_engaged);
+  PullOptionalU32(reader, spec, "scale", 0U, out.scale, out.scale_engaged);
+  PullOptionalU32(reader, spec, "fitToWidth", 0U, out.fit_to_width, out.fit_to_width_engaged);
+  PullOptionalU32(reader, spec, "fitToHeight", 0U, out.fit_to_height, out.fit_to_height_engaged);
+  PullOptionalBool(reader, spec, "fitToPage", false, out.fit_to_page, out.fit_to_page_engaged);
   if (!reader.ok()) {
     // A malformed field left a pending JS exception:
     // stop before the C ABI call commits a default value for it.
@@ -255,19 +269,12 @@ Napi::Value Workbook::SetSheetPageMargins(const Napi::CallbackInfo& info) {
   const Napi::Object spec = info[1].As<Napi::Object>();
   CheckedSpecReader reader(env);
   fm_page_margins_t out{};
-  bool present = false;
-  out.left = reader.Double(spec, "left", 0.0, &present);
-  out.left_engaged = present ? 1 : 0;
-  out.right = reader.Double(spec, "right", 0.0, &present);
-  out.right_engaged = present ? 1 : 0;
-  out.top = reader.Double(spec, "top", 0.0, &present);
-  out.top_engaged = present ? 1 : 0;
-  out.bottom = reader.Double(spec, "bottom", 0.0, &present);
-  out.bottom_engaged = present ? 1 : 0;
-  out.header = reader.Double(spec, "header", 0.0, &present);
-  out.header_engaged = present ? 1 : 0;
-  out.footer = reader.Double(spec, "footer", 0.0, &present);
-  out.footer_engaged = present ? 1 : 0;
+  PullOptionalDouble(reader, spec, "left", 0.0, out.left, out.left_engaged);
+  PullOptionalDouble(reader, spec, "right", 0.0, out.right, out.right_engaged);
+  PullOptionalDouble(reader, spec, "top", 0.0, out.top, out.top_engaged);
+  PullOptionalDouble(reader, spec, "bottom", 0.0, out.bottom, out.bottom_engaged);
+  PullOptionalDouble(reader, spec, "header", 0.0, out.header, out.header_engaged);
+  PullOptionalDouble(reader, spec, "footer", 0.0, out.footer, out.footer_engaged);
   if (!reader.ok()) {
     // A malformed field left a pending JS exception:
     // stop before the C ABI call commits a default value for it.
@@ -289,15 +296,10 @@ Napi::Value Workbook::SetSheetPrintOptions(const Napi::CallbackInfo& info) {
   const Napi::Object spec = info[1].As<Napi::Object>();
   CheckedSpecReader reader(env);
   fm_print_options_t out{};
-  bool present = false;
-  out.grid_lines = reader.Bool(spec, "gridLines", false, &present) ? 1 : 0;
-  out.grid_lines_engaged = present ? 1 : 0;
-  out.headings = reader.Bool(spec, "headings", false, &present) ? 1 : 0;
-  out.headings_engaged = present ? 1 : 0;
-  out.horizontal_centered = reader.Bool(spec, "horizontalCentered", false, &present) ? 1 : 0;
-  out.horizontal_centered_engaged = present ? 1 : 0;
-  out.vertical_centered = reader.Bool(spec, "verticalCentered", false, &present) ? 1 : 0;
-  out.vertical_centered_engaged = present ? 1 : 0;
+  PullOptionalBool(reader, spec, "gridLines", false, out.grid_lines, out.grid_lines_engaged);
+  PullOptionalBool(reader, spec, "headings", false, out.headings, out.headings_engaged);
+  PullOptionalBool(reader, spec, "horizontalCentered", false, out.horizontal_centered, out.horizontal_centered_engaged);
+  PullOptionalBool(reader, spec, "verticalCentered", false, out.vertical_centered, out.vertical_centered_engaged);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -331,15 +333,10 @@ Napi::Value Workbook::SetSheetHeaderFooter(const Napi::CallbackInfo& info) {
   out.even_footer = PullOptionalString(reader, spec, "evenFooter", even_footer);
   out.first_header = PullOptionalString(reader, spec, "firstHeader", first_header);
   out.first_footer = PullOptionalString(reader, spec, "firstFooter", first_footer);
-  bool present = false;
-  out.different_odd_even = reader.Bool(spec, "differentOddEven", false, &present) ? 1 : 0;
-  out.different_odd_even_engaged = present ? 1 : 0;
-  out.different_first = reader.Bool(spec, "differentFirst", false, &present) ? 1 : 0;
-  out.different_first_engaged = present ? 1 : 0;
-  out.scale_with_doc = reader.Bool(spec, "scaleWithDoc", false, &present) ? 1 : 0;
-  out.scale_with_doc_engaged = present ? 1 : 0;
-  out.align_with_margins = reader.Bool(spec, "alignWithMargins", false, &present) ? 1 : 0;
-  out.align_with_margins_engaged = present ? 1 : 0;
+  PullOptionalBool(reader, spec, "differentOddEven", false, out.different_odd_even, out.different_odd_even_engaged);
+  PullOptionalBool(reader, spec, "differentFirst", false, out.different_first, out.different_first_engaged);
+  PullOptionalBool(reader, spec, "scaleWithDoc", false, out.scale_with_doc, out.scale_with_doc_engaged);
+  PullOptionalBool(reader, spec, "alignWithMargins", false, out.align_with_margins, out.align_with_margins_engaged);
   if (!reader.ok()) {
     return env.Undefined();
   }
