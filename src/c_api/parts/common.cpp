@@ -492,28 +492,29 @@ void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out) {
   out->u.number = 0.0;
 }
 
-fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index, const char* fn) {
+namespace {
+
+fm_status_t check_sheet(const fm_workbook_t* wb, std::size_t sheet, const char* fn, const char* field) {
   if (wb == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn);
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
+  const std::size_t count = wb->workbook().sheet_count();
+  if (sheet >= count) {
     return set_binding_error(
         formulon::FormulonErrorCode::kInvalidArgument, fn,
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+        std::string(field) + "=" + std::to_string(sheet) + " sheet_count=" + std::to_string(count));
   }
   return 0;
 }
 
+}  // namespace
+
+fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index, const char* fn) {
+  return check_sheet(wb, sheet_index, fn, "sheet_index");
+}
+
 fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const char* fn) {
-  if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn);
-  }
-  if (static_cast<std::size_t>(sheet) >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, fn,
-        "sheet=" + std::to_string(sheet) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
-  }
-  return 0;
+  return check_sheet(wb, sheet, fn, "sheet");
 }
 
 fm_status_t check_index(std::size_t index, std::size_t size, const char* fn, const char* field) {

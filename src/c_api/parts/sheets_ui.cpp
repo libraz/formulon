@@ -60,6 +60,20 @@ fm_status_t sheet_item_count(fm_workbook_t* wb, std::uint32_t sheet, std::uint32
   return 0;
 }
 
+template <typename GetItems>
+fm_status_t remove_sheet_item_at(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t index, const char* fn,
+                                 GetItems get_items) {
+  if (auto rc = check_sheet_u32(wb, sheet, fn); rc != 0) {
+    return rc;
+  }
+  auto& list = get_items(wb->workbook().sheet(sheet));
+  if (auto rc = check_index(index, list.size(), fn, "index"); rc != 0) {
+    return rc;
+  }
+  list.erase(list.begin() + static_cast<std::ptrdiff_t>(index));
+  return 0;
+}
+
 void fill_comment(const formulon::CellComment& c, fm_comment* out) {
   out->row = c.row;
   out->col = c.col;
@@ -110,15 +124,8 @@ extern "C" fm_status_t fm_sheet_remove_hyperlink(fm_workbook_t* wb, std::uint32_
 
 extern "C" fm_status_t fm_sheet_remove_hyperlink_at(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t index) {
   clear_last_error();
-  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_remove_hyperlink_at"); rc != 0) {
-    return rc;
-  }
-  auto& hls = wb->workbook().sheet(sheet).mutable_hyperlinks();
-  if (auto rc = check_index(index, hls.size(), "fm_sheet_remove_hyperlink_at", "index"); rc != 0) {
-    return rc;
-  }
-  hls.erase(hls.begin() + static_cast<std::ptrdiff_t>(index));
-  return 0;
+  return remove_sheet_item_at(wb, sheet, index, "fm_sheet_remove_hyperlink_at",
+                              [](formulon::Sheet& s) -> decltype(auto) { return s.mutable_hyperlinks(); });
 }
 
 extern "C" fm_status_t fm_sheet_clear_hyperlinks(fm_workbook_t* wb, std::uint32_t sheet) {
@@ -489,15 +496,8 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::uint32_t 
 
 extern "C" fm_status_t fm_sheet_remove_validation_at(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t index) {
   clear_last_error();
-  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_remove_validation_at"); rc != 0) {
-    return rc;
-  }
-  auto& list = wb->workbook().sheet(sheet).mutable_validations();
-  if (auto rc = check_index(index, list.size(), "fm_sheet_remove_validation_at", "index"); rc != 0) {
-    return rc;
-  }
-  list.erase(list.begin() + static_cast<std::ptrdiff_t>(index));
-  return 0;
+  return remove_sheet_item_at(wb, sheet, index, "fm_sheet_remove_validation_at",
+                              [](formulon::Sheet& s) -> decltype(auto) { return s.mutable_validations(); });
 }
 
 extern "C" fm_status_t fm_sheet_clear_validations(fm_workbook_t* wb, std::uint32_t sheet) {
