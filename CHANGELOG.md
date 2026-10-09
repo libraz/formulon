@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   profiles are estimated from them plus the Windows host rules.
   Formulas are still entered with English names and stored separators, and
   CLI output stays locale-invariant.
+- `--now <date[Thh:mm:ss]>` on every CLI subcommand pins the clock `NOW`,
+  `TODAY` and relative pivot date filters read, as the pinned-clock API
+  already does in the C ABI, Node, WASM and Python.
 - Locale-dependent catalog calls are keyed by profile id in the C ABI, Node,
   WASM and Python: function-name translation (`fm_function_localize`,
   `fm_function_canonicalize`; `localizeFunctionName`,

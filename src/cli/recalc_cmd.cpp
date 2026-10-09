@@ -74,7 +74,7 @@ void print_recalc_usage(std::ostream& out) {
       << "Options must precede --; after --, exactly one input path is accepted.\n"
       << "Status: prints \"formulon: recalc: ok, wrote M bytes to 'OUT'\" on stderr unless\n"
       << "--quiet is supplied; --quiet does not suppress load/save loss warnings.\n";
-  print_profile_option(out);
+  print_shared_options(out);
 }
 
 bool parse_thread_count(std::string_view text, std::uint32_t* out) {
@@ -128,13 +128,12 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
   bool input_seen = false;
   bool output_seen = false;
   bool options_ended = false;
-  std::optional<std::string_view> profile_id;
+  SharedOptions shared;
   int exit_code = 0;
 
   for (std::size_t i = 0; i < args.size(); ++i) {
     const std::string_view a = args[i];
-    switch (
-        handle_common_option(args, i, options_ended, profile_id, print_recalc_usage, "recalc", out, err, exit_code)) {
+    switch (handle_common_option(args, i, options_ended, shared, print_recalc_usage, "recalc", out, err, exit_code)) {
       case CommonOption::kConsumed:
         continue;
       case CommonOption::kExit:
@@ -215,7 +214,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     return rc;
   }
 
-  if (auto rc = apply_excel_profile(wb.handle, profile_id); rc != 0) {
+  if (auto rc = apply_shared_options(wb.handle, shared); rc != 0) {
     emit_last_error(err, "recalc");
     return rc;
   }

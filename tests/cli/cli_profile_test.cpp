@@ -19,12 +19,12 @@ constexpr std::array<ProfileCase, 4> kProfiles = {{
     {"mac-365-en_US", "$1,234.50"},
 }};
 
-bool write_profile_fixture(const std::string& path) {
+bool write_formula_fixture(const std::string& path, const char* formula) {
   fm_workbook_t* workbook = nullptr;
   if (fm_workbook_create(&workbook) != 0) {
     return false;
   }
-  const bool formula_set = fm_workbook_set_formula(workbook, 0, 0, 0, "=DOLLAR(1234.5)") == 0;
+  const bool formula_set = fm_workbook_set_formula(workbook, 0, 0, 0, formula) == 0;
   std::uint8_t* bytes = nullptr;
   std::size_t length = 0;
   const bool saved = formula_set && fm_workbook_save(workbook, &bytes, &length) == 0;
@@ -83,7 +83,7 @@ TEST(FormulonCli, ProfileFlagOmittedUsesEnglishDefault) {
 TEST(FormulonCli, ProfileFlagAppliesAfterRecalcLoad) {
   const std::string input = temp_path("profile_recalc_input.xlsx");
   PathGuard input_guard(input);
-  ASSERT_TRUE(write_profile_fixture(input));
+  ASSERT_TRUE(write_formula_fixture(input, "=DOLLAR(1234.5)"));
 
   for (const ProfileCase& profile : kProfiles) {
     const std::string output = temp_path(std::string("profile_recalc_output_") + profile.id + ".xlsx");
@@ -97,7 +97,7 @@ TEST(FormulonCli, ProfileFlagAppliesAfterRecalcLoad) {
 TEST(FormulonCli, ProfileFlagAppliesAfterDumpLoad) {
   const std::string input = temp_path("profile_dump_input.xlsx");
   PathGuard input_guard(input);
-  ASSERT_TRUE(write_profile_fixture(input));
+  ASSERT_TRUE(write_formula_fixture(input, "=DOLLAR(1234.5)"));
 
   for (const ProfileCase& profile : kProfiles) {
     const CliRun result = run_cli({"dump", "--profile", profile.id, "--values", input});
@@ -163,4 +163,34 @@ TEST(FormulonCli, ProfileFlagAppearsInTopAndSubcommandHelp) {
     }
     EXPECT_NE(help.stdout_text.find("win-365-en_US"), std::string::npos) << command;
   }
+}
+
+TEST(FormulonCli, NowFlagPinsTheClockForEval) {
+  const CliRun stamped = run_cli({"eval", "--now", "2026-10-09T09:30:00", "=TEXT(NOW(),\"yyyy-mm-dd hh:mm:ss\")"});
+  ASSERT_EQ(stamped.exit_code, 0) << stamped.stderr_text;
+  EXPECT_EQ(stamped.stdout_text, "2026-10-09 09:30:00\n");
+
+  const CliRun bare_date = run_cli({"eval", "--now", "2026-10-09", "=NOW()-TODAY()"});
+  ASSERT_EQ(bare_date.exit_code, 0) << bare_date.stderr_text;
+  EXPECT_EQ(bare_date.stdout_text, "0\n");
+}
+
+TEST(FormulonCli, NowFlagRejectsValuesOutsideTheCalendar) {
+  for (const char* value : {"2026-13-01", "2026-02-30", "1899-12-31", "2026-10-09 09:30:00", "2026-10-09T24:00:00",
+                            "26-10-09", "2026-10-09T09:30"}) {
+    const CliRun result = run_cli({"eval", "--now", value, "=NOW()"});
+    EXPECT_EQ(result.exit_code, 64) << value;
+    EXPECT_NE(result.stderr_text.find("--now requires"), std::string::npos) << value;
+  }
+  const CliRun missing = run_cli({"eval", "=NOW()", "--now"});
+  EXPECT_EQ(missing.exit_code, 64);
+}
+
+TEST(FormulonCli, NowFlagPinsTheClockForRecalc) {
+  const std::string input = temp_path("now_recalc_input.xlsx");
+  const std::string output = temp_path("now_recalc_output.xlsx");
+  ASSERT_TRUE(write_formula_fixture(input, "=TEXT(TODAY(),\"yyyy-mm-dd\")"));
+  const CliRun result = run_cli({"recalc", "--now", "2031-02-28", input, "-o", output, "--quiet"});
+  ASSERT_EQ(result.exit_code, 0) << result.stderr_text;
+  EXPECT_EQ(first_cell_text(output), "2031-02-28");
 }

@@ -28,6 +28,8 @@
 #ifndef FORMULON_CLI_CLI_H_
 #define FORMULON_CLI_CLI_H_
 
+#include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <ostream>
 #include <string>
@@ -36,6 +38,7 @@
 
 #include "c_api/formulon_c.h"
 #include "excel_profile.h"
+#include "utils/date_time.h"
 #include "utils/error.h"
 
 namespace formulon {
@@ -55,20 +58,74 @@ inline void print_profile_ids(std::ostream& out) {
   }
 }
 
-inline void print_profile_option(std::ostream& out) {
+/// Writes the help lines of the value-taking shared options.
+inline void print_shared_options(std::ostream& out) {
   out << "  --profile <id>        Select the Excel formula profile (default: "
       << excel_profile_id(default_excel_profile()) << ").\n"
       << "                        Supported ids: ";
   print_profile_ids(out);
-  out << ".\n";
+  out << ".\n"
+      << "  --now <date[Thh:mm:ss]>\n"
+      << "                        Pin the clock NOW, TODAY and relative date filters\n"
+      << "                        read, as local wall time (e.g. 2026-10-09T09:30:00;\n"
+      << "                        a bare date is midnight). Default: the host clock.\n";
 }
 
-inline fm_status_t apply_excel_profile(fm_workbook_t* workbook, const std::optional<std::string_view>& profile_id) {
-  if (!profile_id.has_value()) {
-    return 0;
+/// The value-taking options every subcommand shares.
+struct SharedOptions {
+  std::optional<std::string_view> profile_id;
+  std::optional<fm_civil_time_t> now;
+};
+
+/// Parses `YYYY-MM-DD` or `YYYY-MM-DDThh:mm:ss` into a wall-clock reading in
+/// the range `fm_workbook_set_pinned_now` accepts.
+inline bool parse_pinned_now(std::string_view text, fm_civil_time_t* out) {
+  const auto field = [&](std::size_t pos, std::size_t len, std::int32_t* value) {
+    if (pos + len > text.size()) {
+      return false;
+    }
+    std::int32_t v = 0;
+    for (std::size_t i = pos; i < pos + len; ++i) {
+      if (text[i] < '0' || text[i] > '9') {
+        return false;
+      }
+      v = v * 10 + (text[i] - '0');
+    }
+    *value = v;
+    return true;
+  };
+  fm_civil_time_t t{};
+  if (text.size() != 10 && text.size() != 19) {
+    return false;
   }
-  const std::string id(*profile_id);
-  return fm_workbook_set_excel_profile_id(workbook, id.c_str());
+  if (!field(0, 4, &t.year) || text[4] != '-' || !field(5, 2, &t.month) || text[7] != '-' || !field(8, 2, &t.day)) {
+    return false;
+  }
+  if (text.size() == 19 && (text[10] != 'T' || !field(11, 2, &t.hour) || text[13] != ':' || !field(14, 2, &t.minute) ||
+                            text[16] != ':' || !field(17, 2, &t.second))) {
+    return false;
+  }
+  if (t.year < 1900 || t.month < 1 || t.month > 12 || t.day < 1 ||
+      t.day > static_cast<std::int32_t>(date_time::days_in_month(t.year, static_cast<unsigned>(t.month))) ||
+      t.hour > 23 || t.minute > 59 || t.second > 59) {
+    return false;
+  }
+  *out = t;
+  return true;
+}
+
+/// Applies the shared options to a freshly created or loaded workbook.
+inline fm_status_t apply_shared_options(fm_workbook_t* workbook, const SharedOptions& options) {
+  if (options.profile_id.has_value()) {
+    const std::string id(*options.profile_id);
+    if (const fm_status_t rc = fm_workbook_set_excel_profile_id(workbook, id.c_str()); rc != 0) {
+      return rc;
+    }
+  }
+  if (options.now.has_value()) {
+    return fm_workbook_set_pinned_now(workbook, &*options.now);
+  }
+  return 0;
 }
 
 /// Generic usage exit code. Mirrors sysexits(3) `EX_USAGE = 64`.
@@ -114,20 +171,20 @@ inline int print_version(std::ostream& out, std::ostream& err) {
 /// Outcome of `handle_common_option`.
 enum class CommonOption {
   kNotCommon,  ///< The argument is not a shared option; the handler keeps parsing it.
-  kConsumed,   ///< The argument was a shared option (`--`, or `--profile` and its value).
+  kConsumed,   ///< The argument was a shared option (`--`, or `--profile` / `--now` and its value).
   kExit,       ///< The invocation is finished; return `exit_code`.
 };
 
 /// Handles the options every subcommand shares: `--` (ends option parsing,
 /// recorded in `options_ended`), `-h | --help` (prints `print_usage_fn` to
-/// `out`), `--version`, and `--profile <id>`. The profile option validates
-/// one of the four supported ids, stores it in `profile_id`, and advances
-/// `index` over its value; repeating it replaces the previous value. Once
+/// `out`), `--version`, `--profile <id>` and `--now <date[Thh:mm:ss]>`. A
+/// value-taking option is validated, stored in `shared`, and advances `index`
+/// over its value; repeating it replaces the previous value. Once
 /// `options_ended` is set nothing is shared.
 inline CommonOption handle_common_option(const ArgList& args, std::size_t& index, bool& options_ended,
-                                         std::optional<std::string_view>& profile_id,
-                                         void (*print_usage_fn)(std::ostream&), std::string_view subcommand,
-                                         std::ostream& out, std::ostream& err, int& exit_code) {
+                                         SharedOptions& shared, void (*print_usage_fn)(std::ostream&),
+                                         std::string_view subcommand, std::ostream& out, std::ostream& err,
+                                         int& exit_code) {
   const std::string_view arg = args[index];
   if (options_ended) {
     return CommonOption::kNotCommon;
@@ -161,7 +218,19 @@ inline CommonOption handle_common_option(const ArgList& args, std::size_t& index
       exit_code = kExitUsage;
       return CommonOption::kExit;
     }
-    profile_id = value;
+    shared.profile_id = value;
+    ++index;
+    return CommonOption::kConsumed;
+  }
+  if (arg == "--now") {
+    fm_civil_time_t now{};
+    if (index + 1 >= args.size() || !parse_pinned_now(args[index + 1], &now)) {
+      err << "formulon: " << subcommand << ": --now requires a date YYYY-MM-DD or YYYY-MM-DDThh:mm:ss"
+          << " from 1900-01-01 to 9999-12-31\n";
+      exit_code = kExitUsage;
+      return CommonOption::kExit;
+    }
+    shared.now = now;
     ++index;
     return CommonOption::kConsumed;
   }

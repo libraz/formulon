@@ -30,7 +30,7 @@ void print_top_usage(std::ostream& out) {
       << "                          Resolve print area, page breaks, and page count.\n"
       << "\n"
       << "Common options:\n";
-  formulon::cli::print_profile_option(out);
+  formulon::cli::print_shared_options(out);
   out << "  -h, --help              Show this help (or per-subcommand help).\n"
       << "  --version               Print the engine version and exit.\n";
 }
