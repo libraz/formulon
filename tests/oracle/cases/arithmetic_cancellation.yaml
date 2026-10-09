@@ -1,0 +1,327 @@
+suite: arithmetic_cancellation
+description: >
+  Results that cancel to within 2^-50 of their operands: when the outermost
+  + or - of a formula reads as 0, which wrappers keep the residue, and the
+  same rule inside SUM, AVERAGE and SUBTOTAL but not SUMPRODUCT or SUMIF.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: plain
+    formula: =0.5-0.4-0.1
+  - id: paren
+    formula: =(0.5-0.4-0.1)
+  - id: times1
+    formula: =1*(0.5-0.4-0.1)
+  - id: plus0
+    formula: =0.5-0.4-0.1+0
+  - id: sum
+    formula: =SUM(0.5,-0.4,-0.1)
+  - id: abs
+    formula: =ABS(0.5-0.4-0.1)
+  - id: if
+    formula: =IF(TRUE,0.5-0.4-0.1)
+  - id: rev
+    formula: =0.1+0.2-0.3
+  - id: rev2
+    formula: =0.3-0.1-0.2
+  - id: neg
+    formula: =-(0.5-0.4-0.1)
+  - id: pow_sub
+    formula: =((-8)^(1/3))-(-2)
+  - id: pow_add
+    formula: =(-8)^(1/3)+2
+  - id: cells_two
+    formula: =A1-B1
+    setup:
+      A1: -1.9999999999999998
+      B1: -2
+  - id: cells3
+    formula: =A1-B1-C1
+    setup:
+      A1: 0.5
+      B1: 0.4
+      C1: 0.1
+  - id: text
+    formula: =TEXT(0.5-0.4-0.1,"0.00E+00")
+  - id: concat
+    formula: =0.5-0.4-0.1&""
+  - id: cmp
+    formula: =(0.5-0.4-0.1)=0
+  - id: cmp2
+    formula: =0.5-0.4-0.1=0
+  - id: div
+    formula: =(0.5-0.4-0.1)/1
+  - id: let
+    formula: =LET(x,0.5-0.4-0.1,x)
+  - id: array
+    formula: =SUM({0.5}-0.4-0.1)
+  - id: big
+    formula: =1E15+0.3-1E15
+  - id: mul_last
+    formula: =(1-0.9-0.1)*1
+  - id: k40
+    formula: =1-(1-2^-40)
+  - id: kp40
+    formula: =(1+2^-40)-1
+  - id: kr40
+    formula: =100-(100-100*2^-40)
+  - id: k41
+    formula: =1-(1-2^-41)
+  - id: kp41
+    formula: =(1+2^-41)-1
+  - id: kr41
+    formula: =100-(100-100*2^-41)
+  - id: k42
+    formula: =1-(1-2^-42)
+  - id: kp42
+    formula: =(1+2^-42)-1
+  - id: kr42
+    formula: =100-(100-100*2^-42)
+  - id: k43
+    formula: =1-(1-2^-43)
+  - id: kp43
+    formula: =(1+2^-43)-1
+  - id: kr43
+    formula: =100-(100-100*2^-43)
+  - id: k44
+    formula: =1-(1-2^-44)
+  - id: kp44
+    formula: =(1+2^-44)-1
+  - id: kr44
+    formula: =100-(100-100*2^-44)
+  - id: k45
+    formula: =1-(1-2^-45)
+  - id: kp45
+    formula: =(1+2^-45)-1
+  - id: kr45
+    formula: =100-(100-100*2^-45)
+  - id: k46
+    formula: =1-(1-2^-46)
+  - id: kp46
+    formula: =(1+2^-46)-1
+  - id: kr46
+    formula: =100-(100-100*2^-46)
+  - id: k47
+    formula: =1-(1-2^-47)
+  - id: kp47
+    formula: =(1+2^-47)-1
+  - id: kr47
+    formula: =100-(100-100*2^-47)
+  - id: k48
+    formula: =1-(1-2^-48)
+  - id: kp48
+    formula: =(1+2^-48)-1
+  - id: kr48
+    formula: =100-(100-100*2^-48)
+  - id: k49
+    formula: =1-(1-2^-49)
+  - id: kp49
+    formula: =(1+2^-49)-1
+  - id: kr49
+    formula: =100-(100-100*2^-49)
+  - id: k50
+    formula: =1-(1-2^-50)
+  - id: kp50
+    formula: =(1+2^-50)-1
+  - id: kr50
+    formula: =100-(100-100*2^-50)
+  - id: k51
+    formula: =1-(1-2^-51)
+  - id: kp51
+    formula: =(1+2^-51)-1
+  - id: kr51
+    formula: =100-(100-100*2^-51)
+  - id: k52
+    formula: =1-(1-2^-52)
+  - id: kp52
+    formula: =(1+2^-52)-1
+  - id: kr52
+    formula: =100-(100-100*2^-52)
+  - id: k53
+    formula: =1-(1-2^-53)
+  - id: kp53
+    formula: =(1+2^-53)-1
+  - id: kr53
+    formula: =100-(100-100*2^-53)
+  - id: s_basic
+    formula: =SUM(0.5,-0.4,-0.1)
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: s_k49
+    formula: =SUM(1,-(1-2^-49))
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: s_k50
+    formula: =SUM(1,-(1-2^-50))
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: s_order
+    formula: =SUM(-0.1,0.5,-0.4)
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: s_big
+    formula: =SUM(1E15,0.3,-1E15)
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: s_range
+    formula: =SUM(A1:A3)
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: s_nested
+    formula: =1*SUM(0.5,-0.4,-0.1)
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: s_paren
+    formula: =(SUM(0.5,-0.4,-0.1))
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: s_plus
+    formula: =SUM(0.5,-0.4,-0.1)+0
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: s_mid
+    formula: =SUM(0.5,-0.4)-0.1
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: s_three
+    formula: =SUM(1,1E-16,-1)
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: s_k50b
+    formula: =SUM(1,2^-50,-1)
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: s_k49b
+    formula: =SUM(1,2^-49,-1)
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: s_k50c
+    formula: =SUM(2^-50,1,-1)
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: sp
+    formula: =SUMPRODUCT({0.5,-0.4,-0.1})
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: avg
+    formula: =AVERAGE(0.5,-0.4,-0.1)*3
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: subtotal
+    formula: =SUBTOTAL(9,A1:A3)
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: sumifs
+    formula: =SUMIF(A1:A3,"<>x")
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: in_if
+    formula: =IF(TRUE,SUM(0.5,-0.4,-0.1))
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: sum_in_sum
+    formula: =SUM(SUM(0.5,-0.4,-0.1))
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: pos_k50
+    formula: =1-(1-2^-50)
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: neg_top
+    formula: =-0.5+0.4+0.1
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: mixed_mul
+    formula: =0.5-0.4-0.1*1
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: div_last
+    formula: =0.3/3-0.1
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: snap_cell_ref
+    formula: =B1
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1
+  - id: snap_chain
+    formula: =B1-0
+    setup:
+      A1: 0.5
+      A2: -0.4
+      A3: -0.1
+      B1: =0.5-0.4-0.1

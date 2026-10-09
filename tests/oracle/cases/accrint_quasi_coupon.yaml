@@ -1,0 +1,247 @@
+suite: accrint_quasi_coupon
+description: >
+  ACCRINT on the quasi-coupon grid when the issue date falls after
+  first_interest, across every basis, coupon frequency and calc_method.
+tolerance: { abs: 1.0e-9, rel: 1.0e-9 }
+locale: ja-JP
+cases:
+  - id: c0_b0_f1_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,1,0,TRUE)
+  - id: c0_b0_f1_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,1,0,FALSE)
+  - id: c0_b0_f2_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,2,0,TRUE)
+  - id: c0_b0_f2_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,2,0,FALSE)
+  - id: c0_b0_f4_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,4,0,TRUE)
+  - id: c0_b0_f4_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,4,0,FALSE)
+  - id: c0_b1_f1_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,1,1,TRUE)
+  - id: c0_b1_f1_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,1,1,FALSE)
+  - id: c0_b1_f2_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,2,1,TRUE)
+  - id: c0_b1_f2_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,2,1,FALSE)
+  - id: c0_b1_f4_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,4,1,TRUE)
+  - id: c0_b1_f4_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,4,1,FALSE)
+  - id: c0_b2_f1_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,1,2,TRUE)
+  - id: c0_b2_f1_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,1,2,FALSE)
+  - id: c0_b2_f2_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,2,2,TRUE)
+  - id: c0_b2_f2_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,2,2,FALSE)
+  - id: c0_b2_f4_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,4,2,TRUE)
+  - id: c0_b2_f4_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,4,2,FALSE)
+  - id: c0_b3_f1_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,1,3,TRUE)
+  - id: c0_b3_f1_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,1,3,FALSE)
+  - id: c0_b3_f2_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,2,3,TRUE)
+  - id: c0_b3_f2_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,2,3,FALSE)
+  - id: c0_b3_f4_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,4,3,TRUE)
+  - id: c0_b3_f4_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,4,3,FALSE)
+  - id: c0_b4_f1_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,1,4,TRUE)
+  - id: c0_b4_f1_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,1,4,FALSE)
+  - id: c0_b4_f2_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,2,4,TRUE)
+  - id: c0_b4_f2_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,2,4,FALSE)
+  - id: c0_b4_f4_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,4,4,TRUE)
+  - id: c0_b4_f4_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2024,9,15),0.05,1000,4,4,FALSE)
+  - id: c1_b0_f1_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,1,0,TRUE)
+  - id: c1_b0_f1_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,1,0,FALSE)
+  - id: c1_b0_f2_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,2,0,TRUE)
+  - id: c1_b0_f2_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,2,0,FALSE)
+  - id: c1_b0_f4_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,4,0,TRUE)
+  - id: c1_b0_f4_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,4,0,FALSE)
+  - id: c1_b1_f1_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,1,1,TRUE)
+  - id: c1_b1_f1_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,1,1,FALSE)
+  - id: c1_b1_f2_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,2,1,TRUE)
+  - id: c1_b1_f2_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,2,1,FALSE)
+  - id: c1_b1_f4_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,4,1,TRUE)
+  - id: c1_b1_f4_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,4,1,FALSE)
+  - id: c1_b2_f1_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,1,2,TRUE)
+  - id: c1_b2_f1_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,1,2,FALSE)
+  - id: c1_b2_f2_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,2,2,TRUE)
+  - id: c1_b2_f2_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,2,2,FALSE)
+  - id: c1_b2_f4_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,4,2,TRUE)
+  - id: c1_b2_f4_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,4,2,FALSE)
+  - id: c1_b3_f1_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,1,3,TRUE)
+  - id: c1_b3_f1_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,1,3,FALSE)
+  - id: c1_b3_f2_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,2,3,TRUE)
+  - id: c1_b3_f2_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,2,3,FALSE)
+  - id: c1_b3_f4_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,4,3,TRUE)
+  - id: c1_b3_f4_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,4,3,FALSE)
+  - id: c1_b4_f1_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,1,4,TRUE)
+  - id: c1_b4_f1_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,1,4,FALSE)
+  - id: c1_b4_f2_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,2,4,TRUE)
+  - id: c1_b4_f2_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,2,4,FALSE)
+  - id: c1_b4_f4_true
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,4,4,TRUE)
+  - id: c1_b4_f4_false
+    formula: =ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,4,4,FALSE)
+  - id: c2_b0_f1_true
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,1,0,TRUE)
+  - id: c2_b0_f1_false
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,1,0,FALSE)
+  - id: c2_b0_f2_true
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,2,0,TRUE)
+  - id: c2_b0_f2_false
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,2,0,FALSE)
+  - id: c2_b0_f4_true
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,4,0,TRUE)
+  - id: c2_b0_f4_false
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,4,0,FALSE)
+  - id: c2_b1_f1_true
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,1,1,TRUE)
+  - id: c2_b1_f1_false
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,1,1,FALSE)
+  - id: c2_b1_f2_true
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,2,1,TRUE)
+  - id: c2_b1_f2_false
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,2,1,FALSE)
+  - id: c2_b1_f4_true
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,4,1,TRUE)
+  - id: c2_b1_f4_false
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,4,1,FALSE)
+  - id: c2_b2_f1_true
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,1,2,TRUE)
+  - id: c2_b2_f1_false
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,1,2,FALSE)
+  - id: c2_b2_f2_true
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,2,2,TRUE)
+  - id: c2_b2_f2_false
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,2,2,FALSE)
+  - id: c2_b2_f4_true
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,4,2,TRUE)
+  - id: c2_b2_f4_false
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,4,2,FALSE)
+  - id: c2_b3_f1_true
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,1,3,TRUE)
+  - id: c2_b3_f1_false
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,1,3,FALSE)
+  - id: c2_b3_f2_true
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,2,3,TRUE)
+  - id: c2_b3_f2_false
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,2,3,FALSE)
+  - id: c2_b3_f4_true
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,4,3,TRUE)
+  - id: c2_b3_f4_false
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,4,3,FALSE)
+  - id: c2_b4_f1_true
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,1,4,TRUE)
+  - id: c2_b4_f1_false
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,1,4,FALSE)
+  - id: c2_b4_f2_true
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,2,4,TRUE)
+  - id: c2_b4_f2_false
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,2,4,FALSE)
+  - id: c2_b4_f4_true
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,4,4,TRUE)
+  - id: c2_b4_f4_false
+    formula: =ACCRINT(DATE(2024,5,20),DATE(2024,5,15),DATE(2024,6,30),0.05,1000,4,4,FALSE)
+  - id: c3_b0_f1_true
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,1,0,TRUE)
+  - id: c3_b0_f1_false
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,1,0,FALSE)
+  - id: c3_b0_f2_true
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,2,0,TRUE)
+  - id: c3_b0_f2_false
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,2,0,FALSE)
+  - id: c3_b0_f4_true
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,4,0,TRUE)
+  - id: c3_b0_f4_false
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,4,0,FALSE)
+  - id: c3_b1_f1_true
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,1,1,TRUE)
+  - id: c3_b1_f1_false
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,1,1,FALSE)
+  - id: c3_b1_f2_true
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,2,1,TRUE)
+  - id: c3_b1_f2_false
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,2,1,FALSE)
+  - id: c3_b1_f4_true
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,4,1,TRUE)
+  - id: c3_b1_f4_false
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,4,1,FALSE)
+  - id: c3_b2_f1_true
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,1,2,TRUE)
+  - id: c3_b2_f1_false
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,1,2,FALSE)
+  - id: c3_b2_f2_true
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,2,2,TRUE)
+  - id: c3_b2_f2_false
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,2,2,FALSE)
+  - id: c3_b2_f4_true
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,4,2,TRUE)
+  - id: c3_b2_f4_false
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,4,2,FALSE)
+  - id: c3_b3_f1_true
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,1,3,TRUE)
+  - id: c3_b3_f1_false
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,1,3,FALSE)
+  - id: c3_b3_f2_true
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,2,3,TRUE)
+  - id: c3_b3_f2_false
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,2,3,FALSE)
+  - id: c3_b3_f4_true
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,4,3,TRUE)
+  - id: c3_b3_f4_false
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,4,3,FALSE)
+  - id: c3_b4_f1_true
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,1,4,TRUE)
+  - id: c3_b4_f1_false
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,1,4,FALSE)
+  - id: c3_b4_f2_true
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,2,4,TRUE)
+  - id: c3_b4_f2_false
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,2,4,FALSE)
+  - id: c3_b4_f4_true
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,4,4,TRUE)
+  - id: c3_b4_f4_false
+    formula: =ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,4,4,FALSE)

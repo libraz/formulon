@@ -1,0 +1,67 @@
+suite: lookup_regex_mode
+description: >
+  XMATCH and XLOOKUP match_mode 3 (regular expression): partial matching,
+  case sensitivity, number and boolean cells, numeric lookup values, invalid
+  and empty patterns, reverse search.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: partial_first
+    setup:
+      A1: xabcx
+      A2: abc
+    formula: =XMATCH("a.c",A1:A2,3)
+  - id: anchored
+    setup:
+      A1: xabcx
+      A2: abc
+    formula: =XMATCH("^a.c$",A1:A2,3)
+  - id: case_sens
+    setup:
+      A1: ABC
+      A2: abc
+    formula: =XMATCH("abc",A1:A2,3)
+  - id: number_cell
+    setup:
+      A1: 123
+      A2: x123
+    formula: =XMATCH("12",A1:A2,3)
+  - id: number_lookup
+    setup:
+      A1: x
+      A2: '42'
+    formula: =XMATCH(42,A1:A2,3)
+  - id: bad_regex
+    setup:
+      A1: a
+      A2: b
+    formula: =XMATCH("(",A1:A2,3)
+  - id: reverse
+    setup:
+      A1: abc
+      A2: abc
+    formula: =XMATCH("b",A1:A2,3,-1)
+  - id: xlookup_partial
+    setup:
+      A1: xabcx
+      A2: abc
+      B1: 1
+      B2: 2
+    formula: =XLOOKUP("a.c",A1:A2,B1:B2,"none",3)
+  - id: xlookup_none
+    setup:
+      A1: x
+      A2: y
+      B1: 1
+      B2: 2
+    formula: =XLOOKUP("z",A1:A2,B1:B2,,3)
+  - id: bool_cell
+    setup:
+      A1: true
+      A2: 'TRUE'
+    formula: =XMATCH("TRUE",A1:A2,3)
+  - id: empty_pattern
+    setup:
+      A1: a
+      A2: b
+    formula: =XMATCH("",A1:A2,3)

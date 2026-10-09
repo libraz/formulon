@@ -1,0 +1,1269 @@
+{
+  "suite": "aggregate_argument_order",
+  "description": "Which failure an aggregate reports when a non-numeric text literal comes before or after an error argument, and how an IF argument that picks a plain value is read, across the numeric and A-family aggregates.\n",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T01:50:48Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "sum_text_err",
+      "formula": "=SUM(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sum_err_text",
+      "formula": "=SUM(NA(),\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sum_text_div0",
+      "formula": "=SUM(\"abc\",1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sum_numtext_err",
+      "formula": "=SUM(\"1\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sum_ref_text_err",
+      "formula": "=SUM(A1,NA())",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sum_if_text",
+      "formula": "=SUM(IF(TRUE,\"\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sum_if_numtext",
+      "formula": "=SUM(IF(TRUE,\"5\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "sum_if_bool",
+      "formula": "=SUM(IF(TRUE,TRUE,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "average_text_err",
+      "formula": "=AVERAGE(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "average_err_text",
+      "formula": "=AVERAGE(NA(),\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "average_text_div0",
+      "formula": "=AVERAGE(\"abc\",1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "average_numtext_err",
+      "formula": "=AVERAGE(\"1\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "average_ref_text_err",
+      "formula": "=AVERAGE(A1,NA())",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "average_if_text",
+      "formula": "=AVERAGE(IF(TRUE,\"\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "average_if_numtext",
+      "formula": "=AVERAGE(IF(TRUE,\"5\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "average_if_bool",
+      "formula": "=AVERAGE(IF(TRUE,TRUE,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "product_text_err",
+      "formula": "=PRODUCT(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "product_err_text",
+      "formula": "=PRODUCT(NA(),\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "product_text_div0",
+      "formula": "=PRODUCT(\"abc\",1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "product_numtext_err",
+      "formula": "=PRODUCT(\"1\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "product_ref_text_err",
+      "formula": "=PRODUCT(A1,NA())",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "product_if_text",
+      "formula": "=PRODUCT(IF(TRUE,\"\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "product_if_numtext",
+      "formula": "=PRODUCT(IF(TRUE,\"5\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "product_if_bool",
+      "formula": "=PRODUCT(IF(TRUE,TRUE,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "sumsq_text_err",
+      "formula": "=SUMSQ(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumsq_err_text",
+      "formula": "=SUMSQ(NA(),\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumsq_text_div0",
+      "formula": "=SUMSQ(\"abc\",1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumsq_numtext_err",
+      "formula": "=SUMSQ(\"1\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumsq_ref_text_err",
+      "formula": "=SUMSQ(A1,NA())",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumsq_if_text",
+      "formula": "=SUMSQ(IF(TRUE,\"\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumsq_if_numtext",
+      "formula": "=SUMSQ(IF(TRUE,\"5\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "sumsq_if_bool",
+      "formula": "=SUMSQ(IF(TRUE,TRUE,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "max_text_err",
+      "formula": "=MAX(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "max_err_text",
+      "formula": "=MAX(NA(),\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "max_text_div0",
+      "formula": "=MAX(\"abc\",1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "max_numtext_err",
+      "formula": "=MAX(\"1\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "max_ref_text_err",
+      "formula": "=MAX(A1,NA())",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "max_if_text",
+      "formula": "=MAX(IF(TRUE,\"\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "max_if_numtext",
+      "formula": "=MAX(IF(TRUE,\"5\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "max_if_bool",
+      "formula": "=MAX(IF(TRUE,TRUE,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "min_text_err",
+      "formula": "=MIN(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "min_err_text",
+      "formula": "=MIN(NA(),\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "min_text_div0",
+      "formula": "=MIN(\"abc\",1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "min_numtext_err",
+      "formula": "=MIN(\"1\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "min_ref_text_err",
+      "formula": "=MIN(A1,NA())",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "min_if_text",
+      "formula": "=MIN(IF(TRUE,\"\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "min_if_numtext",
+      "formula": "=MIN(IF(TRUE,\"5\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "min_if_bool",
+      "formula": "=MIN(IF(TRUE,TRUE,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "maxa_text_err",
+      "formula": "=MAXA(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "maxa_err_text",
+      "formula": "=MAXA(NA(),\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "maxa_text_div0",
+      "formula": "=MAXA(\"abc\",1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "maxa_numtext_err",
+      "formula": "=MAXA(\"1\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "maxa_ref_text_err",
+      "formula": "=MAXA(A1,NA())",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "maxa_if_text",
+      "formula": "=MAXA(IF(TRUE,\"\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "maxa_if_numtext",
+      "formula": "=MAXA(IF(TRUE,\"5\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "maxa_if_bool",
+      "formula": "=MAXA(IF(TRUE,TRUE,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "count_text_err",
+      "formula": "=COUNT(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "count_err_text",
+      "formula": "=COUNT(NA(),\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "count_text_div0",
+      "formula": "=COUNT(\"abc\",1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "count_numtext_err",
+      "formula": "=COUNT(\"1\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "count_ref_text_err",
+      "formula": "=COUNT(A1,NA())",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "count_if_text",
+      "formula": "=COUNT(IF(TRUE,\"\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "count_if_numtext",
+      "formula": "=COUNT(IF(TRUE,\"5\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "count_if_bool",
+      "formula": "=COUNT(IF(TRUE,TRUE,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "median_text_err",
+      "formula": "=MEDIAN(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "median_err_text",
+      "formula": "=MEDIAN(NA(),\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "median_text_div0",
+      "formula": "=MEDIAN(\"abc\",1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "median_numtext_err",
+      "formula": "=MEDIAN(\"1\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "median_ref_text_err",
+      "formula": "=MEDIAN(A1,NA())",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "median_if_text",
+      "formula": "=MEDIAN(IF(TRUE,\"\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "median_if_numtext",
+      "formula": "=MEDIAN(IF(TRUE,\"5\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "median_if_bool",
+      "formula": "=MEDIAN(IF(TRUE,TRUE,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "stdev_text_err",
+      "formula": "=STDEV(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "stdev_err_text",
+      "formula": "=STDEV(NA(),\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdev_text_div0",
+      "formula": "=STDEV(\"abc\",1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "stdev_numtext_err",
+      "formula": "=STDEV(\"1\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdev_ref_text_err",
+      "formula": "=STDEV(A1,NA())",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdev_if_text",
+      "formula": "=STDEV(IF(TRUE,\"\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "stdev_if_numtext",
+      "formula": "=STDEV(IF(TRUE,\"5\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "stdev_if_bool",
+      "formula": "=STDEV(IF(TRUE,TRUE,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7071067811865476
+      }
+    },
+    {
+      "id": "var_text_err",
+      "formula": "=VAR(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "var_err_text",
+      "formula": "=VAR(NA(),\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "var_text_div0",
+      "formula": "=VAR(\"abc\",1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "var_numtext_err",
+      "formula": "=VAR(\"1\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "var_ref_text_err",
+      "formula": "=VAR(A1,NA())",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "var_if_text",
+      "formula": "=VAR(IF(TRUE,\"\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "var_if_numtext",
+      "formula": "=VAR(IF(TRUE,\"5\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "var_if_bool",
+      "formula": "=VAR(IF(TRUE,TRUE,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "sumproduct_text_err",
+      "formula": "=SUMPRODUCT(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumproduct_err_text",
+      "formula": "=SUMPRODUCT(NA(),\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumproduct_text_div0",
+      "formula": "=SUMPRODUCT(\"abc\",1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "sumproduct_numtext_err",
+      "formula": "=SUMPRODUCT(\"1\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumproduct_ref_text_err",
+      "formula": "=SUMPRODUCT(A1,NA())",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumproduct_if_text",
+      "formula": "=SUMPRODUCT(IF(TRUE,\"\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumproduct_if_numtext",
+      "formula": "=SUMPRODUCT(IF(TRUE,\"5\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumproduct_if_bool",
+      "formula": "=SUMPRODUCT(IF(TRUE,TRUE,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "maxa_text",
+      "formula": "=MAXA(\"abc\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "maxa_text_err_a_family",
+      "formula": "=MAXA(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "maxa_numtext",
+      "formula": "=MAXA(\"5\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "maxa_ref_text",
+      "formula": "=MAXA(A1,2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "mina_text",
+      "formula": "=MINA(\"abc\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mina_text_err",
+      "formula": "=MINA(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mina_numtext",
+      "formula": "=MINA(\"5\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "mina_ref_text",
+      "formula": "=MINA(A1,2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "averagea_text",
+      "formula": "=AVERAGEA(\"abc\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "averagea_text_err",
+      "formula": "=AVERAGEA(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "averagea_numtext",
+      "formula": "=AVERAGEA(\"5\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.5
+      }
+    },
+    {
+      "id": "averagea_ref_text",
+      "formula": "=AVERAGEA(A1,2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "stdeva_text",
+      "formula": "=STDEVA(\"abc\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "stdeva_text_err",
+      "formula": "=STDEVA(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "stdeva_numtext",
+      "formula": "=STDEVA(\"5\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.1213203435596424
+      }
+    },
+    {
+      "id": "stdeva_ref_text",
+      "formula": "=STDEVA(A1,2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.4142135623730951
+      }
+    },
+    {
+      "id": "vara_text",
+      "formula": "=VARA(\"abc\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "vara_text_err",
+      "formula": "=VARA(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "vara_numtext",
+      "formula": "=VARA(\"5\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.5
+      }
+    },
+    {
+      "id": "vara_ref_text",
+      "formula": "=VARA(A1,2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "stdevpa_text",
+      "formula": "=STDEVPA(\"abc\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "stdevpa_text_err",
+      "formula": "=STDEVPA(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "stdevpa_numtext",
+      "formula": "=STDEVPA(\"5\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "stdevpa_ref_text",
+      "formula": "=STDEVPA(A1,2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "varpa_text",
+      "formula": "=VARPA(\"abc\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "varpa_text_err",
+      "formula": "=VARPA(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "varpa_numtext",
+      "formula": "=VARPA(\"5\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.25
+      }
+    },
+    {
+      "id": "varpa_ref_text",
+      "formula": "=VARPA(A1,2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "counta_text",
+      "formula": "=COUNTA(\"abc\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "counta_text_err",
+      "formula": "=COUNTA(\"abc\",NA())",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "counta_numtext",
+      "formula": "=COUNTA(\"5\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "counta_ref_text",
+      "formula": "=COUNTA(A1,2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    }
+  ]
+}
