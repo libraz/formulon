@@ -179,6 +179,50 @@ TEST(TreeWalkerArith, ParensOverridePrecedence) {
   EXPECT_EQ(v.as_number(), 9.0);
 }
 
+// Excel snaps a near-zero cancellation to 0 only at an unparenthesised root
+// `+` / `-`, when |result| <= 2^-50 * max(|a|, |b|). Mac Excel 365 values.
+TEST(TreeWalkerArith, RootCancellationSnapsToZero) {
+  for (const std::string_view source :
+       {"=0.5-0.4-0.1", "=0.1+0.2-0.3", "=1E15+0.3-1E15", "=1-(1-2^-50)", "=(1+2^-50)-1", "=100-(100-100*2^-50)",
+        "=-0.5+0.4+0.1", "=0.5-0.4-0.1*1", "=0.3/3-0.1"}) {
+    const Value v = EvalSource(source);
+    ASSERT_TRUE(v.is_number()) << source;
+    EXPECT_EQ(v.as_number(), 0.0) << source;
+    EXPECT_FALSE(std::signbit(v.as_number())) << source;
+  }
+}
+
+TEST(TreeWalkerArith, CancellationKeptOffRootOrAboveThreshold) {
+  struct Case {
+    const char* source;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=(0.5-0.4-0.1)", -2.7755575615628914e-17},        {"=1*(0.5-0.4-0.1)", -2.7755575615628914e-17},
+      {"=0.5-0.4-0.1+0", -2.7755575615628914e-17},        {"=-(0.5-0.4-0.1)", 2.7755575615628914e-17},
+      {"=ABS(0.5-0.4-0.1)", 2.7755575615628914e-17},      {"=IF(TRUE,0.5-0.4-0.1)", -2.7755575615628914e-17},
+      {"=LET(x,0.5-0.4-0.1,x)", -2.7755575615628914e-17}, {"=1-(1-2^-49)", 1.7763568394002505e-15},
+      {"=(1+2^-49)-1", 1.7763568394002505e-15},           {"=100-(100-100*2^-49)", 1.7053025658242404e-13},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.source);
+    ASSERT_TRUE(v.is_number()) << c.source;
+    EXPECT_EQ(v.as_number(), c.expected) << c.source;
+  }
+  const Value cmp = EvalSource("=0.5-0.4-0.1=0");
+  ASSERT_TRUE(cmp.is_boolean());
+  EXPECT_FALSE(cmp.as_boolean());
+}
+
+TEST(TreeWalkerArith, RootCancellationSnapsCellOperands) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(-1.9999999999999998));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(-2.0));
+  const Value v = formulon::test::EvalSourceIn("=A1-B1", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
 // ---------------------------------------------------------------------------
 // Coercion in arithmetic
 // ---------------------------------------------------------------------------

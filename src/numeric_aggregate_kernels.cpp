@@ -12,6 +12,7 @@
 #include <optional>
 #include <vector>
 
+#include "utils/cancellation_snap.h"
 #include "utils/expected.h"
 #include "utils/index_sort.h"
 #include "value.h"
@@ -52,7 +53,7 @@ std::vector<double> materialize(const NumericInputView& view) {
 Expected<double, ErrorCode> run_sum(const std::vector<double>& xs) {
   double total = 0.0;
   for (double x : xs) {
-    total += x;
+    total = snapped_add(total, x);
   }
   if (!std::isfinite(total)) {
     return ErrorCode::Num;

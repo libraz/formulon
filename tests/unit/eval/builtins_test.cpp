@@ -87,6 +87,44 @@ TEST(BuiltinsSum, EmptyArgListIsArityViolation) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// SUM, AVERAGE and SUBTOTAL(9) snap each accumulation step whose result is
+// within 2^-50 of the larger operand to 0, at any nesting depth; SUMPRODUCT
+// and SUMIF do not. Mac Excel 365 values.
+TEST(BuiltinsSum, AccumulationCancellationSnapsToZero) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(0.5));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(-0.4));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(-0.1));
+  for (const std::string_view source :
+       {"=1*SUM(0.5,-0.4,-0.1)", "=SUM(A1:A3)", "=SUM(1,2^-50,-1)", "=SUM(2^-50,1,-1)", "=SUM(1E15,0.3,-1E15)",
+        "=AVERAGE(0.5,-0.4,-0.1)*3", "=SUBTOTAL(9,A1:A3)", "=IF(TRUE,SUM(0.5,-0.4,-0.1))"}) {
+    const Value v = EvalSourceIn(source, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << source;
+    EXPECT_EQ(v.as_number(), 0.0) << source;
+  }
+}
+
+TEST(BuiltinsSum, AccumulationCancellationKeptAboveThresholdOrOutsideFamily) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(0.5));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(-0.4));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(-0.1));
+  struct Case {
+    const char* source;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=SUM(1,2^-49,-1)", 1.7763568394002505e-15},       {"=SUM(1,-(1-2^-49))", 1.7763568394002505e-15},
+      {"=SUM({0.5}-0.4-0.1)", -2.7755575615628914e-17},   {"=SUMPRODUCT({0.5,-0.4,-0.1})", -2.7755575615628914e-17},
+      {"=SUMIF(A1:A3,\"<>x\")", -2.7755575615628914e-17},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSourceIn(c.source, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << c.source;
+    EXPECT_EQ(v.as_number(), c.expected) << c.source;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // CONCAT / CONCATENATE
 // ---------------------------------------------------------------------------

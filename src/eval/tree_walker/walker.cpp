@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "eval/array_alloc.h"
+#include "eval/coerce.h"
 #include "eval/declared_rect.h"
 #include "eval/defined_name_resolve.h"
 #include "eval/dynamic_array/anchor.h"
@@ -50,6 +51,7 @@
 #include "sheet.h"
 #include "sheet_name.h"
 #include "utils/arena.h"
+#include "utils/cancellation_snap.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -612,6 +614,51 @@ Value first_element(const Shaped& s) {
   return implicit_intersect_value(s.value);
 }
 
+// A binary operator node. `snap_cancellation_result` applies Excel's
+// near-zero cancellation snap to a scalar `+` / `-` result.
+Shaped eval_binary_op(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx, bool snap_cancellation_result) {
+  const parser::BinOp op = node.as_binary_op();
+  // Evaluate left first so error propagation honours the documented
+  // left-most-wins rule.
+  const Shaped lhs = eval_node_shaped(node.as_binary_lhs(), arena, registry, ctx);
+  if (lhs.tail_array == nullptr && lhs.value.is_error()) {
+    return lhs;
+  }
+  const Shaped rhs = eval_node_shaped(node.as_binary_rhs(), arena, registry, ctx);
+  if (rhs.tail_array == nullptr && rhs.value.is_error()) {
+    return rhs;
+  }
+  // Cellwise broadcast when either operand is an array (SpillRef #,
+  // TRANSPOSE, SEQUENCE, a whole column / row, ...); two scalars take
+  // the per-cell fast path.
+  Shaped out = broadcast_binop(op, lhs, rhs, arena);
+  if (snap_cancellation_result && out.tail_array == nullptr && out.value.is_number() && lhs.tail_array == nullptr &&
+      rhs.tail_array == nullptr && !lhs.value.is_array() && !rhs.value.is_array()) {
+    const auto a = coerce_to_number(lhs.value);
+    const auto b = coerce_to_number(rhs.value);
+    if (a && b) {
+      out.value = Value::number(snap_cancellation(a.value(), b.value(), out.value.as_number()));
+    }
+  }
+  return out;
+}
+
+// The value of a formula's root node. An unparenthesised root `+` / `-` is
+// the one operator position where Excel snaps a near-zero cancellation to 0.
+Shaped eval_root_shaped(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx) {
+  if (node.kind() == parser::NodeKind::BinaryOp && node.paren_depth() == 0U &&
+      (node.as_binary_op() == parser::BinOp::Add || node.as_binary_op() == parser::BinOp::Sub)) {
+    EvalDepthGuard depth_guard(ctx.eval_depth_counter(), kMaxEvalDepth);
+    if (depth_guard.exceeded()) {
+      return Shaped{Value::error(ErrorCode::Calc), nullptr};
+    }
+    return eval_binary_op(node, arena, registry, ctx, /*snap_cancellation_result=*/true);
+  }
+  return eval_node_shaped(node, arena, registry, ctx);
+}
+
 }  // namespace
 
 // Defined with external linkage (declared in `eval/lazy_impls.h`) so the
@@ -728,23 +775,8 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
       return broadcast_unary(node.as_unary_op(), operand, arena);
     }
 
-    case parser::NodeKind::BinaryOp: {
-      const parser::BinOp op = node.as_binary_op();
-      // Evaluate left first so error propagation honours the documented
-      // left-most-wins rule.
-      const Shaped lhs = eval_node_shaped(node.as_binary_lhs(), arena, registry, ctx);
-      if (lhs.tail_array == nullptr && lhs.value.is_error()) {
-        return lhs;
-      }
-      const Shaped rhs = eval_node_shaped(node.as_binary_rhs(), arena, registry, ctx);
-      if (rhs.tail_array == nullptr && rhs.value.is_error()) {
-        return rhs;
-      }
-      // Cellwise broadcast when either operand is an array (SpillRef #,
-      // TRANSPOSE, SEQUENCE, a whole column / row, ...); two scalars take
-      // the per-cell fast path.
-      return broadcast_binop(op, lhs, rhs, arena);
-    }
+    case parser::NodeKind::BinaryOp:
+      return eval_binary_op(node, arena, registry, ctx, /*snap_cancellation_result=*/false);
 
     case parser::NodeKind::Call:
       return dispatch_call(node, arena, registry, ctx);
@@ -936,7 +968,7 @@ Value evaluate_top(const parser::AstNode& node, Arena& arena, const FunctionRegi
       // pass's value without re-entrant evaluation.
       pass_state.memoize(anchor_sheet, anchor_row, anchor_col, current);
       EvalContext pass_ctx = ctx_with_counters.with_state(pass_state);
-      Value next = eval_node(node, arena, registry, pass_ctx);
+      Value next = densify(eval_root_shaped(node, arena, registry, pass_ctx), arena);
       // Apply the blank -> 0 surface contract so a blank-resolving pass is
       // comparable to a numeric one (matches the contract applied below for
       // the non-iterative path).
@@ -965,7 +997,7 @@ Value evaluate_top(const parser::AstNode& node, Arena& arena, const FunctionRegi
     // Fall through to the shared top-level surface contract below.
     sv.value = current;
   } else {
-    sv = eval_node_shaped(node, arena, registry, ctx_with_counters);
+    sv = eval_root_shaped(node, arena, registry, ctx_with_counters);
   }
   const auto out_of_memory = [&]() {
     if (EvalState* state = ctx.state(); state != nullptr) {

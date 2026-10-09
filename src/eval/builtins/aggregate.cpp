@@ -26,6 +26,7 @@
 #include "eval/range_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
+#include "utils/cancellation_snap.h"
 #include "utils/error.h"
 #include "utils/strings.h"
 #include "utils/utf8_length.h"
@@ -47,7 +48,7 @@ Value Sum(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     if (!coerced) {
       return Value::error(coerced.error());
     }
-    total += coerced.value();
+    total = snapped_add(total, coerced.value());
   }
   return to_finite_value(total);
 }
@@ -158,7 +159,7 @@ Value Average(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     if (!coerced) {
       return Value::error(coerced.error());
     }
-    total += coerced.value();
+    total = snapped_add(total, coerced.value());
   }
   const double r = total / static_cast<double>(arity);
   return to_finite_value(r);

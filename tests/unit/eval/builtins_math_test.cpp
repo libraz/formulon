@@ -339,9 +339,9 @@ TEST(MathPower, NegativeBaseFractionalExpYieldsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-// A negative base with a non-integer exponent e is an odd root when 1/e,
-// rounded to 15 significant digits, is an odd integer. Values are bit-exact
-// Mac Excel results.
+// A negative base with a non-integer exponent e is an odd root when 1/e lies
+// within half a unit of its 15th significant digit of an odd integer. Values
+// are bit-exact Mac Excel results.
 TEST(MathPower, NegativeBaseOddRootValues) {
   struct Case {
     const char* source;
@@ -355,6 +355,7 @@ TEST(MathPower, NegativeBaseOddRootValues) {
       {"=(-32)^(1/5)", -2.0},
       {"=(-8)^0.333333333333333", -1.9999999999999984},
       {"=(-2)^(1/1000001)", -1.0000006931467276},
+      {"=(-2)^(1/1001)", -1.0006926945279553},
       {"=(-1)^(1/3)", -1.0},
       {"=(-0.5)^(1/3)", -0.7937005259840998},
       {"=(-1E300)^(1/3)", -9.999999999999825e+99},
