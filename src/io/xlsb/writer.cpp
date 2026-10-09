@@ -45,6 +45,7 @@
 #include "io/xlsb/styles_writer.h"
 #include "io/xlsb/workbook_bin_writer.h"
 #include "io/xml_escape.h"
+#include "io/xml_utils.h"
 #include "miniz.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -66,8 +67,6 @@ namespace {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-constexpr std::string_view kXmlDecl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
 
 // The reader accepts both `application/vnd.ms-excel.sheet.binary.macroEnabled.main`
 // (used by `.xlsm` and the `.xlsb` corpus xlwings emits on macOS) and

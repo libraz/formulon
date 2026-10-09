@@ -17,6 +17,7 @@
 #include "io/ooxml_defs.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
+#include "io/xml_utils.h"
 #include "value.h"
 
 namespace formulon {
@@ -221,7 +222,7 @@ std::vector<std::uint8_t> build_external_link_bin(const ExternalLinkRecord& link
 std::string build_external_link_rels(const ExternalLinkRecord& link) {
   const LinkRelIds ids = RelIdsOf(link);
   std::string out;
-  out.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n");
+  out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
   // Excel lists the absolute URL first.
   if (!ids.absolute.empty()) {

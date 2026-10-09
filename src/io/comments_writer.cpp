@@ -13,23 +13,12 @@
 #include <utility>
 #include <vector>
 
+#include "io/ooxml/cell_ref_writer.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "sheet.h"
-#include "utils/a1_column.h"
-#include "utils/expected.h"
 
 namespace formulon::io {
-namespace {
-
-/// Appends an A1 cell reference (`A1`, `XFD1048576`, ...).
-void AppendCellRef(std::string& out, std::uint32_t row, std::uint32_t col) {
-  FM_CHECK(a1::append_column_letters(out, col), "comment column is outside Excel's grid");
-  out.append(std::to_string(row + 1));
-}
-
-}  // namespace
-
 std::string write_comments(const std::vector<CellComment>& comments) {
   if (comments.empty()) {
     return {};
@@ -69,7 +58,7 @@ std::string write_comments(const std::vector<CellComment>& comments) {
   out.append("  <commentList>\n");
   for (const CellComment& c : comments) {
     out.append("    <comment ref=\"");
-    AppendCellRef(out, c.row, c.col);
+    AppendCellRefForRef(out, c.row, c.col);
     out.append("\" authorId=\"");
     out.append(std::to_string(author_index[c.author]));
     out.push_back('"');

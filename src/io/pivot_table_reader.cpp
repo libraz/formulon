@@ -180,7 +180,7 @@ void ParseFieldOrder(const pugi::xml_node& parent, std::vector<std::uint32_t>* o
                      std::optional<std::size_t>* out_values_position) {
   std::size_t position = 0;
   for (pugi::xml_node f = parent.child("field"); f; f = f.next_sibling("field"), ++position) {
-    const std::int32_t x = parse_xml_i32_attr(f.attribute("x"), 0);
+    const std::int32_t x = attr_i32(f, "x");
     if (x == pivot::kValuesFieldPosition) {
       if (!out_values_position->has_value()) {
         *out_values_position = position;
@@ -225,7 +225,7 @@ Expected<void, Error> ParseDataFields(const pugi::xml_node& parent, pivot::Pivot
                         "context=pivot_table_reader");
     }
     entry.name = name_attr.value();
-    entry.field_index = parse_xml_u32_attr(df.attribute("fld"), 0U);
+    entry.field_index = attr_u32(df, "fld");
     entry.aggregation =
         enum_from_name(kPivotAggregationNames, df.attribute("subtotal").as_string(), pivot::Aggregation::Sum);
     if (pugi::xml_attribute nf = df.attribute("numFmtId"); nf) {
@@ -511,7 +511,7 @@ void ParseAuthoredRecurringFilters(const pugi::xml_node& parent, pivot::PivotTab
       continue;
     }
     pivot::AuthoredRecurringFilter entry;
-    entry.field_index = parse_xml_u32_attr(node.attribute("fld"), 0U);
+    entry.field_index = attr_u32(node, "fld");
     entry.month_low = months_or->first;
     entry.month_high = months_or->second;
     out->mutable_authored_recurring_filters().push_back(entry);
@@ -526,7 +526,7 @@ void ParseAuthoredPeriodFilters(const pugi::xml_node& parent, pivot::PivotTable*
       continue;
     }
     pivot::AuthoredPeriodFilter entry;
-    entry.field_index = parse_xml_u32_attr(node.attribute("fld"), 0U);
+    entry.field_index = attr_u32(node, "fld");
     entry.period = *period_or;
     out->mutable_authored_period_filters().push_back(entry);
   }
@@ -539,8 +539,8 @@ void ParseAuthoredValueFilters(const pugi::xml_node& parent, pivot::PivotTable* 
       continue;
     }
     pivot::AuthoredValueFilter entry;
-    entry.field_index = parse_xml_u32_attr(node.attribute("fld"), 0U);
-    entry.data_field_index = parse_xml_u32_attr(node.attribute("iMeasureFld"), 0U);
+    entry.field_index = attr_u32(node, "fld");
+    entry.data_field_index = attr_u32(node, "iMeasureFld");
     entry.type = *type_or;
     entry.top_n_basis = ParseTopNBasis(attr_str(node, "type"));
 
@@ -618,7 +618,7 @@ void ParseAuthoredFilters(const pugi::xml_node& parent, pivot::PivotTable* out) 
     }
 
     pivot::AuthoredCaptionFilter entry;
-    entry.field_index = parse_xml_u32_attr(f.attribute("fld"), 0U);
+    entry.field_index = attr_u32(f, "fld");
     entry.predicate = *predicate_or;
     entry.value = std::move(low);
     entry.value_high = std::move(high);
@@ -646,7 +646,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   if (pugi::xml_attribute cap = root.attribute("dataCaption"); cap) {
     table.set_data_caption(cap.value());
   }
-  table.set_pivot_cache_id(parse_xml_u32_attr(root.attribute("cacheId"), 0U));
+  table.set_pivot_cache_id(attr_u32(root, "cacheId"));
 
   // Grand-total layout flags. OOXML defaults both to true when absent, so a
   // file that turned grand totals OFF carries `rowGrandTotals="0"` /

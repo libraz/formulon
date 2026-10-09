@@ -33,7 +33,7 @@ Expected<void, Error> load_part_dom(const Workbook& wb, std::string_view path, s
 }
 
 Expected<void, Error> store_part_dom(Workbook& wb, std::string_view path, const pugi::xml_document& doc) {
-  std::string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+  std::string xml(kXmlDecl);
   append_raw_xml(xml, doc.document_element());
   return wb.replace_passthrough_part(path, std::vector<std::uint8_t>(xml.begin(), xml.end()));
 }

@@ -148,10 +148,9 @@ std::string theme_part_path(const Workbook& wb) {
 /// entries per list) carrying the default colours and fonts.
 std::string build_default_theme_xml() {
   const Theme& def = default_theme();
-  std::string xml =
-      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
-      "<a:theme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" name=\"Office Theme\">"
-      "<a:themeElements><a:clrScheme name=\"Office\">";
+  std::string xml = std::string(kXmlDecl) +
+                    "<a:theme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" name=\"Office Theme\">"
+                    "<a:themeElements><a:clrScheme name=\"Office\">";
   for (std::size_t i = 0; i < kThemeColorCount; ++i) {
     xml += "<a:" + std::string(kSchemeNames[i]) + "><a:srgbClr val=\"" + hex6(def.colors[i]) +
            "\"/></a:" + kSchemeNames[i] + ">";
