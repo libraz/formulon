@@ -537,9 +537,89 @@ bool is_self_book_name_ref(const AstNode& node) noexcept;
 
 /// The expressions directly under `node`, in source order: operands,
 /// arguments, a lambda call's callee, LET binding values and body, a lambda
-/// body and a computed spill anchor. Array-constant elements, which are
-/// always literals, are not included.
+/// body and a computed spill anchor. The legacy vector API intentionally
+/// excludes array-constant elements; use `any_child_node` when those elements
+/// must be visited.
 std::vector<const AstNode*> child_nodes(const AstNode& node);
+
+/// Invokes `predicate` for each expression directly under `node`, stopping
+/// when the predicate returns true. Non-array children use the same source
+/// order as `child_nodes`; array elements are additionally visited in
+/// row-major order. Returns true when the predicate stopped the walk. This
+/// visitor does not allocate; callers that only need a match should use it
+/// instead of `child_nodes`.
+template <typename Predicate>
+bool any_child_node(const AstNode& node, Predicate&& predicate) {
+  switch (node.kind()) {
+    case NodeKind::UnaryOp:
+      return predicate(node.as_unary_operand());
+    case NodeKind::BinaryOp:
+      return predicate(node.as_binary_lhs()) || predicate(node.as_binary_rhs());
+    case NodeKind::RangeOp:
+      return predicate(node.as_range_lhs()) || predicate(node.as_range_rhs());
+    case NodeKind::IntersectOp:
+      return predicate(node.as_intersect_lhs()) || predicate(node.as_intersect_rhs());
+    case NodeKind::UnionOp:
+      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+        if (predicate(node.as_union_child(i))) {
+          return true;
+        }
+      }
+      return false;
+    case NodeKind::ImplicitIntersection:
+      return predicate(node.as_implicit_intersection_operand());
+    case NodeKind::Call:
+      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
+        if (predicate(node.as_call_arg(i))) {
+          return true;
+        }
+      }
+      return false;
+    case NodeKind::LambdaCall:
+      if (predicate(node.as_lambda_call_callee())) {
+        return true;
+      }
+      for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
+        if (predicate(node.as_lambda_call_arg(i))) {
+          return true;
+        }
+      }
+      return false;
+    case NodeKind::LetBinding:
+      for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
+        if (predicate(node.as_let_binding_expr(i))) {
+          return true;
+        }
+      }
+      return predicate(node.as_let_body());
+    case NodeKind::Lambda:
+      return predicate(node.as_lambda_body());
+    case NodeKind::SpillRef:
+      if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
+        return predicate(*anchor);
+      }
+      return false;
+    case NodeKind::ArrayLiteral:
+      for (std::uint32_t row = 0; row < node.as_array_rows(); ++row) {
+        for (std::uint32_t col = 0; col < node.as_array_cols(); ++col) {
+          if (predicate(node.as_array_element(row, col))) {
+            return true;
+          }
+        }
+      }
+      return false;
+    case NodeKind::Literal:
+    case NodeKind::Ref:
+    case NodeKind::StructuredRef:
+    case NodeKind::NameRef:
+    case NodeKind::ErrorLiteral:
+    case NodeKind::ErrorPlaceholder:
+    case NodeKind::Ref3D:
+    case NodeKind::ExternalRef:
+      return false;
+  }
+  return false;
+}
 
 /// True for a cell-shaped lexeme that is also an Excel function name. The
 /// two overlap only where a name matches `[A-Za-z]{1,3}[0-9]{1,7}` inside

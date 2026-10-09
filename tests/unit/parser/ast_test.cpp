@@ -10,10 +10,12 @@
 #include <type_traits>
 #include <vector>
 
+#include "eval/builtin_names.h"
 #include "gtest/gtest.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook_formula_index.h"
 
 namespace formulon {
 namespace parser {
@@ -355,6 +357,89 @@ TEST(AstNodeLambdaCall, CalleeAndArgsRoundtrip) {
   EXPECT_EQ(n->as_lambda_call_arity(), 2u);
   EXPECT_DOUBLE_EQ(n->as_lambda_call_arg(0).as_literal().as_number(), 10.0);
   EXPECT_DOUBLE_EQ(n->as_lambda_call_arg(1).as_literal().as_number(), 20.0);
+}
+
+TEST(AstNodeChildren, VisitsInSourceOrderAndStopsEarly) {
+  Arena a;
+  AstNode* callee = make_name_ref(a, "fn");
+  AstNode* arg0 = make_literal(a, Value::number(10.0));
+  AstNode* arg1 = make_literal(a, Value::number(20.0));
+  const AstNode* args[] = {arg0, arg1};
+  AstNode* lambda_call = make_lambda_call(a, callee, args, 2);
+
+  Reference anchor_ref;
+  anchor_ref.row = 2;
+  anchor_ref.col = 3;
+  AstNode* anchor = make_ref(a, anchor_ref);
+  AstNode* computed_spill = make_spill_ref_expr(a, anchor);
+  const std::string_view binding_names[] = {"x", "y"};
+  const AstNode* binding_exprs[] = {lambda_call, computed_spill};
+  AstNode* body = make_literal(a, Value::number(30.0));
+  AstNode* let = make_let_binding(a, binding_names, binding_exprs, 2, body);
+  ASSERT_NE(let, nullptr);
+
+  std::vector<const AstNode*> seen;
+  EXPECT_FALSE(any_child_node(*let, [&](const AstNode& child) {
+    seen.push_back(&child);
+    return false;
+  }));
+  ASSERT_EQ(seen.size(), 3u);
+  EXPECT_EQ(seen[0], lambda_call);
+  EXPECT_EQ(seen[1], computed_spill);
+  EXPECT_EQ(seen[2], body);
+
+  seen.clear();
+  EXPECT_FALSE(any_child_node(*lambda_call, [&](const AstNode& child) {
+    seen.push_back(&child);
+    return false;
+  }));
+  ASSERT_EQ(seen.size(), 3u);
+  EXPECT_EQ(seen[0], callee);
+  EXPECT_EQ(seen[1], arg0);
+  EXPECT_EQ(seen[2], arg1);
+
+  seen.clear();
+  EXPECT_FALSE(any_child_node(*computed_spill, [&](const AstNode& child) {
+    seen.push_back(&child);
+    return false;
+  }));
+  ASSERT_EQ(seen.size(), 1u);
+  EXPECT_EQ(seen[0], anchor);
+
+  std::size_t visits = 0;
+  EXPECT_TRUE(any_child_node(*lambda_call, [&](const AstNode&) {
+    ++visits;
+    return true;
+  }));
+  EXPECT_EQ(visits, 1u);
+
+  std::vector<const AstNode*> literal_elements;
+  literal_elements.push_back(make_literal(a, Value::number(1.0)));
+  literal_elements.push_back(make_literal(a, Value::number(2.0)));
+  AstNode* array = make_array_literal(a, 1, 2, literal_elements.data());
+  ASSERT_NE(array, nullptr);
+  seen.clear();
+  EXPECT_FALSE(any_child_node(*array, [&](const AstNode& child) {
+    seen.push_back(&child);
+    return false;
+  }));
+  ASSERT_EQ(seen.size(), 2u);
+  EXPECT_EQ(seen[0], literal_elements[0]);
+  EXPECT_EQ(seen[1], literal_elements[1]);
+  EXPECT_TRUE(child_nodes(*array).empty());
+}
+
+TEST(AstNodeChildren, ArrayElementsRemainVisibleToConsumers) {
+  Arena a;
+  AstNode* name = make_name_ref(a, "Target");
+  AstNode* qualified_callee = make_sheet_name_ref(a, "Sheet1", "SUM", false);
+  AstNode* qualified_call = make_lambda_call(a, qualified_callee, nullptr, 0);
+  const AstNode* elements[] = {name, qualified_call};
+  AstNode* array = make_array_literal(a, 1, 2, elements);
+  ASSERT_NE(array, nullptr);
+
+  EXPECT_TRUE(::formulon::references_any_name(*array, {"Target"}));
+  EXPECT_EQ(::formulon::eval::find_qualified_builtin_call(*array), qualified_callee);
 }
 
 TEST(AstNodeErrorLiteral, AccessorRoundtrips) {

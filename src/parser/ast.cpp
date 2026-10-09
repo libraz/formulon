@@ -615,55 +615,16 @@ const Reference& AstNode::as_ref3d_cell_end() const {
 
 std::vector<const AstNode*> child_nodes(const AstNode& node) {
   std::vector<const AstNode*> out;
-  switch (node.kind()) {
-    case NodeKind::UnaryOp:
-      out.push_back(&node.as_unary_operand());
-      break;
-    case NodeKind::BinaryOp:
-      out = {&node.as_binary_lhs(), &node.as_binary_rhs()};
-      break;
-    case NodeKind::RangeOp:
-      out = {&node.as_range_lhs(), &node.as_range_rhs()};
-      break;
-    case NodeKind::IntersectOp:
-      out = {&node.as_intersect_lhs(), &node.as_intersect_rhs()};
-      break;
-    case NodeKind::UnionOp:
-      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
-        out.push_back(&node.as_union_child(i));
-      }
-      break;
-    case NodeKind::ImplicitIntersection:
-      out.push_back(&node.as_implicit_intersection_operand());
-      break;
-    case NodeKind::Call:
-      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
-        out.push_back(&node.as_call_arg(i));
-      }
-      break;
-    case NodeKind::LambdaCall:
-      out.push_back(&node.as_lambda_call_callee());
-      for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
-        out.push_back(&node.as_lambda_call_arg(i));
-      }
-      break;
-    case NodeKind::LetBinding:
-      for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
-        out.push_back(&node.as_let_binding_expr(i));
-      }
-      out.push_back(&node.as_let_body());
-      break;
-    case NodeKind::Lambda:
-      out.push_back(&node.as_lambda_body());
-      break;
-    case NodeKind::SpillRef:
-      if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
-        out.push_back(anchor);
-      }
-      break;
-    default:
-      break;
+  // Preserve the historical API contract: array elements are not returned,
+  // even though any_child_node visits them for consumers that need a full
+  // direct-child scan.
+  if (node.kind() == NodeKind::ArrayLiteral) {
+    return out;
   }
+  any_child_node(node, [&](const AstNode& child) {
+    out.push_back(&child);
+    return false;
+  });
   return out;
 }
 

@@ -114,7 +114,6 @@ bool references_any(const parser::AstNode& node, const std::vector<std::string>&
       return kind == RefKind::kSheet ? sheet_names::equal(n, ref) : strings::case_insensitive_eq(n, ref);
     });
   };
-  const auto any = [&](const parser::AstNode& child) { return references_any(child, candidates, kind); };
   switch (node.kind()) {
     case parser::NodeKind::NameRef:
       return matches(RefKind::kSheet, node.as_name_sheet()) || matches(RefKind::kName, node.as_name());
@@ -132,70 +131,24 @@ bool references_any(const parser::AstNode& node, const std::vector<std::string>&
     case parser::NodeKind::Ref:
       return matches(RefKind::kSheet, node.as_ref().sheet);
     case parser::NodeKind::SpillRef:
-      if (const parser::AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
-        return any(*anchor);
+      if (node.as_spill_ref_anchor_expr() == nullptr) {
+        return matches(RefKind::kSheet, node.as_spill_ref().sheet);
       }
-      return matches(RefKind::kSheet, node.as_spill_ref().sheet);
+      break;
     case parser::NodeKind::Ref3D:
       return matches(RefKind::kSheet, node.as_ref3d_sheet_begin()) ||
              matches(RefKind::kSheet, node.as_ref3d_sheet_end());
-    case parser::NodeKind::UnaryOp:
-      return any(node.as_unary_operand());
-    case parser::NodeKind::BinaryOp:
-      return any(node.as_binary_lhs()) || any(node.as_binary_rhs());
-    case parser::NodeKind::RangeOp:
-      return any(node.as_range_lhs()) || any(node.as_range_rhs());
-    case parser::NodeKind::UnionOp:
-      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
-        if (any(node.as_union_child(i))) {
-          return true;
-        }
-      }
-      return false;
-    case parser::NodeKind::IntersectOp:
-      return any(node.as_intersect_lhs()) || any(node.as_intersect_rhs());
-    case parser::NodeKind::ImplicitIntersection:
-      return any(node.as_implicit_intersection_operand());
     case parser::NodeKind::Call:
       if (matches(RefKind::kName, node.as_call_name())) {
         return true;
       }
-      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
-        if (any(node.as_call_arg(i))) {
-          return true;
-        }
-      }
-      return false;
-    case parser::NodeKind::ArrayLiteral:
-      for (std::uint32_t r = 0; r < node.as_array_rows(); ++r) {
-        for (std::uint32_t c = 0; c < node.as_array_cols(); ++c) {
-          if (any(node.as_array_element(r, c))) {
-            return true;
-          }
-        }
-      }
-      return false;
-    case parser::NodeKind::Lambda:
-      return any(node.as_lambda_body());
-    case parser::NodeKind::LetBinding:
-      for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
-        if (any(node.as_let_binding_expr(i))) {
-          return true;
-        }
-      }
-      return any(node.as_let_body());
-    case parser::NodeKind::LambdaCall:
-      if (any(node.as_lambda_call_callee())) {
-        return true;
-      }
-      for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
-        if (any(node.as_lambda_call_arg(i))) {
-          return true;
-        }
-      }
-      return false;
+      break;
+    default:
+      break;
   }
-  return false;
+
+  return parser::any_child_node(node,
+                                [&](const parser::AstNode& child) { return references_any(child, candidates, kind); });
 }
 
 }  // namespace
