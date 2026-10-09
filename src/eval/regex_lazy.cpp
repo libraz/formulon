@@ -780,6 +780,25 @@ bool resolve_text_and_pattern(const parser::AstNode& call, Arena& arena, const F
 
 }  // namespace
 
+struct RegexSearch::Impl {
+  explicit Impl(std::string_view pattern) : program(pattern, /*case_insensitive=*/false) {}
+  CompiledPattern program;
+};
+
+RegexSearch::RegexSearch(std::string_view pattern) : impl_(new Impl(pattern)) {}
+
+RegexSearch::~RegexSearch() = default;
+
+bool RegexSearch::ok() const noexcept {
+  return impl_->program.ok();
+}
+
+bool RegexSearch::matches(std::string_view subject) const {
+  const KernelResult result = regex_kernel(impl_->program, subject, /*find_all=*/false,
+                                           /*on_match_limit_returns_no_match=*/true);
+  return result.ok && !result.matches.empty();
+}
+
 std::uint64_t regex_compile_count() noexcept {
   return g_compile_count.load(std::memory_order_relaxed);
 }

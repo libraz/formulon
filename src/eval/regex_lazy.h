@@ -24,6 +24,8 @@
 #define FORMULON_EVAL_REGEX_LAZY_H_
 
 #include <cstdint>
+#include <memory>
+#include <string_view>
 
 #include "utils/arena.h"
 #include "value.h"
@@ -74,6 +76,29 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
 /// begins none of those three forms is a literal dollar.
 Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx);
+
+/// A case-sensitive PCRE2 pattern compiled once and searched against many
+/// subjects; XMATCH / XLOOKUP match_mode 3 uses it so the REGEX* family stays
+/// the only place patterns are compiled.
+class RegexSearch {
+ public:
+  /// Compiles `pattern`. An empty, oversized or invalid pattern leaves `ok()`
+  /// false.
+  explicit RegexSearch(std::string_view pattern);
+  ~RegexSearch();
+  RegexSearch(const RegexSearch&) = delete;
+  RegexSearch& operator=(const RegexSearch&) = delete;
+
+  bool ok() const noexcept;
+
+  /// True when the pattern matches anywhere in `subject`. Resource
+  /// exhaustion counts as no match.
+  bool matches(std::string_view subject) const;
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
+};
 
 /// Running count of `pcre2_compile` calls issued by the REGEX* family in
 /// this process.

@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "eval/array_alloc.h"
+#include "eval/coerce.h"
 #include "eval/declared_rect.h"
 #include "eval/defined_name_resolve.h"
 #include "eval/dynamic_array/anchor.h"
@@ -506,6 +507,9 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   // callee's values; the deferred error fires only when it was the entire
   // scalar argument set.
   bool saw_blank_scalar_ref = false;
+  // Set once a direct text literal that does not coerce to a number has been
+  // seen by a numeric or A-family aggregator.
+  bool literal_text_not_numeric = false;
   const std::uint32_t evaluated_arity = def->analysis_toolpak_args && !def->atp_omitted_optional_is_na
                                             ? atp_evaluated_arity(node, def->min_arity, def->max_arity)
                                             : arity;
@@ -855,19 +859,35 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       had_range_shaped_arg = true;
       continue;
     }
-    // IF-as-range-producer mirrors the CHOOSE / OFFSET branches: when an
-    // aggregator receives `IF(cond, range1, range2)`, the picked branch
-    // must be flattened to a vector of cells. This is what makes
-    // `=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))` aggregate the 3-cell
-    // range rather than collapse `r` to a scalar. `expand_if_call` shares
-    // the same evaluation / range-resolution / filter contracts as the
-    // CHOOSE / OFFSET expanders.
-    if (!append_expanded_call_argument(*def, arg_node, "IF", expand_if_call, arena, registry, ctx, &values,
-                                       &expanded_call_handled, &expanded_call_return)) {
-      return expanded_call_return;
-    }
-    if (expanded_call_handled) {
+    // IF as a range producer: a picked range branch is flattened through the
+    // range filters, so `=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))` aggregates
+    // three cells. A picked plain value (`IF(TRUE, "", 1)`) is a direct
+    // argument, not a range cell, so the provenance filter must not drop it.
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
+        strings::case_insensitive_eq(arg_node.as_call_name(), "IF")) {
+      auto picked = resolve_range_arg(arg_node, arena, registry, ctx);
+      if (!picked) {
+        const Value err = Value::error(picked.error());
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      if (picked.value().from_scalar && picked.value().cells.size() == 1U) {
+        const Value& direct = picked.value().cells[0];
+        if (def->propagate_errors && direct.is_error()) {
+          return direct;
+        }
+        values.push_back(direct);
+        continue;
+      }
       had_range_shaped_arg = true;
+      Value range_err = Value::blank();
+      if (!append_range_sourced_values(*def, picked.value().cells.data(), picked.value().cells.size(), &values,
+                                       &range_err)) {
+        return range_err;
+      }
       continue;
     }
     // CHOOSE-as-range-producer mirrors the OFFSET branch above: when an
@@ -979,7 +999,13 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     }
     Value v = densify(shaped_arg, arena);
     if (def->propagate_errors && v.is_error()) {
-      return v;
+      // A text literal that cannot be a number already failed ahead of this
+      // error, and the earlier failure is the one reported.
+      return literal_text_not_numeric ? Value::error(ErrorCode::Value) : v;
+    }
+    if ((def->range_filter_numeric_only || def->range_filter_a_coerce) &&
+        arg_node.kind() == parser::NodeKind::Literal && v.is_text() && !coerce_to_number(v)) {
+      literal_text_not_numeric = true;
     }
     // Generic Array-result flatten for range-aware aggregators. Lazy
     // builtins (`ANCHORARRAY`, `SEQUENCE`, `TRANSPOSE`, `MUNIT`, ...)

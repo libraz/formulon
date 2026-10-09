@@ -7,6 +7,7 @@
 #include "eval/number_parse.h"
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 
 #include "eval/eval_profile_scope.h"
@@ -204,7 +205,7 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
     return false;
   }
   double parsed = 0.0;
-  if (!parse_double_exact(canonical, &parsed) || std::isinf(parsed)) {
+  if (!parse_double_exact(canonical, &parsed) || std::isinf(parsed) || numeric_text_above_excel_max(canonical)) {
     return false;
   }
   // Apply percent scaling with division (not multiplication by 0.01) so the
@@ -284,6 +285,55 @@ std::string normalize_locale_numeric(std::string_view raw, bool* paren_negated) 
     }
   }
   return out;
+}
+
+bool numeric_text_above_excel_max(std::string_view text) {
+  std::size_t i = 0;
+  if (i < text.size() && (text[i] == '+' || text[i] == '-')) {
+    ++i;
+  }
+  long long digits_before_point = 0;
+  long long first_nonzero = -1;
+  long long seen = 0;
+  bool in_fraction = false;
+  for (; i < text.size(); ++i) {
+    const char c = text[i];
+    if (c == '.' && !in_fraction) {
+      in_fraction = true;
+    } else if (c >= '0' && c <= '9') {
+      if (c != '0' && first_nonzero < 0) {
+        first_nonzero = seen;
+      }
+      ++seen;
+      if (!in_fraction) {
+        ++digits_before_point;
+      }
+    } else {
+      break;
+    }
+  }
+  if (first_nonzero < 0) {
+    return false;
+  }
+  long long exponent = 0;
+  if (i < text.size() && (text[i] == 'e' || text[i] == 'E')) {
+    ++i;
+    bool negative = false;
+    if (i < text.size() && (text[i] == '+' || text[i] == '-')) {
+      negative = text[i] == '-';
+      ++i;
+    }
+    for (; i < text.size() && text[i] >= '0' && text[i] <= '9' && exponent < 100000; ++i) {
+      exponent = exponent * 10 + (text[i] - '0');
+    }
+    if (negative) {
+      exponent = -exponent;
+    }
+  }
+  // The leading digit's decimal exponent decides it: fifteen nines at 307 is
+  // the largest accepted value, so anything whose leading digit sits at 308
+  // or beyond is over.
+  return digits_before_point - 1 - first_nonzero + exponent >= 308;
 }
 
 bool parse_excel_number(std::string_view text, double* out) {

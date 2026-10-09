@@ -1,7 +1,7 @@
 //
 // Implementation of the OFFSET lazy impl plus the related range-shape
-// expanders (`expand_offset_call`, `expand_choose_call`, `expand_if_call`,
-// `expand_row_call`, `expand_column_call`).
+// expanders (`expand_offset_call`, `expand_choose_call`, `expand_row_call`,
+// `expand_column_call`).
 //
 // The rectangle-construction core (`compute_offset_rect`, `OffsetBase`)
 // lives in `reference/common.cpp` because the intersection resolver
@@ -248,15 +248,6 @@ bool expand_array_result(const Value& result, std::vector<Value>* out_cells, Err
     *out_cols = array->cols;
   }
   return true;
-}
-
-bool expand_if_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                    std::vector<Value>* out_cells, ErrorCode* out_err_code, std::uint32_t* out_rows,
-                    std::uint32_t* out_cols) {
-  // `resolve_range_arg` owns the reference-shaped IF rule: it short-circuits
-  // the condition, broadcasts an array condition, and recurses into the
-  // picked branch.
-  return expand_resolved_range(call, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
 }
 
 namespace {

@@ -22,6 +22,7 @@
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
+#include "eval/regex_lazy.h"
 #include "eval/wildcard.h"
 #include "excel_locale.h"
 #include "parser/ast.h"
@@ -41,8 +42,9 @@ namespace {
 // (case-insensitive ASCII equality; no wildcard metacharacters honoured).
 // `Smaller` / `Larger` fall back to the closest cell below / above the
 // lookup value when no exact hit is found. `Wildcard` is "exact + honour
-// `*` / `?` / `~` in text patterns".
-enum class XMatchMode : std::int8_t { Exact = 0, Smaller = -1, Larger = 1, Wildcard = 2 };
+// `*` / `?` / `~` in text patterns". `Regex` searches each cell's text for the
+// lookup value taken as a case-sensitive regular expression.
+enum class XMatchMode : std::int8_t { Exact = 0, Smaller = -1, Larger = 1, Wildcard = 2, Regex = 3 };
 
 // Excel 365 search-mode codes for XLOOKUP / XMATCH. `FirstToLast` /
 // `LastToFirst` are linear scans in the obvious direction. `BinaryAsc` /
@@ -474,7 +476,7 @@ Expected<XlookupPlan, ErrorCode> plan_xlookup(const parser::AstNode& call, Arena
 
   // 5) match_mode (optional, default Exact). Validate the whitelist before
   //    casting into the enum.
-  static constexpr int kMatchModes[] = {-1, 0, 1, 2};
+  static constexpr int kMatchModes[] = {-1, 0, 1, 2, 3};
   int match_raw = 0;
   if (arity >= 5U && !is_omitted_arg(call.as_call_arg(4))) {
     const Value mm_val = eval_node(call.as_call_arg(4), arena, registry, ctx);
@@ -505,7 +507,7 @@ Expected<XlookupPlan, ErrorCode> plan_xlookup(const parser::AstNode& call, Arena
   // Excel 365 rejects the Wildcard (+2) match_mode combined with either
   // Binary search_mode (±2) as #VALUE!: binary search has no defined
   // meaning when the pattern contains `*` / `?` metacharacters.
-  if (match_mode == XMatchMode::Wildcard &&
+  if ((match_mode == XMatchMode::Wildcard || match_mode == XMatchMode::Regex) &&
       (search_mode == XSearchMode::BinaryAsc || search_mode == XSearchMode::BinaryDesc)) {
     return ErrorCode::Value;
   }
@@ -532,10 +534,48 @@ struct MatchOutcome {
   Value error;
 };
 
+// XMATCH / XLOOKUP match_mode 3: the first (or, scanning from the end, last)
+// cell whose text contains a match of `query` read as a regular expression.
+// Numbers and booleans are searched by their text; blanks and errors never
+// hit. An empty pattern hits the first scanned cell; an invalid one is
+// #VALUE!.
+MatchOutcome regex_match_query(const std::vector<Value>& cells, const Value& query, XSearchMode search_mode) {
+  auto pattern = coerce_to_text(query);
+  if (!pattern) {
+    return {MatchOutcomeKind::Error, SIZE_MAX, Value::error(pattern.error())};
+  }
+  const std::size_t n = cells.size();
+  const bool reverse = search_mode == XSearchMode::LastToFirst;
+  if (pattern.value().empty()) {
+    if (n == 0U) {
+      return {MatchOutcomeKind::Miss, SIZE_MAX, Value::blank()};
+    }
+    return {MatchOutcomeKind::Hit, reverse ? n - 1U : 0U, Value::blank()};
+  }
+  const RegexSearch search(pattern.value());
+  if (!search.ok()) {
+    return {MatchOutcomeKind::Error, SIZE_MAX, Value::error(ErrorCode::Value)};
+  }
+  for (std::size_t k = 0; k < n; ++k) {
+    const std::size_t i = reverse ? n - 1U - k : k;
+    if (cells[i].is_error() || cells[i].is_blank()) {
+      continue;
+    }
+    auto text = coerce_to_text(cells[i]);
+    if (text && search.matches(text.value())) {
+      return {MatchOutcomeKind::Hit, i, Value::blank()};
+    }
+  }
+  return {MatchOutcomeKind::Miss, SIZE_MAX, Value::blank()};
+}
+
 MatchOutcome match_query(const std::vector<Value>& cells, const Value& query, XMatchMode match_mode,
                          XSearchMode search_mode, ExcelProfile profile) {
   if (query.is_error()) {
     return {MatchOutcomeKind::Error, SIZE_MAX, query};
+  }
+  if (match_mode == XMatchMode::Regex) {
+    return regex_match_query(cells, query, search_mode);
   }
   const std::size_t offset = xlookup_scan(cells, query, match_mode, search_mode, profile);
   if (offset == SIZE_MAX) {
@@ -715,9 +755,14 @@ bool resolve_xlookup_reference(const parser::AstNode& call, Arena& arena, const 
     *out_err = ErrorCode::Value;
     return false;
   }
-  const std::size_t offset =
-      xlookup_scan(plan.lookup_cells, plan.lookup, plan.match_mode, plan.search_mode, ctx.excel_profile());
-  if (offset == SIZE_MAX) {
+  const MatchOutcome found =
+      match_query(plan.lookup_cells, plan.lookup, plan.match_mode, plan.search_mode, ctx.excel_profile());
+  if (found.kind == MatchOutcomeKind::Error) {
+    *out_err = found.error.as_error();
+    return false;
+  }
+  const std::size_t offset = found.offset;
+  if (found.kind == MatchOutcomeKind::Miss) {
     const std::uint32_t arity = call.as_call_arity();
     if (arity < 4U || is_omitted_arg(call.as_call_arg(3))) {
       *out_err = ErrorCode::NA;
@@ -775,7 +820,7 @@ Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::error(ErrorCode::NA);
   }
 
-  static constexpr int kMatchModes[] = {-1, 0, 1, 2};
+  static constexpr int kMatchModes[] = {-1, 0, 1, 2, 3};
   int match_raw = 0;
   if (arity >= 3U && !is_omitted_arg(call.as_call_arg(2))) {
     const Value mm_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
@@ -805,7 +850,7 @@ Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const Function
   // Excel 365 rejects the Wildcard (+2) match_mode combined with either
   // Binary search_mode (±2) as #VALUE!: binary search has no defined
   // meaning when the pattern contains `*` / `?` metacharacters.
-  if (match_mode == XMatchMode::Wildcard &&
+  if ((match_mode == XMatchMode::Wildcard || match_mode == XMatchMode::Regex) &&
       (search_mode == XSearchMode::BinaryAsc || search_mode == XSearchMode::BinaryDesc)) {
     return Value::error(ErrorCode::Value);
   }

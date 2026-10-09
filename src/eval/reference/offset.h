@@ -1,8 +1,8 @@
 //
 // Lazy impl entry point for `OFFSET(reference, rows, cols, [height],
 // [width])`. The matching range-expander surface
-// (`expand_offset_call` / `expand_choose_call` / `expand_if_call` /
-// `expand_row_call` / `expand_column_call`) is declared in
+// (`expand_offset_call` / `expand_choose_call` / `expand_row_call` /
+// `expand_column_call`) is declared in
 // `eval/range_expanders.h` and lives in `reference/offset.cpp` because
 // those helpers all flow through the same OFFSET rectangle-construction
 // pipeline.

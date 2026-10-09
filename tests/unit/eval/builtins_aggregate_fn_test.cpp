@@ -695,6 +695,28 @@ TEST(AggregateNested, SubtotalCellsExcludedFromAggregateAndBack) {
   EXPECT_DOUBLE_EQ(EvalSourceIn("=SUBTOTAL(9,A1:A4)", wb, wb.sheet(0)).as_number(), 300.0);
 }
 
+TEST(BuiltinsAggregate, PlainValueFromIfIsADirectArgument) {
+  Workbook wb = Workbook::create();
+  EXPECT_EQ(EvalSourceIn("=MIN(IF(TRUE,\"\",1))", wb, wb.sheet(0)).as_error(), ErrorCode::Value);
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=MIN(IF(TRUE,5,1))", wb, wb.sheet(0)).as_number(), 5.0);
+}
+
+TEST(BuiltinsAggregate, UncoercibleTextLiteralOutranksALaterError) {
+  Workbook wb = Workbook::create();
+  EXPECT_EQ(EvalSourceIn("=MAX(\"abc\",NA())", wb, wb.sheet(0)).as_error(), ErrorCode::Value);
+  EXPECT_EQ(EvalSourceIn("=MAX(NA(),\"abc\")", wb, wb.sheet(0)).as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsAggregate, AFamilyTextLiteralOutranksALaterError) {
+  Workbook wb = Workbook::create();
+  for (const char* fn : {"MAXA", "MINA", "AVERAGEA", "STDEVA", "VARA", "STDEVPA", "VARPA"}) {
+    const std::string na = std::string("=") + fn + "(\"abc\",NA())";
+    const std::string div = std::string("=") + fn + "(\"abc\",1/0)";
+    EXPECT_EQ(EvalSourceIn(na, wb, wb.sheet(0)).as_error(), ErrorCode::Value) << fn;
+    EXPECT_EQ(EvalSourceIn(div, wb, wb.sheet(0)).as_error(), ErrorCode::Value) << fn;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

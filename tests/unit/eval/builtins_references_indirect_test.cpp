@@ -231,9 +231,27 @@ TEST(BuiltinsIndirect, A1TextUnderR1C1FlagIsRef) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
-TEST(BuiltinsIndirect, R1C1OffsetOutsideTheGridIsRef) {
+TEST(BuiltinsIndirect, R1C1RelativeRowAboveTheSheetWrapsToTheBottom) {
   Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(Sheet::kMaxRows - 1U, 0, Value::number(41.0));
   const Value v = EvalAnchoredAt("=INDIRECT(\"R[-1]C\",FALSE)", wb, 0, 0);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 41.0);
+}
+
+TEST(BuiltinsIndirect, R1C1RelativeRangeWrapsPerEndpoint) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(Sheet::kMaxRows - 1U, 3, Value::number(2.0));
+  wb.sheet(0).set_cell_value(1, 3, Value::number(2.0));
+  wb.sheet(0).set_cell_value(0, 3, Value::number(1000.0));
+  const Value v = EvalAnchoredAt("=SUM(INDIRECT(\"R[-5]C[-4]:R[-3]C[-4]\",FALSE))", wb, 4, 7);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
+}
+
+TEST(BuiltinsIndirect, R1C1AbsoluteOutsideTheGridIsRef) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalAnchoredAt("=INDIRECT(\"R1048577C1\",FALSE)", wb, 0, 0);
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }

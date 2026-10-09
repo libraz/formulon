@@ -10,7 +10,6 @@
 //   * `expand_offset_call`  -> `OFFSET(reference, ...)`
 //   * `expand_indirect_call` -> `INDIRECT(ref_text, [a1])`
 //   * `expand_choose_call`  -> `CHOOSE(idx, value1, value2, ...)`
-//   * `expand_if_call`      -> `IF(cond, then, [else])`
 //   * `expand_row_call`     -> `ROW(arg)`
 //   * `expand_column_call`  -> `COLUMN(arg)`
 //
@@ -90,25 +89,6 @@ bool expand_indirect_call(const parser::AstNode& call, Arena& arena, const Funct
 bool expand_choose_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
                         std::uint32_t* out_rows, std::uint32_t* out_cols);
-
-/// Expands `Call("IF", cond, then, [else])` into a flat row-major vector of
-/// cell `Value`s. Mirrors `expand_choose_call`'s contract but short-circuits
-/// on `cond` rather than indexing: TRUE picks `then`, FALSE picks `else`
-/// (or surfaces `#VALUE!` for the two-arity `IF(FALSE, then)` shape, since
-/// Excel returns boolean FALSE — not a reference — there). The chosen
-/// branch is then recursively flattened: nested `OFFSET` / `CHOOSE` / `IF`
-/// calls forward to their dedicated expanders, anything else flows through
-/// `resolve_range_arg`'s existing branches. Errors propagate left-to-right
-/// (cond first, then the chosen branch). Used by the eager dispatcher in
-/// `tree_walker.cpp` so that `=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))`
-/// aggregates the 3-cell range rather than collapsing `r` to a scalar.
-///
-/// `call` must be a `NodeKind::Call` whose callee name is `"IF"`
-/// (case-insensitive); the caller is expected to have already verified
-/// that shape.
-bool expand_if_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                    std::vector<Value>* out_cells, ErrorCode* out_err_code, std::uint32_t* out_rows,
-                    std::uint32_t* out_cols);
 
 /// Expands `Call("ROW", arg)` into a vertical column of 1-based row indices
 /// when `arg` resolves to a multi-row reference. ROW() with no argument

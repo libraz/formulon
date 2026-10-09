@@ -22,6 +22,7 @@
 #include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "utils/arena.h"
+#include "utils/error.h"
 #include "value.h"
 
 namespace formulon {
@@ -105,6 +106,18 @@ TEST(CoerceToNumberTextLocale, CommonCurrencyAndAccountingFormsRemainShared) {
     ASSERT_TRUE(accounting.has_value());
     EXPECT_DOUBLE_EQ(accounting.value(), -100.0);
   }
+}
+
+TEST(CoerceToNumberTextRange, TextAboveTheLargestNumberIsValueNotNum) {
+  for (const char* text : {"1e308", "1.8e308", "1e400", "1e999", "-1e400"}) {
+    auto r = coerce_to_number(Value::text(text));
+    ASSERT_FALSE(static_cast<bool>(r)) << text;
+    EXPECT_EQ(r.error(), ErrorCode::Value) << text;
+  }
+  auto largest = coerce_to_number(Value::text("9.99999999999999E+307"));
+  ASSERT_TRUE(static_cast<bool>(largest));
+  EXPECT_DOUBLE_EQ(largest.value(), 9.99999999999999e307);
+  EXPECT_TRUE(static_cast<bool>(coerce_to_number(Value::text("9.9999999999999999e307"))));
 }
 
 TEST(CoerceToNumberTextDate, IsoDashedDate) {

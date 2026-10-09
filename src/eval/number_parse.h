@@ -35,6 +35,12 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
 /// `parse_numeric`.
 std::string normalize_locale_numeric(std::string_view raw, bool* paren_negated);
 
+/// True when decimal numeric text (optional sign, digits with an optional
+/// point, optional exponent) denotes a magnitude above 9.99999999999999E+307
+/// once the digits past the 15th are dropped. Excel rejects such text as a
+/// number. Text of any other shape yields false.
+bool numeric_text_above_excel_max(std::string_view text);
+
 /// Convenience wrapper reproducing the VALUE() function's numeric phase:
 /// `normalize_locale_numeric` followed by `parse_numeric` with the active
 /// profile's separators and accounting-paren negation.

@@ -61,8 +61,8 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* f
   // stand in for the locale parse where that is the profile's separator.
   const bool invariant_decimal = locale_facts(current_eval_profile()).decimal_separator == '.';
   if (invariant_decimal && parse_double_exact(trimmed, &parsed)) {
-    if (std::isinf(parsed)) {
-      return ErrorCode::Num;
+    if (std::isinf(parsed) || (std::fabs(parsed) >= 9.9e307 && numeric_text_above_excel_max(trimmed))) {
+      return ErrorCode::Value;
     }
     return parsed;
   }

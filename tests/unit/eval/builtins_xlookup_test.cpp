@@ -838,6 +838,50 @@ TEST(BuiltinsXMatch, LookupValueErrorPropagates) {
   EXPECT_EQ(EvalSourceIn("=XMATCH(#DIV/0!, A1:A1)", wb, wb.sheet(0)).as_error(), ErrorCode::Div0);
 }
 
+// match_mode 3 searches each cell's text for the lookup value as a
+// case-sensitive regular expression.
+TEST(BuiltinsXMatch, RegexModeSearchesCellText) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::text("xabcx"));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("abc"));
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=XMATCH(\"a.c\",A1:A2,3)", wb, wb.sheet(0)).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=XMATCH(\"^a.c$\",A1:A2,3)", wb, wb.sheet(0)).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=XMATCH(\"b\",A1:A2,3,-1)", wb, wb.sheet(0)).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=XMATCH(\"\",A1:A2,3)", wb, wb.sheet(0)).as_number(), 1.0);
+  EXPECT_EQ(EvalSourceIn("=XMATCH(\"z\",A1:A2,3)", wb, wb.sheet(0)).as_error(), ErrorCode::NA);
+  EXPECT_EQ(EvalSourceIn("=XMATCH(\"(\",A1:A2,3)", wb, wb.sheet(0)).as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsXMatch, RegexModeIsCaseSensitive) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::text("ABC"));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("abc"));
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=XMATCH(\"abc\",A1:A2,3)", wb, wb.sheet(0)).as_number(), 2.0);
+}
+
+TEST(BuiltinsXMatch, RegexModeMatchesNumbersAndBooleansByText) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(123.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("x123"));
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=XMATCH(\"12\",A1:A2,3)", wb, wb.sheet(0)).as_number(), 1.0);
+  wb.sheet(0).set_cell_value(0, 0, Value::text("x"));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("42"));
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=XMATCH(42,A1:A2,3)", wb, wb.sheet(0)).as_number(), 2.0);
+  wb.sheet(0).set_cell_value(0, 0, Value::boolean(true));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("TRUE"));
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=XMATCH(\"TRUE\",A1:A2,3)", wb, wb.sheet(0)).as_number(), 1.0);
+}
+
+TEST(BuiltinsXLookup, RegexModeReturnsTheMatchedRow) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::text("xabcx"));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("abc"));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::number(2.0));
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=XLOOKUP(\"a.c\",A1:A2,B1:B2,\"none\",3)", wb, wb.sheet(0)).as_number(), 1.0);
+  EXPECT_EQ(EvalSourceIn("=XLOOKUP(\"z\",A1:A2,B1:B2,,3)", wb, wb.sheet(0)).as_error(), ErrorCode::NA);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

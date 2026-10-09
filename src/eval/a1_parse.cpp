@@ -375,15 +375,21 @@ bool parse_r1c1_axis(std::string_view text, std::size_t* i, const LocaleFacts& f
   return true;
 }
 
-// Resolves one axis to a 0-based coordinate against `base`, rejecting
-// anything outside `[0, max)`. A relative axis with no base has nothing
-// to measure from and fails rather than assuming the origin.
+// Resolves one axis to a 0-based coordinate against `base`. An absolute axis
+// outside `[0, max)` is rejected; a relative axis wraps around the sheet edge
+// as Excel does. A relative axis with no base has nothing to measure from
+// and fails rather than assuming the origin.
 bool resolve_r1c1_axis(const R1C1Axis& axis, bool base_present, std::uint32_t base, std::uint32_t max,
                        std::uint32_t* out) {
   if (axis.relative && !base_present) {
     return false;
   }
-  const long long resolved = axis.relative ? static_cast<long long>(base) + axis.value : axis.value - 1;
+  if (axis.relative) {
+    const long long span = static_cast<long long>(max);
+    *out = static_cast<std::uint32_t>(((static_cast<long long>(base) + axis.value) % span + span) % span);
+    return true;
+  }
+  const long long resolved = axis.value - 1;
   if (resolved < 0 || resolved >= static_cast<long long>(max)) {
     return false;
   }
