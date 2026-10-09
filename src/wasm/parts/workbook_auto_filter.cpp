@@ -28,7 +28,7 @@ emscripten::val JsWorkbook::getSheetAutoFilterXml(uint32_t sheet) const {
 
 JsStatus JsWorkbook::setSheetAutoFilterXml(uint32_t sheet, const std::string& xml) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   return status_from_rc(fm_sheet_set_auto_filter_xml(handle_, sheet, xml.c_str()));
 }
@@ -161,11 +161,11 @@ struct FilterColumnStore {
 /// Reads the JS array `v[key]`; absent or non-array reads as empty. Property
 /// access and Array.isArray both go through the reader's JS try/catch path.
 emscripten::val js_pull_array(const emscripten::val& v, const char* key, JsNarrowNumericReader& reader) {
-  if (v.isUndefined() || v.isNull()) {
+  if (!js_value_present(v)) {
     return emscripten::val::array();
   }
   const emscripten::val a = reader.value(v, key, key);
-  if (!reader.ok() || a.isUndefined() || a.isNull()) {
+  if (!reader.ok() || !js_value_present(a)) {
     return emscripten::val::array();
   }
   return reader.is_array(a, key) ? a : emscripten::val::array();
@@ -241,7 +241,7 @@ void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filt
     if (!reader.ok()) {
       return;
     }
-    if (group.isUndefined() || group.isNull()) {
+    if (!js_value_present(group)) {
       continue;
     }
     st.date_groups.push_back(pull_date_group(group, reader));
@@ -364,7 +364,7 @@ JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t i
     if (!reader.ok()) {
       break;
     }
-    if (column.isUndefined() || column.isNull()) {
+    if (!js_value_present(column)) {
       continue;
     }
     pull_filter_column(column, stores[i], cols[i], reader);
@@ -377,7 +377,7 @@ JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t i
   const emscripten::val sort = reader.value(filter, "sort", "autoFilter.sort");
   std::vector<std::string> custom_lists;
   std::vector<fm_sort_condition> conditions;
-  if (!sort.isUndefined() && !sort.isNull()) {
+  if (js_value_present(sort)) {
     f.has_sort = 1;
     f.sort_ref = js_pull_range(reader.value(sort, "ref", "sort.ref"), &reader);
     if (!reader.ok()) {
@@ -404,7 +404,7 @@ JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t i
       if (!reader.ok()) {
         break;
       }
-      if (condition.isUndefined() || condition.isNull()) {
+      if (!js_value_present(condition)) {
         continue;
       }
       pull_sort_condition(condition, custom_lists[i], conditions[i], reader);

@@ -255,7 +255,7 @@ JsReadDiagnosticsResult JsWorkbook::readDiagnostics() const {
 
 JsStatus JsWorkbook::addSheet(const std::string& name) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_workbook_add_sheet(handle_, name.c_str());
   return status_from_rc(rc);
@@ -263,7 +263,7 @@ JsStatus JsWorkbook::addSheet(const std::string& name) {
 
 JsStatus JsWorkbook::moveSheet(uint32_t fromIdx, uint32_t toIdx) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_workbook_move_sheet(handle_, fromIdx, toIdx);
   return status_from_rc(rc);
@@ -271,7 +271,7 @@ JsStatus JsWorkbook::moveSheet(uint32_t fromIdx, uint32_t toIdx) {
 
 JsStatus JsWorkbook::removeSheet(uint32_t index) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_workbook_remove_sheet(handle_, index);
   return status_from_rc(rc);
@@ -279,7 +279,7 @@ JsStatus JsWorkbook::removeSheet(uint32_t index) {
 
 JsStatus JsWorkbook::renameSheet(uint32_t index, const std::string& newName) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_workbook_rename_sheet(handle_, index, newName.c_str());
   return status_from_rc(rc);
@@ -287,7 +287,7 @@ JsStatus JsWorkbook::renameSheet(uint32_t index, const std::string& newName) {
 
 JsStatus JsWorkbook::setDefinedName(const std::string& name, const std::string& formula) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_workbook_set_defined_name(handle_, name.c_str(), formula.c_str());
   return status_from_rc(rc);
@@ -295,7 +295,7 @@ JsStatus JsWorkbook::setDefinedName(const std::string& name, const std::string& 
 
 JsStatus JsWorkbook::setDefinedNameScoped(const std::string& name, const std::string& formula, int32_t localSheetId) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_workbook_set_defined_name_scoped(handle_, name.c_str(), formula.c_str(), localSheetId);
   return status_from_rc(rc);
@@ -305,7 +305,7 @@ JsStatus JsWorkbook::setDefinedNameScoped(const std::string& name, const std::st
 
 JsStatus JsWorkbook::invoke_row_col_edit(RowColEditFn fn, uint32_t sheet, uint32_t index, uint32_t count) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   return status_from_rc(fn(handle_, sheet, index, count));
 }
@@ -339,7 +339,7 @@ JsStringResult JsWorkbook::sheetName(uint32_t idx) const {
 
 JsStatus JsWorkbook::recalc() {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   progress_callback_threw_ = false;
   fm_status_t rc = fm_workbook_recalc(handle_);
@@ -357,7 +357,7 @@ JsStatus JsWorkbook::recalc() {
 JsParallelRecalcResult JsWorkbook::recalcParallel(emscripten::val threadCount) {
   JsParallelRecalcResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.status = error_status(kBindingInvalidHandle);
     return r;
   }
 
@@ -413,7 +413,7 @@ JsParallelRecalcResult JsWorkbook::recalcParallel(emscripten::val threadCount) {
 
 JsStatus JsWorkbook::setIterative(bool enabled, uint32_t max_iterations, double max_change) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc =
       fm_workbook_set_iterative(handle_, enabled ? 1 : 0, static_cast<int32_t>(max_iterations), max_change);
@@ -424,8 +424,8 @@ emscripten::val JsWorkbook::getIterative() const {
   int32_t enabled = 0;
   uint32_t max_iterations = 0;
   double max_change = 0.0;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_iterative(handle_, &enabled, &max_iterations, &max_change) : 7000;
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_iterative(handle_, &enabled, &max_iterations, &max_change)
+                                            : kBindingInvalidHandle;
   if (rc != 0) {
     enabled = 0;
     max_iterations = 0;
@@ -450,7 +450,7 @@ JsNumberResult JsWorkbook::calcMode() const {
 
 JsStatus JsWorkbook::setCalcMode(uint32_t mode) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_workbook_set_calc_mode(handle_, static_cast<std::int32_t>(mode));
   return status_from_rc(rc);
@@ -484,7 +484,7 @@ emscripten::val JsWorkbook::pinnedNow() const {
 JsStatus JsWorkbook::setPinnedNow(uint32_t year, uint32_t month, uint32_t day, uint32_t hour, uint32_t minute,
                                   uint32_t second) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   // Each field is widened rather than range-checked here: the C layer owns
   // the calendar domain, and a JS-side duplicate would be a second place to
@@ -497,7 +497,7 @@ JsStatus JsWorkbook::setPinnedNow(uint32_t year, uint32_t month, uint32_t day, u
 
 JsStatus JsWorkbook::clearPinnedNow() {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   return status_from_rc(fm_workbook_clear_pinned_now(handle_));
 }
@@ -513,7 +513,7 @@ JsStringResult JsWorkbook::excelProfileId() const {
 
 JsStatus JsWorkbook::setExcelProfileId(const std::string& profile_id) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_workbook_set_excel_profile_id(handle_, profile_id.c_str());
   return status_from_rc(rc);
@@ -522,7 +522,7 @@ JsStatus JsWorkbook::setExcelProfileId(const std::string& profile_id) {
 emscripten::val JsWorkbook::partialRecalc(emscripten::val viewport) {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
+    o.set("status", error_status(kBindingInvalidHandle));
     o.set("recomputed", static_cast<uint32_t>(0));
     return o;
   }
@@ -596,7 +596,7 @@ void JsWorkbook::rebind_progress_callback() {
 
 JsStatus JsWorkbook::setIterativeProgress(emscripten::val cb) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   if (cb.isNull() || cb.isUndefined()) {
     progress_callback_ = emscripten::val::null();

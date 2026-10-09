@@ -24,7 +24,7 @@ namespace parts {
 
 JsStatus JsWorkbook::setNumber(uint32_t sheet, uint32_t row, uint32_t col, double value) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_workbook_set_number(handle_, sheet, row, col, value);
   return status_from_rc(rc);
@@ -32,7 +32,7 @@ JsStatus JsWorkbook::setNumber(uint32_t sheet, uint32_t row, uint32_t col, doubl
 
 JsStatus JsWorkbook::setBool(uint32_t sheet, uint32_t row, uint32_t col, bool value) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_workbook_set_bool(handle_, sheet, row, col, value ? 1 : 0);
   return status_from_rc(rc);
@@ -40,7 +40,7 @@ JsStatus JsWorkbook::setBool(uint32_t sheet, uint32_t row, uint32_t col, bool va
 
 JsStatus JsWorkbook::setError(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val errorCode) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   // Unlike setNumber/setBool/setText, there is no sane zero-value default
   // here: an omitted `errorCode` silently writing `#NULL!` (error code 0)
@@ -48,7 +48,7 @@ JsStatus JsWorkbook::setError(uint32_t sheet, uint32_t row, uint32_t col, emscri
   // as `emscripten::val` rather than `int32_t` so a missing argument is
   // still distinguishable from a literal `0` at this point -- matching
   // the Node binding's `info.Length() < 4` rejection for the same call.
-  if (errorCode.isUndefined() || errorCode.isNull()) {
+  if (!js_value_present(errorCode)) {
     return binding_error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kBindingNullPointer),
                                 "setError: `errorCode` is required");
   }
@@ -59,7 +59,7 @@ JsStatus JsWorkbook::setError(uint32_t sheet, uint32_t row, uint32_t col, emscri
 
 JsStatus JsWorkbook::setText(uint32_t sheet, uint32_t row, uint32_t col, const std::string& text) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_workbook_set_text(handle_, sheet, row, col, text.c_str());
   return status_from_rc(rc);
@@ -67,7 +67,7 @@ JsStatus JsWorkbook::setText(uint32_t sheet, uint32_t row, uint32_t col, const s
 
 JsStatus JsWorkbook::setCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col, const std::string& phonetic) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_workbook_set_cell_phonetic(handle_, sheet, row, col, phonetic.c_str());
   return status_from_rc(rc);
@@ -129,7 +129,7 @@ JsStatus JsWorkbook::setCellPhoneticProperties(uint32_t sheet, uint32_t row, uin
 
 JsStatus JsWorkbook::setBlank(uint32_t sheet, uint32_t row, uint32_t col) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_workbook_set_blank(handle_, sheet, row, col);
   return status_from_rc(rc);
@@ -137,7 +137,7 @@ JsStatus JsWorkbook::setBlank(uint32_t sheet, uint32_t row, uint32_t col) {
 
 JsStatus JsWorkbook::setFormula(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_workbook_set_formula(handle_, sheet, row, col, formula.c_str());
   return status_from_rc(rc);
@@ -160,7 +160,7 @@ void adopt_value(fm_status_t rc, const fm_value_t& v, JsStatus& status, JsValue&
 JsCellResult JsWorkbook::getValue(uint32_t sheet, uint32_t row, uint32_t col) const {
   JsCellResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.status = error_status(kBindingInvalidHandle);
     return r;
   }
   fm_value_t v{};
@@ -236,7 +236,7 @@ JsEvalResult JsWorkbook::evaluateFormulaText(uint32_t sheet, uint32_t row, uint3
                                              const std::string& formula) const {
   JsEvalResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.status = error_status(kBindingInvalidHandle);
     return r;
   }
   fm_value_t v{};
@@ -249,7 +249,7 @@ JsEvalResult JsWorkbook::evaluateConditionalFormula(uint32_t sheet, uint32_t row
                                                     uint32_t anchorCol, const std::string& formula) const {
   JsEvalResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.status = error_status(kBindingInvalidHandle);
     return r;
   }
   fm_value_t v{};
@@ -269,7 +269,7 @@ emscripten::val JsWorkbook::evaluateFormulaArray(uint32_t sheet, uint32_t row, u
     return o;
   };
   if (handle_ == nullptr) {
-    return fail(7000);
+    return fail(kBindingInvalidHandle);
   }
   uint32_t rows = 0;
   uint32_t cols = 0;
@@ -316,7 +316,7 @@ emscripten::val JsWorkbook::getLambdaText(uint32_t sheet, uint32_t row, uint32_t
 emscripten::val JsWorkbook::cellAt(uint32_t sheet, uint32_t idx) const {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
+    o.set("status", error_status(kBindingInvalidHandle));
     return o;
   }
   uint32_t row = 0;
@@ -339,7 +339,7 @@ emscripten::val JsWorkbook::cellAt(uint32_t sheet, uint32_t idx) const {
 emscripten::val JsWorkbook::definedNameAt(uint32_t idx) const {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
+    o.set("status", error_status(kBindingInvalidHandle));
     return o;
   }
   const char* name = nullptr;
@@ -360,7 +360,7 @@ emscripten::val JsWorkbook::definedNameAt(uint32_t idx) const {
 emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
+    o.set("status", error_status(kBindingInvalidHandle));
     return o;
   }
   const char* name = nullptr;
@@ -383,7 +383,7 @@ emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
 JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
   JsAddStyleResult out;
   if (handle_ == nullptr) {
-    out.status = error_status(7000);
+    out.status = error_status(kBindingInvalidHandle);
     return out;
   }
   JsNarrowNumericReader reader("createTable");
@@ -443,7 +443,7 @@ JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
 
 JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
 
   // The C ABI keeps `ref` non-null, so an omitted ref is resolved to the
@@ -456,7 +456,7 @@ JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
   const char* style_name_ptr = reader.optional_string(spec, "styleName", style_name, "updateTable.styleName");
   const auto optional_bool = [&reader, &spec](const char* key, const char* field) {
     const emscripten::val value = reader.value(spec, key, field);
-    if (!reader.ok() || value.isUndefined() || value.isNull()) {
+    if (!reader.ok() || !js_value_present(value)) {
       return int32_t{-1};
     }
     return reader.boolean_value(value, false, field) ? int32_t{1} : int32_t{0};
@@ -486,7 +486,7 @@ JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
 
 JsStatus JsWorkbook::removeTable(uint32_t idx) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   return status_from_rc(fm_workbook_table_remove(handle_, idx));
 }
@@ -494,7 +494,7 @@ JsStatus JsWorkbook::removeTable(uint32_t idx) {
 emscripten::val JsWorkbook::passthroughAt(uint32_t idx) const {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
+    o.set("status", error_status(kBindingInvalidHandle));
     return o;
   }
   const char* path = nullptr;
@@ -510,7 +510,7 @@ emscripten::val JsWorkbook::passthroughAt(uint32_t idx) const {
 
 emscripten::val JsWorkbook::pivotLayout(uint32_t sheet, uint32_t pivotIndex) const {
   if (handle_ == nullptr) {
-    return empty_pivot_layout_result(error_status(7000));
+    return empty_pivot_layout_result(error_status(kBindingInvalidHandle));
   }
 
   fm_pivot_cells_t* cells = nullptr;
@@ -555,7 +555,7 @@ emscripten::val JsWorkbook::pivotLayout(uint32_t sheet, uint32_t pivotIndex) con
 emscripten::val JsWorkbook::getExternalLinks() const {
   emscripten::val arr = emscripten::val::array();
   if (handle_ == nullptr) {
-    arr.set("status", error_status(7000));
+    arr.set("status", error_status(kBindingInvalidHandle));
     return arr;
   }
   uint32_t count = 0;
@@ -609,7 +609,7 @@ emscripten::val display_envelope(fm_status_t rc, const char* text, int32_t displ
 /// Reads an optional non-negative integer argument (`undefined` / `null`
 /// keep `dflt`). Returns false for anything else that is not a safe integer.
 bool js_optional_index(const emscripten::val& v, double dflt, double max, double* out) {
-  if (v.isUndefined() || v.isNull()) {
+  if (!js_value_present(v)) {
     *out = dflt;
     return true;
   }
@@ -681,13 +681,15 @@ void fill_cells_page(emscripten::val& o, fm_cell_range_t* page) {
 
 emscripten::val JsWorkbook::getFormula(uint32_t sheet, uint32_t row, uint32_t col) const {
   const char* formula = nullptr;
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_formula(handle_, sheet, row, col, &formula) : 7000;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_formula(handle_, sheet, row, col, &formula) : kBindingInvalidHandle;
   return formula_envelope(rc, formula);
 }
 
 emscripten::val JsWorkbook::getFormulaR1C1(uint32_t sheet, uint32_t row, uint32_t col) const {
   const char* formula = nullptr;
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_formula_r1c1(handle_, sheet, row, col, &formula) : 7000;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_formula_r1c1(handle_, sheet, row, col, &formula) : kBindingInvalidHandle;
   return formula_envelope(rc, formula);
 }
 
@@ -697,7 +699,7 @@ emscripten::val JsWorkbook::getCellsInRange(uint32_t sheet, emscripten::val rang
   o.set("cells", emscripten::val::array());
   o.set("nextCursor", emscripten::val::null());
   if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
+    o.set("status", error_status(kBindingInvalidHandle));
     return o;
   }
   double cursor_value = 0.0;
@@ -785,14 +787,15 @@ emscripten::val JsWorkbook::validateValue(uint32_t sheet, uint32_t row, uint32_t
 emscripten::val JsWorkbook::getDisplayText(uint32_t sheet, uint32_t row, uint32_t col) const {
   const char* text = nullptr;
   int32_t display_status = 0;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_display_text(handle_, sheet, row, col, &text, &display_status) : 7000;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_get_display_text(handle_, sheet, row, col, &text, &display_status)
+                             : kBindingInvalidHandle;
   return display_envelope(rc, text, display_status);
 }
 
 emscripten::val JsWorkbook::formatValue(emscripten::val value, const std::string& formatCode) const {
   if (handle_ == nullptr) {
-    return display_envelope(7000, nullptr, 0);
+    return display_envelope(kBindingInvalidHandle, nullptr, 0);
   }
   std::string text;
   fm_value_t v{};

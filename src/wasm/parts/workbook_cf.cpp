@@ -38,7 +38,7 @@ fm_cfvo_t js_pull_cfvo(emscripten::val v, formulon::c_api::BorrowedStringArena* 
   out.type = reader.u8(v, "type", 0U, "cfvo.type");
   out.gte = reader.boolean(v, "gte", true, "cfvo.gte") ? 1 : 0;
   const emscripten::val value = reader.value(v, "value", "cfvo.value");
-  if (!value.isUndefined() && !value.isNull()) {
+  if (js_value_present(value)) {
     out.value = strings->emplace(reader.string_value(value, "cfvo.value"));
   }
   return out;
@@ -70,7 +70,7 @@ emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, uint32_t firstRow, u
   emscripten::val r = emscripten::val::object();
   emscripten::val cells = emscripten::val::array();
   if (handle_ == nullptr) {
-    r.set("status", error_status(7000));
+    r.set("status", error_status(kBindingInvalidHandle));
     r.set("cells", cells);
     return r;
   }
@@ -119,7 +119,7 @@ emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, uint32_t firstRow, u
 emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
   if (handle_ == nullptr) {
-    arr.set("status", error_status(7000));
+    arr.set("status", error_status(kBindingInvalidHandle));
     return arr;
   }
   std::size_t count = 0;
@@ -255,7 +255,7 @@ emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
 JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   JsAddStyleResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.status = error_status(kBindingInvalidHandle);
     return r;
   }
   // Pull every JS field into local storage; the C ABI receives
@@ -286,7 +286,7 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
   rule.priority = reader.i32(v, "priority", 0, "rule.priority");
   rule.stop_if_true = reader.boolean(v, "stopIfTrue", false, "rule.stopIfTrue") ? 1 : 0;
   const emscripten::val dxf_id = reader.value(v, "dxfId", "rule.dxfId");
-  if (!dxf_id.isUndefined() && !dxf_id.isNull()) {
+  if (js_value_present(dxf_id)) {
     rule.dxf_id_engaged = 1;
     rule.dxf_id = reader.u32_value(dxf_id, 0U, "rule.dxfId");
   }
@@ -295,12 +295,12 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
   rule.formula1 = formula1.empty() ? nullptr : formula1.c_str();
   rule.formula2 = formula2.empty() ? nullptr : formula2.c_str();
   const emscripten::val op = reader.value(v, "op", "rule.op");
-  if (!op.isUndefined() && !op.isNull()) {
+  if (js_value_present(op)) {
     rule.op_engaged = 1;
     rule.op = reader.u8_value(op, 0U, "rule.op");
   }
   const emscripten::val rank = reader.value(v, "rank", "rule.rank");
-  if (!rank.isUndefined() && !rank.isNull()) {
+  if (js_value_present(rank)) {
     rule.rank_engaged = 1;
     rule.rank = reader.i32_value(rank, 0, "rule.rank");
   }
@@ -309,18 +309,18 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
   rule.above_average = reader.boolean(v, "aboveAverage", true, "rule.aboveAverage") ? 1 : 0;
   rule.equal_average = reader.boolean(v, "equalAverage", false, "rule.equalAverage") ? 1 : 0;
   const emscripten::val std_dev = reader.value(v, "stdDev", "rule.stdDev");
-  if (!std_dev.isUndefined() && !std_dev.isNull()) {
+  if (js_value_present(std_dev)) {
     rule.std_dev_engaged = 1;
     rule.std_dev = reader.number_value(std_dev, 0.0, "rule.stdDev");
   }
   rule.text = text.empty() ? nullptr : text.c_str();
   const emscripten::val time_period = reader.value(v, "timePeriod", "rule.timePeriod");
-  if (!time_period.isUndefined() && !time_period.isNull()) {
+  if (js_value_present(time_period)) {
     rule.time_period_engaged = 1;
     rule.time_period = reader.u8_value(time_period, 0U, "rule.timePeriod");
   }
   const emscripten::val color_scale = reader.value(v, "colorScale", "colorScale");
-  if (!color_scale.isUndefined() && !color_scale.isNull()) {
+  if (js_value_present(color_scale)) {
     const emscripten::val thresholds = reader.value(color_scale, "thresholds", "colorScale.thresholds");
     if (reader.is_array(thresholds, "colorScale.thresholds")) {
       const uint32_t n = reader.length(thresholds, "colorScale.thresholds");
@@ -343,7 +343,7 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
     rule.color_scale_count = static_cast<uint32_t>(color_scale_thresholds.size());
   }
   const emscripten::val data_bar = reader.value(v, "dataBar", "dataBar");
-  if (!data_bar.isUndefined() && !data_bar.isNull()) {
+  if (js_value_present(data_bar)) {
     rule.data_bar_engaged = 1;
     rule.data_bar_min = js_pull_cfvo(reader.value(data_bar, "min", "dataBar.min"), &cfvo_strings, reader);
     rule.data_bar_max = js_pull_cfvo(reader.value(data_bar, "max", "dataBar.max"), &cfvo_strings, reader);
@@ -356,39 +356,39 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
     // default" (gradient on, automatic axis, negative fill equal to the
     // positive fill, no border, black axis).
     const emscripten::val gradient = reader.value(data_bar, "gradient", "dataBar.gradient");
-    if (!gradient.isUndefined() && !gradient.isNull()) {
+    if (js_value_present(gradient)) {
       rule.data_bar_gradient_engaged = 1;
       rule.data_bar_gradient = reader.boolean_value(gradient, true, "dataBar.gradient") ? 1 : 0;
     }
     const emscripten::val axis_position = reader.value(data_bar, "axisPosition", "dataBar.axisPosition");
-    if (!axis_position.isUndefined() && !axis_position.isNull()) {
+    if (js_value_present(axis_position)) {
       rule.data_bar_axis_position_engaged = 1;
       rule.data_bar_axis_position = reader.u8_value(axis_position, 0U, "dataBar.axisPosition");
     }
     const emscripten::val negative_fill = reader.value(data_bar, "negativeFill", "dataBar.negativeFill");
-    if (!negative_fill.isUndefined() && !negative_fill.isNull()) {
+    if (js_value_present(negative_fill)) {
       rule.data_bar_negative_fill_engaged = 1;
       rule.data_bar_negative_fill = js_pull_cf_color(negative_fill, reader);
     }
     const emscripten::val border = reader.value(data_bar, "border", "dataBar.border");
-    if (!border.isUndefined() && !border.isNull()) {
+    if (js_value_present(border)) {
       rule.data_bar_border_engaged = 1;
       rule.data_bar_border = js_pull_cf_color(border, reader);
     }
     const emscripten::val negative_border = reader.value(data_bar, "negativeBorder", "dataBar.negativeBorder");
-    if (!negative_border.isUndefined() && !negative_border.isNull()) {
+    if (js_value_present(negative_border)) {
       rule.data_bar_negative_border_engaged = 1;
       rule.data_bar_negative_border = js_pull_cf_color(negative_border, reader);
     }
     const emscripten::val axis_color = reader.value(data_bar, "axisColor", "dataBar.axisColor");
-    if (!axis_color.isUndefined() && !axis_color.isNull()) {
+    if (js_value_present(axis_color)) {
       rule.data_bar_axis_color_engaged = 1;
       rule.data_bar_axis_color = js_pull_cf_color(axis_color, reader);
     }
     rule.data_bar_direction = reader.u8(data_bar, "direction", 0U, "dataBar.direction");
   }
   const emscripten::val icon_set = reader.value(v, "iconSet", "iconSet");
-  if (!icon_set.isUndefined() && !icon_set.isNull()) {
+  if (js_value_present(icon_set)) {
     rule.icon_set_engaged = 1;
     rule.icon_set_name = reader.u8(icon_set, "name", 0U, "iconSet.name");
     const emscripten::val thresholds = reader.value(icon_set, "thresholds", "iconSet.thresholds");
@@ -407,7 +407,7 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
     rule.icon_set_percent = reader.boolean(icon_set, "percent", true, "iconSet.percent") ? 1 : 0;
     // An omitted floor keeps Excel's default, `percent 0`.
     const emscripten::val floor = reader.value(icon_set, "floor", "iconSet.floor");
-    if (!floor.isUndefined() && !floor.isNull()) {
+    if (js_value_present(floor)) {
       rule.icon_set_floor_engaged = 1;
       rule.icon_set_floor = js_pull_cfvo(floor, &cfvo_strings, reader);
     }
@@ -424,7 +424,7 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
 
 JsStatus JsWorkbook::removeConditionalFormatAt(uint32_t sheet, uint32_t index) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_cf_remove_at(handle_, sheet, index);
   return status_from_rc(rc);
@@ -432,7 +432,7 @@ JsStatus JsWorkbook::removeConditionalFormatAt(uint32_t sheet, uint32_t index) {
 
 JsStatus JsWorkbook::clearConditionalFormats(uint32_t sheet) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_cf_clear(handle_, sheet);
   return status_from_rc(rc);

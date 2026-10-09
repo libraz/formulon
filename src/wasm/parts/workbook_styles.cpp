@@ -27,15 +27,14 @@ void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf* xf, JsNarrowNume
   xf->fill_index = reader.u32(record, "fillIndex", 0U, "xf.fillIndex");
   xf->border_index = reader.u32(record, "borderIndex", 0U, "xf.borderIndex");
   xf->num_fmt_id = reader.u16(record, "numFmtId", 0U, "xf.numFmtId");
-  const auto has_value = [](const emscripten::val& value) { return !value.isUndefined() && !value.isNull(); };
   const emscripten::val horizontal_align = reader.value(record, "horizontalAlign", "xf.horizontalAlign");
   const emscripten::val vertical_align = reader.value(record, "verticalAlign", "xf.verticalAlign");
   const emscripten::val wrap_text = reader.value(record, "wrapText", "xf.wrapText");
   const emscripten::val justify_last_line = reader.value(record, "justifyLastLine", "xf.justifyLastLine");
-  const bool horizontal_align_present = has_value(horizontal_align);
-  const bool vertical_align_present = has_value(vertical_align);
-  const bool wrap_text_present = has_value(wrap_text);
-  const bool justify_last_line_present = has_value(justify_last_line);
+  const bool horizontal_align_present = js_value_present(horizontal_align);
+  const bool vertical_align_present = js_value_present(vertical_align);
+  const bool wrap_text_present = js_value_present(wrap_text);
+  const bool justify_last_line_present = js_value_present(justify_last_line);
   xf->horizontal_align = reader.u8_value(horizontal_align, 0U, "xf.horizontalAlign");
   xf->vertical_align = reader.u8_value(vertical_align, 2U, "xf.verticalAlign");
   xf->wrap_text = reader.boolean_value(wrap_text, false, "xf.wrapText") ? 1 : 0;
@@ -45,10 +44,10 @@ void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf* xf, JsNarrowNume
   const emscripten::val has_vertical_align = reader.value(record, "hasVerticalAlign", "xf.hasVerticalAlign");
   const emscripten::val has_wrap_text = reader.value(record, "hasWrapText", "xf.hasWrapText");
   const emscripten::val has_justify_last_line = reader.value(record, "hasJustifyLastLine", "xf.hasJustifyLastLine");
-  const bool has_horizontal_align_present = has_value(has_horizontal_align);
-  const bool has_vertical_align_present = has_value(has_vertical_align);
-  const bool has_wrap_text_present = has_value(has_wrap_text);
-  const bool has_justify_last_line_present = has_value(has_justify_last_line);
+  const bool has_horizontal_align_present = js_value_present(has_horizontal_align);
+  const bool has_vertical_align_present = js_value_present(has_vertical_align);
+  const bool has_wrap_text_present = js_value_present(has_wrap_text);
+  const bool has_justify_last_line_present = js_value_present(has_justify_last_line);
   xf->has_horizontal_align =
       reader.boolean_value(has_horizontal_align, horizontal_align_present, "xf.hasHorizontalAlign") ? 1 : 0;
   xf->has_vertical_align =
@@ -62,11 +61,11 @@ void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf* xf, JsNarrowNume
   const emscripten::val relative_indent = reader.value(record, "relativeIndent", "xf.relativeIndent");
   const emscripten::val shrink_to_fit = reader.value(record, "shrinkToFit", "xf.shrinkToFit");
   const emscripten::val reading_order = reader.value(record, "readingOrder", "xf.readingOrder");
-  const bool text_rotation_present = has_value(text_rotation);
-  const bool indent_present = has_value(indent);
-  const bool relative_indent_present = has_value(relative_indent);
-  const bool shrink_to_fit_present = has_value(shrink_to_fit);
-  const bool reading_order_present = has_value(reading_order);
+  const bool text_rotation_present = js_value_present(text_rotation);
+  const bool indent_present = js_value_present(indent);
+  const bool relative_indent_present = js_value_present(relative_indent);
+  const bool shrink_to_fit_present = js_value_present(shrink_to_fit);
+  const bool reading_order_present = js_value_present(reading_order);
   xf->text_rotation = reader.u32_value(text_rotation, 0U, "xf.textRotation");
   xf->indent = reader.u32_value(indent, 0U, "xf.indent");
   xf->relative_indent = reader.i32_value(relative_indent, 0, "xf.relativeIndent");
@@ -94,8 +93,8 @@ void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf* xf, JsNarrowNume
   const emscripten::val has_protection = reader.value(record, "hasProtection", "xf.hasProtection");
   const emscripten::val locked = reader.value(record, "locked", "xf.locked");
   const emscripten::val hidden = reader.value(record, "hidden", "xf.hidden");
-  const bool locked_present = has_value(locked);
-  const bool hidden_present = has_value(hidden);
+  const bool locked_present = js_value_present(locked);
+  const bool hidden_present = js_value_present(hidden);
   xf->has_protection =
       reader.boolean_value(has_protection, locked_present || hidden_present, "xf.hasProtection") ? 1 : 0;
   xf->locked = reader.boolean_value(locked, true, "xf.locked") ? 1 : 0;
@@ -291,7 +290,7 @@ emscripten::val JsWorkbook::getCellXfIndex(uint32_t sheet, uint32_t row, uint32_
   emscripten::val o = emscripten::val::object();
   uint32_t xf = 0;
   if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
+    o.set("status", error_status(kBindingInvalidHandle));
     o.set("xfIndex", xf);
     return o;
   }
@@ -303,7 +302,7 @@ emscripten::val JsWorkbook::getCellXfIndex(uint32_t sheet, uint32_t row, uint32_
 
 JsStatus JsWorkbook::setCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col, uint32_t xf_index) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_cell_set_xf_index(handle_, sheet, row, col, xf_index);
   return status_from_rc(rc);
@@ -312,7 +311,7 @@ JsStatus JsWorkbook::setCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col, 
 JsStatus JsWorkbook::setRangeXfIndex(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
                                      uint32_t lastCol, uint32_t xf_index) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   return status_from_rc(fm_sheet_set_range_xf_index(handle_, sheet, firstRow, firstCol, lastRow, lastCol, xf_index));
 }
@@ -321,13 +320,13 @@ JsStatus JsWorkbook::setRangeXfIndex(uint32_t sheet, uint32_t firstRow, uint32_t
 
 emscripten::val JsWorkbook::getCellXf(uint32_t xf_index) const {
   fm_cell_xf xf{};
-  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_xf(handle_, xf_index, &xf) : 7000;
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_xf(handle_, xf_index, &xf) : kBindingInvalidHandle;
   return js_cell_xf_result(rc, xf);
 }
 
 emscripten::val JsWorkbook::getFont(uint32_t font_index) const {
   fm_font_record f{};
-  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_font(handle_, font_index, &f) : 7000;
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_font(handle_, font_index, &f) : kBindingInvalidHandle;
   if (rc != 0) {
     f = fm_font_record{};
   }
@@ -338,7 +337,7 @@ emscripten::val JsWorkbook::getFont(uint32_t font_index) const {
 
 emscripten::val JsWorkbook::getFill(uint32_t fill_index) const {
   fm_fill_record f{};
-  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_fill(handle_, fill_index, &f) : 7000;
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_fill(handle_, fill_index, &f) : kBindingInvalidHandle;
   if (rc != 0) {
     f = fm_fill_record{};
   }
@@ -349,7 +348,7 @@ emscripten::val JsWorkbook::getFill(uint32_t fill_index) const {
 
 emscripten::val JsWorkbook::getBorder(uint32_t border_index) const {
   fm_border_record b{};
-  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_border(handle_, border_index, &b) : 7000;
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_border(handle_, border_index, &b) : kBindingInvalidHandle;
   if (rc != 0) {
     b = fm_border_record{};
   }
@@ -361,8 +360,9 @@ emscripten::val JsWorkbook::getBorder(uint32_t border_index) const {
 emscripten::val JsWorkbook::getNumFmt(uint32_t num_fmt_id) const {
   emscripten::val o = emscripten::val::object();
   const char* s = nullptr;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_styles_get_num_fmt_string(handle_, static_cast<uint16_t>(num_fmt_id), &s) : 7000;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_styles_get_num_fmt_string(handle_, static_cast<uint16_t>(num_fmt_id), &s)
+                             : kBindingInvalidHandle;
   o.set("status", status_from_rc(rc));
   o.set("numFmtId", rc == 0 ? num_fmt_id : 0U);
   js_set_cstr(o, "formatCode", rc == 0 ? s : nullptr);
@@ -372,7 +372,7 @@ emscripten::val JsWorkbook::getNumFmt(uint32_t num_fmt_id) const {
 emscripten::val JsWorkbook::getDxf(uint32_t dxf_index) const {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
+    o.set("status", error_status(kBindingInvalidHandle));
     return o;
   }
   fm_dxf_record d{};
@@ -411,7 +411,7 @@ emscripten::val JsWorkbook::getDxf(uint32_t dxf_index) const {
 JsAddStyleResult JsWorkbook::addFont(emscripten::val record) {
   JsAddStyleResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.status = error_status(kBindingInvalidHandle);
     return r;
   }
   std::string name;
@@ -429,7 +429,7 @@ JsAddStyleResult JsWorkbook::addFont(emscripten::val record) {
 
 JsStatus JsWorkbook::setFont(uint32_t font_index, emscripten::val record) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   std::string name;
   fm_font_record fr{};
@@ -443,7 +443,7 @@ JsStatus JsWorkbook::setFont(uint32_t font_index, emscripten::val record) {
 
 JsStatus JsWorkbook::setDefaultFont(emscripten::val record) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   std::string name;
   fm_font_record fr{};
@@ -458,7 +458,7 @@ JsStatus JsWorkbook::setDefaultFont(emscripten::val record) {
 JsAddStyleResult JsWorkbook::addFill(emscripten::val record) {
   JsAddStyleResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.status = error_status(kBindingInvalidHandle);
     return r;
   }
   JsNarrowNumericReader reader("addFill");
@@ -475,7 +475,7 @@ JsAddStyleResult JsWorkbook::addFill(emscripten::val record) {
 JsAddStyleResult JsWorkbook::addBorder(emscripten::val record) {
   JsAddStyleResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.status = error_status(kBindingInvalidHandle);
     return r;
   }
   JsNarrowNumericReader reader("addBorder");
@@ -492,7 +492,7 @@ JsAddStyleResult JsWorkbook::addBorder(emscripten::val record) {
 JsAddNumFmtResult JsWorkbook::addNumFmt(const std::string& format_code) {
   JsAddNumFmtResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.status = error_status(kBindingInvalidHandle);
     return r;
   }
   uint16_t id = 0;
@@ -509,7 +509,7 @@ JsAddNumFmtResult JsWorkbook::addNumFmt(const std::string& format_code) {
 JsAddStyleResult JsWorkbook::addXf(emscripten::val record) {
   JsAddStyleResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.status = error_status(kBindingInvalidHandle);
     return r;
   }
   fm_cell_xf xf{};
@@ -527,7 +527,7 @@ JsAddStyleResult JsWorkbook::addXf(emscripten::val record) {
 JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
   JsAddStyleResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.status = error_status(kBindingInvalidHandle);
     return r;
   }
 
@@ -539,25 +539,25 @@ JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
   JsNarrowNumericReader reader("addDxf");
 
   emscripten::val font = reader.value(record, "font", "dxf.font");
-  if (!font.isUndefined() && !font.isNull()) {
+  if (js_value_present(font)) {
     dxf.font_engaged = 1;
     js_pull_font_record(font, &font_name, &dxf.font, reader);
   }
 
   emscripten::val fill = reader.value(record, "fill", "dxf.fill");
-  if (!fill.isUndefined() && !fill.isNull()) {
+  if (js_value_present(fill)) {
     dxf.fill_engaged = 1;
     dxf.fill = js_pull_fill_record(fill, reader);
   }
 
   emscripten::val border = reader.value(record, "border", "dxf.border");
-  if (!border.isUndefined() && !border.isNull()) {
+  if (js_value_present(border)) {
     dxf.border_engaged = 1;
     dxf.border = js_pull_border_record(border, kDxfBorderFields, reader);
   }
 
   emscripten::val num_fmt = reader.value(record, "numFmt", "dxf.numFmt");
-  if (!num_fmt.isUndefined() && !num_fmt.isNull()) {
+  if (js_value_present(num_fmt)) {
     dxf.num_fmt_engaged = 1;
     dxf.num_fmt_id = reader.u16(num_fmt, "numFmtId", 0U, "dxf.numFmtId");
     num_fmt_code = reader.string(num_fmt, "formatCode", "dxf.numFmt.formatCode");
@@ -617,7 +617,7 @@ JsNumberResult JsWorkbook::cellStyleXfCount() const {
 emscripten::val JsWorkbook::getCellStyle(uint32_t index) const {
   emscripten::val o = emscripten::val::object();
   fm_cell_style_record_t cs{};
-  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_style(handle_, index, &cs) : 7000;
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_style(handle_, index, &cs) : kBindingInvalidHandle;
   if (rc != 0) {
     cs = fm_cell_style_record_t{};
   }
@@ -633,14 +633,14 @@ emscripten::val JsWorkbook::getCellStyle(uint32_t index) const {
 
 emscripten::val JsWorkbook::getCellStyleXf(uint32_t index) const {
   fm_cell_xf xf{};
-  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_style_xf(handle_, index, &xf) : 7000;
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_cell_style_xf(handle_, index, &xf) : kBindingInvalidHandle;
   return js_cell_xf_result(rc, xf);
 }
 
 JsAddStyleResult JsWorkbook::addCellStyleXf(emscripten::val record) {
   JsAddStyleResult out;
   if (handle_ == nullptr) {
-    out.status = error_status(7000);
+    out.status = error_status(kBindingInvalidHandle);
     return out;
   }
   fm_cell_xf xf{};
@@ -657,7 +657,7 @@ JsAddStyleResult JsWorkbook::addCellStyleXf(emscripten::val record) {
 
 JsStatus JsWorkbook::setCellStyle(emscripten::val record) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   JsNarrowNumericReader reader("setCellStyle");
   const std::string name = reader.string(record, "name", "cellStyle.name");
@@ -676,7 +676,7 @@ JsStatus JsWorkbook::setCellStyle(emscripten::val record) {
 
 JsStatus JsWorkbook::removeCellStyle(const std::string& name) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   return status_from_rc(fm_styles_remove_cell_style(handle_, name.c_str()));
 }
@@ -696,7 +696,7 @@ emscripten::val JsWorkbook::getTheme() const {
   fm_theme_colors colors{};
   fm_theme_fonts fonts{};
   int32_t source = 0;
-  fm_status_t rc = handle_ != nullptr ? fm_workbook_get_theme_colors(handle_, &colors, &source) : 7000;
+  fm_status_t rc = handle_ != nullptr ? fm_workbook_get_theme_colors(handle_, &colors, &source) : kBindingInvalidHandle;
   if (rc == 0) {
     rc = fm_workbook_get_theme_fonts(handle_, &fonts);
   }
@@ -724,7 +724,7 @@ emscripten::val JsWorkbook::getTheme() const {
 
 JsStatus JsWorkbook::setThemeColors(emscripten::val colors) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_theme_colors tc{};
   JsNarrowNumericReader reader("setThemeColors");
@@ -743,7 +743,7 @@ JsStatus JsWorkbook::setThemeColors(emscripten::val colors) {
 
 JsStatus JsWorkbook::setThemeFonts(emscripten::val fonts) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   JsNarrowNumericReader reader("setThemeFonts");
   const std::string major_latin = reader.string(fonts, "majorLatin", "theme.majorLatin");
@@ -763,7 +763,7 @@ JsStatus JsWorkbook::setThemeFonts(emscripten::val fonts) {
 
 JsStatus JsWorkbook::resetTheme() {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   return status_from_rc(fm_workbook_reset_theme(handle_));
 }
@@ -773,7 +773,7 @@ emscripten::val JsWorkbook::resolveColor(emscripten::val spec, int32_t context) 
   int32_t resolution = 0;
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
-    o.set("status", error_status(7000));
+    o.set("status", error_status(kBindingInvalidHandle));
     o.set("argb", 0U);
     o.set("resolution", 0);
     return o;
@@ -797,7 +797,8 @@ emscripten::val JsWorkbook::resolveColor(emscripten::val spec, int32_t context) 
 
 emscripten::val JsWorkbook::getEffectiveStyle(uint32_t sheet, uint32_t row, uint32_t col) const {
   fm_effective_style e{};
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_effective_style(handle_, sheet, row, col, &e) : 7000;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_effective_style(handle_, sheet, row, col, &e) : kBindingInvalidHandle;
   if (rc != 0) {
     e = fm_effective_style{};
   }

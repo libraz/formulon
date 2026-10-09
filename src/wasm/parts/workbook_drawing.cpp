@@ -126,7 +126,7 @@ emscripten::val JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, e
   std::string name_store;
   std::string descr_store;
   JsNarrowNumericReader reader("insertImage");
-  const emscripten::val options = opts.isUndefined() || opts.isNull() ? emscripten::val::object() : opts;
+  const emscripten::val options = !js_value_present(opts) ? emscripten::val::object() : opts;
   const JsBytesReadResult bytes_result = val_to_bytes_checked(bytes);
   if (!bytes_result.ok) {
     return image_id_result(binding_error_status(kInvalidArgument, bytes_result.message.c_str()), 0U);
@@ -163,7 +163,7 @@ JsStatus JsWorkbook::setImageAnchor(uint32_t sheet, uint32_t objectId, emscripte
     return error_status(kBindingInvalidHandle);
   }
   JsNarrowNumericReader reader("setImageAnchor");
-  const emscripten::val options = placement.isUndefined() || placement.isNull() ? emscripten::val::object() : placement;
+  const emscripten::val options = !js_value_present(placement) ? emscripten::val::object() : placement;
   fm_image_anchor anchor{};
   anchor.anchor_kind = reader.i32(options, "anchorKind", FM_ANCHOR_KIND_ONE_CELL, "placement.anchorKind");
   anchor.edit_as = reader.i32(options, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL, "placement.editAs");
@@ -207,7 +207,7 @@ emscripten::val JsWorkbook::restoreImage(uint32_t sheet, emscripten::val bytes, 
     return image_id_result(error_status(kBindingInvalidHandle), 0U);
   }
   JsNarrowNumericReader reader("restoreImage");
-  const emscripten::val options = opts.isUndefined() || opts.isNull() ? emscripten::val::object() : opts;
+  const emscripten::val options = !js_value_present(opts) ? emscripten::val::object() : opts;
   const JsBytesReadResult bytes_result = val_to_bytes_checked(bytes);
   if (!bytes_result.ok) {
     return image_id_result(binding_error_status(kInvalidArgument, bytes_result.message.c_str()), 0U);

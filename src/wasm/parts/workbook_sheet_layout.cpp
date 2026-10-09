@@ -28,7 +28,7 @@ emscripten::val entry_list(const fm_workbook_t* handle, uint32_t sheet, EntryCou
   emscripten::val r = emscripten::val::object();
   emscripten::val list = emscripten::val::array();
   std::size_t count = 0;
-  const fm_status_t rc = handle == nullptr ? 7000 : count_getter(handle, sheet, &count);
+  const fm_status_t rc = handle == nullptr ? kBindingInvalidHandle : count_getter(handle, sheet, &count);
   if (rc != 0) {
     r.set("status", error_status(rc));
     r.set(key, list);
@@ -189,7 +189,7 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
   emscripten::val horizontal_breaks = emscripten::val::array();
   emscripten::val vertical_breaks = emscripten::val::array();
   if (handle_ == nullptr) {
-    result.set("status", error_status(7000));
+    result.set("status", error_status(kBindingInvalidHandle));
     result.set("printArea", print_area);
     result.set("horizontalBreaks", horizontal_breaks);
     result.set("verticalBreaks", vertical_breaks);
@@ -248,7 +248,7 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
 JsSheetViewResult JsWorkbook::getSheetView(uint32_t sheet) const {
   JsSheetViewResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.status = error_status(kBindingInvalidHandle);
     return r;
   }
   fm_sheet_view_t v{};
@@ -275,7 +275,7 @@ JsSheetViewResult JsWorkbook::getSheetView(uint32_t sheet) const {
 JsSheetProtectionResult JsWorkbook::getSheetProtection(uint32_t sheet) const {
   JsSheetProtectionResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.status = error_status(kBindingInvalidHandle);
     return r;
   }
   fm_sheet_protection_t p{};
@@ -312,7 +312,7 @@ JsSheetProtectionResult JsWorkbook::getSheetProtection(uint32_t sheet) const {
 
 JsStatus JsWorkbook::setSheetProtection(uint32_t sheet, emscripten::val input) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   JsNarrowNumericReader reader("setSheetProtection");
   JsSheetProtection in{};
@@ -370,7 +370,7 @@ JsStatus JsWorkbook::setSheetProtection(uint32_t sheet, emscripten::val input) {
 
 JsStatus JsWorkbook::setSheetZoom(uint32_t sheet, uint32_t zoomScale) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_zoom(handle_, sheet, zoomScale);
   return status_from_rc(rc);
@@ -378,7 +378,7 @@ JsStatus JsWorkbook::setSheetZoom(uint32_t sheet, uint32_t zoomScale) {
 
 JsStatus JsWorkbook::setSheetFreeze(uint32_t sheet, uint32_t freezeRows, uint32_t freezeCols) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_freeze(handle_, sheet, freezeRows, freezeCols);
   return status_from_rc(rc);
@@ -386,7 +386,7 @@ JsStatus JsWorkbook::setSheetFreeze(uint32_t sheet, uint32_t freezeRows, uint32_
 
 JsStatus JsWorkbook::setSheetTabHidden(uint32_t sheet, bool hidden) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_tab_hidden(handle_, sheet, hidden ? 1 : 0);
   return status_from_rc(rc);
@@ -394,7 +394,7 @@ JsStatus JsWorkbook::setSheetTabHidden(uint32_t sheet, bool hidden) {
 
 JsStatus JsWorkbook::setSheetVisibility(uint32_t sheet, int32_t visibility) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_visibility(handle_, sheet, visibility);
   return status_from_rc(rc);
@@ -402,7 +402,7 @@ JsStatus JsWorkbook::setSheetVisibility(uint32_t sheet, int32_t visibility) {
 
 JsStatus JsWorkbook::setSheetShowGridLines(uint32_t sheet, bool show) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_show_grid_lines(handle_, sheet, show ? 1 : 0);
   return status_from_rc(rc);
@@ -410,7 +410,7 @@ JsStatus JsWorkbook::setSheetShowGridLines(uint32_t sheet, bool show) {
 
 JsStatus JsWorkbook::setSheetShowRowColHeaders(uint32_t sheet, bool show) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_show_row_col_headers(handle_, sheet, show ? 1 : 0);
   return status_from_rc(rc);
@@ -418,7 +418,7 @@ JsStatus JsWorkbook::setSheetShowRowColHeaders(uint32_t sheet, bool show) {
 
 JsStatus JsWorkbook::setSheetShowZeros(uint32_t sheet, bool show) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_show_zeros(handle_, sheet, show ? 1 : 0);
   return status_from_rc(rc);
@@ -426,7 +426,7 @@ JsStatus JsWorkbook::setSheetShowZeros(uint32_t sheet, bool show) {
 
 JsStatus JsWorkbook::setSheetRightToLeft(uint32_t sheet, bool rightToLeft) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_right_to_left(handle_, sheet, rightToLeft ? 1 : 0);
   return status_from_rc(rc);
@@ -434,7 +434,7 @@ JsStatus JsWorkbook::setSheetRightToLeft(uint32_t sheet, bool rightToLeft) {
 
 JsStatus JsWorkbook::setSheetTabSelected(uint32_t sheet, bool selected) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_tab_selected(handle_, sheet, selected ? 1 : 0);
   return status_from_rc(rc);
@@ -442,7 +442,7 @@ JsStatus JsWorkbook::setSheetTabSelected(uint32_t sheet, bool selected) {
 
 JsStatus JsWorkbook::setSheetViewMode(uint32_t sheet, std::string mode) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_view_mode(handle_, sheet, mode.c_str());
   return status_from_rc(rc);
@@ -456,7 +456,7 @@ emscripten::val JsWorkbook::getSheetColumns(uint32_t sheet) const {
 
 JsStatus JsWorkbook::setColumnWidth(uint32_t sheet, uint32_t first, uint32_t last, double width) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_column_width(handle_, sheet, first, last, width);
   return status_from_rc(rc);
@@ -464,7 +464,7 @@ JsStatus JsWorkbook::setColumnWidth(uint32_t sheet, uint32_t first, uint32_t las
 
 JsStatus JsWorkbook::setColumnHidden(uint32_t sheet, uint32_t first, uint32_t last, bool hidden) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_column_hidden(handle_, sheet, first, last, hidden ? 1 : 0);
   return status_from_rc(rc);
@@ -472,7 +472,7 @@ JsStatus JsWorkbook::setColumnHidden(uint32_t sheet, uint32_t first, uint32_t la
 
 JsStatus JsWorkbook::setColumnOutline(uint32_t sheet, uint32_t first, uint32_t last, uint32_t level) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_column_outline(handle_, sheet, first, last, clamp_outline_level(level));
   return status_from_rc(rc);
@@ -486,7 +486,7 @@ emscripten::val JsWorkbook::getSheetRowOverrides(uint32_t sheet) const {
 
 JsStatus JsWorkbook::setRowHeight(uint32_t sheet, uint32_t row, double height) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_row_height(handle_, sheet, row, height);
   return status_from_rc(rc);
@@ -494,7 +494,7 @@ JsStatus JsWorkbook::setRowHeight(uint32_t sheet, uint32_t row, double height) {
 
 JsStatus JsWorkbook::setRowHidden(uint32_t sheet, uint32_t row, bool hidden) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_row_hidden(handle_, sheet, row, hidden ? 1 : 0);
   return status_from_rc(rc);
@@ -502,7 +502,7 @@ JsStatus JsWorkbook::setRowHidden(uint32_t sheet, uint32_t row, bool hidden) {
 
 JsStatus JsWorkbook::setRowOutline(uint32_t sheet, uint32_t row, uint32_t level) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   fm_status_t rc = fm_sheet_set_row_outline(handle_, sheet, row, clamp_outline_level(level));
   return status_from_rc(rc);
@@ -510,14 +510,14 @@ JsStatus JsWorkbook::setRowOutline(uint32_t sheet, uint32_t row, uint32_t level)
 
 JsStatus JsWorkbook::clearRowHeight(uint32_t sheet, uint32_t row) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   return status_from_rc(fm_sheet_clear_row_height(handle_, sheet, row));
 }
 
 JsStatus JsWorkbook::clearColumnWidth(uint32_t sheet, uint32_t first, uint32_t last) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   return status_from_rc(fm_sheet_clear_column_width(handle_, sheet, first, last));
 }
@@ -526,7 +526,7 @@ JsStatus JsWorkbook::clearColumnWidth(uint32_t sheet, uint32_t first, uint32_t l
 
 emscripten::val JsWorkbook::getSheetFormatDefaults(uint32_t sheet) const {
   fm_sheet_format_defaults d{};
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_format_defaults(handle_, sheet, &d) : 7000;
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_format_defaults(handle_, sheet, &d) : kBindingInvalidHandle;
   if (rc != 0) {
     d = fm_sheet_format_defaults{};
   }
@@ -544,7 +544,7 @@ emscripten::val JsWorkbook::getSheetFormatDefaults(uint32_t sheet) const {
 
 JsStatus JsWorkbook::setSheetFormatDefaults(uint32_t sheet, emscripten::val defaults) {
   if (handle_ == nullptr) {
-    return error_status(7000);
+    return error_status(kBindingInvalidHandle);
   }
   JsNarrowNumericReader reader("setSheetFormatDefaults");
   const emscripten::val default_col_width = reader.value(defaults, "defaultColWidth", "format.defaultColWidth");
@@ -554,8 +554,8 @@ JsStatus JsWorkbook::setSheetFormatDefaults(uint32_t sheet, emscripten::val defa
       reader.value(defaults, "hasDefaultColWidth", "format.hasDefaultColWidth");
   const emscripten::val has_default_row_height =
       reader.value(defaults, "hasDefaultRowHeight", "format.hasDefaultRowHeight");
-  const bool default_col_width_present = !default_col_width.isUndefined() && !default_col_width.isNull();
-  const bool default_row_height_present = !default_row_height.isUndefined() && !default_row_height.isNull();
+  const bool default_col_width_present = js_value_present(default_col_width);
+  const bool default_row_height_present = js_value_present(default_row_height);
   fm_sheet_format_defaults d{};
   d.default_col_width = reader.number_value(default_col_width, 0.0, "format.defaultColWidth");
   d.default_row_height = reader.number_value(default_row_height, 0.0, "format.defaultRowHeight");
@@ -596,19 +596,20 @@ emscripten::val JsWorkbook::getCellRectPt(uint32_t sheet, emscripten::val range,
 
 JsNumberResult JsWorkbook::getColumnWidthPt(uint32_t sheet, uint32_t col, int32_t mode) const {
   double pt = 0.0;
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_column_width_pt(handle_, sheet, col, mode, &pt) : 7000;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_column_width_pt(handle_, sheet, col, mode, &pt) : kBindingInvalidHandle;
   return number_result(rc, pt);
 }
 
 JsNumberResult JsWorkbook::getRowHeightPt(uint32_t sheet, uint32_t row) const {
   double pt = 0.0;
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_row_height_pt(handle_, sheet, row, &pt) : 7000;
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_row_height_pt(handle_, sheet, row, &pt) : kBindingInvalidHandle;
   return number_result(rc, pt);
 }
 
 emscripten::val JsWorkbook::getWidthModel(uint32_t sheet, int32_t mode) const {
   fm_width_model m{};
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_width_model(handle_, sheet, mode, &m) : 7000;
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_width_model(handle_, sheet, mode, &m) : kBindingInvalidHandle;
   if (rc != 0) {
     m = fm_width_model{};
   }
@@ -625,13 +626,15 @@ emscripten::val JsWorkbook::getWidthModel(uint32_t sheet, int32_t mode) const {
 
 JsNumberResult JsWorkbook::columnCharsToPt(uint32_t sheet, int32_t mode, double chars) const {
   double pt = 0.0;
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_column_chars_to_pt(handle_, sheet, mode, chars, &pt) : 7000;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_column_chars_to_pt(handle_, sheet, mode, chars, &pt) : kBindingInvalidHandle;
   return number_result(rc, pt);
 }
 
 JsNumberResult JsWorkbook::columnPtToChars(uint32_t sheet, int32_t mode, double pt) const {
   double chars = 0.0;
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_column_pt_to_chars(handle_, sheet, mode, pt, &chars) : 7000;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_column_pt_to_chars(handle_, sheet, mode, pt, &chars) : kBindingInvalidHandle;
   return number_result(rc, chars);
 }
 

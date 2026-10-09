@@ -266,6 +266,9 @@ struct JsAddNumFmtResult {
 /// Builds an `ok` envelope with empty diagnostic strings.
 JsStatus ok_status();
 
+/// Returns true when a JS value is neither `undefined` nor `null`.
+bool js_value_present(const emscripten::val& value);
+
 /// Builds a failure envelope from `code`, copying out the thread-local
 /// diagnostics surfaced by the most recent C-ABI call. `code ==
 /// kBindingInvalidHandle` is special-cased: that failure is raised before

@@ -158,6 +158,10 @@ JsStatus ok_status() {
   return JsStatus{true, 0, std::string(), std::string()};
 }
 
+bool js_value_present(const emscripten::val& value) {
+  return !value.isUndefined() && !value.isNull();
+}
+
 JsStatus binding_error_status(int32_t code, const char* message) {
   JsStatus s;
   s.ok = false;
@@ -240,7 +244,7 @@ emscripten::val JsNarrowNumericReader::safe_get(const emscripten::val& owner, co
 
 bool JsNarrowNumericReader::read_integer(const emscripten::val& value, const char* key, const char* field, double lower,
                                          double upper, const char* range, double* number) {
-  if (value.isUndefined() || value.isNull()) {
+  if (!js_value_present(value)) {
     return false;
   }
   // Check the JavaScript primitive before asking embind for a C++ value.
@@ -260,7 +264,7 @@ bool JsNarrowNumericReader::read_integer(const emscripten::val& value, const cha
 
 bool JsNarrowNumericReader::read_number(const emscripten::val& value, const char* key, const char* field,
                                         double* number) {
-  if (value.isUndefined() || value.isNull()) {
+  if (!js_value_present(value)) {
     return false;
   }
   if (!value.isNumber()) {
@@ -287,7 +291,7 @@ double JsNarrowNumericReader::integer_value(const emscripten::val& value, double
   }
   double number = 0.0;
   if (!read_integer(value, field, field, lower, upper, range, &number)) {
-    return (value.isUndefined() || value.isNull()) ? dflt : 0.0;
+    return !js_value_present(value) ? dflt : 0.0;
   }
   return number;
 }
@@ -371,7 +375,7 @@ double JsNarrowNumericReader::number_value(const emscripten::val& value, double 
   }
   double number = 0.0;
   if (!read_number(value, field, field, &number)) {
-    return (value.isUndefined() || value.isNull()) ? dflt : 0.0;
+    return !js_value_present(value) ? dflt : 0.0;
   }
   return number;
 }
@@ -390,7 +394,7 @@ bool JsNarrowNumericReader::boolean_value(const emscripten::val& value, bool dfl
     return dflt;
   }
   (void)field;
-  if (value.isUndefined() || value.isNull()) {
+  if (!js_value_present(value)) {
     return dflt;
   }
   // JavaScript `!` is a primitive truthiness operation and never performs
@@ -408,7 +412,7 @@ std::string JsNarrowNumericReader::string(const emscripten::val& owner, const ch
 }
 
 std::string JsNarrowNumericReader::string_value(const emscripten::val& value, const char* field) {
-  if (!ok() || value.isUndefined() || value.isNull()) {
+  if (!ok() || !js_value_present(value)) {
     return std::string();
   }
   bool completed = false;
@@ -418,7 +422,7 @@ std::string JsNarrowNumericReader::string_value(const emscripten::val& value, co
     reject_access(nullptr, field);
     return std::string();
   }
-  if (safe_value.isUndefined() || safe_value.isNull()) {
+  if (!js_value_present(safe_value)) {
     reject_type(field, "a string or one-byte buffer");
     return std::string();
   }
@@ -427,7 +431,7 @@ std::string JsNarrowNumericReader::string_value(const emscripten::val& value, co
 
 const char* JsNarrowNumericReader::optional_string(const emscripten::val& owner, const char* key, std::string& storage,
                                                    const char* field) {
-  if (owner.isUndefined() || owner.isNull()) {
+  if (!js_value_present(owner)) {
     return nullptr;
   }
   bool fetched = false;
@@ -440,7 +444,7 @@ const char* JsNarrowNumericReader::optional_string(const emscripten::val& owner,
 
 const char* JsNarrowNumericReader::optional_string_value(const emscripten::val& value, std::string& storage,
                                                          const char* field) {
-  if (!ok() || value.isUndefined() || value.isNull()) {
+  if (!ok() || !js_value_present(value)) {
     return nullptr;
   }
   storage = string_value(value, field);
@@ -451,7 +455,7 @@ emscripten::val JsNarrowNumericReader::value(const emscripten::val& owner, const
   if (!ok()) {
     return emscripten::val::undefined();
   }
-  if (owner.isUndefined() || owner.isNull()) {
+  if (!js_value_present(owner)) {
     reject_type(field != nullptr ? field : key, "an object");
     return emscripten::val::undefined();
   }
@@ -467,7 +471,7 @@ emscripten::val JsNarrowNumericReader::value(const emscripten::val& owner, const
 
 bool JsNarrowNumericReader::safe_predicate(const emscripten::val& owner, const emscripten::val& key, int32_t operation,
                                            const char* key_name, const char* field) {
-  if (!ok() || owner.isUndefined() || owner.isNull()) {
+  if (!ok() || !js_value_present(owner)) {
     return false;
   }
   bool completed = false;
@@ -647,7 +651,7 @@ JsBytesReadResult val_to_bytes_checked(const emscripten::val& v) {
     result.message = "bytes: field access threw";
     return result;
   }
-  if (snapshot.isUndefined() || snapshot.isNull()) {
+  if (!js_value_present(snapshot)) {
     result.ok = false;
     result.message = "bytes must be a Uint8Array";
     return result;
@@ -690,7 +694,7 @@ fm_merge_range js_pull_range(const emscripten::val& v, JsNarrowNumericReader* re
     return fm_merge_range{};
   }
   fm_merge_range m{};
-  if (v.isUndefined() || v.isNull()) {
+  if (!js_value_present(v)) {
     return m;
   }
   m.first_row = reader->u32_value(reader->value(v, "firstRow", "range.firstRow"), 0U, "range.firstRow");
@@ -706,7 +710,7 @@ std::vector<fm_merge_range> js_pull_ranges(const emscripten::val& v, const char*
   }
   std::vector<fm_merge_range> out;
   const emscripten::val array = reader->value(v, key, key);
-  if (!reader->ok() || array.isUndefined() || array.isNull()) {
+  if (!reader->ok() || !js_value_present(array)) {
     return out;
   }
   if (!reader->is_array(array, key)) {
@@ -722,7 +726,7 @@ std::vector<fm_merge_range> js_pull_ranges(const emscripten::val& v, const char*
     if (!reader->ok()) {
       return out;
     }
-    if (range.isUndefined() || range.isNull()) {
+    if (!js_value_present(range)) {
       continue;
     }
     fm_merge_range m{};
@@ -744,7 +748,7 @@ fm_color_spec js_pull_color_spec(const emscripten::val& v, const char* key, JsNa
   if (!reader->ok()) {
     return spec;
   }
-  if (f.isUndefined() || f.isNull()) {
+  if (!js_value_present(f)) {
     return spec;
   }
   spec.kind = reader->u8(f, "kind", 0, "color.kind");
@@ -757,7 +761,7 @@ fm_color_spec js_pull_color_spec(const emscripten::val& v, const char* key, JsNa
 
 fm_border_side js_pull_border_side(const emscripten::val& v, JsNarrowNumericReader* reader) {
   fm_border_side s{};
-  if (reader == nullptr || v.isUndefined() || v.isNull()) {
+  if (reader == nullptr || !js_value_present(v)) {
     return s;
   }
   s.style = reader->u8(v, "style", 0, "border.style");
