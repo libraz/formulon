@@ -377,10 +377,10 @@ TEST(BuiltinsNetworkdaysIntl, SundayOnlyWeekend) {
   EXPECT_EQ(v.as_number(), 6.0);
 }
 
-TEST(BuiltinsNetworkdaysIntl, AllWeekendMaskRejected) {
+TEST(BuiltinsNetworkdaysIntl, AllWeekendMaskCountsZero) {
   const Value v = EvalSource("=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,14),\"1111111\")");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
 }
 
 TEST(BuiltinsNetworkdaysIntl, InvalidSelectorIsNum) {

@@ -909,10 +909,11 @@ Value Days360_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
     }
     european = m.value();
   }
-  const double start_f = std::floor(normal_date_serial(start_n.value(), date1904));
-  const double end_f = std::floor(normal_date_serial(end_n.value(), date1904));
-  const date_time::YMD s = date_time::ymd_from_serial(start_f, /*date1904=*/false);
-  const date_time::YMD e = date_time::ymd_from_serial(end_f, /*date1904=*/false);
+  // The date component is taken after rounding to the nearest second, and serial 0 reads as 1900-01-00.
+  const double start_f = std::floor(round_to_second(normal_date_serial(start_n.value(), date1904)));
+  const double end_f = std::floor(round_to_second(normal_date_serial(end_n.value(), date1904)));
+  const date_time::YMD s = date_time::legacy_1900_ymd(start_f);
+  const date_time::YMD e = date_time::legacy_1900_ymd(end_f);
   int sy = s.y;
   int sm = static_cast<int>(s.m);
   int sd = static_cast<int>(s.d);

@@ -71,12 +71,13 @@ constexpr std::uint8_t kSatSunWeekendMask = 0x60U;
 //   * Number 1..7  -> pre-defined paired-weekend pattern (TRUE reads as 1) (Sat+Sun, Sun+Mon, ...)
 //   * Number 11..17 -> single-day weekend (Sun only, Mon only, ...)
 //   * 7-char text of '0'/'1' with position 0 = Monday. The all-weekend
-//     mask "1111111" is rejected by Excel as `#VALUE!`.
+//     mask "1111111" is `#VALUE!` for WORKDAY.INTL and counts 0 in NETWORKDAYS.INTL.
 //
 // On failure writes the error code into `*out_err` and returns false. The
 // error code distinguishes `#NUM!` (invalid numeric selector) from
 // `#VALUE!` (malformed string / unsupported kind).
-bool parse_weekend_arg(const Value& arg_val, std::uint8_t* out_mask, ErrorCode* out_err) noexcept {
+bool parse_weekend_arg(const Value& arg_val, bool reject_all_weekend, std::uint8_t* out_mask,
+                       ErrorCode* out_err) noexcept {
   if (arg_val.is_number() || arg_val.is_boolean() || arg_val.is_blank()) {
     // TRUE is selector 1; FALSE and a blank cell are selector 0, which no pattern matches.
     const double selector = arg_val.is_number() ? arg_val.as_number() : (arg_val.is_boolean() && arg_val.as_boolean());
@@ -116,9 +117,9 @@ bool parse_weekend_arg(const Value& arg_val, std::uint8_t* out_mask, ErrorCode* 
         return false;
       }
     }
-    // Excel rejects a mask that marks every day as weekend; there would be
-    // no candidate working day to return.
-    if (mask == 0x7FU) {
+    // WORKDAY.INTL rejects a mask that marks every day as weekend (no candidate
+    // working day); NETWORKDAYS.INTL accepts it and counts 0.
+    if (reject_all_weekend && mask == 0x7FU) {
       *out_err = ErrorCode::Value;
       return false;
     }
@@ -207,7 +208,7 @@ bool is_holiday_sorted(double day_serial, const std::vector<double>& holidays) n
 // leaves the Sat+Sun mask (selector 1, matching NETWORKDAYS / WORKDAY).
 //
 // Returns `false` with the propagating error in `*out_err`.
-bool resolve_intl_calendar(const parser::AstNode& call, std::uint32_t arity, Arena& arena,
+bool resolve_intl_calendar(const parser::AstNode& call, std::uint32_t arity, bool add_days, Arena& arena,
                            const FunctionRegistry& registry, const EvalContext& ctx, std::uint8_t* out_mask,
                            std::vector<double>* out_holidays, Value* out_err) {
   *out_mask = kSatSunWeekendMask;
@@ -218,7 +219,7 @@ bool resolve_intl_calendar(const parser::AstNode& call, std::uint32_t arity, Are
       return false;
     }
     ErrorCode code = ErrorCode::Value;
-    if (!parse_weekend_arg(weekend, out_mask, &code)) {
+    if (!parse_weekend_arg(weekend, add_days, out_mask, &code)) {
       *out_err = Value::error(code);
       return false;
     }
@@ -293,7 +294,7 @@ Value count_workdays(double start, double end, std::uint8_t mask, const std::vec
 // walk leaves the serial range.
 Value add_workdays(double start, double days, std::uint8_t mask, const std::vector<double>& holidays, bool date1904) {
   double cur = std::floor(start);
-  long long remaining = static_cast<long long>(std::trunc(days));
+  long long remaining = static_cast<long long>(std::floor(days));
   if (remaining == 0) {
     // Excel WORKDAY(start, 0) returns start unchanged (no weekend/holiday
     // adjustment). This is the canonical behaviour confirmed by 365.
@@ -341,7 +342,7 @@ Value eval_workdays_driver(const parser::AstNode& call, Arena& arena, const Func
   }
   std::uint8_t mask = kSatSunWeekendMask;
   std::vector<double> holidays;
-  if (intl ? !resolve_intl_calendar(call, arity, arena, registry, ctx, &mask, &holidays, &err)
+  if (intl ? !resolve_intl_calendar(call, arity, add_days, arena, registry, ctx, &mask, &holidays, &err)
            : !collect_holidays(call, arity, arena, registry, ctx, &holidays, &err)) {
     return err;
   }

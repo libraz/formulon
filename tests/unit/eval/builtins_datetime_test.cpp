@@ -1,6 +1,7 @@
 // End-to-end date/time built-in tests: constructors and extractors.
 
 #include <limits>
+#include <string>
 #include <utility>
 
 #include "builtins_datetime_test_helpers.h"
@@ -459,6 +460,45 @@ TEST(DateTimeWeekday, UnsupportedTypeIsNum) {
   const Value v = EvalSource("=WEEKDAY(DATE(2026, 4, 23), 5)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTimeDays360, FractionalSerialsRoundToNearestSecondBeforeDateExtraction) {
+  Value v = EvalSource("=DAYS360(DATE(2025,1,1)+0.0000001,DATE(2025,1,1)+0.9999999)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
+  v = EvalSource("=DAYS360(DATE(2025,1,1)+0.9999999,DATE(2025,1,2)+0.0000001)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+  v = EvalSource("=DAYS360(DATE(2025,1,1)+0.9999999,DATE(2025,1,1))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), -1.0);
+}
+
+TEST(DateTimeDays360, SerialZeroIsJanuaryZeroth1900) {
+  Value v = EvalSource("=DAYS360(DATE(2025,1,1),0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), -45001.0);
+  v = EvalSource("=DAYS360(DATE(2025,1,10),)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), -45010.0);
+  v = EvalSource("=DAYS360(10,0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), -10.0);
+  v = EvalSource("=DAYS360(TRUE,0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), -1.0);
+}
+
+TEST(DateTimeWorkday, NegativeFractionalDaysFloorTowardMinusInfinity) {
+  for (const char* days : {"-0.9999999", "-0.000000001"}) {
+    const std::string src = std::string("=WORKDAY(DATE(2025,1,10),") + days + ")";
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_number());
+    EXPECT_EQ(v.as_number(), 45666.0);
+    const Value w = EvalSource(std::string("=WORKDAY.INTL(DATE(2025,1,10),") + days + ")");
+    ASSERT_TRUE(w.is_number());
+    EXPECT_EQ(w.as_number(), 45666.0);
+  }
 }
 
 }  // namespace
