@@ -445,7 +445,8 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   if (!col_entries_or) {
     return std::move(col_entries_or.error());
   }
-  const std::vector<AxisEntry> col_entries = col_entries_or.take();
+  // An axis leaf without a data field is a label-only pivot, not a value column.
+  const std::vector<AxisEntry> col_entries = data_field_count == 0 ? std::vector<AxisEntry>{} : col_entries_or.take();
   const std::size_t data_cols = col_entries.size();
 
   // Compact form merges every row level into one physical column (Excel
@@ -470,7 +471,8 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   // already lives in its data columns, and likewise a no-row-fields
   // pivot's per-column total. Tabular / Outline share that rule; the
   // English projection keeps emitting both strips.
-  const bool emit_grand_totals_rows_strip = table.grand_totals_rows() && (legacy || col_depth > 0);
+  const bool emit_grand_totals_rows_strip =
+      data_field_count > 0 && table.grand_totals_rows() && (legacy || col_depth > 0);
   const bool emit_grand_totals_cols_strip = table.grand_totals_cols() && (legacy || row_depth > 0);
   // The Values axis totals each data field on its own: one strip column
   // (or row) per field, named after it.
