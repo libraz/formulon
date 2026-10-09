@@ -195,8 +195,8 @@ export const LogLevel = Object.freeze({ Debug: 0, Info: 1, Warn: 2, Error: 3, Of
  *   `undefined`/`null` to leave `base` unchanged (signature/description
  *   stay `undefined`).
  * @param {string} locale A BCP-47 display locale tag (e.g. `"fr-FR"`),
- *   matching the keys in `aliases` / `localized`. Independent of the numeric
- *   locale code passed to `functionMetadata()`.
+ *   matching the keys in `aliases` / `localized`. Independent of the profile id
+ *   passed to the engine locale calls.
  * @returns {object} The merged metadata (a new object), or `base` verbatim
  *   when `entry` is absent.
  */

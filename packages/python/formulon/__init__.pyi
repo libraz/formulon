@@ -1100,6 +1100,27 @@ class FunctionMetadata:
     signature_template: Optional[str]
     description: Optional[str]
 
+class ErrorName:
+    canonical: str
+    localized: str
+    measured: bool
+
+class LocaleFacts:
+    decimal_separator: str
+    group_separator: str
+    list_separator: str
+    array_column_separator: str
+    array_row_separator: str
+    true_name: str
+    false_name: str
+    date_order: Literal["mdy", "ymd", "dmy"]
+    currency_symbol: str
+    currency_suffix: bool
+    currency_space: bool
+    currency_default_decimals: int
+    measured: bool
+    error_names: Tuple[ErrorName, ...]
+
 class FunctionMetadataLocalized(TypedDict, total=False):
     signature: str
     description: str
@@ -2028,11 +2049,17 @@ class Workbook:
     @staticmethod
     def function_name_at(index: int) -> str: ...
     @staticmethod
-    def function_metadata(name: str, locale: int = ...) -> Optional[FunctionMetadata]: ...
+    def function_metadata(name: str) -> Optional[FunctionMetadata]: ...
     @staticmethod
-    def localize_function_name(canonical_name: str, locale: int = ...) -> str: ...
+    def localize_function_name(canonical_name: str, profile_id: ExcelProfileId) -> str: ...
     @staticmethod
-    def canonicalize_function_name(localized_name: str, locale: int = ...) -> str: ...
+    def canonicalize_function_name(localized_name: str, profile_id: ExcelProfileId) -> str: ...
+    @staticmethod
+    def localize_formula(formula: str, profile_id: ExcelProfileId) -> str: ...
+    @staticmethod
+    def canonicalize_formula(formula: str, profile_id: ExcelProfileId) -> str: ...
+    @staticmethod
+    def locale_facts(profile_id: ExcelProfileId) -> LocaleFacts: ...
 
     # External links.
     def external_link_count(self) -> int: ...

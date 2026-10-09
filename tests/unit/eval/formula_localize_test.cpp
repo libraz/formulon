@@ -9,7 +9,6 @@
 #include <string_view>
 
 #include "c_api/formulon_c.h"
-#include "eval/eval_profile_scope.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "parser/token.h"
@@ -24,8 +23,11 @@ namespace eval {
 namespace {
 
 std::string localize_in(ExcelLocale locale, std::string_view formula) {
-  ScopedEvalProfile scope(ExcelProfile{ExcelHost::kMac365, locale});
-  return localize_formula_text(formula);
+  return localize_formula_text(formula, ExcelProfile{ExcelHost::kMac365, locale});
+}
+
+std::string canonicalize_in(ExcelLocale locale, std::string_view formula) {
+  return canonicalize_formula_text(formula, ExcelProfile{ExcelHost::kMac365, locale});
 }
 
 TEST(FormulaLocalize, FunctionNameTable) {
@@ -47,22 +49,22 @@ TEST(FormulaLocalize, FunctionNameTable) {
 
 TEST(FormulaLocalize, CatalogApiReadsTheSameTable) {
   const char* out = nullptr;
-  ASSERT_EQ(fm_function_localize("sum", FM_LOCALE_DE_DE, &out), 0);
+  ASSERT_EQ(fm_function_localize("sum", "mac-365-de_DE", &out), 0);
   EXPECT_STREQ(out, "SUMME");
-  ASSERT_EQ(fm_function_localize("ABS", FM_LOCALE_FR_FR, &out), 0);
+  ASSERT_EQ(fm_function_localize("ABS", "mac-365-fr_FR", &out), 0);
   EXPECT_STREQ(out, "ABS");
-  ASSERT_EQ(fm_function_canonicalize("SOMME", FM_LOCALE_FR_FR, &out), 0);
+  ASSERT_EQ(fm_function_canonicalize("SOMME", "mac-365-fr_FR", &out), 0);
   EXPECT_STREQ(out, "SUM");
-  ASSERT_EQ(fm_function_canonicalize("TRIM", FM_LOCALE_FR_FR, &out), 0);
+  ASSERT_EQ(fm_function_canonicalize("TRIM", "mac-365-fr_FR", &out), 0);
   EXPECT_STREQ(out, "MIRR");
   // The canonical spelling stays accepted as a fallback.
-  ASSERT_EQ(fm_function_canonicalize("sum", FM_LOCALE_DE_DE, &out), 0);
+  ASSERT_EQ(fm_function_canonicalize("sum", "mac-365-de_DE", &out), 0);
   EXPECT_STREQ(out, "SUM");
-  ASSERT_EQ(fm_function_localize("DOLLAR", FM_LOCALE_JA_JP, &out), 0);
-  EXPECT_STREQ(out, "DOLLAR");
+  ASSERT_EQ(fm_function_localize("DOLLAR", "mac-365-ja_JP", &out), 0);
+  EXPECT_STREQ(out, "YEN");
   fm_function_metadata_t md{};
-  EXPECT_EQ(fm_function_metadata("SUM", FM_LOCALE_FR_FR, &md), 0);
-  EXPECT_NE(fm_function_canonicalize("SUMME", FM_LOCALE_FR_FR, &out), 0);
+  EXPECT_EQ(fm_function_metadata("SUM", &md), 0);
+  EXPECT_NE(fm_function_canonicalize("SUMME", "mac-365-fr_FR", &out), 0);
 }
 
 // Expected values are the locale_tokens.formulatext_* captures.
@@ -87,6 +89,33 @@ TEST(FormulaLocalize, FrenchAndJapaneseCaptures) {
   EXPECT_EQ(localize_in(ExcelLocale::kJaJP, "=DOLLAR(1)+0"), "=YEN(1)+0");
   EXPECT_EQ(localize_in(ExcelLocale::kJaJP, "=DBCS(\"a\")&USDOLLAR(1)"), "=JIS(\"a\")&DOLLAR(1)");
   EXPECT_EQ(localize_in(ExcelLocale::kJaJP, "=1.5E-3*2"), "=0.0015*2");
+}
+
+TEST(FormulaLocalize, CanonicalizeInvertsTheCaptures) {
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "=SUMME(1,5;2)"), "=SUM(1.5,2)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "=SUMME({1,5.2,5;3,4.4})"), "=SUM({1.5,2.5;3.4,4})");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "=WENN(WAHR;1;FALSCH)"), "=IF(TRUE,1,FALSE)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "=WENNFEHLER(#NV;1)"), "=IFERROR(#N/A,1)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "=DM(1)+0"), "=DOLLAR(1)+0");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kFrFR, "=SI(VRAI;1,5;0)"), "=IF(TRUE,1.5,0)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kFrFR, "=ARRONDI(SOMME(A1:A3);2)"), "=ROUND(SUM(A1:A3),2)");
+  // Text the rewrite does not own stays as written, with or without `=`.
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "SUMME(\"a;b\";'a;b'!A1)"), "SUM(\"a;b\",'a;b'!A1)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "=SUMME(T[[#Headers],[a;b]];1)"), "=SUM(T[[#Headers],[a;b]],1)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "= summe( 1 ; LOG10(A1) )"), "= SUM( 1 , LOG10(A1) )");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kJaJP, "=IF(TRUE,1.5,{1,2;3,4})"), "=IF(TRUE,1.5,{1,2;3,4})");
+}
+
+TEST(FormulaLocalize, CanonicalizeRoundTripsLocalize) {
+  const char* const formulas[] = {
+      "=SUM(1.5,2)",       "=IF(TRUE,1.5,FALSE)",          "=SUM({1,2.5;3,4})", "=IFERROR(#N/A,\"x;y\")",
+      "=SUM('a;b'!A1,B2)", "=SUM(T[[#Headers],[a]],0.25)", "SUM(1,2)",          "= XLOOKUP( 1 , A:A , B:B )"};
+  for (const auto& entry : detail::kExcelProfileIds) {
+    for (const char* formula : formulas) {
+      const std::string shown = localize_formula_text(formula, entry.profile);
+      EXPECT_EQ(canonicalize_formula_text(shown, entry.profile), formula) << entry.id << ": " << shown;
+    }
+  }
 }
 
 TEST(FormulaLocalize, KeepsUnlocalizedTextVerbatim) {

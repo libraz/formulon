@@ -1,4 +1,4 @@
-// Rewrites stored formula text into the active locale's spelling.
+// Rewrites formula text between the stored (en-invariant) form and a profile's spelling.
 
 #ifndef FORMULON_EVAL_FORMULA_LOCALIZE_H_
 #define FORMULON_EVAL_FORMULA_LOCALIZE_H_
@@ -20,12 +20,17 @@ const char* localized_function_name(ExcelLocale locale, std::string_view canonic
 const char* canonical_function_name(ExcelLocale locale, std::string_view localized) noexcept;
 
 /// Renders stored (en-invariant, storage-prefix-free) formula text as Excel
-/// displays it under the active evaluation profile: localized function
-/// names, separators, booleans and error names, and number literals in
-/// their normalized form (`1.5E-3` reads back as `0.0015`). Everything else,
-/// including whitespace, strings and structured-reference brackets, is kept
-/// verbatim.
-std::string localize_formula_text(std::string_view formula);
+/// displays it under `profile`: localized function names, separators,
+/// booleans and error names, and number literals in their normalized form
+/// (`1.5E-3` reads back as `0.0015`). Everything else, including whitespace,
+/// strings and structured-reference brackets, is kept verbatim. A leading `=`
+/// is preserved. Pure text rewrite: the grammar is never validated.
+std::string localize_formula_text(std::string_view formula, ExcelProfile profile);
+
+/// Inverse of `localize_formula_text`: reads `formula` as `profile`'s
+/// spelling and returns the en-invariant text. `canonicalize(localize(f, p),
+/// p) == f` holds for any `f` without exponent number literals.
+std::string canonicalize_formula_text(std::string_view formula, ExcelProfile profile);
 
 }  // namespace eval
 }  // namespace formulon

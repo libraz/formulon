@@ -189,6 +189,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("addXf", &JsWorkbook::addXf)
       .function("borderCount", &JsWorkbook::borderCount)
       .function("calcMode", &JsWorkbook::calcMode)
+      .function("canonicalizeFormula", &JsWorkbook::canonicalizeFormula)
       .function("canonicalizeFunctionName", &JsWorkbook::canonicalizeFunctionName)
       .function("cellAt", &JsWorkbook::cellAt)
       .function("cellCount", &JsWorkbook::cellCount)
@@ -329,6 +330,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("insertCols", &JsWorkbook::insertCols)
       .function("insertRows", &JsWorkbook::insertRows)
       .function("isValid", &JsWorkbook::isValid)
+      .function("localeFacts", &JsWorkbook::localeFacts)
+      .function("localizeFormula", &JsWorkbook::localizeFormula)
       .function("localizeFunctionName", &JsWorkbook::localizeFunctionName)
       .function("moveSheet", &JsWorkbook::moveSheet)
       .function("partialRecalc", &JsWorkbook::partialRecalc)
@@ -438,7 +441,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setDefinedName", &JsWorkbook::setDefinedName)
       .function("setDefinedNameScoped", &JsWorkbook::setDefinedNameScoped)
       .function("setError", &JsWorkbook::setError)
-      // `setExcelProfileId` accepts the same four ids documented above.
+      // `setExcelProfileId` accepts the fourteen ids documented at `excelProfileId`.
       .function("setExcelProfileId", &JsWorkbook::setExcelProfileId)
       .function("setFormula", &JsWorkbook::setFormula)
       .function("setIterative", &JsWorkbook::setIterative)

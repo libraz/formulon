@@ -475,6 +475,13 @@ const LocaleFacts& locale_facts(ExcelProfile profile) noexcept {
   return kEnglishFacts;
 }
 
+bool error_name_measured(std::size_t error_ordinal) noexcept {
+  // #DIV/0! and #N/A: arraytotext.arraytotext_error_literal_in_array_default and
+  // arraytotext.arraytotext_only_error_cells_default run under every Mac locale.
+  return error_ordinal == static_cast<std::size_t>(ErrorCode::Div0) ||
+         error_ordinal == static_cast<std::size_t>(ErrorCode::NA);
+}
+
 SbcsCodepage sbcs_codepage(ExcelProfile profile) noexcept {
   switch (profile.locale) {
     case ExcelLocale::kJaJP:

@@ -24,6 +24,7 @@
 #include "eval/coerce.h"
 #include "eval/datetime_lazy.h"
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/formula_localize.h"
 #include "eval/function_registry.h"
 #include "eval/implicit_intersection.h"
@@ -230,7 +231,7 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
     stripped.push_back(c);
     ++i;
   }
-  const std::string shown = localize_formula_text(stripped);
+  const std::string shown = localize_formula_text(stripped, current_eval_profile());
   char* buf = static_cast<char*>(arena.allocate(shown.size(), alignof(char)));
   if (buf == nullptr) {
     return Value::error(ErrorCode::Value);

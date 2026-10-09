@@ -33,3 +33,6 @@ removed fm_workbook_pivot_field_add_aggregation :: wrote a field-level aggregati
 removed fm_workbook_pivot_field_clear_aggregations :: counterpart of the removed fm_workbook_pivot_field_add_aggregation
 signature fm_workbook_pivot_field_set_date_group :: gains interval_days and the Start/End serials of Excel's Days grouping, which replaces the Sunday-aligned FM_PIVOT_DATE_WEEK
 signature fm_styles_set_cell_style :: takes one fm_cell_style_record_t carrying i_level, hidden and custom_builtin instead of name, xf_id and builtin_id
+signature fm_function_metadata :: drops the locale parameter; the metadata is locale-invariant
+signature fm_function_localize :: takes a profile id string instead of an fm_locale_t ordinal, which is removed
+signature fm_function_canonicalize :: takes a profile id string instead of an fm_locale_t ordinal, which is removed

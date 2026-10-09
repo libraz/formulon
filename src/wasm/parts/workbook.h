@@ -445,10 +445,13 @@ class JsWorkbook {
 
   emscripten::val precedents(uint32_t sheet, uint32_t row, uint32_t col, uint32_t depth) const;
   emscripten::val dependents(uint32_t sheet, uint32_t row, uint32_t col, uint32_t depth) const;
-  emscripten::val functionMetadata(const std::string& name, uint32_t locale) const;
+  emscripten::val functionMetadata(const std::string& name) const;
   emscripten::val functionNames() const;
-  JsStringResult localizeFunctionName(const std::string& canonical_name, uint32_t locale) const;
-  JsStringResult canonicalizeFunctionName(const std::string& localized_name, uint32_t locale) const;
+  JsStringResult localizeFunctionName(const std::string& canonical_name, const std::string& profile_id) const;
+  JsStringResult canonicalizeFunctionName(const std::string& localized_name, const std::string& profile_id) const;
+  JsStringResult localizeFormula(const std::string& formula, const std::string& profile_id) const;
+  JsStringResult canonicalizeFormula(const std::string& formula, const std::string& profile_id) const;
+  emscripten::val localeFacts(const std::string& profile_id) const;
   emscripten::val spillInfo(uint32_t sheet, uint32_t row, uint32_t col) const;
 
   // ---- PivotCache mutation -----------------------------------------------

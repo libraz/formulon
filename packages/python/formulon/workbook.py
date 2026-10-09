@@ -26,7 +26,7 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Dict, Iterator, List, Literal, NamedTuple, Optional, Sequence, Union, cast
+from typing import Dict, Iterator, List, Literal, NamedTuple, Optional, Sequence, Tuple, Union, cast
 
 from . import _structs as S
 from ._c import LIB, FormulonError, ValueKind, _sint, _uint, fm_value_t_size
@@ -139,7 +139,6 @@ __all__ = [
 
 # `formulon::FormulonErrorCode` ordinals. The C ABI intentionally exposes
 # status codes as integers, so bindings retain these matching stable values.
-_STATUS_INVALID_ARGUMENT = 2
 _STATUS_NOT_FOUND = 6
 # 7000-band: bindings / C API (src/utils/error.h).
 _STATUS_BINDING_INVALID_HANDLE = 7000
@@ -166,9 +165,8 @@ ExcelProfileId = Literal[
     "win-365-th_TH",
 ]
 
-# Inclusive bounds of `fm_locale_t` (0 = en-US, 1 = ja-JP, 2 = de-DE, 3 = fr-FR).
-_LOCALE_MIN = 0
-_LOCALE_MAX = 3
+# `fm_date_order_t` ordinals, indexed by the C value.
+_DATE_ORDERS = ("mdy", "ymd", "dmy")
 
 # `FormulonError` itself lives in `formulon._c` (imported above): its
 # constructor needs to run from inside that module's WASM call trampoline,
@@ -1500,6 +1498,48 @@ class FunctionMetadata:
     availability: int
     signature_template: Optional[str]
     description: Optional[str]
+
+
+@dataclass(frozen=True)
+class ErrorName:
+    """One error value's spelling under a profile.
+
+    ``canonical`` is the en-invariant text and ``localized`` the profile's
+    Excel spelling. ``measured`` is ``False`` when the localized spelling
+    is assumed rather than captured from Excel.
+    """
+
+    canonical: str
+    localized: str
+    measured: bool
+
+
+@dataclass(frozen=True)
+class LocaleFacts:
+    """Scalar locale facts of one :data:`ExcelProfileId`.
+
+    ``measured`` is ``True`` for the profiles captured from Excel (every
+    ``mac-*`` id and ``win-365-ja_JP``) and ``False`` for the estimated
+    ``win-*`` ids. ``date_order`` is ``"mdy"``, ``"ymd"`` or ``"dmy"``.
+    ``error_names`` is indexed by error-code ordinal.
+    """
+
+    decimal_separator: str
+    group_separator: str
+    list_separator: str
+    array_column_separator: str
+    array_row_separator: str
+    true_name: str
+    false_name: str
+    date_order: str
+    currency_symbol: str
+    #: ``True`` when the currency symbol follows the number.
+    currency_suffix: bool
+    #: ``True`` when one space separates the symbol and the number.
+    currency_space: bool
+    currency_default_decimals: int
+    measured: bool
+    error_names: Tuple[ErrorName, ...]
 
 
 def _cell_xf_has_alignment(record: "CellXf") -> bool:
@@ -7955,38 +7995,22 @@ class Workbook:
             LIB.free(out)
 
     @staticmethod
-    def function_metadata(name: str, locale: int = 0) -> Optional[FunctionMetadata]:
+    def function_metadata(name: str) -> Optional[FunctionMetadata]:
         """Return metadata for ``name`` or ``None`` when unknown.
 
-        ``locale`` is ``0`` for ``en-US``, ``1`` for ``ja-JP``, ``2`` for
-        ``de-DE`` and ``3`` for ``fr-FR``.
+        The metadata is locale-invariant.
 
         Args:
           name: canonical function name, matched case-insensitively.
-          locale: catalog locale ordinal.
 
         Returns:
           The metadata, or ``None`` when ``name`` matches no registered
           function.
-
-        Raises:
-          FormulonError: when ``locale`` is outside the supported range.
-            The C ABI reports an invalid locale and an unknown function
-            with the same status, so the locale is range-checked here to
-            keep ``None`` meaning "unknown function" only -- matching
-            ``localize_function_name`` / ``canonicalize_function_name``,
-            which raise for the same bad ``locale``.
         """
-        if not _LOCALE_MIN <= int(locale) <= _LOCALE_MAX:
-            raise FormulonError(
-                _STATUS_INVALID_ARGUMENT,
-                op="fm_function_metadata",
-                _diagnostic_override=("invalid locale", f"locale={int(locale)}"),
-            )
         name_ptr, _ = LIB.alloc_utf8(name)
         ptr = S.alloc_struct(LIB, S.FUNCTION_METADATA)
         try:
-            status = LIB.fm_function_metadata(name_ptr, _sint(locale, "locale"), ptr)
+            status = LIB.fm_function_metadata(name_ptr, ptr)
             if status != 0:
                 return None
             d = S.FUNCTION_METADATA.unpack(LIB, ptr)
@@ -8009,34 +8033,97 @@ class Workbook:
             LIB.free(ptr)
 
     @staticmethod
-    def localize_function_name(canonical_name: str, locale: int = 0) -> str:
-        """Return the localized display name for ``canonical_name``."""
-        name_ptr, _ = LIB.alloc_utf8(canonical_name)
+    def _map_profile_text(fn_name: str, text: str, profile_id: str) -> str:
+        """Call a ``(text, profile_id) -> text`` catalog entry point."""
+        text_ptr, _ = LIB.alloc_utf8(text)
+        pid_ptr, _ = LIB.alloc_utf8(profile_id)
         out = _alloc_out_ptr()
         try:
-            _check(
-                LIB.fm_function_localize(name_ptr, _sint(locale, "locale"), out),
-                "fm_function_localize",
-            )
+            _check(getattr(LIB, fn_name)(text_ptr, pid_ptr, out), fn_name)
             return LIB.read_cstr(LIB.read_u32(out))
         finally:
-            LIB.free(name_ptr)
+            LIB.free(text_ptr)
+            LIB.free(pid_ptr)
             LIB.free(out)
 
     @staticmethod
-    def canonicalize_function_name(localized_name: str, locale: int = 0) -> str:
-        """Return the canonical English name for ``localized_name``."""
-        name_ptr, _ = LIB.alloc_utf8(localized_name)
-        out = _alloc_out_ptr()
+    def localize_function_name(canonical_name: str, profile_id: ExcelProfileId) -> str:
+        """Return the display name of ``canonical_name`` under ``profile_id``."""
+        return Workbook._map_profile_text("fm_function_localize", canonical_name, profile_id)
+
+    @staticmethod
+    def canonicalize_function_name(localized_name: str, profile_id: ExcelProfileId) -> str:
+        """Return the canonical English name for ``localized_name`` under ``profile_id``."""
+        return Workbook._map_profile_text("fm_function_canonicalize", localized_name, profile_id)
+
+    @staticmethod
+    def localize_formula(formula: str, profile_id: ExcelProfileId) -> str:
+        """Rewrite stored (en-invariant) formula text into ``profile_id``'s spelling.
+
+        Function names, list / array separators, decimal points, booleans
+        and error names take the locale form; strings, quoted sheet names,
+        external qualifiers and structured-reference brackets are kept
+        verbatim. A pure text rewrite: the grammar is not validated.
+        """
+        return Workbook._map_profile_text("fm_formula_localize", formula, profile_id)
+
+    @staticmethod
+    def canonicalize_formula(formula: str, profile_id: ExcelProfileId) -> str:
+        """Rewrite ``profile_id``-spelled formula text into the en-invariant form."""
+        return Workbook._map_profile_text("fm_formula_canonicalize", formula, profile_id)
+
+    @staticmethod
+    def locale_facts(profile_id: ExcelProfileId) -> LocaleFacts:
+        """Return the locale facts (separators, names, currency, error names) of ``profile_id``.
+
+        Raises:
+          FormulonError: when ``profile_id`` is not a documented profile.
+        """
+        pid_ptr, _ = LIB.alloc_utf8(profile_id)
+        ptr = S.alloc_struct(LIB, S.LOCALE_FACTS)
+        canonical_out = _alloc_out_ptr()
+        localized_out = _alloc_out_ptr()
+        measured_out = _alloc_out_ptr()
         try:
-            _check(
-                LIB.fm_function_canonicalize(name_ptr, _sint(locale, "locale"), out),
-                "fm_function_canonicalize",
+            _check(LIB.fm_locale_facts(pid_ptr, ptr), "fm_locale_facts")
+            d = S.LOCALE_FACTS.unpack(LIB, ptr)
+            errors = []
+            for index in range(int(LIB.fm_locale_error_name_count())):
+                _check(
+                    LIB.fm_locale_error_name(
+                        pid_ptr, _uint(index, "error_index"), canonical_out, localized_out, measured_out
+                    ),
+                    "fm_locale_error_name",
+                )
+                errors.append(
+                    ErrorName(
+                        canonical=LIB.read_cstr(LIB.read_u32(canonical_out)),
+                        localized=LIB.read_cstr(LIB.read_u32(localized_out)),
+                        measured=LIB.read_u32(measured_out) != 0,
+                    )
+                )
+            return LocaleFacts(
+                decimal_separator=LIB.read_cstr(d["decimal_separator"]),
+                group_separator=LIB.read_cstr(d["group_separator"]),
+                list_separator=LIB.read_cstr(d["list_separator"]),
+                array_column_separator=LIB.read_cstr(d["array_column_separator"]),
+                array_row_separator=LIB.read_cstr(d["array_row_separator"]),
+                true_name=LIB.read_cstr(d["true_name"]),
+                false_name=LIB.read_cstr(d["false_name"]),
+                date_order=_DATE_ORDERS[d["date_order"]],
+                currency_symbol=LIB.read_cstr(d["currency_symbol"]),
+                currency_suffix=d["currency_suffix"] != 0,
+                currency_space=d["currency_space"] != 0,
+                currency_default_decimals=d["currency_default_decimals"],
+                measured=d["measured"] != 0,
+                error_names=tuple(errors),
             )
-            return LIB.read_cstr(LIB.read_u32(out))
         finally:
-            LIB.free(name_ptr)
-            LIB.free(out)
+            LIB.free(pid_ptr)
+            LIB.free(ptr)
+            LIB.free(canonical_out)
+            LIB.free(localized_out)
+            LIB.free(measured_out)
 
     # -- External links ----------------------------------------------------
     def external_link_count(self) -> int:

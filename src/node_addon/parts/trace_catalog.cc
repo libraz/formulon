@@ -53,14 +53,16 @@ Napi::Array TraceToArray(const Napi::CallbackInfo& info, const fm_workbook_t* ha
   return FinishListResult(env, arr, rc);
 }
 
-// Shared bridge for `localizeFunctionName` / `canonicalizeFunctionName`.
-using FunctionNameMapFn = fm_status_t (*)(const char*, int32_t, const char**);
+// Shared bridge for the `(text, profileId)` -> text catalog calls
+// (`localizeFunctionName`, `canonicalizeFunctionName`, `localizeFormula`,
+// `canonicalizeFormula`).
+using ProfileTextMapFn = fm_status_t (*)(const char*, const char*, const char**);
 
-Napi::Value MapFunctionName(const Napi::CallbackInfo& info, FunctionNameMapFn fn) {
-  const std::string name = Workbook::ArgString(info, 0);
-  const std::int32_t locale = Workbook::ArgI32(info, 1);
+Napi::Value MapProfileText(const Napi::CallbackInfo& info, ProfileTextMapFn fn) {
+  const std::string text = Workbook::ArgString(info, 0);
+  const std::string profile_id = Workbook::ArgString(info, 1);
   const char* out = nullptr;
-  const fm_status_t rc = fn(name.c_str(), locale, &out);
+  const fm_status_t rc = fn(text.c_str(), profile_id.c_str(), &out);
   return MakeStringResult(info.Env(), rc, out);
 }
 
@@ -146,9 +148,8 @@ Napi::Value Workbook::FunctionMetadata(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
   const std::string name = ArgString(info, 0);
-  const std::int32_t locale = ArgI32(info, 1);
   fm_function_metadata_t md{};
-  fm_status_t rc = fm_function_metadata(name.c_str(), locale, &md);
+  fm_status_t rc = fm_function_metadata(name.c_str(), &md);
   if (rc != 0) {
     out.Set("ok", Napi::Boolean::New(env, false));
     return out;
@@ -190,11 +191,70 @@ Napi::Value Workbook::FunctionNames(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::LocalizeFunctionName(const Napi::CallbackInfo& info) {
-  return MapFunctionName(info, &fm_function_localize);
+  return MapProfileText(info, &fm_function_localize);
 }
 
 Napi::Value Workbook::CanonicalizeFunctionName(const Napi::CallbackInfo& info) {
-  return MapFunctionName(info, &fm_function_canonicalize);
+  return MapProfileText(info, &fm_function_canonicalize);
+}
+
+Napi::Value Workbook::LocalizeFormula(const Napi::CallbackInfo& info) {
+  return MapProfileText(info, &fm_formula_localize);
+}
+
+Napi::Value Workbook::CanonicalizeFormula(const Napi::CallbackInfo& info) {
+  return MapProfileText(info, &fm_formula_canonicalize);
+}
+
+Napi::Value Workbook::LocaleFacts(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("facts", env.Null());
+  const std::string profile_id = ArgString(info, 0);
+  fm_locale_facts_t f{};
+  fm_status_t rc = fm_locale_facts(profile_id.c_str(), &f);
+  if (rc != 0) {
+    out.Set("status", MakeStatus(env, rc));
+    return out;
+  }
+  static const char* const kDateOrders[] = {"mdy", "ymd", "dmy"};
+  const auto str = [&env](const char* s) { return Napi::String::New(env, s != nullptr ? s : ""); };
+  Napi::Object facts = Napi::Object::New(env);
+  facts.Set("decimalSeparator", str(f.decimal_separator));
+  facts.Set("groupSeparator", str(f.group_separator));
+  facts.Set("listSeparator", str(f.list_separator));
+  facts.Set("arrayColumnSeparator", str(f.array_column_separator));
+  facts.Set("arrayRowSeparator", str(f.array_row_separator));
+  facts.Set("trueName", str(f.true_name));
+  facts.Set("falseName", str(f.false_name));
+  facts.Set("dateOrder", Napi::String::New(env, kDateOrders[static_cast<std::size_t>(f.date_order)]));
+  facts.Set("currencySymbol", str(f.currency_symbol));
+  facts.Set("currencySuffix", Napi::Boolean::New(env, f.currency_suffix != 0));
+  facts.Set("currencySpace", Napi::Boolean::New(env, f.currency_space != 0));
+  facts.Set("currencyDefaultDecimals", Napi::Number::New(env, f.currency_default_decimals));
+  facts.Set("measured", Napi::Boolean::New(env, f.measured != 0));
+  Napi::Array errors = Napi::Array::New(env);
+  const std::size_t n = fm_locale_error_name_count();
+  for (std::size_t i = 0; i < n && rc == 0; ++i) {
+    const char* canonical = nullptr;
+    const char* localized = nullptr;
+    std::int32_t measured = 0;
+    rc = fm_locale_error_name(profile_id.c_str(), i, &canonical, &localized, &measured);
+    if (rc != 0) {
+      break;
+    }
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("canonical", str(canonical));
+    item.Set("localized", str(localized));
+    item.Set("measured", Napi::Boolean::New(env, measured != 0));
+    errors.Set(static_cast<uint32_t>(i), item);
+  }
+  facts.Set("errorNames", errors);
+  out.Set("status", MakeStatus(env, rc));
+  if (rc == 0) {
+    out.Set("facts", facts);
+  }
+  return out;
 }
 
 }  // namespace formulon_node

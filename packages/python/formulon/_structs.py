@@ -434,6 +434,25 @@ FUNCTION_METADATA = Struct(
     ],
 )
 
+LOCALE_FACTS = Struct(
+    "fm_locale_facts_t",
+    [
+        ("decimal_separator", PTR),
+        ("group_separator", PTR),
+        ("list_separator", PTR),
+        ("array_column_separator", PTR),
+        ("array_row_separator", PTR),
+        ("true_name", PTR),
+        ("false_name", PTR),
+        ("date_order", I32),
+        ("currency_symbol", PTR),
+        ("currency_suffix", I32),
+        ("currency_space", I32),
+        ("currency_default_decimals", I32),
+        ("measured", I32),
+    ],
+)
+
 CIVIL_TIME = Struct(
     "fm_civil_time_t",
     [

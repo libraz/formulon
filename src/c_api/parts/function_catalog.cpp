@@ -11,8 +11,9 @@
 // result at display time (`docs/function-metadata-schema.md`). Anything
 // that would populate these fields from inside the engine contradicts
 // that contract. Localize / canonicalize read the function-name table
-// FORMULATEXT uses (`eval/locale_function_names.h`) for de-DE and fr-FR;
-// en-US and ja-JP resolve to the canonical name.
+// FORMULATEXT uses (`eval/locale_function_names.h`) through the profile's
+// locale: de-DE and fr-FR localize the catalog, ja-JP three functions;
+// en-US, zh-CN, ko-KR and th-TH show the canonical name.
 //
 // A runtime-recognised function name comes from one of three sources:
 // the eager `FunctionRegistry`, the tree walker's lazy-dispatch table
@@ -31,7 +32,6 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -48,6 +48,7 @@
 #include "utils/index_sort.h"
 
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 
@@ -109,16 +110,12 @@ const std::vector<std::string>& sorted_function_names() {
 
 }  // namespace
 
-extern "C" fm_status_t fm_function_metadata(const char* name, std::int32_t locale, fm_function_metadata_t* out) {
+extern "C" fm_status_t fm_function_metadata(const char* name, fm_function_metadata_t* out) {
   clear_last_error();
   if (name == nullptr || out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_function_metadata: NULL argument");
   }
   *out = fm_function_metadata_t{};
-  if (locale < FM_LOCALE_EN_US || locale > FM_LOCALE_FR_FR) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_metadata: invalid locale",
-                             "locale=" + std::to_string(locale));
-  }
   const auto& reg = formulon::eval::default_registry();
   const auto* def = reg.lookup(std::string_view(name));
   if (def == nullptr) {
@@ -172,33 +169,20 @@ extern "C" fm_status_t fm_function_name_at(std::size_t idx, const char** out_nam
 
 namespace {
 
-// The engine locale whose function-name table `locale` reads, or nullopt
-// for the locales that show the canonical names.
-std::optional<formulon::ExcelLocale> name_table_locale(std::int32_t locale) {
-  switch (locale) {
-    case FM_LOCALE_DE_DE:
-      return formulon::ExcelLocale::kDeDE;
-    case FM_LOCALE_FR_FR:
-      return formulon::ExcelLocale::kFrFR;
-    default:
-      return std::nullopt;
-  }
-}
-
 // Shared body of `fm_function_localize` / `fm_function_canonicalize`.
 // `localize` maps canonical -> localized; otherwise a localized spelling is
 // matched first and the canonical name is accepted as a fallback.
-fm_status_t resolve_function_name(const char* fn, const char* name_field, const char* name, std::int32_t locale,
+fm_status_t resolve_function_name(const char* fn, const char* name_field, const char* name, const char* profile_id,
                                   bool localize, const char** out) {
   *out = nullptr;
-  if (locale < FM_LOCALE_EN_US || locale > FM_LOCALE_FR_FR) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             (std::string(fn) + ": invalid locale").c_str(), "locale=" + std::to_string(locale));
+  formulon::ExcelProfile profile;
+  if (auto rc = check_profile_id(profile_id, fn, &profile); rc != 0) {
+    return rc;
   }
-  const std::optional<formulon::ExcelLocale> table = name_table_locale(locale);
+  const formulon::ExcelLocale locale = profile.locale;
   std::string_view lookup(name);
-  if (!localize && table) {
-    if (const char* canonical = formulon::eval::canonical_function_name(*table, lookup); canonical != nullptr) {
+  if (!localize) {
+    if (const char* canonical = formulon::eval::canonical_function_name(locale, lookup); canonical != nullptr) {
       lookup = canonical;
     }
   }
@@ -207,30 +191,30 @@ fm_status_t resolve_function_name(const char* fn, const char* name_field, const 
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              (std::string(fn) + ": unknown function").c_str(), std::string(name_field) + "=" + name);
   }
-  const char* localized = localize && table ? formulon::eval::localized_function_name(*table, canonical) : nullptr;
+  const char* localized = localize ? formulon::eval::localized_function_name(locale, canonical) : nullptr;
   *out = localized != nullptr ? localized : canonical;
   return 0;
 }
 
 }  // namespace
 
-extern "C" fm_status_t fm_function_localize(const char* canonical_name, std::int32_t locale,
+extern "C" fm_status_t fm_function_localize(const char* canonical_name, const char* profile_id,
                                             const char** out_localized) {
   clear_last_error();
-  if (canonical_name == nullptr || out_localized == nullptr) {
+  if (canonical_name == nullptr || profile_id == nullptr || out_localized == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_function_localize: NULL argument");
   }
-  return resolve_function_name("fm_function_localize", "canonical_name", canonical_name, locale, /*localize=*/true,
+  return resolve_function_name("fm_function_localize", "canonical_name", canonical_name, profile_id, /*localize=*/true,
                                out_localized);
 }
 
-extern "C" fm_status_t fm_function_canonicalize(const char* localized_name, std::int32_t locale,
+extern "C" fm_status_t fm_function_canonicalize(const char* localized_name, const char* profile_id,
                                                 const char** out_canonical) {
   clear_last_error();
-  if (localized_name == nullptr || out_canonical == nullptr) {
+  if (localized_name == nullptr || profile_id == nullptr || out_canonical == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_function_canonicalize: NULL argument");
   }
-  return resolve_function_name("fm_function_canonicalize", "localized_name", localized_name, locale,
+  return resolve_function_name("fm_function_canonicalize", "localized_name", localized_name, profile_id,
                                /*localize=*/false, out_canonical);
 }

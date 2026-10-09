@@ -103,6 +103,10 @@ constexpr std::uint32_t kMaxRangesPerCApiCall = 16384U;
 // bogus reservation.
 bool check_range_count(std::uint32_t n, const char* api);
 
+// Resolves a non-NULL `profile_id` to its `ExcelProfile`. Returns 0, or sets
+// `kInvalidArgument` ("<api>: unknown profile", context `profile_id=<id>`).
+fm_status_t check_profile_id(const char* profile_id, const char* api, formulon::ExcelProfile* out);
+
 // --- Input validation ------------------------------------------------
 //
 // Every C-ABI entry point that copies a caller-supplied aggregate into

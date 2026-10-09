@@ -108,6 +108,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value FunctionNames(const Napi::CallbackInfo& info);
   Napi::Value LocalizeFunctionName(const Napi::CallbackInfo& info);
   Napi::Value CanonicalizeFunctionName(const Napi::CallbackInfo& info);
+  Napi::Value LocalizeFormula(const Napi::CallbackInfo& info);
+  Napi::Value CanonicalizeFormula(const Napi::CallbackInfo& info);
+  Napi::Value LocaleFacts(const Napi::CallbackInfo& info);
 
   // Sheet operations.
   Napi::Value AddSheet(const Napi::CallbackInfo& info);

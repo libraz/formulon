@@ -2,7 +2,8 @@
 // JsWorkbook trace / function-catalog / spill surfaces:
 // `precedents` / `dependents` and their shared `trace_to_val` bridge,
 // `functionMetadata` / `functionNames` / `localizeFunctionName` /
-// `canonicalizeFunctionName`, and `spillInfo`.
+// `canonicalizeFunctionName` / `localizeFormula` / `canonicalizeFormula` /
+// `localeFacts`, and `spillInfo`.
 
 #include <emscripten/val.h>
 
@@ -64,10 +65,10 @@ emscripten::val JsWorkbook::dependents(uint32_t sheet, uint32_t row, uint32_t co
 
 // ---- Function catalog --------------------------------------------------
 
-emscripten::val JsWorkbook::functionMetadata(const std::string& name, uint32_t locale) const {
+emscripten::val JsWorkbook::functionMetadata(const std::string& name) const {
   emscripten::val o = emscripten::val::object();
   fm_function_metadata_t md{};
-  fm_status_t rc = fm_function_metadata(name.c_str(), static_cast<std::int32_t>(locale), &md);
+  fm_status_t rc = fm_function_metadata(name.c_str(), &md);
   if (rc != 0) {
     o.set("ok", false);
     return o;
@@ -108,16 +109,78 @@ emscripten::val JsWorkbook::functionNames() const {
   return arr;
 }
 
-JsStringResult JsWorkbook::localizeFunctionName(const std::string& canonical_name, uint32_t locale) const {
+JsStringResult JsWorkbook::localizeFunctionName(const std::string& canonical_name,
+                                                const std::string& profile_id) const {
   const char* out = nullptr;
-  const fm_status_t rc = fm_function_localize(canonical_name.c_str(), static_cast<std::int32_t>(locale), &out);
+  const fm_status_t rc = fm_function_localize(canonical_name.c_str(), profile_id.c_str(), &out);
   return string_result(rc, out);
 }
 
-JsStringResult JsWorkbook::canonicalizeFunctionName(const std::string& localized_name, uint32_t locale) const {
+JsStringResult JsWorkbook::canonicalizeFunctionName(const std::string& localized_name,
+                                                    const std::string& profile_id) const {
   const char* out = nullptr;
-  const fm_status_t rc = fm_function_canonicalize(localized_name.c_str(), static_cast<std::int32_t>(locale), &out);
+  const fm_status_t rc = fm_function_canonicalize(localized_name.c_str(), profile_id.c_str(), &out);
   return string_result(rc, out);
+}
+
+JsStringResult JsWorkbook::localizeFormula(const std::string& formula, const std::string& profile_id) const {
+  const char* out = nullptr;
+  const fm_status_t rc = fm_formula_localize(formula.c_str(), profile_id.c_str(), &out);
+  return string_result(rc, out);
+}
+
+JsStringResult JsWorkbook::canonicalizeFormula(const std::string& formula, const std::string& profile_id) const {
+  const char* out = nullptr;
+  const fm_status_t rc = fm_formula_canonicalize(formula.c_str(), profile_id.c_str(), &out);
+  return string_result(rc, out);
+}
+
+emscripten::val JsWorkbook::localeFacts(const std::string& profile_id) const {
+  emscripten::val o = emscripten::val::object();
+  o.set("facts", emscripten::val::null());
+  fm_locale_facts_t f{};
+  fm_status_t rc = fm_locale_facts(profile_id.c_str(), &f);
+  if (rc != 0) {
+    o.set("status", status_from_rc(rc));
+    return o;
+  }
+  static const char* const kDateOrders[] = {"mdy", "ymd", "dmy"};
+  emscripten::val facts = emscripten::val::object();
+  js_set_cstr(facts, "decimalSeparator", f.decimal_separator);
+  js_set_cstr(facts, "groupSeparator", f.group_separator);
+  js_set_cstr(facts, "listSeparator", f.list_separator);
+  js_set_cstr(facts, "arrayColumnSeparator", f.array_column_separator);
+  js_set_cstr(facts, "arrayRowSeparator", f.array_row_separator);
+  js_set_cstr(facts, "trueName", f.true_name);
+  js_set_cstr(facts, "falseName", f.false_name);
+  facts.set("dateOrder", std::string(kDateOrders[static_cast<std::size_t>(f.date_order)]));
+  js_set_cstr(facts, "currencySymbol", f.currency_symbol);
+  facts.set("currencySuffix", f.currency_suffix != 0);
+  facts.set("currencySpace", f.currency_space != 0);
+  facts.set("currencyDefaultDecimals", f.currency_default_decimals);
+  facts.set("measured", f.measured != 0);
+  emscripten::val errors = emscripten::val::array();
+  const std::size_t n = fm_locale_error_name_count();
+  for (std::size_t i = 0; i < n && rc == 0; ++i) {
+    const char* canonical = nullptr;
+    const char* localized = nullptr;
+    std::int32_t measured = 0;
+    rc = fm_locale_error_name(profile_id.c_str(), i, &canonical, &localized, &measured);
+    if (rc != 0) {
+      break;
+    }
+    emscripten::val item = emscripten::val::object();
+    js_set_cstr(item, "canonical", canonical);
+    js_set_cstr(item, "localized", localized);
+    item.set("measured", measured != 0);
+    errors.set(static_cast<uint32_t>(i), item);
+  }
+  facts.set("errorNames", errors);
+  o.set("status", status_from_rc(rc));
+  if (rc == 0) {
+    o.set("facts", facts);
+  }
+  return o;
 }
 
 // ---- Spill info --------------------------------------------------------

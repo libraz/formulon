@@ -52,6 +52,9 @@
 #include "utils/arena.h"
 
 namespace formulon {
+
+struct LocaleFacts;
+
 namespace parser {
 
 /// Tokenizer configuration knobs. The defaults match the per-formula limits
@@ -64,6 +67,10 @@ struct TokenizerOptions {
   /// depth_cap` in tests/divergence.yaml for the directly-measured Excel
   /// observation this mirrors).
   std::uint32_t max_formula_length_utf16 = 8192;
+
+  /// Lexes locale-spelled text (decimal point, list and array separators,
+  /// boolean and error names) when set; `nullptr` lexes the invariant form.
+  const LocaleFacts* locale = nullptr;
 };
 
 /// Converts a UTF-8 formula source into a token stream.
@@ -160,6 +167,15 @@ class Tokenizer {
 
   // Checks whether `word` (ASCII) is `TRUE` or `FALSE` case-insensitively.
   static bool is_bool_word(std::string_view word, bool* out) noexcept;
+  // `is_bool_word`, or the locale spelling of either boolean when a locale is set.
+  bool is_bool_name(std::string_view word, bool* out) const noexcept;
+
+  // Lexes the byte at the cursor as a locale separator or a locale-decimal
+  // number start. Returns false, consuming nothing, when it is neither.
+  bool scan_locale_char(unsigned char c);
+  // Matches `run` against the locale's error names that differ from the
+  // canonical ones.
+  bool match_locale_error(std::string_view run, ErrorCode* out, std::size_t* match_len) const noexcept;
 
   // Longest-prefix match of `run` against the error-literal catalog. On a
   // hit, writes the catalog code to `*out` and the matched byte length to
@@ -214,6 +230,12 @@ class Tokenizer {
   // structured-reference (or external-book index) bracket payload, where
   // an apostrophe is an escape prefix rather than a sheet-name quote.
   std::uint32_t bracket_depth_ = 0;
+
+  // Number of `{` not yet closed by a `}`; selects the array separators.
+  std::uint32_t brace_depth_ = 0;
+
+  // Decimal point of number literals: `.` unless a locale says otherwise.
+  char decimal_ = '.';
 };
 
 }  // namespace parser

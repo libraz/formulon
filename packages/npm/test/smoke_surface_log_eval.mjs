@@ -391,3 +391,45 @@ test('setExcelProfileId switches a live workbook through every profile id', asyn
     wb.delete();
   }
 });
+
+test('formula and function-name localization is keyed by profile id', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    assert.equal(wb.localizeFormula('=SUM(1.5,2)', 'mac-365-de_DE').value, '=SUMME(1,5;2)');
+    assert.equal(wb.canonicalizeFormula('=SUMME(1,5;2)', 'mac-365-de_DE').value, '=SUM(1.5,2)');
+    assert.equal(wb.localizeFormula('=IF(TRUE,1,2)', 'mac-365-fr_FR').value, '=SI(VRAI;1;2)');
+    assert.equal(wb.localizeFormula('=#N/A', 'mac-365-de_DE').value, '=#NV');
+    assert.equal(wb.canonicalizeFormula('=#NV', 'mac-365-de_DE').value, '=#N/A');
+    assert.equal(wb.localizeFormula('=A1&";"', 'mac-365-de_DE').value, '=A1&";"');
+    assert.equal(wb.localizeFunctionName('SUM', 'mac-365-de_DE').value, 'SUMME');
+    assert.equal(wb.canonicalizeFunctionName('SUMME', 'win-365-de_DE').value, 'SUM');
+    assert.equal(wb.localizeFormula('=SUM(1)', 'nope').status.ok, false);
+    assert.equal(wb.canonicalizeFormula('=SUM(1)', 'nope').status.ok, false);
+    assert.equal(wb.canonicalizeFunctionName('SUM', 'nope').status.ok, false);
+  } finally {
+    wb.delete();
+  }
+});
+
+test('localeFacts reports separators, names, error spellings and measurement', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const mac = wb.localeFacts('mac-365-de_DE');
+    assert.ok(mac.status.ok);
+    assert.equal(mac.facts.decimalSeparator, ',');
+    assert.equal(mac.facts.listSeparator, ';');
+    assert.equal(mac.facts.dateOrder, 'dmy');
+    assert.equal(mac.facts.measured, true);
+    const na = mac.facts.errorNames.find((e) => e.canonical === '#N/A');
+    assert.equal(na.localized, '#NV');
+    assert.equal(wb.localeFacts('win-365-de_DE').facts.measured, false);
+    assert.equal(wb.localeFacts('win-365-en_US').facts.decimalSeparator, '.');
+    const bad = wb.localeFacts('nope');
+    assert.equal(bad.status.ok, false);
+    assert.equal(bad.facts, null);
+  } finally {
+    wb.delete();
+  }
+});

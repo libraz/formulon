@@ -26,6 +26,7 @@
 #include <string>
 #include <string_view>
 
+#include "excel_locale.h"
 #include "parser/parser_detail.h"
 #include "utils/double_parse.h"
 
@@ -259,6 +260,63 @@ bool Tokenizer::is_bool_word(std::string_view word, bool* out) noexcept {
   return false;
 }
 
+bool Tokenizer::is_bool_name(std::string_view word, bool* out) const noexcept {
+  if (is_bool_word(word, out)) {
+    return true;
+  }
+  if (opts_.locale == nullptr) {
+    return false;
+  }
+  const LocaleFacts& f = *opts_.locale;
+  if (word.size() == f.true_name.size() && ieq_prefix(word, f.true_name)) {
+    *out = true;
+    return true;
+  }
+  if (word.size() == f.false_name.size() && ieq_prefix(word, f.false_name)) {
+    *out = false;
+    return true;
+  }
+  return false;
+}
+
+bool Tokenizer::match_locale_error(std::string_view run, ErrorCode* out, std::size_t* match_len) const noexcept {
+  if (opts_.locale == nullptr) {
+    return false;
+  }
+  for (std::size_t i = 0; i < opts_.locale->error_names.size(); ++i) {
+    const std::string_view name = opts_.locale->error_names[i];
+    if (name != kErrorTable[i].display_name && ieq_prefix(run, name)) {
+      *out = static_cast<ErrorCode>(i);
+      *match_len = name.size();
+      return true;
+    }
+  }
+  return false;
+}
+
+bool Tokenizer::scan_locale_char(unsigned char c) {
+  const LocaleFacts& f = *opts_.locale;
+  const char ch = static_cast<char>(c);
+  if (brace_depth_ > 0) {
+    if (ch == f.array_column_separator) {
+      emit_single_char(TokenKind::Comma);
+      return true;
+    }
+    if (ch == f.array_row_separator) {
+      emit_single_char(TokenKind::Semicolon);
+      return true;
+    }
+  } else if (ch == f.list_separator) {
+    emit_single_char(TokenKind::Comma);
+    return true;
+  }
+  if (ch == decimal_ && ch != '.' && byte_pos_ + 1 < source_.size() && is_ascii_digit(source_[byte_pos_ + 1])) {
+    scan_number();
+    return true;
+  }
+  return false;
+}
+
 bool Tokenizer::match_error_literal(std::string_view run, ErrorCode* out, std::size_t* match_len) noexcept {
   // Longest-match against the catalog (declared longest-first) so an error
   // literal immediately followed by an operator or reference — `#REF!/2`,
@@ -329,7 +387,10 @@ bool Tokenizer::looks_like_cellref(std::string_view run, bool* letters_only) noe
 // ---------------------------------------------------------------------------
 
 Tokenizer::Tokenizer(std::string_view source, TokenizerOptions opts) noexcept
-    : source_(source), opts_(opts), arena_(4096) {}
+    : source_(source),
+      opts_(opts),
+      arena_(4096),
+      decimal_(opts.locale != nullptr ? opts.locale->decimal_separator : '.') {}
 
 const std::vector<Token>& Tokenizer::tokens() {
   if (done_) {
@@ -420,6 +481,10 @@ const std::vector<Token>& Tokenizer::tokens() {
       continue;
     }
 
+    if (opts_.locale != nullptr && bracket_depth_ == 0 && scan_locale_char(c)) {
+      continue;
+    }
+
     // Dispatch on the leading byte.
     switch (c) {
       case '"':
@@ -448,9 +513,13 @@ const std::vector<Token>& Tokenizer::tokens() {
         continue;
       case '{':
         emit_single_char(TokenKind::LBrace);
+        ++brace_depth_;
         continue;
       case '}':
         emit_single_char(TokenKind::RBrace);
+        if (brace_depth_ > 0) {
+          --brace_depth_;
+        }
         continue;
       case '[':
         if (bracket_depth_ == 0 && at_operand_start()) {
@@ -540,7 +609,8 @@ const std::vector<Token>& Tokenizer::tokens() {
 
     // Digits: number literal.
     if (is_ascii_digit(static_cast<char>(c)) ||
-        (c == '.' && byte_pos_ + 1 < source_.size() && is_ascii_digit(source_[byte_pos_ + 1]))) {
+        (c == static_cast<unsigned char>(decimal_) && byte_pos_ + 1 < source_.size() &&
+         is_ascii_digit(source_[byte_pos_ + 1]))) {
       scan_number();
       continue;
     }
@@ -840,9 +910,9 @@ void Tokenizer::scan_number() {
       advance_one();
       continue;
     }
-    if (ch == '.' && !saw_dot && !saw_exp) {
+    if (ch == decimal_ && !saw_dot && !saw_exp) {
       // `1.:3` is a leading-trim row range, not the literal `1.`.
-      if (byte_pos_ + 1 < source_.size() && source_[byte_pos_ + 1] == ':' && byte_pos_ > start) {
+      if (decimal_ == '.' && byte_pos_ + 1 < source_.size() && source_[byte_pos_ + 1] == ':' && byte_pos_ > start) {
         break;
       }
       saw_dot = true;
@@ -879,7 +949,7 @@ void Tokenizer::scan_number() {
   // a digit (before or after the dot respectively) and are valid Excel
   // literals -- `1.` parses to 1, matching Excel's own acceptance of a
   // trailing decimal point with an empty fractional part.
-  if (lex == ".") {
+  if (lex.size() == 1 && lex[0] == decimal_) {
     emit(TokenKind::Invalid, start);
     record_error(LexerErrorCode::InvalidNumberLiteral, start);
     return;
@@ -890,7 +960,7 @@ void Tokenizer::scan_number() {
     bool has_digit_after = false;
     bool seen_dot = false;
     for (char ch : lex) {
-      if (ch == '.') {
+      if (ch == decimal_) {
         seen_dot = true;
         continue;
       }
@@ -912,11 +982,11 @@ void Tokenizer::scan_number() {
   // Reject an immediately-following second '.' as in `1.2.3`. Without this
   // check the main loop would produce Number("1.2"), Invalid or similar;
   // flagging it here yields the more actionable diagnostic.
-  if (byte_pos_ < source_.size() && source_[byte_pos_] == '.' &&
-      !(byte_pos_ + 1 < source_.size() && source_[byte_pos_ + 1] == ':')) {
+  if (byte_pos_ < source_.size() && source_[byte_pos_] == decimal_ &&
+      !(decimal_ == '.' && byte_pos_ + 1 < source_.size() && source_[byte_pos_ + 1] == ':')) {
     // Absorb the offending run up to the next whitespace / operator so the
     // diagnostic lexeme covers the whole malformed literal.
-    while (byte_pos_ < source_.size() && (is_ascii_digit(source_[byte_pos_]) || source_[byte_pos_] == '.')) {
+    while (byte_pos_ < source_.size() && (is_ascii_digit(source_[byte_pos_]) || source_[byte_pos_] == decimal_)) {
       advance_one();
     }
     emit(TokenKind::Invalid, start);
@@ -937,8 +1007,19 @@ void Tokenizer::scan_number() {
   }
   // Apply Excel's 15-significant-digit rule before parsing. The original
   // lexeme is still recorded on the token for diagnostics.
-  const std::string truncated = truncate_to_excel_precision(lex);
-  const std::string_view numeric_text = truncated.empty() ? lex : std::string_view(truncated);
+  std::string invariant;
+  std::string_view numeric_lex = lex;
+  if (decimal_ != '.') {
+    invariant.assign(lex);
+    for (char& ch : invariant) {
+      if (ch == decimal_) {
+        ch = '.';
+      }
+    }
+    numeric_lex = invariant;
+  }
+  const std::string truncated = truncate_to_excel_precision(numeric_lex);
+  const std::string_view numeric_text = truncated.empty() ? numeric_lex : std::string_view(truncated);
   double value = 0.0;
   if (!parse_double_exact(numeric_text, &value)) {
     emit(TokenKind::Invalid, start);
@@ -1011,7 +1092,7 @@ void Tokenizer::scan_error_literal() {
   std::string_view run(source_.data() + byte_pos_, probe - byte_pos_);
   ErrorCode code;
   std::size_t match_len = 0;
-  if (match_error_literal(run, &code, &match_len)) {
+  if (match_error_literal(run, &code, &match_len) || match_locale_error(run, &code, &match_len)) {
     // Consume only the matched literal; catalog entries are pure ASCII so
     // the byte length equals the codepoint count advanced here. Any trailing
     // run bytes (an operator or reference glued to the literal) stay for the
@@ -1075,6 +1156,10 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
           break;
         }
       }
+      // `.` separates the columns of an array constant in a locale that says so.
+      if (c == '.' && brace_depth_ > 0 && opts_.locale != nullptr && opts_.locale->array_column_separator == '.') {
+        break;
+      }
       if (is_ident_cont_byte(c)) {
         advance_one();
         continue;
@@ -1119,7 +1204,7 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
   }
 
   bool b = false;
-  if (is_bool_word(run, &b)) {
+  if (is_bool_name(run, &b)) {
     Token t;
     t.kind = TokenKind::Bool;
     t.range = make_range();
@@ -1177,7 +1262,7 @@ bool Tokenizer::try_scan_local_sheet_qualifier() {
   }
   const std::string_view run = source_.substr(start, len);
   bool b = false;
-  if (is_bool_word(run, &b)) {
+  if (is_bool_name(run, &b)) {
     return false;
   }
   if (source_[end] != '!') {

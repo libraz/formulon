@@ -329,6 +329,11 @@ fm_function_count
 fm_function_name_at
 fm_function_localize
 fm_function_canonicalize
+fm_formula_localize
+fm_formula_canonicalize
+fm_locale_facts
+fm_locale_error_name_count
+fm_locale_error_name
 
 # -- External links --------------------------------------------------------------
 fm_workbook_external_link_count

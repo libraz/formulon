@@ -906,9 +906,9 @@ class Workbook {
   //
   // Some formula behaviours are host-specific even for the same Microsoft 365
   // channel and locale. The default runtime profile tracks Windows Excel 365
-  // ja-JP; oracle tests can override this per golden set.
+  // en-US; oracle tests can override this per golden set.
 
-  /// Returns the full formula-behaviour profile. Defaults to `win-365-ja_JP`.
+  /// Returns the full formula-behaviour profile. Defaults to `win-365-en_US`.
   ExcelProfile excel_profile() const noexcept { return excel_profile_; }
 
   /// Sets the full formula-behaviour profile used by future recalc calls.

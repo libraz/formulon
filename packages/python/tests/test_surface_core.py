@@ -49,6 +49,7 @@ class StructLayoutTests(unittest.TestCase):
         "SAVE_DIAGNOSTICS": 20,
         "SPILL_INFO": 20,
         "FUNCTION_METADATA": 24,
+        "LOCALE_FACTS": 52,
         "CIVIL_TIME": 24,
         "SHEET_VIEW": 44,
         "COLUMN_LAYOUT": 40,

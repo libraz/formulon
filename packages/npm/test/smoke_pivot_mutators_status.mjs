@@ -680,8 +680,8 @@ const STATUS_ACCESSORS = [
   ['cellStyleXfCount', [], null],
   ['calcMode', [], null],
   ['excelProfileId', [], null],
-  ['localizeFunctionName', ['SUM', 0], ['NOPE_XYZ', 0]],
-  ['canonicalizeFunctionName', ['SUM', 0], ['NOPE_XYZ', 0]],
+  ['localizeFunctionName', ['SUM', 'win-365-en_US'], ['NOPE_XYZ', 'win-365-en_US']],
+  ['canonicalizeFunctionName', ['SUM', 'win-365-en_US'], ['NOPE_XYZ', 'win-365-en_US']],
   ['pinnedNow', [], null],
   ['spillInfo', [0, 0, 0], [99, 0, 0]],
   ['getColumnWidthPt', [0, 0, 0], [99, 0, 0]],
@@ -730,8 +730,8 @@ test('fallible accessors report their status on success, rejection and a release
   }
   assert.equal(wb.sheetCount().value, 1);
   assert.equal(wb.excelProfileId().value, 'win-365-en_US');
-  assert.equal(wb.localizeFunctionName('SUM', 1).value, 'SUM');
-  assert.equal(wb.localizeFunctionName('SUM', 99).status.ok, false);
+  assert.equal(wb.localizeFunctionName('SUM', 'win-365-ja_JP').value, 'SUM');
+  assert.equal(wb.localizeFunctionName('SUM', 'nope').status.ok, false);
 
   wb.delete();
   // `delete()` detaches the embind wrapper outright; a failed load is the

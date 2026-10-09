@@ -508,19 +508,19 @@ test('functionNames + functionMetadata expose the catalog', async () => {
   assert.ok(Array.isArray(names));
   assert.ok(names.length > 0, 'expected a non-empty function catalog');
   assert.ok(names.includes('SUM'), 'expected SUM in the catalog');
-  const md = wb.functionMetadata('SUM', 0);
+  const md = wb.functionMetadata('SUM');
   assert.equal(md.ok, true);
   assert.equal(md.name, 'SUM');
   assert.equal(typeof md.minArity, 'number');
   // Unknown function returns { ok: false }.
-  const miss = wb.functionMetadata('NOT_A_REAL_FUNCTION_XYZ', 0);
+  const miss = wb.functionMetadata('NOT_A_REAL_FUNCTION_XYZ');
   assert.equal(miss.ok, false);
 });
 
 test('mergeFunctionMetadata overlays provider metadata; is identity without a provider', async () => {
   const mod = await getModule();
   assert.equal(typeof mod.mergeFunctionMetadata, 'function');
-  const base = mod.Workbook.createDefault().functionMetadata('XLOOKUP', 0);
+  const base = mod.Workbook.createDefault().functionMetadata('XLOOKUP');
   assert.equal(base.ok, true);
   // The engine leaves display metadata empty.
   assert.equal(base.signatureTemplate, undefined);
@@ -561,11 +561,53 @@ test('mergeFunctionMetadata overlays provider metadata; is identity without a pr
 test('localizeFunctionName / canonicalizeFunctionName round-trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  // en-US locale (0): the localized name is the canonical name itself.
-  assert.equal(wb.localizeFunctionName('SUM', 0).value, 'SUM');
-  assert.equal(wb.canonicalizeFunctionName('SUM', 0).value, 'SUM');
+  // en-US profile: the localized name is the canonical name itself.
+  assert.equal(wb.localizeFunctionName('SUM', 'win-365-en_US').value, 'SUM');
+  assert.equal(wb.canonicalizeFunctionName('SUM', 'win-365-en_US').value, 'SUM');
   // An unknown name returns the empty string.
-  assert.equal(wb.canonicalizeFunctionName('NOPE_XYZ', 0).value, '');
+  assert.equal(wb.canonicalizeFunctionName('NOPE_XYZ', 'win-365-en_US').value, '');
+});
+
+test('formula and function-name localization is keyed by profile id', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    assert.equal(wb.localizeFormula('=SUM(1.5,2)', 'mac-365-de_DE').value, '=SUMME(1,5;2)');
+    assert.equal(wb.canonicalizeFormula('=SUMME(1,5;2)', 'mac-365-de_DE').value, '=SUM(1.5,2)');
+    assert.equal(wb.localizeFormula('=IF(TRUE,1,2)', 'mac-365-fr_FR').value, '=SI(VRAI;1;2)');
+    assert.equal(wb.localizeFormula('=#N/A', 'mac-365-de_DE').value, '=#NV');
+    assert.equal(wb.canonicalizeFormula('=#NV', 'mac-365-de_DE').value, '=#N/A');
+    assert.equal(wb.localizeFormula('=A1&";"', 'mac-365-de_DE').value, '=A1&";"');
+    assert.equal(wb.localizeFunctionName('SUM', 'mac-365-de_DE').value, 'SUMME');
+    assert.equal(wb.canonicalizeFunctionName('SUMME', 'win-365-de_DE').value, 'SUM');
+    assert.equal(wb.localizeFormula('=SUM(1)', 'nope').status.ok, false);
+    assert.equal(wb.canonicalizeFormula('=SUM(1)', 'nope').status.ok, false);
+    assert.equal(wb.canonicalizeFunctionName('SUM', 'nope').status.ok, false);
+  } finally {
+    wb.dispose();
+  }
+});
+
+test('localeFacts reports separators, names, error spellings and measurement', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const mac = wb.localeFacts('mac-365-de_DE');
+    assert.ok(mac.status.ok);
+    assert.equal(mac.facts.decimalSeparator, ',');
+    assert.equal(mac.facts.listSeparator, ';');
+    assert.equal(mac.facts.dateOrder, 'dmy');
+    assert.equal(mac.facts.measured, true);
+    const na = mac.facts.errorNames.find((e) => e.canonical === '#N/A');
+    assert.equal(na.localized, '#NV');
+    assert.equal(wb.localeFacts('win-365-de_DE').facts.measured, false);
+    assert.equal(wb.localeFacts('win-365-en_US').facts.decimalSeparator, '.');
+    const bad = wb.localeFacts('nope');
+    assert.equal(bad.status.ok, false);
+    assert.equal(bad.facts, null);
+  } finally {
+    wb.dispose();
+  }
 });
 
 test('precedents / dependents return arrays for a small formula graph', async () => {

@@ -1,10 +1,11 @@
 # Function metadata provider schema
 
 Formulon's calculation engine deliberately ships **no** human-readable
-function documentation. `functionMetadata(name, locale)` returns only the
+function documentation. `functionMetadata(name)` returns only the
 data the engine actually owns — canonical name, arity bounds, and an
 availability class — and leaves `signatureTemplate` / `description` as
-`NULL` (empty). Non-primary-locale display-name tables are likewise empty.
+`NULL` (empty). Display-name tables beyond the engine's own function-name
+translation are likewise empty.
 
 That content is a UI concern, not a calculation concern. Rather than bake
 several hundred localized strings into the WASM binary, the bindings expose
@@ -21,12 +22,16 @@ parsed or evaluated.
   A formula written with a localized function name (formula-language
   localization) is **not** interpreted by this seam — that is a separate
   engine-level concern and is out of scope here.
-- The C ABI entry points `fm_function_localize` / `fm_function_canonicalize`
-  are **not** driven by this provider. They remain canonical-fallback
-  (they return the canonical name unchanged for non-primary locales).
-- The primary locale is `ja-JP`, whose function names are identical to the
-  English canonical names, so the primary locale needs no `aliases` entry
-  at all (the alias is the identity mapping).
+- The engine's own locale calls — `fm_function_localize` /
+  `fm_function_canonicalize` (and the formula-text and locale-facts calls
+  `fm_formula_localize`, `fm_formula_canonicalize`, `fm_locale_facts`) — are
+  keyed by an Excel profile id (`{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,
+  zh_CN,ko_KR,th_TH}`) and are **not** driven by this provider. They carry
+  Excel's own spelling of function names, separators and error names; this
+  provider carries display text only.
+- `ja-JP` function names are identical to the English canonical names
+  (apart from three renames the engine handles itself), so a `ja-JP`
+  `aliases` entry is normally the identity mapping and may be omitted.
 
 ## Document shape
 
@@ -64,8 +69,7 @@ parsed or evaluated.
   (`XLOOKUP`, `SUM`, `VLOOKUP`), matching the engine's canonical name.
 - Keys inside `aliases` and `localized` are BCP-47 locale tags
   (`fr-FR`, `de-DE`, ...). They are the **display locale** the host chose,
-  independent of the numeric locale code passed to the engine's
-  `functionMetadata` call.
+  independent of the profile id passed to the engine's locale calls.
 
 ## Merge semantics
 

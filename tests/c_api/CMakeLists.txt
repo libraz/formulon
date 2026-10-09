@@ -21,6 +21,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_formula_entry_test.cpp
   formulon_c_function_metadata_test.cpp
   formulon_c_lambda_text_test.cpp
+  formulon_c_locale_test.cpp
   formulon_c_logging_test.cpp
   formulon_c_named_styles_test.cpp
   formulon_c_pivot_authoring_test.cpp

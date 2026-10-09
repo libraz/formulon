@@ -430,6 +430,7 @@ src/eval/aggregate_lazy.cpp
   src/c_api/parts/display.cpp
   src/c_api/parts/external_links.cpp
   src/c_api/parts/function_catalog.cpp
+  src/c_api/parts/locale.cpp
   src/c_api/parts/pivot_cache.cpp
   src/c_api/parts/pivot_internal.cpp
   src/c_api/parts/pivot_layout.cpp

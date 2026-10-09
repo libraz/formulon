@@ -1050,7 +1050,49 @@ export interface CellNode {
   readonly col: number;
 }
 
-/** Result envelope for `functionMetadata(name, locale)`.
+/** One error value's spelling under a profile: the canonical (en-invariant)
+ *  text and the profile's Excel spelling. `measured` is `false` when the
+ *  localized spelling is assumed rather than captured from Excel. */
+export interface LocaleErrorName {
+  readonly canonical: string;
+  readonly localized: string;
+  readonly measured: boolean;
+}
+
+/** Order in which a locale writes day, month and year. */
+export type LocaleDateOrder = 'mdy' | 'ymd' | 'dmy';
+
+/** Scalar locale facts of one {@link ExcelProfileId}. `measured` is `true`
+ *  for the profiles captured from Excel (every `mac-*` id and
+ *  `win-365-ja_JP`) and `false` for the estimated `win-*` ids.
+ *  `errorNames` is indexed by error-code ordinal. */
+export interface LocaleFacts {
+  readonly decimalSeparator: string;
+  readonly groupSeparator: string;
+  readonly listSeparator: string;
+  readonly arrayColumnSeparator: string;
+  readonly arrayRowSeparator: string;
+  readonly trueName: string;
+  readonly falseName: string;
+  readonly dateOrder: LocaleDateOrder;
+  readonly currencySymbol: string;
+  /** `true` when the currency symbol follows the number. */
+  readonly currencySuffix: boolean;
+  /** `true` when one space separates the symbol and the number. */
+  readonly currencySpace: boolean;
+  readonly currencyDefaultDecimals: number;
+  readonly measured: boolean;
+  readonly errorNames: readonly LocaleErrorName[];
+}
+
+/** Return type of `Workbook.localeFacts(profileId)`. `facts` is `null` on
+ *  failure (an unknown profile id). */
+export interface LocaleFactsResult {
+  status: Status;
+  facts: LocaleFacts | null;
+}
+
+/** Result envelope for `functionMetadata(name)`.
  *
  *  `ok` is `false` when no function matches `name`; the remaining
  *  fields are absent. When `ok` is `true`, `name` / `minArity` /
@@ -1117,8 +1159,8 @@ export interface MergedFunctionMetadataResult extends FunctionMetadataResult {
  *
  *  When `entry` is `undefined`, `base` is returned verbatim (signature /
  *  description stay `undefined`). `locale` is a BCP-47 display tag matching
- *  the keys in `aliases` / `localized`, independent of the numeric locale
- *  passed to `functionMetadata()`. See `docs/function-metadata-schema.md`.
+ *  the keys in `aliases` / `localized`, independent of the profile id
+ *  passed to the engine locale calls. See `docs/function-metadata-schema.md`.
  *
  *  A pure host-side helper: it touches no WASM state and is exported from
  *  this package's hand-written entry point rather than the generated module
@@ -3258,28 +3300,40 @@ export interface Workbook {
   dependents(sheet: number, row: number, col: number, depth: number): ListResult<CellNode>;
 
   /** Returns metadata for the function `name` (case-insensitive). When
-   *  the function is unknown, returns `{ok: false}`. `locale` selects
-   *  the catalog locale (`0` = `en-US`, `1` = `ja-JP`, `2` = `de-DE`, `3` = `fr-FR`) and is validated,
-   *  but does not change the result: the description / signature fields
-   *  are always `undefined` (see {@link FunctionMetadataResult}). */
-  functionMetadata(name: string, locale: number): FunctionMetadataResult;
+   *  the function is unknown, returns `{ok: false}`. The result is
+   *  locale-invariant: the description / signature fields are always
+   *  `undefined` (see {@link FunctionMetadataResult}). */
+  functionMetadata(name: string): FunctionMetadataResult;
   /** Returns every registered function's canonical name in ascending
    *  sort order. */
   functionNames(): ListResult<string>;
 
   /** Returns the localized display name for the canonical function
-   *  `canonicalName` in `locale`. `de-DE` and `fr-FR` return Excel's
-   *  function names for that locale; the other locales return the
-   *  canonical name unchanged. `value` is
-   *  the empty string, with `status.ok === false`, when the canonical
-   *  name does not match a registered function. */
-  localizeFunctionName(canonicalName: string, locale: number): StringResult;
+   *  `canonicalName` under `profileId`. `de_DE` and `fr_FR` profiles return
+   *  Excel's function names for that locale; `ja_JP` renames only `DOLLAR`,
+   *  `USDOLLAR` and `DBCS`; the other locales return the canonical name
+   *  unchanged. `value` is the empty string, with `status.ok === false`,
+   *  when `profileId` is unknown or the name does not match a registered
+   *  function. */
+  localizeFunctionName(canonicalName: string, profileId: ExcelProfileId): StringResult;
   /** Inverse of `localizeFunctionName`: returns the canonical English
-   *  name for the localized function `localizedName`. `de-DE` and
-   *  `fr-FR` invert the localized name table; the other locales match
-   *  the canonical name case-insensitively. `value` is the empty string, with `status.ok === false`,
-   *  when no function matches. */
-  canonicalizeFunctionName(localizedName: string, locale: number): StringResult;
+   *  name for the localized function `localizedName` under `profileId`.
+   *  `value` is the empty string, with `status.ok === false`, when
+   *  `profileId` is unknown or no function matches. */
+  canonicalizeFunctionName(localizedName: string, profileId: ExcelProfileId): StringResult;
+  /** Rewrites stored (en-invariant) formula text into `profileId`'s Excel
+   *  spelling: function names, list / array separators, decimal points,
+   *  booleans and error names. Strings, quoted sheet names, external
+   *  qualifiers and structured-reference brackets are kept verbatim. A pure
+   *  text rewrite; the grammar is not validated. `status.ok` is `false`
+   *  for an unknown `profileId`. */
+  localizeFormula(formula: string, profileId: ExcelProfileId): StringResult;
+  /** Inverse of `localizeFormula`: rewrites `profileId`-spelled formula text
+   *  into the en-invariant form. */
+  canonicalizeFormula(formula: string, profileId: ExcelProfileId): StringResult;
+  /** Returns the locale facts (separators, boolean names, date order,
+   *  currency, error names) of `profileId`. */
+  localeFacts(profileId: ExcelProfileId): LocaleFactsResult;
 
   /** Returns dynamic-array spill info for `(sheet, row, col)`.
    *  When the cell is part of a spill region (anchor or phantom),

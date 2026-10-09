@@ -120,6 +120,7 @@ function envelopeProbes(wb) {
     ['NumberResult', true, () => wb.cellCount(99)],
     // A released handle is the only failure path, which is not usable here.
     ['PinnedNowResult', false, () => wb.pinnedNow()],
+    ['LocaleFactsResult', true, () => wb.localeFacts('nope')],
     ['SpillInfo', true, () => wb.spillInfo(99, 0, 0)],
     ['SheetFormatDefaultsResult', true, () => wb.getSheetFormatDefaults(99)],
     ['CellRectResult', true, () => wb.getCellRectPt(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, 0)],

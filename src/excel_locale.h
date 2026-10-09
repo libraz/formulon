@@ -149,6 +149,10 @@ struct LocaleFacts {
 };
 
 const LocaleFacts& locale_facts(ExcelProfile profile) noexcept;
+
+/// True when the localized spelling of the error at `error_ordinal`
+/// (`kErrorTable` order) was captured from Excel rather than assumed.
+bool error_name_measured(std::size_t error_ordinal) noexcept;
 SbcsCodepage sbcs_codepage(ExcelProfile profile) noexcept;
 WidthFolding width_folding(ExcelProfile profile) noexcept;
 

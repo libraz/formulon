@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+#include "excel_locale.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "parser/lexer_error.h"
 #include "parser/token.h"
@@ -916,6 +918,156 @@ TEST(TokenizerExcessiveLength, InputAtExactlyTheCapIsAccepted) {
   ASSERT_GE(toks.size(), 2U);
   EXPECT_EQ(toks.front().lexeme, "ABCDE");
   EXPECT_TRUE(tz.errors().empty());
+}
+
+// ---------------------------------------------------------------------------
+// Locale-aware lexing
+// ---------------------------------------------------------------------------
+
+TokenizerOptions LocaleOptions(ExcelLocale locale) {
+  TokenizerOptions opts;
+  opts.locale = &locale_facts(ExcelProfile{ExcelHost::kMac365, locale});
+  return opts;
+}
+
+TEST(TokenizerLocale, ListSeparatorAndDecimalPoint) {
+  for (const ExcelLocale locale : {ExcelLocale::kDeDE, ExcelLocale::kFrFR}) {
+    Tokenizer tz("SUMME(1,5;2)", LocaleOptions(locale));
+    const auto& v = tz.tokens();
+    ASSERT_EQ(v.size(), 7u);
+    EXPECT_EQ(v[0].kind, TokenKind::Ident);
+    EXPECT_EQ(v[1].kind, TokenKind::LParen);
+    EXPECT_EQ(v[2].kind, TokenKind::Number);
+    EXPECT_EQ(v[2].lexeme, "1,5");
+    EXPECT_DOUBLE_EQ(v[2].number, 1.5);
+    EXPECT_FALSE(v[2].is_integer);
+    EXPECT_EQ(v[3].kind, TokenKind::Comma);
+    EXPECT_EQ(v[4].kind, TokenKind::Number);
+    EXPECT_EQ(v[5].kind, TokenKind::RParen);
+    EXPECT_TRUE(tz.errors().empty());
+  }
+}
+
+TEST(TokenizerLocale, LeadingDecimalSeparatorStartsANumber) {
+  Tokenizer tz(",5+1", LocaleOptions(ExcelLocale::kDeDE));
+  const auto& v = tz.tokens();
+  ASSERT_GE(v.size(), 2u);
+  EXPECT_EQ(v[0].kind, TokenKind::Number);
+  EXPECT_DOUBLE_EQ(v[0].number, 0.5);
+}
+
+TEST(TokenizerLocale, SecondDecimalSeparatorIsAnInvalidLiteral) {
+  Tokenizer tz("1,2,3", LocaleOptions(ExcelLocale::kDeDE));
+  (void)tz.tokens();
+  ASSERT_FALSE(tz.errors().empty());
+  EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidNumberLiteral);
+}
+
+TEST(TokenizerLocale, ArrayConstantSeparators) {
+  for (const ExcelLocale locale : {ExcelLocale::kDeDE, ExcelLocale::kFrFR}) {
+    Tokenizer tz("{1,5.2,5;3,4}", LocaleOptions(locale));
+    const auto& v = tz.tokens();
+    const std::vector<TokenKind> expected = {TokenKind::LBrace, TokenKind::Number,    TokenKind::Comma,
+                                             TokenKind::Number, TokenKind::Semicolon, TokenKind::Number,
+                                             TokenKind::RBrace, TokenKind::Eof};
+    ASSERT_EQ(v.size(), expected.size());
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+      EXPECT_EQ(v[i].kind, expected[i]) << i;
+    }
+    EXPECT_DOUBLE_EQ(v[1].number, 1.5);
+    EXPECT_DOUBLE_EQ(v[3].number, 2.5);
+    EXPECT_DOUBLE_EQ(v[5].number, 3.4);
+    EXPECT_TRUE(tz.errors().empty());
+  }
+}
+
+TEST(TokenizerLocale, ColumnSeparatorDoesNotJoinNamesInsideBraces) {
+  Tokenizer tz("{WAHR.FALSCH}", LocaleOptions(ExcelLocale::kDeDE));
+  const auto& v = tz.tokens();
+  ASSERT_EQ(v.size(), 6u);
+  EXPECT_EQ(v[1].kind, TokenKind::Bool);
+  EXPECT_TRUE(v[1].boolean);
+  EXPECT_EQ(v[2].kind, TokenKind::Comma);
+  EXPECT_EQ(v[3].kind, TokenKind::Bool);
+  EXPECT_FALSE(v[3].boolean);
+}
+
+TEST(TokenizerLocale, ListSeparatorOutsideBracesIsNotARowSeparator) {
+  EXPECT_EQ(KindsOf("A1;B1", LocaleOptions(ExcelLocale::kDeDE)),
+            (std::vector<TokenKind>{TokenKind::CellRef, TokenKind::Comma, TokenKind::CellRef, TokenKind::Eof}));
+}
+
+TEST(TokenizerLocale, BooleanNames) {
+  Tokenizer de("WAHR falsch", LocaleOptions(ExcelLocale::kDeDE));
+  const auto& d = de.tokens();
+  ASSERT_GE(d.size(), 3u);
+  EXPECT_EQ(d[0].kind, TokenKind::Bool);
+  EXPECT_TRUE(d[0].boolean);
+  EXPECT_EQ(d[2].kind, TokenKind::Bool);
+  EXPECT_FALSE(d[2].boolean);
+
+  Tokenizer fr("VRAI FAUX TRUE", LocaleOptions(ExcelLocale::kFrFR));
+  const auto& f = fr.tokens();
+  ASSERT_GE(f.size(), 5u);
+  EXPECT_TRUE(f[0].boolean);
+  EXPECT_EQ(f[2].kind, TokenKind::Bool);
+  EXPECT_FALSE(f[2].boolean);
+  EXPECT_EQ(f[4].kind, TokenKind::Bool);
+
+  // Without the locale the localized spelling is a name.
+  EXPECT_EQ(KindsOf("WAHR"), (std::vector<TokenKind>{TokenKind::Ident, TokenKind::Eof}));
+}
+
+TEST(TokenizerLocale, LocalizedErrorName) {
+  Tokenizer tz("#NV", LocaleOptions(ExcelLocale::kDeDE));
+  const auto& v = tz.tokens();
+  ASSERT_EQ(v.size(), 2u);
+  EXPECT_EQ(v[0].kind, TokenKind::ErrorLiteral);
+  EXPECT_EQ(v[0].error_code, ErrorCode::NA);
+  // The canonical spelling is still accepted.
+  Tokenizer canonical("#N/A", LocaleOptions(ExcelLocale::kDeDE));
+  EXPECT_EQ(canonical.tokens()[0].error_code, ErrorCode::NA);
+  // Without the locale `#NV` is not an error literal.
+  Tokenizer plain("#NV");
+  (void)plain.tokens();
+  EXPECT_FALSE(plain.errors().empty());
+}
+
+TEST(TokenizerLocale, QuotedTextAndStructuredRefsKeepSeparators) {
+  for (const ExcelLocale locale : {ExcelLocale::kDeDE, ExcelLocale::kFrFR}) {
+    Tokenizer sheet("'a;b'!A1", LocaleOptions(locale));
+    const auto& s = sheet.tokens();
+    ASSERT_GE(s.size(), 3u);
+    EXPECT_EQ(s[0].kind, TokenKind::SheetName);
+    EXPECT_EQ(s[0].text, "a;b");
+
+    Tokenizer text("\"x;y\"", LocaleOptions(locale));
+    const auto& t = text.tokens();
+    ASSERT_EQ(t.size(), 2u);
+    EXPECT_EQ(t[0].kind, TokenKind::String);
+    EXPECT_EQ(t[0].text, "x;y");
+
+    Tokenizer table("Tbl[[#Headers],[a;b]]", LocaleOptions(locale));
+    std::size_t semicolons = 0;
+    std::size_t commas = 0;
+    for (const Token& token : table.tokens()) {
+      semicolons += token.kind == TokenKind::Semicolon ? 1 : 0;
+      commas += token.kind == TokenKind::Comma ? 1 : 0;
+    }
+    EXPECT_EQ(semicolons, 1u);
+    EXPECT_EQ(commas, 1u);
+  }
+}
+
+TEST(TokenizerLocale, InvariantFactsLexLikeTheDefaultPath) {
+  const char* const sources[] = {"SUM(1.5,2;3)", "{1,2.5;3,4}", "IF(TRUE,#N/A,FALSE)", "'a,b'!A1+.5",
+                                 "T[[#Headers],[a]]"};
+  for (const ExcelLocale locale :
+       {ExcelLocale::kEnUS, ExcelLocale::kJaJP, ExcelLocale::kZhCN, ExcelLocale::kKoKR, ExcelLocale::kThTH}) {
+    for (const char* source : sources) {
+      EXPECT_EQ(KindsOf(source, LocaleOptions(locale)), KindsOf(source)) << source;
+    }
+  }
 }
 
 }  // namespace

@@ -114,27 +114,41 @@ class WasmLocatorTests(unittest.TestCase):
         self.assertNotIn("(from FORMULON_WASM_PATH)", str(caught.exception))
 
 
-class FunctionMetadataLocaleTests(unittest.TestCase):
+class CatalogProfileTests(unittest.TestCase):
     def test_unknown_function_returns_none(self) -> None:
         self.assertIsNone(Workbook.function_metadata("NOPE"))
 
-    def test_out_of_range_locale_raises_instead_of_returning_none(self) -> None:
-        """An invalid locale is an API error, not a "function not found"."""
-        for locale in (-1, 4, 99):
-            with self.subTest(locale=locale):
-                with self.assertRaises(FormulonError):
-                    Workbook.function_metadata("SUM", locale)
+    def test_unknown_profile_raises_on_every_profile_keyed_call(self) -> None:
+        for call in (
+            lambda: Workbook.localize_function_name("SUM", "nope"),
+            lambda: Workbook.canonicalize_function_name("SUM", "nope"),
+            lambda: Workbook.localize_formula("=SUM(1)", "nope"),
+            lambda: Workbook.canonicalize_formula("=SUM(1)", "nope"),
+            lambda: Workbook.locale_facts("nope"),
+        ):
+            with self.assertRaises(FormulonError):
+                call()
 
-    def test_out_of_range_locale_matches_the_sibling_catalog_methods(self) -> None:
-        with self.assertRaises(FormulonError):
-            Workbook.localize_function_name("SUM", 99)
-        with self.assertRaises(FormulonError):
-            Workbook.canonicalize_function_name("SUM", 99)
+    def test_formula_and_function_names_follow_the_profile(self) -> None:
+        self.assertEqual(Workbook.localize_formula("=SUM(1.5,2)", "mac-365-de_DE"), "=SUMME(1,5;2)")
+        self.assertEqual(Workbook.canonicalize_formula("=SUMME(1,5;2)", "mac-365-de_DE"), "=SUM(1.5,2)")
+        self.assertEqual(Workbook.localize_formula("=IF(TRUE,1,2)", "mac-365-fr_FR"), "=SI(VRAI;1;2)")
+        self.assertEqual(Workbook.localize_formula("=#N/A", "mac-365-de_DE"), "=#NV")
+        self.assertEqual(Workbook.canonicalize_formula("=#NV", "mac-365-de_DE"), "=#N/A")
+        self.assertEqual(Workbook.localize_formula('=A1&";"', "mac-365-de_DE"), '=A1&";"')
+        self.assertEqual(Workbook.localize_function_name("SUM", "win-365-de_DE"), "SUMME")
+        self.assertEqual(Workbook.canonicalize_function_name("SUMME", "win-365-de_DE"), "SUM")
 
-    def test_known_function_resolves_in_both_locales(self) -> None:
-        for locale in (0, 1):
-            with self.subTest(locale=locale):
-                self.assertIsNotNone(Workbook.function_metadata("SUM", locale))
+    def test_locale_facts_report_separators_and_measurement(self) -> None:
+        mac = Workbook.locale_facts("mac-365-de_DE")
+        self.assertEqual(mac.decimal_separator, ",")
+        self.assertEqual(mac.list_separator, ";")
+        self.assertEqual(mac.date_order, "dmy")
+        self.assertTrue(mac.measured)
+        na = next(e for e in mac.error_names if e.canonical == "#N/A")
+        self.assertEqual(na.localized, "#NV")
+        self.assertFalse(Workbook.locale_facts("win-365-de_DE").measured)
+        self.assertEqual(Workbook.locale_facts("win-365-en_US").decimal_separator, ".")
 
 
 class NamedConstantTableTests(unittest.TestCase):

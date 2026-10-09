@@ -16,10 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and boolean text, `TEXT` format codes, R1C1 letters, `CELL` codes,
   `FORMULATEXT`, double-byte text functions and `CHAR` / `CODE`; the `win-*`
   profiles are estimated from them plus the Windows host rules.
-  `fm_function_localize` and `fm_function_canonicalize` translate function
-  names for `de-DE` and `fr-FR` (`fm_locale_t` gains `FM_LOCALE_DE_DE` and
-  `FM_LOCALE_FR_FR`). Formulas are still entered with English names and
-  stored separators, and CLI output stays locale-invariant.
+  Formulas are still entered with English names and stored separators, and
+  CLI output stays locale-invariant.
+- Locale-dependent catalog calls are keyed by profile id in the C ABI, Node,
+  WASM and Python: function-name translation (`fm_function_localize`,
+  `fm_function_canonicalize`; `localizeFunctionName`,
+  `canonicalizeFunctionName`; `localize_function_name`,
+  `canonicalize_function_name`) for `de-DE` and `fr-FR`; whole-formula text
+  conversion between the stored English form and a profile's spelling
+  (`fm_formula_localize`, `fm_formula_canonicalize`, `localizeFormula`,
+  `canonicalizeFormula`, `localize_formula`, `canonicalize_formula`); and
+  per-profile locale facts (`fm_locale_facts`, `fm_locale_error_name`,
+  `localeFacts`, `locale_facts`): separators, boolean names, date order,
+  currency layout, localized error names, and whether the profile is
+  Excel-measured or estimated.
 - A built-in function name written bare is a function value, as a `LAMBDA`
   is: `=TYPE(SUM)` is 128, `=SUM` shows `#CALC!`, `=ABS+1` is `#VALUE!`, and
   `=LET(f,ABS,f(-2))`, `=CHOOSE(1,SUM,ABS)(5)` and `=IF(TRUE,ABS,SUM)(-3)`
@@ -73,6 +83,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `fm_locale_t` and the `FM_LOCALE_*` codes are removed; the function-name
+  calls take a profile id instead of a numeric locale. `fm_function_metadata`,
+  `functionMetadata` and `function_metadata` lose their locale argument, as
+  the metadata is locale-invariant.
 - PivotTable labels, data-field names and subtotal rows follow Mac Excel 365
   in each profile's locale. An en-US pivot renders Excel's compact layout
   (`Row Labels` / `Column Labels` headers, `North Total` subtotal rows) instead

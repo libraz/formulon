@@ -4,7 +4,6 @@
 #include <cctype>
 #include <cstdint>
 #include <cstring>
-#include <limits>
 #include <string>
 #include <unordered_set>
 
@@ -14,7 +13,7 @@
 
 TEST(FormulonCApiFunctionMetadata, KnownFunctionResolves) {
   fm_function_metadata_t md{};
-  ASSERT_EQ(fm_function_metadata("SUM", FM_LOCALE_EN_US, &md), 0);
+  ASSERT_EQ(fm_function_metadata("SUM", &md), 0);
   ASSERT_NE(md.canonical_name, nullptr);
   EXPECT_STREQ(md.canonical_name, "SUM");
   EXPECT_EQ(md.min_arity, 1U);
@@ -28,66 +27,116 @@ TEST(FormulonCApiFunctionMetadata, KnownFunctionResolves) {
 
 TEST(FormulonCApiFunctionMetadata, LookupIsCaseInsensitive) {
   fm_function_metadata_t md{};
-  ASSERT_EQ(fm_function_metadata("sum", FM_LOCALE_EN_US, &md), 0);
+  ASSERT_EQ(fm_function_metadata("sum", &md), 0);
   EXPECT_STREQ(md.canonical_name, "SUM");
-  ASSERT_EQ(fm_function_metadata("SuM", FM_LOCALE_EN_US, &md), 0);
+  ASSERT_EQ(fm_function_metadata("SuM", &md), 0);
   EXPECT_STREQ(md.canonical_name, "SUM");
 }
 
 TEST(FormulonCApiFunctionMetadata, UnknownFunctionReturnsInvalidArgument) {
   fm_function_metadata_t md{};
-  fm_status_t rc = fm_function_metadata("NOT_A_FUNCTION", FM_LOCALE_EN_US, &md);
+  fm_status_t rc = fm_function_metadata("NOT_A_FUNCTION", &md);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
 TEST(FormulonCApiFunctionMetadata, AvailabilityDistinguishesUnavailableStubs) {
   fm_function_metadata_t md{};
-  ASSERT_EQ(fm_function_metadata("WEBSERVICE", FM_LOCALE_EN_US, &md), 0);
+  ASSERT_EQ(fm_function_metadata("WEBSERVICE", &md), 0);
   EXPECT_STREQ(md.canonical_name, "WEBSERVICE");
   EXPECT_EQ(md.availability, FM_FUNCTION_UNAVAILABLE_STUB);
 
-  ASSERT_EQ(fm_function_metadata("CUBEVALUE", FM_LOCALE_EN_US, &md), 0);
+  ASSERT_EQ(fm_function_metadata("CUBEVALUE", &md), 0);
   EXPECT_EQ(md.availability, FM_FUNCTION_UNAVAILABLE_STUB);
 }
 
 TEST(FormulonCApiFunctionMetadata, AvailabilityDistinguishesNonStubSpecialCases) {
   fm_function_metadata_t md{};
-  ASSERT_EQ(fm_function_metadata("FILTERXML", FM_LOCALE_EN_US, &md), 0);
+  ASSERT_EQ(fm_function_metadata("FILTERXML", &md), 0);
   EXPECT_EQ(md.availability, FM_FUNCTION_IMPLEMENTED);
 
-  ASSERT_EQ(fm_function_metadata("INFO", FM_LOCALE_EN_US, &md), 0);
+  ASSERT_EQ(fm_function_metadata("INFO", &md), 0);
   EXPECT_EQ(md.availability, FM_FUNCTION_ENVIRONMENT_BOUND);
 
-  ASSERT_EQ(fm_function_metadata("SUM", FM_LOCALE_EN_US, &md), 0);
+  ASSERT_EQ(fm_function_metadata("SUM", &md), 0);
   EXPECT_EQ(md.availability, FM_FUNCTION_IMPLEMENTED);
 }
 
 TEST(FormulonCApiFunctionMetadata, NullArgsReturnBindingNullPointer) {
   fm_function_metadata_t md{};
-  EXPECT_EQ(fm_function_metadata(nullptr, FM_LOCALE_EN_US, &md),
+  EXPECT_EQ(fm_function_metadata(nullptr, &md),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_function_metadata("SUM", FM_LOCALE_EN_US, nullptr),
+  EXPECT_EQ(fm_function_metadata("SUM", nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
-TEST(FormulonCApiFunctionMetadata, RawLocaleValuesAreRejectedWithoutMutation) {
-  const std::int32_t invalid_locales[] = {99, std::numeric_limits<std::int32_t>::min(),
-                                          std::numeric_limits<std::int32_t>::max()};
-  const fm_status_t expected = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  for (const std::int32_t raw : invalid_locales) {
-    fm_function_metadata_t md{};
-    md.canonical_name = "sentinel";
-    EXPECT_EQ(fm_function_metadata("SUM", raw, &md), expected);
-    EXPECT_EQ(md.canonical_name, nullptr);
-
+TEST(FormulonCApiFunctionMetadata, UnknownProfileIsRejectedWithoutMutation) {
+  const fm_status_t invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  for (const char* id : {"", "de_DE", "mac-365-xx_XX", "win-365-en-US"}) {
     const char* localized = "sentinel";
-    EXPECT_EQ(fm_function_localize("SUM", raw, &localized), expected);
+    EXPECT_EQ(fm_function_localize("SUM", id, &localized), invalid) << id;
     EXPECT_EQ(localized, nullptr);
+    EXPECT_NE(std::strstr(fm_last_error_context(), "profile_id="), nullptr) << id;
 
     const char* canonical = "sentinel";
-    EXPECT_EQ(fm_function_canonicalize("SUM", raw, &canonical), expected);
+    EXPECT_EQ(fm_function_canonicalize("SUM", id, &canonical), invalid) << id;
     EXPECT_EQ(canonical, nullptr);
   }
+}
+
+TEST(FormulonCApiFunctionMetadata, NullProfileReturnsBindingNullPointer) {
+  const fm_status_t null_ptr = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
+  const char* out = nullptr;
+  EXPECT_EQ(fm_function_localize("SUM", nullptr, &out), null_ptr);
+  EXPECT_EQ(fm_function_canonicalize("SUM", nullptr, &out), null_ptr);
+  EXPECT_EQ(fm_function_localize(nullptr, "mac-365-de_DE", &out), null_ptr);
+  EXPECT_EQ(fm_function_canonicalize("SUM", "mac-365-de_DE", nullptr), null_ptr);
+}
+
+TEST(FormulonCApiFunctionMetadata, GermanAndFrenchShowLocalizedNames) {
+  const char* out = nullptr;
+  for (const char* id : {"mac-365-de_DE", "win-365-de_DE"}) {
+    ASSERT_EQ(fm_function_localize("sum", id, &out), 0);
+    EXPECT_STREQ(out, "SUMME");
+    ASSERT_EQ(fm_function_canonicalize("SUMME", id, &out), 0);
+    EXPECT_STREQ(out, "SUM");
+    // The canonical spelling stays accepted as a fallback.
+    ASSERT_EQ(fm_function_canonicalize("sum", id, &out), 0);
+    EXPECT_STREQ(out, "SUM");
+  }
+  ASSERT_EQ(fm_function_localize("XLOOKUP", "mac-365-fr_FR", &out), 0);
+  EXPECT_STREQ(out, "RECHERCHEX");
+  ASSERT_EQ(fm_function_canonicalize("SOMME", "mac-365-fr_FR", &out), 0);
+  EXPECT_STREQ(out, "SUM");
+  ASSERT_EQ(fm_function_canonicalize("TRIM", "mac-365-fr_FR", &out), 0);
+  EXPECT_STREQ(out, "MIRR");
+  // A localized spelling of another locale is not a function here.
+  EXPECT_NE(fm_function_canonicalize("SUMME", "mac-365-fr_FR", &out), 0);
+}
+
+TEST(FormulonCApiFunctionMetadata, OtherLocalesShowCanonicalNames) {
+  const char* out = nullptr;
+  for (const char* id : {"mac-365-ja_JP", "win-365-ja_JP", "mac-365-en_US", "win-365-en_US", "mac-365-zh_CN",
+                         "mac-365-ko_KR", "mac-365-th_TH"}) {
+    ASSERT_EQ(fm_function_localize("SUM", id, &out), 0) << id;
+    EXPECT_STREQ(out, "SUM") << id;
+    ASSERT_EQ(fm_function_canonicalize("sum", id, &out), 0) << id;
+    EXPECT_STREQ(out, "SUM") << id;
+  }
+  for (const char* id : {"mac-365-en_US", "mac-365-zh_CN", "mac-365-ko_KR", "mac-365-th_TH"}) {
+    ASSERT_EQ(fm_function_localize("DOLLAR", id, &out), 0) << id;
+    EXPECT_STREQ(out, "DOLLAR") << id;
+  }
+}
+
+// ja-JP renames only the three functions its name column lists.
+TEST(FormulonCApiFunctionMetadata, JapaneseRenamesTheListedFunctions) {
+  const char* out = nullptr;
+  ASSERT_EQ(fm_function_localize("DOLLAR", "mac-365-ja_JP", &out), 0);
+  EXPECT_STREQ(out, "YEN");
+  ASSERT_EQ(fm_function_canonicalize("YEN", "win-365-ja_JP", &out), 0);
+  EXPECT_STREQ(out, "DOLLAR");
+  ASSERT_EQ(fm_function_localize("SUM", "mac-365-ja_JP", &out), 0);
+  EXPECT_STREQ(out, "SUM");
 }
 
 TEST(FormulonCApiFunctionMetadata, FunctionCountIsPositive) {
@@ -137,7 +186,7 @@ TEST(FormulonCApiFunctionMetadata, LazyAndSpecialFormsResolveMetadata) {
   for (const char* fn : {"XLOOKUP", "SUMIFS", "IFERROR", "INDEX", "OFFSET", "INDIRECT", "SORT", "UNIQUE", "FILTER",
                          "LET", "LAMBDA", "VLOOKUP"}) {
     fm_function_metadata_t md{};
-    ASSERT_EQ(fm_function_metadata(fn, FM_LOCALE_EN_US, &md), 0) << fn << " did not resolve";
+    ASSERT_EQ(fm_function_metadata(fn, &md), 0) << fn << " did not resolve";
     ASSERT_NE(md.canonical_name, nullptr);
     EXPECT_STREQ(md.canonical_name, fn);
     // No FunctionDef -> arity is unknown: min 0, max unbounded sentinel.
@@ -149,7 +198,7 @@ TEST(FormulonCApiFunctionMetadata, LazyAndSpecialFormsResolveMetadata) {
 
 TEST(FormulonCApiFunctionMetadata, LazyFormLookupIsCaseInsensitive) {
   fm_function_metadata_t md{};
-  ASSERT_EQ(fm_function_metadata("xlookup", FM_LOCALE_EN_US, &md), 0);
+  ASSERT_EQ(fm_function_metadata("xlookup", &md), 0);
   EXPECT_STREQ(md.canonical_name, "XLOOKUP");
 }
 
@@ -158,16 +207,13 @@ TEST(FormulonCApiFunctionMetadata, LazyFormLookupIsCaseInsensitive) {
 // membership split where localize / canonicalize consulted only the eager
 // registry and rejected XLOOKUP / LET / SUMIFS despite enumerating them.
 //
-// Swept across every supported locale because the locale ordinal must not
-// change any answer: display names and function text belong to the host's
-// provider document, so the engine's reply is locale-invariant. A
-// per-locale table growing inside the engine would break the merge
-// contract in `docs/function-metadata-schema.md`, and this is where that
-// shows up.
+// Swept across locales with no name column, because metadata is
+// locale-invariant and a function-text table growing inside the engine would
+// break the merge contract in `docs/function-metadata-schema.md`.
 TEST(FormulonCApiFunctionMetadata, EveryEnumeratedNameRoundTripsAcrossAllCatalogApis) {
   const std::size_t count = fm_function_count();
   ASSERT_GT(count, 0U);
-  for (const std::int32_t locale : {FM_LOCALE_EN_US, FM_LOCALE_JA_JP}) {
+  for (const char* profile : {"win-365-en_US", "mac-365-zh_CN"}) {
     for (std::size_t i = 0; i < count; ++i) {
       const char* name = nullptr;
       ASSERT_EQ(fm_function_name_at(i, &name), 0);
@@ -175,7 +221,7 @@ TEST(FormulonCApiFunctionMetadata, EveryEnumeratedNameRoundTripsAcrossAllCatalog
 
       // metadata
       fm_function_metadata_t md{};
-      EXPECT_EQ(fm_function_metadata(name, locale, &md), 0) << name << " has no metadata in locale " << locale;
+      EXPECT_EQ(fm_function_metadata(name, &md), 0) << name << " has no metadata";
       // Display text is host-supplied, never engine-owned. Asserted for
       // the whole catalog rather than one sample: the eager and the
       // lazy / special-form branches populate the result separately, so
@@ -186,13 +232,13 @@ TEST(FormulonCApiFunctionMetadata, EveryEnumeratedNameRoundTripsAcrossAllCatalog
       // canonicalize: an enumerated name is already canonical, so it maps to
       // itself.
       const char* canonical = nullptr;
-      ASSERT_EQ(fm_function_canonicalize(name, locale, &canonical), 0) << name << " did not canonicalize";
+      ASSERT_EQ(fm_function_canonicalize(name, profile, &canonical), 0) << name << " did not canonicalize";
       ASSERT_NE(canonical, nullptr);
       EXPECT_STREQ(canonical, name);
 
       // localize: with no alias table it falls through to the canonical name.
       const char* localized = nullptr;
-      ASSERT_EQ(fm_function_localize(name, locale, &localized), 0) << name << " did not localize";
+      ASSERT_EQ(fm_function_localize(name, profile, &localized), 0) << name << " did not localize";
       ASSERT_NE(localized, nullptr);
       EXPECT_STREQ(localized, name);
     }
@@ -202,7 +248,7 @@ TEST(FormulonCApiFunctionMetadata, EveryEnumeratedNameRoundTripsAcrossAllCatalog
 TEST(FormulonCApiFunctionMetadata, LazyAndSpecialFormsCanonicalizeCaseInsensitively) {
   for (const char* fn : {"xlookup", "sumifs", "let", "lambda", "filter"}) {
     const char* canonical = nullptr;
-    ASSERT_EQ(fm_function_canonicalize(fn, FM_LOCALE_EN_US, &canonical), 0) << fn << " did not canonicalize";
+    ASSERT_EQ(fm_function_canonicalize(fn, "win-365-en_US", &canonical), 0) << fn << " did not canonicalize";
     ASSERT_NE(canonical, nullptr);
     std::string upper(fn);
     for (char& c : upper) {

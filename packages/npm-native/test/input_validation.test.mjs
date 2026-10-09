@@ -120,7 +120,7 @@ test('sheet, structural, enum, and read positions reject non-number primitives',
     assert.throws(() => wb.insertRows(0, 0, 1.5), RangeError);
     assert.throws(() => wb.setCalcMode(1.5), RangeError);
     assert.throws(() => wb.getValue(Symbol('sheet'), 0, 0), TypeError);
-    assert.throws(() => wb.functionMetadata('SUM', 1.5), RangeError);
+    assert.throws(() => wb.localizeFunctionName('SUM', 1), TypeError);
     assert.throws(() => wb.resolveColor({ kind: 1, rgb: 0 }, 2 ** 31), RangeError);
     assert.throws(
       () => wb.getCellsInRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, Symbol('cursor')),

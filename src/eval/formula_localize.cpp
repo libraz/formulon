@@ -1,6 +1,6 @@
-// Locale rewriting of stored formula text.
+// Locale rewriting of formula text, in both directions.
 //
-// The stored text is tokenized and re-emitted token by token. Token lexemes
+// The text is tokenized and re-emitted token by token. Token lexemes
 // are views into the source, so the bytes between tokens (and any run the
 // tokenizer skipped) are copied verbatim; only the token kinds Excel
 // localizes are replaced. Structured-reference brackets are copied as-is
@@ -8,16 +8,16 @@
 
 #include "eval/formula_localize.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <vector>
 
-#include "eval/eval_profile_scope.h"
 #include "eval/locale_function_names.h"
-#include "eval/locale_text.h"
 #include "excel_locale.h"
 #include "parser/token.h"
 #include "parser/tokenizer.h"
+#include "utils/double_format.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -63,7 +63,9 @@ bool is_function_name_token(parser::TokenKind kind) noexcept {
 // their digits and only take the locale decimal separator.
 void append_number(const parser::Token& token, char decimal_separator, std::string& out) {
   if (token.lexeme.find_first_of("Ee") != std::string_view::npos) {
-    out.append(locale_number_text(token.number));
+    const std::size_t from = out.size();
+    format_double(out, token.number);
+    std::replace(out.begin() + static_cast<std::ptrdiff_t>(from), out.end(), '.', decimal_separator);
     return;
   }
   for (const char c : token.lexeme) {
@@ -71,24 +73,18 @@ void append_number(const parser::Token& token, char decimal_separator, std::stri
   }
 }
 
-}  // namespace
+enum class Direction { kToLocale, kToCanonical };
 
-const char* localized_function_name(ExcelLocale locale, std::string_view canonical) noexcept {
-  return find_function_name(locale, [canonical](const char* name, const char* field) -> const char* {
-    return strings::case_insensitive_eq(name, canonical) ? field : nullptr;
-  });
-}
-
-const char* canonical_function_name(ExcelLocale locale, std::string_view localized) noexcept {
-  return find_function_name(locale, [localized](const char* name, const char* field) -> const char* {
-    return strings::case_insensitive_eq(field, localized) ? name : nullptr;
-  });
-}
-
-std::string localize_formula_text(std::string_view formula) {
-  const ExcelProfile profile = current_eval_profile();
+// Re-emits `formula` token by token. Inter-token bytes are copied verbatim
+// and only the token kinds Excel localizes change; nothing is validated.
+std::string rewrite_formula_text(std::string_view formula, ExcelProfile profile, Direction direction) {
+  const bool to_locale = direction == Direction::kToLocale;
   const LocaleFacts& facts = locale_facts(profile);
-  parser::Tokenizer tokenizer(formula);
+  parser::TokenizerOptions options;
+  if (!to_locale) {
+    options.locale = &facts;
+  }
+  parser::Tokenizer tokenizer(formula, options);
   const std::vector<parser::Token>& tokens = tokenizer.tokens();
 
   std::string out;
@@ -119,8 +115,9 @@ std::string localize_formula_text(std::string_view formula) {
 
     const bool is_call = i + 1 < tokens.size() && tokens[i + 1].kind == parser::TokenKind::LParen;
     if (is_call && is_function_name_token(token.kind)) {
-      const char* local = localized_function_name(profile.locale, token.lexeme);
-      out.append(local != nullptr ? std::string_view(local) : token.lexeme);
+      const char* renamed = to_locale ? localized_function_name(profile.locale, token.lexeme)
+                                      : canonical_function_name(profile.locale, token.lexeme);
+      out.append(renamed != nullptr ? std::string_view(renamed) : token.lexeme);
       continue;
     }
     switch (token.kind) {
@@ -133,24 +130,44 @@ std::string localize_formula_text(std::string_view formula) {
         out.append(token.lexeme);
         break;
       case parser::TokenKind::Comma:
-        out.push_back(braces > 0 ? facts.array_column_separator : facts.list_separator);
+        if (!to_locale) {
+          out.push_back(',');
+        } else {
+          out.push_back(braces > 0 ? facts.array_column_separator : facts.list_separator);
+        }
         break;
       case parser::TokenKind::Semicolon:
         if (braces > 0) {
-          out.push_back(facts.array_row_separator);
+          out.push_back(to_locale ? facts.array_row_separator : ';');
         } else {
           out.append(token.lexeme);
         }
         break;
       case parser::TokenKind::Number:
-        append_number(token, facts.decimal_separator, out);
+        if (to_locale) {
+          append_number(token, facts.decimal_separator, out);
+        } else {
+          for (const char c : token.lexeme) {
+            out.push_back(c == facts.decimal_separator ? '.' : c);
+          }
+        }
         break;
       case parser::TokenKind::Bool:
-        out.append(locale_bool_text(token.boolean));
+        if (to_locale) {
+          out.append(token.boolean ? facts.true_name : facts.false_name);
+        } else {
+          out.append(token.boolean ? "TRUE" : "FALSE");
+        }
         break;
-      case parser::TokenKind::ErrorLiteral:
-        out.append(locale_error_text(token.error_code));
+      case parser::TokenKind::ErrorLiteral: {
+        const auto ordinal = static_cast<std::size_t>(token.error_code);
+        if (to_locale) {
+          out.append(facts.error_names[ordinal]);
+        } else {
+          out.append(kErrorTable[ordinal].display_name);
+        }
         break;
+      }
       default:
         out.append(token.lexeme);
         break;
@@ -158,6 +175,28 @@ std::string localize_formula_text(std::string_view formula) {
   }
   out.append(formula.substr(copied));
   return out;
+}
+
+}  // namespace
+
+const char* localized_function_name(ExcelLocale locale, std::string_view canonical) noexcept {
+  return find_function_name(locale, [canonical](const char* name, const char* field) -> const char* {
+    return strings::case_insensitive_eq(name, canonical) ? field : nullptr;
+  });
+}
+
+const char* canonical_function_name(ExcelLocale locale, std::string_view localized) noexcept {
+  return find_function_name(locale, [localized](const char* name, const char* field) -> const char* {
+    return strings::case_insensitive_eq(field, localized) ? name : nullptr;
+  });
+}
+
+std::string localize_formula_text(std::string_view formula, ExcelProfile profile) {
+  return rewrite_formula_text(formula, profile, Direction::kToLocale);
+}
+
+std::string canonicalize_formula_text(std::string_view formula, ExcelProfile profile) {
+  return rewrite_formula_text(formula, profile, Direction::kToCanonical);
 }
 
 }  // namespace eval

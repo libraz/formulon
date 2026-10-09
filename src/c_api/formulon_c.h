@@ -4446,28 +4446,18 @@ typedef struct {
 } fm_function_metadata_t;
 
 /**
- * @brief Locale codes for `fm_function_metadata`.
- *
- *   * `0` — `en-US` (default).
- *   * `1` — `ja-JP`.
- *   * `2` — `de-DE`.
- *   * `3` — `fr-FR`.
- */
-typedef enum { FM_LOCALE_EN_US = 0, FM_LOCALE_JA_JP = 1, FM_LOCALE_DE_DE = 2, FM_LOCALE_FR_FR = 3 } fm_locale_t;
-
-/**
- * @brief Returns metadata for the function `name` in `locale`.
+ * @brief Returns metadata for the function `name`.
  *
  * `name` is matched case-insensitively against the canonical name. On
  * success, `*out` receives a view into the catalog's static storage;
- * the views are valid for the lifetime of the process. `locale` is a raw
- * signed 32-bit ordinal; unknown values return `kInvalidArgument`.
+ * the views are valid for the lifetime of the process. The metadata is
+ * locale-invariant.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when `name` or `out` is `NULL`;
  *         `kInvalidArgument` when no function matches `name`.
  */
-FM_API fm_status_t fm_function_metadata(const char* name, int32_t locale, fm_function_metadata_t* out);
+FM_API fm_status_t fm_function_metadata(const char* name, fm_function_metadata_t* out);
 
 /**
  * @brief Returns the total number of registered Formulon functions.
@@ -4490,39 +4480,134 @@ FM_API size_t fm_function_count(void);
 FM_API fm_status_t fm_function_name_at(size_t idx, const char** out_name);
 
 /**
- * @brief Returns the localized display name for `canonical_name` in
- *        `locale`, or `canonical_name` itself when no alias is
- *        registered.
+ * @brief Returns the localized display name for `canonical_name` under the
+ *        profile `profile_id`, or `canonical_name` itself when the locale
+ *        has no alias.
  *
  * `*out_localized` is a static view into process-static storage and must not
- * be freed. `de-DE` and `fr-FR` return the function names Excel shows in
- * that locale; `en-US` and `ja-JP` return `canonical_name` unchanged (the
- * ja-JP names are identical to the English ones). Display names for other
- * locales belong to the host's provider document, not to the engine.
- * `locale` is a raw signed 32-bit ordinal and unknown values return
- * `kInvalidArgument`.
+ * be freed. `profile_id` is one of `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,
+ * zh_CN,ko_KR,th_TH}`. `de-DE` and `fr-FR` return the function names Excel
+ * shows in that locale; `en-US`, `zh-CN`, `ko-KR` and `th-TH` show the
+ * canonical names and return `canonical_name` unchanged. `ja-JP` renames
+ * only `DOLLAR` (`YEN`), `USDOLLAR` (`DOLLAR`) and `DBCS` (`JIS`).
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `canonical_name` does not match a
- *           registered function.
+ *         `kInvalidArgument` when `profile_id` is not a documented profile
+ *           (context `profile_id=<id>`) or `canonical_name` does not match
+ *           a registered function.
  */
-FM_API fm_status_t fm_function_localize(const char* canonical_name, int32_t locale, const char** out_localized);
+FM_API fm_status_t fm_function_localize(const char* canonical_name, const char* profile_id, const char** out_localized);
 
 /**
  * @brief Returns the canonical (English UPPERCASE) name for the
- *        localized function `localized_name` in `locale`.
+ *        localized function `localized_name` under the profile
+ *        `profile_id`.
  *
  * For `de-DE` and `fr-FR` this inverts the name table of
- * `fm_function_localize`; for `en-US` and `ja-JP` it is a case-insensitive
- * ASCII match against the canonical name list. `locale` is a raw signed
- * 32-bit ordinal and unknown values return `kInvalidArgument`.
+ * `fm_function_localize`, accepting the canonical spelling as a fallback;
+ * `ja-JP` inverts its three renames; for the other locales it is a
+ * case-insensitive ASCII match against the canonical name list.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when no function matches.
+ *         `kInvalidArgument` when `profile_id` is not a documented profile
+ *           (context `profile_id=<id>`) or no function matches.
  */
-FM_API fm_status_t fm_function_canonicalize(const char* localized_name, int32_t locale, const char** out_canonical);
+FM_API fm_status_t fm_function_canonicalize(const char* localized_name, const char* profile_id,
+                                            const char** out_canonical);
+
+/**
+ * @brief Rewrites stored (en-invariant) formula text into `profile_id`'s
+ *        spelling.
+ *
+ * Function names, list / array separators, decimal points, booleans and
+ * error names take the locale form; strings, quoted sheet names, external
+ * qualifiers and structured-reference brackets are kept verbatim. A number
+ * literal with an exponent is regenerated (`1.5E-3` becomes `0.0015`). A
+ * leading `=` is preserved. This is a pure text rewrite: the grammar is not
+ * validated.
+ *
+ * `*out_formula` points into a thread-local buffer and is valid until the
+ * next `fm_formula_localize` / `fm_formula_canonicalize` call on the same
+ * thread. Copy it before making another call when it must be retained.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `profile_id` is not a documented profile
+ *           (context `profile_id=<id>`).
+ */
+FM_API fm_status_t fm_formula_localize(const char* formula, const char* profile_id, const char** out_formula);
+
+/**
+ * @brief Rewrites `profile_id`-spelled formula text into the en-invariant
+ *        form; the inverse of `fm_formula_localize`.
+ *
+ * Same buffer lifetime, rewrite scope and status codes as
+ * `fm_formula_localize`.
+ */
+FM_API fm_status_t fm_formula_canonicalize(const char* formula, const char* profile_id, const char** out_formula);
+
+/** @brief Order in which a locale writes day, month and year. */
+typedef enum { FM_DATE_ORDER_MDY = 0, FM_DATE_ORDER_YMD = 1, FM_DATE_ORDER_DMY = 2 } fm_date_order_t;
+
+/**
+ * @brief Scalar locale facts of one profile (`fm_locale_facts`).
+ *
+ * Every string is a NUL-terminated UTF-8 view into process-static storage.
+ * `measured` is `1` for the profiles captured from Excel (every `mac-*`
+ * profile and `win-365-ja_JP`) and `0` for the estimated `win-*` ones; the
+ * other facts are measured in every Mac locale.
+ */
+typedef struct {
+  const char* decimal_separator;
+  const char* group_separator;
+  const char* list_separator;
+  const char* array_column_separator;
+  const char* array_row_separator;
+  const char* true_name;
+  const char* false_name;
+  int32_t date_order; /* fm_date_order_t */
+  const char* currency_symbol;
+  int32_t currency_suffix; /* 1: the symbol follows the number */
+  int32_t currency_space;  /* 1: one space between symbol and number */
+  int32_t currency_default_decimals;
+  int32_t measured; /* 1: Excel-measured profile; 0: estimated */
+} fm_locale_facts_t;
+
+/**
+ * @brief Fills `*out` with the locale facts of `profile_id`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `profile_id` or `out` is `NULL`;
+ *         `kInvalidArgument` when `profile_id` is not a documented profile
+ *           (context `profile_id=<id>`).
+ */
+FM_API fm_status_t fm_locale_facts(const char* profile_id, fm_locale_facts_t* out);
+
+/**
+ * @brief Returns the number of error values, the bound of `error_index` in
+ *        `fm_locale_error_name`.
+ *
+ * `error_index` uses the `fm_error_code_t` numbering (`4` is `#NAME?`).
+ */
+FM_API size_t fm_locale_error_name_count(void);
+
+/**
+ * @brief Returns the canonical and the `profile_id`-localized spelling of
+ *        the error at `error_index`.
+ *
+ * Both strings are process-static. `*out_measured` is `1` when the
+ * localized spelling was captured from Excel under a measured profile and
+ * `0` when it is assumed.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `profile_id` is not a documented profile
+ *           or `error_index` is out of range.
+ */
+FM_API fm_status_t fm_locale_error_name(const char* profile_id, size_t error_index, const char** out_canonical,
+                                        const char** out_localized, int32_t* out_measured);
 
 /* -------------------------------------------------------------------------- */
 /* Sheet view / layout (viewport, frozen panes, column / row overrides)       */

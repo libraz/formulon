@@ -100,6 +100,14 @@ bool check_range_count(std::uint32_t n, const char* api) {
   return true;
 }
 
+fm_status_t check_profile_id(const char* profile_id, const char* api, formulon::ExcelProfile* out) {
+  if (formulon::parse_excel_profile_id(profile_id, out)) {
+    return 0;
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                           (std::string(api) + ": unknown profile").c_str(), std::string("profile_id=") + profile_id);
+}
+
 fm_status_t check_sheet_rect(std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
                              std::uint32_t last_col, const char* api) {
   if (formulon::Sheet::rect_in_grid(first_row, first_col, last_row, last_col)) {
