@@ -69,6 +69,8 @@ namespace {
 // definition can call it.
 Expected<void, Error> validate_sheet_name(std::string_view name);
 
+void mark_all_formulas_dirty_locked(const std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator);
+
 }  // namespace
 
 // `op`-prefixed range check for a mutator addressing one sheet.
@@ -457,16 +459,7 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
     // the formula cell's own text. Sheet ids survive a rename, so retaining
     // the existing graph edges is safe; dirty every formula so those cached
     // values are nevertheless refreshed on the next pass.
-    for (std::size_t sheet_idx = 0; sheet_idx < sheets_.size(); ++sheet_idx) {
-      for (const auto& [row, cells] : sheets_[sheet_idx].rows()) {
-        for (std::size_t col = 0; col < cells.size(); ++col) {
-          if (!cells[col].formula_text.empty()) {
-            mutator.mark_dirty(
-                eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)});
-          }
-        }
-      }
-    }
+    mark_all_formulas_dirty_locked(sheets_, mutator);
   }
   // Rename last: the transform above intentionally reads the old workbook
   // name while formatting, then the final name makes all newly-written text
