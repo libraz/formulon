@@ -18,6 +18,7 @@
 
 #include "cell.h"
 #include "styles.h"
+#include "utils/a1_ref.h"
 
 namespace formulon::cf {
 
@@ -155,8 +156,8 @@ struct Color {
 /// so `CFCellRange` can classify whole-column / whole-row ranges without a
 /// heavy `sheet.h` include here. A `static_assert` in `cf_helpers.cpp`
 /// keeps these in sync with the canonical `Sheet` constants.
-inline constexpr std::uint32_t kCfMaxRows = 1048576U;
-inline constexpr std::uint32_t kCfMaxCols = 16384U;
+inline constexpr std::uint32_t kCfMaxRows = a1::kMaxRows;
+inline constexpr std::uint32_t kCfMaxCols = a1::kMaxCols;
 
 /// Inclusive cell-range expressed as two `CellAddress` corners. `first`
 /// is the top-left, `last` is the bottom-right; single-cell ranges have

@@ -15,6 +15,7 @@
 
 #include "parser/ast.h"
 #include "parser/reference.h"
+#include "utils/a1_ref.h"
 #include "utils/arena.h"
 
 namespace formulon {
@@ -47,11 +48,6 @@ std::optional<std::string_view> RefTransform::apply_name_sheet(std::string_view 
 }
 
 namespace {
-
-// Excel's coordinate ceilings. Used by the relative-shift transform to
-// detect out-of-bounds rewrites.
-constexpr std::uint32_t kMaxColumn = 16384;  // XFD
-constexpr std::uint32_t kMaxRow = 1048576;   // 2^20
 
 // Builds a `#REF!` error literal node. Returns nullptr on arena failure.
 AstNode* MakeRefError(Arena& arena) {
@@ -512,14 +508,14 @@ class RelativeShiftTransform final : public RefTransform {
     // axis; the absent axis stays meaningless and is left untouched.
     if (!ref.is_full_row && !ref.col_abs) {
       const std::int64_t shifted = static_cast<std::int64_t>(ref.col) + col_delta_;
-      if (shifted < 0 || shifted >= static_cast<std::int64_t>(kMaxColumn)) {
+      if (shifted < 0 || shifted >= static_cast<std::int64_t>(a1::kMaxCols)) {
         return std::nullopt;
       }
       out.col = static_cast<std::uint32_t>(shifted);
     }
     if (!ref.is_full_col && !ref.row_abs) {
       const std::int64_t shifted = static_cast<std::int64_t>(ref.row) + row_delta_;
-      if (shifted < 0 || shifted >= static_cast<std::int64_t>(kMaxRow)) {
+      if (shifted < 0 || shifted >= static_cast<std::int64_t>(a1::kMaxRows)) {
         return std::nullopt;
       }
       out.row = static_cast<std::uint32_t>(shifted);

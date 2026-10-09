@@ -11,6 +11,7 @@
 #include <string_view>
 
 #include "parser/token.h"
+#include "utils/a1_ref.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -55,8 +56,10 @@ inline constexpr int kBpComparison = 10;
 // lets the operand absorb `:` / space so `@A1:B2` is `@(A1:B2)`.
 inline constexpr int kBpAtPrefix = 65;
 
-inline constexpr std::uint32_t kMaxColumn = 16384;  // XFD
-inline constexpr std::uint32_t kMaxRow = 1048576;   // 2^20
+// Keep the historical parser-detail aliases for callers that use them, while
+// sourcing the workbook grid limits from the shared A1 reference constants.
+inline constexpr std::uint32_t kMaxColumn = a1::kMaxCols;
+inline constexpr std::uint32_t kMaxRow = a1::kMaxRows;
 
 // ASCII helpers. Re-implemented locally to avoid depending on the tokenizer's
 // privates and to keep the parser self-contained.

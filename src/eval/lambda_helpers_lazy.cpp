@@ -17,6 +17,7 @@
 #include "eval/shape_ops_lazy.h"
 #include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
+#include "utils/a1_ref.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -26,12 +27,6 @@ namespace formulon {
 namespace eval {
 
 namespace {
-
-// Excel worksheet grid limits. MAKEARRAY rejects shapes that exceed either
-// dimension with `#NUM!` so the helper cannot be used to allocate an array
-// the surrounding workbook could never contain.
-constexpr std::uint32_t kExcelMaxRows = 1048576U;
-constexpr std::uint32_t kExcelMaxCols = 16384U;
 
 // Allocates the `(rows, cols)` result array through the evaluator's shared
 // seam, handing back the header to publish once the cells are written and,
@@ -522,11 +517,11 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
   }
   Value err = Value::blank();
   std::uint32_t rows = 0;
-  if (!read_count_arg(call.as_call_arg(0), arena, registry, ctx, kExcelMaxRows, &rows, &err)) {
+  if (!read_count_arg(call.as_call_arg(0), arena, registry, ctx, a1::kMaxRows, &rows, &err)) {
     return err;
   }
   std::uint32_t cols = 0;
-  if (!read_count_arg(call.as_call_arg(1), arena, registry, ctx, kExcelMaxCols, &cols, &err)) {
+  if (!read_count_arg(call.as_call_arg(1), arena, registry, ctx, a1::kMaxCols, &cols, &err)) {
     return err;
   }
   if (static_cast<std::uint64_t>(rows) * static_cast<std::uint64_t>(cols) > kMaxSequenceCells) {

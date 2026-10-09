@@ -25,6 +25,7 @@
 #include "parser/ast_format.h"
 #include "parser/reference.h"
 #include "sheet_name.h"
+#include "utils/a1_ref.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -163,11 +164,11 @@ void emit_area(std::vector<std::uint8_t>& dst, const parser::Reference& a, const
 void SpanGrid(parser::Reference& first, parser::Reference& last) {
   if (first.is_full_col) {
     first.row = 0;
-    last.row = 1048575U;
+    last.row = a1::kMaxRows - 1U;
     first.row_abs = last.row_abs = true;
   } else if (first.is_full_row) {
     first.col = 0;
-    last.col = 16383U;
+    last.col = a1::kMaxCols - 1U;
     first.col_abs = last.col_abs = true;
   }
   first.is_full_col = first.is_full_row = last.is_full_col = last.is_full_row = false;

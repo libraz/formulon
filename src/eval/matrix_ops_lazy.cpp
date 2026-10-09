@@ -27,6 +27,7 @@
 #include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
+#include "utils/a1_ref.h"
 #include "utils/arena.h"
 #include "utils/checked_mul.h"
 #include "utils/error.h"
@@ -315,8 +316,7 @@ Value eval_minverse_lazy(const parser::AstNode& call, Arena& arena, const Functi
   // worksheet width at 16384 columns, so any matrix the engine could
   // legitimately encounter from a workbook is comfortably under this
   // limit; values above it can only come from synthetic inputs.
-  constexpr std::uint32_t kMaxMinverseDimension = 16384U;
-  if (n > kMaxMinverseDimension) {
+  if (n > a1::kMaxCols) {
     return Value::error(ErrorCode::Num);
   }
 

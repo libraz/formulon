@@ -13,6 +13,7 @@
 #include "io/xlsb/func_id_table.h"
 #include "io/xlsb/ptg_targets.h"
 #include "parser/ast.h"
+#include "utils/a1_ref.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -171,10 +172,8 @@ bool Shapes::positive_int(const parser::AstNode& node, std::uint32_t want) const
 }
 
 std::optional<std::pair<std::uint32_t, std::uint32_t>> Shapes::extent(const parser::AstNode& node) const {
-  constexpr std::uint32_t kRows = 1048576U;
-  constexpr std::uint32_t kCols = 16384U;
   auto one = [&](const parser::Reference& r) {
-    return std::make_pair(r.is_full_col ? kRows : 1U, r.is_full_row ? kCols : 1U);
+    return std::make_pair(r.is_full_col ? a1::kMaxRows : 1U, r.is_full_row ? a1::kMaxCols : 1U);
   };
   switch (node.kind()) {
     case parser::NodeKind::Ref:
@@ -187,8 +186,8 @@ std::optional<std::pair<std::uint32_t, std::uint32_t>> Shapes::extent(const pars
       }
       const parser::Reference& a = lhs.as_ref();
       const parser::Reference& b = rhs.as_ref();
-      const std::uint32_t rows = a.is_full_col ? kRows : (a.row > b.row ? a.row - b.row : b.row - a.row) + 1U;
-      const std::uint32_t cols = a.is_full_row ? kCols : (a.col > b.col ? a.col - b.col : b.col - a.col) + 1U;
+      const std::uint32_t rows = a.is_full_col ? a1::kMaxRows : (a.row > b.row ? a.row - b.row : b.row - a.row) + 1U;
+      const std::uint32_t cols = a.is_full_row ? a1::kMaxCols : (a.col > b.col ? a.col - b.col : b.col - a.col) + 1U;
       return std::make_pair(rows, cols);
     }
     case parser::NodeKind::NameRef: {
