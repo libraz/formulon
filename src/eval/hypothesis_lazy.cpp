@@ -440,8 +440,9 @@ Value eval_prob_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   }
   const NumericPairs& pairs = std::get<NumericPairs>(prepared);
   // `pairs.first` holds the x-values (first arg), `pairs.second` the probs.
+  // No numeric (x, prob) pair survives, e.g. text-only ranges.
   if (pairs.first.empty()) {
-    return Value::error(ErrorCode::NA);
+    return Value::error(ErrorCode::Div0);
   }
   double prob_sum = 0.0;
   for (double p : pairs.second) {
@@ -465,10 +466,10 @@ Value eval_prob_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (lower_v.is_error()) {
     return lower_v;
   }
-  if (!lower_v.is_number()) {
+  if (!lower_v.is_number() && !lower_v.is_blank()) {
     return Value::error(ErrorCode::Value);
   }
-  const double lower = lower_v.as_number();
+  const double lower = lower_v.is_blank() ? 0.0 : lower_v.as_number();
 
   if (arity == 3U) {
     // Upper omitted: degenerate single-point probability — sum of the
@@ -486,10 +487,10 @@ Value eval_prob_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (upper_v.is_error()) {
     return upper_v;
   }
-  if (!upper_v.is_number()) {
+  if (!upper_v.is_number() && !upper_v.is_blank()) {
     return Value::error(ErrorCode::Value);
   }
-  const double upper = upper_v.as_number();
+  const double upper = upper_v.is_blank() ? 0.0 : upper_v.as_number();
   if (upper < lower) {
     // Empty interval (lower_limit > upper_limit): Mac Excel treats this
     // as zero probability mass rather than a parameter error.

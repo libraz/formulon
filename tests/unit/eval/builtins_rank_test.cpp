@@ -275,6 +275,17 @@ TEST(BuiltinsRankRegistry, AllNamesDispatch) {
   }
 }
 
+TEST(BuiltinsRank, PercentRankInterpolatesPastADuplicateRun) {
+  // Sorted {-4,-1,3,7.5,12,12,56}: 40 lies between the second 12 (index 5)
+  // and 56, so the anchor is the run's last index.
+  const Value inc = EvalSource("=PERCENTRANK.INC({12;-1;7.5;56;12;-4;3}, 40)");
+  ASSERT_TRUE(inc.is_number()) << inc.debug_to_string();
+  EXPECT_DOUBLE_EQ(inc.as_number(), 0.939);
+  const Value exc = EvalSource("=PERCENTRANK.EXC({12;-1;7.5;56;12;-4;3}, 40)");
+  ASSERT_TRUE(exc.is_number()) << exc.debug_to_string();
+  EXPECT_DOUBLE_EQ(exc.as_number(), 0.829);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

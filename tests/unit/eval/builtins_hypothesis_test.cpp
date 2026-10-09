@@ -487,6 +487,33 @@ TEST(BuiltinsChisqTestPairs, ZeroExpectedAndAllDroppedAreDiv0) {
   ExpectHypErr("=CHISQ.TEST({TRUE,FALSE},{1,2})", ErrorCode::Div0);
 }
 
+TEST(HypothesisProb, BlankLimitCellsAreZero) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  const double xs[] = {1, 2, 3, 4, 5, 6};
+  const double ps[] = {0.2, 0.111, 0.05, 0.07, 0.5, 0.069};
+  for (std::uint32_t i = 0; i < 6U; ++i) {
+    s.set_cell_value(i, 0, Value::number(xs[i]));
+    s.set_cell_value(i, 1, Value::number(ps[i]));
+  }
+  const Value v = EvalSourceIn("=PROB(A1:A6,B1:B6,D1,E1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(HypothesisProb, TextOnlyRangesAreDiv0) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0, 0, Value::text("Hi"));
+  s.set_cell_value(1, 0, Value::text("ho"));
+  s.set_cell_value(0, 1, Value::text("hi"));
+  s.set_cell_value(1, 1, Value::text("ho"));
+  s.set_cell_value(0, 2, Value::number(1.0));
+  const Value v = EvalSourceIn("=PROB(A1:A2,B1:B2,C1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

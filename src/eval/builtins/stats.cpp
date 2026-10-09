@@ -465,7 +465,7 @@ void register_stats_builtins(FunctionRegistry& registry) {
       {"HARMEAN", 1u, kVariadic, &stats_detail::HarMean, true, true, true},
       {"DEVSQ", 1u, kVariadic, &stats_detail::DevSq, true, true, true},
       {"AVEDEV", 1u, kVariadic, &stats_detail::AveDev, true, true, true},
-      {"TRIMMEAN", 2u, kVariadic, &stats_detail::TrimMean, true, true, true},
+      {"TRIMMEAN", 2u, kVariadic, &stats_detail::TrimMean, true, true},
       {"SKEW", 1u, kVariadic, &stats_detail::Skew, true, true, true},
       {"SKEW.P", 1u, kVariadic, &stats_detail::SkewP, true, true, true},
       {"KURT", 1u, kVariadic, &stats_detail::Kurt, true, true, true},

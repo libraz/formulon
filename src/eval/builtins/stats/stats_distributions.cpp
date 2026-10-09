@@ -418,9 +418,11 @@ static double TDistRtCore(double x, double df) noexcept {
   return (x >= 0.0) ? half : 1.0 - half;
 }
 
-// Student's t CDF at `x` with `df` degrees of freedom.
+// Student's t CDF at `x` with `df` degrees of freedom. A negative `x` reads
+// the left tail off the symmetric right tail so it does not round to 0
+// through `1 - (1 - tail)`.
 static double TDistCdf(double x, double df) noexcept {
-  return 1.0 - TDistRtCore(x, df);
+  return x < 0.0 ? TDistRtCore(-x, df) : 1.0 - TDistRtCore(x, df);
 }
 
 // Student's t PDF at `x` with `df` degrees of freedom, computed in log

@@ -330,10 +330,8 @@ std::variant<Value, PercentRankInputs> prepare_percentrank(const parser::AstNode
   return out;
 }
 
-// Finds the lowest index k such that sorted[k] <= x < sorted[k + 1], then
-// scans back over an equal run so k points at the first occurrence of the
-// value (Excel reports the lowest rank for duplicates). Requires a
-// non-empty `sorted` with `sorted.front() <= x`.
+// Finds the highest index k with sorted[k] <= x. Requires a non-empty
+// `sorted` with `sorted.front() <= x`.
 std::size_t percentrank_floor_index(const std::vector<double>& sorted, double x) {
   std::size_t k = 0U;
   for (std::size_t i = 0; i < sorted.size(); ++i) {
@@ -342,9 +340,6 @@ std::size_t percentrank_floor_index(const std::vector<double>& sorted, double x)
     } else {
       break;
     }
-  }
-  while (k > 0U && sorted[k - 1U] == sorted[k]) {
-    --k;
   }
   return k;
 }
@@ -368,11 +363,19 @@ Value percentrank_impl(const parser::AstNode& call, Arena& arena, const Function
   if (in.x < in.sorted.front() || in.x > in.sorted.back()) {
     return Value::error(ErrorCode::NA);
   }
-  const std::size_t k = percentrank_floor_index(in.sorted, in.x);
+  std::size_t k = percentrank_floor_index(in.sorted, in.x);
+  const bool exact = in.sorted[k] == in.x;
+  // An exact match reports the lowest rank of a duplicate run; an
+  // interpolated x keeps the run's last index as its anchor.
+  if (exact) {
+    while (k > 0U && in.sorted[k - 1U] == in.sorted[k]) {
+      --k;
+    }
+  }
   const std::size_t pos = exclusive ? k + 1U : k;
   const double denom = static_cast<double>(exclusive ? n + 1U : n - 1U);
   double raw = 0.0;
-  if (in.sorted[k] == in.x) {
+  if (exact) {
     raw = static_cast<double>(pos) / denom;
   } else {
     // Interpolate between sorted[k] and sorted[k + 1]. The outer range

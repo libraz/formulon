@@ -195,8 +195,7 @@ Value Fisher(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }
 
 // FISHERINV(y) - inverse Fisher: (exp(2y) - 1) / (exp(2y) + 1). Defined for
-// all finite y; returns `#NUM!` only if the computation overflows to +/-inf
-// or produces NaN (i.e. y so large that exp(2y) already saturates).
+// all finite y; once exp(2y) overflows the result saturates to 1.
 Value FisherInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto y_arg = read_number_arg(args, 0);
   if (!y_arg) {
@@ -204,6 +203,9 @@ Value FisherInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   const double y = y_arg.value();
   const double e2y = std::exp(2.0 * y);
+  if (std::isinf(e2y)) {
+    return Value::number(1.0);
+  }
   return finite_number_result((e2y - 1.0) / (e2y + 1.0));
 }
 

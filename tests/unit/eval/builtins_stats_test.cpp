@@ -867,6 +867,32 @@ TEST(BuiltinsStatsExtreme, AdjacentLargeValuesMatchExcelPopulationVariance) {
   EXPECT_DOUBLE_EQ(variance.as_number(), 1.650920409798954e+268);
 }
 
+TEST(BuiltinsStatsEdges, TrimMeanBlankPercentCellTrimsNothing) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  const double data[] = {12.4, 5.0, 7.3, -4.0, 0.0, 2.3, 4.3, 7.0, -2.0};
+  for (std::uint32_t i = 0; i < 9U; ++i) {
+    s.set_cell_value(i, 0, Value::number(data[i]));
+  }
+  const Value v = EvalSourceIn("=TRIMMEAN(A1:A9,B1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.5888888888888886);
+}
+
+TEST(BuiltinsStatsEdges, FisherInvSaturatesToOne) {
+  for (const char* formula : {"=FISHERINV(1000)", "=FISHERINV(10000000000)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_number()) << formula;
+    EXPECT_DOUBLE_EQ(v.as_number(), 1.0) << formula;
+  }
+}
+
+TEST(BuiltinsStatsEdges, TInvRoundTripsAnExtremeLeftTail) {
+  const Value v = EvalSource("=T.INV(T.DIST(-1000000,10,TRUE),10)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_NEAR(v.as_number(), -1000000.0000000001, 1e-6);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
