@@ -203,6 +203,15 @@ inline bool starts_with(std::string_view haystack, std::string_view prefix) noex
   return haystack.compare(0, prefix.size(), prefix) == 0;
 }
 
+/// Returns true iff `haystack` begins with `prefix`, comparing ASCII letters
+/// case-insensitively.
+inline bool case_insensitive_starts_with(std::string_view haystack, std::string_view prefix) noexcept {
+  if (prefix.size() > haystack.size()) {
+    return false;
+  }
+  return case_insensitive_eq(haystack.substr(0, prefix.size()), prefix);
+}
+
 /// Returns true iff `haystack` ends with `suffix`.
 inline bool ends_with(std::string_view haystack, std::string_view suffix) noexcept {
   if (suffix.size() > haystack.size()) {

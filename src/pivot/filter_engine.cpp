@@ -160,24 +160,14 @@ bool label_filter_passes(const PivotFilter& f, std::string_view label) {
   return true;
 }
 
-// ASCII-only case folding for authored caption comparisons.
-//
-// Excel matches a pivot caption filter the way it matches an AutoFilter
-// criterion: without regard to case. Only the ASCII range is folded here
-// — a full Unicode case mapping is a table this build does not carry, and
-// the pivot corpus that reaches these filters is field labels rather than
-// arbitrary text.
-constexpr char AsciiLower(char c) {
-  return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
-}
-
 // Three-way ASCII-case-insensitive comparison, ordering by folded bytes
 // and breaking ties on length.
 int CaseInsensitiveCompare(std::string_view lhs, std::string_view rhs) {
   const std::size_t common = lhs.size() < rhs.size() ? lhs.size() : rhs.size();
   for (std::size_t i = 0; i < common; ++i) {
-    const char a = AsciiLower(lhs[i]);
-    const char b = AsciiLower(rhs[i]);
+    // Keep the historical signed-char comparison for non-ASCII bytes.
+    const char a = strings::ascii_to_lower(lhs[i]);
+    const char b = strings::ascii_to_lower(rhs[i]);
     if (a != b) {
       return a < b ? -1 : 1;
     }

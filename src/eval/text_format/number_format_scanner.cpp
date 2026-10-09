@@ -16,6 +16,7 @@
 #include "eval/text_format/number_format_types.h"
 #include "excel_locale.h"
 #include "utils/double_parse.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace text_format {
@@ -172,10 +173,6 @@ bool is_a_codepoint(std::uint32_t cp) noexcept {
   return cp == 'a' || cp == 'A' || cp == 0xFF41U || cp == 0xFF21U;
 }
 
-char ascii_lower(char c) noexcept {
-  return c >= 'A' && c <= 'Z' ? static_cast<char>(c + ('a' - 'A')) : c;
-}
-
 bool scalar_matches_ascii(std::string_view fmt, std::size_t i, char expected, std::size_t* width) noexcept {
   const Utf8Scalar scalar = decode_utf8(fmt, i);
   if (!scalar.valid) {
@@ -193,13 +190,14 @@ bool scalar_matches_ascii(std::string_view fmt, std::size_t i, char expected, st
     return false;
   }
   if (scalar.codepoint < 0x80U) {
-    if (ascii_lower(static_cast<char>(scalar.codepoint)) == ascii_lower(expected)) {
+    if (strings::ascii_to_lower(static_cast<char>(scalar.codepoint)) == strings::ascii_to_lower(expected)) {
       *width = scalar.width;
       return true;
     }
     return false;
   }
-  if (is_fullwidth_ascii(scalar.codepoint) && ascii_lower(fullwidth_ascii(scalar.codepoint)) == ascii_lower(expected)) {
+  if (is_fullwidth_ascii(scalar.codepoint) &&
+      strings::ascii_to_lower(fullwidth_ascii(scalar.codepoint)) == strings::ascii_to_lower(expected)) {
     *width = scalar.width;
     return true;
   }
@@ -438,7 +436,7 @@ std::string normalize_ja_jp_format_syntax(std::string_view fmt) {
     // including the lone `Ａ` literal observed in Excel, are preserved.
     if (is_date_codepoint(cp) && should_fold_date_codepoint(fmt, i, width, cp)) {
       const char c = fullwidth_ascii(cp);
-      out.push_back(ascii_lower(c));
+      out.push_back(strings::ascii_to_lower(c));
       i += width;
       continue;
     }
@@ -477,18 +475,6 @@ namespace {
 // Highest index the indexed form accepts; `Color57` is rejected.
 constexpr int kMaxColorIndex = 56;
 
-bool starts_with_ascii_ci(std::string_view s, std::string_view prefix) noexcept {
-  if (s.size() < prefix.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < prefix.size(); ++i) {
-    if (ascii_lower(s[i]) != ascii_lower(prefix[i])) {
-      return false;
-    }
-  }
-  return true;
-}
-
 // Reads one decimal digit at `body[i]`, accepting the ASCII digits and their
 // full-width forms U+FF10..U+FF19 alike (Excel folds full-width ASCII across
 // the whole format string, and the color index inherits that). Advances `i`
@@ -515,12 +501,12 @@ int take_digit(std::string_view body, std::size_t& i) noexcept {
 bool is_color_specifier(std::string_view body) noexcept {
   // The en-US colour names are the stored spelling.
   for (const std::string_view name : locale_facts(mac_365_en_us_profile()).color_names) {
-    if (starts_with_ascii_ci(body, name)) {
+    if (strings::case_insensitive_starts_with(body, name)) {
       return true;
     }
   }
   const std::string_view prefix = kStoredColorIndexPrefix;
-  if (!starts_with_ascii_ci(body, prefix)) {
+  if (!strings::case_insensitive_starts_with(body, prefix)) {
     return false;
   }
   // The index prefix then optional blanks then the index. Trailing bytes

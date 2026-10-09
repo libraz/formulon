@@ -36,23 +36,7 @@ namespace formulon::cf::helpers {
 // ---------------------------------------------------------------------------
 
 bool icase_equal(std::string_view lhs, std::string_view rhs) {
-  if (lhs.size() != rhs.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < lhs.size(); ++i) {
-    char left_ch = lhs[i];
-    char right_ch = rhs[i];
-    if (left_ch >= 'A' && left_ch <= 'Z') {
-      left_ch = static_cast<char>(left_ch - 'A' + 'a');
-    }
-    if (right_ch >= 'A' && right_ch <= 'Z') {
-      right_ch = static_cast<char>(right_ch - 'A' + 'a');
-    }
-    if (left_ch != right_ch) {
-      return false;
-    }
-  }
-  return true;
+  return strings::case_insensitive_eq(lhs, rhs);
 }
 
 std::optional<LiteralOperand> parse_literal(const std::string& source) {

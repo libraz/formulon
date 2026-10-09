@@ -8,6 +8,7 @@
 
 #include "eval/text_format/number_format_scanner.h"
 #include "excel_locale.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace text_format {
@@ -15,10 +16,6 @@ namespace number_format_detail {
 namespace {
 
 constexpr std::string_view kGeneralKeyword = "General";
-
-char ascii_lower(char c) noexcept {
-  return c >= 'A' && c <= 'Z' ? static_cast<char>(c + ('a' - 'A')) : c;
-}
 
 bool is_ascii_letter(char c) noexcept {
   return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
@@ -28,22 +25,9 @@ bool is_digit_placeholder(char c) noexcept {
   return c == '0' || c == '#' || c == '?';
 }
 
-// ASCII case-insensitive prefix test; non-ASCII bytes compare exactly.
-bool starts_with_ci(std::string_view s, std::string_view prefix) noexcept {
-  if (s.size() < prefix.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < prefix.size(); ++i) {
-    if (ascii_lower(s[i]) != ascii_lower(prefix[i])) {
-      return false;
-    }
-  }
-  return true;
-}
-
 // `word` at `s[i]`, not followed by an ASCII letter when it ends in one.
 bool keyword_at(std::string_view s, std::size_t i, std::string_view word) noexcept {
-  if (word.empty() || !starts_with_ci(s.substr(i), word)) {
+  if (word.empty() || !strings::case_insensitive_starts_with(s.substr(i), word)) {
     return false;
   }
   const std::size_t end = i + word.size();
@@ -69,24 +53,24 @@ bool localize_bracket(std::string_view body, const LocaleFacts& facts, const Loc
                       std::string_view index_prefix, std::string& out) {
   for (std::size_t k = 0; k < facts.color_names.size(); ++k) {
     const std::string_view name = facts.color_names[k];
-    if (!name.empty() && starts_with_ci(body, name)) {
+    if (!name.empty() && strings::case_insensitive_starts_with(body, name)) {
       out.append(english.color_names[k]);
       out.append(body.substr(name.size()));
       return true;
     }
   }
-  if (!index_prefix.empty() && starts_with_ci(body, index_prefix)) {
+  if (!index_prefix.empty() && strings::case_insensitive_starts_with(body, index_prefix)) {
     out.append(kStoredColorIndexPrefix);
     out.append(body.substr(index_prefix.size()));
     return true;
   }
   out.append(body);
   for (const std::string_view name : english.color_names) {
-    if (starts_with_ci(body, name)) {
+    if (strings::case_insensitive_starts_with(body, name)) {
       return false;
     }
   }
-  return !starts_with_ci(body, kStoredColorIndexPrefix);
+  return !strings::case_insensitive_starts_with(body, kStoredColorIndexPrefix);
 }
 
 }  // namespace

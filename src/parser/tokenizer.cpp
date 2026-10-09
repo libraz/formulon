@@ -28,7 +28,9 @@
 
 #include "excel_locale.h"
 #include "parser/parser_detail.h"
+#include "utils/a1_ref.h"
 #include "utils/double_parse.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace parser {
@@ -38,10 +40,6 @@ namespace {
 // UTF-8 BOM and UTF-16 LE BOM (as 2 bytes) for the source-prefix check.
 constexpr std::string_view kUtf8Bom = "\xEF\xBB\xBF";
 constexpr std::string_view kUtf16LeBom = "\xFF\xFE";
-
-// Excel 365 workbook limits.
-constexpr std::uint32_t kMaxColumn = 16384;  // XFD
-constexpr std::uint32_t kMaxRow = 1048576;   // 2^20
 
 // Lookup for the 17 canonical Excel error literals. Kept sorted by the
 // longest-prefix-first ordering so scan_error_literal can commit on first
@@ -73,23 +71,7 @@ constexpr ErrorLiteralEntry kErrorLiterals[] = {
 
 // ASCII case-insensitive prefix match over a known-ASCII catalog entry.
 bool ieq_prefix(std::string_view haystack, std::string_view needle) noexcept {
-  if (haystack.size() < needle.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < needle.size(); ++i) {
-    char a = haystack[i];
-    char b = needle[i];
-    if (a >= 'a' && a <= 'z') {
-      a = static_cast<char>(a - ('a' - 'A'));
-    }
-    if (b >= 'a' && b <= 'z') {
-      b = static_cast<char>(b - ('a' - 'A'));
-    }
-    if (a != b) {
-      return false;
-    }
-  }
-  return true;
+  return strings::case_insensitive_starts_with(haystack, needle);
 }
 
 // Converts a column-letter run (1..3 ASCII letters) to a 1-based column index.
@@ -104,7 +86,7 @@ std::uint32_t column_letters_to_index(std::string_view letters) noexcept {
       return 0;
     }
     v = v * 26u + static_cast<std::uint32_t>(ch - 'A' + 1);
-    if (v > kMaxColumn) {
+    if (v > a1::kMaxCols) {
       return 0;
     }
   }
@@ -120,7 +102,7 @@ std::uint32_t row_digits_to_index(std::string_view digits) noexcept {
       return 0;
     }
     v = v * 10u + static_cast<std::uint32_t>(ch - '0');
-    if (v > kMaxRow) {
+    if (v > a1::kMaxRows) {
       return 0;
     }
   }
