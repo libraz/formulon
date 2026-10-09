@@ -199,6 +199,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ACCRINT` counts periods on the quasi-coupon grid anchored on
   `first_interest`, and `ODDFPRICE`, `ODDFYIELD`, `ODDLPRICE` and
   `ODDLYIELD` measure each quasi-coupon period at its own length.
+- A pivot with several data fields lays out the Values level where its
+  file places it: on the rows, first on its axis, or between column fields.
+  Each data field gets its own grand-total row or column in the locale's
+  wording, a group above the Values level is subtotalled once per data
+  field, and the tabular and outline headers show the stored Values
+  caption. The report form is read from the row fields, where Excel
+  records it, and written back in the attribute combinations Excel saves.
 
 ## [0.13.0] - 2026-10-06
 
