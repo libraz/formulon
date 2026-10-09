@@ -148,14 +148,18 @@ Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot:
     if (pugi::xml_node items_node = f.child("items"); items_node) {
       RETURN_IF_ERROR(ParseItems(items_node, &field));
     }
-    // Preserve unmodelled `<pivotField>` attributes (`compact`, `outline`,
-    // `showAll`, `includeNewItemsInFilter`, ...) for verbatim round-trip.
-    capture_unknown_attrs(
-        f,
-        {"axis", "dataField", "name", "numFmtId", "subtotalTop", "defaultSubtotal", "sumSubtotal", "countASubtotal",
-         "avgSubtotal", "maxSubtotal", "minSubtotal", "productSubtotal", "countSubtotal", "stdDevSubtotal",
-         "stdDevPSubtotal", "varSubtotal", "varPSubtotal", "sortType"},
-        field.passthrough_attrs);
+    // Preserve unmodelled `<pivotField>` attributes (`showAll`,
+    // `includeNewItemsInFilter`, ...) for verbatim round-trip. `compact` /
+    // `outline` are the report form, which the writer derives from the
+    // table's layout.
+    capture_unknown_attrs(f, {"axis",          "dataField",      "name",
+                              "numFmtId",      "subtotalTop",    "defaultSubtotal",
+                              "sumSubtotal",   "countASubtotal", "avgSubtotal",
+                              "maxSubtotal",   "minSubtotal",    "productSubtotal",
+                              "countSubtotal", "stdDevSubtotal", "stdDevPSubtotal",
+                              "varSubtotal",   "varPSubtotal",   "sortType",
+                              "compact",       "outline"},
+                          field.passthrough_attrs);
     out->mutable_fields().push_back(std::move(field));
   }
   return Expected<void, Error>::Ok();
@@ -655,28 +659,22 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
     table.set_grand_totals(row_grand, col_grand);
   }
 
-  // Report layout mode. OOXML expresses it on `<pivotTableDefinition>` via
-  // `compact` (default true) and `outline` (default false): `outline="1"`
-  // is Outline form, an explicit `compact="0"` (with outline off) is
-  // Tabular, and the default is Compact. The writer re-derives the same
-  // attributes so the layout round-trips and drives the renderer.
+  // Report layout mode, provisionally from the table-level defaults Excel
+  // gives new fields: `compact` (default true) wins over `outline` (default
+  // false). The row fields' own attributes override it below.
   {
-    const bool outline = attr_bool(root, "outline", false);
     const bool compact = attr_bool(root, "compact", true);
-    if (outline) {
-      table.set_layout(pivot::PivotLayout::Outline);
-    } else if (compact) {
-      table.set_layout(pivot::PivotLayout::Compact);
-    } else {
-      table.set_layout(pivot::PivotLayout::Tabular);
-    }
+    const bool outline = attr_bool(root, "outline", false);
+    table.set_layout(compact ? pivot::PivotLayout::Compact
+                             : (outline ? pivot::PivotLayout::Outline : pivot::PivotLayout::Tabular));
   }
 
   // Capture every root attribute the model does not represent structurally
   // (`updatedVersion`, `createdVersion`, `itemPrintTitles`, `indent`, ...)
   // so the writer re-emits them verbatim.
   capture_unknown_attrs(root,
-                        {"name", "cacheId", "dataCaption", "rowGrandTotals", "colGrandTotals", "compact", "outline"},
+                        {"name", "cacheId", "dataCaption", "rowGrandTotals", "colGrandTotals", "compact", "outline",
+                         "compactData", "outlineData"},
                         table.mutable_passthrough_attrs());
 
   pugi::xml_node loc = root.child("location");
@@ -722,6 +720,21 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
     std::optional<std::size_t> values_position;
     ParseFieldOrder(rows, &table.mutable_row_field_order(), &values_position);
     table.set_row_values_position(values_position);
+  }
+  // Excel renders the report form per field (`compact` and `outline` both
+  // default to true); the first row field's pair decides the table's form.
+  if (!table.row_field_order().empty()) {
+    std::uint32_t index = 0;
+    for (pugi::xml_node f = root.child("pivotFields").child("pivotField"); f;
+         f = f.next_sibling("pivotField"), ++index) {
+      if (index == table.row_field_order().front()) {
+        const bool compact = attr_bool(f, "compact", true);
+        const bool outline = attr_bool(f, "outline", true);
+        table.set_layout(compact ? pivot::PivotLayout::Compact
+                                 : (outline ? pivot::PivotLayout::Outline : pivot::PivotLayout::Tabular));
+        break;
+      }
+    }
   }
   if (pugi::xml_node cols = root.child("colFields"); cols) {
     std::optional<std::size_t> values_position;

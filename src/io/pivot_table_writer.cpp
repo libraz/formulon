@@ -54,7 +54,7 @@ void AppendOptionalLocationAttr(std::string& out, std::string_view name, std::op
 
 /// Emits one `<pivotField>` element. Self-closing when there are no
 /// items; open/close pair otherwise.
-void AppendPivotField(std::string& out, const pivot::PivotField& field) {
+void AppendPivotField(std::string& out, const pivot::PivotField& field, pivot::PivotLayout layout) {
   out.append("<pivotField");
   if (field.axis == pivot::PivotAxis::Value) {
     // Excel-saved files use `dataField="1"` for Value-axis fields; the
@@ -100,6 +100,13 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field) {
     out.append(" sortType=\"manual\"");
   } else if (!field.sort.ascending) {
     out.append(" sortType=\"descending\"");
+  }
+  // The report form is per field in Excel (`compact` / `outline` default to
+  // true); every field carries the table's form, as Excel writes it.
+  if (layout == pivot::PivotLayout::Tabular) {
+    out.append(" compact=\"0\" outline=\"0\"");
+  } else if (layout == pivot::PivotLayout::Outline) {
+    out.append(" compact=\"0\"");
   }
   // Re-emit any unmodelled `<pivotField>` attributes captured on read.
   append_raw_attrs(out, field.passthrough_attrs);
@@ -263,18 +270,17 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table,
   if (!table.grand_totals_cols()) {
     out.append(" colGrandTotals=\"0\"");
   }
-  // Report layout. `compact` defaults to true and `outline` to false, so
-  // Compact needs no attribute; Tabular emits `compact="0"`; Outline emits
-  // `compact="0" outline="1"`. The reader derives the enum from the same
-  // pair (see `read_pivot_table_definition`).
+  // Report layout as Excel writes it at table level, where it is the form
+  // new fields take (`compact` defaults to true, `outline` to false).
   switch (table.layout()) {
     case pivot::PivotLayout::Compact:
+      out.append(" outline=\"1\" outlineData=\"1\"");
       break;
     case pivot::PivotLayout::Tabular:
-      out.append(" compact=\"0\"");
+      out.append(" compact=\"0\" compactData=\"0\"");
       break;
     case pivot::PivotLayout::Outline:
-      out.append(" compact=\"0\" outline=\"1\"");
+      out.append(" compact=\"0\" compactData=\"0\" outline=\"1\" outlineData=\"1\"");
       break;
   }
   // Re-emit any unmodelled root attributes captured on read.
@@ -322,7 +328,7 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table,
   out.append(std::to_string(table.fields().size()));
   out.append("\">");
   for (const pivot::PivotField& f : table.fields()) {
-    AppendPivotField(out, f);
+    AppendPivotField(out, f, table.layout());
   }
   out.append("</pivotFields>");
 

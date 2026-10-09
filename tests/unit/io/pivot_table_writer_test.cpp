@@ -753,8 +753,9 @@ TEST(PivotTableWriter, ReadsAndRoundTripsLayoutMode) {
     pivot::PivotLayout expected;
   };
   const Case cases[] = {
-      {"", pivot::PivotLayout::Compact},                // defaults
-      {" compact=\"0\"", pivot::PivotLayout::Tabular},  // tabular
+      {"", pivot::PivotLayout::Compact},                                  // defaults
+      {" outline=\"1\" outlineData=\"1\"", pivot::PivotLayout::Compact},  // as Excel writes compact
+      {" compact=\"0\" compactData=\"0\"", pivot::PivotLayout::Tabular},  // as Excel writes tabular
       {" compact=\"0\" outline=\"1\"", pivot::PivotLayout::Outline},
   };
   for (const Case& c : cases) {
@@ -773,6 +774,36 @@ TEST(PivotTableWriter, ReadsAndRoundTripsLayoutMode) {
   }
 }
 
+// The row fields' own `compact` / `outline` pair decides the form, as Excel
+// renders it; every written field then carries that form.
+TEST(PivotTableWriter, RowFieldFormDecidesLayout) {
+  struct Case {
+    const char* root_attrs;
+    const char* field_attrs;
+    pivot::PivotLayout expected;
+    const char* written_field_attrs;
+  };
+  const Case cases[] = {
+      {" outline=\"1\" outlineData=\"1\"", "", pivot::PivotLayout::Compact, "<pivotField axis=\"axisRow\"/>"},
+      {" compact=\"0\" compactData=\"0\"", " compact=\"0\" outline=\"0\"", pivot::PivotLayout::Tabular,
+       "<pivotField axis=\"axisRow\" compact=\"0\" outline=\"0\"/>"},
+      {"", " compact=\"0\"", pivot::PivotLayout::Outline, "<pivotField axis=\"axisRow\" compact=\"0\"/>"},
+  };
+  for (const Case& c : cases) {
+    std::string xml(kXmlDecl);
+    xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\"").append(c.root_attrs);
+    xml.append("><location ref=\"A1:B2\"/><pivotFields count=\"1\"><pivotField axis=\"axisRow\"");
+    xml.append(c.field_attrs);
+    xml.append("/></pivotFields>");
+    xml.append("<rowFields count=\"1\"><field x=\"0\"/></rowFields></pivotTableDefinition>");
+    auto parsed_or = read_pivot_table_definition(Bytes(xml));
+    ASSERT_TRUE(static_cast<bool>(parsed_or)) << parsed_or.error().message;
+    EXPECT_EQ(parsed_or.value().layout(), c.expected) << c.field_attrs;
+    const std::string written = write_pivot_table_definition(parsed_or.value());
+    EXPECT_NE(written.find(c.written_field_attrs), std::string::npos) << written;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Unmodelled root + pivotField attributes round-trip verbatim.
 // ---------------------------------------------------------------------------
@@ -783,7 +814,7 @@ TEST(PivotTableWriter, UnknownRootAndFieldAttributesRoundTrip) {
   xml.append(" name=\"P\" cacheId=\"0\" updatedVersion=\"8\" createdVersion=\"8\" itemPrintTitles=\"1\" indent=\"0\">");
   xml.append("<location ref=\"A1:B2\"/>");
   xml.append("<pivotFields count=\"1\"><pivotField axis=\"axisRow\" compact=\"0\" showAll=\"0\"/></pivotFields>");
-  xml.append("</pivotTableDefinition>");
+  xml.append("<rowFields count=\"1\"><field x=\"0\"/></rowFields></pivotTableDefinition>");
 
   auto parsed_or = read_pivot_table_definition(Bytes(xml));
   ASSERT_TRUE(static_cast<bool>(parsed_or)) << "read failed: " << parsed_or.error().message;
@@ -808,7 +839,10 @@ TEST(PivotTableWriter, UnknownRootAndFieldAttributesRoundTrip) {
     EXPECT_NE(name, "cacheId");
   }
   ASSERT_EQ(table.fields().size(), 1U);
-  EXPECT_TRUE(has_attr(table.fields()[0].passthrough_attrs, "compact", "0"));
+  // A field's `compact` / `outline` pair is its report form, modelled as the
+  // table layout rather than passed through.
+  EXPECT_FALSE(has_attr(table.fields()[0].passthrough_attrs, "compact", "0"));
+  EXPECT_EQ(table.layout(), pivot::PivotLayout::Outline);
   EXPECT_TRUE(has_attr(table.fields()[0].passthrough_attrs, "showAll", "0"));
 
   const std::string written = write_pivot_table_definition(table);
