@@ -113,6 +113,17 @@ Expected<UIntPair, ErrorCode> read_nonneg_uint_pair(const Value* args) {
   return UIntPair{first.value(), second.value()};
 }
 
+Expected<UIntPair, ErrorCode> read_selection_pair(const Value* args) {
+  auto pair = read_nonneg_uint_pair(args);
+  if (!pair) {
+    return std::move(pair.error());
+  }
+  if (pair.value().second > pair.value().first) {
+    return ErrorCode::Num;
+  }
+  return std::move(pair.value());
+}
+
 // ---------------------------------------------------------------------------
 // FACT / FACTDOUBLE
 // ---------------------------------------------------------------------------
@@ -200,15 +211,12 @@ inline double combin_exact(std::uint64_t n, std::uint64_t k) {
 // COMBIN(n, k) - n choose k. Fractional inputs truncated toward zero.
 // Negative n, negative k, or k > n yields #NUM!. Overflow yields #NUM!.
 Value Combin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto pair = read_nonneg_uint_pair(args);
+  auto pair = read_selection_pair(args);
   if (!pair) {
     return Value::error(pair.error());
   }
   const std::uint64_t n = pair.value().first;
   const std::uint64_t k = pair.value().second;
-  if (k > n) {
-    return Value::error(ErrorCode::Num);
-  }
   return to_finite_value(combin_exact(n, k));
 }
 
@@ -242,15 +250,12 @@ Value CombinA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // non-negative integer; `k > n` yields `#NUM!`, as does overflow.
 // Edge cases: `PERMUT(n, 0) = 1` for any n >= 0.
 Value Permut(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto pair = read_nonneg_uint_pair(args);
+  auto pair = read_selection_pair(args);
   if (!pair) {
     return Value::error(pair.error());
   }
   const std::uint64_t n = pair.value().first;
   const std::uint64_t k = pair.value().second;
-  if (k > n) {
-    return Value::error(ErrorCode::Num);
-  }
   // Multiply incrementally in double precision; bail out as soon as the
   // running product overflows to infinity.
   double result = 1.0;

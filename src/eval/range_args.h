@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 #include "utils/error.h"
@@ -68,6 +69,15 @@ struct RangeResult {
   std::uint32_t cols = 0;
   bool from_scalar = false;
 };
+
+/// Expands a resolved rectangle and reports its dimensions. Callers perform
+/// their own endpoint/error validation before this shared materialisation
+/// step; this helper only constructs the two references, delegates to the
+/// context, and moves the resulting cells into `out_cells`.
+bool expand_resolved_rect_cells(std::string_view sheet, std::uint32_t top, std::uint32_t left, std::uint32_t bottom,
+                                std::uint32_t right, Arena& arena, const FunctionRegistry& registry,
+                                const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                                std::uint32_t* out_rows, std::uint32_t* out_cols);
 
 /// Reads the cells of a 3-D reference node (`Sheet1:Sheet3!A1:B2`): the same
 /// rectangle from every sheet of the inclusive span, sheet-major then

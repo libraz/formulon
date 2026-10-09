@@ -7,7 +7,6 @@
 #include "eval/builtins/text_detail.h"
 
 #include <cmath>
-#include <limits>
 #include <utility>
 
 #include "eval/coerce.h"
@@ -33,31 +32,6 @@ Expected<double, ErrorCode> read_finite_number(const Value& v) {
     return ErrorCode::Num;
   }
   return d;
-}
-
-int truncate_saturated(double d) {
-  // Converting a double outside `int`'s range is undefined, and the two
-  // architectures disagree on what they produce: x86-64 yields INT_MIN
-  // while WASM's `--enable-nontrapping-float-to-int` saturates to
-  // INT_MAX. A count like `1E+15` (a routine LEFT/MID/RIGHT/REPT/
-  // SUBSTITUTE/REPLACE argument, not an attack input) would therefore
-  // read as a huge negative on one target and a huge positive on the
-  // other, so `LEFT("text",1E+15)` returns `#VALUE!` on native and
-  // `"text"` on WASM. Every caller already treats "past the end of the
-  // text" the same way it treats "the whole text", so saturating before
-  // the cast carries the same meaning as the real magnitude and keeps
-  // the result identical across targets. Mirrors `read_digits` in
-  // `eval/builtins/math.cpp`.
-  const double truncated = std::trunc(d);
-  constexpr double kIntMax = 2147483647.0;
-  constexpr double kIntMin = -2147483648.0;
-  if (truncated >= kIntMax) {
-    return std::numeric_limits<int>::max();
-  }
-  if (truncated <= kIntMin) {
-    return std::numeric_limits<int>::min();
-  }
-  return static_cast<int>(truncated);
 }
 
 // SEARCHB's `?` spans one SBCS character in ja and ko but any character in zh
@@ -96,7 +70,7 @@ Expected<int, ErrorCode> read_int_arg(const Value& v) {
   if (!d) {
     return std::move(d.error());
   }
-  return truncate_saturated(d.value());
+  return truncate_saturated_int(d.value());
 }
 
 Expected<int, ErrorCode> read_snapped_int_arg(const Value& v, double min) {
@@ -107,7 +81,7 @@ Expected<int, ErrorCode> read_snapped_int_arg(const Value& v, double min) {
   if (d.value() < min) {
     return ErrorCode::Value;
   }
-  return truncate_saturated(snap_near_integer(d.value()));
+  return truncate_saturated_int(snap_near_integer(d.value()));
 }
 
 Expected<int, ErrorCode> read_optional_int_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
@@ -172,6 +146,26 @@ std::size_t find_folded(const std::string& haystack, const std::string& needle, 
     return std::string::npos;
   }
   return start_byte + rel;
+}
+
+Value find_utf16_exact(const SearchArgs& args) {
+  const std::size_t start_byte = utf16_to_byte_offset(args.haystack, static_cast<std::uint32_t>(args.start - 1));
+  const std::size_t pos = args.haystack.find(args.needle, start_byte);
+  if (pos == std::string::npos) {
+    return Value::error(ErrorCode::Value);
+  }
+  const std::uint32_t units = utf16_units_in(std::string_view(args.haystack).substr(0, pos));
+  return Value::number(static_cast<double>(units + 1));
+}
+
+Value find_utf16_folded(const SearchArgs& args) {
+  const std::size_t start_byte = utf16_to_byte_offset(args.haystack, static_cast<std::uint32_t>(args.start - 1));
+  const std::size_t pos = find_folded(args.haystack, args.needle, start_byte, SearchUnit::Utf16);
+  if (pos == std::string::npos) {
+    return Value::error(ErrorCode::Value);
+  }
+  const std::uint32_t units = utf16_units_in(std::string_view(args.haystack).substr(0, pos));
+  return Value::number(static_cast<double>(units + 1));
 }
 
 Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std::uint32_t arity, bool snap_start) {

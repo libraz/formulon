@@ -164,27 +164,8 @@ bool expand_indirect_call(const parser::AstNode& call, Arena& arena, const Funct
     *out_err_code = err;
     return false;
   }
-  parser::Reference lhs{};
-  parser::Reference rhs{};
-  lhs.sheet = sheet;
-  lhs.row = top;
-  lhs.col = left;
-  rhs.sheet = sheet;
-  rhs.row = bottom;
-  rhs.col = right;
-  auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
-  if (!expanded) {
-    *out_err_code = expanded.error();
-    return false;
-  }
-  *out_cells = std::move(expanded.value());
-  if (out_rows != nullptr) {
-    *out_rows = bottom - top + 1U;
-  }
-  if (out_cols != nullptr) {
-    *out_cols = right - left + 1U;
-  }
-  return true;
+  return expand_resolved_rect_cells(sheet, top, left, bottom, right, arena, registry, ctx, out_cells, out_err_code,
+                                    out_rows, out_cols);
 }
 
 bool expand_choose_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

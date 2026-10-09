@@ -91,16 +91,7 @@ Expected<int, ErrorCode> read_digits(const Value* args, std::uint32_t arity, std
   // before converting; every caller compares against thresholds (+/-308) far
   // inside this range, so saturating carries the same meaning as the real
   // magnitude.
-  const double truncated = std::trunc(snap ? snap_near_integer(d) : d);
-  constexpr double kIntMax = 2147483647.0;
-  constexpr double kIntMin = -2147483648.0;
-  if (truncated >= kIntMax) {
-    return std::numeric_limits<int>::max();
-  }
-  if (truncated <= kIntMin) {
-    return std::numeric_limits<int>::min();
-  }
-  return static_cast<int>(truncated);
+  return truncate_saturated_int(snap ? snap_near_integer(d) : d);
 }
 
 // Shared frame of TRUNC and the ROUND family: coerces `value`, reads

@@ -50,13 +50,7 @@ Value FindB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     if (!read_search_args(args, arity, SearchUnit::Utf16, &sargs, &early)) {
       return early;
     }
-    const std::size_t start_byte = utf16_to_byte_offset(sargs.haystack, static_cast<std::uint32_t>(sargs.start - 1));
-    const std::size_t pos = sargs.haystack.find(sargs.needle, start_byte);
-    if (pos == std::string::npos) {
-      return Value::error(ErrorCode::Value);
-    }
-    const std::uint32_t units = utf16_units_in(std::string_view(sargs.haystack).substr(0, pos));
-    return Value::number(static_cast<double>(units + 1));
+    return find_utf16_exact(sargs);
   }
   SearchArgs sargs;
   Value early = Value::blank();
@@ -85,13 +79,7 @@ Value SearchB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     if (!read_search_args(args, arity, SearchUnit::Utf16, &sargs, &early)) {
       return early;
     }
-    const std::size_t start_byte = utf16_to_byte_offset(sargs.haystack, static_cast<std::uint32_t>(sargs.start - 1));
-    const std::size_t pos = find_folded(sargs.haystack, sargs.needle, start_byte, SearchUnit::Utf16);
-    if (pos == std::string::npos) {
-      return Value::error(ErrorCode::Value);
-    }
-    const std::uint32_t units = utf16_units_in(std::string_view(sargs.haystack).substr(0, pos));
-    return Value::number(static_cast<double>(units + 1));
+    return find_utf16_folded(sargs);
   }
   SearchArgs sargs;
   Value early = Value::blank();

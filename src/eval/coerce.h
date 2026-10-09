@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -70,6 +71,18 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* f
 /// outside it.
 inline double truncate_index(double value) noexcept {
   return std::trunc(value);
+}
+
+/// Truncates a finite number to int, saturating at the integer bounds.
+inline int truncate_saturated_int(double value) noexcept {
+  const double truncated = std::trunc(value);
+  if (truncated >= static_cast<double>(std::numeric_limits<int>::max())) {
+    return std::numeric_limits<int>::max();
+  }
+  if (truncated <= static_cast<double>(std::numeric_limits<int>::min())) {
+    return std::numeric_limits<int>::min();
+  }
+  return static_cast<int>(truncated);
 }
 
 /// Distance below an integer within which Excel snaps an integer argument up

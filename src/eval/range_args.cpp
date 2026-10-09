@@ -233,27 +233,8 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
       *out_err_code = ErrorCode::Null;
       return false;
     }
-    parser::Reference lhs{};
-    parser::Reference rhs{};
-    lhs.sheet = sheet;
-    lhs.row = top;
-    lhs.col = left;
-    rhs.sheet = sheet;
-    rhs.row = bottom;
-    rhs.col = right;
-    auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
-    if (!expanded) {
-      *out_err_code = expanded.error();
-      return false;
-    }
-    *out_cells = std::move(expanded.value());
-    if (out_rows != nullptr) {
-      *out_rows = bottom - top + 1U;
-    }
-    if (out_cols != nullptr) {
-      *out_cols = right - left + 1U;
-    }
-    return true;
+    return expand_resolved_rect_cells(sheet, top, left, bottom, right, arena, registry, ctx, out_cells, out_err_code,
+                                      out_rows, out_cols);
   }
   if (arg_node.kind() == parser::NodeKind::RangeOp) {
     const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
@@ -527,6 +508,33 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
 }
 
 }  // namespace
+
+bool expand_resolved_rect_cells(std::string_view sheet, std::uint32_t top, std::uint32_t left, std::uint32_t bottom,
+                                std::uint32_t right, Arena& arena, const FunctionRegistry& registry,
+                                const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                                std::uint32_t* out_rows, std::uint32_t* out_cols) {
+  parser::Reference lhs{};
+  parser::Reference rhs{};
+  lhs.sheet = sheet;
+  lhs.row = top;
+  lhs.col = left;
+  rhs.sheet = sheet;
+  rhs.row = bottom;
+  rhs.col = right;
+  auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
+  if (!expanded) {
+    *out_err_code = expanded.error();
+    return false;
+  }
+  *out_cells = std::move(expanded.value());
+  if (out_rows != nullptr) {
+    *out_rows = bottom - top + 1U;
+  }
+  if (out_cols != nullptr) {
+    *out_cols = right - left + 1U;
+  }
+  return true;
+}
 
 bool append_range_sourced_value(const FunctionDef& def, const Value& value, std::vector<Value>* values,
                                 Value* out_err) {

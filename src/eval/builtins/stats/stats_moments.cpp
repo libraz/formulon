@@ -17,6 +17,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "eval/builtins/stats/stats_helpers.h"
@@ -27,19 +28,31 @@ namespace formulon {
 namespace eval {
 namespace stats_detail {
 
+namespace {
+
+Expected<std::vector<double>, ErrorCode> collect_nonempty_direct_stats(const Value* args, std::uint32_t arity) {
+  auto collected = collect_direct_stats(args, arity);
+  if (!collected) {
+    return std::move(collected.error());
+  }
+  if (collected.value().empty()) {
+    return ErrorCode::Num;
+  }
+  return std::move(collected.value());
+}
+
+}  // namespace
+
 // GEOMEAN(value, ...) - geometric mean. Every numeric input must be
 // strictly positive; a zero or negative value (including a range cell
 // coerced via the numeric provenance rule) yields `#NUM!`. Computed in
 // log-space to avoid overflow for long data sets: exp(mean(ln(x_i))).
 Value GeoMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto collected = collect_direct_stats(args, arity);
+  auto collected = collect_nonempty_direct_stats(args, arity);
   if (!collected) {
     return Value::error(collected.error());
   }
   const std::vector<double>& xs = collected.value();
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
   double log_sum = 0.0;
   for (double x : xs) {
     if (x <= 0.0) {
@@ -54,14 +67,11 @@ Value GeoMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // HARMEAN(value, ...) - harmonic mean. Every input must be strictly
 // positive; any value <= 0 yields `#NUM!`. `n / sum(1/x_i)`.
 Value HarMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto collected = collect_direct_stats(args, arity);
+  auto collected = collect_nonempty_direct_stats(args, arity);
   if (!collected) {
     return Value::error(collected.error());
   }
   const std::vector<double>& xs = collected.value();
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
   double inv_sum = 0.0;
   for (double x : xs) {
     if (x <= 0.0) {
@@ -95,14 +105,11 @@ Value DevSq(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // AVEDEV(value, ...) - mean absolute deviation from the mean,
 // `sum(|x_i - mean|) / n`. Empty numeric slice yields `#NUM!`.
 Value AveDev(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto collected = collect_direct_stats(args, arity);
+  auto collected = collect_nonempty_direct_stats(args, arity);
   if (!collected) {
     return Value::error(collected.error());
   }
   const std::vector<double>& xs = collected.value();
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
   const double mean = mean_of(xs);
   double abs_sum = 0.0;
   for (double x : xs) {

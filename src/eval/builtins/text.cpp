@@ -40,6 +40,21 @@ using text_detail::read_int_arg;
 using text_detail::read_snapped_int_arg;
 using text_detail::read_text_window_args;
 
+Expected<std::uint32_t, ErrorCode> read_first_codepoint(const Value& value) {
+  auto text = coerce_to_text(value);
+  if (!text) {
+    return std::move(text.error());
+  }
+  if (text.value().empty()) {
+    return ErrorCode::Value;
+  }
+  const Utf8DecodeResult decoded = decode_first_utf8_codepoint(text.value());
+  if (!decoded.valid) {
+    return ErrorCode::Value;
+  }
+  return decoded.codepoint;
+}
+
 // UPPER(text) / LOWER(text) - ASCII case fold. Multi-byte UTF-8 bytes are
 // preserved verbatim (see `text_ops::to_upper_ascii` for the contract).
 Value Upper(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
@@ -344,15 +359,7 @@ Value Find(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!text_detail::read_search_args(args, arity, text_detail::SearchUnit::Utf16, &sargs, &early)) {
     return early;
   }
-  const int start = sargs.start;
-  const std::size_t start_byte = utf16_to_byte_offset(sargs.haystack, static_cast<std::uint32_t>(start - 1));
-  const std::size_t pos = sargs.haystack.find(sargs.needle, start_byte);
-  if (pos == std::string::npos) {
-    return Value::error(ErrorCode::Value);
-  }
-  // Convert byte offset back to a 1-based UTF-16 unit position.
-  const std::uint32_t units = utf16_units_in(std::string_view(sargs.haystack).substr(0, pos));
-  return Value::number(static_cast<double>(units + 1));
+  return text_detail::find_utf16_exact(sargs);
 }
 
 // SEARCH(find_text, within_text, [start_num]) - case-insensitive substring
@@ -366,14 +373,7 @@ Value Search(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!text_detail::read_search_args(args, arity, text_detail::SearchUnit::Utf16, &sargs, &early)) {
     return early;
   }
-  const std::size_t start_byte = utf16_to_byte_offset(sargs.haystack, static_cast<std::uint32_t>(sargs.start - 1));
-  const std::size_t pos =
-      text_detail::find_folded(sargs.haystack, sargs.needle, start_byte, text_detail::SearchUnit::Utf16);
-  if (pos == std::string::npos) {
-    return Value::error(ErrorCode::Value);
-  }
-  const std::uint32_t units = utf16_units_in(std::string_view(sargs.haystack).substr(0, pos));
-  return Value::number(static_cast<double>(units + 1));
+  return text_detail::find_utf16_folded(sargs);
 }
 
 // EXACT(text1, text2) - byte-wise (case-sensitive) equality.
@@ -431,18 +431,11 @@ Value Unichar(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // codepoint, not a UTF-16 code unit: supplementary-plane characters return
 // values above 0xFFFF (e.g. `UNICODE("😀")` = 128512, not the high surrogate).
 Value Unicode_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return Value::error(text.error());
+  auto codepoint = read_first_codepoint(args[0]);
+  if (!codepoint) {
+    return Value::error(codepoint.error());
   }
-  if (text.value().empty()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const Utf8DecodeResult decoded = decode_first_utf8_codepoint(text.value());
-  if (!decoded.valid) {
-    return Value::error(ErrorCode::Value);
-  }
-  return Value::number(static_cast<double>(decoded.codepoint));
+  return Value::number(static_cast<double>(codepoint.value()));
 }
 
 // CLEAN(text) - strips ASCII control characters (0x00..0x1F) from `text`.
@@ -556,18 +549,11 @@ Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 Value Code_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const ExcelProfile profile = current_eval_profile();
   const LocaleFacts& facts = locale_facts(profile);
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return Value::error(text.error());
+  auto codepoint = read_first_codepoint(args[0]);
+  if (!codepoint) {
+    return Value::error(codepoint.error());
   }
-  if (text.value().empty()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const Utf8DecodeResult decoded = decode_first_utf8_codepoint(text.value());
-  if (!decoded.valid) {
-    return Value::error(ErrorCode::Value);
-  }
-  const std::uint32_t cp = decoded.codepoint;
+  const std::uint32_t cp = codepoint.value();
   if (facts.dbcs_codepage == DbcsCodepage::kNone) {
     const int encoded = sbcs_encode_codepoint(sbcs_codepage(profile), cp);
     return Value::number(static_cast<double>(encoded < 0 ? 95 : encoded));

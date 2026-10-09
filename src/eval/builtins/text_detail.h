@@ -74,6 +74,12 @@ bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, S
 std::size_t find_folded(const std::string& haystack, const std::string& needle, std::size_t start_byte,
                         SearchUnit unit);
 
+// UTF-16 FIND / SEARCH match helpers. The caller owns argument coercion and
+// start validation through `read_search_args`; these only locate a match and
+// convert its byte offset back to Excel's 1-based UTF-16 position.
+Value find_utf16_exact(const SearchArgs& args);
+Value find_utf16_folded(const SearchArgs& args);
+
 // The `(text, start_num, num_chars[, new_text])` arguments of MID / MIDB /
 // REPLACE / REPLACEB. `new_text` stays empty for the three-argument forms.
 struct TextWindowArgs {
