@@ -149,34 +149,34 @@ TEST(PivotLayout, AddsDataFieldHeaderRowForMultipleValueFields) {
   ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message;
   const PivotCells& cells = cells_or.value();
 
-  EXPECT_EQ(cells.rows, 6U);  // value label + data-field headers + row header + 2 rows + col grand total.
+  EXPECT_EQ(cells.rows, 5U);  // data-field headers + row header + 2 rows + col grand total.
   EXPECT_EQ(cells.cols, 5U);  // row label + 2 data fields + 2 grand-total fields.
 
-  const PivotCell* sum_header = find_cell(cells, 3, 4);
+  const PivotCell* sum_header = find_cell(cells, 2, 4);
   ASSERT_NE(sum_header, nullptr);
   EXPECT_EQ(sum_header->kind, PivotCellKind::Header);
   ASSERT_TRUE(sum_header->value.is_text());
   EXPECT_EQ(sum_header->value.as_text(), "Sum of Amount");
 
-  const PivotCell* count_header = find_cell(cells, 3, 5);
+  const PivotCell* count_header = find_cell(cells, 2, 5);
   ASSERT_NE(count_header, nullptr);
   EXPECT_EQ(count_header->kind, PivotCellKind::Header);
   ASSERT_TRUE(count_header->value.is_text());
   EXPECT_EQ(count_header->value.as_text(), "Count of Amount");
 
-  const PivotCell* north_count = find_cell(cells, 5, 5);
+  const PivotCell* north_count = find_cell(cells, 4, 5);
   ASSERT_NE(north_count, nullptr);
   EXPECT_EQ(north_count->kind, PivotCellKind::Data);
   ASSERT_TRUE(north_count->value.is_number());
   EXPECT_DOUBLE_EQ(north_count->value.as_number(), 3.0);
 
-  const PivotCell* sum_grand_total = find_cell(cells, 7, 6);
+  const PivotCell* sum_grand_total = find_cell(cells, 6, 6);
   ASSERT_NE(sum_grand_total, nullptr);
   EXPECT_EQ(sum_grand_total->kind, PivotCellKind::GrandTotal);
   ASSERT_TRUE(sum_grand_total->value.is_number());
   EXPECT_DOUBLE_EQ(sum_grand_total->value.as_number(), 675.0);
 
-  const PivotCell* count_grand_total = find_cell(cells, 7, 7);
+  const PivotCell* count_grand_total = find_cell(cells, 6, 7);
   ASSERT_NE(count_grand_total, nullptr);
   EXPECT_EQ(count_grand_total->kind, PivotCellKind::GrandTotal);
   ASSERT_TRUE(count_grand_total->value.is_number());

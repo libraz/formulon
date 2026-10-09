@@ -39,7 +39,9 @@ enum class PivotCellKind : std::uint8_t {
 /// GETPIVOTDATA's exact-match walk read.
 ///
 /// All fields except `grand_total_label` / `values_label` /
-/// `blank_item_label` default to empty.
+/// `blank_item_label` / `data_total_prefix` default to empty.
+/// `values_label` is the caption a newly created pivot stores; an existing
+/// pivot draws the caption it carries.
 /// When `row_labels_label` (or `column_labels_label`) is empty the
 /// projection keeps the historical English layout: the row-field (resp.
 /// column-field) display name occupies the corresponding header cell.
@@ -49,7 +51,9 @@ enum class PivotCellKind : std::uint8_t {
 ///
 /// Subtotal rows / columns label a group as `subtotal_prefix + group +
 /// subtotal_suffix` (fr-FR puts its word first). When both are empty the
-/// projection falls back to `" " + grand_total_label`.
+/// projection falls back to `" " + grand_total_label`. With several data
+/// fields, each one's grand total on the Values axis is labelled
+/// `data_total_prefix + data field name + data_total_suffix`.
 ///
 /// `blank_item_label` names an axis group with no source value, which
 /// must be named because an empty label can be neither drawn nor
@@ -70,6 +74,8 @@ struct PivotLayoutOptions {
   std::string column_labels_label;                        ///< e.g. "列ラベル"; empty disables.
   std::string subtotal_prefix;                            ///< e.g. "Total " (fr-FR); placed before the group label.
   std::string subtotal_suffix;                            ///< e.g. " 集計"; empty falls back to grand_total_label.
+  std::string data_total_prefix = "Total ";  ///< Grand total of one of several data fields, e.g. "全体の ".
+  std::string data_total_suffix;             ///< e.g. "汇总" (zh-CN); placed after the data-field name.
 };
 
 struct PivotCell {

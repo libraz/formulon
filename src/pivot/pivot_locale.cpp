@@ -78,26 +78,28 @@ struct PivotLocaleLabels {
   std::string_view all_pages_label;
   std::string_view multiple_items_label;
   std::string_view data_field_separator;
+  std::string_view data_total_prefix;
+  std::string_view data_total_suffix;
 };
 
 // Indexed by `ExcelLocale`. Measured on Mac Excel 365 by switching the UI
-// locale and reading what Excel renders and names, except `values_label`
-// outside ja-JP: Excel stores it as the pivot's dataCaption at creation,
-// which this host cannot drive, so the others are the UI wording.
+// locale and reading what Excel renders and names. `values_label` is the
+// dataCaption Excel stores when a pivot is created in that UI.
 constexpr std::array<PivotLocaleLabels, 7> kLocaleLabels{{
     {kJaJpAggregationLabels, "総計", "値", "行ラベル", "列ラベル", "", " 集計", "(空白)", "(すべて)",
-     "(複数のアイテム)", " / "},
+     "(複数のアイテム)", " / ", "全体の ", ""},
     {kEnUsAggregationLabels, "Grand Total", "Values", "Row Labels", "Column Labels", "", " Total", "(blank)", "(All)",
-     "(Multiple Items)", " of "},
+     "(Multiple Items)", " of ", "Total ", ""},
     {kDeDeAggregationLabels, "Gesamtergebnis", "Werte", "Zeilenbeschriftungen", "Spaltenbeschriftungen", "",
-     " Ergebnis", "(Leer)", "(Alle)", "(Mehrere Elemente)", " von "},
+     " Ergebnis", "(Leer)", "(Alle)", "(Mehrere Elemente)", " von ", "Gesamt: ", ""},
     {kFrFrAggregationLabels, "Total général", "Valeurs", "Étiquettes de lignes", "Étiquettes de colonnes", "Total ", "",
-     "(vide)", "(Tous)", "(Plusieurs éléments)", " de "},
-    {kZhCnAggregationLabels, "总计", "值", "行标签", "列标签", "", " 汇总", "(空白)", "(全部)", "(多项)", ":"},
+     "(vide)", "(Tous)", "(Plusieurs éléments)", " de ", "Total ", ""},
+    {kZhCnAggregationLabels, "总计", "值", "行标签", "列标签", "", " 汇总", "(空白)", "(全部)", "(多项)", ":", "",
+     "汇总"},
     {kKoKrAggregationLabels, "총합계", "값", "행 레이블", "열 레이블", "", " 요약", "(비어 있음)", "(모두)",
-     "(다중 항목)", " : "},
+     "(다중 항목)", " : ", "전체 ", ""},
     {kThThAggregationLabels, "ผลรวมทั้งหมด", "ค่า", "ป้ายชื่อแถว", "ป้ายชื่อคอลัมน์", "", " ผลรวม", "(ว่าง)", "(ทั้งหมด)",
-     "(หลายรายการ)", " ของ "},
+     "(หลายรายการ)", " ของ ", "ผลรวม ", ""},
 }};
 
 static_assert(kLocaleLabels.size() == static_cast<std::size_t>(ExcelLocale::kThTH) + 1U,
@@ -134,6 +136,8 @@ pivot::PivotLayoutOptions pivot_layout_options_for(ExcelProfile profile) {
   options.blank_item_label = labels.blank_item_label;
   options.all_pages_label = labels.all_pages_label;
   options.multiple_items_label = labels.multiple_items_label;
+  options.data_total_prefix = labels.data_total_prefix;
+  options.data_total_suffix = labels.data_total_suffix;
   return options;
 }
 

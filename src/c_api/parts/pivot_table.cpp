@@ -19,6 +19,8 @@
 #include "c_api/parts/pivot_internal.h"
 #include "pivot/date_serial.h"
 #include "pivot/field_lookup.h"
+#include "pivot/pivot_layout.h"
+#include "pivot/pivot_locale.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/number_text.h"
@@ -153,6 +155,9 @@ extern "C" fm_status_t fm_workbook_pivot_create(fm_workbook_t* wb, std::size_t s
   // Default span of 1x1 anchored at the requested cell; callers can
   // adjust via `fm_workbook_pivot_set_anchor`.
   table->set_anchor(anchor_row, anchor_col, 1U, 1U);
+  // Excel stores the Values caption in the creating UI's wording and keeps it
+  // when the file is opened under another locale.
+  table->set_data_caption(formulon::pivot::pivot_layout_options_for(wb->workbook().excel_profile()).values_label);
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   sheet.add_pivot_table(std::move(table));
   *out_pivot_index = sheet.pivot_tables().size() - 1U;

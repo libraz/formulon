@@ -28,6 +28,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   ooxml_writer_pivot_test.cpp
   pivot_blank_item_fixture_test.cpp
   pivot_caption_filter_fixture_test.cpp
+  pivot_layout_fixture_test.cpp
   pivot_recurring_period_filter_fixture_test.cpp
   pivot_value_date_filter_fixture_test.cpp
   real_excel_fixture_smoke_test.cpp
