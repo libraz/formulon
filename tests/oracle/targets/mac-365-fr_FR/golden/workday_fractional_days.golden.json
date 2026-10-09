@@ -1,0 +1,224 @@
+{
+  "suite": "workday_fractional_days",
+  "description": "WORKDAY, WORKDAY.INTL and NETWORKDAYS with fractional day counts, starts and holidays",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "fr-FR",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T05:15:01Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "workday_0_5",
+      "formula": "=WORKDAY(DATE(2024,1,3),0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45294.0
+      }
+    },
+    {
+      "id": "workdayintl_0_5",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,3),0.5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45294.0
+      }
+    },
+    {
+      "id": "workday_1_5",
+      "formula": "=WORKDAY(DATE(2024,1,3),1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45295.0
+      }
+    },
+    {
+      "id": "workdayintl_1_5",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,3),1.5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45295.0
+      }
+    },
+    {
+      "id": "workday_m0_5",
+      "formula": "=WORKDAY(DATE(2024,1,3),-0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45293.0
+      }
+    },
+    {
+      "id": "workdayintl_m0_5",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,3),-0.5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45293.0
+      }
+    },
+    {
+      "id": "workday_m1_5",
+      "formula": "=WORKDAY(DATE(2024,1,3),-1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45292.0
+      }
+    },
+    {
+      "id": "workdayintl_m1_5",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,3),-1.5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45292.0
+      }
+    },
+    {
+      "id": "workday_2_9",
+      "formula": "=WORKDAY(DATE(2024,1,3),2.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45296.0
+      }
+    },
+    {
+      "id": "workdayintl_2_9",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,3),2.9,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45296.0
+      }
+    },
+    {
+      "id": "workday_m2_9",
+      "formula": "=WORKDAY(DATE(2024,1,3),-2.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45289.0
+      }
+    },
+    {
+      "id": "workdayintl_m2_9",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,3),-2.9,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45289.0
+      }
+    },
+    {
+      "id": "workday_0_9999999",
+      "formula": "=WORKDAY(DATE(2024,1,3),0.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45294.0
+      }
+    },
+    {
+      "id": "workdayintl_0_9999999",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,3),0.9999999,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45294.0
+      }
+    },
+    {
+      "id": "workday_4_5",
+      "formula": "=WORKDAY(DATE(2024,1,3),4.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45300.0
+      }
+    },
+    {
+      "id": "workdayintl_4_5",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,3),4.5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45300.0
+      }
+    },
+    {
+      "id": "workday_start_frac0_7",
+      "formula": "=WORKDAY(DATE(2024,1,6)+0.7,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45299.0
+      }
+    },
+    {
+      "id": "workday_start_frac0_7_d0",
+      "formula": "=WORKDAY(DATE(2024,1,6)+0.7,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45297.0
+      }
+    },
+    {
+      "id": "networkdays_frac0_7",
+      "formula": "=NETWORKDAYS(DATE(2024,1,6)+0.7,DATE(2024,1,10)+0.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "workday_start_frac0_2",
+      "formula": "=WORKDAY(DATE(2024,1,6)+0.2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45299.0
+      }
+    },
+    {
+      "id": "workday_start_frac0_2_d0",
+      "formula": "=WORKDAY(DATE(2024,1,6)+0.2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45297.0
+      }
+    },
+    {
+      "id": "networkdays_frac0_2",
+      "formula": "=NETWORKDAYS(DATE(2024,1,6)+0.2,DATE(2024,1,10)+0.2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "workday_holiday_frac",
+      "formula": "=WORKDAY(DATE(2024,1,3),1,DATE(2024,1,4)+0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45296.0
+      }
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+suite: workday_fractional_days
+description: WORKDAY, WORKDAY.INTL and NETWORKDAYS with fractional day counts, starts and holidays
+tolerance:
+  abs: 0
+  rel: 0
+locale: ja-JP
+cases:
+- id: workday_0_5
+  formula: =WORKDAY(DATE(2024,1,3),0.5)
+- id: workdayintl_0_5
+  formula: =WORKDAY.INTL(DATE(2024,1,3),0.5,1)
+- id: workday_1_5
+  formula: =WORKDAY(DATE(2024,1,3),1.5)
+- id: workdayintl_1_5
+  formula: =WORKDAY.INTL(DATE(2024,1,3),1.5,1)
+- id: workday_m0_5
+  formula: =WORKDAY(DATE(2024,1,3),-0.5)
+- id: workdayintl_m0_5
+  formula: =WORKDAY.INTL(DATE(2024,1,3),-0.5,1)
+- id: workday_m1_5
+  formula: =WORKDAY(DATE(2024,1,3),-1.5)
+- id: workdayintl_m1_5
+  formula: =WORKDAY.INTL(DATE(2024,1,3),-1.5,1)
+- id: workday_2_9
+  formula: =WORKDAY(DATE(2024,1,3),2.9)
+- id: workdayintl_2_9
+  formula: =WORKDAY.INTL(DATE(2024,1,3),2.9,1)
+- id: workday_m2_9
+  formula: =WORKDAY(DATE(2024,1,3),-2.9)
+- id: workdayintl_m2_9
+  formula: =WORKDAY.INTL(DATE(2024,1,3),-2.9,1)
+- id: workday_0_9999999
+  formula: =WORKDAY(DATE(2024,1,3),0.9999999)
+- id: workdayintl_0_9999999
+  formula: =WORKDAY.INTL(DATE(2024,1,3),0.9999999,1)
+- id: workday_4_5
+  formula: =WORKDAY(DATE(2024,1,3),4.5)
+- id: workdayintl_4_5
+  formula: =WORKDAY.INTL(DATE(2024,1,3),4.5,1)
+- id: workday_start_frac0_7
+  formula: =WORKDAY(DATE(2024,1,6)+0.7,1)
+- id: workday_start_frac0_7_d0
+  formula: =WORKDAY(DATE(2024,1,6)+0.7,0)
+- id: networkdays_frac0_7
+  formula: =NETWORKDAYS(DATE(2024,1,6)+0.7,DATE(2024,1,10)+0.7)
+- id: workday_start_frac0_2
+  formula: =WORKDAY(DATE(2024,1,6)+0.2,1)
+- id: workday_start_frac0_2_d0
+  formula: =WORKDAY(DATE(2024,1,6)+0.2,0)
+- id: networkdays_frac0_2
+  formula: =NETWORKDAYS(DATE(2024,1,6)+0.2,DATE(2024,1,10)+0.2)
+- id: workday_holiday_frac
+  formula: =WORKDAY(DATE(2024,1,3),1,DATE(2024,1,4)+0.5)
