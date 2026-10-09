@@ -56,10 +56,12 @@ from typing import Any, Dict, List, Optional, Tuple
 try:  # pragma: no cover - trivial fallback
     from tools.oracle.drivers import select_driver
     from tools.oracle.oracle_gen import _load_divergence_reprobes, _load_divergence_skips
+    from tools.oracle.targets_manifest import _load_targets
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from drivers import select_driver  # type: ignore
     from oracle_gen import _load_divergence_reprobes, _load_divergence_skips  # type: ignore
+    from targets_manifest import _load_targets  # type: ignore
 try:
     from tools.oracle import print_roundtrip, workbook_case_schema
 except ImportError:  # pragma: no cover
@@ -127,25 +129,6 @@ def staging_dir_for(track: str, target_name: str) -> Path:
     """Returns the default staging directory for one track / target pair."""
 
     return STAGING_ROOT / track / target_name
-
-
-def _load_targets(path: Path) -> Dict[str, Any]:
-    """Loads `targets.yaml`. Raises RuntimeError on any read / parse error."""
-
-    if not path.exists():
-        raise RuntimeError(f"oracle targets file not found: {path}")
-    try:
-        import yaml  # type: ignore
-
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except Exception as exc:  # pragma: no cover - yaml import / parse guard
-        raise RuntimeError(f"failed to parse {path}: {exc}") from exc
-    if not isinstance(doc, dict):
-        raise RuntimeError(f"{path} root must be a mapping")
-    targets = doc.get("targets")
-    if not isinstance(targets, dict) or not targets:
-        raise RuntimeError(f"{path} has no `targets:` mapping")
-    return doc
 
 
 def _workbook_primary(targets_doc: Dict[str, Any]) -> str:

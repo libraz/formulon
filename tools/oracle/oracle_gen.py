@@ -38,12 +38,14 @@ try:  # pragma: no cover - trivial fallback
     from tools.oracle.divergence_check import is_pending_stamp
     from tools.oracle.drivers import select_driver
     from tools.oracle.drivers.base import CaseResult, EnvironmentInfo
+    from tools.oracle.targets_manifest import _load_targets
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import case_schema  # type: ignore
     from divergence_check import is_pending_stamp  # type: ignore
     from drivers import select_driver  # type: ignore
     from drivers.base import CaseResult, EnvironmentInfo  # type: ignore
+    from targets_manifest import _load_targets  # type: ignore
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -81,30 +83,6 @@ class ProgressBar:
                 print(file=sys.stderr, flush=True)
         else:
             print(line, file=sys.stderr, flush=True)
-
-
-def _load_targets(path: Path) -> Dict[str, object]:
-    """Loads `targets.yaml`. Raises RuntimeError on any read / parse error.
-
-    The file is required for `--target` resolution; oracle_gen will not
-    silently fall back to hard-coded paths so that a typo in `--target`
-    surfaces immediately rather than being papered over.
-    """
-
-    if not path.exists():
-        raise RuntimeError(f"oracle targets file not found: {path}")
-    try:
-        import yaml  # type: ignore
-
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except Exception as exc:
-        raise RuntimeError(f"failed to parse {path}: {exc}") from exc
-    if not isinstance(doc, dict):
-        raise RuntimeError(f"{path} root must be a mapping")
-    targets = doc.get("targets")
-    if not isinstance(targets, dict) or not targets:
-        raise RuntimeError(f"{path} has no `targets:` mapping")
-    return doc
 
 
 def _resolve_target(targets_doc: Dict[str, object], name: Optional[str]) -> Dict[str, object]:

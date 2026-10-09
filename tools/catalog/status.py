@@ -201,16 +201,21 @@ def load_c_api_availability(path: Path) -> Dict[str, str]:
 # ---- Source scanning -----------------------------------------------------
 
 
+def _scan_eval_names(eval_dir: Path, *patterns: re.Pattern[str]) -> Set[str]:
+    """Scan every C++ evaluation source once with the requested patterns."""
+    names: Set[str] = set()
+    for path in sorted(eval_dir.rglob("*.cpp")):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for pattern in patterns:
+            names.update(match.group(1) for match in pattern.finditer(text))
+    return names
+
+
 def scan_registered_names(eval_dir: Path) -> Set[str]:
     """Returns every name appearing inside a `FunctionDef{"NAME"` literal
     under `src/eval/` (recursively). Covers builtins + any host extensions
     that follow the same registration pattern."""
-    names: Set[str] = set()
-    for path in sorted(eval_dir.rglob("*.cpp")):
-        text = path.read_text(encoding="utf-8", errors="replace")
-        for m in FUNCTION_DEF_RE.finditer(text):
-            names.add(m.group(1))
-    return names
+    return _scan_eval_names(eval_dir, FUNCTION_DEF_RE)
 
 
 def scan_lazy_names(eval_dir: Path) -> Set[str]:
@@ -219,12 +224,7 @@ def scan_lazy_names(eval_dir: Path) -> Set[str]:
     split out of `tree_walker.cpp` into `tree_walker_lazy_table.cpp`, so a
     file-specific scan would miss it; the regex anchor (`{"NAME", &eval_`)
     is specific enough that a tree-wide rglob is safe."""
-    names: Set[str] = set()
-    for path in sorted(eval_dir.rglob("*.cpp")):
-        text = path.read_text(encoding="utf-8", errors="replace")
-        for m in LAZY_ENTRY_RE.finditer(text):
-            names.add(m.group(1))
-    return names
+    return _scan_eval_names(eval_dir, LAZY_ENTRY_RE)
 
 
 def scan_special_form_names(path: Path) -> Set[str]:
@@ -249,7 +249,7 @@ def scan_special_form_names(path: Path) -> Set[str]:
 def scan_implemented(repo_root: Path) -> Set[str]:
     eval_dir = repo_root / "src" / "eval"
     special_forms = eval_dir / "special_forms_catalog.cpp"
-    return scan_registered_names(eval_dir) | scan_lazy_names(eval_dir) | scan_special_form_names(special_forms)
+    return _scan_eval_names(eval_dir, FUNCTION_DEF_RE, LAZY_ENTRY_RE) | scan_special_form_names(special_forms)
 
 
 # ---- Reporting -----------------------------------------------------------
