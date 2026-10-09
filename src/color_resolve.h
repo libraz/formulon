@@ -51,6 +51,13 @@ std::uint32_t default_indexed_color(std::uint32_t index);
 /// Applies a tint (-1..1) to an opaque RGB colour.
 std::uint32_t apply_tint(std::uint32_t argb, double tint);
 
+/// Uses a sibling literal when the colour spec is unspecified and the
+/// sibling differs from the caller's no-colour sentinel.
+ColorSpec with_literal_fallback(const ColorSpec& spec, std::uint32_t argb, std::uint32_t none_value);
+
+/// Whether a colour is explicitly specified or has a non-zero literal value.
+bool has_color(const ColorSpec& spec, std::uint32_t argb);
+
 ResolvedColor resolve_color(const ColorSpec& spec, const Theme& theme, ThemeSource source,
                             const IndexedPalette& palette, ColorContext context);
 

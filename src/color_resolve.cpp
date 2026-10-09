@@ -121,6 +121,20 @@ std::uint32_t apply_tint(std::uint32_t argb, double tint) {
   return rgb_pack(channel(hue + kHlsMax / 3), channel(hue), channel(hue - kHlsMax / 3));
 }
 
+ColorSpec with_literal_fallback(const ColorSpec& spec, std::uint32_t argb, std::uint32_t none_value) {
+  if (spec.kind != ColorSpec::Kind::kNone || argb == none_value) {
+    return spec;
+  }
+  ColorSpec literal;
+  literal.kind = ColorSpec::Kind::kRgb;
+  literal.rgb = argb;
+  return literal;
+}
+
+bool has_color(const ColorSpec& spec, std::uint32_t argb) {
+  return spec.kind != ColorSpec::Kind::kNone || argb != 0U;
+}
+
 ResolvedColor resolve_color(const ColorSpec& spec, const Theme& theme, ThemeSource source,
                             const IndexedPalette& palette, ColorContext context) {
   switch (spec.kind) {

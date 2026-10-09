@@ -39,22 +39,6 @@ EffectiveXf select_effective_xf(const Sheet& sheet, std::uint32_t row, std::uint
   return {0U, StyleSource::kDefault};
 }
 
-namespace {
-
-/// A record built programmatically may set only its `*_argb` sibling; that
-/// literal is then the colour, matching what the writer emits.
-ColorSpec with_literal_fallback(const ColorSpec& spec, std::uint32_t argb, std::uint32_t none_value) {
-  if (spec.kind != ColorSpec::Kind::kNone || argb == none_value) {
-    return spec;
-  }
-  ColorSpec literal;
-  literal.kind = ColorSpec::Kind::kRgb;
-  literal.rgb = argb;
-  return literal;
-}
-
-}  // namespace
-
 EffectiveStyle effective_style(const Workbook& wb, const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
   const StylesTable& styles = wb.styles();
   const EffectiveXf choice = select_effective_xf(sheet, row, col);

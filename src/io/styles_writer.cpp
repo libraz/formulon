@@ -7,6 +7,7 @@
 #include <string>
 #include <string_view>
 
+#include "color_resolve.h"
 #include "io/color_spec_xml.h"
 #include "io/styles_vocab.h"
 #include "io/xml_escape.h"
@@ -47,14 +48,6 @@ void AppendColor(std::string& out, const char* tag, const ColorSpec& spec, std::
   out.append(tag);
   append_color_spec_attrs(out, spec, fallback_argb);
   out.append("/>");
-}
-
-/// True when a colour location should emit a `<color>` element: either the
-/// source carried an explicit spec, or a non-zero sibling value was set
-/// programmatically. Used by fills and borders, where an all-zero colour
-/// means "no colour set" and no element is emitted.
-bool HasColor(const ColorSpec& spec, std::uint32_t argb) {
-  return spec.kind != ColorSpec::Kind::kNone || argb != 0U;
 }
 
 const char* HorizontalAlignName(std::uint8_t v) {
@@ -124,7 +117,7 @@ void AppendBorderSide(std::string& out, const char* tag, const BorderSide& side)
   if (style != nullptr) {
     append_xml_attr(out, "style", style);
   }
-  if (HasColor(side.color, side.color_argb)) {
+  if (has_color(side.color, side.color_argb)) {
     out.append(">");
     AppendColor(out, "color", side.color, side.color_argb);
     out.append("</");
@@ -511,8 +504,8 @@ void AppendFillFragment(std::string& out, const FillRecord& fill) {
   out.append("<fill><patternFill patternType=\"");
   out.append(FillPatternName(fill.pattern));
   out.append("\"");
-  const bool has_fg = HasColor(fill.fg, fill.fg_argb);
-  const bool has_bg = HasColor(fill.bg, fill.bg_argb);
+  const bool has_fg = has_color(fill.fg, fill.fg_argb);
+  const bool has_bg = has_color(fill.bg, fill.bg_argb);
   if (has_fg || has_bg) {
     out.append(">");
     if (has_fg) {

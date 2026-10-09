@@ -334,22 +334,8 @@ bool match_dynamic(const DynamicFilter& f, const Value& v, const Run& run, std::
 
 // --- Colour and icon filters ------------------------------------------------
 
-ColorSpec literal_or_spec(const ColorSpec& spec, std::uint32_t argb) {
-  if (spec.kind != ColorSpec::Kind::kNone || argb == 0U) {
-    return spec;
-  }
-  ColorSpec literal;
-  literal.kind = ColorSpec::Kind::kRgb;
-  literal.rgb = argb;
-  return literal;
-}
-
-bool has_color(const ColorSpec& spec, std::uint32_t argb) {
-  return spec.kind != ColorSpec::Kind::kNone || argb != 0U;
-}
-
 std::uint32_t rgb_of(const Workbook& wb, const ColorSpec& spec, std::uint32_t argb, ColorContext context) {
-  return resolve_color(wb, literal_or_spec(spec, argb), context).argb & 0x00FFFFFFU;
+  return resolve_color(wb, with_literal_fallback(spec, argb, 0U), context).argb & 0x00FFFFFFU;
 }
 
 /// Solid colour of a dxf fill: its foreground, else its background.
