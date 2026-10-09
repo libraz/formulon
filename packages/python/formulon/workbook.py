@@ -2113,14 +2113,38 @@ def _alloc_struct_array(layout: S.Struct, count: int, owned: List[int]) -> int:
     return ptr
 
 
-def _read_count(fn, *args) -> int:
+def _read_count(fn, *args, default_op: str = "count") -> int:
     """Call a ``(... , out_count*)`` ABI function and return the count."""
     out = _alloc_out_ptr()
     try:
-        _check(fn(*args, out), getattr(fn, "__name__", "count"))
+        _check(fn(*args, out), getattr(fn, "__name__", default_op))
         return LIB.read_u32(out)
     finally:
         LIB.free(out)
+
+
+def _read_owned_buffer(fn, *args, default_op: str = "save") -> bytes:
+    """Call a save-style ABI function and copy its owned byte buffer."""
+    scratch: List[int] = []
+    data_ptr = 0
+    try:
+        out_ptr_ptr = _alloc_out_ptr()
+        scratch.append(out_ptr_ptr)
+        out_len_ptr = _alloc_out_ptr()
+        scratch.append(out_len_ptr)
+        _check(fn(*args, out_ptr_ptr, out_len_ptr), getattr(fn, "__name__", default_op))
+        data_ptr = LIB.read_u32(out_ptr_ptr)
+        data_len = LIB.read_u32(out_len_ptr)
+        if data_len == 0 or data_ptr == 0:
+            return b""
+        return LIB.read_bytes(data_ptr, data_len)
+    finally:
+        try:
+            if data_ptr:
+                LIB.fm_buffer_free(data_ptr)
+        finally:
+            for ptr in scratch:
+                LIB.free(ptr)
 
 
 def _opt_str_ptr(value: Optional[str], owned: List[int]) -> int:
@@ -2144,16 +2168,7 @@ def _pack_merge_array(ranges: Sequence[MergeRange], owned: List[int]) -> int:
     ptr = LIB.alloc(size * len(ranges))
     owned.append(ptr)
     for i, r in enumerate(ranges):
-        S.MERGE_RANGE.pack(
-            LIB,
-            ptr + i * size,
-            {
-                "first_row": _uint(r.first_row, "first_row"),
-                "first_col": _uint(r.first_col, "first_col"),
-                "last_row": _uint(r.last_row, "last_row"),
-                "last_col": _uint(r.last_col, "last_col"),
-            },
-        )
+        _pack_merge_at(ptr + i * size, r)
     return ptr
 
 
@@ -3038,25 +3053,7 @@ class Workbook:
         buffer is freed before this method returns.
         """
         h = self._require()
-        out_ptr_ptr = LIB.alloc(4)
-        out_len_ptr = LIB.alloc(4)
-        LIB.write_bytes(out_ptr_ptr, b"\x00\x00\x00\x00")
-        LIB.write_bytes(out_len_ptr, b"\x00\x00\x00\x00")
-        try:
-            status = LIB.fm_workbook_save(h, out_ptr_ptr, out_len_ptr)
-            _check(status, "fm_workbook_save")
-            data_ptr = LIB.read_u32(out_ptr_ptr)
-            data_len = LIB.read_u32(out_len_ptr)
-            try:
-                if data_len == 0 or data_ptr == 0:
-                    return b""
-                return LIB.read_bytes(data_ptr, data_len)
-            finally:
-                if data_ptr:
-                    LIB.fm_buffer_free(data_ptr)
-        finally:
-            LIB.free(out_ptr_ptr)
-            LIB.free(out_len_ptr)
+        return _read_owned_buffer(LIB.fm_workbook_save, h, default_op="fm_workbook_save")
 
     def save_as(self, fmt: "WorkbookFormat | int") -> bytes:
         """Serialise the workbook to an in-memory byte stream in ``fmt``.
@@ -3067,25 +3064,12 @@ class Workbook:
         the underlying WASM buffer is freed before this method returns.
         """
         h = self._require()
-        out_ptr_ptr = LIB.alloc(4)
-        out_len_ptr = LIB.alloc(4)
-        LIB.write_bytes(out_ptr_ptr, b"\x00\x00\x00\x00")
-        LIB.write_bytes(out_len_ptr, b"\x00\x00\x00\x00")
-        try:
-            status = LIB.fm_workbook_save_as(h, _sint(fmt, "format"), out_ptr_ptr, out_len_ptr)
-            _check(status, "fm_workbook_save_as")
-            data_ptr = LIB.read_u32(out_ptr_ptr)
-            data_len = LIB.read_u32(out_len_ptr)
-            try:
-                if data_len == 0 or data_ptr == 0:
-                    return b""
-                return LIB.read_bytes(data_ptr, data_len)
-            finally:
-                if data_ptr:
-                    LIB.fm_buffer_free(data_ptr)
-        finally:
-            LIB.free(out_ptr_ptr)
-            LIB.free(out_len_ptr)
+        return _read_owned_buffer(
+            LIB.fm_workbook_save_as,
+            h,
+            _sint(fmt, "format"),
+            default_op="fm_workbook_save_as",
+        )
 
     def save_with_diagnostics(self, fmt: "WorkbookFormat | int") -> SaveDiagnostics:
         """Serialise the workbook and return what the save cost.
@@ -3153,13 +3137,7 @@ class Workbook:
         C ABI invalidates a cell enumeration after a workbook mutation.
         """
         h = self._require()
-        out_count = _alloc_out_ptr()
-        try:
-            status = LIB.fm_workbook_cell_count(h, _uint(sheet, "sheet_index"), out_count)
-            _check(status, "fm_workbook_cell_count")
-            n = LIB.read_u32(out_count)
-        finally:
-            LIB.free(out_count)
+        n = _read_count(LIB.fm_workbook_cell_count, h, _uint(sheet, "sheet_index"))
         # Scratch: row(4) + col(4) + formula_ptr(4) + value(16) = 28 bytes.
         # Allocate them as separate slots so the ABI's
         # individual out-parameter contract is respected.
@@ -3724,15 +3702,7 @@ class Workbook:
                     LIB.fm_sheet_get_merge_at(h, _uint(sheet, "sheet"), _uint(i, "index"), ptr),
                     "fm_sheet_get_merge_at",
                 )
-                d = S.MERGE_RANGE.unpack(LIB, ptr)
-                out.append(
-                    MergeRange(
-                        first_row=d["first_row"],
-                        first_col=d["first_col"],
-                        last_row=d["last_row"],
-                        last_col=d["last_col"],
-                    )
-                )
+                out.append(_decode_merge_at(ptr))
         finally:
             LIB.free(ptr)
         return out
@@ -3961,15 +3931,7 @@ class Workbook:
         base = d["ranges"]
         rsize = S.MERGE_RANGE.size
         for i in range(d["range_count"]):
-            rd = S.MERGE_RANGE.unpack(LIB, base + i * rsize)
-            ranges.append(
-                MergeRange(
-                    first_row=rd["first_row"],
-                    first_col=rd["first_col"],
-                    last_row=rd["last_row"],
-                    last_col=rd["last_col"],
-                )
-            )
+            ranges.append(_decode_merge_at(base + i * rsize))
         return DataValidation(
             ranges=ranges,
             type=d["type"],
@@ -4930,8 +4892,7 @@ class Workbook:
             )
             out: List[MergeRange] = []
             for i in range(min(total, LIB.read_u32(count_ptr))):
-                d = S.MERGE_RANGE.unpack(LIB, buf + i * size)
-                out.append(MergeRange(d["first_row"], d["first_col"], d["last_row"], d["last_col"]))
+                out.append(_decode_merge_at(buf + i * size))
             return out
         finally:
             LIB.free(count_ptr)
@@ -6301,38 +6262,32 @@ class Workbook:
             hidden=bool(d["hidden"]),
         )
 
-    def get_cell_xf(self, xf_index: int) -> CellXf:
-        """Return the resolved ``<xf>`` record at ``xf_index``."""
+    def _get_style_record(self, fn, layout: S.Struct, index: int, index_field: str, decode, op: str):
         h = self._require()
-        ptr = S.alloc_struct(LIB, S.CELL_XF)
+        ptr = S.alloc_struct(LIB, layout)
         try:
-            _check(
-                LIB.fm_styles_get_cell_xf(h, _uint(xf_index, "xf_index"), ptr),
-                "fm_styles_get_cell_xf",
-            )
-            return self._decode_cell_xf(ptr)
+            _check(fn(h, _uint(index, index_field), ptr), op)
+            return decode(ptr)
         finally:
             LIB.free(ptr)
+
+    def get_cell_xf(self, xf_index: int) -> CellXf:
+        """Return the resolved ``<xf>`` record at ``xf_index``."""
+        return self._get_style_record(
+            LIB.fm_styles_get_cell_xf, S.CELL_XF, xf_index, "xf_index", self._decode_cell_xf, "fm_styles_get_cell_xf"
+        )
 
     def get_font(self, font_index: int) -> FontRecord:
         """Return the font record at ``font_index``."""
-        h = self._require()
-        ptr = S.alloc_struct(LIB, S.FONT_RECORD)
-        try:
-            _check(LIB.fm_styles_get_font(h, _uint(font_index, "font_index"), ptr), "fm_styles_get_font")
-            return _decode_font(ptr)
-        finally:
-            LIB.free(ptr)
+        return self._get_style_record(
+            LIB.fm_styles_get_font, S.FONT_RECORD, font_index, "font_index", _decode_font, "fm_styles_get_font"
+        )
 
     def get_fill(self, fill_index: int) -> FillRecord:
         """Return the fill record at ``fill_index``."""
-        h = self._require()
-        ptr = S.alloc_struct(LIB, S.FILL_RECORD)
-        try:
-            _check(LIB.fm_styles_get_fill(h, _uint(fill_index, "fill_index"), ptr), "fm_styles_get_fill")
-            return _decode_fill(ptr)
-        finally:
-            LIB.free(ptr)
+        return self._get_style_record(
+            LIB.fm_styles_get_fill, S.FILL_RECORD, fill_index, "fill_index", _decode_fill, "fm_styles_get_fill"
+        )
 
     def get_border(self, border_index: int) -> Dict[str, object]:
         """Return the border record at ``border_index``.
@@ -6341,16 +6296,14 @@ class Workbook:
         ``color`` is the round-trip :class:`ColorSpec`; the result also
         carries ``diagonal_up`` / ``diagonal_down`` booleans.
         """
-        h = self._require()
-        ptr = S.alloc_struct(LIB, S.BORDER_RECORD)
-        try:
-            _check(
-                LIB.fm_styles_get_border(h, _uint(border_index, "border_index"), ptr),
-                "fm_styles_get_border",
-            )
-            return _decode_border_record(ptr)
-        finally:
-            LIB.free(ptr)
+        return self._get_style_record(
+            LIB.fm_styles_get_border,
+            S.BORDER_RECORD,
+            border_index,
+            "border_index",
+            _decode_border_record,
+            "fm_styles_get_border",
+        )
 
     def get_dxf(self, dxf_index: int) -> DifferentialFormat:
         """Read one differential format by its conditional-format ``dxfId``."""
@@ -6417,12 +6370,7 @@ class Workbook:
 
     def _style_count(self, fn) -> int:
         h = self._require()
-        out = _alloc_out_ptr()
-        try:
-            _check(fn(h, out), getattr(fn, "__name__", "style_count"))
-            return LIB.read_u32(out)
-        finally:
-            LIB.free(out)
+        return _read_count(fn, h, default_op="style_count")
 
     def add_font(self, record: FontRecord) -> int:
         """Add (dedup) a font record; return its index."""
