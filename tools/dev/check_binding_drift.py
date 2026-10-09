@@ -54,10 +54,9 @@ Checks:
                   (`NODE_PURE_JS_FREE_FUNCTIONS`) are exported by both npm
                   packages (packages/npm/common.mjs, re-exported by each
                   entry point, and packages/npm-native/index.mjs), declared
-                  in both declaration files,
-                  and implemented with identical source. The two packages
-                  share no module, so this is the only thing holding the
-                  copies together.
+                  in both declaration files, and implemented by the canonical
+                  helper source. The native entry point must explicitly
+                  re-export that source.
   readme-counts   The instance-method count quoted in
                   packages/npm-native/README.md matches the actual count
                   registered in workbook_class.cc and its shared/WASM-only
@@ -94,12 +93,13 @@ Checks:
                   stale ledger entry fails too, so the ledger cannot
                   outlive the break it excuses.
   staged-dist     packages/npm-native/dist/{index.d.ts,index.mjs} are
-                  byte-identical to the package-root sources `stage.mjs`
-                  copied them from, so the published package cannot ship a
-                  declaration file or ordinal table that no longer matches
-                  the source every other check here reads. Reports
-                  "SKIPPED" when the package has not been staged, because
-                  `dist/` is gitignored and absent in a fresh clone.
+                  the expected staged copies of the package-root sources:
+                  `index.d.ts` and `common.mjs` are byte-identical, while
+                  `index.mjs` has exactly its source-relative common import
+                  rewritten to the staged sibling. This prevents a published
+                  declaration, constant table or shim from going stale.
+                  Reports "SKIPPED" when the package has not been staged,
+                  because `dist/` is gitignored and absent in a fresh clone.
   header-error-codes
                   Every numeric status code a doc comment in
                   src/c_api/formulon_c.h prints beside an enumerator name

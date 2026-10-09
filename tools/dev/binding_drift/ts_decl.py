@@ -137,6 +137,62 @@ def _js_exported_function_source(text: str, name: str) -> Optional[str]:
     return " ".join(_extract_braced_block(text, body_open + 1).split())
 
 
+_COMMON_IMPORT = "../npm/common.mjs"
+_JS_IMPORT_RE = re.compile(r"\bimport\s*\{(.*?)\}\s*from\s*['\"]([^'\"]+)['\"]\s*;?", re.DOTALL)
+_JS_EXPORT_LIST_RE = re.compile(r"^export\s*\{(.*?)\}\s*;?", re.DOTALL | re.MULTILINE)
+
+
+def _parse_js_binding_list(body: str) -> list[tuple[str, str]]:
+    """Returns `(source_name, local_name)` pairs from an import/export list."""
+    bindings: list[tuple[str, str]] = []
+    for item in body.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        names = re.fullmatch(r"([A-Za-z_$][A-Za-z0-9_$]*)(?:\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*))?", item)
+        if names is None:
+            continue
+        source_name, local_name = names.groups()
+        bindings.append((source_name, local_name or source_name))
+    return bindings
+
+
+def _js_common_reexports(text: str) -> dict[str, str]:
+    """Maps exported names to names explicitly imported from canonical common.mjs.
+
+    The map intentionally requires both halves of the seam: an import whose
+    source is exactly `../npm/common.mjs`, followed by an explicit `export {}`
+    list. This keeps an imported-but-private name out of the public surface and
+    rejects a broad `export *` or an unrelated module with the same values.
+    """
+    imported: dict[str, str] = {}
+    for match in _JS_IMPORT_RE.finditer(text):
+        if match.group(2) != _COMMON_IMPORT:
+            continue
+        for source_name, local_name in _parse_js_binding_list(match.group(1)):
+            imported[local_name] = source_name
+
+    exported: dict[str, str] = {}
+    for match in _JS_EXPORT_LIST_RE.finditer(text):
+        for local_name, exported_name in _parse_js_binding_list(match.group(1)):
+            source_name = imported.get(local_name)
+            if source_name is not None:
+                exported[exported_name] = source_name
+    return exported
+
+
+def _js_common_reexported_function_source(path: Path, name: str) -> Optional[str]:
+    """Returns a canonical helper body when `path` explicitly re-exports it."""
+    text = _read(path)
+    source_name = _js_common_reexports(text).get(name)
+    if source_name is None:
+        return None
+    common_path = (path.parent / _COMMON_IMPORT).resolve()
+    if not common_path.is_file():
+        return None
+    return _js_exported_function_source(_read(common_path), source_name)
+
+
 # Frozen ordinal tables are the only way a JS consumer can name a value
 # that crosses the boundary as a plain number, so both published ESM entry
 # points have to carry the same ones. The WASM `.d.ts` above is already
@@ -149,11 +205,19 @@ _JS_MEMBER_RE = re.compile(r"(\w+)\s*:\s*(-?\d+)")
 
 
 def _parse_js_constants(path: Path) -> dict:
-    """Reads an `index.mjs`'s exported ordinal tables and scalar constants."""
+    """Reads exported ordinal tables, including explicit common.mjs re-exports."""
     text = _read(path)
     out: dict = {}
     for match in _JS_TABLE_RE.finditer(text):
         out[match.group(1)] = {name: int(value) for name, value in _JS_MEMBER_RE.findall(match.group(2))}
     for match in _JS_SCALAR_RE.finditer(text):
         out[match.group(1)] = int(match.group(2))
+
+    common_path = (path.parent / _COMMON_IMPORT).resolve()
+    reexports = _js_common_reexports(text)
+    if reexports and common_path != path.resolve() and common_path.is_file():
+        common = _parse_js_constants(common_path)
+        for exported_name, source_name in reexports.items():
+            if source_name in common:
+                out[exported_name] = common[source_name]
     return out

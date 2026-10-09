@@ -7,16 +7,19 @@
 //   --build-dir       build
 //   --out-dir         packages/npm-native/dist
 //   --platform-arch   <process.platform>-<process.arch>  (e.g. darwin-arm64)
+//   --source-only     stage only the JS shim and declarations; skip the addon
 //
 // Copies:
 //   <build-dir>/bin/formulon.node   -> <out-dir>/prebuilds/<platform-arch>/formulon.node
 //   packages/npm-native/index.mjs   -> <out-dir>/index.mjs
+//   packages/npm/common.mjs         -> <out-dir>/common.mjs
 //   packages/npm-native/index.d.ts  -> <out-dir>/index.d.ts
 //
-// Run via `make node-package`. No npm dependencies; Node 18 stdlib only.
+// Run via `make node-package` (or `--source-only` from release bundling).
+// No npm dependencies; Node 18 stdlib only.
 
 import { constants as FS } from 'node:fs';
-import { access, copyFile, mkdir } from 'node:fs/promises';
+import { access, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -31,6 +34,7 @@ function parseArgs(argv) {
     buildDir: 'build',
     outDir: 'packages/npm-native/dist',
     platformArch: `${process.platform}-${process.arch}`,
+    sourceOnly: false,
   };
   for (let i = 0; i < argv.length; ++i) {
     const a = argv[i];
@@ -40,8 +44,10 @@ function parseArgs(argv) {
       out.outDir = argv[++i];
     } else if (a === '--platform-arch') {
       out.platformArch = argv[++i];
+    } else if (a === '--source-only') {
+      out.sourceOnly = true;
     } else if (a === '-h' || a === '--help') {
-      console.log('Usage: stage.mjs [--build-dir <path>] [--out-dir <path>] [--platform-arch <tag>]');
+      console.log('Usage: stage.mjs [--build-dir <path>] [--out-dir <path>] [--platform-arch <tag>] [--source-only]');
       process.exit(0);
     } else {
       console.error(`stage.mjs: unknown argument: ${a}`);
@@ -61,30 +67,43 @@ async function fileExists(p) {
 }
 
 async function main() {
-  const { buildDir, outDir, platformArch } = parseArgs(process.argv.slice(2));
+  const { buildDir, outDir, platformArch, sourceOnly } = parseArgs(process.argv.slice(2));
   const absBuildDir = path.resolve(repoRoot, buildDir);
   const absOutDir = path.resolve(repoRoot, outDir);
   const prebuildDir = path.join(absOutDir, 'prebuilds', platformArch);
 
   const nodeSrc = path.join(absBuildDir, 'bin', 'formulon.node');
   const mjsSrc = path.join(pkgRoot, 'index.mjs');
+  const commonSrc = path.join(repoRoot, 'packages', 'npm', 'common.mjs');
   const dtsSrc = path.join(pkgRoot, 'index.d.ts');
 
-  for (const p of [nodeSrc, mjsSrc, dtsSrc]) {
+  const inputs = sourceOnly ? [mjsSrc, commonSrc, dtsSrc] : [nodeSrc, mjsSrc, commonSrc, dtsSrc];
+  for (const p of inputs) {
     if (!(await fileExists(p))) {
       console.error(`stage.mjs: missing input ${p}`);
-      console.error('  Run `make node-native` first to produce the addon.');
+      if (!sourceOnly) console.error('  Run `make node-native` first to produce the addon.');
       process.exit(1);
     }
   }
 
-  await mkdir(prebuildDir, { recursive: true });
+  await mkdir(sourceOnly ? absOutDir : prebuildDir, { recursive: true });
 
-  await copyFile(nodeSrc, path.join(prebuildDir, 'formulon.node'));
-  await copyFile(mjsSrc, path.join(absOutDir, 'index.mjs'));
+  if (!sourceOnly) await copyFile(nodeSrc, path.join(prebuildDir, 'formulon.node'));
+  const mjs = await readFile(mjsSrc, 'utf8');
+  const commonImport = "from '../npm/common.mjs'";
+  const commonImportSites = mjs.split(commonImport).length - 1;
+  if (commonImportSites !== 1) {
+    console.error(`stage.mjs: expected exactly 1 canonical common import in ${mjsSrc}, found ${commonImportSites}`);
+    console.error(`  looked for: ${commonImport}`);
+    process.exit(1);
+  }
+  await writeFile(path.join(absOutDir, 'index.mjs'), mjs.replace(commonImport, "from './common.mjs'"));
+  await copyFile(commonSrc, path.join(absOutDir, 'common.mjs'));
   await copyFile(dtsSrc, path.join(absOutDir, 'index.d.ts'));
 
-  console.log(`staged 3 file(s) -> ${absOutDir} (prebuild slot: ${platformArch})`);
+  const stagedFiles = sourceOnly ? 3 : 4;
+  const slot = sourceOnly ? '' : ` (prebuild slot: ${platformArch})`;
+  console.log(`staged ${stagedFiles} file(s) -> ${absOutDir}${slot}`);
 }
 
 main().catch((e) => {

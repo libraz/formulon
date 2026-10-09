@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import List
 
 from .enum_decl import (
@@ -36,6 +37,7 @@ from .surface_files import (
 from .ts_decl import (
     _extract_ts_methods,
     _find_interface_body,
+    _js_common_reexported_function_source,
     _js_exported_function_source,
     _parse_js_constants,
 )
@@ -161,7 +163,7 @@ def check_dts_node() -> List[str]:
 
 
 def _npm_entries_reexport_common(check: str) -> List[str]:
-    """Every npm entry point must re-export common.mjs, or it ships without the shared surface."""
+    """Every WASM npm entry point must re-export common.mjs."""
     return [
         f"{check}: {entry.relative_to(REPO_ROOT)} does not `export * from './common.js'`"
         for entry in NPM_ENTRY_MJS
@@ -179,13 +181,23 @@ def check_pure_js_helpers() -> List[str]:
     for name in sorted(NODE_PURE_JS_FREE_FUNCTIONS):
         bodies: dict[str, str] = {}
         for package, (mjs_path, dts_path) in sources.items():
-            body = _js_exported_function_source(_read(mjs_path), name)
+            mjs_text = _read(mjs_path)
+            if package == "npm-native":
+                body = _js_common_reexported_function_source(mjs_path, name)
+            else:
+                body = _js_exported_function_source(mjs_text, name)
             if body is None:
-                problems.append(
-                    f"pure-js-helpers: {mjs_path.relative_to(REPO_ROOT)} does not export a "
-                    f"`{name}` function. A helper only one package ships cannot be named in a "
-                    "declaration file both packages publish."
-                )
+                if package == "npm-native":
+                    problems.append(
+                        f"pure-js-helpers: {mjs_path.relative_to(REPO_ROOT)} must explicitly re-export "
+                        f"`{name}` imported from ../npm/common.mjs"
+                    )
+                else:
+                    problems.append(
+                        f"pure-js-helpers: {mjs_path.relative_to(REPO_ROOT)} does not export a "
+                        f"`{name}` function. A helper only one package ships cannot be named in a "
+                        "declaration file both packages publish."
+                    )
             else:
                 bodies[package] = body
             if not re.search(r"^export function %s\s*\(" % re.escape(name), _read(dts_path), re.MULTILINE):
@@ -196,8 +208,8 @@ def check_pure_js_helpers() -> List[str]:
             problems.append(
                 f"pure-js-helpers: the `{name}` implementations have diverged between "
                 f"{NPM_COMMON_MJS.relative_to(REPO_ROOT)} and {NODE_INDEX_MJS.relative_to(REPO_ROOT)}. "
-                "The two packages share no module, so the copies are held together here or not "
-                "at all."
+                "The native entry point must re-export the canonical helper from "
+                "packages/npm/common.mjs so both packages stay tied to one implementation."
             )
 
     return problems
@@ -399,40 +411,67 @@ def _check_js_constant_tables(wasm_dts_text: str) -> List[str]:
 # ---------------------------------------------------------------------------
 # Check 7: the npm-native package's staged copies <-> their sources.
 #
-# `stage.mjs` publishes `packages/npm-native/dist/` by copying `index.d.ts`
-# and `index.mjs` verbatim out of the package root. Every other check in this
-# file reads the source side only, so an edit that lands in the source but is
-# never re-staged publishes a declaration file that no longer describes the
-# runtime, or an ordinal table that no longer matches the one `dts-enums`
-# verified. The WASM package already guards its own staged `.d.ts`
-# (packages/npm/scripts/check-dts.mjs); npm-native had no equivalent, which
-# matters most for a mechanical rewrite that touches one side of the pair.
+# `stage.mjs` publishes `packages/npm-native/dist/` by copying `index.d.ts` and
+# `common.mjs`, while it rewrites the native index's source-relative import to
+# the staged sibling. Every other check in this file reads the source side
+# only, so an edit that lands in the source but is never re-staged publishes a
+# declaration file, shared constant table or shim that no longer describes the
+# runtime. The WASM package already guards its own staged `.d.ts`
+# (packages/npm/scripts/check-dts.mjs); npm-native needs the same guard for the
+# copied files and the deterministic import rewrite.
 # ---------------------------------------------------------------------------
 
-# (source, staged copy) pairs `stage.mjs` produces with a verbatim copyFile.
+# (source, staged copy) pairs `stage.mjs` produces. The native index is the
+# one transformed copy; `_staged_bytes` applies that exact transformation.
 _NODE_STAGED_COPIES = (
     (NODE_DTS, NODE_DIST_DIR / "index.d.ts"),
     (NODE_INDEX_MJS, NODE_DIST_DIR / "index.mjs"),
+    (NPM_COMMON_MJS, NODE_DIST_DIR / "common.mjs"),
 )
+
+_NATIVE_COMMON_IMPORT = b"from '../npm/common.mjs'"
+_STAGED_COMMON_IMPORT = b"from './common.mjs'"
+
+
+def _staged_bytes(source: Path, data: bytes) -> tuple[bytes | None, str | None]:
+    """Returns expected bytes and an error for a malformed native shim source."""
+    if source != NODE_INDEX_MJS:
+        return data, None
+    sites = data.count(_NATIVE_COMMON_IMPORT)
+    if sites != 1:
+        return None, (
+            f"staged-dist: {NODE_INDEX_MJS.relative_to(REPO_ROOT)} must contain exactly 1 canonical common import "
+            f"for staging, found {sites}"
+        )
+    return data.replace(_NATIVE_COMMON_IMPORT, _STAGED_COMMON_IMPORT), None
 
 
 def check_staged_dist() -> List[str]:
     problems: List[str] = []
+    staged_present = any(staged.is_file() for _, staged in _NODE_STAGED_COPIES)
     for source, staged in _NODE_STAGED_COPIES:
         if not staged.is_file():
-            # `dist/` is gitignored, so a fresh clone has nothing to compare
-            # until the package is staged. Record that as not-checked instead
-            # of passing: this check exists because a silent pass is
-            # indistinguishable from a real one.
-            _SKIPPED.append(
-                f"staged-dist: {staged.relative_to(REPO_ROOT)} is absent; the npm-native "
-                "package has not been staged in this tree (`make node-package`)"
-            )
-            continue
-        if _read_bytes(source) != _read_bytes(staged):
+            if not staged_present:
+                # `dist/` is gitignored, so a fresh clone has nothing to
+                # compare until the package is staged. Record that as
+                # not-checked instead of passing; a partially staged package
+                # is a real drift and must fail below.
+                continue
             problems.append(
-                f"staged-dist: {staged.relative_to(REPO_ROOT)} differs from "
-                f"{source.relative_to(REPO_ROOT)}; the published copy is stale -- "
+                f"staged-dist: {staged.relative_to(REPO_ROOT)} is absent from a partial staging; "
                 "re-stage the package with `make node-package`"
             )
+            continue
+        expected, malformed = _staged_bytes(source, _read_bytes(source))
+        if malformed:
+            problems.append(malformed)
+            continue
+        if expected != _read_bytes(staged):
+            problems.append(
+                f"staged-dist: {staged.relative_to(REPO_ROOT)} differs from "
+                f"the expected staged form of {source.relative_to(REPO_ROOT)}; the published copy is stale -- "
+                "re-stage the package with `make node-package`"
+            )
+    if not staged_present:
+        _SKIPPED.append("staged-dist: npm-native dist has not been staged in this tree (`make node-package`)")
     return problems

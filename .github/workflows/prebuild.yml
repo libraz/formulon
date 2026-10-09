@@ -31,9 +31,10 @@
 #   - push to main       : same, plus refreshed artifacts available
 #                          via the actions UI for download.
 #   - push tag `v*`      : matrix runs, then `release-bundle` aggregates
-#                          all four `.node` files plus the JS shim and
-#                          types into a single `formulon-native-bundle`
-#                          artifact for npm publish staging.
+#                          all three `.node` files plus the JS shim,
+#                          shared module and types into a single
+#                          `formulon-native-bundle` artifact for npm
+#                          publish staging.
 #
 # Per CLAUDE.md "CI vs. local development": this workflow produces
 # *artifacts*, not gates. A failed prebuild does NOT block a merge;
@@ -170,6 +171,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
       - name: Download all prebuild artifacts
         uses: actions/download-artifact@v8
         with:
@@ -186,9 +192,11 @@ jobs:
             cp "$dir/formulon.node" "$slot/formulon.node"
             echo "  staged $tag"
           done
-          # JS shim + types are pure source; no build artefacts needed.
-          cp packages/npm-native/index.mjs packages/npm-native/dist/
-          cp packages/npm-native/index.d.ts packages/npm-native/dist/
+          # Stage the source-only JS shim, shared module and types through the
+          # same rewrite used by normal node-package staging.
+          node packages/npm-native/scripts/stage.mjs \
+            --source-only \
+            --out-dir packages/npm-native/dist
           ls -la packages/npm-native/dist/
           find packages/npm-native/dist -type f
 
