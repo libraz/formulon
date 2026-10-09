@@ -21,13 +21,8 @@ namespace formulon::pivot {
 namespace {
 
 std::pair<bool, double> cell_num(const Value& v) {
-  if (v.is_number()) {
-    return {true, v.as_number()};
-  }
-  if (v.is_boolean()) {
-    return {true, v.as_boolean() ? 1.0 : 0.0};
-  }
-  return {false, 0.0};
+  const std::optional<double> number = numeric_aggregate_value(v);
+  return {number.has_value(), number.value_or(0.0)};
 }
 
 // Scales `cell` in place by `denom`. Only acts when `cell` is a

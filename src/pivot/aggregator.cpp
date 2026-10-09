@@ -29,22 +29,6 @@ const Value* first_error(const std::vector<Value>& values) {
   return nullptr;
 }
 
-// Numeric coercion for arithmetic aggregations. Booleans coerce; text
-// is skipped (Excel's SUM/MAX/MIN over a Value column ignore text).
-// `out` receives the coerced number on success.
-bool coerce_arithmetic(const Value& v, double& out) noexcept {
-  switch (v.kind()) {
-    case ValueKind::Number:
-      out = v.as_number();
-      return true;
-    case ValueKind::Bool:
-      out = v.as_boolean() ? 1.0 : 0.0;
-      return true;
-    default:
-      return false;
-  }
-}
-
 struct ArithmeticSummary {
   double sum = 0.0;
   double product = 1.0;
@@ -56,10 +40,11 @@ struct ArithmeticSummary {
 ArithmeticSummary summarize_arithmetic(const std::vector<Value>& values) {
   ArithmeticSummary summary;
   for (const auto& v : values) {
-    double x = 0.0;
-    if (!coerce_arithmetic(v, x)) {
+    const std::optional<double> number = numeric_aggregate_value(v);
+    if (!number.has_value()) {
       continue;
     }
+    const double x = *number;
     summary.sum += x;
     summary.product *= x;
     summary.min = (summary.count == 0 || x < summary.min) ? x : summary.min;
@@ -71,11 +56,7 @@ ArithmeticSummary summarize_arithmetic(const std::vector<Value>& values) {
 
 std::optional<double> numeric_view_get(const void* context, std::size_t index) {
   const auto& values = *static_cast<const std::vector<Value>*>(context);
-  double number = 0.0;
-  if (!coerce_arithmetic(values[index], number)) {
-    return std::nullopt;
-  }
-  return number;
+  return numeric_aggregate_value(values[index]);
 }
 
 numeric_aggregate_kernels::NumericInputView numeric_view(const std::vector<Value>& values) {
@@ -91,7 +72,7 @@ Value lift_kernel_result(Expected<double, ErrorCode> result) {
 
 // A non-finite aggregate is #NUM!, as Excel reports it.
 Value finite_number(double v) {
-  if (std::isnan(v) || std::isinf(v)) {
+  if (!std::isfinite(v)) {
     return Value::error(ErrorCode::Num);
   }
   return Value::number(v);
