@@ -11,6 +11,7 @@
 #include "eval/eval_profile_scope.h"
 #include "eval/locale_text.h"
 #include "eval/number_parse.h"
+#include "eval/text_format/rounding.h"
 #include "excel_locale.h"
 #include "utils/double_parse.h"
 #include "utils/expected.h"
@@ -194,9 +195,21 @@ Expected<double, ErrorCode> apply_pow(double base, double exp) {
   if (base == 0.0 && exp < 0.0) {
     return ErrorCode::Div0;
   }
-  // For all other cases Excel matches std::pow: negative base with a
-  // non-integer exponent yields NaN -> #NUM!, and overflow / underflow to
-  // Inf also yields #NUM!.
+  // A negative base with a non-integer exponent is an odd root when 1/exp,
+  // rounded to 15 significant digits, is an odd integer; Excel then returns
+  // -exp(log(-base) * exp). Any other such exponent is #NUM!.
+  if (base < 0.0 && std::isfinite(exp) && exp != std::floor(exp)) {
+    const double root = text_format::round_to_15_significant_digits(1.0 / exp);
+    if (root != std::floor(root) || std::fmod(std::fabs(root), 2.0) != 1.0) {
+      return ErrorCode::Num;
+    }
+    const double odd_root = -std::exp(std::log(-base) * exp);
+    if (std::isnan(odd_root) || std::isinf(odd_root)) {
+      return ErrorCode::Num;
+    }
+    return odd_root;
+  }
+  // Overflow / underflow to Inf is #NUM!.
   const double r = std::pow(base, exp);
   if (std::isnan(r) || std::isinf(r)) {
     return ErrorCode::Num;

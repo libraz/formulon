@@ -339,6 +339,43 @@ TEST(MathPower, NegativeBaseFractionalExpYieldsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+// A negative base with a non-integer exponent e is an odd root when 1/e,
+// rounded to 15 significant digits, is an odd integer. Values are bit-exact
+// Mac Excel results.
+TEST(MathPower, NegativeBaseOddRootValues) {
+  struct Case {
+    const char* source;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=(-8)^(1/3)", -1.9999999999999998},
+      {"=POWER(-8,1/3)", -1.9999999999999998},
+      {"=(-8)^(-1/3)", -0.5000000000000001},
+      {"=(-27)^(1/3)", -2.9999999999999996},
+      {"=(-32)^(1/5)", -2.0},
+      {"=(-8)^0.333333333333333", -1.9999999999999984},
+      {"=(-2)^(1/1000001)", -1.0000006931467276},
+      {"=(-1)^(1/3)", -1.0},
+      {"=(-0.5)^(1/3)", -0.7937005259840998},
+      {"=(-1E300)^(1/3)", -9.999999999999825e+99},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.source);
+    ASSERT_TRUE(v.is_number()) << c.source;
+    EXPECT_EQ(v.as_number(), c.expected) << c.source;
+  }
+}
+
+TEST(MathPower, NegativeBaseNonOddRootIsNum) {
+  for (const std::string_view source :
+       {"=(-8)^(2/3)", "=(-8)^(4/3)", "=(-8)^(5/3)", "=(-8)^(-2/3)", "=(-8)^(1/6)", "=(-8)^1.5", "=(-8)^(1/3+1E-15)",
+        "=(-8)^(1/3+1E-12)", "=(-8)^0.3333333333", "=(-8)^0.333", "=(-2)^0.5", "=(-2)^(3/7)", "=(-32)^(2/5)"}) {
+    const Value v = EvalSource(source);
+    ASSERT_TRUE(v.is_error()) << source;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << source;
+  }
+}
+
 TEST(MathPower, NegativeExponent) {
   const Value v = EvalSource("=POWER(2, -2)");
   ASSERT_TRUE(v.is_number());

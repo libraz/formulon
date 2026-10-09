@@ -875,6 +875,18 @@ TEST(BuiltinsMath4Arabic, SubtractsAgainstLargestValueToTheRight) {
   }
 }
 
+// A boolean read from a range cell is #VALUE! for GCD / LCM / MULTINOMIAL.
+TEST(BuiltinsMath4BoolRangeCell, GcdLcmMultinomialAreValue) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::boolean(true));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  for (const char* formula : {"=GCD(A1:A2)", "=LCM(A1:A2)", "=MULTINOMIAL(A1:A2)"}) {
+    const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

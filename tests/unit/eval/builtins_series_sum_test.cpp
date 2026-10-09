@@ -159,6 +159,20 @@ TEST(BuiltinsSeriesSumAnalysisToolPak, BoolXIsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// The first term is x^n, so a zero x with a zero exponent is the indeterminate
+// 0^0 and the whole series is #NUM!, as for the `^` operator.
+TEST(BuiltinsSeriesSum, ZeroXZeroLeadingExponentIsNum) {
+  const Value v = EvalSource("=SERIESSUM(0,0,2,{1,2,3})");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsSeriesSum, ZeroXPositiveLeadingExponentIsZero) {
+  const Value v = EvalSource("=SERIESSUM(0,1,1,{1,2,3})");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

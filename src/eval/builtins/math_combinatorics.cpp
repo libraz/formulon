@@ -284,7 +284,8 @@ Value PermutationA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/)
 
 // MULTINOMIAL(a1, a2, ...) - multinomial coefficient = (sum(a_i))! / prod(a_i!).
 // Each argument truncated to non-negative integer; negative -> #NUM!.
-// Overflow -> #NUM!.
+// Overflow -> #NUM!. A boolean (including one read from a range cell) is
+// #VALUE!, as for GCD / LCM.
 Value Multinomial(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // Accumulate sum first while validating each argument.
   std::uint64_t total = 0;
@@ -294,6 +295,9 @@ Value Multinomial(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // via `result *= C(total_so_far, next_k)` (Pascal's rule for multinomials).
   double result = 1.0;
   for (std::uint32_t i = 0; i < arity; ++i) {
+    if (args[i].is_boolean()) {
+      return Value::error(ErrorCode::Value);
+    }
     auto k_e = read_nonneg_uint_arg(args, i, static_cast<std::uint64_t>(1) << 52u);
     if (!k_e) {
       return Value::error(k_e.error());
@@ -318,10 +322,14 @@ Value Multinomial(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // ---------------------------------------------------------------------------
 
 // GCD(a1, a2, ...) - greatest common divisor. All args truncated to
-// non-negative integers. Negative -> #NUM!. All zero -> 0.
+// non-negative integers. Negative -> #NUM!. All zero -> 0. A boolean
+// (including one read from a range cell) is #VALUE!.
 Value Gcd(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   std::uint64_t g = 0;
   for (std::uint32_t i = 0; i < arity; ++i) {
+    if (args[i].is_boolean()) {
+      return Value::error(ErrorCode::Value);
+    }
     auto coerced = coerce_to_number(args[i]);
     if (!coerced) {
       return Value::error(coerced.error());
@@ -341,6 +349,9 @@ Value Lcm(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   std::uint64_t l = 1;
   bool any_zero = false;
   for (std::uint32_t i = 0; i < arity; ++i) {
+    if (args[i].is_boolean()) {
+      return Value::error(ErrorCode::Value);
+    }
     auto coerced = coerce_to_number(args[i]);
     if (!coerced) {
       return Value::error(coerced.error());

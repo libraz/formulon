@@ -6,7 +6,6 @@
 
 #include "eval/series_sum_lazy.h"
 
-#include <cmath>
 #include <cstddef>
 #include <utility>
 #include <vector>
@@ -135,7 +134,8 @@ Value eval_series_sum_lazy(const parser::AstNode& call, Arena& arena, const Func
   // cells that are not numbers (Blank, Bool, Text) are skipped, matching
   // Excel's tolerance of mixed columns; the power index still advances so
   // the i-th coefficient is always paired with the i-th term, matching
-  // Excel's 1-based enumeration (first coefficient gets x^n).
+  // Excel's 1-based enumeration (first coefficient gets x^n). Each power
+  // follows the `^` operator, so 0^0 is #NUM! and 0^negative is #DIV/0!.
   double total = 0.0;
   for (std::size_t i = 0; i < coefficients.size(); ++i) {
     const Value& v = coefficients[i];
@@ -143,7 +143,11 @@ Value eval_series_sum_lazy(const parser::AstNode& call, Arena& arena, const Func
       continue;
     }
     const double power = n + static_cast<double>(i) * m;
-    total += v.as_number() * std::pow(x, power);
+    auto term = apply_pow(x, power);
+    if (!term) {
+      return Value::error(term.error());
+    }
+    total += v.as_number() * term.value();
   }
   return to_finite_value(total);
 }
