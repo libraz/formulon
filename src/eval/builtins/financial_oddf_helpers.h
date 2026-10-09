@@ -21,7 +21,8 @@
 //   * `qp[0..nc-1]`      -- per-quasi-period start/end serials, sorted
 //                           oldest -> newest. `qp[0].start <= issue`,
 //                           `qp[nc-1].end == first_coupon`.
-//   * `nl[i]`            -- basis-adjusted length of quasi-period i.
+//   * `nl[i]`            -- length of quasi-period i (actual days for
+//                           basis 1, nominal 360/freq or 365/freq else).
 //   * `dc[i]`            -- days within quasi-period i that contribute
 //                           to coupon income (issue-to-end on the
 //                           first; full nl[i] on subsequent ones).
@@ -33,15 +34,15 @@
 //                           quasi-periods strictly before it). The
 //                           first quasi-period substitutes `issue` for
 //                           its start.
-//   * `dsc`              -- basis-adjusted days from settlement to
-//                           `first_coupon` summed over the
-//                           settlement-bearing quasi-period plus all
-//                           subsequent ones in the irregular span.
+//   * `dsc`              -- basis-adjusted days from settlement to the
+//                           next quasi-coupon date.
+//   * `nq`               -- whole quasi-periods between that date and
+//                           `first_coupon`.
 //   * `e`                -- normal coupon-period length in
 //                           basis-adjusted days (360/freq for basis
 //                           0/2/4, 365/freq for basis 3, the actual
-//                           length of the most-recent quasi-period
-//                           anchored on `first_coupon` for basis 1).
+//                           length of the settlement-bearing
+//                           quasi-period for basis 1).
 //   * `n_regular`        -- number of regular coupon periods between
 //                           `first_coupon` and `maturity` (>= 1, from
 //                           `compute_coupon_dates(first_coupon,
@@ -53,12 +54,10 @@
 //   cf  = 100 * rate / freq
 //   ai  = cf * sum_i (a[i] / nl[i])
 //   v   = 1 / (1 + yld / freq)
-//   first_period_pv = cf * sum_i ((dc[i] / nl[i]) * v^(NQ_i + dsc/E))
-//                    where NQ_i = nc - i (number of quasi-periods
-//                    between i and first_coupon, exclusive on i and
-//                    inclusive on the discount steps).
-//   reg_coupons_pv  = cf * sum_{j=1..n_regular} v^(dsc/E + j)
-//   redemption_pv   = redemption * v^(dsc/E + n_regular)
+//   x   = nq + dsc / E
+//   first_period_pv = cf * sum_i (dc[i] / nl[i]) * v^x
+//   reg_coupons_pv  = cf * sum_{j=1..n_regular} v^(x + j)
+//   redemption_pv   = redemption * v^(x + n_regular)
 //   ODDFPRICE       = first_period_pv + reg_coupons_pv + redemption_pv - ai
 //
 // When NC == 1 (short first period) the first_period_pv collapses to
@@ -105,7 +104,8 @@ struct OddFirstQuasiPeriod {
 struct OddFirstSchedule {
   int nc;                                            ///< Number of quasi-periods in the irregular first span.
   OddFirstQuasiPeriod qp[kMaxOddFirstQuasiPeriods];  ///< Per-quasi-period detail, oldest first.
-  double dsc;                                        ///< Days from settlement to first_coupon (basis-adjusted).
+  double dsc;                                        ///< Days from settlement to the next quasi-coupon date.
+  int nq;                                            ///< Whole quasi-periods from that date to first_coupon.
   double e;                                          ///< Normal coupon-period length in basis-adjusted days.
   std::int32_t n_regular;                            ///< Regular coupon periods between first_coupon and maturity.
 };

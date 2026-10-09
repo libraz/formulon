@@ -31,17 +31,18 @@
 //     a[i]  = days within qp[i] that are <= settlement (with `issue`
 //             substituted for qp[0].start when i == 0); zero for
 //             quasi-periods strictly after the settlement-bearing one
-//   dsc     = days from settlement to first_coupon (sum across the
-//             settlement-bearing quasi-period plus subsequent ones)
+//   dsc     = days from settlement to the next quasi-coupon date
+//   nq      = whole quasi-periods from that date to first_coupon
 //   E       = normal coupon-period length (basis-adjusted)
 //   N       = compute_coupon_dates(first_coupon, maturity, ...).coupons_remaining
 //
 //   v   = 1 / (1 + yld/freq)
 //   cf  = 100 * rate / freq
+//   x   = nq + dsc/E
 //
-//   first_period_pv = cf * sum_{i=0..nc-1} (dc[i]/nl[i]) * v^((nc-1-i) + dsc/E)
-//   reg_coupons_pv  = cf * sum_{j=1..N} v^(dsc/E + j)
-//   redemption_pv   = redemption * v^(dsc/E + N)
+//   first_period_pv = cf * sum_{i=0..nc-1} (dc[i]/nl[i]) * v^x
+//   reg_coupons_pv  = cf * sum_{j=1..N} v^(x + j)
+//   redemption_pv   = redemption * v^(x + N)
 //   ai              = cf * sum_i (a[i]/nl[i])
 //
 //   ODDFPRICE = first_period_pv + reg_coupons_pv + redemption_pv - ai
@@ -72,51 +73,13 @@ namespace {
 // builtins; see `eval/date_time.h`.
 using date_time::basis_days_between;
 
-// Period length E for the basis. Bases 0/2/4 use 360/freq; basis 3
-// uses 365/freq; basis 1 uses the actual length of the most-recent
-// quasi-period (the one anchored on `first_coupon`, walking 12/freq
-// months back and forward).
-//
-// Bases 2 / 3 deliberately reuse the nominal `360/freq` / `365/freq`
-// here (and feed the same value into `nl[i]` for full quasi-periods
-// in the schedule below) so that `dc[i] / nl[i]` and `a[i] / nl[i]`
-// stay coherent with Mac Excel's published ODDFPRICE / ODDFYIELD
-// output. Without this — i.e. if `nl[i]` came from the *actual*
-// `qend - qstart` while `e` came from the nominal `360/freq`, as the
-// legacy `basis_days_between` path produced — the per-quasi-period
-// PV contributions would mix two different period lengths and drift
-// from Excel by ~0.012 per 100 face on the docs canonical case.
-double normal_period_days(int basis, int frequency, double first_coupon, bool date1904) noexcept {
-  switch (basis) {
-    case 0:
-    case 2:
-    case 4:
-      return 360.0 / static_cast<double>(frequency);
-    case 3:
-      return 365.0 / static_cast<double>(frequency);
-    case 1: {
-      // Actual length of the regular quasi-period ending on
-      // `first_coupon`: step back 12/freq months and measure the gap.
-      const date_time::YMD fc = date_time::ymd_from_serial(first_coupon, date1904);
-      int y = fc.y;
-      unsigned m = fc.m;
-      shift_months(y, m, -(12 / frequency));
-      const double q_prev = quasi_serial(y, m, fc.d, date1904);
-      return first_coupon - q_prev;
-    }
-    default:
-      return 0.0;
-  }
-}
-
-// Full quasi-period length used by `nl[i]` and by the `a[i]` /
-// `dc[i]` slots that represent a *full* quasi-period (rather than a
-// partial span carved out by `issue` or `settlement`). This must
-// match `normal_period_days(...)` so that for full periods
-// `dc[i] / nl[i] == 1` (full coupon paid) — see the explanation
-// above for why bases 2 / 3 use the nominal length.
-double full_quasi_period_length(int basis, int frequency, double first_coupon, bool date1904) noexcept {
-  return normal_period_days(basis, frequency, first_coupon, date1904);
+// Nominal period length for bases 0/2/3/4: 360/freq, or 365/freq for
+// basis 3. Basis 1 measures each quasi-period's actual length instead, and
+// its E is the length of the settlement-bearing quasi-period. Bases 2 / 3
+// keep the nominal length even though their partial spans count actual
+// days; that mix is what Mac Excel's output reproduces.
+double nominal_period_days(int basis, int frequency) noexcept {
+  return (basis == 3 ? 365.0 : 360.0) / static_cast<double>(frequency);
 }
 
 }  // namespace
@@ -172,38 +135,28 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
 
   // --- Per-quasi-period day counts: nl, dc, a.
   //
-  //   nl[i] = full-period length for the basis (must match `e` so the
-  //           `dc[i] / nl[i]` ratio is unitless and full periods give
-  //           ratio == 1 — see `full_quasi_period_length` above)
-  //   dc[i] = (i == 0) ? basis_days_between(max(qp[0].start, issue), qp[0].end)
-  //                    : nl[i]
-  //   a[i]  = days within qp[i] that fall in [start_or_issue, settlement]:
-  //             - i strictly before settlement-bearing: full nl[i]
-  //               (with the i==0 substitution start := issue applying
-  //               only when issue is *inside* qp[0])
-  //             - i equal to settlement-bearing: days from start_or_issue
-  //               to settlement
-  //             - i strictly after: 0
+  //   nl[i] = actual length of qp[i] for basis 1, else the nominal length
+  //   dc[i] = (i == 0) ? days(max(qp[0].start, issue), qp[0].end) : nl[i]
+  //   a[i]  = days of qp[i] in [start_or_issue, settlement]: nl[i] for a
+  //           whole period before settlement, the partial span for the
+  //           settlement-bearing one, 0 after it
   //
-  // For bases 0 / 4 the basis-adjusted day-count call rounds via
-  // std::round to match Excel's integer day-count grid. For basis 1
-  // (actual day counts coherent with `e = ncd - pcd`) the same path
-  // produces integer-valued doubles. For bases 2 / 3 the *full*
-  // period quantities (`nl[i]`, plus `dc[i]` / `a[i]` when they
-  // represent a full quasi-period) come from the nominal length so
-  // they stay coherent with `e`; partial spans (issue->qend,
-  // start->settle) keep their actual day counts because that is what
-  // the published `dc / nl` and `a / nl` ratios assume.
-  const double full_nl = full_quasi_period_length(basis, frequency, fc, date1904);
-  if (full_nl <= 0.0) {
-    return ErrorCode::Num;
-  }
+  // Partial spans round to Excel's integer day grid (a no-op for the
+  // actual-day bases).
+  const double nominal_nl = nominal_period_days(basis, frequency);
+  int settle_index = -1;
   for (int i = 0; i < count; ++i) {
     const double qstart = out.qp[i].start;
     const double qend = out.qp[i].end;
     const double effective_start = (i == 0 && qstart < iss) ? iss : qstart;
+    if (qstart <= s && s < qend) {
+      settle_index = i;
+    }
 
-    out.qp[i].nl = full_nl;
+    out.qp[i].nl = basis == 1 ? qend - qstart : nominal_nl;
+    if (out.qp[i].nl <= 0.0) {
+      return ErrorCode::Num;
+    }
     if (i == 0) {
       out.qp[i].dc = std::round(basis_days_between(effective_start, qend, basis, date1904));
     } else {
@@ -211,53 +164,26 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
     }
 
     if (s >= qend) {
-      if (i == 0 && qstart < iss) {
-        // Issue is inside qp[0] *and* settlement is past qend ->
-        // accrual is the partial issue-to-qend span (actual days).
-        out.qp[i].a = std::round(basis_days_between(effective_start, qend, basis, date1904));
-      } else {
-        // Full quasi-period accrued -> use the basis full-period
-        // length so the ratio `a[i] / nl[i] == 1`.
-        out.qp[i].a = full_nl;
-      }
+      // The issue-to-qend span when issue is inside qp[0], else the whole period.
+      out.qp[i].a = (i == 0 && qstart < iss) ? std::round(basis_days_between(effective_start, qend, basis, date1904))
+                                             : out.qp[i].nl;
     } else if (s > effective_start) {
-      // Settlement falls inside qp[i] -> partial accrual (actual days).
       out.qp[i].a = std::round(basis_days_between(effective_start, s, basis, date1904));
     } else {
-      // Settlement is at or before this quasi-period's effective start
-      // -> no accrual on this or subsequent quasi-periods. (Shouldn't
-      // happen given `issue < settlement`, but guard defensively.)
       out.qp[i].a = 0.0;
     }
   }
-
-  // --- DSC: days from settlement to first_coupon, summed across the
-  // settlement-bearing quasi-period plus all subsequent ones in the
-  // irregular span. By design, `settlement < first_coupon`, so DSC > 0.
-  double dsc = 0.0;
-  for (int i = 0; i < count; ++i) {
-    const double qstart = out.qp[i].start;
-    const double qend = out.qp[i].end;
-    if (s >= qend) {
-      // No DSC contribution from this quasi-period.
-      continue;
-    }
-    if (s > qstart) {
-      // Settlement falls inside this quasi-period.
-      dsc += basis_days_between(s, qend, basis, date1904);
-    } else {
-      // Settlement is before this quasi-period entirely.
-      dsc += basis_days_between(qstart, qend, basis, date1904);
-    }
-  }
-  out.dsc = std::round(dsc);
-  if (out.dsc <= 0.0) {
+  if (settle_index < 0) {
     return ErrorCode::Num;
   }
 
-  // --- Normal period length E.
-  out.e = normal_period_days(basis, frequency, fc, date1904);
-  if (out.e <= 0.0 || std::isnan(out.e) || std::isinf(out.e)) {
+  // --- DSC to the next quasi-coupon date, the whole quasi-periods left
+  // after it, and E (basis 1: the settlement-bearing period's length).
+  const OddFirstQuasiPeriod& settle_qp = out.qp[settle_index];
+  out.dsc = std::round(basis_days_between(s, settle_qp.end, basis, date1904));
+  out.nq = count - 1 - settle_index;
+  out.e = settle_qp.nl;
+  if (out.dsc <= 0.0 || out.e <= 0.0 || std::isnan(out.e) || std::isinf(out.e)) {
     return ErrorCode::Num;
   }
 
@@ -357,26 +283,18 @@ Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uin
     return ErrorCode::Num;
   }
   const double v = 1.0 / v_denom;
-  const double dsc_over_e = sched.dsc / sched.e;
+  // Periods from settlement to first_coupon, where the whole odd coupon is paid.
+  const double dsc_over_e = static_cast<double>(sched.nq) + sched.dsc / sched.e;
 
-  // First-period present value: each quasi-period i contributes
-  //   (dc[i] / nl[i]) * cf * v^((nc-1-i) + dsc/E)
-  // i.e. quasi-period i is discounted by (nc-1-i) full periods after
-  // first_coupon's discount factor v^(dsc/E). For NC == 1 the sole
-  // term is (dc[0] / nl[0]) * cf * v^(dsc/E), matching Microsoft's
-  // documented short-first-period formula.
-  double first_period_pv = 0.0;
+  double first_coupon_units = 0.0;
   for (int i = 0; i < sched.nc; ++i) {
-    const double exp_periods = static_cast<double>(sched.nc - 1 - i) + dsc_over_e;
-    const double disc = std::pow(v, exp_periods);
-    if (std::isnan(disc) || std::isinf(disc)) {
-      return ErrorCode::Num;
-    }
-    if (sched.qp[i].nl <= 0.0) {
-      return ErrorCode::Num;
-    }
-    first_period_pv += (sched.qp[i].dc / sched.qp[i].nl) * cf * disc;
+    first_coupon_units += sched.qp[i].dc / sched.qp[i].nl;
   }
+  const double first_disc = std::pow(v, dsc_over_e);
+  if (std::isnan(first_disc) || std::isinf(first_disc)) {
+    return ErrorCode::Num;
+  }
+  const double first_period_pv = cf * first_coupon_units * first_disc;
 
   // Regular coupons: cf * sum_{j=1..N} v^(dsc/E + j).
   double reg_coupons_pv = 0.0;

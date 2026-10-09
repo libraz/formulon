@@ -30,50 +30,103 @@ using formulon::test::EvalSource;
 // ---------------------------------------------------------------------------
 
 TEST(FinancialAccrint, MicrosoftDocExample) {
-  // ACCRINT docs: issue 2008-03-01, first_interest 2008-08-31,
-  // settlement 2008-05-01, rate 0.1, par 1000, freq 2, basis 0,
-  // calc_method TRUE. YEARFRAC(2008-03-01, 2008-05-01, 0) = 60/360 =
-  // 0.166666..., so ACCRINT = 1000 * 0.1 * 0.166666... = 16.6667.
+  // ACCRINT docs: issue 2008-03-01 lies in the quasi-coupon period that
+  // ends on first_interest 2008-08-31, so the accrual is the direct
+  // 30/360 span 60/180 of a 50.0 coupon = 16.6667.
   const Value v = EvalSource("=ACCRINT(DATE(2008,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2, 0, TRUE)");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 16.6667, 1e-3);
 }
 
 TEST(FinancialAccrint, CalcMethodTrueDefault) {
-  // Omitting calc_method (defaults to TRUE): same start date (issue),
-  // so the result matches the 8-arg case above.
+  // Omitting calc_method (defaults to TRUE) matches the 8-arg case above.
   const Value v = EvalSource("=ACCRINT(DATE(2008,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2)");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 16.6667, 1e-3);
 }
 
-TEST(FinancialAccrint, CalcMethodFalseAccruesFromIssue) {
-  // Mac Excel 365 (16.108.1, ja-JP) always accrues from issue to
-  // settlement, ignoring both `first_interest` and `calc_method`. The MS
-  // docs claim calc_method=FALSE switches the start to first_interest
-  // when settlement > first_interest, but the actual product does not.
-  // issue 2008-03-01, settlement 2008-08-31. YEARFRAC(0) = 180/360 = 0.5,
-  // so result = 1000 * 0.1 * 0.5 = 50.0 regardless of first_interest.
-  const Value v_far = EvalSource("=ACCRINT(DATE(2008,3,1), DATE(2008,5,1), DATE(2008,8,31), 0.1, 1000, 2, 0, FALSE)");
-  ASSERT_TRUE(v_far.is_number());
-  EXPECT_NEAR(v_far.as_number(), 50.0, 1e-3);
+TEST(FinancialAccrint, SettlementAfterFirstInterestWithIssueInLastPeriod) {
+  // Issue in the period ending at first_interest: both calc_method values
+  // accrue the full 180/360 span from issue (Mac Excel: 50.0).
+  const Value v_false = EvalSource("=ACCRINT(DATE(2008,3,1), DATE(2008,5,1), DATE(2008,8,31), 0.1, 1000, 2, 0, FALSE)");
+  ASSERT_TRUE(v_false.is_number());
+  EXPECT_NEAR(v_false.as_number(), 50.0, 1e-9);
 
-  // calc_method=TRUE on the same (issue, settlement) must produce the
-  // same value: the calc_method argument is ignored, only validated for
-  // type correctness.
   const Value v_true = EvalSource("=ACCRINT(DATE(2008,3,1), DATE(2008,5,1), DATE(2008,8,31), 0.1, 1000, 2, 0, TRUE)");
   ASSERT_TRUE(v_true.is_number());
-  EXPECT_NEAR(v_true.as_number(), 50.0, 1e-3);
+  EXPECT_NEAR(v_true.as_number(), 50.0, 1e-9);
 }
 
-TEST(FinancialAccrint, CalcMethodFalseEarlySettlementMatchesIssueAccrual) {
-  // Even when settlement < first_interest, Mac Excel still accrues from
-  // issue (this case happens to match the MS doc result coincidentally,
-  // because the doc-style calc_method=FALSE branch would also pick
-  // issue here). issue 2008-03-01, settlement 2008-05-01.
+TEST(FinancialAccrint, CalcMethodFalseEarlySettlementWithIssueInLastPeriod) {
   const Value v = EvalSource("=ACCRINT(DATE(2008,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2, 0, FALSE)");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 16.6667, 1e-3);
+}
+
+TEST(FinancialAccrint, IssueBeforeLastPeriodMeasuresFromPenultimateQuasiDate) {
+  // Quarterly grid from 2008-08-31: 05-31, 02-29. Issue 03-01 to 05-31 is
+  // 90 days, then 05-31 -> settlement 05-01 is -29 (30/360): 61/90 of 25.
+  const Value v = EvalSource("=ACCRINT(DATE(2008,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 4)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 16.944444444444446, 1e-9);
+}
+
+TEST(FinancialAccrint, CalcMethodFalseDropsWholePeriodsAndCanGoNegative) {
+  // Basis 1: 59/90 issue part, -153/91 from 2017-09-01 back to settlement,
+  // plus the 2 whole periods only when calc_method is TRUE (Mac Excel).
+  const Value v_true = EvalSource("=ACCRINT(DATE(2017,1,1), DATE(2017,12,1), DATE(2017,4,1), 0.33, 3000, 4, 1)");
+  ASSERT_TRUE(v_true.is_number());
+  EXPECT_NEAR(v_true.as_number(), 241.12362637362637, 1e-9);
+
+  const Value v_false =
+      EvalSource("=ACCRINT(DATE(2017,1,1), DATE(2017,12,1), DATE(2017,4,1), 0.33, 3000, 4, 1, FALSE)");
+  ASSERT_TRUE(v_false.is_number());
+  EXPECT_NEAR(v_false.as_number(), -253.8763736263736, 1e-9);
+}
+
+TEST(FinancialAccrint, SettlementAfterFirstInterestCountsWholePeriodsForTrue) {
+  // TRUE counts each whole period after first_interest as 1 and the
+  // settlement period as 90/182; FALSE keeps the raw 456/182 day span.
+  const Value v_true = EvalSource("=ACCRINT(DATE(2020,1,1), DATE(2020,7,1), DATE(2021,4,1), 0.075, 100, 2, 1, TRUE)");
+  ASSERT_TRUE(v_true.is_number());
+  EXPECT_NEAR(v_true.as_number(), 9.354395604395604, 1e-9);
+
+  const Value v_false = EvalSource("=ACCRINT(DATE(2020,1,1), DATE(2020,7,1), DATE(2021,4,1), 0.075, 100, 2, 1, FALSE)");
+  ASSERT_TRUE(v_false.is_number());
+  EXPECT_NEAR(v_false.as_number(), 9.395604395604396, 1e-9);
+}
+
+TEST(FinancialAccrint, MonthEndFirstInterestKeepsQuasiDatesOnMonthEnd) {
+  // first_interest 2024-02-29 puts the previous quasi date on 2023-08-31,
+  // not 08-29: 30/360 from 08-31 back to 2023-05-01 is -119 days.
+  const Value v = EvalSource("=ACCRINT(DATE(2022,8,31), DATE(2024,2,29), DATE(2023,5,1), 0.075, 100, 2, 0, FALSE)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), -2.4791666666666665, 1e-9);
+}
+
+TEST(FinancialAccrint, IssueAfterFirstInterestTrueWalksForwardFalseUsesRawSpan) {
+  // Quarterly grid from 2024-03-31; E = 91 days (2023-12-31 -> 2024-03-31).
+  // TRUE: 29/91 issue part + 2 whole periods + 41/91 (Mac Excel 34.615385);
+  // FALSE: the raw 254-day span over E (Mac Excel 34.890110).
+  const Value v_true = EvalSource("=ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,4,1,TRUE)");
+  ASSERT_TRUE(v_true.is_number());
+  EXPECT_NEAR(v_true.as_number(), 34.61538461538461, 1e-9);
+
+  const Value v_false = EvalSource("=ACCRINT(DATE(2024,6,1),DATE(2024,3,31),DATE(2025,2,10),0.05,1000,4,1,FALSE)");
+  ASSERT_TRUE(v_false.is_number());
+  EXPECT_NEAR(v_false.as_number(), 34.89010989010989, 1e-9);
+}
+
+TEST(FinancialAccrint, IssueAfterFirstInterestBasisZeroMultiPeriod) {
+  // Annual 30/360: TRUE counts 351/360 + 1 whole period + 184/360, while
+  // FALSE is DAYS360(issue, settlement) = 894 over 360.
+  const Value v_true = EvalSource("=ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,1,0,TRUE)");
+  ASSERT_TRUE(v_true.is_number());
+  EXPECT_NEAR(v_true.as_number(), 124.30555555555556, 1e-9);
+
+  const Value v_false = EvalSource("=ACCRINT(DATE(2024,1,10),DATE(2023,12,31),DATE(2026,7,4),0.05,1000,1,0,FALSE)");
+  ASSERT_TRUE(v_false.is_number());
+  EXPECT_NEAR(v_false.as_number(), 124.16666666666667, 1e-9);
 }
 
 TEST(FinancialAccrint, BasisThreeActual365) {

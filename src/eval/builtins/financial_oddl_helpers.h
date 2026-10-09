@@ -8,47 +8,28 @@
 // period that does not align with the regular `12/freq`-month grid: the
 // bond pays its periodic coupons up to `last_interest` and then a single
 // irregular coupon + redemption at `maturity`. The interval
-// (last_interest, maturity] is composed of `NC` quasi-coupon
-// sub-periods of identical normal length `E` (basis-adjusted days,
-// e.g. 360/freq for basis 0/2/4); the irregular bit is just that
-// `maturity` itself is not a regular coupon date relative to a backward
-// walk from any subsequent date.
+// (last_interest, maturity] is split into quasi-coupon periods walked
+// forward from `last_interest` by `12/freq` months (day of month kept,
+// clamped to shorter months); the last one is cut short by `maturity`.
 //
-// `compute_odd_last_schedule` walks the quasi-coupon dates forward from
-// `last_interest` by `12/freq` months per step (preserving the
-// last_interest day-of-month, clamped to month-end as needed) and
-// reports:
+// `compute_odd_last_schedule` sums, over those periods, each period's
+// days divided by its normal length NL_i (360/freq for bases 0 / 4, the
+// period's actual length for bases 1 / 2 / 3):
 //
-//   * `dc_total` -- basis-adjusted days from last_interest to maturity
-//                   (sum of per-quasi-period day counts; equals NC*E for
-//                   the typical non-basis-1 case).
-//   * `a_total`  -- basis-adjusted days from last_interest to settlement
-//                   (sum across quasi-periods up to the one containing
-//                   settlement).
-//   * `dsc`      -- basis-adjusted days from settlement to maturity
-//                   (= dc_total - a_total in the clean case; computed
-//                   independently as the sum from the settlement-bearing
-//                   quasi-period through maturity, which agrees with
-//                   `dc_total - a_total` to floating-point precision).
-//   * `e`        -- normal-period length in basis-adjusted days
-//                   (360/freq for basis 0/2/4, 365/freq for basis 3,
-//                   actual NCD-PCD gap for basis 1's first quasi-period;
-//                   for basis 1 each quasi-period contributes its own
-//                   actual length to dc/a/dsc but `e` is reported as the
-//                   first quasi-period's length, which is what
-//                   Microsoft's documented formula uses for the
-//                   simple-interest residual discount factor).
+//   * `dc_units`  -- sum of DC_i / NL_i, days from last_interest to maturity.
+//   * `a_units`   -- sum of A_i / NL_i, days from last_interest to settlement.
+//   * `dsc_units` -- sum of DSC_i / NL_i, days from settlement to maturity.
 //
 // `compute_oddl_clean_price` evaluates ODDLPRICE's closed form:
 //
-//   cf   = 100 * rate / freq * (DC_total / E)
-//   ai   = 100 * rate / freq * (A_total  / E)
-//   disc = 1 + DSC * yld / freq / E
+//   cf   = 100 * rate / freq * dc_units
+//   ai   = 100 * rate / freq * a_units
+//   disc = 1 + dsc_units * yld / freq
 //   ODDLPRICE = (redemption + cf) / disc - ai
 //
 // `compute_oddl_yield` inverts the above for `yld`:
 //
-//   yld = (freq * E / DSC) * ((redemption + cf - pr - ai) / (pr + ai))
+//   yld = (freq / dsc_units) * ((redemption + cf - pr - ai) / (pr + ai))
 //
 // All three helpers return `Expected<...>` and surface any
 // validation/numerical failure as `ErrorCode::Num`.
@@ -71,10 +52,9 @@ namespace financial_detail {
 
 /// Schedule context for an ODDLPRICE / ODDLYIELD evaluation.
 struct OddLastSchedule {
-  double dc_total;  ///< Basis-adjusted days from last_interest to maturity.
-  double a_total;   ///< Basis-adjusted days from last_interest to settlement.
-  double dsc;       ///< Basis-adjusted days from settlement to maturity.
-  double e;         ///< Normal coupon-period length in basis-adjusted days.
+  double dc_units;   ///< Coupon periods from last_interest to maturity.
+  double a_units;    ///< Coupon periods from last_interest to settlement.
+  double dsc_units;  ///< Coupon periods from settlement to maturity.
 };
 
 /// Builds the OddLastSchedule for `(last_interest, settlement, maturity,
@@ -99,8 +79,7 @@ struct OddLastInputs {
   double redemption;  ///< args[5], per 100 face.
   double cf;          ///< Irregular final coupon per 100 face.
   double ai;          ///< Accrued interest per 100 face.
-  double dsc;         ///< Basis-adjusted days from settlement to maturity.
-  double e;           ///< Normal coupon-period length in basis-adjusted days.
+  double dsc_units;   ///< Coupon periods from settlement to maturity.
   double freq_d;      ///< Coupon frequency as a double.
 };
 

@@ -12,14 +12,14 @@
 // because ODDLPRICE only ever uses simple-interest discounting on a
 // single residual period:
 //
-//   pr = (redemption + cf) / (1 + DSC * yld / freq / E) - ai
+//   pr = (redemption + cf) / (1 + dsc_units * yld / freq) - ai
 //
 // solving for `yld`:
 //
-//   1 + DSC * yld / freq / E = (redemption + cf) / (pr + ai)
-//   DSC * yld / freq / E     = (redemption + cf) / (pr + ai) - 1
+//   1 + dsc_units * yld / freq = (redemption + cf) / (pr + ai)
+//   dsc_units * yld / freq     = (redemption + cf) / (pr + ai) - 1
 //                             = (redemption + cf - pr - ai) / (pr + ai)
-//   yld                       = (freq * E / DSC) *
+//   yld                       = (freq / dsc_units) *
 //                              ((redemption + cf - pr - ai) / (pr + ai))
 //
 // See `financial_oddl_helpers.h` for the schedule walker shared with
@@ -47,10 +47,10 @@ Expected<double, ErrorCode> compute_oddl_yield(const Value* args, std::uint32_t 
   }
   const double pr_v = in.value().slot4;
   const double denom = pr_v + in.value().ai;
-  if (denom == 0.0 || in.value().dsc == 0.0) {
+  if (denom == 0.0 || in.value().dsc_units == 0.0) {
     return ErrorCode::Num;
   }
-  const double yld = (in.value().freq_d * in.value().e / in.value().dsc) *
+  const double yld = (in.value().freq_d / in.value().dsc_units) *
                      ((in.value().redemption + in.value().cf - pr_v - in.value().ai) / denom);
   if (std::isnan(yld) || std::isinf(yld)) {
     return ErrorCode::Num;

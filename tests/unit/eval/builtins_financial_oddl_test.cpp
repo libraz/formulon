@@ -52,6 +52,20 @@ TEST(FinancialOddl, MicrosoftDocCanonicalOddlPrice) {
   EXPECT_NEAR(v.as_number(), 99.8782860831, 1e-6);
 }
 
+TEST(FinancialOddl, LongLastPeriodWeighsEachQuasiPeriodByItsOwnLength) {
+  // A ten-year odd last period: each quasi-period's days are divided by
+  // that period's actual length for bases 1 and 2 (Mac Excel values).
+  const Value basis1 =
+      EvalSource("=ODDLPRICE(DATE(2020,3,1), DATE(2030,3,1), DATE(2020,1,15), 0.075, 0.06, 120, 2, 1)");
+  ASSERT_TRUE(basis1.is_number());
+  EXPECT_NEAR(basis1.as_number(), 121.51937811334447, 1e-9);
+
+  const Value basis2 =
+      EvalSource("=ODDLPRICE(DATE(2020,3,1), DATE(2030,3,1), DATE(2020,1,15), 0.075, 0.0589, 120, 2, 2)");
+  ASSERT_TRUE(basis2.is_number());
+  EXPECT_NEAR(basis2.as_number(), 122.36705839417525, 1e-9);
+}
+
 TEST(FinancialOddl, MicrosoftDocCanonicalOddlYield) {
   // ODDLYIELD inverse: feeding our own ODDLPRICE output back through
   // ODDLYIELD must recover the original 4.05% yld exactly (1e-12).

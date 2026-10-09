@@ -3,16 +3,9 @@
 // ACCRINTM. Registered from `financial.cpp` via
 // `register_financial_builtins`.
 //
-// Both functions follow Excel's documented simple-interest formula
-//
-//     accrued_interest = par * rate * YEARFRAC(start, settlement, basis)
-//
-// where `start` is either the issue date (ACCRINT with calc_method=TRUE,
-// ACCRINTM) or the first-interest date (ACCRINT with calc_method=FALSE
-// and settlement > first_interest).
-//
-// The `first_interest` and `frequency` arguments of ACCRINT are not used
-// in the simple formula but are validated to match Excel's behaviour.
+// ACCRINTM is simple interest, `par * rate * YEARFRAC(issue, settlement,
+// basis)`. ACCRINT instead counts coupon periods on the quasi-coupon grid
+// anchored on `first_interest`; see `accrint_periods` for the measured rule.
 
 #include <cmath>
 #include <cstdint>
@@ -20,6 +13,7 @@
 #include "eval/builtins/financial_helpers.h"
 #include "eval/coerce.h"
 #include "utils/arena.h"
+#include "utils/date_time.h"
 #include "utils/expected.h"
 #include "value.h"
 
@@ -46,22 +40,88 @@ Expected<bool, ErrorCode> read_calc_method(const Value* args, std::uint32_t arit
   return coerced.value() != 0.0;
 }
 
+// Quasi-coupon dates anchored on `first_interest`: `at(k)` lies `k` periods
+// before the anchor (negative `k` steps forward). A month-end anchor keeps
+// every quasi date on its month's end (2024-02-29 -> 2023-08-31).
+struct QuasiCouponGrid {
+  date_time::YMD anchor;
+  unsigned anchor_day;
+  int step_months;
+  bool date1904;
+
+  double at(int k) const noexcept {
+    int y = anchor.y;
+    unsigned m = anchor.m;
+    shift_months(y, m, -k * step_months);
+    return quasi_serial(y, m, anchor_day, date1904);
+  }
+};
+
+// Length of the quasi-coupon period [start, end]: actual days for basis 1,
+// otherwise the nominal 360/freq (365/freq for basis 3).
+double quasi_period_length(double start, double end, int basis, int frequency) noexcept {
+  if (basis == 1) {
+    return end - start;
+  }
+  return (basis == 3 ? 365.0 : 360.0) / static_cast<double>(frequency);
+}
+
+// Accrued interest of ACCRINT in coupon units (multiples of
+// par * rate / frequency), as Mac Excel 365 computes it. With quasi dates
+// q(k) counted back from first_interest = q(0) (k <= 0 lies after it),
+// issue in (q(n), q(n-1)], D the basis day count and E = length of
+// (q(1), q(0)]:
+//   - calc_method TRUE with settlement after first_interest walks forward:
+//     the issue part D(issue, q(n-1)) / len(issue period) and every whole
+//     period count in full, and the period holding settlement counts
+//     D(start, settlement) / E; issue and settlement in one period give
+//     D(issue, settlement) / E.
+//   - otherwise n <= 1: D(issue, settlement) / E.
+//   - otherwise base = issue part + D(q(1), settlement) / E, plus n - 2
+//     whole periods when calc_method is TRUE. The q(1) leg is signed, so
+//     settlement before q(1) gives FALSE its negative values.
+double accrint_periods(double issue, double first_interest, double settlement, int frequency, int basis,
+                       bool calc_method, bool date1904) noexcept {
+  const date_time::YMD anchor = date_time::ymd_from_serial(first_interest, date1904);
+  const bool month_end = anchor.d == date_time::days_in_month(anchor.y, anchor.m);
+  const QuasiCouponGrid q{anchor, month_end ? 31u : anchor.d, 12 / frequency, date1904};
+  const auto days = [&](double a, double b) {
+    return std::round(date_time::basis_days_between(a, b, basis, date1904));
+  };
+
+  int n = 1;
+  while (q.at(n) >= issue) {
+    ++n;
+  }
+  while (q.at(n - 1) < issue) {
+    --n;
+  }
+  const double e_last = quasi_period_length(q.at(1), q.at(0), basis, frequency);
+  const double issue_part = days(issue, q.at(n - 1)) / quasi_period_length(q.at(n), q.at(n - 1), basis, frequency);
+
+  if (calc_method && settlement > first_interest) {
+    int k = n;
+    while (q.at(k - 1) < settlement) {
+      --k;
+    }
+    if (k == n) {
+      return days(issue, settlement) / e_last;
+    }
+    return issue_part + static_cast<double>(n - 1 - k) + days(q.at(k), settlement) / e_last;
+  }
+  if (n <= 1) {
+    return days(issue, settlement) / e_last;
+  }
+  const double from_q1 = issue_part + days(q.at(1), settlement) / e_last;
+  return calc_method ? from_q1 + static_cast<double>(n - 2) : from_q1;
+}
+
 }  // namespace
 
 // --- ACCRINT(issue, first_interest, settlement, rate, par, frequency,
 //             [basis=0], [calc_method=TRUE]) --------------------------------
 //
-// Accrued interest for a security that pays periodic interest. The
-// simple formula used by Excel's calc_method=TRUE branch is:
-//
-//   ACCRINT = par * rate * YEARFRAC(issue, settlement, basis)
-//
-// With calc_method=FALSE, the start date becomes `first_interest` when
-// `settlement > first_interest` (otherwise it stays `issue`).
-//
-// `first_interest` and `frequency` are otherwise unused in the simple
-// formula; Excel still validates them — frequency must be {1,2,4} and
-// the date arguments must be non-negative serials.
+//   ACCRINT = par * rate / frequency * accrint_periods(...)
 //
 // Domain:
 //   - issue >= settlement            ->  #NUM!
@@ -74,9 +134,9 @@ Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
   if (auto read = read_required_numbers(args, "dddnn", v); !read) {
     return Value::error(read.error());
   }
-  const double issue = v[0];
-  const double first_interest = v[1];
-  const double settlement = v[2];
+  const double issue = std::trunc(v[0]);
+  const double first_interest = std::trunc(v[1]);
+  const double settlement = std::trunc(v[2]);
   const double rate = v[3];
   const double par = v[4];
   auto frequency = read_coupon_frequency(args, 5);
@@ -97,19 +157,9 @@ Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
   if (rate <= 0.0 || par <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  // Mac Excel 365 always accrues from `issue` to `settlement`, ignoring
-  // both `first_interest` and `calc_method`. The MS docs say
-  // calc_method=FALSE should switch to first_interest, but the actual
-  // Mac Excel build (16.108.1, ja-JP) does not — for 1-bit parity we
-  // mirror the observable behaviour rather than the docs. The
-  // calc_method argument is still validated for type correctness above.
-  (void)calc_method;
-  (void)first_interest;
-  auto yf = yearfrac_for_basis(issue, settlement, basis.value(), date1904);
-  if (!yf) {
-    return Value::error(yf.error());
-  }
-  return finalize(par * rate * yf.value());
+  const double periods = accrint_periods(issue, first_interest, settlement, frequency.value(), basis.value(),
+                                         calc_method.value(), date1904);
+  return finalize(par * rate / static_cast<double>(frequency.value()) * periods);
 }
 
 // --- ACCRINTM(issue, settlement, rate, par, [basis=0]) -----------------

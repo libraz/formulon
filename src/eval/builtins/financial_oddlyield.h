@@ -11,11 +11,11 @@
 //                  final coupon period is irregular. The analytic
 //                  inverse of ODDLPRICE: solving
 //
-//                    price = (redemption + cf) / (1 + DSC*yld/freq/E) - ai
+//                    price = (redemption + cf) / (1 + dsc_units*yld/freq) - ai
 //
 //                  for `yld` is closed-form, no Newton-Raphson needed:
 //
-//                    yld = (freq * E / DSC) *
+//                    yld = (freq / dsc_units) *
 //                          ((redemption + cf - price - ai) / (price + ai))
 //
 //                  See `financial_oddl_helpers.h` for the schedule

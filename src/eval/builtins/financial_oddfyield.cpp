@@ -120,7 +120,8 @@ Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t 
   // (irregular + regular), expressed as a floating-point fraction so
   // the heuristic stays well-conditioned on long-first-period cases
   // where settlement falls deep inside the irregular span.
-  const double n_total = static_cast<double>(sched.nc) + static_cast<double>(sched.n_regular) - sched.dsc / sched.e;
+  const double n_total = static_cast<double>(sched.nc) + static_cast<double>(sched.n_regular) -
+                         (static_cast<double>(sched.nq) + sched.dsc / sched.e);
   const double avg_capital = (red + pr_v) / 2.0;
   if (avg_capital == 0.0 || n_total <= 0.0) {
     return ErrorCode::Num;

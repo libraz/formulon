@@ -81,6 +81,22 @@ TEST(FinancialOddf, MicrosoftDocCanonicalOddfPrice) {
   EXPECT_NEAR(v.as_number(), 113.598, 1e-3);
 }
 
+TEST(FinancialOddf, LongFirstPeriodPaysWholeOddCouponAtFirstCoupon) {
+  // Issue 2020-01-15 sits two quasi-periods before first_coupon 2021-03-01
+  // and settlement falls on the 2020-03-01 quasi date. The odd coupon is
+  // discounted once, at first_coupon (Mac Excel values).
+  const Value annual =
+      EvalSource("=ODDFPRICE(DATE(2020,3,1), DATE(2030,3,1), DATE(2020,1,15), DATE(2021,3,1), 0.075, 0.05, 120, 1, 1)");
+  ASSERT_TRUE(annual.is_number());
+  EXPECT_NEAR(annual.as_number(), 131.5377155865953, 1e-9);
+
+  // Basis 2: nominal 180-day periods, actual-day DSC (184 days -> 184/180).
+  const Value semi =
+      EvalSource("=ODDFPRICE(DATE(2020,3,1), DATE(2030,3,1), DATE(2020,1,15), DATE(2021,3,1), 0.075, 0.05, 120, 2, 2)");
+  ASSERT_TRUE(semi.is_number());
+  EXPECT_NEAR(semi.as_number(), 131.48376704654166, 1e-9);
+}
+
 TEST(FinancialOddf, OddfPriceDefaultBasisZero) {
   // basis omitted defaults to 0 (US 30/360); same result as the
   // explicit basis=0 case. Confirm both are finite + equal.
