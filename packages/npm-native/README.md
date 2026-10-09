@@ -94,7 +94,8 @@ Cells & recalc
 Workbook policy / catalog
   calcMode, setCalcMode, excelProfileId, setExcelProfileId
   functionMetadata, functionNames,
-  localizeFunctionName, canonicalizeFunctionName
+  localizeFunctionName, canonicalizeFunctionName,
+  localizeFormula, canonicalizeFormula, localeFacts
   precedents, dependents, spillInfo, getExternalLinks
 
 Sheets & structure

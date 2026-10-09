@@ -9,131 +9,111 @@
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/formulon)
 [![Docs](https://img.shields.io/badge/docs-formulon.libraz.net-2563eb)](https://formulon.libraz.net)
 
-**Formulon は Excel 互換の計算エンジンです。** C++17 製のコアエンジンが、既定では **Windows Excel 365 (en-US)** の挙動に合わせて数式を評価します。実 Excel から取得した oracle データで互換性を確認し、既知の差分はすべて理由つきで追跡しています。同じエンジンをブラウザ (WebAssembly)、Python、ネイティブ CLI から使えるため、どの実行環境でも同じワークブックを同じ結果に再計算できます。
+**Formulon は、Excel なしで Excel のワークブックと数式を再計算するエンジンです。結果は実際の Excel 365 と照合しています。**
+Excel のインストールも Windows も COM 操作も要りません。1 つの C++17 コアを、ブラウザと Node 向けの WebAssembly、Python パッケージ、ネイティブ CLI として配布しているので、どこで動かしても同じワークブックは同じ値になります。
 
-Excel 本体、Microsoft ランタイム、COM オートメーションは実行時には不要です。WASM 版はブラウザと Node で動作し、Python 版は `wasmtime` 経由で同じ WASM コアを呼び出します。ネイティブ CLI は `darwin-arm64` / `linux-x64` / `linux-arm64` 向けに配布しています。
+**こんなときに使えます:**
 
-数式は英語の関数名と、ファイル形式が保存する区切り文字で解析するので、数式の書き方はロケールによって変わりません。ja-JP プロファイルによって変わる挙動には、文字幅とかなの扱い、`LENB` などバイト単位で数える `*B` 系の関数、`CODE` / `CHAR`、`INFO` / `CELL` が返す環境値、`年月日` 表記や和暦などの日本語の日付文字列、ピボットテーブルのラベルなどがあります。プロファイルは ja-JP / en-US / de-DE / fr-FR / zh-CN / ko-KR / th-TH を、`mac` と `win` のホスト別に計 14 個選べます。`mac-*` はすべて、そのロケールの Mac Excel 365 で採取した値に合わせています。`win-365-ja_JP` は Windows で採取した値、それ以外の `win-*` は Mac の採取値に ja-JP で測ったホスト差を重ねた推定です。ピボットテーブルのラベルは ja-JP と en-US 以外では英語、CLI の出力はロケールに依らず `TRUE`/`FALSE`・英語のエラー名・`.` のままです。詳しくは [ロケールプロファイル](https://formulon.libraz.net/ja/compatibility/locale-profiles) を参照してください。
+- **サーバーでワークブックを再計算する** — バッチ処理、CI、データパイプラインで `.xlsx` / `.xlsb` を読み込み、入力を変えて、再計算した値で保存できます。
+- **ブラウザで表計算ロジックを動かす** — 数式もワークブック全体もクライアント側で評価するので、アップロードされたファイルが利用者のマシンの外に出ません。
+- **計算モデルは Excel のまま使う** — チームが保守している既存のワークブックを Node や Python から呼び出せます。数式を別の言語で書き直す必要はありません。
+- **ロケールごとに Excel と同じ答えを得る** — 日本語のバイト数計算、ドイツ語の小数点カンマ、ローカライズされた `TRUE` / `FALSE` は、選んだプロファイルに従います。
+- **AI エージェントに表計算の道具を渡す** — [formulon-mcp](https://github.com/libraz/formulon-mcp) がエンジンを MCP 経由で提供します。
+
+Excel との既知の差分は [`tests/divergence.yaml`](https://github.com/libraz/formulon/blob/main/tests/divergence.yaml) にケースごとに記録し、それぞれに理由と最後に確認した Excel ビルドを添えています。
+
+📖 **[ドキュメント](https://formulon.libraz.net/ja/)** &nbsp;·&nbsp; **[はじめに](https://formulon.libraz.net/ja/start/)** &nbsp;·&nbsp; **[ロケールプロファイル](https://formulon.libraz.net/ja/compatibility/locale-profiles)** &nbsp;·&nbsp; **[数式カバレッジ](https://formulon.libraz.net/ja/compatibility/formula-coverage)** &nbsp;·&nbsp; **[API](https://formulon.libraz.net/ja/api/)**
+
+## 主な機能
+
+- **数式エンジン** — Excel 関数名 526 件を認識し、511 件をローカルで実装しています。動的配列、`LET` / `LAMBDA`、`REGEX*` にも対応します。残りはクラウドや COM のサービスを呼ぶ関数で、決まったエラーを返します。[カバレッジ](https://formulon.libraz.net/ja/compatibility/formula-coverage)
+- **ワークブック入出力** — `.xlsx` と `.xlsb` を読み込み、再計算し、書き出します。スタイル、条件付き書式、テーブル、ピボットテーブル、印刷レイアウトも扱います。[ファイル形式](https://formulon.libraz.net/ja/compatibility/file-format-support)
+- **ロケールプロファイル** — 7 ロケール × Mac / Windows ホストの、14 種類の Excel 挙動プロファイルを選べます。[ロケールプロファイル](https://formulon.libraz.net/ja/compatibility/locale-profiles)
+- **Excel oracle** — 数式の結果は、7 ロケールの Mac Excel 365 から取得したゴールデンデータとビット単位で照合しています。ピボットと印刷レイアウトは Windows Excel 365 と照合しています。[Oracle テスト](https://formulon.libraz.net/ja/compatibility/oracle-testing)
+- **サイズ上限つきの WASM** — 非圧縮 3.75 MiB、Brotli 960 KiB を超えると CI が失敗します。[サイズ予算](https://formulon.libraz.net/ja/development/size-budgets)
 
 ## インストール
 
 ```bash
-npm install @libraz/formulon   # JavaScript / TypeScript (WASM)
-pip install formulon            # Python
+npm install @libraz/formulon   # ブラウザと Node 22+
+pip install formulon            # Python 3.9+
 ```
 
-CLI バイナリは [GitHub Releases](https://github.com/libraz/formulon/releases) から取得できます。
+`darwin-arm64`、`linux-x64`、`linux-arm64` 向けの CLI バイナリは [GitHub Releases](https://github.com/libraz/formulon/releases) にあります。
 
-## 特徴
+## クイックスタート
 
-- **互換性は実際の Excel と照合して確かめています。** 既定の profile は `win-365-en_US` (推定、後述) です。数式の結果は 7 ロケールすべての Mac Excel 365、ピボットテーブルと印刷レイアウトは Windows Excel 365 (ja-JP) を基準に固定しています。ピボットテーブルの作成を自動化するには Windows COM が必要なためです。いずれも検証済みの Microsoft 365 環境から採取しています。出力は実 Excel から再生成した golden と照合します。許容している差分、たとえば超越関数の ulp 差、揮発関数、Excel 側の不整合を Formulon が意図的に採らないケースは、[`tests/divergence.yaml`](tests/divergence.yaml) に理由と確認済み Excel ビルドを記録します。
-- **どの環境でも同じ C++ コアが計算します。** ブラウザ、Python、CLI で別々の計算ロジックを持たず、同じエンジンを配布しています。実装が分かれないので、環境ごとに結果がずれることもありません。
-- **WASM のサイズに上限を設けています。** CI は非圧縮 **3.75 MiB**、Brotli **960 KiB** を超えると失敗し、**3.50 MiB** / **928 KiB** を超えると警告を出します。実際に効いてくるのは配信時の Brotli サイズなので、非圧縮と対等に検査します。現在値は `make size-check` で確認できます。
-- **依存は小さく保っています。** ランタイム依存は `miniz` (zip/deflate)、`pugixml` (XML + XPath 1.0)、`PCRE2` (`REGEX*`)、`double-conversion` (Grisu3 `dtoa`) の 4 つです。線形代数、UTF-8 処理、数値変換の多くはリポジトリ内で実装しています。
-- **C++ は監査しやすさを優先して書いています。** `Expected<T, Error>` ベースのエラー処理、RAII、`-fno-exceptions -fno-rtti`、Google C++ Style を採用しています。
+```js
+import createFormulon from '@libraz/formulon';
 
-## 使いどころ
+const Module = await createFormulon();
+console.log(Module.evalFormula('=SUM(1,2,3)').value.number); // 6
+```
 
-Excel を起動せずにスプレッドシートを計算したい場面で使えます。
+```python
+import formulon
 
-- バッチジョブやデータパイプラインで `.xlsx` や `.xlsb` をヘッドレス再計算する
-- Web アプリの中で Excel 風の数式を評価する
-- 社内ツール、ボット、ノートブックに計算機能を組み込む
-- エンジンの上に作った MCP サーバー [formulon-mcp](https://github.com/libraz/formulon-mcp) を通じて、AI エージェントにブック操作のツールを渡す
-- 数式の検証や、レガシースプレッドシートの移行に使う
-
-組み込みの実装例として [formulon-cell](https://github.com/libraz/formulon-cell) があります。`@libraz/formulon` の上に作ったブラウザ向けのスプレッドシート UI で、npm パッケージを実ブラウザで一通り動かす結合テストも兼ねています。
-
-## やらないこと
-
-Formulon は以下を **意図的にサポートしません**。
-
-| 項目 | 理由 |
-|------|------|
-| VBA の実行 | セキュリティ上の理由からです。`vbaProject.bin` はバイト列としてだけ保存し、実行はしません。 |
-| 旧 `.xls` (BIFF8 / Excel 97-2003) | Excel 365 互換の対象外です。 |
-| グラフ / 図形のレンダリング | 描画レイヤの責務。計算エンジンの仕事ではありません。 |
-| PowerQuery (M) / DAX | 別のエンジンが扱う別の問題領域です。 |
-| Pivot キャッシュの再生成 | 保存済み `pivotCacheRecords` はそのまま保持し、ソース範囲から作り直すことはしません。PivotTable の計算結果自体は API から都度評価できます。 |
-| スプレッドシート UI 本体 | 描画は呼び出し側の責任です。UI から使うための API(ビューポート単位の再計算 `partialRecalc`、範囲単位の条件付き書式評価、spill 情報、セルの位置・サイズと表示テキスト、色を解決済みの実効スタイル、AutoFilter と入力規則の評価など)はエンジン側で提供しています。 |
-
-これらは「まだやっていない」機能ではなく、スコープ外として固定しています。
-
-## パッケージ
-
-| 配布元 | パッケージ名 | 内容 |
-|--------|-------------|------|
-| npm | [`@libraz/formulon`](https://www.npmjs.com/package/@libraz/formulon) | WASM ESM モジュール。型定義同梱。Node 22+ / ブラウザ / Worker 対応。既定のビルドはシングルスレッドで cross-origin isolation 不要、`@libraz/formulon/threads` は `recalcParallel` 用のワーカースレッド付きです。 |
-| PyPI | [`formulon`](https://pypi.org/project/formulon/) | Python 3.9+ の `py3-none-any` wheel。`formulon_capi.wasm` と pure-Python wrapper を同梱し、`wasmtime` は `pip` が解決します。 |
-| GitHub Releases | `formulon-<version>-<platform-arch>.tar.gz` | 単体 CLI バイナリ (`eval` / `recalc` / `dump` / `paginate`)。`darwin-arm64` / `linux-x64` / `linux-arm64` 向け。 |
-
-同じ入力からはどの配布形態でも同じ結果が出ます。3 つとも、ワークシートのパートをパース前にまるごとメモリへ展開します（zip リーダーの上限は 1 エントリ 100 MiB、1 回の読み込みで 256 MiB）。WASM ビルド（npm と PyPI のパッケージ）は、そのバッファから必ず DOM ツリーを構築します。ネイティブ CLI は 256 KiB を超えるワークシートではストリーミングパーサに切り替え、DOM ツリーを作りません。このパーサはバイナリサイズを食うため、WASM には入れていません。ただし CLI も展開済みの XML バッファは先に持つので、ピークメモリが一定になるわけではありません。どの配布形態でもシートは 1 枚ずつ読むため、ピークはワークブック単位ではなくワークシート単位です。WASM での実際の上限はホストの 32-bit アドレス空間です。どちらのパーサでも結果は同じです。
-
-## コマンドライン
-
-リリースのバイナリを `PATH` に置くと、次の 4 つのコマンドが使えます。`eval` は数式 1 つの評価、`recalc` は再計算したブックの書き出し、`dump` はテキストでの内容出力、`paginate` は印刷範囲・改ページ・ページ数の算出です。
+print(formulon.eval_formula("=SUM(1,2,3)").to_python())  # 6.0
+```
 
 ```bash
 formulon eval '=SUM(1,2,3)'
 formulon recalc input.xlsx -o output.xlsx
-formulon recalc --threads 4 input.xlsx -o output.xlsx
-formulon dump output.xlsx --formulas
-formulon paginate output.xlsx --sheet 0
 ```
 
-4 つのコマンドはいずれも `--` でオプションの解釈を終了できます。`--` より前にオプションを指定し、その後には `eval` では数式を、`recalc`・`dump`・`paginate` では入力パスを 1 つだけ渡します。これにより `-` で始まる相対パスも扱えます（例: `formulon dump --sheets -- -input.xlsx`）。
+ワークブックの読み込み、編集、保存は [ワークブックを再計算する](https://formulon.libraz.net/ja/start/recalculate) で説明しています。
 
-`recalc` は入出力とも `.xlsx` / `.xlsb` を受け付けます。成功すると stderr に `formulon: recalc: ok, wrote M bytes to 'OUT'` を出力します。このステータス行は `--quiet` で消せますが、読み込み・保存時に情報が失われる旨の警告は XLSB・OOXML とも `--quiet` を付けても表示されます。既定では直列に再計算します。`--threads N` を渡すと並列 SCC スケジューラに切り替わり（`0` は自動検出、`1` は呼び出し元スレッドのまま、`2..8` はワーカー数の上限）、ステータス行にパスごとの計測値も出ます。
+## ロケールプロファイルの切り替え
 
-## ステータス
+新しいワークブックの既定は `win-365-en_US` です。数式は常に英語の関数名と保存形式の区切り文字で書きます。プロファイルが変えるのは、文字列の解釈と結果の表示です。ワークブックごとに切り替えて再計算します。
 
-カタログに登録した Excel 関数は **523 個すべてを認識**します。ただし、「関数名を知っている」ことと「Excel 互換の実装がある」ことは分けて扱います。現在の内訳は `make function-status` で確認できます。
+```js
+const wb = Module.Workbook.createDefault();
+try {
+  wb.setFormula(0, 0, 0, '=LENB("日本")');  // A1
+  wb.setFormula(0, 1, 0, '=VALUE("1,5")');  // A2
+  wb.setFormula(0, 2, 0, '=ISEVEN(2)');     // A3
 
-上位 2 区分（実装済み・unavailable stub）は排他的で、合計は 523 に一致します。環境依存の行は**実装済み 508 件の内数**です。固定の golden では記述しきれないため別に示していますが、独立した区分ではありません（508 + 15 = 523 で、525 にはなりません）。
+  for (const id of ['mac-365-en_US', 'mac-365-ja_JP', 'mac-365-de_DE']) {
+    wb.setExcelProfileId(id);
+    wb.recalc(); // a profile change marks formulas dirty
+    console.log(id, [0, 1, 2].map((row) => wb.getDisplayText(0, row, 0).text));
+  }
+} finally {
+  wb.delete();
+}
+// mac-365-en_US [ '2', '#VALUE!', 'TRUE' ]
+// mac-365-ja_JP [ '4', '#VALUE!', 'TRUE' ]
+// mac-365-de_DE [ '2', '1,5', 'WAHR' ]
+```
 
-| 区分 | 件数 | 意味 | 例 |
-|------|------|------|----|
-| 実装済み | 508 | 通常の計算エンジン内で評価できる関数。unit / oracle で検証しています。 | 数学、統計、検索、テキスト、動的配列など |
-| &nbsp;&nbsp;↳ うち環境依存 | 2 | 実装済みだが、ホスト環境やワークブック状態によって値が変わるため固定 golden だけでは完全に記述できない関数。上記 508 に含まれます。 | `INFO`, `CELL` |
-| unavailable stub | 15 | Formulon が内蔵しない外部サービス、ネットワーク、COM、OLAP 接続などが必要な関数。決まったエラーを返します。 | `PY`, `WEBSERVICE`, `STOCKHISTORY`, `IMAGE`, `RTD`, `TRANSLATE`, `DETECTLANGUAGE`, `COPILOT`, `CUBE*` |
+```python
+with formulon.Workbook.create_default() as wb:
+    wb.set_formula(0, 0, 0, '=LENB("日本")')
+    wb.set_formula(0, 1, 0, '=VALUE("1,5")')
+    wb.set_formula(0, 2, 0, "=ISEVEN(2)")
 
-oracle は **104 カテゴリ** あります。数式 track は 7 ロケールそれぞれの Mac Excel 365 から、条件付き書式 track は Mac Excel 365 ja-JP から、workbook track は Windows Excel 365 ja-JP から再生成します。workbook track の golden には採取 ID が付いていて、すべての suite が同じ検証済み Microsoft 365 セッションで採取されたことを確認できます。
+    for profile in ("mac-365-en_US", "mac-365-ja_JP", "mac-365-de_DE"):
+        wb.set_excel_profile_id(profile)
+        wb.recalc()
+        print(profile, [wb.get_display_text(0, row, 0)[0] for row in range(3)])
+```
 
-現在のローカル検証結果:
+プロファイル ID は `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}` です。`mac-*` のすべてと `win-365-ja_JP` は Excel で測定したもので、それ以外の `win-*` は Mac での測定値からの推定です。プロファイルはファイルに保存されないため、アプリケーション側で対象の ID を保持し、読み込み後に設定し直してください。
 
-| 検査 | 結果 |
-|------|------|
-| `ctest -LE "SLOW\|BENCH\|TSAN"` — `make test`、PR ゲート | すべて passed |
-| `ctest -LE "BENCH\|TSAN"` — `make test-slow`、`SLOW` 層を追加 | すべて passed |
-| primary formula oracle | `4768/4768` passed / `133` documented skips |
-| 条件付き書式 oracle | `23/23` |
-| workbook oracle (pivot + print) | `83/83` passed / `10` documented skips |
-| 取り込み済み外部エンジンコーパス (クロスチェック) | `12510/12510` passed / `168` documented divergences |
+## 対象外
 
-CTest スイートを分けているラベルは 3 つです。`SLOW`（数分かかる結合・並行性テスト）、`TSAN`（ThreadSanitizer での実行）、`BENCH`（しきい値を調整できるマイクロベンチの回帰チェックで、必要なときだけ実行）です。ラベルのないテストはすべて高速層で、CI はこれを合否判定に使います。負荷試験専用の層はありません。libFuzzer ハーネスも `SLOW` ラベルを持ちますが、`-DFM_BUILD_FUZZ=ON` を指定したビルド (`make fuzz`) にしか存在せず、既定ビルドにも CI にも含まれません。libFuzzer ランタイムを同梱する Clang が必要で、Apple の toolchain はこれを持たないため、macOS では別途 LLVM が要ります。macOS では AddressSanitizer も既定で無効です。最近の macOS の動的リンカと組み合わせると、shadow memory の初期化中にデッドロックするためです。そのため macOS での fuzz 実行で検出できるのはクラッシュ・タイムアウト・未定義動作までで、ヒープ破壊は検出できません。
+VBA の実行、旧形式の `.xls`、グラフの描画、Power Query / DAX、元データからのピボットキャッシュ更新、外部データへのライブ接続、表計算 UI は、恒久的に対象外です。詳しくは [対象外の機能](https://formulon.libraz.net/ja/compatibility/non-goals) を参照してください。
 
-残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。523 関数のうち `519` は closure 6 条件 (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`) を全て満たします。残る 4 件 (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) が満たさないのは `behaviors_declared` だけで、挙動の分類がまだ書き切れていないためです。`JIS` は `DBCS` の別名として宣言し、closure を満たしています。Excel は ja-JP の数式バーで入力された `JIS` を保存・評価の前に `DBCS` へ書き換えるため、`JIS` を直接呼ぶ oracle case は作れません。closure harness は宣言をそのまま信用せず、別名の参照先の関数を実際に評価して判定します。
+## コントリビュート
 
-数式の結果に加えて、**ピボットテーブルと印刷範囲・改ページ**には専用の **workbook oracle track** があり、WSL2 から Windows COM へ渡すブリッジ経由で採取します。skip は 10 件あり、そのうち 9 件は同じ Excel の癖によるものです。印刷倍率またはズームが 50% 以下のとき、Excel の改ページプレビューは幾何的なページ分割に従わない列の自動改ページを出すため、観測される改ページ位置は倍率を下げても縮まらず、25% では逆に増えます。この 9 件には、照合した Microsoft 365 の観測値を記録しています。残る 1 件はケースファイルの形だけを確かめるスモーク用のケースで、照合する値を持ちません。
-
-新規ワークブックはデフォルトで `win-365-en_US` profile を使います。profile-id API で切り替えられ、id は `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}` の 14 個です。
-
-| profile | 根拠 |
-|---------|------|
-| `mac-365-<ロケール>` (7 ロケールすべて) | そのロケールの Mac Excel 365 で採取。いずれも oracle の gate |
-| `win-365-ja_JP` | Windows Excel 365 (ja-JP) で採取 |
-| `win-365-en_US` (既定)、`win-365-de_DE`、`win-365-fr_FR`、`win-365-zh_CN`、`win-365-ko_KR`、`win-365-th_TH` | 推定。そのロケールの Mac 採取値に、ja-JP で測ったホスト差と文書化された Windows の挙動 (たとえば Windows の en-US では `CHAR` / `CODE` が Windows-1252) を重ねています。Windows では採取しておらず、採取できた時点で推定を置き換えます |
-
-日本語の挙動を保つには `win-365-ja_JP` か `mac-365-ja_JP` を選んでください。ピボットテーブルのラベルは、de-DE / fr-FR / zh-CN / ko-KR / th-TH では英語です。
-
-OOXML reader / writer はシート、スタイル、条件付き書式、コメント (スレッド形式を含む)、ハイパーリンク、結合セル、入力規則、定義済み名前、テーブル、ピボットテーブル、画像と図形、テーマを round-trip します。MS-XLSB reader / writer はセル値、スタイル、シート間 3-D 参照、および一般的なトークン化数式をカバーします。配列定数リテラルと 2007 年以降の future function ID は、OOXML 経路に比べてまだ限定的です。スレッド形式のコメント、挿入した画像、型付き AutoFilter の編集は XLSB へ書き出しません。ワークブック操作は C ABI と各言語バインディングから利用できます。CLI は意図的に `eval` / `recalc` / `dump` / `paginate` のみを公開します。
-
-不具合報告・oracle 差分レポート・ご意見はいつでも歓迎しています。
-
-## コントリビューション
-
-いちばん助かるのは、**手元の Excel から oracle データを提供していただくこと**です。Windows の Excel 365 をお持ちなら、`make oracle-contribute` で Excel を駆動して golden を取得し、PR の手順まで進められます。詳しくは [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+いちばん役立つのは、お使いのロケールの Excel oracle データです。特に Windows Excel 365 のデータを歓迎します。`make oracle-contribute` が Excel を操作してゴールデンデータを取得します。[CONTRIBUTING.md](CONTRIBUTING.md) と [Oracle データの提供](https://formulon.libraz.net/ja/development/oracle-contribution) を参照してください。
 
 ## ライセンス
 
-Apache License 2.0。[LICENSE](LICENSE) および [NOTICE](NOTICE) を参照してください。
+[Apache License 2.0](LICENSE)。[NOTICE](NOTICE) も参照してください。
+
+## 関連プロジェクト
+
+- [formulon-cell](https://github.com/libraz/formulon-cell) — `@libraz/formulon` を使ったブラウザ向け表計算 UI
+- [formulon-mcp](https://github.com/libraz/formulon-mcp) — AI エージェントにワークブック操作ツールを提供する MCP サーバー

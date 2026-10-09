@@ -9,154 +9,111 @@
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/formulon)
 [![Docs](https://img.shields.io/badge/docs-formulon.libraz.net-2563eb)](https://formulon.libraz.net)
 
-Formulon is a headless, Excel-compatible calculation engine — a C++17 core that defaults to the **Windows Excel 365 (en-US)** behavior profile, with every known divergence explicitly tracked against Excel oracle data. The same engine is packaged for the browser (WebAssembly), for Python, and for native command-line use, so a workbook recalculates to the same values wherever it runs.
+**Formulon recalculates Excel workbooks and formulas without Excel, with results checked against real Excel 365.**
+No Excel install, no Windows, no COM automation: one C++17 core ships as WebAssembly for browsers and Node, as a Python package, and as native CLI binaries, so a workbook gives the same values wherever it runs.
 
-No Excel installation, no Microsoft runtime, no COM automation required. The WASM build runs in browsers and Node, and the Python package runs the same WASM core through `wasmtime`; native CLI binaries ship for `darwin-arm64`, `linux-x64`, and `linux-arm64`.
+**Use it when you need to:**
 
-Formulas are parsed with English function names and the separators the file formats store, so formula syntax does not change with the locale. What the ja-JP profile does change includes text width and kana handling, the byte-counting `*B` functions such as `LENB`, `CODE` / `CHAR`, environment values from `INFO` / `CELL`, Japanese date text such as `年月日` forms and eras, and PivotTable labels. Profiles for ja-JP, en-US, de-DE, fr-FR, zh-CN, ko-KR and th-TH are selectable, each on a `mac` and a `win` host (14 ids). Every `mac-*` profile is captured against Mac Excel 365 in that locale; `win-365-ja_JP` is captured on Windows, and the other `win-*` profiles are estimated from the Mac captures plus the host differences measured on ja-JP. CLI output stays locale-invariant (`TRUE`/`FALSE`, English error names, `.`). See [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles).
+- **Recalculate workbooks on a server** — load `.xlsx` or `.xlsb` in a batch job, CI run or data pipeline, change inputs, and save it with fresh values.
+- **Run spreadsheet logic in the browser** — evaluate formulas and whole workbooks client-side, so uploaded files never leave the user's machine.
+- **Keep the model in Excel** — call the workbook your team already maintains from Node or Python instead of re-implementing its formulas.
+- **Get the answer Excel gives in a given locale** — Japanese byte counting, German decimal commas and localized `TRUE` / `FALSE` follow the profile you pick.
+- **Give AI agents spreadsheet tools** — [formulon-mcp](https://github.com/libraz/formulon-mcp) exposes the engine over MCP.
 
-## Install
+Known differences from Excel are listed case by case in [`tests/divergence.yaml`](https://github.com/libraz/formulon/blob/main/tests/divergence.yaml), each with a reason and the Excel build it was last verified on.
+
+📖 **[Documentation](https://formulon.libraz.net)** &nbsp;·&nbsp; **[Getting started](https://formulon.libraz.net/start/)** &nbsp;·&nbsp; **[Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)** &nbsp;·&nbsp; **[Formula coverage](https://formulon.libraz.net/compatibility/formula-coverage)** &nbsp;·&nbsp; **[API](https://formulon.libraz.net/api/)**
+
+## What's inside
+
+- **Formula engine** — 526 Excel function names, 511 implemented locally; dynamic arrays, `LET` / `LAMBDA`, and `REGEX*`. The rest call cloud or COM services and return a fixed error. [Coverage](https://formulon.libraz.net/compatibility/formula-coverage)
+- **Workbook I/O** — read, recalculate and write `.xlsx` and `.xlsb`, including styles, conditional formatting, tables, pivot tables and print layout. [File formats](https://formulon.libraz.net/compatibility/file-format-support)
+- **Locale profiles** — 14 Excel behavior profiles across seven locales on Mac and Windows hosts. [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
+- **Excel oracle** — formula results are compared bit for bit against goldens captured from Mac Excel 365 in seven locales; pivot and print layout against Windows Excel 365. [Oracle testing](https://formulon.libraz.net/compatibility/oracle-testing)
+- **Size-budgeted WASM** — CI fails the build above 3.75 MiB uncompressed or 960 KiB Brotli. [Size budgets](https://formulon.libraz.net/development/size-budgets)
+
+## Installation
 
 ```bash
-npm install @libraz/formulon   # JavaScript / TypeScript (WASM)
-pip install formulon            # Python
+npm install @libraz/formulon   # browsers and Node 22+
+pip install formulon            # Python 3.9+
 ```
 
-CLI binaries are available from [GitHub Releases](https://github.com/libraz/formulon/releases).
+CLI binaries for `darwin-arm64`, `linux-x64` and `linux-arm64` are on [GitHub Releases](https://github.com/libraz/formulon/releases).
 
-## Why Formulon
+## Quick start
 
-- **Checked against real Excel.** The runtime default is `win-365-en_US` (an estimate; see below), and profile-specific oracle suites pin observed Excel behavior. Formula results are pinned against Mac Excel 365 in all seven locales; pivot tables and print layout are pinned against Windows Excel 365 (ja-JP), because creating PivotTables by automation requires Windows COM. Both come from a verified Microsoft 365 install. Outputs are checked for bit-level parity against golden data regenerated from the real product; every accepted divergence (transcendental ulp drift, volatile-function snapshots, Excel quirks where Formulon deliberately keeps a saner answer) is recorded case-by-case in [`tests/divergence.yaml`](tests/divergence.yaml) with a reason and the last verified Excel build.
-- **One C++ core, identical results everywhere.** The browser, Python, and CLI builds all ship the same engine rather than separate calculation logic, so there is no second implementation for results to drift against.
-- **WASM size budget.** CI enforces a **3.75 MiB** uncompressed and **960 KiB** Brotli hard ceiling, and reports **3.50 MiB** / **928 KiB** soft ceilings. Brotli is the wire size that actually binds, so it gates on equal footing. Run `make size-check` to measure the current artifact.
-- **Small dependency set.** Engine deps: `miniz` (zip/deflate), `pugixml` (XML + XPath 1.0), `PCRE2` (Excel-compatible regex for `REGEX*`), `double-conversion` (Grisu3 shortest-roundtrip `dtoa`). Linear algebra, UTF-8 handling, and most number coercion are in-tree.
-- **C++ written for auditability.** `Expected<T, Error>` error handling, RAII, `-fno-exceptions -fno-rtti`, Google C++ style.
+```js
+import createFormulon from '@libraz/formulon';
 
-## What it is useful for
+const Module = await createFormulon();
+console.log(Module.evalFormula('=SUM(1,2,3)').value.number); // 6
+```
 
-Anywhere a spreadsheet needs to be computed without booting Excel:
+```python
+import formulon
 
-- recalculating `.xlsx` and `.xlsb` workbooks headlessly in batch jobs or data pipelines,
-- evaluating Excel-style formulas inside a web application, in the browser,
-- embedding calculation into internal tools, bots, or notebooks,
-- giving AI agents workbook tools through [formulon-mcp](https://github.com/libraz/formulon-mcp), an MCP server built on the engine,
-- validating formulas and migrating legacy spreadsheets.
-
-For a worked example of embedding the engine, see [formulon-cell](https://github.com/libraz/formulon-cell), a browser spreadsheet UI built on `@libraz/formulon`. It also serves as an integration test, exercising the npm package end to end in a real browser.
-
-## Non-goals (by design)
-
-Formulon deliberately does **not** cover:
-
-| Area | Reason |
-|------|--------|
-| VBA execution | Security. `vbaProject.bin` is preserved byte-for-byte, never executed. |
-| Legacy `.xls` (BIFF8, Excel 97–2003) | Out of scope for Excel 365 compatibility. |
-| Chart / drawing rendering | Belongs to a rendering layer, not the engine. |
-| PowerQuery (M) / DAX | Separate engine, separate problem domain. |
-| Pivot cache regeneration | The stored `pivotCacheRecords` snapshot is preserved as-is, never rebuilt from the source range. PivotTable *results* are evaluated on demand through the API. |
-| Spreadsheet UI | Rendering belongs to the caller. The engine exposes what a UI needs to drive it — viewport recalc (`partialRecalc`), conditional-format evaluation over a range, spill info, cell geometry and display text, effective styles with resolved colours, and AutoFilter and data-validation evaluation. |
-
-These are **permanent** non-goals, not "not yet." The scope is finite on purpose.
-
-## Packaging
-
-| Surface | Name | Notes |
-|---------|------|-------|
-| npm | `@libraz/formulon` | WASM ESM module, type definitions included. Node 22+, browsers, workers. The default build is single-threaded and needs no cross-origin isolation; `@libraz/formulon/threads` adds worker threads for `recalcParallel`. |
-| PyPI | `formulon` | Python 3.9+ `py3-none-any` wheel that bundles `formulon_capi.wasm` plus a pure-Python wrapper. `pip` resolves the platform-specific `wasmtime` runtime. |
-| GitHub Releases | `formulon-<version>-<platform-arch>.tar.gz` | Standalone CLI binaries (`eval`, `recalc`, `dump`, `paginate`) for `darwin-arm64`, `linux-x64`, `linux-arm64`. |
-
-Every surface computes the same results from the same input. All three
-inflate each worksheet part into memory whole before parsing it (the zip
-reader caps this at 100 MiB per entry, 256 MiB per load); the WASM
-builds — the npm and PyPI packages — then always build a DOM tree from
-that buffer. The native CLI switches to a streaming parser for
-worksheets past 256 KiB instead, which skips building the DOM tree —
-that implementation costs binary size the WASM budget does not have —
-but still holds the same inflated XML buffer first, so its peak memory
-is not a fixed window either. Sheets are read one at a time on every
-surface, so the peak is per worksheet, not per workbook; the practical
-ceiling on WASM is the host's 32-bit address space. Results are
-identical either way.
-
-## Command line
-
-After placing a release binary on `PATH`, use `eval` for a scalar formula,
-`recalc` to write a recalculated workbook, `dump` for a text snapshot, and
-`paginate` to resolve the print area, page breaks, and page count.
+print(formulon.eval_formula("=SUM(1,2,3)").to_python())  # 6.0
+```
 
 ```bash
 formulon eval '=SUM(1,2,3)'
 formulon recalc input.xlsx -o output.xlsx
-formulon recalc --threads 4 input.xlsx -o output.xlsx
-formulon dump output.xlsx --formulas
-formulon paginate output.xlsx --sheet 0
 ```
 
-All four commands accept `--` to end option parsing. Put command options
-before it, then pass exactly one positional formula (`eval`) or input path
-(`recalc`, `dump`, `paginate`); this also allows a relative path beginning
-with `-`, for example `formulon dump --sheets -- -input.xlsx`.
+Loading, editing and saving workbooks are covered in [Recalculate a workbook](https://formulon.libraz.net/start/recalculate).
 
-`recalc` accepts `.xlsx` or `.xlsb` for input and output. It writes its success status
-to stderr as `formulon: recalc: ok, wrote M bytes to 'OUT'`; pass `--quiet` to
-suppress that status line. Load/save loss warnings — both XLSB and OOXML —
-remain visible under `--quiet`. By default it recalculates serially;
-`--threads N` opts into the parallel SCC scheduler (`0` auto-detects, `1`
-stays on the caller thread, and `2..8` sets a worker cap) and reports
-per-pass telemetry in the status line.
+## Switching locale profiles
 
-## Status
+New workbooks use `win-365-en_US`. Formulas are always written with English function names and the stored separators; the profile decides how text is parsed and how results are rendered. Switch it per workbook and recalculate:
 
-**All 523 catalogued Excel functions are recognized**, but recognition is not the same as full Excel-compatible execution. The function catalog exposes availability explicitly; `make function-status` reports the current split.
+```js
+const wb = Module.Workbook.createDefault();
+try {
+  wb.setFormula(0, 0, 0, '=LENB("日本")');  // A1
+  wb.setFormula(0, 1, 0, '=VALUE("1,5")');  // A2
+  wb.setFormula(0, 2, 0, '=ISEVEN(2)');     // A3
 
-The two top-level rows are exclusive and sum to the full 523; the
-environment-bound row is a **subset of the 508 real implementations**, called
-out separately because a fixed golden cannot fully describe it — it is not an
-additional category (508 + 15 = 523, not 525).
+  for (const id of ['mac-365-en_US', 'mac-365-ja_JP', 'mac-365-de_DE']) {
+    wb.setExcelProfileId(id);
+    wb.recalc(); // a profile change marks formulas dirty
+    console.log(id, [0, 1, 2].map((row) => wb.getDisplayText(0, row, 0).text));
+  }
+} finally {
+  wb.delete();
+}
+// mac-365-en_US [ '2', '#VALUE!', 'TRUE' ]
+// mac-365-ja_JP [ '4', '#VALUE!', 'TRUE' ]
+// mac-365-de_DE [ '2', '1,5', 'WAHR' ]
+```
 
-| Availability | Count | Meaning | Examples |
-|--------------|-------|---------|----------|
-| Real implementation | 508 | Evaluates inside the normal calculation engine and is covered by unit and/or oracle tests. | Math, statistics, lookup, text, dynamic arrays |
-| &nbsp;&nbsp;↳ of which environment-bound | 2 | A real implementation whose result depends on host or workbook state, so a fixed golden cannot fully describe it. Counted within the 508 above. | `INFO`, `CELL` |
-| Unavailable stub | 15 | Requires external services, network I/O, COM providers, or OLAP connections that Formulon does not embed; returns a fixed error. | `PY`, `WEBSERVICE`, `STOCKHISTORY`, `IMAGE`, `RTD`, `TRANSLATE`, `DETECTLANGUAGE`, `COPILOT`, `CUBE*` |
+```python
+with formulon.Workbook.create_default() as wb:
+    wb.set_formula(0, 0, 0, '=LENB("日本")')
+    wb.set_formula(0, 1, 0, '=VALUE("1,5")')
+    wb.set_formula(0, 2, 0, "=ISEVEN(2)")
 
-**104 oracle categories** are defined. The formula track regenerates from Mac Excel 365 in each of the seven locales and the conditional-formatting track from Mac Excel 365 ja-JP; the workbook track regenerates from Windows Excel 365 ja-JP, and its goldens carry a capture identifier that pins every suite to a single verified Microsoft 365 session. Current local verification:
+    for profile in ("mac-365-en_US", "mac-365-ja_JP", "mac-365-de_DE"):
+        wb.set_excel_profile_id(profile)
+        wb.recalc()
+        print(profile, [wb.get_display_text(0, row, 0)[0] for row in range(3)])
+```
 
-| Check | Result |
-|-------|--------|
-| `ctest -LE "SLOW\|BENCH\|TSAN"` — `make test`, the PR gate | all passing |
-| `ctest -LE "BENCH\|TSAN"` — `make test-slow`, adds the `SLOW` tier | all passing |
-| Primary formula oracle | `4768/4768` passing, `133` documented skips |
-| Conditional-formatting oracle | `23/23` |
-| Workbook oracle (pivot + print) | `83/83` passing, `10` documented skips |
-| Imported third-party engine corpus (cross-check) | `12510/12510` passing, `168` documented divergences |
+The ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}`. Every `mac-*` profile and `win-365-ja_JP` is measured against Excel; the other `win-*` profiles are estimated from the Mac measurements. The profile is not saved into the file, so store the id your application targets and apply it again after loading.
 
-Three labels partition the CTest suite: `SLOW` (minutes-scale integration and concurrency cases), `TSAN` (thread-sanitizer runs), and `BENCH` (microbenchmark regression checks, whose threshold is tunable, so they run on demand). Everything else is the unlabeled fast tier that CI gates on; there is no separate load-test tier. The libFuzzer harnesses also carry the `SLOW` label, but they exist only in a build configured with `-DFM_BUILD_FUZZ=ON` (`make fuzz`), not in a default build or in CI. They need a Clang that ships the libFuzzer runtime, which the Apple toolchain does not, so macOS needs a separate LLVM. AddressSanitizer is off by default there as well — it deadlocks in its own shadow-memory setup against recent macOS dynamic linkers — so a macOS fuzz run detects crashes, timeouts and undefined behaviour but not heap corruption.
+## Non-goals
 
-Every skip is an explicit divergence, host-service dependency, volatile/environment-bound case, or driver limitation, not a silent stub. Of the 523 catalogued functions, `519` satisfy all six closure conditions (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`); the remaining `4` (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) fail only `behaviors_declared` — their behavior taxonomy is under-specified. `JIS` closes as a declared alias of `DBCS`: Excel rewrites that ja-JP formula-bar spelling before it stores or evaluates a formula, so no oracle case can name it, and the closure harness resolves the alias to the function it defers to rather than taking the declaration on trust.
-
-Beyond formula results, **pivot tables and print areas / pagination** have a dedicated **workbook oracle track**, captured through a WSL2 → Windows COM bridge. Nine of its ten skips are the same Excel quirk: at a print scale or zoom of 50% or less, Excel's page-break preview emits column auto-breaks that do not follow geometric pagination, so the observed break set stops shrinking with the scale and grows again at 25%. Each of those nine records the Microsoft 365 observation it was measured against. The tenth is a smoke case that only checks the case-file shape and has nothing to compare.
-
-New workbooks use the `win-365-en_US` formula profile by default; callers switch with the profile-id API. The 14 ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}`.
-
-| Profile | Basis |
-|---------|-------|
-| `mac-365-<locale>` (all seven locales) | Measured on Mac Excel 365 in that locale; each is a gating oracle suite |
-| `win-365-ja_JP` | Measured on Windows Excel 365 (ja-JP) |
-| `win-365-en_US` (default), `win-365-de_DE`, `win-365-fr_FR`, `win-365-zh_CN`, `win-365-ko_KR`, `win-365-th_TH` | Estimated: the Mac measurement for the locale plus the host differences measured on ja-JP and documented Windows behavior (for example `CHAR` / `CODE` use Windows-1252 on a Windows en-US host). Not captured on Windows; an eventual Windows capture replaces the estimate |
-
-Pick `win-365-ja_JP` or `mac-365-ja_JP` to keep Japanese behavior.
-
-The OOXML reader/writer round-trips sheets, styles, conditional formatting, comments (including threaded comments), hyperlinks, merges, data validations, defined names, tables, pivot tables, images and drawings, and the theme; an MS-XLSB reader/writer covers cell values, styles, cross-sheet 3-D references, cross-workbook references, and common tokenized formulas, with array-constant literals and post-2007 "future function" IDs still limited compared to the OOXML path. Threaded comments, inserted images and typed AutoFilter edits are not written to XLSB. Workbook operations are available through the C ABI and language bindings; the CLI deliberately exposes only `eval`, `recalc`, `dump`, and `paginate`.
-
-Feedback, issue reports, and oracle divergence reports are very welcome.
+VBA execution, legacy `.xls`, chart rendering, Power Query / DAX, pivot cache refresh from source data, live external connections, and a spreadsheet UI are permanently out of scope. See [Non-goals](https://formulon.libraz.net/compatibility/non-goals).
 
 ## Contributing
 
-The fastest way to help right now is to **donate Excel oracle data from your locale**. If you run Excel 365 on Windows, one command (`make oracle-contribute`) drives Excel, captures goldens, and walks you through the PR. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full flow and the rationale for why this is community-driven.
+The most useful contribution is Excel oracle data from your locale, especially from Windows Excel 365: `make oracle-contribute` drives Excel and captures goldens. See [CONTRIBUTING.md](CONTRIBUTING.md) and [Oracle contribution](https://formulon.libraz.net/development/oracle-contribution).
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+[Apache License 2.0](LICENSE). See also [NOTICE](NOTICE).
+
+## Related projects
+
+- [formulon-cell](https://github.com/libraz/formulon-cell) — browser spreadsheet UI built on `@libraz/formulon`
+- [formulon-mcp](https://github.com/libraz/formulon-mcp) — MCP server that gives AI agents workbook tools

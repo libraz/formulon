@@ -5,23 +5,28 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/formulon/blob/main/LICENSE)
 [![Docs](https://img.shields.io/badge/docs-formulon.libraz.net-2563eb)](https://formulon.libraz.net)
 
-Excel 365 calculation engine, compiled to WebAssembly for browsers and
-Node. Evaluates formulas and loads, recalculates, and saves `.xlsx` and
-`.xlsb` workbooks without an Excel installation. It defaults to the
-`win-365-en_US` behavior profile; hosts can select any of the 14
-`{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}` profiles. The
-`mac-*` profiles and `win-365-ja_JP` are measured against Excel; the other
-`win-*` profiles are estimated from the Mac measurements. Results are checked
-against real Excel, and known differences are listed in
-[`tests/divergence.yaml`](https://github.com/libraz/formulon/blob/main/tests/divergence.yaml).
+**Recalculate Excel workbooks and formulas in the browser and Node, with results checked against real Excel 365.**
+The engine is a C++17 core compiled to WebAssembly, so it needs no Excel install, no Windows and no server: a workbook a user opens in the page is calculated on their machine and never uploaded.
 
-## Install
+Known differences from Excel are listed case by case in [`tests/divergence.yaml`](https://github.com/libraz/formulon/blob/main/tests/divergence.yaml), each with a reason and the Excel build it was last verified on.
 
-```sh
-npm install @libraz/formulon
+📖 **[Documentation](https://formulon.libraz.net)** &nbsp;·&nbsp; **[WASM guide](https://formulon.libraz.net/runtimes/wasm)** &nbsp;·&nbsp; **[API](https://formulon.libraz.net/api/wasm)** &nbsp;·&nbsp; **[Demos](https://formulon.libraz.net/demos)**
+
+## What's inside
+
+- **Formula engine** — 526 Excel function names, 511 implemented locally; dynamic arrays, `LET` / `LAMBDA`, and `REGEX*`. [Coverage](https://formulon.libraz.net/compatibility/formula-coverage)
+- **Workbook I/O** — read, recalculate and write `.xlsx` and `.xlsb`, including styles, conditional formatting, tables, pivot tables and print layout. [File formats](https://formulon.libraz.net/compatibility/file-format-support)
+- **Locale profiles** — 14 Excel behavior profiles across seven locales on Mac and Windows hosts. [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
+- **Excel oracle** — formula results are compared bit for bit against goldens captured from Mac Excel 365 in seven locales. [Oracle testing](https://formulon.libraz.net/compatibility/oracle-testing)
+- **Two builds** — a single-threaded default that loads anywhere, and `@libraz/formulon/threads` for parallel recalculation. [Choosing a build](#choosing-a-build)
+
+## Installation
+
+```bash
+npm install @libraz/formulon   # browsers and Node 22+
 ```
 
-Requires Node.js 22 or newer (the package is shipped as ES modules).
+The package is ES modules only and ships its TypeScript declarations.
 
 ## Quick start
 
@@ -29,194 +34,73 @@ Requires Node.js 22 or newer (the package is shipped as ES modules).
 import createFormulon from '@libraz/formulon';
 
 const Module = await createFormulon();
-
-const r = Module.evalFormula('=SUM(1,2,3)');
-console.log(r.value.number); // 6
+console.log(Module.evalFormula('=SUM(1,2,3)').value.number); // 6
 ```
 
-`evalFormula` returns an envelope of the form `{ status, value }`. Excel
-errors (e.g. `#DIV/0!`) are surfaced as a `value.kind === 4` (Error)
-result rather than a failed status; only host-side problems
-(out-of-memory, parser crashes) populate `status.ok === false`.
+Excel errors such as `#DIV/0!` come back as values (`value.kind === 4`); `status.ok === false` is reserved for host-side failures. See [Errors](https://formulon.libraz.net/compatibility/errors).
 
-## Workbook example
+## Recalculate a workbook
 
 ```js
 import createFormulon from '@libraz/formulon';
 import { readFile, writeFile } from 'node:fs/promises';
 
 const Module = await createFormulon();
-
-// Load an existing workbook from disk.
-const bytes = await readFile('input.xlsx');
-const wb = Module.Workbook.loadBytes(bytes);
+const wb = Module.Workbook.loadBytes(await readFile('input.xlsx'));
 try {
-  if (!wb.isValid()) {
-    throw new Error(`load failed: ${Module.lastErrorMessage()}`);
-  }
+  if (!wb.isValid()) throw new Error(Module.lastErrorMessage());
 
-  // Mutate, recalc, save.
-  wb.setNumber(0, 0, 0, 42);          // Sheet1!A1 = 42
-  wb.setFormula(0, 1, 0, '=A1*2');    // Sheet1!A2 = =A1*2
+  wb.setNumber(0, 0, 0, 42);        // Sheet1!A1
+  wb.setFormula(0, 1, 0, '=A1*2');  // Sheet1!A2
   wb.recalc();
-
-  const a2 = wb.getValue(0, 1, 0);
-  console.log(a2.value.number); // 84
+  console.log(wb.getValue(0, 1, 0).value.number); // 84
 
   const saved = wb.save();
-  if (saved.status.ok) {
-    await writeFile('output.xlsx', saved.bytes);
-  }
+  if (saved.status.ok) await writeFile('output.xlsx', saved.bytes);
 } finally {
-  // Always release the native handle.
-  wb.delete();
+  wb.delete(); // workbooks wrap a native handle
 }
 ```
 
-## Choosing a build
+## Switching locale profiles
 
-The package ships two builds of the same API:
+New workbooks use `win-365-en_US`. Formulas are always written with English function names and the stored separators; the profile decides how text is parsed and how results are rendered. Switch it per workbook and recalculate:
+
+```js
+const wb = Module.Workbook.createDefault();
+try {
+  wb.setFormula(0, 0, 0, '=LENB("日本")');  // A1
+  wb.setFormula(0, 1, 0, '=VALUE("1,5")');  // A2
+  wb.setFormula(0, 2, 0, '=ISEVEN(2)');     // A3
+
+  for (const id of ['mac-365-en_US', 'mac-365-ja_JP', 'mac-365-de_DE']) {
+    wb.setExcelProfileId(id);
+    wb.recalc(); // a profile change marks formulas dirty
+    console.log(id, [0, 1, 2].map((row) => wb.getDisplayText(0, row, 0).text));
+  }
+} finally {
+  wb.delete();
+}
+// mac-365-en_US [ '2', '#VALUE!', 'TRUE' ]
+// mac-365-ja_JP [ '4', '#VALUE!', 'TRUE' ]
+// mac-365-de_DE [ '2', '1,5', 'WAHR' ]
+```
+
+The ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}`. Every `mac-*` profile and `win-365-ja_JP` is measured against Excel; the other `win-*` profiles are estimated from the Mac measurements. The profile is not saved into the file, so store the id your application targets and apply it again after loading.
+
+## Choosing a build
 
 | Import | Threads | Hosting requirement |
 | --- | --- | --- |
-| `@libraz/formulon` | none | none; loads in any page, worker, Electron `file://` page, or Node |
-| `@libraz/formulon/threads` | up to 8 Web Workers for `recalcParallel` | a browser page must be cross-origin isolated |
+| `@libraz/formulon` | none; `recalcParallel` runs serially | none; loads in any page, worker, Electron `file://` page, or Node |
+| `@libraz/formulon/threads` | up to 8 workers for `recalcParallel` | a browser page must be cross-origin isolated (COOP / COEP); bundlers need ES module workers |
 
-The default build uses ordinary (non-shared) memory and starts no workers.
-`recalcParallel` is still callable there and runs the pass serially,
-reporting `workerThreadsStarted: 0`.
+Bundler settings for Vite, webpack and esbuild are in [Bundler requirements](https://formulon.libraz.net/runtimes/wasm#bundler-requirements).
 
-The threads build allocates its memory as a `SharedArrayBuffer` and
-pre-spawns its worker pool when the factory is called, so in a browser it
-only loads when the page is served with `Cross-Origin-Opener-Policy:
-same-origin` and `Cross-Origin-Embedder-Policy: require-corp`. Node needs
-no extra setup.
+## Non-goals
 
-```js
-import createFormulon from '@libraz/formulon/threads';
-```
-
-## Bundler integration (Vite, webpack, esbuild)
-
-Each build is an ES module factory plus a companion `.wasm`
-(`formulon.wasm`, or `formulon_threads.wasm` for the threads build).
-Consumer-side concerns worth knowing about:
-
-**1. The threads build needs ES module workers.** Its pthread workers are
-spawned by Emscripten with
-`new Worker(new URL("formulon_threads_core.js", import.meta.url), {type: "module"})`.
-Bundlers default to classic (IIFE) workers and must be told otherwise:
-
-```ts
-// vite.config.ts
-export default defineConfig({
-  worker: { format: 'es' },
-});
-```
-
-webpack 5 picks up the `{type: "module"}` automatically when
-`output.module: true`. esbuild requires `--format=esm` for the worker
-chunk.
-
-**2. Node bridging code is compiled in.** The factory contains a Node
-branch (lazy-loaded `node:module`, plus `node:worker_threads` in the
-threads build) that browser bundlers will warn about as
-"externalised". The warnings are harmless — the branch is dead code at
-runtime in browsers — but if you want to silence them, mark the imports
-external:
-
-```ts
-// vite.config.ts
-export default defineConfig({
-  optimizeDeps: { exclude: ['@libraz/formulon'] },
-  build: {
-    rollupOptions: {
-      external: [/^node:/],
-    },
-  },
-});
-```
-
-If your bundler errors on the `await import("node:...")` form rather
-than just warning, raise the build target to `es2022` so the
-async-function-scoped `await` lexes cleanly:
-
-```ts
-// vite.config.ts
-export default defineConfig({
-  build: { target: 'es2022' },
-});
-```
-
-### Parallel recalculation
-
-`Workbook.recalc()` remains the serial, caller-thread recalculation API.
-`Workbook.recalcParallel(threadCount)` starts workers only in the
-`@libraz/formulon/threads` build; it is synchronous and returns a
-`{ status, stats }` result after all workers have joined. A thread count of
-`0` selects automatic detection capped at 8, `1` keeps all evaluation on the
-caller thread and starts no workers, and `2..8` sets the maximum worker count.
-Values above 8 return a failed status with `kInvalidArgument`.
-
-The five 64-bit scheduler counters in `stats` are surfaced as JavaScript
-`number` values (not `bigint`) and are exact through `Number.MAX_SAFE_INTEGER`
-(`2^53 - 1`). `workerThreadsStarted` and `workerThreadsUsed` report actual
-worker telemetry; the scheduler may use fewer workers than requested.
-
-## API reference
-
-The full TypeScript surface is shipped as `dist/formulon.d.ts` and is the
-authoritative reference. Highlights:
-
-- `createFormulon(opts?)` -- the default export. Returns a Promise
-  resolving to a `FormulonModule`.
-- `Module.evalFormula(formula)` -- one-shot evaluation against a fresh
-  workbook.
-- `Module.Workbook.createDefault() / createEmpty() / loadBytes(bytes)` --
-  factory methods for building or loading a workbook.
-- `Workbook.setNumber / setBool / setText / setBlank / setFormula` --
-  cell mutators.
-- `Workbook.recalc()` -- triggers a serial, full dependency-ordered
-  recalculation.
-- `Workbook.recalcParallel(threadCount)` -- synchronously recalculates with
-  the parallel SCC scheduler and returns status plus telemetry (serial
-  outside the threads build).
-- `Workbook.getValue(sheet, row, col)` -- reads a cached cell value.
-- `Workbook.save()` -- serialises back to an in-memory `.xlsx` byte buffer.
-
-Workbook handles wrap a native pointer; always call `wb.delete()` (in a
-`finally` block) when done.
-
-Two C ABI capabilities are bound in the Python package but not exposed
-here: `fm_workbook_set_iterative_enabled` (toggling iterative calculation
-without re-supplying the existing iteration cap and residual threshold --
-`setIterative(enabled, maxIterations, maxChange)` here always takes all
-three) and `fm_styles_add_batch` (bulk style registration). This is a
-genuine gap, not an intentional exclusion.
-
-## Memory when loading a workbook
-
-Both surfaces inflate each worksheet part into memory whole before
-parsing it (the zip reader caps this at 100 MiB per entry, 256 MiB per
-load); `loadBytes` here then always builds a DOM tree from that buffer.
-The native CLI switches to a streaming parser for worksheets past 256
-KiB instead, which skips building the DOM tree -- that implementation
-costs binary size the WASM budget does not have -- but still holds the
-same inflated XML buffer first. Sheets are read one at a time, so the
-peak is per worksheet, and the practical ceiling here is the 32-bit WASM
-address space. Results are identical either way.
-
-## Project
-
-Documentation — guides, compatibility notes, and the per-runtime API
-reference — is at <https://formulon.libraz.net>, and the
-[demos](https://formulon.libraz.net/demos) run this package in the
-browser. Source, design notes,
-and the oracle test suite live at <https://github.com/libraz/formulon>.
-[formulon-cell](https://github.com/libraz/formulon-cell) is a browser
-spreadsheet UI built on this package; it doubles as an integration test
-and a worked example of embedding the engine.
+VBA execution, legacy `.xls`, chart rendering, Power Query / DAX, pivot cache refresh from source data, live external connections, and a spreadsheet UI are permanently out of scope. See [Non-goals](https://formulon.libraz.net/compatibility/non-goals).
 
 ## License
 
-Apache License 2.0. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
+[Apache License 2.0](./LICENSE). See also [NOTICE](./NOTICE).
