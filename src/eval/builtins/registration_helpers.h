@@ -34,6 +34,7 @@ struct BuiltinRegistration {
   FunctionDef::ResultShape result_shape = FunctionDef::ResultShape::kAuto;
   bool analysis_toolpak_args = false;
   bool atp_omitted_optional_is_na = false;
+  bool last_arg_scalar = false;
 };
 
 /// Marks `def` as a former Analysis-ToolPak function; see
@@ -48,6 +49,15 @@ constexpr BuiltinRegistration analysis_toolpak(BuiltinRegistration def) noexcept
 constexpr BuiltinRegistration analysis_toolpak_no_omitted_default(BuiltinRegistration def) noexcept {
   def.analysis_toolpak_args = true;
   def.atp_omitted_optional_is_na = true;
+  return def;
+}
+
+/// Marks the last argument of a range-aware `def` as a single value; see
+/// `FunctionDef::last_arg_scalar`. An array there lifts the call, so the
+/// result can be an array.
+constexpr BuiltinRegistration scalar_last_arg(BuiltinRegistration def) noexcept {
+  def.last_arg_scalar = true;
+  def.result_shape = FunctionDef::ResultShape::kArray;
   return def;
 }
 
@@ -105,6 +115,7 @@ inline void register_builtin_functions(FunctionRegistry& registry, const Builtin
                           : def.result_shape;
     fn.analysis_toolpak_args = def.analysis_toolpak_args;
     fn.atp_omitted_optional_is_na = def.atp_omitted_optional_is_na;
+    fn.last_arg_scalar = def.last_arg_scalar;
     registry.register_function(fn);
   }
 }

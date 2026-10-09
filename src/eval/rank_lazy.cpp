@@ -18,9 +18,8 @@
 //     accepted (Bool -> 1 / 0, Blank -> 0) but ANY text -- numeric or
 //     not -- yields `#VALUE!`. Mac Excel rejects `=RANK(20, A1:A3,
 //     "0")` even though `"0"` is text-numeric.
-//   * PERCENTRANK's `x` and the shared `significance` slot use the
-//     strict `read_scalar_number` (Bool / Text rejected with `#VALUE!`),
-//     preserving Excel's distinction.
+//   * PERCENTRANK's `x` and `significance` coerce as RANK's `number`
+//     does, and an array in either evaluates the function per element.
 
 #include "eval/rank_lazy.h"
 
@@ -32,6 +31,7 @@
 #include <variant>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
@@ -92,33 +92,13 @@ std::variant<Value, std::vector<double>> collect_rank_array(const parser::AstNod
   return nums;
 }
 
-// Evaluates one AST arg as a scalar number. Errors propagate; Bool,
-// Text, Blank, and any non-numeric kind surface as
-// `Value::error(on_non_numeric)` — callers pass `#VALUE!` for slots
-// where Excel rejects bool coercion (the `number` / `x` arguments),
-// which is the only usage today.
-std::variant<Value, double> read_scalar_number(const parser::AstNode& arg, Arena& arena,
-                                               const FunctionRegistry& registry, const EvalContext& ctx,
-                                               ErrorCode on_non_numeric) {
-  const Value v = eval_node(arg, arena, registry, ctx);
-  if (v.is_error()) {
-    return v;
-  }
-  if (!v.is_number()) {
-    return Value{Value::error(on_non_numeric)};
-  }
-  return v.as_number();
-}
-
 /// Evaluates one AST arg as a scalar number using Excel's lenient
 /// coercion rules: Number passes through; Bool -> 1.0 / 0.0; Blank ->
 /// 0.0; text-numeric is parsed; non-numeric text yields `#VALUE!`;
 /// non-finite numbers yield `#NUM!`. Errors propagate. Used by the
 /// RANK `number` and `order` slots so probes like
 /// `=RANK(TRUE, A1:A3, 1)` and `=RANK("20", A1:A3, 0)` match Mac
-/// Excel 365 ja-JP behaviour. PERCENTRANK keeps the strict
-/// `read_scalar_number` because Mac rejects Bool / Text in its `x`
-/// and `significance` slots.
+/// Excel 365 ja-JP behaviour.
 std::variant<Value, double> coerce_scalar_number(const parser::AstNode& arg, Arena& arena,
                                                  const FunctionRegistry& registry, const EvalContext& ctx) {
   const Value v = eval_node(arg, arena, registry, ctx);
@@ -138,27 +118,6 @@ std::variant<Value, double> coerce_scalar_number(const parser::AstNode& arg, Are
 double truncate_to_significance(double raw, std::int64_t significance) {
   const double mult = std::pow(10.0, static_cast<double>(significance));
   return std::trunc(raw * mult) / mult;
-}
-
-// Extracts and validates the optional `significance` argument shared by
-// PERCENTRANK.INC and PERCENTRANK.EXC. Default is 3; non-numeric ->
-// `#VALUE!`; values < 1 (after truncation toward zero) -> `#NUM!`.
-// Returns the error `Value` on the left of the variant, otherwise the
-// truncated integer significance on the right.
-std::variant<Value, std::int64_t> read_significance(const parser::AstNode& call, Arena& arena,
-                                                    const FunctionRegistry& registry, const EvalContext& ctx) {
-  if (call.as_call_arity() < 3U) {
-    return static_cast<std::int64_t>(3);
-  }
-  auto raw = read_scalar_number(call.as_call_arg(2), arena, registry, ctx, ErrorCode::Value);
-  if (std::holds_alternative<Value>(raw)) {
-    return std::get<Value>(raw);
-  }
-  const double sig_d = std::trunc(std::get<double>(raw));
-  if (sig_d < 1.0 || sig_d > static_cast<double>(std::numeric_limits<std::int64_t>::max())) {
-    return Value{Value::error(ErrorCode::Num)};
-  }
-  return static_cast<std::int64_t>(sig_d);
 }
 
 // Shared RANK front-end: decode (number, ref, [order]) arguments,
@@ -294,42 +253,6 @@ Value eval_rank_avg_lazy(const parser::AstNode& call, Arena& arena, const Functi
 
 namespace {
 
-// Shared PERCENTRANK front-end: decode (array, x, [significance]),
-// propagate errors, collect the array, sort ascending, validate the
-// significance, and hand back the pieces the two variants need.
-struct PercentRankInputs {
-  double x;
-  std::int64_t significance;
-  std::vector<double> sorted;
-};
-
-std::variant<Value, PercentRankInputs> prepare_percentrank(const parser::AstNode& call, Arena& arena,
-                                                           const FunctionRegistry& registry, const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 2U || arity > 3U) {
-    return Value{Value::error(ErrorCode::Value)};
-  }
-  // Argument 0: the array.
-  auto arr = collect_rank_array(call.as_call_arg(0), arena, registry, ctx);
-  if (std::holds_alternative<Value>(arr)) {
-    return std::get<Value>(arr);
-  }
-  // Argument 1: `x`. Non-numeric -> #VALUE!.
-  auto x = read_scalar_number(call.as_call_arg(1), arena, registry, ctx, ErrorCode::Value);
-  if (std::holds_alternative<Value>(x)) {
-    return std::get<Value>(x);
-  }
-  // Argument 2 (optional): `significance`.
-  auto sig = read_significance(call, arena, registry, ctx);
-  if (std::holds_alternative<Value>(sig)) {
-    return std::get<Value>(sig);
-  }
-  PercentRankInputs out{std::get<double>(x), std::get<std::int64_t>(sig),
-                        std::move(std::get<std::vector<double>>(arr))};
-  std::sort(out.sorted.begin(), out.sorted.end());
-  return out;
-}
-
 // Finds the highest index k with sorted[k] <= x. Requires a non-empty
 // `sorted` with `sorted.front() <= x`.
 std::size_t percentrank_floor_index(const std::vector<double>& sorted, double x) {
@@ -344,31 +267,47 @@ std::size_t percentrank_floor_index(const std::vector<double>& sorted, double x)
   return k;
 }
 
-// Shared body of PERCENTRANK.INC / .EXC. The inclusive form ranks exact
-// matches at k / (N - 1); the exclusive one uses 1-based positions over
-// (N + 1), so an exact match at sorted[k] yields (k + 1) / (N + 1).
-Value percentrank_impl(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                       const EvalContext& ctx, bool exclusive) {
-  auto prepared = prepare_percentrank(call, arena, registry, ctx);
-  if (std::holds_alternative<Value>(prepared)) {
-    return std::get<Value>(prepared);
+// PERCENTRANK.INC / .EXC of one `x` at one `significance` over the sorted
+// numeric array. The inclusive form ranks exact matches at k / (N - 1); the
+// exclusive one uses 1-based positions over (N + 1), so an exact match at
+// sorted[k] yields (k + 1) / (N + 1).
+Value percentrank_cell(const std::vector<double>& sorted, const Value& x_v, const Value& sig_v, bool exclusive) {
+  if (x_v.is_error()) {
+    return x_v;
   }
-  const PercentRankInputs& in = std::get<PercentRankInputs>(prepared);
-  const std::size_t n = in.sorted.size();
+  const auto x_or = coerce_to_number(x_v);
+  if (!x_or) {
+    return Value::error(x_or.error());
+  }
+  if (sig_v.is_error()) {
+    return sig_v;
+  }
+  const auto sig_or = coerce_to_number(sig_v);
+  if (!sig_or) {
+    return Value::error(sig_or.error());
+  }
+  // Significance truncates toward zero and must be at least 1.
+  const double sig_d = std::trunc(sig_or.value());
+  if (!(sig_d >= 1.0) || sig_d > static_cast<double>(std::numeric_limits<std::int64_t>::max())) {
+    return Value::error(ErrorCode::Num);
+  }
+  const auto significance = static_cast<std::int64_t>(sig_d);
+  const double x = x_or.value();
+  const std::size_t n = sorted.size();
   // Excel returns #N/A for an empty array, and for the inclusive form also
   // for a single numeric cell (the `(N - 1)` divisor collapses).
   if (n < (exclusive ? 1U : 2U)) {
     return Value::error(ErrorCode::NA);
   }
-  if (in.x < in.sorted.front() || in.x > in.sorted.back()) {
+  if (x < sorted.front() || x > sorted.back()) {
     return Value::error(ErrorCode::NA);
   }
-  std::size_t k = percentrank_floor_index(in.sorted, in.x);
-  const bool exact = in.sorted[k] == in.x;
+  std::size_t k = percentrank_floor_index(sorted, x);
+  const bool exact = sorted[k] == x;
   // An exact match reports the lowest rank of a duplicate run; an
   // interpolated x keeps the run's last index as its anchor.
   if (exact) {
-    while (k > 0U && in.sorted[k - 1U] == in.sorted[k]) {
+    while (k > 0U && sorted[k - 1U] == sorted[k]) {
       --k;
     }
   }
@@ -380,11 +319,67 @@ Value percentrank_impl(const parser::AstNode& call, Arena& arena, const Function
   } else {
     // Interpolate between sorted[k] and sorted[k + 1]. The outer range
     // check above guarantees k + 1 < n here.
-    const double span = in.sorted[k + 1U] - in.sorted[k];
-    raw = (static_cast<double>(pos) + (in.x - in.sorted[k]) / span) / denom;
+    const double span = sorted[k + 1U] - sorted[k];
+    raw = (static_cast<double>(pos) + (x - sorted[k]) / span) / denom;
   }
-  const double result = truncate_to_significance(raw, in.significance);
+  const double result = truncate_to_significance(raw, significance);
   return std::isfinite(result) ? Value::number(result) : Value::error(ErrorCode::Num);
+}
+
+// Element (r, c) of `v` under 1xN / Nx1 broadcasting; a scalar supplies
+// every cell and an array too small for the cell gives #N/A.
+Value broadcast_at(const Value& v, std::uint32_t r, std::uint32_t c) {
+  if (!v.is_array()) {
+    return v;
+  }
+  const ArrayValue* a = v.as_array();
+  const std::uint32_t ri = a->rows == 1U ? 0U : r;
+  const std::uint32_t ci = a->cols == 1U ? 0U : c;
+  if (ri >= a->rows || ci >= a->cols) {
+    return Value::error(ErrorCode::NA);
+  }
+  return a->cells[static_cast<std::size_t>(ri) * a->cols + ci];
+}
+
+// Shared body of PERCENTRANK.INC / .EXC: (array, x, [significance]), with
+// an array `x` or `significance` evaluated per element.
+Value percentrank_impl(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx, bool exclusive) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 2U || arity > 3U) {
+    return Value::error(ErrorCode::Value);
+  }
+  auto arr = collect_rank_array(call.as_call_arg(0), arena, registry, ctx);
+  if (std::holds_alternative<Value>(arr)) {
+    return std::get<Value>(arr);
+  }
+  std::vector<double>& sorted = std::get<std::vector<double>>(arr);
+  std::sort(sorted.begin(), sorted.end());
+  const Value x_v = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  const Value sig_v = arity == 3U ? eval_node(call.as_call_arg(2), arena, registry, ctx) : Value::number(3.0);
+  if (!x_v.is_array() && !sig_v.is_array()) {
+    return percentrank_cell(sorted, x_v, sig_v, exclusive);
+  }
+  std::uint32_t rows = 1U;
+  std::uint32_t cols = 1U;
+  for (const Value* v : {&x_v, &sig_v}) {
+    if (v->is_array()) {
+      rows = std::max(rows, v->as_array()->rows);
+      cols = std::max(cols, v->as_array()->cols);
+    }
+  }
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(rows, cols, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::uint32_t r = 0; r < rows; ++r) {
+    for (std::uint32_t c = 0; c < cols; ++c) {
+      cells[static_cast<std::size_t>(r) * cols + c] =
+          percentrank_cell(sorted, broadcast_at(x_v, r, c), broadcast_at(sig_v, r, c), exclusive);
+    }
+  }
+  return rows == 1U && cols == 1U ? cells[0] : Value::array(out);
 }
 
 }  // namespace

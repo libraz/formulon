@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "auto_filter.h"
+#include "eval/array_alloc.h"
 #include "eval/builtin_names.h"
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/subtotal.h"
@@ -19,6 +20,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
+#include "eval/tree_walker/dispatch.h"
 #include "numeric_aggregate_kernels.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -70,9 +72,7 @@ constexpr int kFnKArgFirst = 14;  // 14..19 take a trailing k arg.
 // `0.0`-on-error sentinel, which collided with legitimate zero
 // arguments (e.g. `AGGREGATE(2, 0, range)` -> COUNT mode + clear-flags
 // option) and risked silent-wrong-result bugs.
-Expected<double, ErrorCode> read_scalar(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                                        const EvalContext& ctx) {
-  const Value v = eval_node(node, arena, registry, ctx);
+Expected<double, ErrorCode> scalar_number(const Value& v) {
   if (v.is_error()) {
     return v.as_error();
   }
@@ -85,6 +85,11 @@ Expected<double, ErrorCode> read_scalar(const parser::AstNode& node, Arena& aren
     return ErrorCode::Num;
   }
   return x;
+}
+
+Expected<double, ErrorCode> read_scalar(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                                        const EvalContext& ctx) {
+  return scalar_number(eval_node(node, arena, registry, ctx));
 }
 
 // --- Row visibility ------------------------------------------------------
@@ -385,6 +390,16 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
   const parser::AstNode& node = resolve_range_binding(arg_node, ctx.name_env(), /*accept_ref=*/false);
   const parser::NodeKind k = node.kind();
 
+  if (k == parser::NodeKind::UnionOp) {
+    for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+      if (!collect_arg(node.as_union_child(i), arena, registry, ctx, scope, out_cells, out_hidden, out_nested,
+                       out_err)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   // Range / Ref / SpillRef / RangeOp -> use the canonical resolver.
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::SpillRef) {
     auto resolved = resolve_range_arg(node, arena, registry, ctx);
@@ -630,6 +645,21 @@ bool subtotal_code_skips_hidden(double raw) noexcept {
   return std::isfinite(raw) && raw >= 101.0 && raw < 112.0;
 }
 
+// `fn` applied to each element of `in`, keeping its shape; 1x1 unwraps.
+template <typename Fn>
+Value map_array(const ArrayValue& in, const Fn& fn, Arena& arena) {
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(in.rows, in.cols, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const std::size_t n = static_cast<std::size_t>(in.rows) * in.cols;
+  for (std::size_t i = 0; i < n; ++i) {
+    cells[i] = fn(in.cells[i]);
+  }
+  return n == 1U ? cells[0] : Value::array(out);
+}
+
 }  // namespace
 
 Value eval_subtotal_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -724,35 +754,50 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
       return err;
     }
     // k is a scalar metadata arg: errors propagate regardless of the
-    // options bit (matches the function_num / options contract).
-    auto k_raw_or = read_scalar(call.as_call_arg(3), arena, registry, ctx);
-    if (!k_raw_or) {
-      return Value::error(k_raw_or.error());
-    }
-    const double k_raw = k_raw_or.value();
-    std::vector<double> xs = to_numbers(cells);
-    switch (code) {
-      case kCodeLarge:
-        return run_large_small(std::move(xs), k_raw, /*want_large=*/true);
-      case kCodeSmall:
-        return run_large_small(std::move(xs), k_raw, /*want_large=*/false);
-      case kCodePercentileInc:
-        return run_percentile_inc(std::move(xs), k_raw);
-      case kCodeQuartileInc:
-        return run_quartile_inc(std::move(xs), k_raw);
-      case kCodePercentileExc:
-        return run_percentile_exc(std::move(xs), k_raw);
-      case kCodeQuartileExc:
-        return run_quartile_exc(std::move(xs), k_raw);
-      default:
-        // Unreachable: code is constrained to [14, 19] in this branch.
-        return Value::error(ErrorCode::Value);
-    }
+    // options bit (matches the function_num / options contract). An array k
+    // evaluates the function once per element.
+    const std::vector<double> xs = to_numbers(cells);
+    const auto at_k = [&](const Value& k_value) -> Value {
+      auto k_raw_or = scalar_number(k_value);
+      if (!k_raw_or) {
+        return Value::error(k_raw_or.error());
+      }
+      const double k_raw = k_raw_or.value();
+      switch (code) {
+        case kCodeLarge:
+          return run_large_small(xs, k_raw, /*want_large=*/true);
+        case kCodeSmall:
+          return run_large_small(xs, k_raw, /*want_large=*/false);
+        case kCodePercentileInc:
+          return run_percentile_inc(xs, k_raw);
+        case kCodeQuartileInc:
+          return run_quartile_inc(xs, k_raw);
+        case kCodePercentileExc:
+          return run_percentile_exc(xs, k_raw);
+        case kCodeQuartileExc:
+          return run_quartile_exc(xs, k_raw);
+        default:
+          // Unreachable: code is constrained to [14, 19] in this branch.
+          return Value::error(ErrorCode::Value);
+      }
+    };
+    const Value k_value = eval_node(call.as_call_arg(3), arena, registry, ctx);
+    return k_value.is_array() ? map_array(*k_value.as_array(), at_k, arena) : at_k(k_value);
   }
 
-  // Codes 1..13 — every remaining positional arg is data.
+  // Codes 1..13 take references only: a value argument is #VALUE!, and an
+  // array fourth argument evaluates the call per element, each one a value.
   for (std::uint32_t i = 2; i < arity; ++i) {
-    if (!collect_arg(call.as_call_arg(i), arena, registry, ctx, HiddenScope::kAll, &cells, &hidden, nested_out, &err)) {
+    const parser::AstNode& arg = call.as_call_arg(i);
+    const parser::AstNode* ref = is_reference_shape(arg) ? &arg : resolve_binding_reference(arg, arena, registry, ctx);
+    if (ref == nullptr) {
+      const Value v = i == 3U ? eval_node(arg, arena, registry, ctx) : Value::blank();
+      if (v.is_array()) {
+        return map_array(*v.as_array(), [](const Value&) { return Value::error(ErrorCode::Value); }, arena);
+      }
+      return Value::error(ErrorCode::Value);
+    }
+    if (!collect_arg(*ref, arena, registry, ctx, HiddenScope::kAll, &cells, &hidden, nested_out, &err)) {
       return err;
     }
   }

@@ -85,7 +85,7 @@ Expected<double, ErrorCode> run_average(const std::vector<double>& xs) {
   }
   double total = 0.0;
   for (double x : xs) {
-    total += x;
+    total = snapped_add(total, x);
   }
   const double avg = total / static_cast<double>(xs.size());
   if (!std::isfinite(avg)) {
@@ -204,17 +204,12 @@ Expected<double, ErrorCode> percentile_sorted_exc(const std::vector<double>& xs_
     return ErrorCode::Num;
   }
   const std::size_t n = xs_sorted.size();
-  // 1-based position formula `pos = k*(n+1)`. The exclusive method
-  // rejects positions whose integer floor is outside `[1, n-1]` (i.e.
-  // `idx < 1 || idx >= n`), matching Mac Excel 365: at the upper
-  // boundary `pos == n` (e.g. n=3, k=0.75) the integer floor is `n`
-  // itself, which the strict `idx >= n` test rejects. The earlier
-  // double-precision `pos > n` test let those boundary inputs through
-  // and returned the last element instead of `#NUM!`.
+  // 1-based position `pos = k*(n+1)` must lie in [1, n]; Mac Excel 365
+  // accepts both ends exactly (PERCENTILE.EXC({1,2,3},0.75) is 3).
   const double pos = k * static_cast<double>(n + 1);
   const double floor_pos = std::floor(pos);
   const auto idx = static_cast<std::int64_t>(floor_pos);  // 1-based; xs[idx-1] is the lower neighbour.
-  if (idx < 1 || idx >= static_cast<std::int64_t>(n)) {
+  if (idx < 1 || pos > static_cast<double>(n)) {
     return ErrorCode::Num;
   }
   const auto lo_index = static_cast<std::size_t>(idx - 1);

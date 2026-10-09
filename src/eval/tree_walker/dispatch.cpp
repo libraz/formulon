@@ -236,6 +236,28 @@ Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& ar
   return Value::array(out);
 }
 
+// Evaluates a `last_arg_scalar` function once per element of `last`, the
+// array its last argument evaluated to, with `values` holding the other
+// arguments. A 1x1 result unwraps to a scalar.
+Value lift_last_arg_call(const FunctionDef& def, std::vector<Value> values, const ArrayValue& last, Arena& arena) {
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(last.rows, last.cols, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const std::size_t n = static_cast<std::size_t>(last.rows) * last.cols;
+  for (std::size_t i = 0; i < n; ++i) {
+    values.back() = last.cells[i];
+    cells[i] = def.propagate_errors && last.cells[i].is_error()
+                   ? last.cells[i]
+                   : def.impl(values.data(), static_cast<std::uint32_t>(values.size()), arena);
+  }
+  if (n == 1U) {
+    return cells[0];
+  }
+  return Value::array(out);
+}
+
 // `broadcast_scalar_call` for arguments of which `tails[i]` (when non-null) is
 // a whole column / row standing in for `args[i]`. Arguments on one axis give a
 // `TailArray`: the function is applied to the head cells and once to the tail
@@ -510,6 +532,9 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   // Set once a direct text literal that does not coerce to a number has been
   // seen by a numeric or A-family aggregator.
   bool literal_text_not_numeric = false;
+  // The array a `last_arg_scalar` function's last argument evaluated to; the
+  // call is then evaluated once per element.
+  const ArrayValue* lifted_last_arg = nullptr;
   const std::uint32_t evaluated_arity = def->analysis_toolpak_args && !def->atp_omitted_optional_is_na
                                             ? atp_evaluated_arity(node, def->min_arity, def->max_arity)
                                             : arity;
@@ -522,6 +547,17 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     // Substitute only when the resolved AST is genuinely range-shaped so
     // that a NameRef bound to a scalar (or a single-cell Ref) continues to
     // flow through the existing scalar branch with its original provenance.
+    if (def->last_arg_scalar && i > 0U && i + 1U == evaluated_arity) {
+      const Value v = densify(eval_node_shaped(raw_arg, arena, registry, ctx), arena);
+      if (def->propagate_errors && v.is_error()) {
+        return literal_text_not_numeric ? Value::error(ErrorCode::Value) : v;
+      }
+      if (v.is_array()) {
+        lifted_last_arg = v.as_array();
+      }
+      values.push_back(v);
+      continue;
+    }
     const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
     // Minimal array-literal support: when a range-aware function receives
     // a `{a;b;c}` style literal, flatten it in row-major order exactly like
@@ -1108,6 +1144,9 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     if (any_array) {
       return broadcast_scalar_call(*def, values, out_rows, out_cols, arena);
     }
+  }
+  if (lifted_last_arg != nullptr) {
+    return lift_last_arg_call(*def, values, *lifted_last_arg, arena);
   }
   // Hand the post-expansion size to the impl; aggregator bodies walk the
   // flattened vector directly.

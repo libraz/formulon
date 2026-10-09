@@ -57,7 +57,8 @@ Value eval_rank_avg_lazy(const parser::AstNode& call, Arena& arena, const Functi
 /// shares this impl. The default `significance` is 3; values < 1 yield
 /// `#NUM!`; non-integer `significance` is truncated toward zero. An
 /// array with fewer than two numeric cells yields `#N/A`. `x` outside
-/// `[min, max]` yields `#N/A`.
+/// `[min, max]` yields `#N/A`. `x` and `significance` coerce as direct
+/// arguments, and an array in either evaluates the function per element.
 Value eval_percentrank_inc_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                                 const EvalContext& ctx);
 

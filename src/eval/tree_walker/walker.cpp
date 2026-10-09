@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -614,8 +615,52 @@ Value first_element(const Shaped& s) {
   return implicit_intersect_value(s.value);
 }
 
+// Operand of a broadcast binary op at output cell (r, c), coerced to a
+// number; empty when the operand cannot supply that cell or is not numeric.
+std::optional<double> broadcast_operand_number(const Value& v, std::uint32_t r, std::uint32_t c) {
+  if (!v.is_array()) {
+    const auto n = coerce_to_number(v);
+    return n ? std::optional<double>(n.value()) : std::nullopt;
+  }
+  const ArrayValue* a = v.as_array();
+  const std::uint32_t ri = a->rows == 1U ? 0U : r;
+  const std::uint32_t ci = a->cols == 1U ? 0U : c;
+  if (ri >= a->rows || ci >= a->cols) {
+    return std::nullopt;
+  }
+  const auto n = coerce_to_number(a->cells[static_cast<std::size_t>(ri) * a->cols + ci]);
+  return n ? std::optional<double>(n.value()) : std::nullopt;
+}
+
+// `out` with the cancellation snap applied to each numeric cell of an
+// array-valued `+` / `-` result.
+Value snap_array_result(const Value& out, const Value& lhs, const Value& rhs, Arena& arena) {
+  const ArrayValue* src = out.as_array();
+  Value* cells = nullptr;
+  ArrayValue* snapped = allocate_array_value(src->rows, src->cols, arena, cells, kMaxDerivedArrayCells);
+  if (snapped == nullptr) {
+    return out;
+  }
+  for (std::uint32_t r = 0; r < src->rows; ++r) {
+    for (std::uint32_t c = 0; c < src->cols; ++c) {
+      const std::size_t i = static_cast<std::size_t>(r) * src->cols + c;
+      cells[i] = src->cells[i];
+      if (!cells[i].is_number()) {
+        continue;
+      }
+      const std::optional<double> a = broadcast_operand_number(lhs, r, c);
+      const std::optional<double> b = broadcast_operand_number(rhs, r, c);
+      if (a && b) {
+        cells[i] = Value::number(snap_cancellation(*a, *b, cells[i].as_number()));
+      }
+    }
+  }
+  return Value::array(snapped);
+}
+
 // A binary operator node. `snap_cancellation_result` applies Excel's
-// near-zero cancellation snap to a scalar `+` / `-` result.
+// near-zero cancellation snap to a `+` / `-` result, cell by cell when it is
+// an array.
 Shaped eval_binary_op(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx, bool snap_cancellation_result) {
   const parser::BinOp op = node.as_binary_op();
@@ -633,12 +678,17 @@ Shaped eval_binary_op(const parser::AstNode& node, Arena& arena, const FunctionR
   // TRANSPOSE, SEQUENCE, a whole column / row, ...); two scalars take
   // the per-cell fast path.
   Shaped out = broadcast_binop(op, lhs, rhs, arena);
-  if (snap_cancellation_result && out.tail_array == nullptr && out.value.is_number() && lhs.tail_array == nullptr &&
-      rhs.tail_array == nullptr && !lhs.value.is_array() && !rhs.value.is_array()) {
-    const auto a = coerce_to_number(lhs.value);
-    const auto b = coerce_to_number(rhs.value);
+  if (!snap_cancellation_result || out.tail_array != nullptr || lhs.tail_array != nullptr ||
+      rhs.tail_array != nullptr) {
+    return out;
+  }
+  if (out.value.is_array()) {
+    out.value = snap_array_result(out.value, lhs.value, rhs.value, arena);
+  } else if (out.value.is_number()) {
+    const std::optional<double> a = broadcast_operand_number(lhs.value, 0U, 0U);
+    const std::optional<double> b = broadcast_operand_number(rhs.value, 0U, 0U);
     if (a && b) {
-      out.value = Value::number(snap_cancellation(a.value(), b.value(), out.value.as_number()));
+      out.value = Value::number(snap_cancellation(*a, *b, out.value.as_number()));
     }
   }
   return out;

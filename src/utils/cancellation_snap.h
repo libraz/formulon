@@ -2,8 +2,9 @@
 // Excel's near-zero cancellation snap: an addition or subtraction whose
 // result is within 2^-50 of its larger operand's magnitude reports exactly 0
 // (`=0.5-0.4-0.1` is 0, not -2.78E-17). Excel applies it to the root `+` / `-`
-// of a cell formula and to each step of the SUM / AVERAGE / SUBTOTAL(9)
-// accumulation; nowhere else (pinned by Mac Excel 365 measurement).
+// of a cell formula (element-wise on an array result) and to each step of the
+// SUM / AVERAGE / AVERAGEA accumulation, SUBTOTAL and AGGREGATE included; the
+// *IF(S) family, D-functions and SUMPRODUCT keep the residue (Mac Excel 365).
 
 #ifndef FORMULON_UTILS_CANCELLATION_SNAP_H_
 #define FORMULON_UTILS_CANCELLATION_SNAP_H_

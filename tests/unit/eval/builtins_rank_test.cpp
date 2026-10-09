@@ -286,6 +286,36 @@ TEST(BuiltinsRank, PercentRankInterpolatesPastADuplicateRun) {
   EXPECT_DOUBLE_EQ(exc.as_number(), 0.829);
 }
 
+// PERCENTRANK's x and significance coerce as direct arguments, and an array
+// in either evaluates per element (Mac Excel 365).
+TEST(BuiltinsRank, PercentRankCoercesXAndSignificance) {
+  struct Case {
+    const char* source;
+    double expected;
+  };
+  for (const Case& c :
+       {Case{"=PERCENTRANK({0,1,2},TRUE)", 0.5}, Case{"=PERCENTRANK.INC({10,20,30,40},\"20\")", 0.333},
+        Case{"=PERCENTRANK.INC({10,20,30,40},25,TRUE)", 0.5}, Case{"=PERCENTRANK.EXC({0,1,2},TRUE)", 0.5}}) {
+    const Value v = EvalSource(c.source);
+    ASSERT_TRUE(v.is_number()) << c.source << ": " << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), c.expected) << c.source;
+  }
+  const Value text = EvalSource("=PERCENTRANK({0,1,2},\"x\")");
+  ASSERT_TRUE(text.is_error());
+  EXPECT_EQ(text.as_error(), ErrorCode::Value);
+  const Value zero_sig = EvalSource("=PERCENTRANK({0,1,2},1,0)");
+  ASSERT_TRUE(zero_sig.is_error());
+  EXPECT_EQ(zero_sig.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsRank, PercentRankArrayXEvaluatesPerElement) {
+  const Value v = EvalSource("=PERCENTRANK.INC({10,20,30,40,50,60,70},{10,35})");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array()->cols, 2U);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[1].as_number(), 0.416);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

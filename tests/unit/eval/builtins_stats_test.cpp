@@ -893,6 +893,72 @@ TEST(BuiltinsStatsEdges, TInvRoundTripsAnExtremeLeftTail) {
   EXPECT_NEAR(v.as_number(), -1000000.0000000001, 1e-6);
 }
 
+// The k of LARGE / SMALL / PERCENTILE / QUARTILE / TRIMMEAN is a single value:
+// a cell reference there coerces as a direct argument instead of being
+// filtered like the data range (Mac Excel 365).
+TEST(BuiltinsStatsScalarArg, CellKCoercesAsADirectArgument) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  for (std::uint32_t i = 0; i < 7U; ++i) {
+    s.set_cell_value(i, 0, Value::number(10.0 * (i + 1)));
+  }
+  s.set_cell_value(0, 1, Value::boolean(true));
+  s.set_cell_value(1, 1, Value::text("0.4"));
+  s.set_cell_value(2, 1, Value::text("abc"));
+  struct Case {
+    const char* source;
+    double expected;
+  };
+  for (const Case& c : {Case{"=LARGE(A1:A7,B1)", 70.0}, Case{"=SMALL(A1:A7,B1)", 10.0},
+                        Case{"=QUARTILE.EXC(A1:A7,B1)", 20.0}, Case{"=PERCENTILE.EXC(A1:A7,B2)", 32.0},
+                        Case{"=PERCENTILE.INC(A1:A7,B2)", 34.0}, Case{"=TRIMMEAN(A1:A7,B4)", 40.0}}) {
+    const Value v = EvalSourceIn(c.source, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << c.source << ": " << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), c.expected) << c.source;
+  }
+  for (const char* source : {"=LARGE(A1:A7,B3)", "=SMALL(A1:A7,B3)", "=PERCENTILE.EXC(A1:A7,B3)"}) {
+    const Value v = EvalSourceIn(source, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_error()) << source;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << source;
+  }
+}
+
+TEST(BuiltinsStatsScalarArg, ArrayKEvaluatesPerElement) {
+  const Value large = EvalSource("=LARGE({10;20;30;40},{1,2})");
+  ASSERT_TRUE(large.is_array()) << large.debug_to_string();
+  ASSERT_EQ(large.as_array()->rows, 1U);
+  ASSERT_EQ(large.as_array()->cols, 2U);
+  EXPECT_DOUBLE_EQ(large.as_array()->cells[0].as_number(), 40.0);
+  EXPECT_DOUBLE_EQ(large.as_array()->cells[1].as_number(), 30.0);
+  const Value pct = EvalSource("=PERCENTILE.INC({10;20;30},{0;2})");
+  ASSERT_TRUE(pct.is_array()) << pct.debug_to_string();
+  EXPECT_DOUBLE_EQ(pct.as_array()->cells[0].as_number(), 10.0);
+  EXPECT_EQ(pct.as_array()->cells[1].as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsStatsScalarArg, PercentileExcAcceptsBothEndsOfThePosition) {
+  struct Case {
+    const char* source;
+    double expected;
+  };
+  for (const Case& c : {Case{"=PERCENTILE.EXC({1,2,3},0.75)", 3.0}, Case{"=PERCENTILE.EXC({1,2,3},0.25)", 1.0},
+                        Case{"=QUARTILE.EXC({10},2)", 10.0}, Case{"=PERCENTILE.EXC({10,20},2/3)", 20.0}}) {
+    const Value v = EvalSource(c.source);
+    ASSERT_TRUE(v.is_number()) << c.source << ": " << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), c.expected) << c.source;
+  }
+  const Value past = EvalSource("=PERCENTILE.EXC({10},0.501)");
+  ASSERT_TRUE(past.is_error());
+  EXPECT_EQ(past.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsStatsScalarArg, AverageASnapsCancellation) {
+  const Value v = EvalSource("=AVERAGEA(0.5,-0.4,-0.1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+  EXPECT_FALSE(std::signbit(v.as_number()));
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -42,6 +42,7 @@
 #include "eval/function_registry.h"
 #include "numeric_aggregate_kernels.h"
 #include "utils/arena.h"
+#include "utils/cancellation_snap.h"
 #include "utils/index_sort.h"
 #include "value.h"
 
@@ -377,7 +378,7 @@ static Value AverageA(const Value* args, std::uint32_t arity, Arena& /*arena*/) 
   }
   double total = 0.0;
   for (double x : xs) {
-    total += x;
+    total = snapped_add(total, x);
   }
   const double r = total / static_cast<double>(xs.size());
   return finite_number_result(r);
@@ -434,14 +435,15 @@ void register_stats_builtins(FunctionRegistry& registry) {
       {"MODE.SNGL", 1u, kVariadic, &stats_detail::Mode, true, true, true},
       {"MODE.MULT", 1u, kVariadic, &stats_detail::ModeMult, true, true, true, false, false,
        FunctionDef::BlankScalarPolicy::Allow, ErrorCode::Value, FunctionDef::ResultShape::kArray},
-      {"LARGE", 2u, kVariadic, &stats_detail::Large, true, true, true},
-      {"SMALL", 2u, kVariadic, &stats_detail::Small, true, true, true},
-      {"PERCENTILE.INC", 2u, kVariadic, &stats_detail::PercentileInc, true, true},
-      {"PERCENTILE", 2u, kVariadic, &stats_detail::PercentileInc, true, true},
-      {"PERCENTILE.EXC", 2u, kVariadic, &stats_detail::PercentileExc, true, true, true},
-      {"QUARTILE.INC", 2u, kVariadic, &stats_detail::QuartileInc, true, true},
-      {"QUARTILE", 2u, kVariadic, &stats_detail::QuartileInc, true, true},
-      {"QUARTILE.EXC", 2u, kVariadic, &stats_detail::QuartileExc, true, true, true},
+      builtins_detail::scalar_last_arg({"LARGE", 2u, kVariadic, &stats_detail::Large, true, true, true}),
+      builtins_detail::scalar_last_arg({"SMALL", 2u, kVariadic, &stats_detail::Small, true, true, true}),
+      builtins_detail::scalar_last_arg({"PERCENTILE.INC", 2u, kVariadic, &stats_detail::PercentileInc, true, true}),
+      builtins_detail::scalar_last_arg({"PERCENTILE", 2u, kVariadic, &stats_detail::PercentileInc, true, true}),
+      builtins_detail::scalar_last_arg(
+          {"PERCENTILE.EXC", 2u, kVariadic, &stats_detail::PercentileExc, true, true, true}),
+      builtins_detail::scalar_last_arg({"QUARTILE.INC", 2u, kVariadic, &stats_detail::QuartileInc, true, true}),
+      builtins_detail::scalar_last_arg({"QUARTILE", 2u, kVariadic, &stats_detail::QuartileInc, true, true}),
+      builtins_detail::scalar_last_arg({"QUARTILE.EXC", 2u, kVariadic, &stats_detail::QuartileExc, true, true, true}),
       // range_filter_numeric_only = true: a range/array-sourced Bool or
       // Text cell is dropped, but a direct Bool/numeric-Text argument
       // still coerces via `collect_direct_stats` -- Microsoft's
@@ -465,7 +467,7 @@ void register_stats_builtins(FunctionRegistry& registry) {
       {"HARMEAN", 1u, kVariadic, &stats_detail::HarMean, true, true, true},
       {"DEVSQ", 1u, kVariadic, &stats_detail::DevSq, true, true, true},
       {"AVEDEV", 1u, kVariadic, &stats_detail::AveDev, true, true, true},
-      {"TRIMMEAN", 2u, kVariadic, &stats_detail::TrimMean, true, true},
+      builtins_detail::scalar_last_arg({"TRIMMEAN", 2u, kVariadic, &stats_detail::TrimMean, true, true}),
       {"SKEW", 1u, kVariadic, &stats_detail::Skew, true, true, true},
       {"SKEW.P", 1u, kVariadic, &stats_detail::SkewP, true, true, true},
       {"KURT", 1u, kVariadic, &stats_detail::Kurt, true, true, true},

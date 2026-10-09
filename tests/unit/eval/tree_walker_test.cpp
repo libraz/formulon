@@ -214,6 +214,20 @@ TEST(TreeWalkerArith, CancellationKeptOffRootOrAboveThreshold) {
   EXPECT_FALSE(cmp.as_boolean());
 }
 
+TEST(TreeWalkerArith, RootCancellationSnapsEachArrayCell) {
+  const Value v = EvalSource("={0.5;1}-0.4-0.1");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array()->cells[0].as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[1].as_number(), 0.5);
+  // A 1x1 array result: the cell shows its only element.
+  const Value one = EvalSource("={0.5}*1-0.4-0.1");
+  ASSERT_TRUE(one.is_array()) << one.debug_to_string();
+  EXPECT_EQ(one.as_array()->cells[0].as_number(), 0.0);
+  const Value paren = EvalSource("=({0.5}-0.4-0.1)");
+  ASSERT_TRUE(paren.is_array()) << paren.debug_to_string();
+  EXPECT_EQ(paren.as_array()->cells[0].as_number(), -2.7755575615628914e-17);
+}
+
 TEST(TreeWalkerArith, RootCancellationSnapsCellOperands) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(-1.9999999999999998));

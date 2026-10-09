@@ -600,13 +600,37 @@ TEST(BuiltinsAggregateFn, HiddenRowBitShrinksKArgDomain) {
   EXPECT_EQ(excluded.as_error(), ErrorCode::Num);
 }
 
-TEST(BuiltinsAggregateFn, ArrayLiteralIgnoresRowVisibility) {
+// Functions 1..13 take references only (Mac Excel 365): a literal, an array or
+// a computed array is #VALUE!, while a reference-returning call, a union and a
+// LET-bound range are references.
+TEST(BuiltinsAggregateFn, ReferenceFormRejectsValueArguments) {
   Workbook wb = MakeOneToFive();
-  HideRow(wb.sheet(0), 0);
-  HideRow(wb.sheet(0), 1);
-  const Value v = EvalSourceIn("=AGGREGATE(9,1,{1;2;3})", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 6.0);
+  for (const char* source :
+       {"=AGGREGATE(9,1,{1;2;3})", "=AGGREGATE(9,4,1,2)", "=AGGREGATE(9,4,A1:A3*1)",
+        "=AGGREGATE(3,0,EXPAND({2;1},3,1,))", "=AGGREGATE(9,4,A1:A3,1)", "=LET(r,{1,2},AGGREGATE(9,4,r))"}) {
+    const Value v = EvalSourceIn(source, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_error()) << source << ": " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << source;
+  }
+  for (const char* source : {"=AGGREGATE(9,4,OFFSET(A1,0,0,3))", "=AGGREGATE(9,4,INDEX(A1:A3,0,1))",
+                             "=AGGREGATE(9,4,(A1,A2,A3))", "=LET(r,A1:A3,AGGREGATE(9,4,r))"}) {
+    const Value v = EvalSourceIn(source, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << source << ": " << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), 6.0) << source;
+  }
+}
+
+TEST(BuiltinsAggregateFn, ArrayFourthArgumentEvaluatesPerElement) {
+  Workbook wb = MakeOneToFive();
+  const Value k = EvalSourceIn("=AGGREGATE(14,4,A1:A5,{1,2})", wb, wb.sheet(0));
+  ASSERT_TRUE(k.is_array()) << k.debug_to_string();
+  ASSERT_EQ(k.as_array()->cols, 2U);
+  EXPECT_DOUBLE_EQ(k.as_array()->cells[0].as_number(), 5.0);
+  EXPECT_DOUBLE_EQ(k.as_array()->cells[1].as_number(), 4.0);
+  const Value ref_form = EvalSourceIn("=AGGREGATE(9,4,A1,{1,2})", wb, wb.sheet(0));
+  ASSERT_TRUE(ref_form.is_array()) << ref_form.debug_to_string();
+  EXPECT_EQ(ref_form.as_array()->cells[0].as_error(), ErrorCode::Value);
+  EXPECT_EQ(ref_form.as_array()->cells[1].as_error(), ErrorCode::Value);
 }
 
 // ---------------------------------------------------------------------------

@@ -140,6 +140,11 @@ struct FunctionDef {
   /// With `analysis_toolpak_args`, an omitted optional slot is `#N/A` too
   /// instead of taking its default (ERF's `upper_limit`: `ERF(0.5,)`).
   bool atp_omitted_optional_is_na = false;
+  /// For a range-aware function whose last argument is a single value (the
+  /// `k` of LARGE / PERCENTILE / TRIMMEAN): that argument bypasses the range
+  /// filters and coerces as a direct argument, and an array or multi-cell
+  /// range there evaluates the function once per element.
+  bool last_arg_scalar = false;
 };
 
 /// Case-insensitive function lookup table. Names are stored UPPERCASE
