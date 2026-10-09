@@ -166,6 +166,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ascending sort, and their empty label cells are empty text.
 - `<sheetFormatPr>` keeps `customHeight` and its other attributes through
   an XLSX or XLSB save.
+- A result that cancels to within 2^-50 of its larger operand reads as 0
+  where Excel snaps it: the unparenthesised root `+` / `-` of a formula
+  (`=0.5-0.4-0.1` is 0, cell by cell for an array result) and each addition
+  in `SUM`, `AVERAGE`, `AVERAGEA`, `SUBTOTAL` and `AGGREGATE`. A
+  parenthesised or wrapped expression, `SUMPRODUCT`, the `*IF(S)` family
+  and the `D*` functions keep the residue.
+- A negative base raised to the reciprocal of an odd integer is an odd root
+  (`(-8)^(1/3)` is -1.9999999999999998) in `^`, `POWER` and `SERIESSUM`,
+  and `SERIESSUM` follows the operator's `0^0` and `0^-n` errors. `GCD`,
+  `LCM` and `MULTINOMIAL` reject a boolean with `#VALUE!`.
+- The single-value argument of `LARGE`, `SMALL`, `PERCENTILE`, `QUARTILE`
+  (all variants) and `TRIMMEAN`, and `PERCENTRANK`'s `x` and
+  `significance`, coerce a cell reference as a direct argument (a blank is
+  0, `TRUE` is 1, numeric text is its number) and evaluate per element when
+  given an array or range. `PERCENTILE.EXC` and `QUARTILE.EXC` accept the
+  last position (`PERCENTILE.EXC({1,2,3},0.75)` is 3). `PERCENTRANK`
+  between duplicates, `PROB` with blank limits, `FISHERINV` and `T.INV` at
+  extreme arguments follow Excel.
+- `AGGREGATE` functions 1 to 13 take references only, so a literal or an
+  array argument is `#VALUE!`; a union, a LET-bound range and a
+  reference-returning call are references, and an array `k` in functions
+  14 to 19 evaluates per element.
+- `XMATCH` and `XLOOKUP` `match_mode` 3 is an unanchored, case-sensitive
+  regex search. `INDIRECT` wraps a relative R1C1 offset around the sheet.
+  Numeric text above 9.99999999999999E+307 is `#VALUE!`. In the numeric and
+  A-family aggregates a non-numeric text literal outranks a later error, and
+  an `IF` that picks a plain value is a direct argument.
+- `DAYS360` rounds its dates to the second and reads serial 0 as
+  1900-01-00; `WORKDAY` and `WORKDAY.INTL` floor a fractional day count;
+  `NETWORKDAYS.INTL` counts 0 for the all-weekend mask.
+- `ACCRINT` counts periods on the quasi-coupon grid anchored on
+  `first_interest`, and `ODDFPRICE`, `ODDFYIELD`, `ODDLPRICE` and
+  `ODDLYIELD` measure each quasi-coupon period at its own length.
 
 ## [0.13.0] - 2026-10-06
 
