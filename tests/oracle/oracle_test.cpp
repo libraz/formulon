@@ -269,13 +269,7 @@ std::string PrintParamName(const ::testing::TestParamInfo<OracleCase>& info) {
   if (!info.param.variant.empty()) {
     name += "__" + info.param.variant;
   }
-  // gtest requires [A-Za-z0-9_]; fold everything else to '_'.
-  for (char& c : name) {
-    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) {
-      c = '_';
-    }
-  }
-  return name;
+  return fold_param_name(std::move(name));
 }
 
 INSTANTIATE_TEST_SUITE_P(Oracle, OracleTest, ::testing::ValuesIn(oracle_cases()), PrintParamName);

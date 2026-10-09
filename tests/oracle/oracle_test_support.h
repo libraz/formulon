@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <iterator>
 #include <string>
 #include <string_view>
@@ -17,6 +18,7 @@
 #include "eval/iterative_solver.h"
 #include "eval/tree_walker.h"
 #include "excel_profile.h"
+#include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
@@ -617,6 +619,56 @@ inline std::string compare_array_shape(const JsonValue& expect, const Value& act
 // Parameter provider
 // ---------------------------------------------------------------------------
 
+// gtest requires [A-Za-z0-9_] in parameter names; fold everything else to '_'.
+inline std::string fold_param_name(std::string name) {
+  for (char& c : name) {
+    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) {
+      c = '_';
+    }
+  }
+  return name;
+}
+
+// Suite predicate derived from the gtest filter, so a ctest entry that selects
+// one golden file does not parse the whole golden tree at startup. Each
+// positive pattern is reduced to its literal prefix under
+// `Oracle/OracleTest.Matches/`; a suite is kept when that prefix and
+// `<folded suite>_` agree as far as both run. Negative patterns only narrow
+// further and are ignored.
+inline std::function<bool(const std::string&)> suite_filter_from_gtest_flag() {
+  const std::string filter = GTEST_FLAG_GET(filter);
+  const std::string positive = filter.substr(0, filter.find('-'));
+  if (positive.empty())
+    return {};
+  constexpr std::string_view kHead = "Oracle/OracleTest.Matches/";
+  std::vector<std::string> prefixes;
+  std::size_t start = 0;
+  while (start <= positive.size()) {
+    std::size_t end = positive.find(':', start);
+    if (end == std::string::npos)
+      end = positive.size();
+    const std::string pattern = positive.substr(start, end - start);
+    start = end + 1;
+    const std::string literal = pattern.substr(0, pattern.find_first_of("*?"));
+    if (literal.size() < kHead.size()) {
+      if (kHead.compare(0, literal.size(), literal) == 0)
+        return {};  // The pattern can reach every case.
+      continue;
+    }
+    if (literal.compare(0, kHead.size(), kHead) == 0)
+      prefixes.push_back(literal.substr(kHead.size()));
+  }
+  return [prefixes = std::move(prefixes)](const std::string& suite) {
+    const std::string head = fold_param_name(suite) + "_";
+    for (const std::string& p : prefixes) {
+      const std::size_t n = std::min(p.size(), head.size());
+      if (p.compare(0, n, head, 0, n) == 0)
+        return true;
+    }
+    return false;
+  };
+}
+
 inline const std::vector<OracleCase>& oracle_cases() {
   // Loaded once at first call; `load_oracle_cases` is safe to call multiple
   // times but we cache to keep test discovery deterministic even if the
@@ -628,10 +680,14 @@ inline const std::vector<OracleCase>& oracle_cases() {
   // no variants are configured (the default build) the appended sequence
   // is empty and the parameter list is bit-for-bit identical to the
   // primary-only flow.
+  //
+  // gtest evaluates the generator after flag parsing, so the filter is
+  // already final here; discovery (`--gtest_list_tests`) still loads all.
   static const std::vector<OracleCase> cached = []() {
-    std::vector<OracleCase> all = load_oracle_cases(configured_golden_dir(), "");
+    const auto keep_suite = suite_filter_from_gtest_flag();
+    std::vector<OracleCase> all = load_oracle_cases(configured_golden_dir(), "", keep_suite);
     for (const auto& [tag, dir] : configured_variant_dirs()) {
-      auto vc = load_oracle_cases(dir, tag);
+      auto vc = load_oracle_cases(dir, tag, keep_suite);
       all.insert(all.end(), std::make_move_iterator(vc.begin()), std::make_move_iterator(vc.end()));
     }
     return all;

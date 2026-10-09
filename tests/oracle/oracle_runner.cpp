@@ -4,8 +4,10 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <string>
 #include <string_view>
@@ -54,6 +56,38 @@ OracleCase make_load_error(const std::string& path, const std::string& detail) {
   c.raw_case = JsonValue::make_object(std::move(err_case));
   c.environment = JsonValue::make_object({});
   return c;
+}
+
+// Reads the root `"suite"` value from a golden file's header without parsing
+// the rest. Only the leading-key shape oracle_gen.py writes is recognised;
+// anything else returns false so the caller falls back to a full parse.
+bool peek_golden_suite(const std::string& path, std::string* out_suite) {
+  FILE* fp = std::fopen(path.c_str(), "rb");
+  if (fp == nullptr)
+    return false;
+  char head[512];
+  const std::size_t n = std::fread(head, 1, sizeof(head), fp);
+  std::fclose(fp);
+  std::string_view text(head, n);
+  std::size_t pos = 0;
+  const auto skip_ws = [&] {
+    while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos])))
+      ++pos;
+  };
+  const auto expect = [&](std::string_view token) {
+    skip_ws();
+    if (text.substr(pos, token.size()) != token)
+      return false;
+    pos += token.size();
+    return true;
+  };
+  if (!expect("{") || !expect("\"suite\"") || !expect(":") || !expect("\""))
+    return false;
+  const std::size_t end = text.find_first_of("\"\\", pos);
+  if (end == std::string_view::npos || text[end] != '"')
+    return false;
+  out_suite->assign(text.substr(pos, end - pos));
+  return true;
 }
 
 }  // namespace
@@ -189,7 +223,8 @@ std::vector<std::pair<std::string, std::string>> configured_variant_dirs() {
   return out;
 }
 
-std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir, const std::string& variant_tag) {
+std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir, const std::string& variant_tag,
+                                          const std::function<bool(const std::string&)>& keep_suite) {
   std::vector<OracleCase> out;
   if (golden_dir.empty())
     return out;
@@ -217,6 +252,11 @@ std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir, const s
   std::sort(files.begin(), files.end());
 
   for (const std::string& file_path : files) {
+    if (keep_suite) {
+      std::string peeked;
+      if (peek_golden_suite(file_path, &peeked) && !keep_suite(peeked))
+        continue;
+    }
     auto parsed = parse_json_file(file_path);
     if (!parsed.has_value()) {
       out.push_back(make_load_error(file_path, "parse: " + parsed.error().message));

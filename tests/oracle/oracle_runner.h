@@ -23,6 +23,7 @@
 #define FORMULON_TESTS_ORACLE_ORACLE_RUNNER_H_
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <ostream>
 #include <string>
@@ -92,7 +93,12 @@ const std::map<std::string, std::string>& oracle_skip_registry();
 /// callers loading a non-primary golden tree (e.g. a Win-Excel variant)
 /// should pass the matching tag so the verifier can disambiguate parameter
 /// names and report results per variant.
-std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir, const std::string& variant_tag = "");
+///
+/// When `keep_suite` is set, a file whose leading `"suite"` value it rejects
+/// is skipped before the full parse; a file whose suite cannot be read from
+/// its header is always loaded.
+std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir, const std::string& variant_tag = "",
+                                          const std::function<bool(const std::string&)>& keep_suite = {});
 
 /// Returns variant golden roots configured for this build, as
 /// (tag, golden_dir) pairs. Source priority:
