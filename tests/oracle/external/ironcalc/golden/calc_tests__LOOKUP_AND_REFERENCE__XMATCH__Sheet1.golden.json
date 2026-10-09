@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:35:04Z",
     "profile_id": "mac-365-en_US"
   },
   "tolerance": {
@@ -159,7 +159,10 @@
           "value": "Albania"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.XMATCH(\"[A-Z][a-z]+y\",A2:A9,3,1)"
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
     },
     {
       "id": "D7",
@@ -198,7 +201,10 @@
           "value": "Albania"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.XMATCH(\"[A-Z][a-z]+y\",A2:A9,3,-1)"
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
     },
     {
       "id": "B14",
@@ -213,7 +219,10 @@
           "value": "apple"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.XMATCH(42,A14:A15,3)"
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
     }
   ]
 }

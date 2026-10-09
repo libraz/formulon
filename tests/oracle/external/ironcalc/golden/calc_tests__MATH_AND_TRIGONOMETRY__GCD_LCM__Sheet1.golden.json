@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:35:04Z",
     "profile_id": "win-365-en_US"
   },
   "tolerance": {
@@ -4958,7 +4958,10 @@
           "formula": "=A44"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =LCM(G44:H44)"
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
     },
     {
       "id": "J44",
@@ -4981,7 +4984,10 @@
           "formula": "=A44"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =GCD(G44:H44)"
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
     },
     {
       "id": "K44",
@@ -5086,7 +5092,10 @@
           "formula": "=A45"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =LCM(G45:H45)"
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
     },
     {
       "id": "J45",
@@ -5109,7 +5118,10 @@
           "formula": "=A45"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =GCD(G45:H45)"
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
     },
     {
       "id": "D46",
@@ -5196,7 +5208,10 @@
           "formula": "=A46"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =LCM(G46:H46)"
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
     },
     {
       "id": "J46",
@@ -5219,7 +5234,10 @@
           "formula": "=A46"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =GCD(G46:H46)"
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
     },
     {
       "id": "A47",

@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:35:04Z",
     "profile_id": "mac-365-en_US"
   },
   "tolerance": {
@@ -48,37 +48,65 @@
       "id": "E4",
       "formula": "=SUM(INDIRECT(\"A1:C2\", TRUE))",
       "setup": {
-        "J1": {
+        "L1": {
           "kind": "text",
-          "value": "Cell"
+          "value": "Actual"
         },
-        "K7": {
-          "kind": "error",
-          "code": "#REF!"
+        "J5": {
+          "kind": "text",
+          "value": "E4"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "Expected"
         },
         "J4": {
           "kind": "text",
           "value": "E3"
         },
-        "A2": {
-          "kind": "number",
-          "value": 4.0
+        "E6": {
+          "kind": "error",
+          "code": "#REF!"
         },
-        "C2": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "C1": {
-          "kind": "number",
-          "value": 3.0
+        "K5": {
+          "kind": "text",
+          "value": "21"
         },
         "J7": {
           "kind": "text",
           "value": "E6"
         },
-        "A1": {
+        "K6": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "E2"
+        },
+        "E1": {
           "kind": "number",
-          "value": 1.0
+          "value": 5.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "K7": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J6": {
+          "kind": "text",
+          "value": "E5"
+        },
+        "K3": {
+          "kind": "text",
+          "value": "5"
         },
         "B1": {
           "kind": "number",
@@ -88,69 +116,41 @@
           "kind": "error",
           "code": "#REF!"
         },
+        "C2": {
+          "kind": "number",
+          "value": 6.0
+        },
         "K4": {
           "kind": "text",
           "value": "5"
-        },
-        "K3": {
-          "kind": "text",
-          "value": "5"
-        },
-        "E1": {
-          "kind": "number",
-          "value": 5.0
-        },
-        "K1": {
-          "kind": "text",
-          "value": "Expected"
         },
         "E3": {
           "kind": "number",
           "value": 5.0
         },
-        "J6": {
-          "kind": "text",
-          "value": "E5"
-        },
-        "K6": {
-          "kind": "error",
-          "code": "#REF!"
-        },
         "E2": {
           "kind": "number",
           "value": 5.0
         },
-        "J2": {
+        "J1": {
           "kind": "text",
-          "value": "E1"
-        },
-        "K2": {
-          "kind": "text",
-          "value": "5"
+          "value": "Cell"
         },
         "B2": {
           "kind": "number",
           "value": 5.0
         },
-        "J3": {
+        "K2": {
           "kind": "text",
-          "value": "E2"
+          "value": "5"
         },
-        "E6": {
-          "kind": "error",
-          "code": "#REF!"
+        "A1": {
+          "kind": "number",
+          "value": 1.0
         },
-        "L1": {
+        "J2": {
           "kind": "text",
-          "value": "Actual"
-        },
-        "J5": {
-          "kind": "text",
-          "value": "E4"
-        },
-        "K5": {
-          "kind": "text",
-          "value": "21"
+          "value": "E1"
         }
       },
       "expect": {
@@ -205,7 +205,10 @@
           "formula": "=SUM(INDIRECT(\"A1:C2\", TRUE))"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =E4"
+      "expect": {
+        "kind": "number",
+        "value": 21.0
+      }
     },
     {
       "id": "L6",

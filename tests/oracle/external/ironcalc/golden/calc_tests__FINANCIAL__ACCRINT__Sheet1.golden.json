@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Excel Online",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:35:04Z",
     "profile_id": "win-365-en_US"
   },
   "tolerance": {
@@ -47,13 +47,19 @@
       "id": "B4",
       "formula": "=ACCRINT(DATE(2007,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2, 0)",
       "setup": {},
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(DATE(2007,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2, 0)"
+      "expect": {
+        "kind": "number",
+        "value": 116.94444444444446
+      }
     },
     {
       "id": "B5",
       "formula": "=ACCRINT(DATE(2007,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2, 0, FALSE)",
       "setup": {},
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(DATE(2007,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2, 0, FALSE)"
+      "expect": {
+        "kind": "number",
+        "value": 66.94444444444446
+      }
     },
     {
       "id": "B6",
@@ -212,13 +218,19 @@
       "id": "B23",
       "formula": "=ACCRINT(DATE(2007,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2, 0, TRUE)",
       "setup": {},
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(DATE(2007,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2, 0, TRUE)"
+      "expect": {
+        "kind": "number",
+        "value": 116.94444444444446
+      }
     },
     {
       "id": "B24",
       "formula": "=ACCRINT(DATE(2020,1,1), DATE(2020,7,1), DATE(2020,3,1), 0.1, 1000, 2, 1)",
       "setup": {},
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(DATE(2020,1,1), DATE(2020,7,1), DATE(2020,3,1), 0.1, 1000, 2, 1)"
+      "expect": {
+        "kind": "number",
+        "value": 16.483516483516482
+      }
     },
     {
       "id": "B25",
@@ -242,7 +254,10 @@
       "id": "B27",
       "formula": "=ACCRINT(DATE(2020,1,1), DATE(2020,7,1), DATE(2020,2,29), 0.1, 1000, 2, 1)",
       "setup": {},
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(DATE(2020,1,1), DATE(2020,7,1), DATE(2020,2,29), 0.1, 1000, 2, 1)"
+      "expect": {
+        "kind": "number",
+        "value": 16.208791208791208
+      }
     },
     {
       "id": "B28",
@@ -284,19 +299,28 @@
       "id": "B32",
       "formula": "=ACCRINT(DATE(2017,1,1), DATE(2017,12,1), DATE(2017,4,1), 0.33, 3000, 4, 1)",
       "setup": {},
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(DATE(2017,1,1), DATE(2017,12,1), DATE(2017,4,1), 0.33, 3000, 4, 1)"
+      "expect": {
+        "kind": "number",
+        "value": 241.12362637362637
+      }
     },
     {
       "id": "B33",
       "formula": "=ACCRINT(DATE(2017,1,1), DATE(2017,12,1), DATE(2017,4,1), 0.33, 3000, 4, 2)",
       "setup": {},
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(DATE(2017,1,1), DATE(2017,12,1), DATE(2017,4,1), 0.33, 3000, 4, 2)"
+      "expect": {
+        "kind": "number",
+        "value": 236.5
+      }
     },
     {
       "id": "B34",
       "formula": "=ACCRINT(DATE(2017,1,1), DATE(2017,12,1), DATE(2017,4,1), 0.33, 3000, 4, 3)",
       "setup": {},
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(DATE(2017,1,1), DATE(2017,12,1), DATE(2017,4,1), 0.33, 3000, 4, 3)"
+      "expect": {
+        "kind": "number",
+        "value": 240.04109589041096
+      }
     },
     {
       "id": "B35",
@@ -311,7 +335,10 @@
       "id": "B36",
       "formula": "=ACCRINT(DATE(2016,6,1), DATE(2017,12,1), DATE(2016,9,1), 0.33, 3000, 2, 2)",
       "setup": {},
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(DATE(2016,6,1), DATE(2017,12,1), DATE(2016,9,1), 0.33, 3000, 2, 2)"
+      "expect": {
+        "kind": "number",
+        "value": 239.25000000000003
+      }
     },
     {
       "id": "B37",
@@ -326,13 +353,19 @@
       "id": "B38",
       "formula": "=ACCRINT(DATE(2016,6,1), DATE(2017,12,1), DATE(2016,9,1), 0.33, 3000, 2, 1)",
       "setup": {},
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(DATE(2016,6,1), DATE(2017,12,1), DATE(2016,9,1), 0.33, 3000, 2, 1)"
+      "expect": {
+        "kind": "number",
+        "value": 251.55737704918027
+      }
     },
     {
       "id": "B39",
       "formula": "=ACCRINT(DATE(2017,6,1), DATE(2017,12,1), DATE(2017,7,1), 0.33, 3000, 4, 1)",
       "setup": {},
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ACCRINT(DATE(2017,6,1), DATE(2017,12,1), DATE(2017,7,1), 0.33, 3000, 4, 1)"
+      "expect": {
+        "kind": "number",
+        "value": 78.87362637362637
+      }
     }
   ]
 }

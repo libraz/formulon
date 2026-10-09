@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:35:04Z",
     "profile_id": "mac-365-en_US"
   },
   "tolerance": {
@@ -2945,7 +2945,10 @@
           "value": 12.0
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.PERCENTRANK.INC($A$14:$A$20,I18)"
+      "expect": {
+        "kind": "number",
+        "value": 0.939
+      }
     },
     {
       "id": "K18",
@@ -2984,7 +2987,10 @@
           "value": 12.0
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.PERCENTRANK.EXC($A$14:$A$20,I18)"
+      "expect": {
+        "kind": "number",
+        "value": 0.829
+      }
     },
     {
       "id": "C19",

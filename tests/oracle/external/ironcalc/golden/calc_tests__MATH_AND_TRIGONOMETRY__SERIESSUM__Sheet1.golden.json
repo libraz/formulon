@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:35:04Z",
     "profile_id": "mac-365-en_US"
   },
   "tolerance": {
@@ -29,7 +29,10 @@
       "id": "C1",
       "formula": "=SERIESSUM(0,0,2,{1,2,3})",
       "setup": {},
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =SERIESSUM(0,0,2,{1,2,3})"
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
     },
     {
       "id": "A2",
@@ -211,7 +214,10 @@
           "formula": "=1/2"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =SERIESSUM(0,B7,C7,D9:D14)"
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
     },
     {
       "id": "I7",

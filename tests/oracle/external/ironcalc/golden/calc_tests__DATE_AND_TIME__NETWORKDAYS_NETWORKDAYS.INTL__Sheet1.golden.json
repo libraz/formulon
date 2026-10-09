@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:38:58Z",
     "profile_id": "win-365-en_US"
   },
   "tolerance": {
@@ -2080,7 +2080,10 @@
           "value": "1111111"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =NETWORKDAYS.INTL(DATE(2025,1,1),DATE(2026,12,31),J31)"
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
     },
     {
       "id": "C32",
@@ -3548,7 +3551,7 @@
           "value": "June 1, 2026"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =NETWORKDAYS(B60,A60)"
+      "skipped": "Date text cached as #VALUE! by the Windows host that saved the fixture; Mac Excel en-US parses the same text and agrees with Formulon, so the cache follows the saving machine's regional date settings. Formula: =NETWORKDAYS(B60,A60)"
     },
     {
       "id": "D60",
@@ -3563,7 +3566,7 @@
           "value": "June 1, 2026"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =NETWORKDAYS.INTL(B60,A60)"
+      "skipped": "Date text cached as #VALUE! by the Windows host that saved the fixture; Mac Excel en-US parses the same text and agrees with Formulon, so the cache follows the saving machine's regional date settings. Formula: =NETWORKDAYS.INTL(B60,A60)"
     },
     {
       "id": "C61",
@@ -3578,7 +3581,10 @@
           "value": "1/1/28"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =NETWORKDAYS(B61,A61)"
+      "expect": {
+        "kind": "number",
+        "value": 261.0
+      }
     },
     {
       "id": "D61",
@@ -3593,7 +3599,10 @@
           "value": "1/1/28"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =NETWORKDAYS.INTL(B61,A61)"
+      "expect": {
+        "kind": "number",
+        "value": 261.0
+      }
     },
     {
       "id": "C62",
@@ -3608,7 +3617,10 @@
           "value": "1/1/29"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =NETWORKDAYS(B62,A62)"
+      "expect": {
+        "kind": "number",
+        "value": -25829.0
+      }
     },
     {
       "id": "D62",
@@ -3623,7 +3635,10 @@
           "value": "1/1/29"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =NETWORKDAYS.INTL(B62,A62)"
+      "expect": {
+        "kind": "number",
+        "value": -25829.0
+      }
     },
     {
       "id": "C63",

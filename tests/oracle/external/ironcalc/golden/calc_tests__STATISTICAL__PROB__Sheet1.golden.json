@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:35:04Z",
     "profile_id": "mac-365-en_US"
   },
   "tolerance": {
@@ -277,7 +277,10 @@
           "value": "Hi"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =PROB(L2:L3,M2:M3,N2)"
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
     },
     {
       "id": "D3",
@@ -1448,7 +1451,10 @@
           "formula": "=1-SUM(B2:B6)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =PROB($A$2:$A$7,$B$2:$B$7,H11,I11)"
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
     },
     {
       "id": "D12",

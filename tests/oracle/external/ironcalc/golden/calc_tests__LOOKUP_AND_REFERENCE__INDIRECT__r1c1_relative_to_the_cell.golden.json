@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:38:58Z",
     "profile_id": "mac-365-en_US"
   },
   "tolerance": {
@@ -62,29 +62,17 @@
       "id": "F5",
       "formula": "=SUM(INDIRECT(\"R[-4]C[-5]:R[-3]C[-3]\", FALSE))",
       "setup": {
-        "J1": {
+        "K5": {
           "kind": "text",
-          "value": "Cell"
-        },
-        "J2": {
-          "kind": "text",
-          "value": "B3"
+          "value": "6"
         },
         "K2": {
           "kind": "text",
           "value": "5"
         },
-        "J3": {
-          "kind": "text",
-          "value": "C3"
-        },
-        "K7": {
-          "kind": "text",
-          "value": "21"
-        },
-        "J4": {
-          "kind": "text",
-          "value": "D2"
+        "E2": {
+          "kind": "number",
+          "value": 4.0
         },
         "A2": {
           "kind": "number",
@@ -94,57 +82,9 @@
           "kind": "number",
           "value": 5.0
         },
-        "B3": {
-          "kind": "number",
-          "value": 5.0
-        },
-        "K8": {
-          "kind": "error",
-          "code": "#REF!"
-        },
-        "C2": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "C1": {
-          "kind": "number",
-          "value": 3.0
-        },
-        "L1": {
+        "K1": {
           "kind": "text",
-          "value": "Actual"
-        },
-        "J7": {
-          "kind": "text",
-          "value": "F5"
-        },
-        "J5": {
-          "kind": "text",
-          "value": "D1"
-        },
-        "D2": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "A1": {
-          "kind": "number",
-          "value": 1.0
-        },
-        "C3": {
-          "kind": "number",
-          "value": 4.0
-        },
-        "D1": {
-          "kind": "number",
-          "value": 6.0
-        },
-        "B1": {
-          "kind": "number",
-          "value": 2.0
-        },
-        "F6": {
-          "kind": "number",
-          "value": 0.0
+          "value": "Expected"
         },
         "K4": {
           "kind": "text",
@@ -154,29 +94,89 @@
           "kind": "text",
           "value": "4"
         },
-        "K1": {
+        "B3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J2": {
           "kind": "text",
-          "value": "Expected"
+          "value": "B3"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "F5"
+        },
+        "F6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J8": {
+          "kind": "text",
+          "value": "F6"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "Actual"
+        },
+        "K8": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "K7": {
+          "kind": "text",
+          "value": "21"
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
         },
         "J6": {
           "kind": "text",
           "value": "E2"
         },
-        "K5": {
-          "kind": "text",
-          "value": "6"
-        },
         "K6": {
           "kind": "text",
           "value": "4"
         },
-        "E2": {
-          "kind": "number",
-          "value": 4.0
-        },
-        "J8": {
+        "J3": {
           "kind": "text",
-          "value": "F6"
+          "value": "C3"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "D1"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D2"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 6.0
         }
       },
       "expect": {
@@ -221,7 +221,7 @@
           "formula": "=SUM(INDIRECT(\"R[-4]C[-5]:R[-3]C[-3]\", FALSE))"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =F5"
+      "skipped": "The importer kept the referenced formula cell but none of the cells its INDIRECT reads (or the other sheet it names), so the replay sees a different workbook than Excel evaluated; Mac Excel recalculating the imported case agrees with Formulon. Formula: =F5"
     },
     {
       "id": "L8",

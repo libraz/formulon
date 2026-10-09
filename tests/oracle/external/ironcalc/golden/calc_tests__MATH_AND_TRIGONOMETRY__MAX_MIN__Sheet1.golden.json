@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:35:04Z",
     "profile_id": "mac-365-en_US"
   },
   "tolerance": {
@@ -357,7 +357,10 @@
       "id": "H26",
       "formula": "=MIN(IF(TRUE, \"\", 1))",
       "setup": {},
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =MIN(IF(TRUE, \"\", 1))"
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
     },
     {
       "id": "H27",
@@ -477,7 +480,10 @@
       "id": "H49",
       "formula": "=MAX(\"abc\", NA())",
       "setup": {},
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =MAX(\"abc\", NA())"
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
     },
     {
       "id": "H51",

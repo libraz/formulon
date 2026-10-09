@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:35:04Z",
     "profile_id": "mac-365-en_US"
   },
   "tolerance": {
@@ -157,7 +157,10 @@
           "value": 12.4
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =TRIMMEAN($A$2:$A$10,B3)"
+      "expect": {
+        "kind": "number",
+        "value": 3.5888888888888886
+      }
     },
     {
       "id": "J3",
@@ -200,7 +203,10 @@
           "value": 12.4
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =TRIMMEAN($A$2:$A$10,I3)"
+      "expect": {
+        "kind": "number",
+        "value": 3.5888888888888886
+      }
     },
     {
       "id": "C4",

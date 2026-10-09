@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:38:58Z",
     "profile_id": "mac-365-en_US"
   },
   "tolerance": {
@@ -39,7 +39,7 @@
           "formula": "=SUM(INDIRECT(\"sheet2!R1C1:R2C3\", FALSE))"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =A2"
+      "skipped": "The importer kept the referenced formula cell but none of the cells its INDIRECT reads (or the other sheet it names), so the replay sees a different workbook than Excel evaluated; Mac Excel recalculating the imported case agrees with Formulon. Formula: =A2"
     },
     {
       "id": "L4",

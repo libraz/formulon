@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:38:58Z",
     "profile_id": "win-365-en_US"
   },
   "tolerance": {
@@ -1972,7 +1972,7 @@
           "formula": "=PI()/2 - 0.000000000001"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =TAN(A45)"
+      "skipped": "Near a pole of the function the result is ill-conditioned: Formulon and a fresh Mac Excel calculation differ from the cached value around the 8th significant digit, beyond the corpus tolerance but at the limit of the argument's precision. Formula: =TAN(A45)"
     },
     {
       "id": "A46",
@@ -2020,7 +2020,7 @@
           "formula": "=PI()/2 + 0.000000000001"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =TAN(A46)"
+      "skipped": "Near a pole of the function the result is ill-conditioned: Formulon and a fresh Mac Excel calculation differ from the cached value around the 8th significant digit, beyond the corpus tolerance but at the limit of the argument's precision. Formula: =TAN(A46)"
     },
     {
       "id": "A47",

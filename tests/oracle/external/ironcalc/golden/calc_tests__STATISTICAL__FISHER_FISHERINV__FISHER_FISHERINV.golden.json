@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:35:04Z",
     "profile_id": "win-365-en_US"
   },
   "tolerance": {
@@ -1078,7 +1078,10 @@
           "value": 1000.0
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =FISHERINV(A38)"
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "C39",
@@ -1089,7 +1092,10 @@
           "value": 10000000000.0
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =FISHERINV(A39)"
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "C40",

@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:35:04Z",
     "profile_id": "win-365-en_US"
   },
   "tolerance": {
@@ -2313,7 +2313,10 @@
           "formula": "=DATE(2025,1,10)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =WORKDAY(A40,B40)"
+      "expect": {
+        "kind": "number",
+        "value": 45666.0
+      }
     },
     {
       "id": "D40",
@@ -2328,7 +2331,10 @@
           "formula": "=DATE(2025,1,10)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =WORKDAY.INTL(A40,B40)"
+      "expect": {
+        "kind": "number",
+        "value": 45666.0
+      }
     },
     {
       "id": "H40",
@@ -2487,7 +2493,10 @@
           "formula": "=DATE(2025,1,10)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =WORKDAY(A42,B42)"
+      "expect": {
+        "kind": "number",
+        "value": 45666.0
+      }
     },
     {
       "id": "D42",
@@ -2502,7 +2511,10 @@
           "formula": "=DATE(2025,1,10)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =WORKDAY.INTL(A42,B42)"
+      "expect": {
+        "kind": "number",
+        "value": 45666.0
+      }
     },
     {
       "id": "A43",

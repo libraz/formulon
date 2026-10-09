@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:35:04Z",
     "profile_id": "mac-365-en_US"
   },
   "tolerance": {
@@ -93,7 +93,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A2,B2,C2,D2,E2,F2,G2,H2,I2)"
+      "expect": {
+        "kind": "number",
+        "value": 131.53696747314225
+      }
     },
     {
       "id": "A3",
@@ -172,7 +175,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A3,B3,C3,D3,E3,F3,G3,H3,I3)"
+      "expect": {
+        "kind": "number",
+        "value": 131.5377155865953
+      }
     },
     {
       "id": "A4",
@@ -251,7 +257,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A4,B4,C4,D4,E4,F4,G4,H4,I4)"
+      "expect": {
+        "kind": "number",
+        "value": 131.44721361650284
+      }
     },
     {
       "id": "A5",
@@ -330,7 +339,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A5,B5,C5,D5,E5,F5,G5,H5,I5)"
+      "expect": {
+        "kind": "number",
+        "value": 131.53759260904138
+      }
     },
     {
       "id": "A6",
@@ -409,7 +421,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A6,B6,C6,D6,E6,F6,G6,H6,I6)"
+      "expect": {
+        "kind": "number",
+        "value": 131.53696747314225
+      }
     },
     {
       "id": "A9",
@@ -488,7 +503,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A9,B9,C9,D9,E9,F9,G9,H9,I9)"
+      "expect": {
+        "kind": "number",
+        "value": 131.55646124427685
+      }
     },
     {
       "id": "A10",
@@ -567,7 +585,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A10,B10,C10,D10,E10,F10,G10,H10,I10)"
+      "expect": {
+        "kind": "number",
+        "value": 131.55696869340122
+      }
     },
     {
       "id": "A11",
@@ -646,7 +667,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A11,B11,C11,D11,E11,F11,G11,H11,I11)"
+      "expect": {
+        "kind": "number",
+        "value": 131.48376704654166
+      }
     },
     {
       "id": "A12",
@@ -725,7 +749,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A12,B12,C12,D12,E12,F12,G12,H12,I12)"
+      "expect": {
+        "kind": "number",
+        "value": 131.53020481001226
+      }
     },
     {
       "id": "A13",
@@ -804,7 +831,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDFPRICE(A13,B13,C13,D13,E13,F13,G13,H13,I13)"
+      "expect": {
+        "kind": "number",
+        "value": 131.55646124427685
+      }
     }
   ]
 }

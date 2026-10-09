@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:35:04Z",
     "profile_id": "mac-365-en_US"
   },
   "tolerance": {
@@ -80,7 +80,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDLPRICE(A2,B2,C2,D2,E2,F2,G2,H2)"
+      "expect": {
+        "kind": "number",
+        "value": 121.51937811334447
+      }
     },
     {
       "id": "J2",
@@ -192,7 +195,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDLPRICE(A3,B3,C3,D3,E3,F3,G3,H3)"
+      "expect": {
+        "kind": "number",
+        "value": 122.36705839417525
+      }
     },
     {
       "id": "J3",
@@ -304,7 +310,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDLPRICE(A4,B4,C4,D4,E4,F4,G4,H4)"
+      "expect": {
+        "kind": "number",
+        "value": 116.47102012136368
+      }
     },
     {
       "id": "J4",
@@ -646,7 +655,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDLPRICE(A8,B8,C8,D8,E8,F8,G8,H8)"
+      "expect": {
+        "kind": "number",
+        "value": 121.52128858401393
+      }
     },
     {
       "id": "J8",
@@ -758,7 +770,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDLPRICE(A9,B9,C9,D9,E9,F9,G9,H9)"
+      "expect": {
+        "kind": "number",
+        "value": 122.3689285685928
+      }
     },
     {
       "id": "J9",
@@ -870,7 +885,10 @@
           "formula": "=DATE(2020, 3, 1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =ODDLPRICE(A10,B10,C10,D10,E10,F10,G10,H10)"
+      "expect": {
+        "kind": "number",
+        "value": 116.47338382128387
+      }
     },
     {
       "id": "J10",

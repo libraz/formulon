@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:35:04Z",
     "profile_id": "mac-365-en_US"
   },
   "tolerance": {
@@ -20,22 +20,6 @@
       "id": "H3",
       "formula": "=SUM(INDIRECT(\"R[-4]\", FALSE))",
       "setup": {
-        "H7": {
-          "kind": "error",
-          "code": "#REF!"
-        },
-        "G6": {
-          "kind": "number",
-          "value": 41.0
-        },
-        "H8": {
-          "kind": "error",
-          "code": "#REF!"
-        },
-        "A1048576": {
-          "kind": "number",
-          "value": 2.0
-        },
         "D1": {
           "kind": "number",
           "value": 1000.0
@@ -44,19 +28,19 @@
           "kind": "number",
           "value": 7.0
         },
-        "B1": {
+        "H8": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "E2": {
           "kind": "number",
-          "value": 2.0
+          "value": 7.0
         },
         "F6": {
           "kind": "number",
           "value": 42.0
         },
-        "F1048575": {
-          "kind": "number",
-          "value": 41.0
-        },
-        "D1048576": {
+        "B1": {
           "kind": "number",
           "value": 2.0
         },
@@ -64,41 +48,44 @@
           "kind": "number",
           "value": 42.0
         },
-        "J12": {
-          "kind": "error",
-          "code": "#REF!"
-        },
         "D2": {
           "kind": "number",
           "value": 2.0
         },
-        "E2": {
+        "D1048576": {
           "kind": "number",
-          "value": 7.0
+          "value": 2.0
+        },
+        "F1048575": {
+          "kind": "number",
+          "value": 41.0
+        },
+        "H7": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A1048576": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J12": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "G6": {
+          "kind": "number",
+          "value": 41.0
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =SUM(INDIRECT(\"R[-4]\", FALSE))"
+      "expect": {
+        "kind": "number",
+        "value": 41.0
+      }
     },
     {
       "id": "H5",
       "formula": "=SUM(INDIRECT(\"R[-5]C[-4]:R[-3]C[-4]\", FALSE))",
       "setup": {
-        "H7": {
-          "kind": "error",
-          "code": "#REF!"
-        },
-        "G6": {
-          "kind": "number",
-          "value": 41.0
-        },
-        "H8": {
-          "kind": "error",
-          "code": "#REF!"
-        },
-        "A1048576": {
-          "kind": "number",
-          "value": 2.0
-        },
         "D1": {
           "kind": "number",
           "value": 1000.0
@@ -107,19 +94,19 @@
           "kind": "number",
           "value": 7.0
         },
-        "B1": {
+        "H8": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "E2": {
           "kind": "number",
-          "value": 2.0
+          "value": 7.0
         },
         "F6": {
           "kind": "number",
           "value": 42.0
         },
-        "F1048575": {
-          "kind": "number",
-          "value": 41.0
-        },
-        "D1048576": {
+        "B1": {
           "kind": "number",
           "value": 2.0
         },
@@ -127,20 +114,39 @@
           "kind": "number",
           "value": 42.0
         },
-        "J12": {
-          "kind": "error",
-          "code": "#REF!"
-        },
         "D2": {
           "kind": "number",
           "value": 2.0
         },
-        "E2": {
+        "D1048576": {
           "kind": "number",
-          "value": 7.0
+          "value": 2.0
+        },
+        "F1048575": {
+          "kind": "number",
+          "value": 41.0
+        },
+        "H7": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A1048576": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J12": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "G6": {
+          "kind": "number",
+          "value": 41.0
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =SUM(INDIRECT(\"R[-5]C[-4]:R[-3]C[-4]\", FALSE))"
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
     }
   ]
 }

@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Macintosh Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:38:58Z",
     "profile_id": "mac-365-en_US"
   },
   "tolerance": {
@@ -25,7 +25,7 @@
           "value": 1.0
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =SUM(_xlfn.ANCHORARRAY(J3))"
+      "skipped": "The case reads a live spill anchor the importer flattened; Excel rejects the imported formula =SUM(_xlfn.ANCHORARRAY(J3)) outright. Formula: =SUM(_xlfn.ANCHORARRAY(J3))"
     }
   ]
 }

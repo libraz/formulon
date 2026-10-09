@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-10-09T01:38:58Z",
     "profile_id": "win-365-en_US"
   },
   "tolerance": {
@@ -1488,7 +1488,10 @@
           "value": 45992.000001
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B24,A24)"
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
     },
     {
       "id": "H24",
@@ -1663,7 +1666,10 @@
           "value": 10.0
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B29,A29)"
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
     },
     {
       "id": "A30",
@@ -2014,7 +2020,10 @@
           "value": true
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B40,A40)"
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
     },
     {
       "id": "C41",
@@ -2084,7 +2093,10 @@
           "formula": "=1.05*(0.0284+0.0046)-0.0284"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B44,A44)"
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
     },
     {
       "id": "A46",
@@ -3081,7 +3093,10 @@
           "formula": "=DATE(2025,1,1)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B64,A64)"
+      "expect": {
+        "kind": "number",
+        "value": -45001.0
+      }
     },
     {
       "id": "A65",
@@ -3207,7 +3222,10 @@
           "formula": "=DATE(2025,1,10)"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(A68,)"
+      "expect": {
+        "kind": "number",
+        "value": -45010.0
+      }
     },
     {
       "id": "C69",
@@ -3276,7 +3294,7 @@
           "value": "July 1, 2026"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.DAYS(A71,B71)"
+      "skipped": "Date text cached as #VALUE! by the Windows host that saved the fixture; Mac Excel en-US parses the same text and agrees with Formulon, so the cache follows the saving machine's regional date settings. Formula: =_xlfn.DAYS(A71,B71)"
     },
     {
       "id": "D71",
@@ -3291,7 +3309,7 @@
           "value": "June 1, 2026"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B71,A71)"
+      "skipped": "Date text cached as #VALUE! by the Windows host that saved the fixture; Mac Excel en-US parses the same text and agrees with Formulon, so the cache follows the saving machine's regional date settings. Formula: =DAYS360(B71,A71)"
     },
     {
       "id": "C72",
@@ -3306,7 +3324,10 @@
           "value": "1/1/29"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.DAYS(A72,B72)"
+      "expect": {
+        "kind": "number",
+        "value": 366.0
+      }
     },
     {
       "id": "D72",
@@ -3321,7 +3342,10 @@
           "value": "1/1/28"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B72,A72)"
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
     },
     {
       "id": "C73",
@@ -3336,7 +3360,10 @@
           "value": "1/1/30"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =_xlfn.DAYS(A73,B73)"
+      "expect": {
+        "kind": "number",
+        "value": -36160.0
+      }
     },
     {
       "id": "D73",
@@ -3351,7 +3378,10 @@
           "value": "1/1/29"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B73,A73)"
+      "expect": {
+        "kind": "number",
+        "value": -35640.0
+      }
     },
     {
       "id": "C74",
@@ -3474,7 +3504,10 @@
           "formula": "=DATE(2025,1,1)+0.0000001"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B77,A77)"
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "A78",
@@ -3525,7 +3558,10 @@
           "formula": "=DATE(2025,1,1)+0.9999999"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B78,A78)"
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
     },
     {
       "id": "A79",
@@ -3738,7 +3774,10 @@
           "formula": "=DATE(2025,1,1)+0.9999999"
         }
       },
-      "skipped": "Cached fixture result differs from Formulon; Mac Excel measurement is pending and no host rule is established. Formula: =DAYS360(B82,A82)"
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
     }
   ]
 }
