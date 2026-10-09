@@ -252,6 +252,7 @@ target_compile_definitions(formulon_ironcalc_oracle_tests
 # own profile id; a gate's cases keep the primary oracle's names. The primary
 # (ja-JP) is formulon_oracle_tests above.
 set(_formula_gate_targets "")
+set(_locale_switch_targets "mac-365-ja_JP|${_formula_oracle_skip_file}")
 if(Python3_Interpreter_FOUND)
   execute_process(
     COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py
@@ -289,6 +290,7 @@ foreach(_gate_target IN LISTS _formula_gate_targets)
     set(_gate_skip_file "")
   endif()
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_gate_divergence}")
+  list(APPEND _locale_switch_targets "${_gate_target}|${_gate_skip_file}")
 
   add_executable(${_gate_exe} ${FORMULON_ORACLE_TEST_SOURCES})
   target_link_libraries(${_gate_exe} PRIVATE formulon_static gtest_main)
@@ -318,6 +320,27 @@ foreach(_gate_target IN LISTS _formula_gate_targets)
     )
   endif()
 endforeach()
+
+# One live workbook switched through the primary and every gate, checked
+# against each target's own golden after every profile change.
+string(REPLACE ";" "\\;" _locale_switch_define "${_locale_switch_targets}")
+add_executable(formulon_oracle_locale_switch_tests json_reader.cpp oracle_anchor.cpp oracle_runner.cpp
+               locale_switch_test.cpp)
+target_link_libraries(formulon_oracle_locale_switch_tests PRIVATE formulon_static gtest_main)
+target_include_directories(formulon_oracle_locale_switch_tests
+  PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}
+)
+target_compile_definitions(formulon_oracle_locale_switch_tests
+  PRIVATE
+    FORMULON_ORACLE_TARGETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/targets"
+    "FORMULON_ORACLE_SWITCH_TARGETS=\"${_locale_switch_define}\""
+)
+formulon_apply_warnings(formulon_oracle_locale_switch_tests)
+add_test(
+  NAME formulon_oracle_locale_switch_tests
+  COMMAND formulon_oracle_locale_switch_tests --gtest_brief=1 --gtest_fail_if_no_test_selected
+)
+set_tests_properties(formulon_oracle_locale_switch_tests PROPERTIES LABELS "oracle")
 
 if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(

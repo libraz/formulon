@@ -469,6 +469,38 @@ test('excelProfileId / setExcelProfileId round-trip the profile id', async () =>
   assert.equal(wb.excelProfileId().value, 'mac-365-ja_JP');
 });
 
+// Values are the mac-365-* oracle captures of `DOLLAR(-1234.567)`; the
+// estimated win-* ids are checked for the id round trip only.
+const PROFILE_DOLLAR = {
+  'mac-365-ja_JP': '¥-1,235',
+  'mac-365-en_US': '($1,234.57)',
+  'mac-365-de_DE': '-1.234,57 €',
+  'mac-365-fr_FR': '(1 234,57 €)',
+  'mac-365-zh_CN': '(¥1,234.57)',
+  'mac-365-ko_KR': '(₩1,235)',
+  'mac-365-th_TH': '(฿1,234.57)',
+};
+const PROFILE_LOCALES = ['ja_JP', 'en_US', 'de_DE', 'fr_FR', 'zh_CN', 'ko_KR', 'th_TH'];
+
+test('setExcelProfileId switches a live workbook through every profile id', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.excelProfileId().value, 'win-365-en_US');
+  assert.ok(wb.setFormula(0, 0, 0, '=DOLLAR(-1234.567)').ok);
+  for (const host of ['mac', 'win']) {
+    for (const locale of PROFILE_LOCALES) {
+      const id = `${host}-365-${locale}`;
+      assert.ok(wb.setExcelProfileId(id).ok, id);
+      assert.equal(wb.excelProfileId().value, id);
+      assert.ok(wb.recalc().ok, id);
+      if (id in PROFILE_DOLLAR) {
+        assert.equal(wb.getValue(0, 0, 0).value.text, PROFILE_DOLLAR[id], id);
+      }
+    }
+  }
+  assert.equal(wb.setExcelProfileId('mac-365-xx_XX').ok, false);
+});
+
 test('functionNames + functionMetadata expose the catalog', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();

@@ -243,6 +243,33 @@ class CalcPolicyTests(unittest.TestCase):
             wb.set_excel_profile_id("mac-365-ja_JP")
             self.assertEqual(wb.excel_profile_id(), "mac-365-ja_JP")
 
+    def test_excel_profile_switches_live_workbook(self) -> None:
+        # mac-365-* values are the oracle captures of DOLLAR(-1234.567); the
+        # estimated win-* ids are checked for the id round trip only.
+        dollar = {
+            "mac-365-ja_JP": "\u00a5-1,235",
+            "mac-365-en_US": "($1,234.57)",
+            "mac-365-de_DE": "-1.234,57 \u20ac",
+            "mac-365-fr_FR": "(1 234,57 \u20ac)",
+            "mac-365-zh_CN": "(\u00a51,234.57)",
+            "mac-365-ko_KR": "(\u20a91,235)",
+            "mac-365-th_TH": "(\u0e3f1,234.57)",
+        }
+        locales = ("ja_JP", "en_US", "de_DE", "fr_FR", "zh_CN", "ko_KR", "th_TH")
+        with Workbook.create_default() as wb:
+            self.assertEqual(wb.excel_profile_id(), "win-365-en_US")
+            wb.set_formula(0, 0, 0, "=DOLLAR(-1234.567)")
+            for host in ("mac", "win"):
+                for locale in locales:
+                    profile_id = f"{host}-365-{locale}"
+                    wb.set_excel_profile_id(profile_id)
+                    self.assertEqual(wb.excel_profile_id(), profile_id)
+                    wb.recalc()
+                    if profile_id in dollar:
+                        self.assertEqual(wb.get_value(0, 0, 0).to_python(), dollar[profile_id], profile_id)
+            with self.assertRaises(FormulonError):
+                wb.set_excel_profile_id("mac-365-xx_XX")
+
 
 class PartialRecalcTests(unittest.TestCase):
     def test_partial_recalc_recomputes_chain(self) -> None:
