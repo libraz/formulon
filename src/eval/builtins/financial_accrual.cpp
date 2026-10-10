@@ -52,8 +52,9 @@ struct QuasiCouponGrid {
   double at(int k) const noexcept {
     int y = anchor.y;
     unsigned m = anchor.m;
-    shift_months(y, m, -k * step_months);
-    return quasi_serial(y, m, anchor_day, date1904);
+    const std::int64_t months = -static_cast<std::int64_t>(k) * static_cast<std::int64_t>(step_months);
+    date_time::shift_year_month(y, m, months);
+    return date_time::serial_from_ymd_clamped(y, m, anchor_day, date1904);
   }
 };
 

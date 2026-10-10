@@ -15,34 +15,8 @@ namespace eval {
 namespace {
 
 // Calendar day-count helpers shared with the COUP* engine and the date
-// builtins; see `eval/date_time.h`.
+// builtins; see `utils/date_time.h`.
 using date_time::basis_days_between;
-using date_time::days_in_month;
-
-// Constructs the serial for (y, m, anchor_day), clamping the day to
-// the target month's last day when shorter. This implements Excel's
-// coupon-date day-of-month preservation rule: if the maturity is
-// Aug-31 and we step back three months, we land on May-31; if we step
-// back six, we land on Feb-28 (or Feb-29 in a leap year).
-double coupon_serial(int y, unsigned m, unsigned anchor_day, bool date1904) noexcept {
-  const unsigned last = days_in_month(y, m);
-  const unsigned d = anchor_day > last ? last : anchor_day;
-  return date_time::serial_from_ymd(y, m, d, date1904);
-}
-
-// Shifts (y, m) backward by `months` (always positive). Uses
-// floor-division so negative month remainders wrap correctly.
-void shift_months_back(int& y, unsigned& m, int months) noexcept {
-  long long mm0 = static_cast<long long>(m) - 1 - static_cast<long long>(months);
-  long long year_shift = mm0 / 12;
-  long long rem = mm0 % 12;
-  if (rem < 0) {
-    rem += 12;
-    year_shift -= 1;
-  }
-  y += static_cast<int>(year_shift);
-  m = static_cast<unsigned>(rem + 1);
-}
 
 }  // namespace
 
@@ -81,27 +55,16 @@ bool compute_coupon_dates(double settlement, double maturity, int frequency, int
     // and <= maturity.
     ++coupons;
     // Step one period back.
-    shift_months_back(y_walk, m_walk, step_months);
-    current = coupon_serial(y_walk, m_walk, anchor_day, date1904);
+    date_time::shift_year_month(y_walk, m_walk, -static_cast<std::int64_t>(step_months));
+    current = date_time::serial_from_ymd_clamped(y_walk, m_walk, anchor_day, date1904);
   }
 
   const double pcd = current;
   // NCD is one step forward from PCD.
   int y_ncd = y_walk;
   unsigned m_ncd = m_walk;
-  // Forward step by step_months using the same floor-mod logic.
-  {
-    long long mm0 = static_cast<long long>(m_ncd) - 1 + static_cast<long long>(step_months);
-    long long year_shift = mm0 / 12;
-    long long rem = mm0 % 12;
-    if (rem < 0) {
-      rem += 12;
-      year_shift -= 1;
-    }
-    y_ncd += static_cast<int>(year_shift);
-    m_ncd = static_cast<unsigned>(rem + 1);
-  }
-  const double ncd = coupon_serial(y_ncd, m_ncd, anchor_day, date1904);
+  date_time::shift_year_month(y_ncd, m_ncd, static_cast<std::int64_t>(step_months));
+  const double ncd = date_time::serial_from_ymd_clamped(y_ncd, m_ncd, anchor_day, date1904);
 
   // Basis-adjusted day counts. `days_bs` = settlement - PCD;
   // `days_nc` = NCD - settlement. Rounded to match Excel's

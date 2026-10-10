@@ -112,8 +112,8 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
     if (count >= kMaxOddFirstQuasiPeriods) {
       return ErrorCode::Num;
     }
-    shift_months(y_walk, m_walk, -step_months);
-    const double prev = quasi_serial(y_walk, m_walk, anchor_day, date1904);
+    date_time::shift_year_month(y_walk, m_walk, -static_cast<std::int64_t>(step_months));
+    const double prev = date_time::serial_from_ymd_clamped(y_walk, m_walk, anchor_day, date1904);
     end_serials[count + 1] = prev;
     ++count;
     if (prev <= iss) {

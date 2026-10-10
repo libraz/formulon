@@ -181,29 +181,6 @@ inline Expected<CouponBondTail, ErrorCode> read_coupon_bond_tail(const Value* ar
   return CouponBondTail{v[0], v[1], v[2], frequency.value(), basis.value()};
 }
 
-// Constructs the serial for (y, m, anchor_day), clamping the day to the
-// target month's last day when shorter (month-end preservation: stepping
-// Aug-31 back three months lands on May-31, six months on Feb-28/29).
-inline double quasi_serial(int y, unsigned m, unsigned anchor_day, bool date1904) noexcept {
-  const unsigned last = date_time::days_in_month(y, m);
-  const unsigned d = anchor_day > last ? last : anchor_day;
-  return date_time::serial_from_ymd(y, m, d, date1904);
-}
-
-// Shifts (y, m) by `signed_months` (negative moves backward). Uses
-// floor-division so the month remainder wraps into the adjacent year.
-inline void shift_months(int& y, unsigned& m, int signed_months) noexcept {
-  long long mm0 = static_cast<long long>(m) - 1 + static_cast<long long>(signed_months);
-  long long year_shift = mm0 / 12;
-  long long rem = mm0 % 12;
-  if (rem < 0) {
-    rem += 12;
-    year_shift -= 1;
-  }
-  y += static_cast<int>(year_shift);
-  m = static_cast<unsigned>(rem + 1);
-}
-
 // Computes YEARFRAC(start, end, basis) under the same rules as the
 // YEARFRAC builtin. Allows a zero result; callers that divide by the
 // year fraction should reject zero before use. `date1904` must be the

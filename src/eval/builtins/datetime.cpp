@@ -478,21 +478,10 @@ struct MonthFields {
 };
 
 MonthFields shift_month_fields(const date_time::YMD& base, long long months) noexcept {
-  const long long base_months = static_cast<long long>(base.y) * 12 + static_cast<long long>(base.m - 1);
-  const long long total_months = base_months + months;
-  // Python-style floor-division so negative deltas work correctly.
-  long long new_y = total_months / 12;
-  long long new_m = total_months % 12;
-  if (new_m < 0) {
-    new_m += 12;
-    new_y -= 1;
-  }
-  MonthFields out;
-  out.y = static_cast<int>(new_y);
-  out.m = static_cast<unsigned>(new_m + 1);
-  const unsigned dim = days_in_month(out.y, out.m);
-  out.d = base.d > dim ? dim : base.d;
-  out.eom_d = dim;
+  MonthFields out{base.y, base.m, base.d, 0u};
+  date_time::shift_year_month(out.y, out.m, static_cast<std::int64_t>(months));
+  out.eom_d = days_in_month(out.y, out.m);
+  out.d = base.d > out.eom_d ? out.eom_d : base.d;
   return out;
 }
 

@@ -134,6 +134,12 @@ double serial_from_ymd(int y, unsigned m, unsigned d, bool date1904) noexcept {
   return static_cast<double>(civil + base);
 }
 
+double serial_from_ymd_clamped(int y, unsigned m, unsigned anchor_day, bool date1904) noexcept {
+  const unsigned last = days_in_month(y, m);
+  const unsigned day = anchor_day > last ? last : anchor_day;
+  return serial_from_ymd(y, m, day, date1904);
+}
+
 int weekday_sun0(double serial_floor, bool date1904) noexcept {
   // 1900: serial 1 is a Sunday. 1904: serial 0 (1904-01-01) is a Friday.
   const std::int64_t s = static_cast<std::int64_t>(std::floor(serial_floor)) + (date1904 ? 5 : 6);
@@ -265,6 +271,21 @@ unsigned days_in_month(int y, unsigned m) noexcept {
     return leap ? 29u : 28u;
   }
   return kTable[m - 1u];
+}
+
+void shift_year_month(int& y, unsigned& m, std::int64_t delta_months) noexcept {
+  // Split the delta before adding it to the year/month pair, making the negative remainder explicit.
+  std::int64_t year_delta = delta_months / 12;
+  std::int64_t month_index = static_cast<std::int64_t>(m) - 1 + delta_months % 12;
+  if (month_index < 0) {
+    month_index += 12;
+    --year_delta;
+  } else if (month_index >= 12) {
+    month_index -= 12;
+    ++year_delta;
+  }
+  y = static_cast<int>(static_cast<std::int64_t>(y) + year_delta);
+  m = static_cast<unsigned>(month_index + 1);
 }
 
 double basis_days_between(double a, double b, int basis, bool date1904) noexcept {

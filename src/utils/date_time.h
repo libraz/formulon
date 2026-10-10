@@ -85,6 +85,13 @@ inline constexpr double kDate1904EpochGap = 1462.0;
 /// mis-normalised month from clamping a date it should have rolled over.
 unsigned days_in_month(int y, unsigned m) noexcept;
 
+/// Shifts a normalised year/month pair by `delta_months`.
+///
+/// The month remainder is floor-normalised, so a negative shift from January
+/// lands in December of the preceding year rather than producing month 0.
+/// Callers must keep the resulting year representable by the `int` year field.
+void shift_year_month(int& y, unsigned& m, std::int64_t delta_months) noexcept;
+
 /// Converts a Gregorian (y, m, d) to days since 1970-01-01.
 ///
 /// Accepts any `y` and any `m` / `d`; out-of-range months/days are normalised
@@ -135,6 +142,11 @@ YMD legacy_1900_ymd(double serial) noexcept;
 /// ghost-day interception is skipped. The 1904 serial is exactly 1462
 /// less than the 1900 serial for the same calendar day.
 double serial_from_ymd(int y, unsigned m, unsigned d, bool date1904 = false) noexcept;
+
+/// Converts a year/month and anchor day to a serial, clamping the day to the
+/// target month's last day before applying the normal serial rules (an
+/// Aug-31 anchor three months back is May-31, six months back Feb-28/29).
+double serial_from_ymd_clamped(int y, unsigned m, unsigned anchor_day, bool date1904 = false) noexcept;
 
 /// Excel's weekday for a serial, Sunday = 0 .. Saturday = 6.
 ///

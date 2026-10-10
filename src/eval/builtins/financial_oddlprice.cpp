@@ -55,8 +55,8 @@ using date_time::basis_days_between;
 double quasi_after(const date_time::YMD& anchor, int k, int frequency, bool date1904) noexcept {
   int y = anchor.y;
   unsigned m = anchor.m;
-  shift_months(y, m, k * (12 / frequency));
-  return quasi_serial(y, m, anchor.d, date1904);
+  date_time::shift_year_month(y, m, static_cast<std::int64_t>(k) * (12 / frequency));
+  return date_time::serial_from_ymd_clamped(y, m, anchor.d, date1904);
 }
 
 }  // namespace
