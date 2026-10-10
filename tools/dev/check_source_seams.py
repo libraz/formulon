@@ -148,7 +148,11 @@ _APP_DIRS = frozenset({"c_api", "cli", "wasm", "node_addon"})
 # upward include stays.
 LAYER_BASELINE: dict[tuple[str, str], str] = {
     ("value.cpp", "eval/lambda_value.h"): "Value owns the LAMBDA payload.",
-    ("pivot/value_order.h", "eval/jp_fold.h"): "Pivot item ordering shares the eval kana/width folding.",
+    ("pivot/value_order.h", "eval/collation.h"): "Pivot item ordering shares the eval text collation.",
+    ("pivot/value_order.h", "eval/eval_profile_scope.h"): "Pivot collation reads the evaluating profile.",
+    ("pivot/filter_engine.cpp", "eval/collation.h"): "Label filters collate like the items they filter.",
+    ("pivot/filter_engine.cpp", "eval/eval_profile_scope.h"): "Pivot collation reads the evaluating profile.",
+    ("pivot/pivot_evaluator.cpp", "eval/eval_profile_scope.h"): "Pivot evaluation scopes the collation profile.",
 }
 
 _INCLUDE_RE = re.compile(r'^\s*#\s*include\s+"([^"]+)"')
