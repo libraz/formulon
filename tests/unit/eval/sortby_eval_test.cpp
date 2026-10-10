@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
 
@@ -360,14 +361,19 @@ const CollationCase kCollationCases[] = {
     {win_365_ja_jp_profile(), kWinJa, sizeof(kWinJa) / sizeof(kWinJa[0])},
 };
 
-Value EvalPair(const std::string& formula, ExcelProfile profile) {
+// Owns what an EvalPair result points into; it lives until the next call.
+struct PairEval {
   Workbook wb = Workbook::create();
-  Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx = test::mac_context(wb, sheet, state).with_excel_profile(profile);
   Arena parse_arena;
   Arena eval_arena;
-  return EvalUnder(formula, &parse_arena, &eval_arena, ctx);
+};
+
+Value EvalPair(const std::string& formula, ExcelProfile profile) {
+  static std::unique_ptr<PairEval> last;
+  last = std::make_unique<PairEval>();
+  const EvalContext ctx = test::mac_context(last->wb, last->wb.sheet(0), last->state).with_excel_profile(profile);
+  return EvalUnder(formula, &last->parse_arena, &last->eval_arena, ctx);
 }
 
 std::string PairArray(const CollationPair& p) {
