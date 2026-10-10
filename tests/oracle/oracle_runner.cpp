@@ -15,6 +15,8 @@
 #include <vector>
 
 #include "tests/oracle/json_reader.h"
+#include "utils/a1_ref.h"
+#include "utils/strings.h"
 
 #ifndef FORMULON_ORACLE_GOLDEN_DIR
 #define FORMULON_ORACLE_GOLDEN_DIR ""
@@ -147,37 +149,8 @@ std::pair<std::string, std::string> split_sheet_qualified_addr(const std::string
 bool a1_to_row_col(const std::string& a1, std::uint32_t* out_row, std::uint32_t* out_col) {
   if (a1.empty() || out_row == nullptr || out_col == nullptr)
     return false;
-  std::size_t i = 0;
-  std::uint32_t col = 0;
-  // Column letters: A..Z, AA..ZZ, ... (base-26 with digits 1..26, not 0..25).
-  while (i < a1.size()) {
-    char c = a1[i];
-    if (c >= 'A' && c <= 'Z') {
-      col = col * 26 + static_cast<std::uint32_t>(c - 'A' + 1);
-      ++i;
-    } else if (c >= 'a' && c <= 'z') {
-      col = col * 26 + static_cast<std::uint32_t>(c - 'a' + 1);
-      ++i;
-    } else {
-      break;
-    }
-  }
-  if (i == 0 || i == a1.size())
-    return false;  // missing letters or missing row
-  std::uint64_t row = 0;
-  for (; i < a1.size(); ++i) {
-    char c = a1[i];
-    if (c < '0' || c > '9')
-      return false;
-    row = row * 10 + static_cast<std::uint64_t>(c - '0');
-    if (row > 1048576ULL)
-      return false;  // Excel max row
-  }
-  if (row == 0 || col == 0)
-    return false;
-  *out_row = static_cast<std::uint32_t>(row - 1);
-  *out_col = col - 1;
-  return true;
+  const std::string upper = strings::to_ascii_upper(a1);
+  return a1::parse_a1_ref(upper, out_row, out_col);
 }
 
 std::string configured_golden_dir() {

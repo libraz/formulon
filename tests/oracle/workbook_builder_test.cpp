@@ -24,6 +24,7 @@
 #include "pivot/pivot_layout.h"
 #include "print/pagination.h"
 #include "tests/oracle/json_reader.h"
+#include "tests/oracle/oracle_runner.h"
 #include "value.h"
 
 namespace formulon {
@@ -108,6 +109,56 @@ JsonValue build_smoke_spec() {
 }
 
 // --- Tests ------------------------------------------------------------------
+
+TEST(WorkbookBuilder, A1ToRowColValidatesBoundsAndPreservesOutputsOnFailure) {
+  struct ValidCase {
+    const char* text;
+    std::uint32_t row;
+    std::uint32_t col;
+  };
+  constexpr std::array<ValidCase, 3> valid_cases{{
+      {"A1", 0U, 0U},
+      {"b2", 1U, 1U},
+      {"XFD1048576", 1048575U, 16383U},
+  }};
+  for (const ValidCase& test_case : valid_cases) {
+    std::uint32_t row = 0U;
+    std::uint32_t col = 0U;
+    ASSERT_TRUE(a1_to_row_col(test_case.text, &row, &col)) << test_case.text;
+    EXPECT_EQ(row, test_case.row) << test_case.text;
+    EXPECT_EQ(col, test_case.col) << test_case.text;
+  }
+
+  const auto expect_invalid = [](const char* text) {
+    constexpr std::uint32_t kSentinelRow = 0xA5A5A5A5U;
+    constexpr std::uint32_t kSentinelCol = 0x5A5A5A5AU;
+    std::uint32_t row = kSentinelRow;
+    std::uint32_t col = kSentinelCol;
+    EXPECT_FALSE(a1_to_row_col(text, &row, &col)) << text;
+    EXPECT_EQ(row, kSentinelRow) << text;
+    EXPECT_EQ(col, kSentinelCol) << text;
+  };
+
+  for (const char* text : {"", "A", "1", "A1!", "A1:B2"}) {
+    expect_invalid(text);
+  }
+  for (const char* text : {"XFE1", "ZZZ1", "A1048577", "A4294967296"}) {
+    expect_invalid(text);
+  }
+  // Case ids are not cell addresses; arbitrary long letter prefixes must not
+  // wrap the column accumulator into an apparently valid coordinate.
+  for (const char* text : {"times1", "cells3", "subtotal109"}) {
+    expect_invalid(text);
+  }
+
+  std::uint32_t row = 17U;
+  std::uint32_t col = 23U;
+  EXPECT_FALSE(a1_to_row_col("A1", nullptr, &col));
+  EXPECT_EQ(col, 23U);
+  EXPECT_FALSE(a1_to_row_col("A1", &row, nullptr));
+  EXPECT_EQ(row, 17U);
+  EXPECT_FALSE(a1_to_row_col("A1", nullptr, nullptr));
+}
 
 TEST(WorkbookBuilder, BuildsCacheAndTableFromSpec) {
   const JsonValue spec = build_smoke_spec();
