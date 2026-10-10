@@ -244,16 +244,6 @@ std::size_t walk_hierarchy(const std::vector<pivot::AxisHierarchyNode>& roots,
   return static_cast<std::size_t>(-1);
 }
 
-// Re-emits `v` so any Text payload is rooted in `arena` (the evaluator's
-// per-call arena), independent of the `PivotResult::text_storage` deque.
-// Numbers / bools / errors / blanks are trivially copyable.
-Value reify_in_arena(const Value& v, Arena& arena) {
-  if (!v.is_text()) {
-    return v;
-  }
-  return Value::text(arena.intern(v.as_text()));
-}
-
 }  // namespace
 
 Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -423,12 +413,14 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
   // shape because the row-axis path slot is unset. Mac's surface for
   // the bare call is the grand total even when axis fields are
   // configured.
+  // PivotResult text is backed by its cache storage, so returned Text values
+  // are copied into the evaluator's arena before leaving this function.
   if (pair_count == 0 && (!table->row_field_order().empty() || !table->col_field_order().empty())) {
     if (df_idx < pivot_result.grand_totals.size() && !pivot_result.grand_totals[df_idx].is_blank()) {
-      return reify_in_arena(pivot_result.grand_totals[df_idx], arena);
+      return adopt_text_into(arena, pivot_result.grand_totals[df_idx]);
     }
     if (df_idx == 0 && !pivot_result.grand_total.is_blank()) {
-      return reify_in_arena(pivot_result.grand_total, arena);
+      return adopt_text_into(arena, pivot_result.grand_total);
     }
     return Value::error(kPivotRefError);
   }
@@ -497,13 +489,13 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
     if (row_leaf >= pivot_result.row_leaf_totals.size() || df_idx >= pivot_result.row_leaf_totals[row_leaf].size()) {
       return Value::error(kPivotRefError);
     }
-    return reify_in_arena(pivot_result.row_leaf_totals[row_leaf][df_idx], arena);
+    return adopt_text_into(arena, pivot_result.row_leaf_totals[row_leaf][df_idx]);
   }
   if (col_complete && has_row_axis && !row_complete) {
     if (col_leaf >= pivot_result.col_leaf_totals.size() || df_idx >= pivot_result.col_leaf_totals[col_leaf].size()) {
       return Value::error(kPivotRefError);
     }
-    return reify_in_arena(pivot_result.col_leaf_totals[col_leaf][df_idx], arena);
+    return adopt_text_into(arena, pivot_result.col_leaf_totals[col_leaf][df_idx]);
   }
   if ((has_row_axis && !row_complete) || (has_col_axis && !col_complete)) {
     return Value::error(kPivotRefError);
@@ -513,7 +505,7 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
       df_idx >= pivot_result.values[row_leaf][col_leaf].size()) {
     return Value::error(kPivotRefError);
   }
-  return reify_in_arena(pivot_result.values[row_leaf][col_leaf][df_idx], arena);
+  return adopt_text_into(arena, pivot_result.values[row_leaf][col_leaf][df_idx]);
 }
 
 }  // namespace eval

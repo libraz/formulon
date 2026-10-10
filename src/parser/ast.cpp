@@ -190,9 +190,7 @@ AstNode* make_literal(Arena& arena, Value v) {
   // the caller's source (e.g. a Tokenizer arena scoped to Parser::parse()).
   // This matches the pattern used by every other factory below
   // (make_ref, make_call, make_name_ref, etc.).
-  if (v.kind() == ValueKind::Text) {
-    v = Value::text(arena.intern(v.as_text()));
-  }
+  v = adopt_text_into(arena, v);
   n->data_.literal = v;
   return n;
 }

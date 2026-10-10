@@ -7,10 +7,18 @@
 #include <string>
 
 #include "eval/lambda_value.h"
+#include "utils/arena.h"
 #include "utils/expected.h"
 #include "utils/number_text.h"
 
 namespace formulon {
+
+Value adopt_text_into(Arena& arena, Value value) noexcept {
+  if (!value.is_text()) {
+    return value;
+  }
+  return Value::text(arena.intern(value.as_text()));
+}
 
 double Value::as_number() const {
   FM_CHECK(kind_ == ValueKind::Number, "Value::as_number() on non-Number");

@@ -33,6 +33,7 @@ namespace eval {
 struct LambdaValue;
 }  // namespace eval
 
+class Arena;
 struct ArrayValue;
 
 /// Discriminator tag for every variant a cell may hold.
@@ -430,6 +431,11 @@ static_assert(std::is_trivially_copyable_v<Value>, "Value must be trivially copy
 // existing budget. With a 1-byte tag and alignment padding the struct
 // lands at 24 bytes on every platform Formulon targets.
 static_assert(sizeof(Value) <= 24, "Value must fit within 24 bytes");
+
+/// Copies a Text payload into `arena` and returns the re-homed value. All
+/// non-Text variants, including pointer-backed Array and Lambda values, pass
+/// through unchanged.
+Value adopt_text_into(Arena& arena, Value value) noexcept;
 
 }  // namespace formulon
 

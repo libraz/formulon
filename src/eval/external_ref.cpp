@@ -23,16 +23,6 @@ namespace formulon {
 namespace eval {
 namespace {
 
-/// Re-interns a Text result into the evaluation arena so the returned
-/// value does not borrow the workbook's cache.
-Value ReifyCached(Value cached, Arena& arena) {
-  if (!cached.is_text()) {
-    return cached;
-  }
-  const std::string_view interned = arena.intern(cached.as_text());
-  return Value::text(interned);
-}
-
 /// Materialises `[row_first..row_last] x [col_first..col_last]` of
 /// `book`'s sheet `sheet` as an Array.
 Value MaterializeRect(const ExternalBook& book, std::uint32_t sheet, std::uint32_t row_first, std::uint32_t row_last,
@@ -47,7 +37,7 @@ Value MaterializeRect(const ExternalBook& book, std::uint32_t sheet, std::uint32
   std::size_t k = 0;
   for (std::uint32_t r = row_first; r <= row_last; ++r) {
     for (std::uint32_t c = col_first; c <= col_last; ++c) {
-      buffer[k] = ReifyCached(book.cached_cell(sheet, r, c), arena);
+      buffer[k] = adopt_text_into(arena, book.cached_cell(sheet, r, c));
       ++k;
     }
   }
@@ -158,13 +148,13 @@ bool WholeAxisTail(const parser::AstNode& node, Arena& arena, const EvalContext&
   if (by_rows) {
     for (std::uint32_t r = 0; r < head; ++r) {
       for (std::uint32_t c = rect.col_first; c <= rect.col_last; ++c) {
-        cells[k++] = ReifyCached(book->cached_cell(sheet, r, c), arena);
+        cells[k++] = adopt_text_into(arena, book->cached_cell(sheet, r, c));
       }
     }
   } else {
     for (std::uint32_t r = rect.row_first; r <= rect.row_last; ++r) {
       for (std::uint32_t c = 0; c < head; ++c) {
-        cells[k++] = ReifyCached(book->cached_cell(sheet, r, c), arena);
+        cells[k++] = adopt_text_into(arena, book->cached_cell(sheet, r, c));
       }
     }
   }
@@ -203,7 +193,7 @@ Value ResolveDense(const parser::AstNode& node, Arena& arena, const EvalContext&
   }
   const parser::Reference& first = node.as_external_ref_cell();
   if (!node.as_external_ref_is_range() && !first.is_full_col && !first.is_full_row) {
-    return ReifyCached(book.cached_cell(sheet, first.row, first.col), arena);
+    return adopt_text_into(arena, book.cached_cell(sheet, first.row, first.col));
   }
   std::uint32_t row_first = 0;
   std::uint32_t row_last = 0;
@@ -271,7 +261,7 @@ Expected<ExternalRect, ErrorCode> resolve_external_rect(const parser::AstNode& n
 
 Value read_external_cell(const ExternalBook& book, std::uint32_t sheet, std::uint32_t row, std::uint32_t col,
                          Arena& arena) {
-  return ReifyCached(book.cached_cell(sheet, row, col), arena);
+  return adopt_text_into(arena, book.cached_cell(sheet, row, col));
 }
 
 Value resolve_external_book_name(const ExternalBook& book, std::uint32_t scope_sheet, std::string_view name,
@@ -284,7 +274,7 @@ Value resolve_external_book_name(const ExternalBook& book, std::uint32_t scope_s
     return Value::error(ErrorCode::Ref);
   }
   if (!entry->is_range) {
-    return ReifyCached(book.cached_cell(entry->sheet, entry->row, entry->col), arena);
+    return adopt_text_into(arena, book.cached_cell(entry->sheet, entry->row, entry->col));
   }
   return MaterializeRect(book, entry->sheet, entry->row, entry->row_end, entry->col, entry->col_end, arena);
 }
@@ -327,7 +317,7 @@ bool collect_external_ref3d_cells(const parser::AstNode& node, Arena& arena, con
     }
     for (std::uint32_t r = row_first; r <= row_last; ++r) {
       for (std::uint32_t c = col_first; c <= col_last; ++c) {
-        out->push_back(ReifyCached(book.cached_cell(sheet, r, c), arena));
+        out->push_back(adopt_text_into(arena, book.cached_cell(sheet, r, c)));
       }
     }
   }

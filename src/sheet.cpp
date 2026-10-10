@@ -151,25 +151,6 @@ Cell& RowCells::ensure(std::uint32_t col) {
   return run_[index];
 }
 
-namespace {
-
-// Returns `value` with any Text payload copied into `arena`.
-//
-// A Text `Value` read out of sheet storage is a view into bytes the sheet
-// owns and frees: a cell's `cached_text_owned`, replaced by the next cached
-// write, or a spill region's `owned_strings`, freed when the region is
-// cleared. Re-homing the bytes under the same lock that read them is what
-// lets the copy leave the critical section; the caller's arena decides how
-// long it stays readable. Non-Text values carry no pointer.
-Value AdoptText(const Value& value, Arena& arena) {
-  if (!value.is_text()) {
-    return value;
-  }
-  return Value::text(arena.intern(value.as_text()));
-}
-
-}  // namespace
-
 void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
   // Bounds checks are advisory: callers above this layer (parser, OOXML
   // reader) own coordinate validation. A debug assert catches programming
@@ -867,16 +848,16 @@ void Sheet::read_range(std::uint32_t first_row, std::uint32_t last_row, std::uin
       // a covering spill region, which in turn wins over a stored literal.
       if (cell != nullptr && !cell->formula_text.empty()) {
         formula_indices.push_back(out.size());
-        out.push_back(AdoptText(cell->cached_value, text_arena));
+        out.push_back(adopt_text_into(text_arena, cell->cached_value));
         continue;
       }
       if (const SpillRegion* region = covering(row, col); region != nullptr) {
         const std::size_t index = static_cast<std::size_t>(row - region->anchor_row) * region->cols +
                                   static_cast<std::size_t>(col - region->anchor_col);
-        out.push_back(AdoptText(region->cells[index], text_arena));
+        out.push_back(adopt_text_into(text_arena, region->cells[index]));
         continue;
       }
-      out.push_back(cell != nullptr ? AdoptText(cell->cached_value, text_arena) : Value::blank());
+      out.push_back(cell != nullptr ? adopt_text_into(text_arena, cell->cached_value) : Value::blank());
     }
   }
 }
@@ -895,7 +876,7 @@ bool Sheet::read_spill_region_at_anchor(std::uint32_t row, std::uint32_t col, Ar
   const SpillRegion& region = it->second;
   out_cells.reserve(out_cells.size() + region.cells.size());
   for (const Value& value : region.cells) {
-    out_cells.push_back(AdoptText(value, text_arena));
+    out_cells.push_back(adopt_text_into(text_arena, value));
   }
   if (out_rows != nullptr) {
     *out_rows = region.rows;

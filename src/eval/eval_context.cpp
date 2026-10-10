@@ -158,20 +158,6 @@ Expected<std::string_view, ErrorCode> effective_range_sheet(const parser::Refere
   return rhs.sheet;
 }
 
-// Re-homes a Text payload into `arena`.
-//
-// A `Sheet::CellRead` owns its bytes only for as long as the snapshot
-// object lives, and the snapshot is a local of `resolve_ref`. The arena is
-// the lifetime the overload already promises its callers, so anything
-// derived from a snapshot has to be copied into it before it is returned.
-// Non-Text values carry no pointer and pass through untouched.
-Value adopt_into_arena(Arena& arena, Value value) {
-  if (!value.is_text()) {
-    return value;
-  }
-  return Value::text(arena.intern(value.as_text()));
-}
-
 }  // namespace
 
 const Sheet* EvalContext::sheet_for_qualifier(std::string_view sheet_name) const noexcept {
@@ -241,7 +227,7 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
     // Phantom-aware read: an absent or literal cell resolves through the
     // spill table so phantom cells of a committed region are visible to
     // cross-cell references.
-    return adopt_into_arena(arena, read.value());
+    return adopt_text_into(arena, read.value());
   }
 
   // Same-sheet mutable references are dispatched through SpillCommitter and
@@ -255,7 +241,7 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
   // Formula cell. If no recursive state is bound, fall back to the
   // non-recursive behaviour so the two overloads agree.
   if (state_ == nullptr || state_->observing_reads()) {
-    const Value cached = adopt_into_arena(arena, read.value());
+    const Value cached = adopt_text_into(arena, read.value());
     return scalarize_result ? scalarize_formula_ref(cached) : cached;
   }
 
@@ -273,7 +259,7 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
     // shows 0 plus a circular-reference warning banner, which Formulon has
     // no surface for yet.
     if (workbook_ != nullptr && workbook_->iterative_options().enabled) {
-      const Value cached = adopt_into_arena(arena, read.value());
+      const Value cached = adopt_text_into(arena, read.value());
       return scalarize_result ? scalarize_formula_ref(cached) : cached;
     }
     return Value::error(ErrorCode::Ref);
