@@ -9,18 +9,66 @@ namespace {
 using Names7 = std::array<std::string_view, 7>;
 using Names12 = std::array<std::string_view, 12>;
 using ErrorNames = std::array<std::string_view, kErrorNameCount>;
-using DbnumDigits = std::array<std::array<std::string_view, 10>, 2>;
 
+// Error spellings, in `kErrorTable` order: the classic errors and #GETTING_DATA
+// as formula text writes them, #SPILL! and #CALC! as ARRAYTOTEXT does
+// (locale_tokens.arraytotext_range_error_*, arraytotext_error_literal_getting_data).
+// The errors after #CALC! cannot be produced on Mac and keep the English spelling.
 constexpr ErrorNames kEnglishErrorNames{
     "#NULL!", "#DIV/0!", "#VALUE!",   "#REF!",     "#NAME?",     "#NUM!",  "#N/A",     "#GETTING_DATA", "#SPILL!",
     "#CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
 };
-
-// Only #N/A is localized by a capture (arraytotext.arraytotext_error_literal_in_array_default);
-// #DIV/0! is measured unchanged and every other slot is unmeasured.
-constexpr ErrorNames kGermanErrorNames{
-    "#NULL!", "#DIV/0!", "#VALUE!",   "#REF!",     "#NAME?",     "#NUM!",  "#NV",      "#GETTING_DATA", "#SPILL!",
+constexpr ErrorNames kJapaneseErrorNames{
+    "#NULL!", "#DIV/0!", "#VALUE!",   "#REF!",     "#NAME?",     "#NUM!",  "#N/A",     "#GETTING_DATA", "#スピル!",
     "#CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
+};
+constexpr ErrorNames kChineseErrorNames{
+    "#NULL!", "#DIV/0!", "#VALUE!",   "#REF!",     "#NAME?",     "#NUM!",  "#N/A",     "#GETTING_DATA", "#溢出!",
+    "#CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
+};
+constexpr ErrorNames kKoreanErrorNames{
+    "#NULL!", "#DIV/0!", "#VALUE!",   "#REF!",     "#NAME?",     "#NUM!",  "#N/A",     "#GETTING_DATA", "#분산!",
+    "#CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
+};
+constexpr ErrorNames kThaiErrorNames{
+    "#NULL!", "#DIV/0!", "#VALUE!",   "#REF!",     "#NAME?",     "#NUM!",  "#N/A",     "#GETTING_DATA", "#สปิลล์!",
+    "#CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
+};
+constexpr ErrorNames kGermanErrorNames{
+    "#NULL!", "#DIV/0!", "#WERT!",    "#BEZUG!",   "#NAME?",     "#ZAHL!", "#NV",      "#DATEN_ABRUFEN", "#SPILL!",
+    "#CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
+};
+constexpr ErrorNames kFrenchErrorNames{
+    "#NUL!",     "#DIV/0!", "#VALEUR!", "#REF!",     "#NOM?",     "#NOMBRE!",   "#N/A",   "#CHARGEMENT_DONNEES",
+    "#SPILL!",   "#CALC!",  "#FIELD!",  "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!",
+    "#UNKNOWN!",
+};
+constexpr ErrorNames kSpanishErrorNames{
+    "#¡NULO!", "#¡DIV/0!", "#¡VALOR!",  "#¡REF!",    "#¿NOMBRE?",  "#¡NUM!", "#N/D",     "#OBTENIENDO_DATOS", "#SPILL!",
+    "#CALC!",  "#FIELD!",  "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
+};
+constexpr ErrorNames kMexicanSpanishErrorNames{
+    "#NULO!",  "#DIV/0!", "#VALOR!",   "#REF!",     "#NOMBRE?",   "#N¡NUM!", "#N/D",     "#OBTENIENDO_DATOS", "#SPILL!",
+    "#¡CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!",  "#PYTHON!", "#UNKNOWN!",
+};
+constexpr ErrorNames kPortugueseErrorNames{
+    "#NULO!", "#DIV/0!", "#VALOR!",   "#REF!",     "#NOME?",     "#NÚM!",  "#N/D",     "#OBTENDO_DADOS", "#DESPEJAR!",
+    "#CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
+};
+constexpr ErrorNames kRussianErrorNames{
+    "#ПУСТО!",   "#ДЕЛ/0!",          "#ЗНАЧ!",    "#ССЫЛКА!", "#ИМЯ?",     "#ЧИСЛО!",
+    "#Н/Д",      "#ОЖИДАНИЕ_ДАННЫХ", "#ПЕРЕНОС!", "#ВЫЧИСЛ!", "#FIELD!",   "#BLOCKED!",
+    "#CONNECT!", "#EXTERNAL!",       "#BUSY!",    "#PYTHON!", "#UNKNOWN!",
+};
+constexpr ErrorNames kItalianErrorNames{
+    "#NULL!",    "#DIV/0!", "#VALORE!", "#RIF!",     "#NOME?",    "#NUM!",      "#N/D",   "#ESTRAZIONE_DATI_IN_CORSO",
+    "#SPILL!",   "#CALC!",  "#FIELD!",  "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!",
+    "#UNKNOWN!",
+};
+constexpr ErrorNames kDutchErrorNames{
+    "#LEEG!",    "#DELING.DOOR.0!",   "#WAARDE!", "#VERW!",   "#NAAM?",    "#GETAL!",
+    "#N/B",      "#GEGEVENS.OPHALEN", "#SPILL!",  "#CALC!",   "#FIELD!",   "#BLOCKED!",
+    "#CONNECT!", "#EXTERNAL!",        "#BUSY!",   "#PYTHON!", "#UNKNOWN!",
 };
 
 constexpr Names12 kEnglishMonthsLong{"January", "February", "March",     "April",   "May",      "June",
@@ -49,19 +97,128 @@ constexpr FormatLetters kInvariantLetters{'y', 'm', 'd', 'h', 'm', 's', false, f
 constexpr std::array<std::string_view, 8> kEnglishColorNames{"Black",   "Blue", "Cyan",  "Green",
                                                              "Magenta", "Red",  "White", "Yellow"};
 
-constexpr std::array<std::string_view, 10> kAsciiDigits{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+// [DBNum1]-[DBNum4]: dbnum_digits, dbnum_place_units, dbnum_place_one_filler, dbnum_general_*,
+// dbnum_date_fields.
+// A directive the locale accepts and leaves in ASCII digits (dbnum_digits).
+constexpr DbnumStyle kAsciiDbnumStyle{
+    {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}, {}, {}, false, false, false, false};
+constexpr DbnumStyles kJapaneseDbnumStyles{{
+    DbnumStyle{{"〇", "一", "二", "三", "四", "五", "六", "七", "八", "九"},
+               {"十", "百", "千"},
+               {"万", "億", "兆"},
+               false,
+               false,
+               true,
+               false},
+    DbnumStyle{{"〇", "壱", "弐", "参", "四", "伍", "六", "七", "八", "九"},
+               {"拾", "百", "阡"},
+               {"萬", "億", "兆"},
+               true,
+               false,
+               true,
+               true},
+    DbnumStyle{{"０", "１", "２", "３", "４", "５", "６", "７", "８", "９"},
+               {"十", "百", "千"},
+               {"万", "億", "兆"},
+               false,
+               false,
+               false,
+               false},
+    kAsciiDbnumStyle,
+}};
+
+constexpr DbnumStyles kChineseDbnumStyles{{
+    DbnumStyle{{"○", "一", "二", "三", "四", "五", "六", "七", "八", "九"},
+               {"十", "百", "千"},
+               {"万", "亿", "兆"},
+               true,
+               true,
+               true,
+               false},
+    DbnumStyle{{"零", "壹", "贰", "叁", "肆", "伍", "陆", "柒", "捌", "玖"},
+               {"拾", "佰", "仟"},
+               {"万", "亿", "兆"},
+               true,
+               true,
+               true,
+               true},
+    DbnumStyle{{"０", "１", "２", "３", "４", "５", "６", "７", "８", "９"},
+               {"十", "百", "千"},
+               {"万", "亿", "兆"},
+               true,
+               true,
+               false,
+               false},
+    kAsciiDbnumStyle,
+}};
+
+constexpr DbnumStyles kKoreanDbnumStyles{{
+    DbnumStyle{{"０", "一", "二", "三", "四", "五", "六", "七", "八", "九"},
+               {"十", "百", "千"},
+               {"万", "億", "兆"},
+               true,
+               false,
+               true,
+               false},
+    DbnumStyle{{"零", "壹", "貳", "參", "四", "伍", "六", "七", "八", "九"},
+               {"拾", "百", "阡"},
+               {"萬", "億", "兆"},
+               true,
+               false,
+               true,
+               true},
+    DbnumStyle{{"０", "１", "２", "３", "４", "５", "６", "７", "８", "９"},
+               {"十", "百", "千"},
+               {"万", "億", "兆"},
+               false,
+               false,
+               false,
+               false},
+    DbnumStyle{{"영", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"},
+               {"십", "백", "천"},
+               {"만", "억", "조"},
+               true,
+               false,
+               true,
+               false},
+}};
+
+constexpr DbnumStyles kTraditionalChineseDbnumStyles{{
+    DbnumStyle{{"○", "一", "二", "三", "四", "五", "六", "七", "八", "九"},
+               {"十", "百", "千"},
+               {"萬", "億", "兆"},
+               true,
+               true,
+               true,
+               false},
+    DbnumStyle{{"零", "壹", "貳", "參", "肆", "伍", "陸", "柒", "捌", "玖"},
+               {"拾", "佰", "仟"},
+               {"萬", "億", "兆"},
+               true,
+               true,
+               true,
+               true},
+    DbnumStyle{{"０", "１", "２", "３", "４", "５", "６", "７", "８", "９"},
+               {"十", "百", "千"},
+               {"萬", "億", "兆"},
+               true,
+               true,
+               false,
+               false},
+    kAsciiDbnumStyle,
+}};
 
 // @size-budget: 12 KB
 constexpr LocaleFacts kJapaneseFacts{
-    '.',                 // locale_tokens.fixed_negative
-    ',',                 // fixed_negative
-    ',',                 // formulatext_bool_literal
-    ',',                 // formulatext_array_constant
-    ';',                 // formulatext_array_constant
-    "TRUE",              // bool_text_true
-    "FALSE",             // bool_text_false
-    false,               // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
-    kEnglishErrorNames,  // arraytotext.arraytotext_only_error_cells_default; others unmeasured
+    '.',                  // locale_tokens.fixed_negative
+    ',',                  // fixed_negative
+    ',',                  // formulatext_bool_literal
+    ',',                  // formulatext_array_constant
+    ';',                  // formulatext_array_constant
+    "TRUE",               // bool_text_true
+    "FALSE",              // bool_text_false
+    false,                // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
+    kJapaneseErrorNames,  // locale_tokens.arraytotext_range_error_*
     'R',
     'C',
     '[',
@@ -95,24 +252,21 @@ constexpr LocaleFacts kJapaneseFacts{
     "PM",                   // text_format.text_time_pm
     true,                   // text_format.text_time_a_p
     DbcsCodepage::kJis0208,
-    true,      // code_char_jp_probes.char_halfwidth_kata_177
-    true,      // value_numbervalue.value_fullwidth_digits
-    false,     // code_char_jp_probes.near_char
-    true,      // lazy_forms.lazy_phonetic_unannotated_cell
-    true,      // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
-    true,      // text_format.text_four_section_text
-    true,      // text_format.text_dbnum1
-    false,     // locale_tokens.text_letter_t_digits
-    '\0',      // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    true,      // existing ja behaviour; unmeasured
-    false,     // text_general_english
-    false,     // text_decimal_point
-    "G/標準",  // text_general_g_hyojun
-    {"黒", "青", "水", "緑", "紫", "赤", "白", "黄"},  // text_color_aka
-    DbnumDigits{{
-        {"〇", "一", "二", "三", "四", "五", "六", "七", "八", "九"},
-        {"零", "壱", "弐", "参", "四", "伍", "六", "七", "捌", "玖"},
-    }},  // text_format.text_dbnum1, text_format.text_dbnum2
+    true,                   // code_char_jp_probes.char_halfwidth_kata_177
+    true,                   // value_numbervalue.value_fullwidth_digits
+    false,                  // code_char_jp_probes.near_char
+    true,                   // lazy_forms.lazy_phonetic_unannotated_cell
+    true,                   // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
+    true,                   // text_format.text_four_section_text
+    &kJapaneseDbnumStyles,  // locale_tokens.dbnum_digits
+    false,                  // locale_tokens.text_letter_t_digits
+    '\0',                   // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
+    true,                   // existing ja behaviour; unmeasured
+    false,                  // text_general_english
+    false,                  // text_decimal_point
+    "G/標準",               // text_general_g_hyojun
+    {"黒", "青", "水", "緑", "紫", "赤", "白", "黄"},  // text_colors_ja_jp
+    "色",                                              // text_color_index_prefixes
     "合計",
     "総計",
     "行フィールド ",
@@ -123,15 +277,15 @@ constexpr LocaleFacts kJapaneseFacts{
 };
 
 constexpr LocaleFacts kEnglishFacts{
-    '.',      // fixed_negative
-    ',',      // fixed_negative
-    ',',      // formulatext_bool_literal
-    ',',      // formulatext_array_constant
-    ';',      // formulatext_array_constant
-    "TRUE",   // bool_text_true
-    "FALSE",  // bool_text_false
-    false,    // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
-    kEnglishErrorNames,
+    '.',                 // fixed_negative
+    ',',                 // fixed_negative
+    ',',                 // formulatext_bool_literal
+    ',',                 // formulatext_array_constant
+    ';',                 // formulatext_array_constant
+    "TRUE",              // bool_text_true
+    "FALSE",             // bool_text_false
+    false,               // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
+    kEnglishErrorNames,  // locale_tokens.arraytotext_range_error_*
     'R',
     'C',
     '[',
@@ -171,15 +325,15 @@ constexpr LocaleFacts kEnglishFacts{
     false,
     false,
     false,
+    nullptr,  // locale_tokens.dbnum_digits
+    false,    // locale_tokens.text_letter_t_digits
+    '\0',     // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
     false,
-    false,  // locale_tokens.text_letter_t_digits
-    '\0',   // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,
-    true,                                       // text_general_english
-    false,                                      // text_decimal_point
-    "",                                         // text_general_english
-    kEnglishColorNames,                         // text_color_red
-    DbnumDigits{{kAsciiDigits, kAsciiDigits}},  // text_format.text_dbnum1
+    true,                // text_general_english
+    false,               // text_decimal_point
+    "",                  // text_general_english
+    kEnglishColorNames,  // text_colors_en_us
+    "Color",             // text_color_index_prefixes
     "Total",
     "Grand Total",
     "Row Field ",
@@ -190,15 +344,15 @@ constexpr LocaleFacts kEnglishFacts{
 };
 
 constexpr LocaleFacts kGermanFacts{
-    ',',       // fixed_negative
-    '.',       // fixed_negative
-    ';',       // formulatext_bool_literal
-    '.',       // formulatext_array_constant
-    ';',       // formulatext_array_constant
-    "WAHR",    // bool_text_true
-    "FALSCH",  // bool_text_false
-    true,      // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
-    kGermanErrorNames,
+    ',',                // fixed_negative
+    '.',                // fixed_negative
+    ';',                // formulatext_bool_literal
+    '.',                // formulatext_array_constant
+    ';',                // formulatext_array_constant
+    "WAHR",             // bool_text_true
+    "FALSCH",           // bool_text_false
+    true,               // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
+    kGermanErrorNames,  // locale_tokens.arraytotext_range_error_*
     'Z',
     'S',
     '(',
@@ -241,34 +395,34 @@ constexpr LocaleFacts kGermanFacts{
     false,       // lazy_forms.lazy_phonetic_unannotated_cell
     false,       // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,       // text_format.text_four_section_text
-    false,       // text_format.text_dbnum1
+    nullptr,     // locale_tokens.dbnum_digits
     false,       // locale_tokens.text_letter_t_digits
     '\0',        // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
     false,       // unmeasured
     false,       // text_general_english
     false,       // text_decimal_point
     "Standard",  // text_general_standard
-    {"", "", "", "", "", "Rot", "", ""},        // text_color_rot; other colours unmeasured
-    DbnumDigits{{kAsciiDigits, kAsciiDigits}},  // text_format.text_dbnum1
-    "Gesamt",                                   // groupby.groupby_measured_fh2_hdr
-    "Gesamtergebnis",                           // pivotby.pivotby_row_subtotal_depth_two
-    "Zeilenfeld ",                              // groupby.groupby_measured_fh2_hdr
-    "Spaltenfeld ",                             // pivotby.pivotby_measured_fh2_hdr
-    "Wert ",                                    // groupby.groupby_measured_fh2_hdr
+    {"Schwarz", "Blau", "Zyan", "Grün", "Magenta", "Rot", "Weiß", "Gelb"},  // text_colors_de_de
+    "Farbe",                                                                // text_color_index_prefixes
+    "Gesamt",                                                               // groupby.groupby_measured_fh2_hdr
+    "Gesamtergebnis",                                                       // pivotby.pivotby_row_subtotal_depth_two
+    "Zeilenfeld ",                                                          // groupby.groupby_measured_fh2_hdr
+    "Spaltenfeld ",                                                         // pivotby.pivotby_measured_fh2_hdr
+    "Wert ",                                                                // groupby.groupby_measured_fh2_hdr
     {"Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"},  // weekdays_aaaa
     {"So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"},                                         // weekdays_aaa
 };
 
 constexpr LocaleFacts kFrenchFacts{
-    ',',                 // fixed_negative
-    ' ',                 // fixed_negative
-    ';',                 // formulatext_bool_literal
-    '.',                 // formulatext_array_constant
-    ';',                 // formulatext_array_constant
-    "VRAI",              // bool_text_true
-    "FAUX",              // bool_text_false
-    true,                // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
-    kEnglishErrorNames,  // arraytotext.arraytotext_error_literal_in_array_default; others unmeasured
+    ',',                // fixed_negative
+    ' ',                // fixed_negative
+    ';',                // formulatext_bool_literal
+    '.',                // formulatext_array_constant
+    ';',                // formulatext_array_constant
+    "VRAI",             // bool_text_true
+    "FAUX",             // bool_text_false
+    true,               // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
+    kFrenchErrorNames,  // locale_tokens.arraytotext_range_error_*
     'L',
     'C',
     '(',
@@ -311,22 +465,22 @@ constexpr LocaleFacts kFrenchFacts{
     false,       // lazy_forms.lazy_phonetic_unannotated_cell
     false,       // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,       // text_format.text_four_section_text
-    false,       // text_format.text_dbnum1
+    nullptr,     // locale_tokens.dbnum_digits
     false,       // locale_tokens.text_letter_t_digits
     '\0',        // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
     false,       // unmeasured
     false,       // text_general_english
     false,       // text_decimal_point
     "Standard",  // text_general_standard
-    {"", "", "", "", "", "Rouge", "", ""},      // text_color_rouge; other colours unmeasured
-    DbnumDigits{{kAsciiDigits, kAsciiDigits}},  // text_format.text_dbnum1
-    "Total",                                    // groupby.groupby_measured_fh2_hdr
-    "Total général",                            // pivotby.pivotby_row_subtotal_depth_two
-    "Champ de ligne ",                          // groupby.groupby_measured_fh2_hdr
-    "Champ de colonne ",                        // pivotby.pivotby_measured_fh2_hdr
-    "Valeur ",                                  // groupby.groupby_measured_fh2_hdr
-    kEnglishDaysLong,                           // unmeasured: aaaa is a year token (weekdays_aaaa)
-    kEnglishDaysShort,                          // unmeasured: aaa is a year token (weekdays_aaa)
+    {"Noir", "Bleu", "Cyan", "Vert", "Magenta", "Rouge", "Blanc", "Jaune"},  // text_colors_fr_fr
+    "Couleur",                                                               // text_color_index_prefixes
+    "Total",                                                                 // groupby.groupby_measured_fh2_hdr
+    "Total général",                                                         // pivotby.pivotby_row_subtotal_depth_two
+    "Champ de ligne ",                                                       // groupby.groupby_measured_fh2_hdr
+    "Champ de colonne ",                                                     // pivotby.pivotby_measured_fh2_hdr
+    "Valeur ",                                                               // groupby.groupby_measured_fh2_hdr
+    kEnglishDaysLong,   // unmeasured: aaaa is a year token (weekdays_aaaa)
+    kEnglishDaysShort,  // unmeasured: aaa is a year token (weekdays_aaa)
 };
 
 constexpr LocaleFacts kChineseFacts{
@@ -338,7 +492,7 @@ constexpr LocaleFacts kChineseFacts{
     "TRUE",              // bool_text_true
     "FALSE",             // bool_text_false
     false,               // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
-    kEnglishErrorNames,  // arraytotext.arraytotext_error_literal_in_array_default; others unmeasured
+    kChineseErrorNames,  // locale_tokens.arraytotext_range_error_*
     'R',
     'C',
     '[',
@@ -376,39 +530,36 @@ constexpr LocaleFacts kChineseFacts{
     true,                   // value_numbervalue.value_fullwidth_digits
     false,                  // code_char_jp_probes.near_char
     true,                   // lazy_forms.lazy_phonetic_unannotated_cell
-    false,         // no width folding (dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header)
-    true,          // text_format.text_four_section_text
-    true,          // text_format.text_dbnum1
-    false,         // locale_tokens.text_letter_t_digits
-    '\0',          // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,         // unmeasured
-    false,         // text_general_english
-    false,         // text_decimal_point
-    "G/通用格式",  // text_general_g_tongyong
-    {"", "", "", "", "", "红色", "", ""},  // text_color_hongse; other colours unmeasured
-    DbnumDigits{{
-        {"○", "一", "二", "三", "四", "5", "6", "7", "8", "9"},  // 5-9 unmeasured
-        {"0", "壹", "贰", "叁", "肆", "5", "6", "7", "8", "9"},  // 0 and 5-9 unmeasured
-    }},         // text_format.text_dbnum1_with_era, text_format.text_dbnum1, text_format.text_dbnum2
-    "总计",     // groupby.groupby_measured_fh2_hdr
-    "总计",     // pivotby.pivotby_row_subtotal_depth_two
-    "行字段 ",  // groupby.groupby_measured_fh2_hdr
-    "列字段 ",  // pivotby.pivotby_measured_fh2_hdr
-    "值 ",      // groupby.groupby_measured_fh2_hdr
+    false,  // no width folding (dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header)
+    true,   // text_format.text_four_section_text
+    &kChineseDbnumStyles,  // locale_tokens.dbnum_digits
+    false,                 // locale_tokens.text_letter_t_digits
+    '\0',                  // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
+    false,                 // unmeasured
+    false,                 // text_general_english
+    false,                 // text_decimal_point
+    "G/通用格式",          // text_general_g_tongyong
+    {"黑色", "蓝色", "蓝绿色", "绿色", "洋红", "红色", "白色", "黄色"},      // text_colors_zh_cn
+    "颜色",                                                                  // text_color_index_prefixes
+    "总计",                                                                  // groupby.groupby_measured_fh2_hdr
+    "总计",                                                                  // pivotby.pivotby_row_subtotal_depth_two
+    "行字段 ",                                                               // groupby.groupby_measured_fh2_hdr
+    "列字段 ",                                                               // pivotby.pivotby_measured_fh2_hdr
+    "值 ",                                                                   // groupby.groupby_measured_fh2_hdr
     {"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"},  // weekdays_aaaa
     {"周日", "周一", "周二", "周三", "周四", "周五", "周六"},                // weekdays_aaa
 };
 
 constexpr LocaleFacts kKoreanFacts{
-    '.',                 // fixed_negative
-    ',',                 // fixed_negative
-    ',',                 // formulatext_bool_literal
-    ',',                 // formulatext_array_constant
-    ';',                 // formulatext_array_constant
-    "TRUE",              // bool_text_true
-    "FALSE",             // bool_text_false
-    false,               // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
-    kEnglishErrorNames,  // arraytotext.arraytotext_error_literal_in_array_default; others unmeasured
+    '.',                // fixed_negative
+    ',',                // fixed_negative
+    ',',                // formulatext_bool_literal
+    ',',                // formulatext_array_constant
+    ';',                // formulatext_array_constant
+    "TRUE",             // bool_text_true
+    "FALSE",            // bool_text_false
+    false,              // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
+    kKoreanErrorNames,  // locale_tokens.arraytotext_range_error_*
     'R',
     'C',
     '[',
@@ -448,37 +599,34 @@ constexpr LocaleFacts kKoreanFacts{
     true,                    // lazy_forms.lazy_phonetic_unannotated_cell
     false,                   // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     true,                    // text_format.text_four_section_text
-    true,                    // text_format.text_dbnum1
+    &kKoreanDbnumStyles,     // locale_tokens.dbnum_digits
     false,                   // locale_tokens.text_letter_t_digits
     '\0',                    // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
     false,                   // unmeasured
     false,                   // text_general_english
     false,                   // text_decimal_point
     "G/표준",                // text_general_g_pyojun
-    {"", "", "", "", "", "빨강", "", ""},  // text_color_ppalgang; other colours unmeasured
-    DbnumDigits{{
-        {"０", "一", "二", "三", "四", "5", "6", "7", "8", "9"},           // 5-9 unmeasured
-        {"0", "壹", "貳", "\xEF\xA5\xAB", "四", "5", "6", "7", "8", "9"},  // 3 is U+F96B; 0 and 5-9 unmeasured
-    }},          // text_format.text_dbnum1_with_era, text_format.text_dbnum1, text_format.text_dbnum2
-    "합계",      // groupby.groupby_measured_fh2_hdr
-    "총합계",    // pivotby.pivotby_row_subtotal_depth_two
-    "행 필드 ",  // groupby.groupby_measured_fh2_hdr
-    "열 필드 ",  // pivotby.pivotby_measured_fh2_hdr
-    "값 ",       // groupby.groupby_measured_fh2_hdr
+    {"검정", "파랑", "녹청", "녹색", "자홍", "빨강", "흰색", "노랑"},        // text_colors_ko_kr
+    "색",                                                                    // text_color_index_prefixes
+    "합계",                                                                  // groupby.groupby_measured_fh2_hdr
+    "총합계",                                                                // pivotby.pivotby_row_subtotal_depth_two
+    "행 필드 ",                                                              // groupby.groupby_measured_fh2_hdr
+    "열 필드 ",                                                              // pivotby.pivotby_measured_fh2_hdr
+    "값 ",                                                                   // groupby.groupby_measured_fh2_hdr
     {"일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"},  // weekdays_aaaa
     {"일", "월", "화", "수", "목", "금", "토"},                              // weekdays_aaa
 };
 
 constexpr LocaleFacts kThaiFacts{
-    '.',                 // fixed_negative
-    ',',                 // fixed_negative
-    ',',                 // formulatext_bool_literal
-    ',',                 // formulatext_array_constant
-    ';',                 // formulatext_array_constant
-    "TRUE",              // bool_text_true
-    "FALSE",             // bool_text_false
-    false,               // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
-    kEnglishErrorNames,  // arraytotext.arraytotext_error_literal_in_array_default; others unmeasured
+    '.',              // fixed_negative
+    ',',              // fixed_negative
+    ',',              // formulatext_bool_literal
+    ',',              // formulatext_array_constant
+    ';',              // formulatext_array_constant
+    "TRUE",           // bool_text_true
+    "FALSE",          // bool_text_false
+    false,            // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
+    kThaiErrorNames,  // locale_tokens.arraytotext_range_error_*
     'R',
     'C',
     '[',
@@ -514,35 +662,27 @@ constexpr LocaleFacts kThaiFacts{
     true,                 // text_format.text_time_a_p
     DbcsCodepage::kNone,  // lenb_hangul
     false,
-    false,  // value_numbervalue.value_fullwidth_digits
-    true,   // code_char_jp_probes.near_char
-    false,  // lazy_forms.lazy_phonetic_unannotated_cell
-    false,  // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
-    false,  // text_format.text_four_section_text
-    false,  // text_format.text_dbnum1
-    true,   // locale_tokens.text_letter_t_digits
-    '\0',   // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,  // unmeasured
-    true,   // text_general_english
-    false,  // text_decimal_point
-    "",     // text_general_english
-    {"", "", "", "", "", "", "", ""},           // text_color_red, text_color_thai_red; other colours unmeasured
-    DbnumDigits{{kAsciiDigits, kAsciiDigits}},  // text_format.text_dbnum1
-    "ผลรวม",                                    // groupby.groupby_measured_fh2_hdr
-    "ผลรวมทั้งหมด",                               // pivotby.pivotby_row_subtotal_depth_two
-    "เขตข้อมูลแถว ",                              // groupby.groupby_measured_fh2_hdr
-    "เขตข้อมูลคอลัมน์ ",                            // pivotby.pivotby_measured_fh2_hdr
-    "ค่า ",                                      // groupby.groupby_measured_fh2_hdr
+    false,    // value_numbervalue.value_fullwidth_digits
+    true,     // code_char_jp_probes.near_char
+    false,    // lazy_forms.lazy_phonetic_unannotated_cell
+    false,    // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
+    false,    // text_format.text_four_section_text
+    nullptr,  // locale_tokens.dbnum_digits
+    true,     // locale_tokens.text_letter_t_digits
+    '\0',     // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
+    false,    // unmeasured
+    true,     // text_general_english
+    false,    // text_decimal_point
+    "",       // text_general_english
+    {"ดำ", "น้ำเงิน", "ฟ้า", "เขียว", "ม่วงมาเจนต้า", "แดง", "ขาว", "เหลือง"},       // text_colors_th_th
+    "สี",                                                                      // text_color_index_prefixes
+    "ผลรวม",                                                                  // groupby.groupby_measured_fh2_hdr
+    "ผลรวมทั้งหมด",                                                             // pivotby.pivotby_row_subtotal_depth_two
+    "เขตข้อมูลแถว ",                                                            // groupby.groupby_measured_fh2_hdr
+    "เขตข้อมูลคอลัมน์ ",                                                          // pivotby.pivotby_measured_fh2_hdr
+    "ค่า ",                                                                    // groupby.groupby_measured_fh2_hdr
     {"วันอาทิตย์", "วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์"},  // weekdays_aaaa
     {"อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์"},                  // weekdays_aaa
-};
-
-// ru-RU: #N/A and #DIV/0! are localized by captures
-// (arraytotext.arraytotext_error_literal_in_array_default, arraytotext.arraytotext_only_error_cells_default);
-// every other slot is unmeasured.
-constexpr ErrorNames kRussianErrorNames{
-    "#NULL!", "#ДЕЛ/0!", "#VALUE!",   "#REF!",     "#NAME?",     "#NUM!",  "#Н/Д",     "#GETTING_DATA", "#SPILL!",
-    "#CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
 };
 
 constexpr LocaleFacts kRussianFacts{
@@ -554,8 +694,7 @@ constexpr LocaleFacts kRussianFacts{
     "ИСТИНА",            // bool_text_true
     "ЛОЖЬ",              // bool_text_false
     true,                // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
-    kRussianErrorNames,  // arraytotext.arraytotext_error_literal_in_array_default,
-                         // arraytotext.arraytotext_only_error_cells_default; others unmeasured
+    kRussianErrorNames,  // locale_tokens.arraytotext_range_error_*
     'R',
     'C',
     '[',
@@ -599,7 +738,7 @@ constexpr LocaleFacts kRussianFacts{
     false,                // lazy_forms.lazy_phonetic_unannotated_cell
     false,                // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,                // text_format.text_four_section_text
-    false,                // text_format.text_dbnum1
+    nullptr,              // locale_tokens.dbnum_digits
     false,                // locale_tokens.text_letter_t_digits
     '\0',                 // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
     false,                // unmeasured
@@ -607,14 +746,13 @@ constexpr LocaleFacts kRussianFacts{
     true,                 // text_decimal_point
     "Основной",           // text_general_osnovnoy; General and Standard are rejected (text_general_english,
                           // text_general_standard)
-    {"", "", "", "", "", "Красный", "",
-     ""},  // text_color_krasny; English Red is rejected (text_color_red), others unmeasured
-    DbnumDigits{{kAsciiDigits, kAsciiDigits}},  // text_format.text_dbnum1
-    "Итого",                                    // groupby.groupby_measured_fh2_hdr
-    "Общий итог",                               // pivotby.pivotby_row_subtotal_depth_two
-    "Поле строки ",                             // groupby.groupby_measured_fh2_hdr
-    "Поле столбца ",                            // pivotby.pivotby_measured_fh2_hdr
-    "Значение ",                                // groupby.groupby_measured_fh2_hdr
+    {"Черный", "Синий", "Голубой", "Зеленый", "Фиолетовый", "Красный", "Белый", "Желтый"},  // text_colors_ru_ru
+    "Цвет",                                                                                 // text_color_index_prefixes
+    "Итого",          // groupby.groupby_measured_fh2_hdr
+    "Общий итог",     // pivotby.pivotby_row_subtotal_depth_two
+    "Поле строки ",   // groupby.groupby_measured_fh2_hdr
+    "Поле столбца ",  // pivotby.pivotby_measured_fh2_hdr
+    "Значение ",      // groupby.groupby_measured_fh2_hdr
     {"воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"},  // weekdays_aaaa
     {"Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"},                                           // weekdays_aaa
 };
@@ -628,7 +766,7 @@ constexpr LocaleFacts kTraditionalChineseFacts{
     "TRUE",              // bool_text_true
     "FALSE",             // bool_text_false
     false,               // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
-    kEnglishErrorNames,  // arraytotext.arraytotext_error_literal_in_array_default; others unmeasured
+    kChineseErrorNames,  // locale_tokens.arraytotext_range_error_*
     'R',
     'C',
     '[',
@@ -644,60 +782,47 @@ constexpr LocaleFacts kTraditionalChineseFacts{
     kInvariantLetters,    // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"$", false, false, true, false, true,
-     2U},                 // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
-    {"$", "€", "", ""},   // value_dollar_prefix, value_euro_prefix, value_yen_prefix
-    "US$",                // usdollar.usdollar_two_decimals
-    DateOrder::kYMD,      // locale_profile_measurements.datevalue_two_digit_year
-    false,                // value_dotted_ymd
-    true,                 // datevalue_timevalue.datevalue_kanji_with_terminator
-    true,                 // datevalue_timevalue.timevalue_jp_kanji_units
-    false,                // datevalue_timevalue.datevalue_era_reiwa_full
-    RLetter::kYear,       // locale_tokens.text_letter_r_date, text_letter_rr_date
-    false,                // locale_tokens.value_korean_ymd
-    true,                 // value_month_name_en
-    true,                 // value_coercion_probes.value_d_mmm_yy
-    true,                 // datevalue_timevalue.timevalue_fractional_seconds
-    true,                 // datevalue_timevalue.timevalue_trailing_dot
-    true,                 // datevalue_timevalue.timevalue_space_dot
-    "AM",                 // text_format.text_time_am
-    "PM",                 // text_format.text_time_pm
-    true,                 // text_format.text_time_a_p
-    DbcsCodepage::kBig5,  // code_char_jp_probes (Big5, no ETEN rows), lenb_kanji_not_in_gb2312
-    false,                // code_char_jp_probes.char_halfwidth_kata_177
-    true,                 // value_numbervalue.value_fullwidth_digits
-    false,                // code_char_jp_probes.near_char
-    true,                 // lazy_forms.lazy_phonetic_unannotated_cell
-    false,                // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
-    true,                 // text_format.text_four_section_text
-    true,                 // text_format.text_dbnum1
-    false,                // locale_tokens.text_letter_t_digits
-    '\0',                 // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,                // unmeasured
-    false,                // text_general_english
-    false,                // text_decimal_point
-    "G/通用格式",         // text_general_g_tongyong
-    {"", "", "", "", "", "紅色", "",
-     ""},  // text_color_hongse_traditional; English Red is rejected (text_color_red), others unmeasured
-    DbnumDigits{{
-        {"○", "一", "二", "三", "四", "5", "6", "7", "8",
-         "9"},  // 0 from text_format.text_dbnum1_with_era; 5-9 unmeasured
-        {"0", "壹", "貳", "參", "肆", "5", "6", "7", "8", "9"},  // text_format.text_dbnum2; 0 and 5-9 unmeasured
-    }},         // text_format.text_dbnum1_with_era, text_format.text_dbnum1, text_format.text_dbnum2
-    "總計",     // groupby.groupby_measured_fh2_hdr
-    "總計",     // pivotby.pivotby_row_subtotal_depth_two
-    "列欄位 ",  // groupby.groupby_measured_fh2_hdr
-    "欄欄位 ",  // pivotby.pivotby_measured_fh2_hdr
-    "值 ",      // groupby.groupby_measured_fh2_hdr
+     2U},                             // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
+    {"$", "€", "", ""},               // value_dollar_prefix, value_euro_prefix, value_yen_prefix
+    "US$",                            // usdollar.usdollar_two_decimals
+    DateOrder::kYMD,                  // locale_profile_measurements.datevalue_two_digit_year
+    false,                            // value_dotted_ymd
+    true,                             // datevalue_timevalue.datevalue_kanji_with_terminator
+    true,                             // datevalue_timevalue.timevalue_jp_kanji_units
+    false,                            // datevalue_timevalue.datevalue_era_reiwa_full
+    RLetter::kYear,                   // locale_tokens.text_letter_r_date, text_letter_rr_date
+    false,                            // locale_tokens.value_korean_ymd
+    true,                             // value_month_name_en
+    true,                             // value_coercion_probes.value_d_mmm_yy
+    true,                             // datevalue_timevalue.timevalue_fractional_seconds
+    true,                             // datevalue_timevalue.timevalue_trailing_dot
+    true,                             // datevalue_timevalue.timevalue_space_dot
+    "AM",                             // text_format.text_time_am
+    "PM",                             // text_format.text_time_pm
+    true,                             // text_format.text_time_a_p
+    DbcsCodepage::kBig5,              // code_char_jp_probes (Big5, no ETEN rows), lenb_kanji_not_in_gb2312
+    false,                            // code_char_jp_probes.char_halfwidth_kata_177
+    true,                             // value_numbervalue.value_fullwidth_digits
+    false,                            // code_char_jp_probes.near_char
+    true,                             // lazy_forms.lazy_phonetic_unannotated_cell
+    false,                            // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
+    true,                             // text_format.text_four_section_text
+    &kTraditionalChineseDbnumStyles,  // locale_tokens.dbnum_digits
+    false,                            // locale_tokens.text_letter_t_digits
+    '\0',          // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
+    false,         // unmeasured
+    false,         // text_general_english
+    false,         // text_decimal_point
+    "G/通用格式",  // text_general_g_tongyong
+    {"黑色", "藍色", "青色", "綠色", "洋紅", "紅色", "白色", "黃色"},        // text_colors_zh_tw
+    "色彩",                                                                  // text_color_index_prefixes
+    "總計",                                                                  // groupby.groupby_measured_fh2_hdr
+    "總計",                                                                  // pivotby.pivotby_row_subtotal_depth_two
+    "列欄位 ",                                                               // groupby.groupby_measured_fh2_hdr
+    "欄欄位 ",                                                               // pivotby.pivotby_measured_fh2_hdr
+    "值 ",                                                                   // groupby.groupby_measured_fh2_hdr
     {"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"},  // weekdays_aaaa
     {"週日", "週一", "週二", "週三", "週四", "週五", "週六"},                // weekdays_aaa
-};
-
-// it-IT: #N/A is localized by captures
-// (arraytotext.arraytotext_error_literal_in_array_default); #DIV/0! is measured unchanged
-// (arraytotext.arraytotext_only_error_cells_default); every other slot is unmeasured.
-constexpr ErrorNames kItalianErrorNames{
-    "#NULL!", "#DIV/0!", "#VALUE!",   "#REF!",     "#NAME?",     "#NUM!",  "#N/D",     "#GETTING_DATA", "#SPILL!",
-    "#CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
 };
 
 constexpr LocaleFacts kItalianFacts{
@@ -709,7 +834,7 @@ constexpr LocaleFacts kItalianFacts{
     "VERO",              // bool_text_true
     "FALSO",             // bool_text_false
     true,                // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
-    kItalianErrorNames,  // arraytotext.arraytotext_error_literal_in_array_default; others unmeasured
+    kItalianErrorNames,  // locale_tokens.arraytotext_range_error_*
     'R',
     'C',
     '[',
@@ -753,32 +878,22 @@ constexpr LocaleFacts kItalianFacts{
     false,                // lazy_forms.lazy_phonetic_unannotated_cell
     false,                // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,                // text_format.text_four_section_text
-    false,                // text_format.text_dbnum1
+    nullptr,              // locale_tokens.dbnum_digits
     false,                // locale_tokens.text_letter_t_digits
     'x',                  // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
     false,                // unmeasured
     false,                // text_general_english
     false,                // text_decimal_point
     "Standard",           // text_general_standard
-    {"", "", "", "", "", "Rosso", "",
-     ""},  // text_color_rosso; English Red is rejected (text_color_red), others unmeasured
-    DbnumDigits{{kAsciiDigits, kAsciiDigits}},  // text_format.text_dbnum1
-    "Totale",                                   // groupby.groupby_measured_fh2_hdr
-    "Totale complessivo",                       // pivotby.pivotby_row_subtotal_depth_two
-    "Campo riga ",                              // groupby.groupby_measured_fh2_hdr
-    "Campo colonna ",                           // pivotby.pivotby_measured_fh2_hdr
-    "Valore ",                                  // groupby.groupby_measured_fh2_hdr
-    kEnglishDaysLong,                           // unmeasured: aaaa is a year token (weekdays_aaaa)
-    kEnglishDaysShort,                          // unmeasured: aaa is a year token (weekdays_aaa)
-};
-
-// nl-NL: #N/A and #DIV/0! are localized by captures
-// (arraytotext.arraytotext_error_literal_in_array_default, arraytotext.arraytotext_only_error_cells_default);
-// every other slot is unmeasured.
-constexpr ErrorNames kDutchErrorNames{
-    "#NULL!",    "#DELING.DOOR.0!", "#VALUE!", "#REF!",    "#NAME?",    "#NUM!",
-    "#N/B",      "#GETTING_DATA",   "#SPILL!", "#CALC!",   "#FIELD!",   "#BLOCKED!",
-    "#CONNECT!", "#EXTERNAL!",      "#BUSY!",  "#PYTHON!", "#UNKNOWN!",
+    {"Nero", "Blu", "Celeste", "Verde", "Fucsia", "Rosso", "Bianco", "Giallo"},  // text_colors_it_it
+    "Colore",                                                                    // text_color_index_prefixes
+    "Totale",                                                                    // groupby.groupby_measured_fh2_hdr
+    "Totale complessivo",  // pivotby.pivotby_row_subtotal_depth_two
+    "Campo riga ",         // groupby.groupby_measured_fh2_hdr
+    "Campo colonna ",      // pivotby.pivotby_measured_fh2_hdr
+    "Valore ",             // groupby.groupby_measured_fh2_hdr
+    kEnglishDaysLong,      // unmeasured: aaaa is a year token (weekdays_aaaa)
+    kEnglishDaysShort,     // unmeasured: aaa is a year token (weekdays_aaa)
 };
 
 constexpr LocaleFacts kDutchFacts{
@@ -790,8 +905,7 @@ constexpr LocaleFacts kDutchFacts{
     "WAAR",            // bool_text_true
     "ONWAAR",          // bool_text_false
     true,              // text_to_bool_probes.text_bool_and_whitespace, text_bool_and_two_true
-    kDutchErrorNames,  // arraytotext.arraytotext_error_literal_in_array_default,
-                       // arraytotext.arraytotext_only_error_cells_default; others unmeasured
+    kDutchErrorNames,  // locale_tokens.arraytotext_range_error_*
     'R',
     'K',
     '[',
@@ -834,7 +948,7 @@ constexpr LocaleFacts kDutchFacts{
     false,                // lazy_forms.lazy_phonetic_unannotated_cell
     false,                // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,                // text_format.text_four_section_text
-    false,                // text_format.text_dbnum1
+    nullptr,              // locale_tokens.dbnum_digits
     false,                // locale_tokens.text_letter_t_digits
     '\0',                 // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
     false,                // unmeasured
@@ -842,32 +956,15 @@ constexpr LocaleFacts kDutchFacts{
     false,                // text_decimal_point
     "Standaard",          // text_general_standaard; General and Standard are rejected (text_general_english,
                           // text_general_standard)
-    {"", "", "", "", "", "Rood", "",
-     ""},  // text_color_rood; English Red is rejected (text_color_red), others unmeasured
-    DbnumDigits{{kAsciiDigits, kAsciiDigits}},  // text_format.text_dbnum1
-    "Totaal",                                   // groupby.groupby_measured_fh2_hdr
-    "Eindtotaal",                               // pivotby.pivotby_row_subtotal_depth_two
-    "Rijveld ",                                 // groupby.groupby_measured_fh2_hdr
-    "Kolomveld ",                               // pivotby.pivotby_measured_fh2_hdr
-    "Waarde ",                                  // groupby.groupby_measured_fh2_hdr
+    {"Zwart", "Blauw", "Cyaan", "Groen", "Magenta", "Rood", "Wit", "Geel"},  // text_colors_nl_nl
+    "Kleur",                                                                 // text_color_index_prefixes
+    "Totaal",                                                                // groupby.groupby_measured_fh2_hdr
+    "Eindtotaal",                                                            // pivotby.pivotby_row_subtotal_depth_two
+    "Rijveld ",                                                              // groupby.groupby_measured_fh2_hdr
+    "Kolomveld ",                                                            // pivotby.pivotby_measured_fh2_hdr
+    "Waarde ",                                                               // groupby.groupby_measured_fh2_hdr
     {"zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"},  // weekdays_aaaa
     {"zo", "ma", "di", "wo", "do", "vr", "za"},                                        // weekdays_aaa
-};
-
-// es-ES: #N/A and #DIV/0! are localized by captures
-// (arraytotext.arraytotext_error_literal_in_array_default, arraytotext.arraytotext_only_error_cells_default);
-// every other slot is unmeasured.
-constexpr ErrorNames kSpanishErrorNames{
-    "#NULL!", "#¡DIV/0!", "#VALUE!",   "#REF!",     "#NAME?",     "#NUM!",  "#N/D",     "#GETTING_DATA", "#SPILL!",
-    "#CALC!", "#FIELD!",  "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
-};
-
-// pt-BR and es-MX: #N/A is localized by captures (arraytotext.arraytotext_error_literal_in_array_default);
-// #DIV/0! is measured unchanged (arraytotext.arraytotext_only_error_cells_default) under both, so es-MX
-// shares this array; every other slot is unmeasured.
-constexpr ErrorNames kPortugueseErrorNames{
-    "#NULL!", "#DIV/0!", "#VALUE!",   "#REF!",     "#NAME?",     "#NUM!",  "#N/D",     "#GETTING_DATA", "#SPILL!",
-    "#CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
 };
 
 constexpr Names12 kSpanishMonthsLong{"enero", "febrero", "marzo",      "abril",   "mayo",      "junio",
@@ -887,8 +984,7 @@ constexpr LocaleFacts kSpanishFacts{
     "VERDADERO",         // bool_text_true
     "FALSO",             // bool_text_false
     true,                // text_to_bool_probes.text_bool_and_whitespace, text_bool_or_whitespace
-    kSpanishErrorNames,  // arraytotext.arraytotext_error_literal_in_array_default,
-                         // arraytotext.arraytotext_only_error_cells_default; others unmeasured
+    kSpanishErrorNames,  // locale_tokens.arraytotext_range_error_*
     'F',
     'C',
     '[',
@@ -929,7 +1025,7 @@ constexpr LocaleFacts kSpanishFacts{
     false,                // lazy_forms.lazy_phonetic_unannotated_cell
     false,                // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,                // text_format.text_four_section_text
-    false,                // text_format.text_dbnum1
+    nullptr,              // locale_tokens.dbnum_digits
     false,                // locale_tokens.text_letter_t_digits
     '\0',                 // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
     false,                // unmeasured
@@ -937,31 +1033,29 @@ constexpr LocaleFacts kSpanishFacts{
     false,                // text_decimal_point
     "Estándar",           // text_general_estandar; General and Standard are rejected (text_general_english,
                           // text_general_standard)
-    {"", "", "", "", "", "Rojo", "",
-     ""},  // text_color_rojo; English Red is rejected (text_color_red), others unmeasured
-    DbnumDigits{{kAsciiDigits, kAsciiDigits}},  // text_format.text_dbnum1
-    "Total",                                    // groupby.groupby_measured_fh2_hdr
-    "Total general",                            // pivotby.pivotby_row_subtotal_depth_two
-    "Campo de fila ",                           // groupby.groupby_measured_fh2_hdr
-    "Campo de columna ",                        // pivotby.pivotby_measured_fh2_hdr
-    "Valor ",                                   // groupby.groupby_measured_fh2_hdr
-    kEnglishDaysLong,                           // unmeasured: aaaa is a year token (weekdays_aaaa)
-    kEnglishDaysShort,                          // unmeasured: aaa is a year token (weekdays_aaa)
+    {"Negro", "Azul", "Cian", "Verde", "Magenta", "Rojo", "Blanco", "Amarillo"},  // text_colors_es_es
+    "Color",                                                                      // text_color_index_prefixes
+    "Total",                                                                      // groupby.groupby_measured_fh2_hdr
+    "Total general",      // pivotby.pivotby_row_subtotal_depth_two
+    "Campo de fila ",     // groupby.groupby_measured_fh2_hdr
+    "Campo de columna ",  // pivotby.pivotby_measured_fh2_hdr
+    "Valor ",             // groupby.groupby_measured_fh2_hdr
+    kEnglishDaysLong,     // unmeasured: aaaa is a year token (weekdays_aaaa)
+    kEnglishDaysShort,    // unmeasured: aaa is a year token (weekdays_aaa)
 };
 
 // es-MX keeps the en-US separators and number-format dialect; month and weekday names, bool names, currency
 // and date order are its own.
 constexpr LocaleFacts kMexicanSpanishFacts{
-    '.',                    // fixed_negative
-    ',',                    // fixed_negative
-    ',',                    // formulatext_bool_literal
-    ',',                    // formulatext_array_constant
-    ';',                    // formulatext_array_constant
-    "VERDADERO",            // bool_text_true
-    "FALSO",                // bool_text_false
-    true,                   // text_to_bool_probes.text_bool_or_whitespace
-    kPortugueseErrorNames,  // arraytotext.arraytotext_error_literal_in_array_default,
-                            // arraytotext.arraytotext_only_error_cells_default; others unmeasured
+    '.',                        // fixed_negative
+    ',',                        // fixed_negative
+    ',',                        // formulatext_bool_literal
+    ',',                        // formulatext_array_constant
+    ';',                        // formulatext_array_constant
+    "VERDADERO",                // bool_text_true
+    "FALSO",                    // bool_text_false
+    true,                       // text_to_bool_probes.text_bool_or_whitespace
+    kMexicanSpanishErrorNames,  // locale_tokens.arraytotext_range_error_*
     'F',
     'C',
     '[',
@@ -1002,7 +1096,7 @@ constexpr LocaleFacts kMexicanSpanishFacts{
     false,                // lazy_forms.lazy_phonetic_unannotated_cell
     false,                // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,                // text_format.text_four_section_text
-    false,                // text_format.text_dbnum1
+    nullptr,              // locale_tokens.dbnum_digits
     false,                // locale_tokens.text_letter_t_digits
     '\0',                 // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
     false,                // unmeasured
@@ -1010,16 +1104,15 @@ constexpr LocaleFacts kMexicanSpanishFacts{
     false,                // text_decimal_point
     "Estándar",           // text_general_estandar; General and Standard are rejected (text_general_english,
                           // text_general_standard)
-    {"", "", "", "", "", "Rojo", "",
-     ""},  // text_color_rojo; English Red is rejected (text_color_red), others unmeasured
-    DbnumDigits{{kAsciiDigits, kAsciiDigits}},  // text_format.text_dbnum1
-    "Total",                                    // groupby.groupby_measured_fh2_hdr
-    "Total general",                            // pivotby.pivotby_row_subtotal_depth_two
-    "Campo de fila ",                           // groupby.groupby_measured_fh2_hdr
-    "Campo de columna ",                        // pivotby.pivotby_measured_fh2_hdr
-    "Valor ",                                   // groupby.groupby_measured_fh2_hdr
-    kEnglishDaysLong,                           // unmeasured: aaaa is a year token (weekdays_aaaa)
-    kEnglishDaysShort,                          // unmeasured: aaa is a year token (weekdays_aaa)
+    {"Negro", "Azul", "Cian", "Verde", "Magenta", "Rojo", "Blanco", "Amarillo"},  // text_colors_es_mx
+    "Color",                                                                      // text_color_index_prefixes
+    "Total",                                                                      // groupby.groupby_measured_fh2_hdr
+    "Total general",      // pivotby.pivotby_row_subtotal_depth_two
+    "Campo de fila ",     // groupby.groupby_measured_fh2_hdr
+    "Campo de columna ",  // pivotby.pivotby_measured_fh2_hdr
+    "Valor ",             // groupby.groupby_measured_fh2_hdr
+    kEnglishDaysLong,     // unmeasured: aaaa is a year token (weekdays_aaaa)
+    kEnglishDaysShort,    // unmeasured: aaa is a year token (weekdays_aaa)
 };
 
 constexpr LocaleFacts kPortugueseFacts{
@@ -1031,8 +1124,7 @@ constexpr LocaleFacts kPortugueseFacts{
     "VERDADEIRO",           // bool_text_true
     "FALSO",                // bool_text_false
     true,                   // text_to_bool_probes.text_bool_or_whitespace
-    kPortugueseErrorNames,  // arraytotext.arraytotext_error_literal_in_array_default,
-                            // arraytotext.arraytotext_only_error_cells_default; others unmeasured
+    kPortugueseErrorNames,  // locale_tokens.arraytotext_range_error_*
     'L',
     'C',
     '[',
@@ -1075,23 +1167,22 @@ constexpr LocaleFacts kPortugueseFacts{
     false,                // lazy_forms.lazy_phonetic_unannotated_cell
     false,                // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,                // text_format.text_four_section_text
-    false,                // text_format.text_dbnum1
+    nullptr,              // locale_tokens.dbnum_digits
     false,                // locale_tokens.text_letter_t_digits
     '\0',                 // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
     false,                // unmeasured
     false,                // text_general_english
     false,                // text_decimal_point
     "Geral",  // text_general_geral; General and Standard are rejected (text_general_english, text_general_standard)
-    {"", "", "", "", "", "Vermelho", "",
-     ""},  // text_color_vermelho; English Red is rejected (text_color_red), others unmeasured
-    DbnumDigits{{kAsciiDigits, kAsciiDigits}},  // text_format.text_dbnum1
-    "Total",                                    // groupby.groupby_measured_fh2_hdr
-    "Total Geral",                              // pivotby.pivotby_row_subtotal_depth_two
-    "Campo de linha ",                          // groupby.groupby_measured_fh2_hdr
-    "Campo de coluna ",                         // pivotby.pivotby_measured_fh2_hdr
-    "Valor ",                                   // groupby.groupby_measured_fh2_hdr
-    kEnglishDaysLong,                           // unmeasured: aaaa is a year token (weekdays_aaaa)
-    kEnglishDaysShort,                          // unmeasured: aaa is a year token (weekdays_aaa)
+    {"Preto", "Azul", "Ciano", "Verde", "Magenta", "Vermelho", "Branco", "Amarelo"},  // text_colors_pt_br
+    "Cor",                                                                            // text_color_index_prefixes
+    "Total",             // groupby.groupby_measured_fh2_hdr
+    "Total Geral",       // pivotby.pivotby_row_subtotal_depth_two
+    "Campo de linha ",   // groupby.groupby_measured_fh2_hdr
+    "Campo de coluna ",  // pivotby.pivotby_measured_fh2_hdr
+    "Valor ",            // groupby.groupby_measured_fh2_hdr
+    kEnglishDaysLong,    // unmeasured: aaaa is a year token (weekdays_aaaa)
+    kEnglishDaysShort,   // unmeasured: aaa is a year token (weekdays_aaa)
 };
 
 }  // namespace
@@ -1131,10 +1222,9 @@ const LocaleFacts& locale_facts(ExcelProfile profile) noexcept {
 }
 
 bool error_name_measured(std::size_t error_ordinal) noexcept {
-  // #DIV/0! and #N/A: arraytotext.arraytotext_error_literal_in_array_default and
-  // arraytotext.arraytotext_only_error_cells_default run under every Mac locale.
-  return error_ordinal == static_cast<std::size_t>(ErrorCode::Div0) ||
-         error_ordinal == static_cast<std::size_t>(ErrorCode::NA);
+  // #NULL! through #CALC!: locale_tokens.arraytotext_range_error_* and
+  // arraytotext_error_literal_getting_data run under every Mac locale.
+  return error_ordinal <= static_cast<std::size_t>(ErrorCode::Calc);
 }
 
 SbcsCodepage sbcs_codepage(ExcelProfile profile) noexcept {

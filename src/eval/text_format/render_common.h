@@ -9,6 +9,7 @@
 #ifndef FORMULON_EVAL_TEXT_FORMAT_RENDER_COMMON_H_
 #define FORMULON_EVAL_TEXT_FORMAT_RENDER_COMMON_H_
 
+#include <cstddef>
 #include <string>
 #include <string_view>
 
@@ -20,18 +21,10 @@ namespace number_format_detail {
 
 // --- DBNum digit substitution -----------------------------------------
 //
-// `[DBNum1]` / `[DBNum2]` / `[DBNum3]` are *per-digit* substitutions in
-// Mac Excel 365 ja-JP. Despite their popular description as "positional
-// kanji" formats, the oracle corpus shows that Excel does NOT decompose
-// integers into 千 / 百 / 十 groups -- it simply rewrites each ASCII
-// digit through a fixed table. Concretely:
-//
-//   * `=TEXT(1234, "[DBNum1]0")` -> `一二三四` (NOT `一千二百三十四`).
-//   * `=TEXT(1234, "[DBNum2]0")` -> `壱弐参四` (NOT `壱阡弐百参拾四`).
-//   * `=TEXT(1234, "[DBNum3]0")` -> `１２３４` (full-width Arabic).
-//
-// The exception is `[DBNum1]General`, whose integer part is positional
-// (`千二百三十四`); `render_numeric.cpp` owns it.
+// `[DBNumN]` writes digit placeholders and full years digit by digit through
+// the locale's digit table (`=TEXT(1234,"[DBNum1]0")` -> 一二三四). General,
+// elapsed time and the other date fields are written with place units
+// (千二百三十四), in the per-locale style `LocaleFacts::dbnum` describes.
 
 // Returns the per-digit substitution for `c` under `mode`, or an empty
 // string if no substitution applies (caller falls back to `c` verbatim).
@@ -44,10 +37,20 @@ void append_digit_dbnum(std::string& out, DbNumMode mode, char c);
 // Append every character of `chars`, substituting digits via `mode`.
 void append_chars_dbnum(std::string& out, DbNumMode mode, std::string_view chars);
 
-// Appends `value` to `out` with each digit substituted per `mode`. Used
-// for date components (era year, m, d, h, min, s) where positional kanji
-// do NOT apply -- only per-digit substitution.
+// Appends `value` to `out` with each digit substituted per `mode`.
 void append_int_dbnum(std::string& out, long long value, DbNumMode mode);
+
+// Appends the decimal integer `digits` with the place units of `mode`'s
+// style; digit by digit when `mode` has no style.
+void append_dbnum_positional(std::string& out, DbNumMode mode, std::string_view digits);
+
+// True when `mode` is a `[DBNumN]` style with numerals of its own, rather
+// than one the locale accepts and leaves in ASCII digits.
+bool dbnum_writes_numerals(DbNumMode mode) noexcept;
+
+// Appends a date or time field zero-padded to `width` digits, with place
+// units where `mode`'s style writes date fields that way.
+void append_dbnum_date_field(std::string& out, DbNumMode mode, unsigned value, std::size_t width);
 
 // Append `n` zero-padded to two characters without any DBNum substitution
 // (ASCII output).

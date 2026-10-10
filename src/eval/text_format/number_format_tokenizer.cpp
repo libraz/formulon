@@ -207,25 +207,10 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
         saw_color = true;
         out.has_color = true;
       } else if (const int dbnum = parse_dbnum_directive(body); dbnum > 0) {
-        // `[DBNum1]` / `[DBNum2]` / `[DBNum3]`: digit-substitution mode for
-        // the rest of the section. Multiple directives stack last-write-wins,
-        // matching Mac Excel's behaviour. The renderer applies the chosen
-        // mapping at digit-emit time. The English host accepts the bracket as
-        // inert metadata and leaves the digits in their ordinary form.
-        if (facts.dbnum) {
-          switch (dbnum) {
-            case 1:
-              out.dbnum_mode = DbNumMode::kDBNum1;
-              break;
-            case 2:
-              out.dbnum_mode = DbNumMode::kDBNum2;
-              break;
-            case 3:
-              out.dbnum_mode = DbNumMode::kDBNum3;
-              break;
-            default:
-              break;
-          }
+        // `[DBNum1]`-`[DBNum4]`: digit style for the rest of the section,
+        // last write wins; inert in a locale without DBNum styles.
+        if (facts.dbnum != nullptr) {
+          out.dbnum_mode = static_cast<DbNumMode>(static_cast<int>(DbNumMode::kDBNum1) + dbnum - 1);
         }
       } else {
         // Conditional-section directive `[>1000]`, `[<=0]`, ...

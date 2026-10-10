@@ -190,6 +190,12 @@ TEST(FormulonCApiLocale, ErrorNames) {
 
   ASSERT_EQ(fm_locale_error_name("mac-365-de_DE", name, &canonical, &localized, &measured), 0);
   EXPECT_STREQ(canonical, "#NAME?");
+  EXPECT_EQ(measured, 1);
+
+  ASSERT_EQ(fm_locale_error_name("mac-365-de_DE", static_cast<size_t>(formulon::ErrorCode::Field), &canonical,
+                                 &localized, &measured),
+            0);
+  EXPECT_STREQ(canonical, "#FIELD!");
   EXPECT_EQ(measured, 0);
 
   ASSERT_EQ(fm_locale_error_name("mac-365-fr_FR", static_cast<size_t>(formulon::ErrorCode::Div0), &canonical,

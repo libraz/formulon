@@ -79,23 +79,10 @@ char alias_run(std::string_view body, const LocaleFacts& facts) noexcept {
   return unit;
 }
 
-// Locale spelling of the indexed colour form (`[色12]`); empty where none
-// is measured.
-std::string_view color_index_prefix(ExcelLocale locale) noexcept {
-  switch (locale) {
-    case ExcelLocale::kJaJP:
-      return "色";  // text_format.text_color_indexed_discarded
-    case ExcelLocale::kEnUS:
-      return kStoredColorIndexPrefix;
-    default:
-      return {};  // unmeasured
-  }
-}
-
 // Rewrites a bracket body's colour name into the stored spelling. Returns
 // false when the body is a stored colour name the locale does not accept.
-bool localize_bracket(std::string_view body, const LocaleFacts& facts, const LocaleFacts& english,
-                      std::string_view index_prefix, std::string& out) {
+bool localize_bracket(std::string_view body, const LocaleFacts& facts, const LocaleFacts& english, std::string& out) {
+  const std::string_view index_prefix = facts.color_index_prefix;
   // An elapsed-time body (`[h]`, `[mm]`) spells its unit with the locale's
   // letter; the invariant letter of a unit the locale spells differently is
   // rejected (text_format.text_elapsed_hours).
@@ -155,7 +142,6 @@ LocalizedFormat localize_format(std::string_view fmt, FormatDialect dialect, Exc
   }
 
   const LocaleFacts& english = locale_facts(mac_365_en_us_profile());
-  const std::string_view index_prefix = color_index_prefix(profile.locale);
   const char decimal = facts.decimal_separator;
   const char group = facts.group_separator;
   const bool map_separators = decimal != '.' || group != ',';
@@ -186,7 +172,7 @@ LocalizedFormat localize_format(std::string_view fmt, FormatDialect dialect, Exc
         break;
       }
       out.push_back('[');
-      if (!localize_bracket(s.substr(i + 1, close - i - 1), facts, english, index_prefix, out)) {
+      if (!localize_bracket(s.substr(i + 1, close - i - 1), facts, english, out)) {
         result.valid = false;
       }
       out.push_back(']');

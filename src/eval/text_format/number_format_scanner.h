@@ -76,7 +76,7 @@ int parse_cond_directive(std::string_view body, CondOp* out_op, double* out_valu
 
 // Detects `[DBNumN]` (body length exactly 6 bytes after stripping brackets).
 // Matching is case-insensitive: `[DBNum1]`, `[dbnum2]`, `[DbNum3]` all parse.
-// Returns the directive index (1, 2, or 3) on a hit, otherwise 0.
+// Returns the directive index (1 to 4) on a hit, otherwise 0.
 int parse_dbnum_directive(std::string_view body) noexcept;
 
 // Returns true if `tok` is a date-family token (including elapsed brackets).

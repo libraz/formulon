@@ -222,66 +222,10 @@ void format_general(std::string& out, double v) {
   out.append(buf, trimmed_fraction_length(std::string_view(buf, static_cast<std::size_t>(n))));
 }
 
-// Appends one 4-digit group (leading zeros allowed, value non-zero) as kanji
-// with 千/百/十 place units; a 1 before a place unit is dropped (1234 ->
-// 千二百三十四).
-void append_kanji_group(std::string& out, std::string_view group) {
-  static const char* const kPlaceUnits[4] = {"", "\xE5\x8D\x81", "\xE7\x99\xBE", "\xE5\x8D\x83"};  // 十 百 千
-  for (std::size_t i = 0; i < group.size(); ++i) {
-    const char digit = group[i];
-    const std::size_t place = group.size() - 1U - i;
-    if (digit == '0') {
-      continue;
-    }
-    if (place == 0U || digit != '1') {
-      append_digit_dbnum(out, DbNumMode::kDBNum1, digit);
-    }
-    out.append(kPlaceUnits[place]);
-  }
-}
-
-// Appends the integer `digits` as positional kanji in 4-digit groups under
-// 万/億/兆. A part above 兆 longer than one group has no larger unit and is
-// spelled digit by digit.
-void append_kanji_integer(std::string& out, std::string_view digits) {
-  static const char* const kGroupUnits[4] = {"", "\xE4\xB8\x87", "\xE5\x84\x84", "\xE5\x85\x86"};  // 万 億 兆
-  constexpr std::size_t kGroupDigits = 4U;
-  constexpr std::size_t kTopGroup = 3U;
-  const std::size_t first = digits.find_first_not_of('0');
-  if (first == std::string_view::npos) {
-    append_digit_dbnum(out, DbNumMode::kDBNum1, '0');
-    return;
-  }
-  digits.remove_prefix(first);
-  const std::size_t lower_digits = kTopGroup * kGroupDigits;
-  if (digits.size() > lower_digits) {
-    const std::string_view top = digits.substr(0, digits.size() - lower_digits);
-    if (top.size() <= kGroupDigits) {
-      append_kanji_group(out, top);
-    } else {
-      append_chars_dbnum(out, DbNumMode::kDBNum1, top);
-    }
-    out.append(kGroupUnits[kTopGroup]);
-    digits.remove_prefix(top.size());
-  }
-  std::size_t unit = (digits.size() + kGroupDigits - 1U) / kGroupDigits;
-  std::size_t begin = 0;
-  while (unit > 0U) {
-    --unit;
-    const std::size_t end = digits.size() - unit * kGroupDigits;
-    const std::string_view group = digits.substr(begin, end - begin);
-    if (group.find_first_not_of('0') != std::string_view::npos) {
-      append_kanji_group(out, group);
-      out.append(kGroupUnits[unit]);
-    }
-    begin = end;
-  }
-}
-
-// `[DBNum1]General`: the integer part in positional kanji, the fraction digit
-// by digit. A magnitude General would show in scientific form is written out
-// to 15 significant digits instead (1E+15 -> 千兆).
-void append_dbnum1_general(std::string& out, double abs_v, char decimal_separator) {
+// `[DBNumN]General`: the integer part with place units, the fraction digit by
+// digit. A magnitude General would show in scientific form is written out to
+// 15 significant digits instead (1E+15 -> 千兆).
+void append_dbnum_general(std::string& out, DbNumMode mode, double abs_v, char decimal_separator) {
   std::string general;
   format_general(general, abs_v);
   std::string int_digits;
@@ -299,13 +243,13 @@ void append_dbnum1_general(std::string& out, double abs_v, char decimal_separato
     }
   } else {
     std::replace(general.begin(), general.end(), '.', decimal_separator);
-    append_chars_dbnum(out, DbNumMode::kDBNum1, general);
+    append_chars_dbnum(out, mode, general);
     return;
   }
-  append_kanji_integer(out, int_digits);
+  append_dbnum_positional(out, mode, int_digits);
   if (!frac_digits.empty()) {
     out.push_back(decimal_separator);
-    append_chars_dbnum(out, DbNumMode::kDBNum1, frac_digits);
+    append_chars_dbnum(out, mode, frac_digits);
   }
 }
 
@@ -635,11 +579,11 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
         // on the absolute value; the sign prefix was already emitted above
         // (for single-section formats) or stripped by the section selector
         // (two-section formats pass an already-positive `value`).
-        // `[DBNum1]` spells the integer part positionally; `[DBNum2-3]`
-        // substitute digit by digit, and non-digit bytes (the decimal
-        // point, exponent marker, ...) pass through unchanged.
-        if (section.dbnum_mode == DbNumMode::kDBNum1) {
-          append_dbnum1_general(result, std::fabs(value), facts.decimal_separator);
+        // `[DBNumN]` writes the integer part with place units; Thai digits
+        // substitute digit by digit, and non-digit bytes (the decimal point,
+        // exponent marker, ...) pass through unchanged.
+        if (section.dbnum_mode != DbNumMode::kNone && section.dbnum_mode != DbNumMode::kThai) {
+          append_dbnum_general(result, section.dbnum_mode, std::fabs(value), facts.decimal_separator);
           break;
         }
         std::string general;

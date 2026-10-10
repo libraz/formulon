@@ -102,19 +102,14 @@ struct Token {
   bool fraction_slash_candidate = false;
 };
 
-// DBNum digit-substitution mode controlled by the `[DBNum1]`, `[DBNum2]`,
-// `[DBNum3]` section directives. When set on a section, the renderer
-// substitutes ASCII decimal digits emitted for that section as follows:
-//   * kDBNum1: kanji weak-form numerals with positional kanji (千百十) on
-//     the main integer placeholder; per-digit kanji elsewhere (era, m, d).
-//   * kDBNum2: 大字 (formal-document) numerals with positional kanji.
-//   * kDBNum3: full-width Arabic digits (U+FF10..U+FF19).
-//   * kThai: Thai digits (U+0E50..U+0E59), set by th-TH's `t`.
+// Digit-substitution mode set by a `[DBNum1]`-`[DBNum4]` section directive
+// (styles in `LocaleFacts::dbnum`) or by th-TH's `t` (Thai digits).
 enum class DbNumMode : std::uint8_t {
   kNone = 0,
   kDBNum1,
   kDBNum2,
   kDBNum3,
+  kDBNum4,
   kThai,
 };
 

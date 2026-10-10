@@ -114,8 +114,9 @@ LAYER_ALLOWED: dict[str, frozenset[str]] = {
 LAYER_NO_IO = frozenset({"value", "parser", "model", "pivot", "eval", "cf", "print"})
 
 # Top-level files that belong to the value layer; every other top-level file
-# except the facade files is model.
-_VALUE_FILES = ("value.", "sheet_name", "phonetic.h", "value_sort_order.h")
+# except the facade files is model. The Excel profile and locale tables are
+# leaf data the parser reads, so they sit beside Value.
+_VALUE_FILES = ("value.", "sheet_name", "phonetic.h", "value_sort_order.h", "excel_profile.", "excel_locale.")
 
 # Top-level files that implement the `Workbook` facade.
 _FACADE_FILES = frozenset(

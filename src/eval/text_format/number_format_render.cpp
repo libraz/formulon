@@ -32,12 +32,82 @@ namespace text_format {
 namespace number_format_detail {
 namespace {
 
-// `[DBNum1]` / `[DBNum2]` digits come from the locale facts; `[DBNum3]` is
-// the full-width Arabic block U+FF10..U+FF19 in every DBNum locale.
-const char* const kFullwidthDigits[10] = {"\xEF\xBC\x90", "\xEF\xBC\x91", "\xEF\xBC\x92", "\xEF\xBC\x93",
-                                          "\xEF\xBC\x94", "\xEF\xBC\x95", "\xEF\xBC\x96", "\xEF\xBC\x97",
-                                          "\xEF\xBC\x98", "\xEF\xBC\x99"};
 const char* const kThaiDigits[10] = {"๐", "๑", "๒", "๓", "๔", "๕", "๖", "๗", "๘", "๙"};
+
+// The current locale's style for a `[DBNumN]` mode, or null for any other mode.
+const DbnumStyle* dbnum_style(DbNumMode mode) noexcept {
+  if (mode < DbNumMode::kDBNum1 || mode > DbNumMode::kDBNum4) {
+    return nullptr;
+  }
+  const DbnumStyles* styles = locale_facts(eval::current_eval_profile()).dbnum;
+  if (styles == nullptr) {
+    return nullptr;
+  }
+  return &(*styles)[static_cast<std::size_t>(mode) - static_cast<std::size_t>(DbNumMode::kDBNum1)];
+}
+
+// Appends one group of up to four digits (not all zero) with place units;
+// `*pending_zero` tracks a skipped place for the zero filler.
+void append_place_group(std::string& out, const DbnumStyle& style, bool place_one, bool zero_filler,
+                        std::string_view group, bool* pending_zero) {
+  for (std::size_t i = 0; i < group.size(); ++i) {
+    const std::size_t digit = static_cast<std::size_t>(group[i] - '0');
+    const std::size_t place = group.size() - 1U - i;
+    if (digit == 0U) {
+      *pending_zero = true;
+      continue;
+    }
+    if (*pending_zero && zero_filler) {
+      out.append(style.digits[0]);
+    }
+    *pending_zero = false;
+    if (place == 0U || digit != 1U || place_one) {
+      out.append(style.digits[digit]);
+    }
+    if (place > 0U) {
+      out.append(style.place_units[place - 1U]);
+    }
+  }
+}
+
+// Appends `digits` (no leading zeros, not empty) in groups of four under the
+// group units. A part above the largest unit longer than one group is written
+// digit by digit.
+void append_place_number(std::string& out, const DbnumStyle& style, bool place_one, bool zero_filler,
+                         std::string_view digits) {
+  constexpr std::size_t kGroupDigits = 4U;
+  constexpr std::size_t kTopGroup = 3U;
+  bool pending_zero = false;
+  const std::size_t lower_digits = kTopGroup * kGroupDigits;
+  if (digits.size() > lower_digits) {
+    const std::string_view top = digits.substr(0, digits.size() - lower_digits);
+    if (top.size() <= kGroupDigits) {
+      append_place_group(out, style, place_one, zero_filler, top, &pending_zero);
+    } else {
+      for (const char c : top) {
+        out.append(style.digits[static_cast<std::size_t>(c - '0')]);
+      }
+    }
+    out.append(style.group_units[kTopGroup - 1U]);
+    digits.remove_prefix(top.size());
+  }
+  std::size_t unit = (digits.size() + kGroupDigits - 1U) / kGroupDigits;
+  std::size_t begin = 0;
+  while (unit > 0U) {
+    --unit;
+    const std::size_t end = digits.size() - unit * kGroupDigits;
+    const std::string_view group = digits.substr(begin, end - begin);
+    if (group.find_first_not_of('0') != std::string_view::npos) {
+      // Zeros closing the previous group take no filler (一百四十万二千, dbnum_place_one_filler).
+      pending_zero = false;
+      append_place_group(out, style, place_one, zero_filler, group, &pending_zero);
+      if (unit > 0U) {
+        out.append(style.group_units[unit - 1U]);
+      }
+    }
+    begin = end;
+  }
+}
 
 }  // namespace
 
@@ -48,19 +118,11 @@ std::string_view dbnum_digit_subst(DbNumMode mode, char c) noexcept {
     return {};
   }
   const std::size_t digit = static_cast<std::size_t>(c - '0');
-  switch (mode) {
-    case DbNumMode::kDBNum1:
-      return locale_facts(eval::current_eval_profile()).dbnum_digits[0][digit];
-    case DbNumMode::kDBNum2:
-      return locale_facts(eval::current_eval_profile()).dbnum_digits[1][digit];
-    case DbNumMode::kDBNum3:
-      return kFullwidthDigits[digit];
-    case DbNumMode::kThai:
-      return kThaiDigits[digit];
-    case DbNumMode::kNone:
-    default:
-      return {};
+  if (mode == DbNumMode::kThai) {
+    return kThaiDigits[digit];
   }
+  const DbnumStyle* style = dbnum_style(mode);
+  return style == nullptr ? std::string_view() : style->digits[digit];
 }
 
 void append_digit_dbnum(std::string& out, DbNumMode mode, char c) {
@@ -85,6 +147,38 @@ void append_int_dbnum(std::string& out, long long value, DbNumMode mode) {
     return;
   }
   append_chars_dbnum(out, mode, buf);
+}
+
+void append_dbnum_positional(std::string& out, DbNumMode mode, std::string_view digits) {
+  const DbnumStyle* style = dbnum_style(mode);
+  if (style == nullptr || style->place_units[0].empty()) {
+    append_chars_dbnum(out, mode, digits);
+    return;
+  }
+  const std::size_t first = digits.find_first_not_of('0');
+  if (first == std::string_view::npos) {
+    out.append(style->digits[0]);
+    return;
+  }
+  append_place_number(out, *style, style->place_one, style->zero_filler, digits.substr(first));
+}
+
+void append_dbnum_date_field(std::string& out, DbNumMode mode, unsigned value, std::size_t width) {
+  const std::string digits = std::to_string(value);
+  for (std::size_t i = digits.size(); i < width; ++i) {
+    append_digit_dbnum(out, mode, '0');
+  }
+  const DbnumStyle* style = dbnum_style(mode);
+  if (style == nullptr || !style->date_positional || value == 0U) {
+    append_chars_dbnum(out, mode, digits);
+    return;
+  }
+  append_place_number(out, *style, style->date_place_one, /*zero_filler=*/false, digits);
+}
+
+bool dbnum_writes_numerals(DbNumMode mode) noexcept {
+  const DbnumStyle* style = dbnum_style(mode);
+  return style != nullptr && !style->place_units[0].empty();
 }
 
 void append_pad2(std::string& out, unsigned n) {

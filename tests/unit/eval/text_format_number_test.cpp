@@ -753,14 +753,13 @@ TEST(NumberFormatGeneral, JaJpKeywordMatchesEnglishGeneral) {
 }
 
 TEST(NumberFormatGeneral, JaJpKeywordHonoursDbNumQualifier) {
-  // `[DBNum1]` spells General's integer part positionally (Excel's
-  // Range.Text for `[DBNum1]General`), unlike a digit-token format such as
-  // `[DBNum1]0`, which substitutes per digit (oracle case text_dbnum1).
-  // `[DBNum3]` stays a per-digit substitution.
+  // `[DBNumN]` spells General's integer part with place units, unlike a
+  // digit-token format such as `[DBNum1]0`, which substitutes per digit
+  // (locale_tokens.dbnum_general_ja_jp, text_format.text_dbnum1).
   EXPECT_EQ(Render(1234.0, "[DBNum1]G/\xE6\xA8\x99\xE6\xBA\x96"),
             "\xE5\x8D\x83\xE4\xBA\x8C\xE7\x99\xBE\xE4\xB8\x89\xE5\x8D\x81\xE5\x9B\x9B");  // 千二百三十四
   EXPECT_EQ(Render(1234.0, "[DBNum3]G/\xE6\xA8\x99\xE6\xBA\x96"),
-            "\xEF\xBC\x91\xEF\xBC\x92\xEF\xBC\x93\xEF\xBC\x94");  // １２３４
+            "\xE5\x8D\x83\xEF\xBC\x92\xE7\x99\xBE\xEF\xBC\x93\xE5\x8D\x81\xEF\xBC\x94");  // 千２百３十４
 }
 
 // ---------------------------------------------------------------------------

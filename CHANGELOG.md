@@ -233,6 +233,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that is no date code on its left (`x/x`, or `yyyy/m/d` where `y` and `d`
   are text). `r` is the era year in ja-JP (`rr` adds the era name) and the
   year in zh-TW, and `t` writes the digits in Thai in th-TH.
+- `[DBNum1]`-`[DBNum4]` write numbers the way Mac Excel 365 does in ja-JP,
+  zh-CN, ko-KR and zh-TW. General, elapsed time and the date fields other
+  than the full year use place units in each locale's style: ja-JP drops
+  the 1 before 十百千 (`百一`), zh-CN and zh-TW write it and a zero for
+  skipped places (`一百○一`), ko-KR writes it without the zero, and
+  `[DBNum4]` is Hangul in ko-KR. Digit placeholders and full years stay
+  digit by digit, with each locale's digits (`[DBNum2]` 0 is `〇` in ja-JP,
+  `零` elsewhere). `[DBNum4]` is accepted, and changes nothing outside ko-KR.
+- `TEXT` accepts every colour name and the indexed-colour prefix in each
+  profile's spelling (`[Blau]`, `[Farbe3]`, `[แดง]`), and `ARRAYTOTEXT`
+  writes errors in each profile's spelling, including `#SPILL!` (`#スピル!`
+  in ja-JP) and the French, Spanish and Mexican Spanish names.
+
+### Fixed
+
+- `IFERROR` and `IFNA` replace the caught elements of an array or range
+  value one by one, pairing an array fallback by position, instead of
+  passing the array through unchanged.
+- `NUMBERVALUE` drops spaces anywhere in its text (`"1 234.5"` is 1234.5).
 
 ## [0.13.0] - 2026-10-06
 

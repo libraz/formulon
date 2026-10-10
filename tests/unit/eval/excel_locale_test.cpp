@@ -126,7 +126,7 @@ void ExpectFactsEqual(const LocaleFacts& lhs, const LocaleFacts& rhs) {
   EXPECT_EQ(lhs.format_rejects_dot, rhs.format_rejects_dot);
   EXPECT_EQ(lhs.general_alias, rhs.general_alias);
   EXPECT_EQ(lhs.color_names, rhs.color_names);
-  EXPECT_EQ(lhs.dbnum_digits, rhs.dbnum_digits);
+  EXPECT_EQ(lhs.color_index_prefix, rhs.color_index_prefix);
   EXPECT_EQ(lhs.grand_total, rhs.grand_total);
   EXPECT_EQ(lhs.hierarchy_grand_total, rhs.hierarchy_grand_total);
   EXPECT_EQ(lhs.row_field_prefix, rhs.row_field_prefix);
@@ -149,7 +149,6 @@ constexpr Names12 kEnglishMonthsShort{"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 constexpr Names7 kEnglishDaysLong{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 constexpr Names7 kEnglishDaysShort{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-constexpr std::array<std::string_view, 10> kAsciiDigits{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
 void ExpectInvariantFormatLetters(const FormatLetters& letters) {
   EXPECT_EQ(letters.year, 'y');
@@ -173,7 +172,6 @@ void ExpectInvariantTokens(const LocaleFacts& facts) {
   EXPECT_EQ(facts.array_row_separator, ';');
   EXPECT_EQ(facts.true_name, "TRUE");
   EXPECT_EQ(facts.false_name, "FALSE");
-  EXPECT_EQ(facts.error_names, kEnglishErrors);
   EXPECT_EQ(facts.r1c1_row, 'R');
   EXPECT_EQ(facts.r1c1_col, 'C');
   EXPECT_EQ(facts.r1c1_open, '[');
@@ -192,6 +190,9 @@ void ExpectInvariantTokens(const LocaleFacts& facts) {
 
 void ExpectJapaneseFacts(const LocaleFacts& facts) {
   ExpectInvariantTokens(facts);
+  std::array<std::string_view, kErrorNameCount> japanese_errors = kEnglishErrors;
+  japanese_errors[static_cast<std::size_t>(ErrorCode::Spill)] = "#スピル!";
+  EXPECT_EQ(facts.error_names, japanese_errors);
   EXPECT_EQ(facts.currency.symbol, "¥");
   EXPECT_FALSE(facts.currency.suffix);
   EXPECT_FALSE(facts.currency.space);
@@ -210,14 +211,20 @@ void ExpectJapaneseFacts(const LocaleFacts& facts) {
   EXPECT_TRUE(facts.phonetic);
   EXPECT_TRUE(facts.criteria_header_keeps_halfwidth_kana);
   EXPECT_TRUE(facts.bang_escape);
-  EXPECT_TRUE(facts.dbnum);
+  ASSERT_NE(facts.dbnum, nullptr);
   EXPECT_TRUE(facts.fullwidth_syntax_fold);
   EXPECT_EQ(facts.general_alias, "G/標準");
   EXPECT_EQ(facts.color_names, (std::array<std::string_view, 8>{"黒", "青", "水", "緑", "紫", "赤", "白", "黄"}));
-  EXPECT_EQ(facts.dbnum_digits[0],
+  EXPECT_EQ(facts.color_index_prefix, "色");
+  EXPECT_EQ((*facts.dbnum)[0].digits,
             (std::array<std::string_view, 10>{"〇", "一", "二", "三", "四", "五", "六", "七", "八", "九"}));
-  EXPECT_EQ(facts.dbnum_digits[1],
-            (std::array<std::string_view, 10>{"零", "壱", "弐", "参", "四", "伍", "六", "七", "捌", "玖"}));
+  EXPECT_EQ((*facts.dbnum)[1].digits,
+            (std::array<std::string_view, 10>{"〇", "壱", "弐", "参", "四", "伍", "六", "七", "八", "九"}));
+  EXPECT_EQ((*facts.dbnum)[1].place_units, (std::array<std::string_view, 3>{"拾", "百", "阡"}));
+  EXPECT_FALSE((*facts.dbnum)[0].place_one);
+  EXPECT_TRUE((*facts.dbnum)[1].place_one);
+  EXPECT_FALSE((*facts.dbnum)[0].zero_filler);
+  EXPECT_TRUE((*facts.dbnum)[3].place_units[0].empty());
   EXPECT_EQ(facts.grand_total, "合計");
   EXPECT_EQ(facts.hierarchy_grand_total, "総計");
   EXPECT_EQ(facts.row_field_prefix, "行フィールド ");
@@ -229,6 +236,7 @@ void ExpectJapaneseFacts(const LocaleFacts& facts) {
 
 void ExpectEnglishFacts(const LocaleFacts& facts) {
   ExpectInvariantTokens(facts);
+  EXPECT_EQ(facts.error_names, kEnglishErrors);
   EXPECT_EQ(facts.currency.symbol, "$");
   EXPECT_FALSE(facts.currency.suffix);
   EXPECT_FALSE(facts.currency.space);
@@ -247,13 +255,12 @@ void ExpectEnglishFacts(const LocaleFacts& facts) {
   EXPECT_FALSE(facts.phonetic);
   EXPECT_FALSE(facts.criteria_header_keeps_halfwidth_kana);
   EXPECT_FALSE(facts.bang_escape);
-  EXPECT_FALSE(facts.dbnum);
+  EXPECT_EQ(facts.dbnum, nullptr);
   EXPECT_FALSE(facts.fullwidth_syntax_fold);
   EXPECT_EQ(facts.general_alias, "");
   EXPECT_EQ(facts.color_names,
             (std::array<std::string_view, 8>{"Black", "Blue", "Cyan", "Green", "Magenta", "Red", "White", "Yellow"}));
-  EXPECT_EQ(facts.dbnum_digits[0], kAsciiDigits);
-  EXPECT_EQ(facts.dbnum_digits[1], kAsciiDigits);
+  EXPECT_EQ(facts.color_index_prefix, "Color");
   EXPECT_EQ(facts.grand_total, "Total");
   EXPECT_EQ(facts.hierarchy_grand_total, "Grand Total");
   EXPECT_EQ(facts.row_field_prefix, "Row Field ");
@@ -307,11 +314,17 @@ TEST(ExcelLocale, EveryLocaleNamesEveryErrorMonthAndDay) {
     for (const std::string_view name : facts.weekday_short) {
       EXPECT_FALSE(name.empty()) << id;
     }
-    for (const auto& digits : facts.dbnum_digits) {
-      for (const std::string_view digit : digits) {
-        EXPECT_FALSE(digit.empty()) << id;
+    if (facts.dbnum != nullptr) {
+      for (const DbnumStyle& style : *facts.dbnum) {
+        for (const std::string_view digit : style.digits) {
+          EXPECT_FALSE(digit.empty()) << id;
+        }
       }
     }
+    for (const std::string_view name : facts.color_names) {
+      EXPECT_FALSE(name.empty()) << id;
+    }
+    EXPECT_FALSE(facts.color_index_prefix.empty()) << id;
     EXPECT_FALSE(facts.true_name.empty()) << id;
     EXPECT_FALSE(facts.false_name.empty()) << id;
     EXPECT_FALSE(facts.currency.symbol.empty()) << id;

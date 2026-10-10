@@ -95,6 +95,28 @@ struct Currency {
 
 inline constexpr std::size_t kErrorNameCount = std::size(kErrorTable);
 
+/// How one `[DBNumN]` directive writes numbers. Digit-by-digit output takes
+/// `digits`; General, elapsed time and date fields are written with place units.
+struct DbnumStyle {
+  /// Digits 0-9.
+  std::array<std::string_view, 10> digits;
+  /// Units of 10, 100 and 1000 within a group of four digits; empty for a
+  /// directive the locale accepts and leaves in ASCII digits.
+  std::array<std::string_view, 3> place_units;
+  /// Units of 10^4, 10^8 and 10^12.
+  std::array<std::string_view, 3> group_units;
+  /// A 1 before a place unit is written (一十 rather than 十).
+  bool place_one;
+  /// A run of skipped places between digits is written as one zero (一百○一).
+  bool zero_filler;
+  /// Date and time fields are written with place units rather than digit by digit.
+  bool date_positional;
+  /// A date field writes the 1 before the tens unit.
+  bool date_place_one;
+};
+
+using DbnumStyles = std::array<DbnumStyle, 4>;
+
 struct LocaleFacts {
   char decimal_separator;
   char group_separator;
@@ -160,7 +182,8 @@ struct LocaleFacts {
   bool phonetic;
   bool criteria_header_keeps_halfwidth_kana;
   bool bang_escape;
-  bool dbnum;
+  /// `[DBNum1]`-`[DBNum4]` styles; null where the directives change nothing.
+  const DbnumStyles* dbnum;
   /// A lower-case `t` renders nothing and writes the section's digits in Thai.
   bool thai_digit_letter;
   /// Letter, in either case, of a date code that renders nothing; `'\0'` when none.
@@ -175,8 +198,8 @@ struct LocaleFacts {
   /// Colour numbers 1-8 (black blue cyan green magenta red white yellow);
   /// an empty slot is a colour name the locale rejects.
   std::array<std::string_view, 8> color_names;
-  /// [DBNum1] and [DBNum2] digits 0-9.
-  std::array<std::array<std::string_view, 10>, 2> dbnum_digits;
+  /// Spelling of the indexed colour form's prefix (`[Color12]`); empty when the locale has none.
+  std::string_view color_index_prefix;
   std::string_view grand_total;
   std::string_view hierarchy_grand_total;
   std::string_view row_field_prefix;

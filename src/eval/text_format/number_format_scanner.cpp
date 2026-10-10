@@ -227,12 +227,12 @@ bool match_dbnum(std::string_view fmt, std::size_t start, std::size_t* end, std:
     return false;
   }
   const Utf8Scalar digit = decode_utf8(fmt, i);
-  if (!digit.valid || digit.codepoint < '1' || digit.codepoint > '3') {
+  if (!digit.valid || digit.codepoint < '1' || digit.codepoint > '4') {
     if (!is_fullwidth_ascii(digit.codepoint)) {
       return false;
     }
     const char c = fullwidth_ascii(digit.codepoint);
-    if (c < '1' || c > '3') {
+    if (c < '1' || c > '4') {
       return false;
     }
   }
@@ -342,7 +342,7 @@ std::string normalize_ja_jp_format_syntax(std::string_view fmt) {
       std::uint32_t digit_codepoint = 0;
       if (match_dbnum(fmt, i, &marker_end, &digit_codepoint)) {
         out.append("DBNum");
-        const char digit_ascii = digit_codepoint >= '1' && digit_codepoint <= '3' ? static_cast<char>(digit_codepoint)
+        const char digit_ascii = digit_codepoint >= '1' && digit_codepoint <= '4' ? static_cast<char>(digit_codepoint)
                                                                                   : fullwidth_ascii(digit_codepoint);
         out.push_back(digit_ascii);
         i = marker_end;
@@ -583,7 +583,7 @@ int parse_cond_directive(std::string_view body, CondOp* out_op, double* out_valu
 }
 
 int parse_dbnum_directive(std::string_view body) noexcept {
-  // Expected form: `dbnumN` where N is `1`, `2`, or `3`.
+  // Expected form: `dbnumN` where N is `1` to `4`.
   if (body.size() != 6) {
     return 0;
   }
@@ -598,16 +598,7 @@ int parse_dbnum_directive(std::string_view body) noexcept {
     }
   }
   const char d = body[5];
-  if (d == '1') {
-    return 1;
-  }
-  if (d == '2') {
-    return 2;
-  }
-  if (d == '3') {
-    return 3;
-  }
-  return 0;
+  return d >= '1' && d <= '4' ? d - '0' : 0;
 }
 
 bool is_date_tok(Tok t) noexcept {

@@ -37,12 +37,13 @@ std::string_view name_entry(const std::array<std::string_view, N>& table, long l
 // Buddhist-era year (2024 -> 2567, text_buddhist_year_bbbb).
 constexpr int kBuddhistEraOffset = 543;
 
+// Elapsed time is zero-padded to the token width and written like General.
 void append_elapsed_int_dbnum(std::string& out, long long value, std::size_t width, DbNumMode mode) {
   const std::string digits = std::to_string(value);
   for (std::size_t i = digits.size(); i < width; ++i) {
     append_digit_dbnum(out, mode, '0');
   }
-  append_chars_dbnum(out, mode, digits);
+  append_dbnum_positional(out, mode, digits);
 }
 
 constexpr std::size_t kMaxMeaningfulFractionDigits = 15;
@@ -147,7 +148,7 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
     switch (tk.kind) {
       case Tok::DateY2: {
         unsigned y2 = static_cast<unsigned>(((ymd.y % 100) + 100) % 100);
-        append_pad2_dbnum(out, y2, dbnum);
+        append_dbnum_date_field(out, dbnum, y2, 2U);
         break;
       }
       case Tok::DateY4: {
@@ -163,10 +164,10 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
         break;
       }
       case Tok::DateM:
-        append_int_dbnum(out, static_cast<long long>(ymd.m), dbnum);
+        append_dbnum_date_field(out, dbnum, ymd.m, 1U);
         break;
       case Tok::DateMM:
-        append_pad2_dbnum(out, ymd.m, dbnum);
+        append_dbnum_date_field(out, dbnum, ymd.m, 2U);
         break;
       case Tok::DateMMM:
         out.append(name_entry(facts.month_short, static_cast<long long>(ymd.m) - 1));
@@ -183,10 +184,10 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
         break;
       }
       case Tok::DateD:
-        append_int_dbnum(out, static_cast<long long>(ymd.d), dbnum);
+        append_dbnum_date_field(out, dbnum, ymd.d, 1U);
         break;
       case Tok::DateDD:
-        append_pad2_dbnum(out, ymd.d, dbnum);
+        append_dbnum_date_field(out, dbnum, ymd.d, 2U);
         break;
       case Tok::DateDDD:
         out.append(name_entry(facts.day_short, sun0));
@@ -224,9 +225,15 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
         out.append(era.kanji2);
         break;
       }
-      case Tok::DateB2:
-        append_pad2_dbnum(out, static_cast<unsigned>(((ymd.y + kBuddhistEraOffset) % 100 + 100) % 100), dbnum);
+      case Tok::DateB2: {
+        const auto b2 = static_cast<unsigned>(((ymd.y + kBuddhistEraOffset) % 100 + 100) % 100);
+        append_pad2_dbnum(out, b2, dbnum);
+        // Under a `[DBNumN]` style the two digits are written twice (locale_tokens.dbnum_date_fields).
+        if (dbnum_writes_numerals(dbnum)) {
+          append_pad2_dbnum(out, b2, dbnum);
+        }
         break;
+      }
       case Tok::DateBlank:
         break;
       case Tok::DateB4:
@@ -239,7 +246,11 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
         }
         const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
         const int era_year = ymd.y - era.year_anchor + 1;
-        append_int_dbnum(out, static_cast<long long>(era_year), dbnum);
+        if (era_year >= 0) {
+          append_dbnum_date_field(out, dbnum, static_cast<unsigned>(era_year), 1U);
+        } else {
+          append_int_dbnum(out, static_cast<long long>(era_year), dbnum);
+        }
         break;
       }
       case Tok::EraEE: {
@@ -250,29 +261,29 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
         const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
         const int era_year = ymd.y - era.year_anchor + 1;
         if (era_year >= 0 && era_year < 100) {
-          append_pad2_dbnum(out, static_cast<unsigned>(era_year), dbnum);
+          append_dbnum_date_field(out, dbnum, static_cast<unsigned>(era_year), 2U);
         } else {
           append_int_dbnum(out, static_cast<long long>(era_year), dbnum);
         }
         break;
       }
       case Tok::DateH:
-        append_int_dbnum(out, static_cast<long long>(hour_for_render), dbnum);
+        append_dbnum_date_field(out, dbnum, hour_for_render, 1U);
         break;
       case Tok::DateHH:
-        append_pad2_dbnum(out, hour_for_render, dbnum);
+        append_dbnum_date_field(out, dbnum, hour_for_render, 2U);
         break;
       case Tok::DateMin:
-        append_int_dbnum(out, static_cast<long long>(minute), dbnum);
+        append_dbnum_date_field(out, dbnum, minute, 1U);
         break;
       case Tok::DateMMMin:
-        append_pad2_dbnum(out, minute, dbnum);
+        append_dbnum_date_field(out, dbnum, minute, 2U);
         break;
       case Tok::DateS:
-        append_int_dbnum(out, static_cast<long long>(second), dbnum);
+        append_dbnum_date_field(out, dbnum, second, 1U);
         break;
       case Tok::DateSS:
-        append_pad2_dbnum(out, second, dbnum);
+        append_dbnum_date_field(out, dbnum, second, 2U);
         break;
       case Tok::DateElapsedH: {
         const long long total_hours = total_rounded_seconds / 3600;
