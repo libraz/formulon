@@ -761,41 +761,25 @@ gtest_discover_tests(formulon_workbook_builder_test
 # an incomplete historical print suite) without fabricating or deleting data.
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
+  function(formulon_add_oracle_unittest name module)
+    add_test(
+      NAME ${name}
+      COMMAND ${_formulon_oracle_python} -m unittest ${module}
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    set_tests_properties(${name} PROPERTIES LABELS "oracle;oracle-metadata")
+  endfunction()
+
   add_test(
     NAME formulon_oracle_provenance_check
     COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py check
   )
   set_tests_properties(formulon_oracle_provenance_check PROPERTIES LABELS "oracle;oracle-metadata")
-  add_test(
-    NAME formulon_oracle_policy_unit
-    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.provenance_test
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  set_tests_properties(formulon_oracle_policy_unit PROPERTIES LABELS "oracle;oracle-metadata")
-  add_test(
-    NAME formulon_macos_excel_formula_unit
-    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.macos_excel_test
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  set_tests_properties(formulon_macos_excel_formula_unit PROPERTIES LABELS "oracle;oracle-metadata")
-  add_test(
-    NAME formulon_windows_excel_driver_unit
-    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.windows_excel_test
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  set_tests_properties(formulon_windows_excel_driver_unit PROPERTIES LABELS "oracle;oracle-metadata")
-  add_test(
-    NAME formulon_oracle_golden_diff_unit
-    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.golden_diff_test
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  set_tests_properties(formulon_oracle_golden_diff_unit PROPERTIES LABELS "oracle;oracle-metadata")
-  add_test(
-    NAME formulon_oracle_gen_incremental_unit
-    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.oracle_gen_incremental_test
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  set_tests_properties(formulon_oracle_gen_incremental_unit PROPERTIES LABELS "oracle;oracle-metadata")
+  formulon_add_oracle_unittest(formulon_oracle_policy_unit tools.oracle.provenance_test)
+  formulon_add_oracle_unittest(formulon_macos_excel_formula_unit tools.oracle.macos_excel_test)
+  formulon_add_oracle_unittest(formulon_windows_excel_driver_unit tools.oracle.windows_excel_test)
+  formulon_add_oracle_unittest(formulon_oracle_golden_diff_unit tools.oracle.golden_diff_test)
+  formulon_add_oracle_unittest(formulon_oracle_gen_incremental_unit tools.oracle.oracle_gen_incremental_test)
   option(FORMULON_ORACLE_RELEASE_GATES
     "Register strict external-capture oracle gates (release CI only)"
     OFF
@@ -815,48 +799,23 @@ if(Python3_Interpreter_FOUND)
     COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/workbook_closure_check.py
   )
   set_tests_properties(formulon_workbook_closure_check_optional PROPERTIES LABELS "oracle;oracle-metadata")
-  add_test(
-    NAME formulon_workbook_case_schema_negative
-    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.workbook_case_schema_test
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  set_tests_properties(formulon_workbook_case_schema_negative PROPERTIES LABELS "oracle;oracle-metadata")
+  formulon_add_oracle_unittest(formulon_workbook_case_schema_negative tools.oracle.workbook_case_schema_test)
   # Guards the divergence registry gate itself: the assertions here are what
   # keep the pending-stamp format, the explicit build rejections and the
   # mandatory `cause` enum from being loosened without notice.
-  add_test(
-    NAME formulon_divergence_registry_unit
-    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.divergence_check_test
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  set_tests_properties(formulon_divergence_registry_unit PROPERTIES LABELS "oracle;oracle-metadata")
+  formulon_add_oracle_unittest(formulon_divergence_registry_unit tools.oracle.divergence_check_test)
   # Covers the other half of the same gate: that a registered skip reaches
   # both the capture side and each track's verifier without waiting on a
   # fresh Excel session.
-  add_test(
-    NAME formulon_divergence_projection_unit
-    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.reprobe_test
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  set_tests_properties(formulon_divergence_projection_unit PROPERTIES LABELS "oracle;oracle-metadata")
+  formulon_add_oracle_unittest(formulon_divergence_projection_unit tools.oracle.reprobe_test)
   # The DataBar / IconSet match payloads are computed from documented
   # semantics rather than captured, so this is the only check on them that
   # does not need Excel.
-  add_test(
-    NAME formulon_cf_visual_semantics_unit
-    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.cf_visual_semantics_test
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  set_tests_properties(formulon_cf_visual_semantics_unit PROPERTIES LABELS "oracle;oracle-metadata")
+  formulon_add_oracle_unittest(formulon_cf_visual_semantics_unit tools.oracle.cf_visual_semantics_test)
   # This entry covers the spec and address handling only. The suite's
   # authoring half needs the Formulon Python binding, which the oracle
   # venv does not install -- it carries the capture dependencies (PyYAML,
   # xlwings) instead -- so those cases skip here and are covered by
   # `make python-test`, which runs on an interpreter that has the binding.
-  add_test(
-    NAME formulon_print_roundtrip_fixture
-    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.print_roundtrip_test
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  set_tests_properties(formulon_print_roundtrip_fixture PROPERTIES LABELS "oracle;oracle-metadata")
+  formulon_add_oracle_unittest(formulon_print_roundtrip_fixture tools.oracle.print_roundtrip_test)
 endif()

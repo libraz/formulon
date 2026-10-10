@@ -76,6 +76,28 @@ formulon_apply_warnings(formulon_integration_tests)
 
 gtest_discover_tests(formulon_integration_tests)
 
+macro(formulon_add_slow_integration_test target source test_list)
+  add_executable(${target} ${source})
+
+  target_link_libraries(${target}
+    PRIVATE
+      formulon_static
+      gtest_main
+  )
+
+  target_include_directories(${target}
+    PRIVATE
+      ${CMAKE_SOURCE_DIR}/src
+  )
+
+  formulon_apply_warnings(${target})
+
+  gtest_discover_tests(${target}
+    TEST_LIST ${test_list}
+    PROPERTIES LABELS "SLOW"
+  )
+endmacro()
+
 # ---------------------------------------------------------------------------
 # Slow-labelled 100-book OOXML round-trip corpus.
 #
@@ -87,27 +109,13 @@ gtest_discover_tests(formulon_integration_tests)
 # pick them up.
 # ---------------------------------------------------------------------------
 
-add_executable(formulon_ooxml_corpus_100_tests ooxml_corpus_100_test.cpp)
-
-target_link_libraries(formulon_ooxml_corpus_100_tests
-  PRIVATE
-    formulon_static
-    gtest_main
-)
-
-target_include_directories(formulon_ooxml_corpus_100_tests
-  PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-)
-
-formulon_apply_warnings(formulon_ooxml_corpus_100_tests)
-
 # `TEST_LIST` lets us label every discovered ctest entry without naming
 # them one-by-one (gtest_discover_tests synthesises one ctest test per
 # parameterised case).
-gtest_discover_tests(formulon_ooxml_corpus_100_tests
-  TEST_LIST formulon_ooxml_corpus_100_test_list
-  PROPERTIES LABELS "SLOW"
+formulon_add_slow_integration_test(
+  formulon_ooxml_corpus_100_tests
+  ooxml_corpus_100_test.cpp
+  formulon_ooxml_corpus_100_test_list
 )
 
 # ---------------------------------------------------------------------------
@@ -121,24 +129,10 @@ gtest_discover_tests(formulon_ooxml_corpus_100_tests
 # same per-binary fast-suite-budget reasons; tagged `SLOW`.
 # ---------------------------------------------------------------------------
 
-add_executable(formulon_ooxml_corpus_extended_tests ooxml_corpus_extended_test.cpp)
-
-target_link_libraries(formulon_ooxml_corpus_extended_tests
-  PRIVATE
-    formulon_static
-    gtest_main
-)
-
-target_include_directories(formulon_ooxml_corpus_extended_tests
-  PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-)
-
-formulon_apply_warnings(formulon_ooxml_corpus_extended_tests)
-
-gtest_discover_tests(formulon_ooxml_corpus_extended_tests
-  TEST_LIST formulon_ooxml_corpus_extended_test_list
-  PROPERTIES LABELS "SLOW"
+formulon_add_slow_integration_test(
+  formulon_ooxml_corpus_extended_tests
+  ooxml_corpus_extended_test.cpp
+  formulon_ooxml_corpus_extended_test_list
 )
 
 # ---------------------------------------------------------------------------
@@ -150,24 +144,10 @@ gtest_discover_tests(formulon_ooxml_corpus_extended_tests
 # DOM-only corpus.
 # ---------------------------------------------------------------------------
 
-add_executable(formulon_sax_corpus_parity_tests sax_corpus_parity_test.cpp)
-
-target_link_libraries(formulon_sax_corpus_parity_tests
-  PRIVATE
-    formulon_static
-    gtest_main
-)
-
-target_include_directories(formulon_sax_corpus_parity_tests
-  PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-)
-
-formulon_apply_warnings(formulon_sax_corpus_parity_tests)
-
-gtest_discover_tests(formulon_sax_corpus_parity_tests
-  TEST_LIST formulon_sax_corpus_parity_test_list
-  PROPERTIES LABELS "SLOW"
+formulon_add_slow_integration_test(
+  formulon_sax_corpus_parity_tests
+  sax_corpus_parity_test.cpp
+  formulon_sax_corpus_parity_test_list
 )
 
 # ---------------------------------------------------------------------------
@@ -179,22 +159,8 @@ gtest_discover_tests(formulon_sax_corpus_parity_tests
 # budget is untouched.
 # ---------------------------------------------------------------------------
 
-add_executable(formulon_recalc_scale_tests recalc_scale_test.cpp)
-
-target_link_libraries(formulon_recalc_scale_tests
-  PRIVATE
-    formulon_static
-    gtest_main
-)
-
-target_include_directories(formulon_recalc_scale_tests
-  PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-)
-
-formulon_apply_warnings(formulon_recalc_scale_tests)
-
-gtest_discover_tests(formulon_recalc_scale_tests
-  TEST_LIST formulon_recalc_scale_test_list
-  PROPERTIES LABELS "SLOW"
+formulon_add_slow_integration_test(
+  formulon_recalc_scale_tests
+  recalc_scale_test.cpp
+  formulon_recalc_scale_test_list
 )
