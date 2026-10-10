@@ -10,18 +10,20 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 # Local imports -- accept both `python3 tools/oracle/cli.py` (no package)
 # and `python3 -m tools.oracle.cli` (package-style).
 try:  # pragma: no cover - trivial fallback
     from tools.oracle import oracle_gen
     from tools.oracle.drivers._locale import COUNTRY_CODE_TO_BCP47
+    from tools.oracle.drivers.base import excel_version_tuple as _version_tuple
     from tools.oracle.preflight import _check_target, _venv_python
     from tools.oracle.targets_manifest import _load_targets, _platform_label
 except ImportError:  # pragma: no cover
     import oracle_gen  # type: ignore
     from drivers._locale import COUNTRY_CODE_TO_BCP47  # type: ignore
+    from drivers.base import excel_version_tuple as _version_tuple  # type: ignore
     from preflight import _check_target, _venv_python  # type: ignore
     from targets_manifest import _load_targets, _platform_label  # type: ignore
 
@@ -81,24 +83,6 @@ def _short_host(host: str, label: Optional[str] = None) -> Optional[str]:
     if host == "Linux" and (label or _platform_label()).endswith("(WSL2)"):
         return "win"
     return None
-
-
-def _version_tuple(s: str) -> Tuple[int, ...]:
-    """Returns a comparable integer tuple from an Excel version string.
-
-    Accepts ``"16.108.1"``, ``"16.84 (Build 24021522)"``, ``"16.84"``;
-    extracts every leading-digit run separated by ``.`` until the first
-    non-numeric chunk. Returns ``(0,)`` if no digits were found, so the
-    caller can compare without crashing on garbage input.
-    """
-
-    parts: List[int] = []
-    for chunk in re.split(r"[.\s(]+", s.strip()):
-        m = re.match(r"\d+", chunk)
-        if not m:
-            break
-        parts.append(int(m.group()))
-    return tuple(parts) or (0,)
 
 
 _PROBE_SCRIPT = """

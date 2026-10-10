@@ -23,8 +23,9 @@ from __future__ import annotations
 import abc
 import datetime as _dt
 import math
+import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 # Excel's error values come back from automation bridges as CVErr /
 # ErrorValue / str depending on Mac vs Windows and the property we read.
@@ -62,6 +63,24 @@ _EXCEL_MAX_COLUMNS = 16_384
 # oracle import range budget and prevents an external result from turning the
 # shape probe into an unbounded offset loop.
 MAX_CAPTURE_CELLS = 4_096
+
+
+def excel_version_tuple(s: str) -> Tuple[int, ...]:
+    """Returns a comparable integer tuple from an Excel version string.
+
+    Accepts ``"16.108.1"``, ``"16.84 (Build 24021522)"``, ``"16.84"``;
+    extracts every leading-digit run separated by ``.`` until the first
+    non-numeric chunk. Returns ``(0,)`` if no digits were found, so callers
+    can compare without crashing on garbage input.
+    """
+
+    parts: List[int] = []
+    for chunk in re.split(r"[.\s(]+", s.strip()):
+        m = re.match(r"\d+", chunk)
+        if not m:
+            break
+        parts.append(int(m.group()))
+    return tuple(parts) or (0,)
 
 
 # Where the formula under test is written on the case's own worksheet unless

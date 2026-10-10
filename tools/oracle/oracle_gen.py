@@ -24,7 +24,6 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
-import re
 import sys
 import time
 from dataclasses import dataclass, replace
@@ -38,6 +37,7 @@ try:  # pragma: no cover - trivial fallback
     from tools.oracle.divergence_check import is_pending_stamp
     from tools.oracle.drivers import select_driver
     from tools.oracle.drivers.base import CaseResult, EnvironmentInfo
+    from tools.oracle.drivers.base import excel_version_tuple as _version_tuple
     from tools.oracle.targets_manifest import _load_targets
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -45,6 +45,7 @@ except ImportError:  # pragma: no cover
     from divergence_check import is_pending_stamp  # type: ignore
     from drivers import select_driver  # type: ignore
     from drivers.base import CaseResult, EnvironmentInfo  # type: ignore
+    from drivers.base import excel_version_tuple as _version_tuple  # type: ignore
     from targets_manifest import _load_targets  # type: ignore
 
 
@@ -526,24 +527,6 @@ def _apply_divergence_metadata(
             cases.append(replace(case, tolerance=tolerance, compare_mode=compare_mode) if changed else case)
         out.append((path, replace(suite, cases=cases)))
     return out
-
-
-def _version_tuple(s: str) -> Tuple[int, ...]:
-    """Returns a comparable integer tuple from an Excel version string.
-
-    Mirrors ``contribute.py``'s ``_version_tuple`` (duplicated rather
-    than imported: the contributor flow sits above this module, so the
-    reverse import would be circular). Returns ``(0,)`` for strings with no leading
-    digit run, e.g. a hand-seeded placeholder version.
-    """
-
-    parts: List[int] = []
-    for chunk in re.split(r"[.\s(]+", s.strip()):
-        m = re.match(r"\d+", chunk)
-        if not m:
-            break
-        parts.append(int(m.group()))
-    return tuple(parts) or (0,)
 
 
 def _tree_wide_excel_version(golden_dir: Path, fallback: str) -> str:
