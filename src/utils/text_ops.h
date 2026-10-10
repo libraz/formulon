@@ -83,7 +83,7 @@ struct Utf8DecodeResult {
 
 /// Decodes the first UTF-8 codepoint in `text`. On a malformed leading byte,
 /// truncated continuation, or empty input, returns `{false, 0, 0}`. Used by
-/// UNICODE() to read the leading codepoint of a string.
+/// UNICODE() and the formula tokenizer.
 Utf8DecodeResult decode_first_utf8_codepoint(std::string_view text) noexcept;
 
 /// Lenient single-step UTF-8 decoder. Decodes the codepoint starting at

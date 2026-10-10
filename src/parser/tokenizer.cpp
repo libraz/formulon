@@ -31,6 +31,7 @@
 #include "utils/a1_ref.h"
 #include "utils/double_parse.h"
 #include "utils/strings.h"
+#include "utils/text_ops.h"
 
 namespace formulon {
 namespace parser {
@@ -678,44 +679,14 @@ Tokenizer::CodepointInfo Tokenizer::peek_codepoint(std::size_t i) const noexcept
   if (i >= source_.size()) {
     return info;
   }
-  const unsigned char c0 = static_cast<unsigned char>(source_[i]);
-  if (c0 < 0x80) {
-    info.codepoint = c0;
-    info.byte_len = 1;
-    info.utf16_units = 1;
-    info.valid = true;
-    return info;
-  }
-  std::uint32_t need = 0;
-  std::uint32_t value = 0;
-  if ((c0 & 0xE0) == 0xC0) {
-    need = 1;
-    value = c0 & 0x1F;
-  } else if ((c0 & 0xF0) == 0xE0) {
-    need = 2;
-    value = c0 & 0x0F;
-  } else if ((c0 & 0xF8) == 0xF0) {
-    need = 3;
-    value = c0 & 0x07;
-  } else {
+  const Utf8DecodeResult decoded = decode_first_utf8_codepoint(source_.substr(i));
+  if (!decoded.valid) {
     info.byte_len = 1;  // skip one malformed byte
     return info;
   }
-  if (i + need >= source_.size()) {
-    info.byte_len = 1;
-    return info;
-  }
-  for (std::uint32_t k = 0; k < need; ++k) {
-    const unsigned char ck = static_cast<unsigned char>(source_[i + 1 + k]);
-    if ((ck & 0xC0) != 0x80) {
-      info.byte_len = 1;
-      return info;
-    }
-    value = (value << 6) | (ck & 0x3F);
-  }
-  info.codepoint = value;
-  info.byte_len = need + 1;
-  info.utf16_units = value > 0xFFFF ? 2 : 1;
+  info.codepoint = decoded.codepoint;
+  info.byte_len = static_cast<std::uint32_t>(decoded.byte_len);
+  info.utf16_units = decoded.codepoint > 0xFFFFu ? 2U : 1U;
   info.valid = true;
   return info;
 }
