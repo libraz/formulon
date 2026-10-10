@@ -2139,6 +2139,29 @@ def _read_count(fn, *args, default_op: str = "count") -> int:
         LIB.free(out)
 
 
+def _image_anchor_fields(
+    anchor_kind,
+    edit_as,
+    row,
+    col,
+    row_off_emu,
+    col_off_emu,
+    width_emu,
+    height_emu,
+) -> Dict[str, int]:
+    """Convert the shared image-anchor fields to their ABI representation."""
+    return {
+        "anchor_kind": _sint(anchor_kind, "anchor_kind"),
+        "edit_as": _sint(edit_as, "edit_as"),
+        "row": _uint(row, "row"),
+        "col": _uint(col, "col"),
+        "row_off_emu": int(row_off_emu),
+        "col_off_emu": int(col_off_emu),
+        "width_emu": int(width_emu),
+        "height_emu": int(height_emu),
+    }
+
+
 def _read_owned_buffer(fn, *args, default_op: str = "save") -> bytes:
     """Call a save-style ABI function and copy its owned byte buffer."""
     scratch: List[int] = []
@@ -4703,16 +4726,16 @@ class Workbook:
             S.IMAGE_INSERT.pack(
                 LIB,
                 ptr,
-                {
-                    "anchor_kind": _sint(anchor_kind, "anchor_kind"),
-                    "edit_as": _sint(edit_as, "edit_as"),
-                    "row": _uint(row, "row"),
-                    "col": _uint(col, "col"),
-                    "row_off_emu": int(row_off_emu),
-                    "col_off_emu": int(col_off_emu),
-                    "width_emu": int(width_emu),
-                    "height_emu": int(height_emu),
-                },
+                _image_anchor_fields(
+                    anchor_kind,
+                    edit_as,
+                    row,
+                    col,
+                    row_off_emu,
+                    col_off_emu,
+                    width_emu,
+                    height_emu,
+                ),
             )
             S.write_str_field(LIB, ptr, S.IMAGE_INSERT, "name", name, owned)
             S.write_str_field(LIB, ptr, S.IMAGE_INSERT, "descr", descr, owned)
@@ -4762,16 +4785,16 @@ class Workbook:
             S.IMAGE_ANCHOR.pack(
                 LIB,
                 ptr,
-                {
-                    "anchor_kind": _sint(anchor_kind, "anchor_kind"),
-                    "edit_as": _sint(edit_as, "edit_as"),
-                    "row": _uint(row, "row"),
-                    "col": _uint(col, "col"),
-                    "row_off_emu": int(row_off_emu),
-                    "col_off_emu": int(col_off_emu),
-                    "width_emu": int(width_emu),
-                    "height_emu": int(height_emu),
-                },
+                _image_anchor_fields(
+                    anchor_kind,
+                    edit_as,
+                    row,
+                    col,
+                    row_off_emu,
+                    col_off_emu,
+                    width_emu,
+                    height_emu,
+                ),
             )
             _check(
                 LIB.fm_sheet_set_image_anchor(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), ptr),
@@ -5915,12 +5938,12 @@ class Workbook:
     def cf_count(self, sheet: int) -> int:
         """Return the number of CF rules on ``sheet`` (flattened)."""
         h = self._require()
-        out = _alloc_out_ptr()
-        try:
-            _check(LIB.fm_sheet_cf_count(h, _uint(sheet, "sheet_index"), out), "fm_sheet_cf_count")
-            return LIB.read_u32(out)
-        finally:
-            LIB.free(out)
+        return _read_count(
+            LIB.fm_sheet_cf_count,
+            h,
+            _uint(sheet, "sheet_index"),
+            default_op="fm_sheet_cf_count",
+        )
 
     @staticmethod
     def _decode_cfvo(ptr: int) -> CfValueObject:
@@ -6863,15 +6886,12 @@ class Workbook:
     def pivot_count(self, sheet: int) -> int:
         """Return the number of PivotTables anchored on ``sheet``."""
         h = self._require()
-        out = _alloc_out_ptr()
-        try:
-            _check(
-                LIB.fm_workbook_pivot_count(h, _uint(sheet, "sheet_index"), out),
-                "fm_workbook_pivot_count",
-            )
-            return LIB.read_u32(out)
-        finally:
-            LIB.free(out)
+        return _read_count(
+            LIB.fm_workbook_pivot_count,
+            h,
+            _uint(sheet, "sheet_index"),
+            default_op="fm_workbook_pivot_count",
+        )
 
     def pivot_layout(self, sheet: int, pivot_index: int) -> PivotLayout:
         """Evaluate and project a PivotTable into concrete grid cells."""
@@ -6938,41 +6958,27 @@ class Workbook:
     def pivot_cache_count(self) -> int:
         """Return the number of pivot caches owned by the workbook."""
         h = self._require()
-        out = _alloc_out_ptr()
-        try:
-            _check(
-                LIB.fm_workbook_pivot_cache_count(h, out),
-                "fm_workbook_pivot_cache_count",
-            )
-            return LIB.read_u32(out)
-        finally:
-            LIB.free(out)
+        return _read_count(LIB.fm_workbook_pivot_cache_count, h, default_op="fm_workbook_pivot_cache_count")
 
     def pivot_cache_id_at(self, index: int) -> int:
         """Return the cache id at flat ``index``."""
         h = self._require()
-        out = _alloc_out_ptr()
-        try:
-            _check(
-                LIB.fm_workbook_pivot_cache_id_at(h, _uint(index, "idx"), out),
-                "fm_workbook_pivot_cache_id_at",
-            )
-            return LIB.read_u32(out)
-        finally:
-            LIB.free(out)
+        return _read_count(
+            LIB.fm_workbook_pivot_cache_id_at,
+            h,
+            _uint(index, "idx"),
+            default_op="fm_workbook_pivot_cache_id_at",
+        )
 
     def pivot_cache_create(self, requested_id: int = 0) -> int:
         """Create a new empty pivot cache; return its assigned id."""
         h = self._require()
-        out = _alloc_out_ptr()
-        try:
-            _check(
-                LIB.fm_workbook_pivot_cache_create(h, _uint(requested_id, "requested_id"), out),
-                "fm_workbook_pivot_cache_create",
-            )
-            return LIB.read_u32(out)
-        finally:
-            LIB.free(out)
+        return _read_count(
+            LIB.fm_workbook_pivot_cache_create,
+            h,
+            _uint(requested_id, "requested_id"),
+            default_op="fm_workbook_pivot_cache_create",
+        )
 
     def get_pivot_cache_worksheet_source(self, cache_id: int) -> Optional[PivotWorksheetSource]:
         """Return a cache's worksheet-source metadata, or ``None`` when absent."""
@@ -8093,15 +8099,11 @@ class Workbook:
     def external_link_count(self) -> int:
         """Return the number of external-link records on the workbook."""
         h = self._require()
-        out = _alloc_out_ptr()
-        try:
-            _check(
-                LIB.fm_workbook_external_link_count(h, out),
-                "fm_workbook_external_link_count",
-            )
-            return LIB.read_u32(out)
-        finally:
-            LIB.free(out)
+        return _read_count(
+            LIB.fm_workbook_external_link_count,
+            h,
+            default_op="fm_workbook_external_link_count",
+        )
 
     def get_external_link_at(self, index: int) -> ExternalLink:
         """Read the ``index``-th external-link record."""
