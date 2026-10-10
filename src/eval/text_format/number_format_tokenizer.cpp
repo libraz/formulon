@@ -97,6 +97,8 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
   FormatTag own_tag;
   // An unquoted digit other than 0 makes a text section invalid (locale_tokens.text_section_bare_digit).
   bool bare_digit = false;
+  // Index of the first token after an unquoted colon; a digit placeholder there is #VALUE!.
+  std::size_t after_colon = SIZE_MAX;
   // 0, a `[DBNumN]` index, or th-TH's `t`; resolved once the section's tag is known.
   constexpr int kThaiDigitChoice = 5;
   constexpr std::uint8_t kThaiNumeralSystem = 0x0D;
@@ -555,6 +557,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     // Keep the slash's source range so the classifier can tell it from a quoted slash; a kept
     // full-width slash parses as `/` and writes itself (locale_tokens.text_fullwidth_date_syntax).
     constexpr std::string_view kFullwidthSlash = "\xEF\xBC\x8F";
+    constexpr std::string_view kFullwidthColon = "\xEF\xBC\x9A";
     if (c == '/' || fmt.substr(i, kFullwidthSlash.size()) == kFullwidthSlash) {
       Token t;
       t.kind = Tok::Literal;
@@ -572,12 +575,28 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     if (c >= '1' && c <= '9') {
       bare_digit = true;
     }
+    if ((c == ':' || fmt.substr(i, kFullwidthColon.size()) == kFullwidthColon) && after_colon == SIZE_MAX) {
+      after_colon = toks.size() + 1U;
+    }
     // Fallback: preserve one complete UTF-8 scalar as a literal. Malformed
     // input is consumed one byte at a time by `utf8_scalar_width`, so it is
     // still copied without crashing or swallowing following syntax.
     const std::size_t literal_width = utf8_scalar_width(fmt, i);
     push_literal(i, i + literal_width);
     i += literal_width;
+  }
+  // A colon before a digit placeholder outside a date section is #VALUE! (locale_tokens.text_colon_before_digit).
+  bool colon_before_digit = false;
+  bool date_section = false;
+  for (std::size_t k = 0; k < toks.size(); ++k) {
+    const Tok kind = toks[k].kind;
+    date_section = date_section || is_date_tok(kind);
+    colon_before_digit =
+        colon_before_digit ||
+        (k >= after_colon && (kind == Tok::DigitZero || kind == Tok::DigitOpt || kind == Tok::DigitPad));
+  }
+  if (colon_before_digit && !date_section) {
+    out.has_invalid_bracket = true;
   }
   if (bare_digit) {
     for (const Token& tk : toks) {

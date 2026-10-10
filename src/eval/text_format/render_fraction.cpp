@@ -390,11 +390,13 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
   // 4) Numerator group.
   emit_fraction_digits(section, numerator_digits, num_begin, num_end, result);
   i = static_cast<std::size_t>(num_end);
-  // 5) Literals up to the slash (including the slash itself).
-  while (i <= static_cast<std::size_t>(slash_index)) {
+  // 5) Literals up to the slash; the slash itself writes `/` even when spelled `／`.
+  while (i < static_cast<std::size_t>(slash_index)) {
     emit_token_verbatim(i);
     ++i;
   }
+  result.push_back('/');
+  ++i;
   // 6) Denominator group.
   if (section.fraction_fixed_denominator) {
     // A zero-prefixed fixed denominator shows zeros for its significant width, then spaces (`/008` -> `0  `).

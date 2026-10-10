@@ -274,6 +274,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `NUMBERVALUE` drops spaces anywhere in its text (`"1 234.5"` is 1234.5).
 - `TEXT` returns `#VALUE!` for a text section holding an unquoted digit
   (`"@ 9"`), as Excel does.
+- `TEXT` returns `#VALUE!` for a number format with an unquoted colon before
+  a digit placeholder (`"0:0"`), as Excel does.
 
 ## [0.13.0] - 2026-10-06
 

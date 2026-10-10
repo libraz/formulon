@@ -391,12 +391,14 @@ std::string normalize_fullwidth_format_syntax(std::string_view fmt, std::string_
         (out.back() == '0' || out.back() == '#' || out.back() == '?')) {
       std::size_t sign_end = i + width;
       const Utf8Scalar sign = decode_utf8(fmt, sign_end);
-      if (sign.valid &&
-          (sign.codepoint == '+' || sign.codepoint == '-' || sign.codepoint == 0xFF0BU || sign.codepoint == 0xFF0DU)) {
+      const bool fullwidth_sign = sign.valid && (sign.codepoint == 0xFF0BU || sign.codepoint == 0xFF0DU);
+      const char sign_ascii = sign.codepoint == 0xFF0BU   ? '+'
+                              : sign.codepoint == 0xFF0DU ? '-'
+                                                          : static_cast<char>(sign.codepoint);
+      // A kept full-width sign is text, so `0.00E＋00` is no exponent there (locale_tokens.text_fullwidth_*).
+      const bool kept_sign = fullwidth_sign && literal_glyphs.find(sign_ascii) != std::string_view::npos;
+      if ((fullwidth_sign && !kept_sign) || (sign.valid && (sign.codepoint == '+' || sign.codepoint == '-'))) {
         out.push_back('E');
-        const char sign_ascii = sign.codepoint == 0xFF0BU   ? '+'
-                                : sign.codepoint == 0xFF0DU ? '-'
-                                                            : static_cast<char>(sign.codepoint);
         out.push_back(sign_ascii);
         i = sign_end + sign.width;
         continue;
