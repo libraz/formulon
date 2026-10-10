@@ -9,6 +9,7 @@
 #include "external_book.h"
 #include "io/xlsb/record.h"
 #include "utils/error.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -108,38 +109,23 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
         if (book_rel_id == nullptr) {
           break;
         }
-        auto sbt_or = read_u16(payload);
-        if (!sbt_or) {
-          return std::move(sbt_or.error());
-        }
-        auto rel_or = read_xlwidestring(payload);
-        if (!rel_or) {
-          return std::move(rel_or.error());
-        }
-        *book_rel_id = std::move(rel_or.value());
+        RETURN_IF_ERROR(read_u16(payload));
+        ASSIGN_OR_RETURN(auto rel, read_xlwidestring(payload));
+        *book_rel_id = std::move(rel);
         break;
       }
       case XlsbRecordType::BrtSupTabs: {
-        auto count_or = read_u32(payload);
-        if (!count_or) {
-          return std::move(count_or.error());
-        }
-        for (std::uint32_t i = 0; i < count_or.value(); ++i) {
-          auto name_or = read_xlwidestring(payload);
-          if (!name_or) {
-            return std::move(name_or.error());
-          }
-          book.sheet_names.push_back(std::move(name_or.value()));
+        ASSIGN_OR_RETURN(auto count, read_u32(payload));
+        for (std::uint32_t i = 0; i < count; ++i) {
+          ASSIGN_OR_RETURN(auto name, read_xlwidestring(payload));
+          book.sheet_names.push_back(std::move(name));
         }
         break;
       }
       case XlsbRecordType::BrtExternNameStart: {
-        auto name_or = read_xlwidestring(payload);
-        if (!name_or) {
-          return std::move(name_or.error());
-        }
+        ASSIGN_OR_RETURN(auto name, read_xlwidestring(payload));
         ExternalBookName entry;
-        entry.name = std::move(name_or.value());
+        entry.name = std::move(name);
         book.names.push_back(std::move(entry));
         break;
       }
@@ -147,28 +133,22 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
         if (book.names.empty()) {
           return CorruptError("xlsb external name formula with no name to attach to");
         }
-        auto cce_or = read_u32(payload);
-        if (!cce_or) {
-          return std::move(cce_or.error());
-        }
-        if (cce_or.value() > payload.size) {
+        ASSIGN_OR_RETURN(auto cce, read_u32(payload));
+        if (cce > payload.size) {
           return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb external name formula truncated",
                             "context=xlsb_external_link_reader");
         }
         // No body at all: the supporting book declares no such name.
-        book.names.back().exists = cce_or.value() != 0U;
-        DecodeNameFormula(ByteSpan{payload.data, cce_or.value()}, &book.names.back());
+        book.names.back().exists = cce != 0U;
+        DecodeNameFormula(ByteSpan{payload.data, cce}, &book.names.back());
         break;
       }
       case XlsbRecordType::BrtBeginExternTable: {
-        auto sheet_or = read_u32(payload);
-        if (!sheet_or) {
-          return std::move(sheet_or.error());
-        }
-        if (sheet_or.value() >= book.sheet_names.size()) {
+        ASSIGN_OR_RETURN(auto sheet, read_u32(payload));
+        if (sheet >= book.sheet_names.size()) {
           return CorruptError("xlsb external cached sheet index is outside the supporting book's sheet table");
         }
-        current_sheet = sheet_or.value();
+        current_sheet = sheet;
         book.sheet_data.resize(book.sheet_names.size(), false);
         book.sheet_data[current_sheet] = true;
         row_seen = false;
@@ -179,80 +159,52 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
         row_seen = false;
         break;
       case XlsbRecordType::BrtExternRowHdr: {
-        auto row_or = read_u32(payload);
-        if (!row_or) {
-          return std::move(row_or.error());
-        }
-        current_row = row_or.value();
+        ASSIGN_OR_RETURN(current_row, read_u32(payload));
         row_seen = true;
         break;
       }
       case XlsbRecordType::BrtExternCellReal: {
-        auto col_or = read_u32(payload);
-        if (!col_or) {
-          return std::move(col_or.error());
-        }
-        auto value_or = read_double(payload);
-        if (!value_or) {
-          return std::move(value_or.error());
-        }
+        ASSIGN_OR_RETURN(auto col, read_u32(payload));
+        ASSIGN_OR_RETURN(auto value, read_double(payload));
         ExternalCell cell;
-        cell.value = Value::number(value_or.value());
-        if (!put_cell(col_or.value(), std::move(cell))) {
+        cell.value = Value::number(value);
+        if (!put_cell(col, std::move(cell))) {
           return CorruptError("xlsb external cached cell appears outside a sheet table");
         }
         break;
       }
       case XlsbRecordType::BrtExternCellBool: {
-        auto col_or = read_u32(payload);
-        if (!col_or) {
-          return std::move(col_or.error());
-        }
-        auto flag_or = read_u8(payload);
-        if (!flag_or) {
-          return std::move(flag_or.error());
-        }
+        ASSIGN_OR_RETURN(auto col, read_u32(payload));
+        ASSIGN_OR_RETURN(auto flag, read_u8(payload));
         ExternalCell cell;
-        cell.value = Value::boolean(flag_or.value() != 0U);
-        if (!put_cell(col_or.value(), std::move(cell))) {
+        cell.value = Value::boolean(flag != 0U);
+        if (!put_cell(col, std::move(cell))) {
           return CorruptError("xlsb external cached cell appears outside a sheet table");
         }
         break;
       }
       case XlsbRecordType::BrtExternCellError: {
-        auto col_or = read_u32(payload);
-        if (!col_or) {
-          return std::move(col_or.error());
-        }
-        auto code_or = read_u8(payload);
-        if (!code_or) {
-          return std::move(code_or.error());
-        }
+        ASSIGN_OR_RETURN(auto col, read_u32(payload));
+        ASSIGN_OR_RETURN(auto code, read_u8(payload));
         ExternalCell cell;
         // The byte is the OOXML wire code, the same one a cached error
         // cell carries inside a worksheet.
-        cell.value = Value::error(error_from_ooxml_code(static_cast<std::int32_t>(code_or.value())));
-        if (!put_cell(col_or.value(), std::move(cell))) {
+        cell.value = Value::error(error_from_ooxml_code(static_cast<std::int32_t>(code)));
+        if (!put_cell(col, std::move(cell))) {
           return CorruptError("xlsb external cached cell appears outside a sheet table");
         }
         break;
       }
       case XlsbRecordType::BrtExternCellString: {
-        auto col_or = read_u32(payload);
-        if (!col_or) {
-          return std::move(col_or.error());
-        }
-        auto text_or = read_xlwidestring(payload);
-        if (!text_or) {
-          return std::move(text_or.error());
-        }
+        ASSIGN_OR_RETURN(auto col, read_u32(payload));
+        ASSIGN_OR_RETURN(auto text, read_xlwidestring(payload));
         ExternalCell cell;
         // The kind is carried on `value` and the bytes on `text`; see
         // `ExternalCell`. Binding a `Value::text` to the local string
         // here would leave the cell aliasing a dead buffer.
         cell.value = Value::text({});
-        cell.text = std::move(text_or.value());
-        if (!put_cell(col_or.value(), std::move(cell))) {
+        cell.text = std::move(text);
+        if (!put_cell(col, std::move(cell))) {
           return CorruptError("xlsb external cached cell appears outside a sheet table");
         }
         break;
