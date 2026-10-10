@@ -20,6 +20,7 @@
 #define FORMULON_EVAL_DYNAMIC_ARRAY_COMMON_H_
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -85,9 +86,8 @@ ArrayValue* materialise_slice(const ArrayValue& src, std::uint32_t row_lo, std::
 ArrayValue* materialise_vector(std::vector<Value>&& cells, bool as_column, Arena& arena);
 
 /// Excel-canonical cell equality for UNIQUE. Mirrors `Value::operator==`
-/// for Number / Bool / Error / Blank, but uses ASCII case-insensitive
-/// compare for Text (matching `=A1=B1`, COUNTIF, and the SWITCH precedent
-/// in `special_forms_lazy`). Cross-kind pairs are never equal.
+/// for Number / Bool / Error / Blank; Text compares with the dynamic-array
+/// collation of the current eval profile. Cross-kind pairs are never equal.
 bool unique_cell_equal(const Value& a, const Value& b);
 
 /// Returns `true` iff the `i`-th and `j`-th rows (`by_col == false`) or
@@ -97,7 +97,7 @@ bool unique_lane_equal(const ArrayValue& arr, std::uint32_t i, std::uint32_t j, 
 
 /// Strict weak ordering for SORT keys, ascending. Cross-kind ordering
 /// follows Excel: `Number < Text < Bool < Error < Blank`. Text uses
-/// ASCII case-insensitive lex; Bool uses `FALSE < TRUE`; Error uses
+/// the current profile's dynamic-array collation; Bool uses `FALSE < TRUE`; Error uses
 /// error-code value compare.
 bool sort_cell_less_asc(const Value& a, const Value& b);
 
@@ -107,10 +107,17 @@ bool sort_cell_less_asc(const Value& a, const Value& b);
 /// this being a strict weak ordering.
 bool sort_lane_less(const Value& key_a, const Value& key_b, bool descending);
 
-/// ASCII case-insensitive lex comparison. Returns `true` iff `a < b`.
-/// Walks both strings byte-by-byte with `tolower` applied, matching the
-/// Excel-canonical text ordering used by SWITCH / UNIQUE for equality.
-/// Avoids materialising a full lowercase copy.
+/// Collation key of a text cell (empty for any other kind); compute once per
+/// cell and pass to `sort_lane_less_keyed`.
+std::string sort_text_key(const Value& v);
+
+/// `sort_lane_less` with precomputed `sort_text_key` results; a null key
+/// falls back to collating the text directly.
+bool sort_lane_less_keyed(const Value& key_a, const std::string* text_key_a, const Value& key_b,
+                          const std::string* text_key_b, bool descending);
+
+/// Dynamic-array text order of the current eval profile. Returns `true` iff
+/// `a` sorts strictly before `b`.
 bool ascii_ci_less(std::string_view a, std::string_view b);
 
 /// Resolve a SORT / SORTBY order argument: `1` -> ascending,

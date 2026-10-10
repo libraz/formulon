@@ -5,6 +5,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "eval/coerce.h"
@@ -242,12 +244,17 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   // key column / row, then materialise the output by gathering lanes.
   const std::uint32_t lanes = by_col ? array->cols : array->rows;
   const ArrayValue& arr_ref = *array;
+  const auto key_cell = [&](std::uint32_t lane) -> const Value& {
+    return by_col ? arr_ref.cells[static_cast<std::size_t>(key_idx) * arr_ref.cols + lane]
+                  : arr_ref.cells[static_cast<std::size_t>(lane) * arr_ref.cols + key_idx];
+  };
+  std::vector<std::string> text_keys(lanes);
+  for (std::uint32_t lane = 0; lane < lanes; ++lane) {
+    text_keys[lane] = dynamic_array::sort_text_key(key_cell(lane));
+  }
   const auto lane_less = [&](std::uint32_t lhs, std::uint32_t rhs) {
-    const Value& key_lhs = by_col ? arr_ref.cells[static_cast<std::size_t>(key_idx) * arr_ref.cols + lhs]
-                                  : arr_ref.cells[static_cast<std::size_t>(lhs) * arr_ref.cols + key_idx];
-    const Value& key_rhs = by_col ? arr_ref.cells[static_cast<std::size_t>(key_idx) * arr_ref.cols + rhs]
-                                  : arr_ref.cells[static_cast<std::size_t>(rhs) * arr_ref.cols + key_idx];
-    return dynamic_array::sort_lane_less(key_lhs, key_rhs, descending);
+    return dynamic_array::sort_lane_less_keyed(key_cell(lhs), &text_keys[lhs], key_cell(rhs), &text_keys[rhs],
+                                               descending);
   };
   std::vector<std::uint32_t> perm;
   sorted_index_order(perm, lanes, make_index_less(lane_less));
@@ -281,6 +288,7 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
   struct KeySpec {
     const ArrayValue* arr;
     bool descending;
+    std::vector<std::string> text_keys;
   };
   std::vector<KeySpec> keys;
   keys.reserve((arity - 1U + 1U) / 2U);
@@ -323,7 +331,13 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
         return order_err;
       }
     }
-    keys.push_back(KeySpec{by, descending});
+    KeySpec spec{by, descending, {}};
+    const std::size_t by_cells = static_cast<std::size_t>(by->rows) * by->cols;
+    spec.text_keys.reserve(by_cells);
+    for (std::size_t k = 0; k < by_cells; ++k) {
+      spec.text_keys.push_back(dynamic_array::sort_text_key(by->cells[k]));
+    }
+    keys.push_back(std::move(spec));
   }
 
   // Lane-key accessor. Both axes flatten to a 1D index since each by_array
@@ -336,10 +350,12 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
     for (const KeySpec& spec : keys) {
       const Value& key_lhs = key_at(spec.arr, lhs);
       const Value& key_rhs = key_at(spec.arr, rhs);
-      if (dynamic_array::sort_lane_less(key_lhs, key_rhs, spec.descending)) {
+      const std::string* tk_lhs = &spec.text_keys[lhs];
+      const std::string* tk_rhs = &spec.text_keys[rhs];
+      if (dynamic_array::sort_lane_less_keyed(key_lhs, tk_lhs, key_rhs, tk_rhs, spec.descending)) {
         return true;
       }
-      if (dynamic_array::sort_lane_less(key_rhs, key_lhs, spec.descending)) {
+      if (dynamic_array::sort_lane_less_keyed(key_rhs, tk_rhs, key_lhs, tk_lhs, spec.descending)) {
         return false;
       }
       // Equal under this key -> fall through to next.

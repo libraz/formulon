@@ -6,10 +6,15 @@
 // per-key orders are supported. Axis is inferred from the shape of the
 // first key vector.
 
+#include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 
+#include "eval/collation.h"
+#include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
@@ -305,6 +310,89 @@ TEST(BuiltinsSortby, InvalidOrderReturnsValue) {
   const Value v = EvalUnder("=SORTBY(A1:A1, B1:B1, 2)", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// ---------------------------------------------------------------------------
+// Locale collation (dynamic-array strength)
+// ---------------------------------------------------------------------------
+
+struct CollationPair {
+  const char* a;
+  const char* b;
+  bool sort_first_is_b;        // SORT({a;b}) puts b first
+  std::uint32_t sortby_first;  // SORTBY({1;2}, {a;b}) first element
+  std::uint32_t unique_rows;   // ROWS(UNIQUE({a;b}))
+};
+
+const CollationPair kMacJa[] = {
+    {"ß", "ss", false, 1U, 1U},      {"ｶﾞ", "ガ", false, 1U, 1U}, {"ア", "あ", false, 1U, 1U},
+    {"Ａ", "A", false, 1U, 1U},      {"①", "1", false, 1U, 1U},   {"ä", "a", true, 2U, 2U},
+    {"かー", "かあ", false, 1U, 1U}, {"เก", "กา", true, 2U, 2U},
+};
+
+const CollationPair kMacEn[] = {
+    {"ß", "ss", false, 1U, 1U},      {"ｶﾞ", "ガ", false, 1U, 1U}, {"ア", "あ", false, 1U, 1U},
+    {"Ａ", "A", false, 1U, 1U},      {"①", "1", false, 1U, 1U},   {"ä", "a", true, 2U, 2U},
+    {"かー", "かあ", false, 1U, 2U}, {"เก", "กา", true, 2U, 2U},
+};
+
+const CollationPair kMacZh[] = {
+    {"ß", "ss", false, 1U, 1U},     {"ｶﾞ", "ガ", false, 1U, 1U}, {"ア", "あ", false, 1U, 2U},
+    {"Ａ", "A", false, 1U, 1U},     {"①", "1", false, 1U, 1U},   {"ä", "a", true, 2U, 2U},
+    {"かー", "かあ", true, 2U, 2U}, {"เก", "กา", false, 1U, 2U},
+};
+
+const CollationPair kWinJa[] = {
+    {"ß", "ss", true, 2U, 2U}, {"ｶﾞ", "ガ", false, 1U, 1U}, {"ア", "あ", true, 2U, 2U},     {"Ａ", "A", true, 2U, 2U},
+    {"①", "1", true, 2U, 2U},  {"ä", "a", true, 2U, 2U},    {"かー", "かあ", true, 2U, 2U}, {"เก", "กา", true, 2U, 2U},
+};
+
+struct CollationCase {
+  ExcelProfile profile;
+  const CollationPair* pairs;
+  std::size_t count;
+};
+
+const CollationCase kCollationCases[] = {
+    {mac_365_ja_jp_profile(), kMacJa, sizeof(kMacJa) / sizeof(kMacJa[0])},
+    {mac_365_en_us_profile(), kMacEn, sizeof(kMacEn) / sizeof(kMacEn[0])},
+    {ExcelProfile{ExcelHost::kMac365, ExcelLocale::kZhCN}, kMacZh, sizeof(kMacZh) / sizeof(kMacZh[0])},
+    {win_365_ja_jp_profile(), kWinJa, sizeof(kWinJa) / sizeof(kWinJa[0])},
+};
+
+Value EvalPair(const std::string& formula, ExcelProfile profile) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state).with_excel_profile(profile);
+  Arena parse_arena;
+  Arena eval_arena;
+  return EvalUnder(formula, &parse_arena, &eval_arena, ctx);
+}
+
+std::string PairArray(const CollationPair& p) {
+  return std::string("{\"") + p.a + "\";\"" + p.b + "\"}";
+}
+
+TEST(BuiltinsSortbyCollation, FirstOfPairFollowsMeasuredOrder) {
+  for (const CollationCase& c : kCollationCases) {
+    ScopedEvalProfile scope(c.profile);
+    for (std::size_t i = 0; i < c.count; ++i) {
+      const CollationPair& p = c.pairs[i];
+      SCOPED_TRACE(std::string(p.a) + " / " + p.b);
+      const Value v = EvalPair("=SORTBY({1;2}," + PairArray(p) + ")", c.profile);
+      ASSERT_TRUE(v.is_array());
+      EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), static_cast<double>(p.sortby_first));
+    }
+  }
+}
+
+TEST(BuiltinsSortbyCollation, TiedFirstKeyFallsThroughToSecond) {
+  ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  const Value v = EvalPair("=SORTBY({1;2},{\"ア\";\"あ\"},1,{2;1},1)", mac_365_ja_jp_profile());
+  ASSERT_TRUE(v.is_array());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 1.0);
 }
 
 }  // namespace

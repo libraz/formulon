@@ -5,10 +5,13 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
 #include "eval/coerce.h"
+#include "eval/collation.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
@@ -148,7 +151,7 @@ bool unique_cell_equal(const Value& a, const Value& b) {
     case ValueKind::Error:
       return a.as_error() == b.as_error();
     case ValueKind::Text:
-      return strings::case_insensitive_eq(a.as_text(), b.as_text());
+      return collate(a.as_text(), b.as_text(), current_eval_profile(), CollationStrength::kDynamic) == 0;
     default:
       // Array / Ref / Lambda are not produced by cell reads; treat any
       // hypothetical match conservatively as "not equal" to avoid silent
@@ -207,20 +210,19 @@ int sort_kind_rank(const Value& v) {
 }  // namespace
 
 bool ascii_ci_less(std::string_view a, std::string_view b) {
-  const std::size_t n = std::min(a.size(), b.size());
-  for (std::size_t i = 0; i < n; ++i) {
-    const unsigned char ca = static_cast<unsigned char>(a[i]);
-    const unsigned char cb = static_cast<unsigned char>(b[i]);
-    const unsigned char la = (ca >= 'A' && ca <= 'Z') ? static_cast<unsigned char>(ca + 32) : ca;
-    const unsigned char lb = (cb >= 'A' && cb <= 'Z') ? static_cast<unsigned char>(cb + 32) : cb;
-    if (la != lb) {
-      return la < lb;
-    }
-  }
-  return a.size() < b.size();
+  return collate(a, b, current_eval_profile(), CollationStrength::kDynamic) < 0;
 }
 
-bool sort_cell_less_asc(const Value& a, const Value& b) {
+std::string sort_text_key(const Value& v) {
+  if (!v.is_text()) {
+    return std::string();
+  }
+  return collation_key(v.as_text(), current_eval_profile(), CollationStrength::kDynamic);
+}
+
+namespace {
+
+bool sort_cell_less_keyed(const Value& a, const Value& b, const std::string* key_a, const std::string* key_b) {
   const int ra = sort_kind_rank(a);
   const int rb = sort_kind_rank(b);
   if (ra != rb) {
@@ -230,6 +232,9 @@ bool sort_cell_less_asc(const Value& a, const Value& b) {
     case ValueKind::Number:
       return a.as_number() < b.as_number();
     case ValueKind::Text:
+      if (key_a != nullptr && key_b != nullptr) {
+        return collate_key_compare(*key_a, *key_b) < 0;
+      }
       return ascii_ci_less(a.as_text(), b.as_text());
     case ValueKind::Bool:
       return !a.as_boolean() && b.as_boolean();
@@ -241,7 +246,14 @@ bool sort_cell_less_asc(const Value& a, const Value& b) {
   }
 }
 
-bool sort_lane_less(const Value& key_a, const Value& key_b, bool descending) {
+}  // namespace
+
+bool sort_cell_less_asc(const Value& a, const Value& b) {
+  return sort_cell_less_keyed(a, b, nullptr, nullptr);
+}
+
+bool sort_lane_less_keyed(const Value& key_a, const std::string* text_key_a, const Value& key_b,
+                          const std::string* text_key_b, bool descending) {
   const bool a_blank = key_a.is_blank();
   const bool b_blank = key_b.is_blank();
   if (a_blank != b_blank) {
@@ -251,7 +263,12 @@ bool sort_lane_less(const Value& key_a, const Value& key_b, bool descending) {
   if (a_blank && b_blank) {
     return false;
   }
-  return descending ? sort_cell_less_asc(key_b, key_a) : sort_cell_less_asc(key_a, key_b);
+  return descending ? sort_cell_less_keyed(key_b, key_a, text_key_b, text_key_a)
+                    : sort_cell_less_keyed(key_a, key_b, text_key_a, text_key_b);
+}
+
+bool sort_lane_less(const Value& key_a, const Value& key_b, bool descending) {
+  return sort_lane_less_keyed(key_a, nullptr, key_b, nullptr, descending);
 }
 
 bool resolve_sort_order_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
