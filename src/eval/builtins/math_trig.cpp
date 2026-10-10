@@ -113,7 +113,7 @@ Value Log(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (x.value() <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  auto parsed = builtins_detail::read_optional_number(args, arity, 1, 10.0, /*check_finite=*/false);
+  auto parsed = builtins_detail::read_optional_number(args, arity, 1, 10.0);
   if (!parsed) {
     return Value::error(parsed.error());
   }

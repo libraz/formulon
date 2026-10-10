@@ -77,22 +77,19 @@ struct MeanSS {
 using NumberPair = builtins_detail::NumberPair;
 using NumberTriple = builtins_detail::NumberTriple;
 
-// Stats-specific argument reader: unlike the math / financial / dist
-// counterparts, this one does NOT reject NaN / Inf at the coercion
-// step. Several callers (T.TEST tail handling, CONFIDENCE.NORM size
-// guard) want the raw double so they can apply their own range checks.
+// Stats-namespace spellings of the shared numeric argument readers.
 inline Expected<double, ErrorCode> read_number_arg(const Value* args, std::uint32_t index) {
-  return builtins_detail::read_required_number(args, index, /*check_finite=*/false);
+  return builtins_detail::read_required_number(args, index);
 }
 
 inline Expected<NumberPair, ErrorCode> read_number_pair(const Value* args, std::uint32_t first_index,
                                                         std::uint32_t second_index) {
-  return builtins_detail::read_number_pair(args, first_index, second_index, /*check_finite=*/false);
+  return builtins_detail::read_number_pair(args, first_index, second_index);
 }
 
 inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args, std::uint32_t first_index,
                                                             std::uint32_t second_index, std::uint32_t third_index) {
-  return builtins_detail::read_number_triple(args, first_index, second_index, third_index, /*check_finite=*/false);
+  return builtins_detail::read_number_triple(args, first_index, second_index, third_index);
 }
 
 inline Expected<bool, ErrorCode> read_bool_arg(const Value* args, std::uint32_t index) {

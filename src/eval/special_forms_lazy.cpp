@@ -297,6 +297,10 @@ Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegi
 
 namespace {
 
+bool is_caught_error(const Value& value, bool na_only) {
+  return value.is_error() && (!na_only || value.as_error() == ErrorCode::NA);
+}
+
 // IFERROR / IFNA over an array `primary`: each caught element takes the
 // fallback's cell at its position, broadcast as IF broadcasts its arms. The
 // fallback is evaluated only when some element is caught.
@@ -304,12 +308,11 @@ Value replace_array_errors(const parser::AstNode& call, const Value& primary, bo
                            const FunctionRegistry& registry, const EvalContext& ctx) {
   Value primary_slot = Value::blank();
   const ArrayView pv = as_array_view(primary, &primary_slot);
-  const auto caught = [na_only](const Value& v) { return v.is_error() && (!na_only || v.as_error() == ErrorCode::NA); };
   bool any_caught = false;
   for (std::uint32_t r = 0; r < pv.rows && !any_caught; ++r) {
     for (std::uint32_t c = 0; c < pv.cols && !any_caught; ++c) {
       const Value* cell = broadcast_cell(pv, r, c);
-      any_caught = cell != nullptr && caught(*cell);
+      any_caught = cell != nullptr && is_caught_error(*cell, na_only);
     }
   }
   if (!any_caught) {
@@ -331,7 +334,7 @@ Value replace_array_errors(const parser::AstNode& call, const Value& primary, bo
       const Value* cell = broadcast_cell(pv, r, c);
       if (cell == nullptr) {
         buf[i] = Value::error(ErrorCode::NA);
-      } else if (!caught(*cell)) {
+      } else if (!is_caught_error(*cell, na_only)) {
         buf[i] = *cell;
       } else {
         const Value* pick = broadcast_cell(fv, r, c);
@@ -340,6 +343,19 @@ Value replace_array_errors(const parser::AstNode& call, const Value& primary, bo
     }
   }
   return Value::array(out);
+}
+
+Value eval_error_handler_lazy(const parser::AstNode& call, bool na_only, Arena& arena, const FunctionRegistry& registry,
+                              const EvalContext& ctx) {
+  const Value primary = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (primary.is_array()) {
+    return replace_array_errors(call, primary, na_only, arena, registry, ctx);
+  }
+  // A Blank result stays Blank (no 0 promotion), so ISBLANK(IFNA(<blank>, x)) matches IFERROR.
+  if (!is_caught_error(primary, na_only)) {
+    return primary;
+  }
+  return eval_node(call.as_call_arg(1), arena, registry, ctx);
 }
 
 }  // namespace
@@ -353,14 +369,7 @@ Value eval_iferror_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (call.as_call_arity() != 2) {
     return Value::error(ErrorCode::Value);
   }
-  const Value primary = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (primary.is_array()) {
-    return replace_array_errors(call, primary, /*na_only=*/false, arena, registry, ctx);
-  }
-  if (!primary.is_error()) {
-    return primary;
-  }
-  return eval_node(call.as_call_arg(1), arena, registry, ctx);
+  return eval_error_handler_lazy(call, /*na_only=*/false, arena, registry, ctx);
 }
 
 // IFNA(value, fallback) - returns `value` unchanged unless it is exactly
@@ -372,20 +381,7 @@ Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (call.as_call_arity() != 2) {
     return Value::error(ErrorCode::Value);
   }
-  // Blank handling is kept consistent with IF / IFERROR above: a Blank
-  // result is returned as Blank rather than promoted to number 0. The
-  // implicit Blank->0 promotion happens later, when a formula cell's
-  // ultimate value is returned to the grid, so it must not be applied
-  // here or `ISBLANK(IFNA(<blank>, x))` would diverge from the IFERROR
-  // analog (which preserves Blank).
-  const Value primary = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (primary.is_array()) {
-    return replace_array_errors(call, primary, /*na_only=*/true, arena, registry, ctx);
-  }
-  if (!(primary.is_error() && primary.as_error() == ErrorCode::NA)) {
-    return primary;
-  }
-  return eval_node(call.as_call_arg(1), arena, registry, ctx);
+  return eval_error_handler_lazy(call, /*na_only=*/true, arena, registry, ctx);
 }
 
 Value eval_and_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

@@ -45,12 +45,9 @@ namespace {
 // reasonable spill footprint; cap at ~1M cells, the same order of magnitude
 // as Mac Excel's effective dynamic-array ceiling for a single formula. Going
 // over surfaces `#NUM!`, matching Excel's overflow code for SEQUENCE.
-// SEQUENCE / RANDARRAY use the lenient pass-through variant: NaN / Inf are
-// not rejected here because the impls run their own `> 0` / `<=` shape
-// checks downstream which reject NaN by IEEE-754 rule.
 inline Expected<double, ErrorCode> read_optional_number_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
                                                             double default_value) {
-  return builtins_detail::read_optional_number(args, arity, index, default_value, /*check_finite=*/false);
+  return builtins_detail::read_optional_number(args, arity, index, default_value);
 }
 
 Expected<bool, ErrorCode> read_optional_bool_arg(const Value* args, std::uint32_t arity, std::uint32_t index,

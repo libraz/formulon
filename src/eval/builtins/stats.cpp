@@ -192,15 +192,7 @@ static Value variance_or_stdev_a(const Value* args, std::uint32_t arity, bool sa
 }
 
 Expected<double, ErrorCode> read_kth_arg(const Value& v) {
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    return std::move(coerced.error());
-  }
-  const double d = coerced.value();
-  if (std::isnan(d) || std::isinf(d)) {
-    return ErrorCode::Num;
-  }
-  return d;
+  return coerce_to_number(v);
 }
 
 Value percentile_inc_sorted(const std::vector<double>& xs, double k) {

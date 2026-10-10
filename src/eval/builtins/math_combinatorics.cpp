@@ -690,7 +690,7 @@ inline Value precise_rounding(const Value* args, std::uint32_t arity, bool up) {
   if (!num_v) {
     return Value::error(num_v.error());
   }
-  auto s_v = builtins_detail::read_optional_number(args, arity, 1, 1.0, /*check_finite=*/false);
+  auto s_v = builtins_detail::read_optional_number(args, arity, 1, 1.0);
   if (!s_v) {
     return Value::error(s_v.error());
   }

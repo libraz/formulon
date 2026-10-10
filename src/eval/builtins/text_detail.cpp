@@ -6,7 +6,6 @@
 
 #include "eval/builtins/text_detail.h"
 
-#include <cmath>
 #include <utility>
 
 #include "eval/coerce.h"
@@ -21,18 +20,6 @@ namespace eval {
 namespace text_detail {
 
 namespace {
-
-Expected<double, ErrorCode> read_finite_number(const Value& v) {
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    return std::move(coerced.error());
-  }
-  const double d = coerced.value();
-  if (std::isnan(d) || std::isinf(d)) {
-    return ErrorCode::Num;
-  }
-  return d;
-}
 
 // SEARCHB's `?` spans one SBCS character in ja and ko but any character in zh
 // (locale_tokens.searchb_question_kanji).
@@ -66,7 +53,7 @@ std::uint64_t dbcs_bytes_in(std::string_view s, bool halfwidth_kana_single_byte)
 }
 
 Expected<int, ErrorCode> read_int_arg(const Value& v) {
-  auto d = read_finite_number(v);
+  auto d = coerce_to_number(v);
   if (!d) {
     return std::move(d.error());
   }
@@ -74,7 +61,7 @@ Expected<int, ErrorCode> read_int_arg(const Value& v) {
 }
 
 Expected<int, ErrorCode> read_snapped_int_arg(const Value& v, double min) {
-  auto d = read_finite_number(v);
+  auto d = coerce_to_number(v);
   if (!d) {
     return std::move(d.error());
   }

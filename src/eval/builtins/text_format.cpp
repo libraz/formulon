@@ -36,6 +36,19 @@
 namespace formulon {
 namespace eval {
 
+namespace {
+
+Value apply_text_format_text(std::string_view value, std::string_view format_text, Arena& arena) {
+  std::string out;
+  const auto status = ::formulon::text_format::apply_text_format(value, format_text, out);
+  if (status != ::formulon::text_format::FormatStatus::kOk) {
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::text(arena.intern(out));
+}
+
+}  // namespace
+
 // ---------------------------------------------------------------------------
 // TEXT(value, format_text). Exposed (not in the anonymous namespace) because
 // it is date1904-sensitive and served through the shared calendar lookup
@@ -64,13 +77,7 @@ Value text_builtin_impl(const Value* args, std::uint32_t /*arity*/, Arena& arena
   // FALSE spelling while still applying a text placeholder and validating
   // malformed sections in the format.
   if (v.is_boolean()) {
-    const std::string_view boolean_text = locale_bool_text(v.as_boolean());
-    std::string out;
-    const auto status = ::formulon::text_format::apply_text_format(boolean_text, format_text, out);
-    if (status != ::formulon::text_format::FormatStatus::kOk) {
-      return Value::error(ErrorCode::Value);
-    }
-    return Value::text(arena.intern(out));
+    return apply_text_format_text(locale_bool_text(v.as_boolean()), format_text, arena);
   }
 
   // Text goes through the shared numeric-coercion ladder, the same one
@@ -86,12 +93,7 @@ Value text_builtin_impl(const Value* args, std::uint32_t /*arity*/, Arena& arena
       if (coerced.error() != ErrorCode::Value) {
         return Value::error(coerced.error());
       }
-      std::string out;
-      const auto status = ::formulon::text_format::apply_text_format(v.as_text(), format_text, out);
-      if (status != ::formulon::text_format::FormatStatus::kOk) {
-        return Value::error(ErrorCode::Value);
-      }
-      return Value::text(arena.intern(out));
+      return apply_text_format_text(v.as_text(), format_text, arena);
     }
     number = coerced.value();
     // The ladder's date fallback always yields a 1900-system serial. The
@@ -139,26 +141,11 @@ Expected<int, ErrorCode> fixed_read_int(const Value& v) {
   if (!d) {
     return std::move(d.error());
   }
-  if (std::isnan(d.value()) || std::isinf(d.value())) {
-    return ErrorCode::Num;
-  }
   const double truncated = std::trunc(snap_near_integer(d.value()));
   if (truncated < -127.0 || truncated > 127.0) {
     return ErrorCode::Value;
   }
   return static_cast<int>(truncated);
-}
-
-Expected<double, ErrorCode> read_finite_number_arg(const Value* args, std::uint32_t index) {
-  auto number = coerce_to_number(args[index]);
-  if (!number) {
-    return std::move(number.error());
-  }
-  const double d = number.value();
-  if (std::isnan(d) || std::isinf(d)) {
-    return ErrorCode::Num;
-  }
-  return d;
 }
 
 Expected<int, ErrorCode> read_optional_fixed_decimals(const Value* args, std::uint32_t arity, std::uint32_t index,
@@ -186,8 +173,20 @@ Value apply_text_number_format(double value, std::string_view format, Arena& are
   return Value::text(arena.intern(out));
 }
 
+std::string build_decimal_body(int decimals, bool no_commas) {
+  const int effective_decimals = decimals < 0 ? 0 : decimals;
+  std::string body;
+  body.reserve(8u + static_cast<std::size_t>(effective_decimals));
+  body.append(no_commas ? "0" : "#,##0");
+  if (effective_decimals > 0) {
+    body.push_back('.');
+    body.append(static_cast<std::size_t>(effective_decimals), '0');
+  }
+  return body;
+}
+
 Value Fixed_(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto num = read_finite_number_arg(args, 0);
+  auto num = coerce_to_number(args[0]);
   if (!num) {
     return Value::error(num.error());
   }
@@ -205,14 +204,7 @@ Value Fixed_(const Value* args, std::uint32_t arity, Arena& arena) {
     no_commas = parsed.value();
   }
   const double value = ::formulon::text_format::round_display_decimal(num.value(), decimals);
-  const int effective_decimals = decimals < 0 ? 0 : decimals;
-  std::string fmt;
-  fmt.reserve(16 + static_cast<std::size_t>(effective_decimals));
-  fmt.append(no_commas ? "0" : "#,##0");
-  if (effective_decimals > 0) {
-    fmt.push_back('.');
-    fmt.append(static_cast<std::size_t>(effective_decimals), '0');
-  }
+  const std::string fmt = build_decimal_body(decimals, no_commas);
   return apply_text_number_format(value, fmt, arena);
 }
 
@@ -230,48 +222,36 @@ Value Fixed_(const Value* args, std::uint32_t arity, Arena& arena) {
 // parentheses carry the sign. Negative `decimals` rounds left of the decimal
 // point (same rule as FIXED); `|decimals| > 127` -> `#VALUE!`.
 
-struct CurrencyStyle {
-  Currency currency;
-  int default_decimals;
-};
-
-CurrencyStyle locale_dollar_style() {
-  const Currency& currency = locale_facts(current_eval_profile()).currency;
-  return CurrencyStyle{currency, static_cast<int>(currency.default_decimals)};
+Currency locale_dollar_style() {
+  return locale_facts(current_eval_profile()).currency;
 }
 
 // USDOLLAR formats in US dollars where the locale says so; elsewhere it is DOLLAR itself.
-CurrencyStyle locale_usdollar_style() {
+Currency locale_usdollar_style() {
   const std::string_view symbol = locale_facts(current_eval_profile()).usdollar_symbol;
   if (symbol.empty()) {
     return locale_dollar_style();
   }
-  return CurrencyStyle{Currency{symbol, false, false, true, false, true, 2U}, 2};
+  return Currency{symbol, false, false, true, false, true, 2U};
 }
 
-Value format_currency(const Value* args, std::uint32_t arity, Arena& arena, const CurrencyStyle& style) {
-  auto num = read_finite_number_arg(args, 0);
+Value format_currency(const Value* args, std::uint32_t arity, Arena& arena, const Currency& currency) {
+  auto num = coerce_to_number(args[0]);
   if (!num) {
     return Value::error(num.error());
   }
-  auto decimals_e = read_optional_fixed_decimals(args, arity, 1, style.default_decimals);
+  auto decimals_e = read_optional_fixed_decimals(args, arity, 1, static_cast<int>(currency.default_decimals));
   if (!decimals_e) {
     return Value::error(decimals_e.error());
   }
   const int decimals = decimals_e.value();
   const double value = ::formulon::text_format::round_display_decimal(num.value(), decimals);
-  const int effective_decimals = decimals < 0 ? 0 : decimals;
-  std::string body = "#,##0";
-  if (effective_decimals > 0) {
-    body.push_back('.');
-    body.append(static_cast<std::size_t>(effective_decimals), '0');
-  }
+  const std::string body = build_decimal_body(decimals, /*no_commas=*/false);
   // A number that display-rounds to zero keeps its sign, one rounded left of
   // the decimal point first does not: USDOLLAR(-0.4,0) is `($0)` but
   // USDOLLAR(-4,-1) is `$0`. So the section is picked here, and the chosen
   // one formats the magnitude.
   const bool negative = decimals < 0 ? value < 0.0 : num.value() < 0.0;
-  const Currency& currency = style.currency;
   std::string fmt;
   fmt.reserve(body.size() + currency.symbol.size() + 6u);
   const bool parens = negative && currency.negative_parens;
@@ -456,6 +436,34 @@ Value NumberValue_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::error(ErrorCode::Value);
 }
 
+void append_quoted_text(std::string_view src, std::string& out) {
+  out.push_back('"');
+  for (char c : src) {
+    if (c == '"') {
+      out.push_back('"');
+    }
+    out.push_back(c);
+  }
+  out.push_back('"');
+}
+
+Expected<bool, ErrorCode> decode_text_format(const Value& evaluated_value) {
+  if (evaluated_value.is_error()) {
+    return evaluated_value.as_error();
+  }
+  auto number = coerce_to_number(evaluated_value);
+  if (!number) {
+    return std::move(number.error());
+  }
+  if (number.value() == 0.0) {
+    return false;
+  }
+  if (number.value() == 1.0) {
+    return true;
+  }
+  return ErrorCode::Value;
+}
+
 // VALUETOTEXT(value, [format])
 //
 // Converts `value` to text, exactly as Excel 365 does when the user types
@@ -481,35 +489,17 @@ Value ValueToText_(const Value* args, std::uint32_t arity, Arena& arena) {
   }
   bool strict = false;
   if (arity >= 2) {
-    const Value& fmt = args[1];
-    if (fmt.is_error()) {
-      return fmt;
+    auto decoded = decode_text_format(args[1]);
+    if (!decoded) {
+      return Value::error(decoded.error());
     }
-    auto n = coerce_to_number(fmt);
-    if (!n) {
-      return Value::error(n.error());
-    }
-    const double nv = n.value();
-    if (nv == 0.0) {
-      strict = false;
-    } else if (nv == 1.0) {
-      strict = true;
-    } else {
-      return Value::error(ErrorCode::Value);
-    }
+    strict = decoded.value();
   }
   if (strict && v.is_text()) {
     const std::string_view src = v.as_text();
     std::string out;
     out.reserve(src.size() + 2);
-    out.push_back('"');
-    for (char c : src) {
-      if (c == '"') {
-        out.push_back('"');
-      }
-      out.push_back(c);
-    }
-    out.push_back('"');
+    append_quoted_text(src, out);
     return Value::text(arena.intern(out));
   }
   auto text = coerce_to_text(v);
@@ -517,17 +507,6 @@ Value ValueToText_(const Value* args, std::uint32_t arity, Arena& arena) {
     return Value::error(text.error());
   }
   return Value::text(arena.intern(text.value()));
-}
-
-void append_quoted_text(std::string_view src, std::string& out) {
-  out.push_back('"');
-  for (char c : src) {
-    if (c == '"') {
-      out.push_back('"');
-    }
-    out.push_back(c);
-  }
-  out.push_back('"');
 }
 
 bool append_arraytotext_cell(const Value& v, bool strict, std::string& out, ErrorCode* error) {
@@ -555,22 +534,12 @@ Value parse_arraytotext_format(const parser::AstNode& call, Arena& arena, const 
     return Value::blank();
   }
   const Value fmt = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  if (fmt.is_error()) {
-    return fmt;
+  auto decoded = decode_text_format(fmt);
+  if (!decoded) {
+    return Value::error(decoded.error());
   }
-  auto n = coerce_to_number(fmt);
-  if (!n) {
-    return Value::error(n.error());
-  }
-  if (n.value() == 0.0) {
-    *strict = false;
-    return Value::blank();
-  }
-  if (n.value() == 1.0) {
-    *strict = true;
-    return Value::blank();
-  }
-  return Value::error(ErrorCode::Value);
+  *strict = decoded.value();
+  return Value::blank();
 }
 
 Value arraytotext_from_array(const ArrayValue& arr, bool strict, Arena& arena) {
@@ -644,21 +613,11 @@ Value arraytotext_from_array_literal(const parser::AstNode& literal, bool strict
 Value ArrayToText_(const Value* args, std::uint32_t arity, Arena& arena) {
   bool strict = false;
   if (arity >= 2U) {
-    const Value& fmt = args[1];
-    if (fmt.is_error()) {
-      return fmt;
+    auto decoded = decode_text_format(args[1]);
+    if (!decoded) {
+      return Value::error(decoded.error());
     }
-    auto n = coerce_to_number(fmt);
-    if (!n) {
-      return Value::error(n.error());
-    }
-    if (n.value() == 0.0) {
-      strict = false;
-    } else if (n.value() == 1.0) {
-      strict = true;
-    } else {
-      return Value::error(ErrorCode::Value);
-    }
+    strict = decoded.value();
   }
   if (args[0].is_array()) {
     return arraytotext_from_array(*args[0].as_array(), strict, arena);

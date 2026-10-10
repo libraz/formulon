@@ -458,12 +458,12 @@ Value math_mode_rounding(const Value* args, std::uint32_t arity, bool ceiling) {
   if (!number) {
     return Value::error(number.error());
   }
-  auto sig = builtins_detail::read_optional_number(args, arity, 1, 1.0, /*check_finite=*/false);
+  auto sig = builtins_detail::read_optional_number(args, arity, 1, 1.0);
   if (!sig) {
     return Value::error(sig.error());
   }
   const double significance = sig.value();
-  auto flip = builtins_detail::read_optional_number(args, arity, 2, 0.0, /*check_finite=*/false);
+  auto flip = builtins_detail::read_optional_number(args, arity, 2, 0.0);
   if (!flip) {
     return Value::error(flip.error());
   }

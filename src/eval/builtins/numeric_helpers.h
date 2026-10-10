@@ -74,22 +74,10 @@ struct NumberTriple {
   double third;
 };
 
-/// Reads a required numeric argument from `args[index]`. When
-/// `check_finite` is `true` (the default), a `NaN` / `Inf` coerced
-/// value surfaces as `#NUM!` so impl bodies never have to re-check.
-/// Callers that want to handle non-finite values themselves (e.g. the
-/// `stats_detail::read_number_arg` path) pass `check_finite = false`.
-inline Expected<double, ErrorCode> read_required_number(const Value* args, std::uint32_t index,
-                                                        bool check_finite = true) {
-  auto coerced = coerce_to_number(args[index]);
-  if (!coerced) {
-    return std::move(coerced.error());
-  }
-  const double v = coerced.value();
-  if (check_finite && (std::isnan(v) || std::isinf(v))) {
-    return ErrorCode::Num;
-  }
-  return v;
+/// Reads a required numeric argument from `args[index]`; a non-finite value
+/// surfaces as `#NUM!` from `coerce_to_number`.
+inline Expected<double, ErrorCode> read_required_number(const Value* args, std::uint32_t index) {
+  return coerce_to_number(args[index]);
 }
 
 /// Reads an optional trailing numeric argument at position `index`,
@@ -98,22 +86,22 @@ inline Expected<double, ErrorCode> read_required_number(const Value* args, std::
 /// callers never have to worry about the lifetime of a sentinel
 /// reference.
 inline Expected<double, ErrorCode> read_optional_number(const Value* args, std::uint32_t arity, std::uint32_t index,
-                                                        double default_value, bool check_finite = true) {
+                                                        double default_value) {
   if (arity <= index) {
     return default_value;
   }
-  return read_required_number(args, index, check_finite);
+  return read_required_number(args, index);
 }
 
 /// Reads two required numeric arguments and returns them as a
 /// `NumberPair`. Propagates the left-most coercion / non-finite error.
 inline Expected<NumberPair, ErrorCode> read_number_pair(const Value* args, std::uint32_t first_index,
-                                                        std::uint32_t second_index, bool check_finite = true) {
-  auto first = read_required_number(args, first_index, check_finite);
+                                                        std::uint32_t second_index) {
+  auto first = read_required_number(args, first_index);
   if (!first) {
     return std::move(first.error());
   }
-  auto second = read_required_number(args, second_index, check_finite);
+  auto second = read_required_number(args, second_index);
   if (!second) {
     return std::move(second.error());
   }
@@ -124,17 +112,16 @@ inline Expected<NumberPair, ErrorCode> read_number_pair(const Value* args, std::
 /// `NumberTriple`. Propagates the left-most coercion / non-finite
 /// error.
 inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args, std::uint32_t first_index,
-                                                            std::uint32_t second_index, std::uint32_t third_index,
-                                                            bool check_finite = true) {
-  auto first = read_required_number(args, first_index, check_finite);
+                                                            std::uint32_t second_index, std::uint32_t third_index) {
+  auto first = read_required_number(args, first_index);
   if (!first) {
     return std::move(first.error());
   }
-  auto second = read_required_number(args, second_index, check_finite);
+  auto second = read_required_number(args, second_index);
   if (!second) {
     return std::move(second.error());
   }
-  auto third = read_required_number(args, third_index, check_finite);
+  auto third = read_required_number(args, third_index);
   if (!third) {
     return std::move(third.error());
   }
