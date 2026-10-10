@@ -71,6 +71,10 @@ struct FormatLetters {
   char weekday;
 };
 
+/// Letters used by the invariant stored format syntax and by locales whose
+/// date format letters are the standard ASCII `y`, `m`, `d`, `h`, `m`, `s`.
+inline constexpr FormatLetters kInvariantFormatLetters{'y', 'm', 'd', 'h', 'm', 's', false, false, false, 'a'};
+
 /// A non-ASCII spelling of a format letter (`Д` for the day letter).
 struct FormatLetterAlias {
   std::string_view spelling;

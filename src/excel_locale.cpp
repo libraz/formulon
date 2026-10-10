@@ -92,8 +92,6 @@ constexpr std::array<FormatLetterAlias, 10> kRussianLetterAliases{{
     {"С", 's'},
     {"с", 's'},
 }};
-constexpr FormatLetters kInvariantLetters{'y', 'm', 'd', 'h', 'm', 's', false, false, false, 'a'};
-
 constexpr std::array<std::string_view, 8> kEnglishColorNames{"Black",   "Blue", "Cyan",  "Green",
                                                              "Magenta", "Red",  "White", "Yellow"};
 
@@ -222,16 +220,16 @@ constexpr LocaleFacts kJapaneseFacts{
     'R',
     'C',
     '[',
-    ']',                  // references.address_r1c1_row_abs_col_rel
-    'b',                  // cell_type_blank
-    'l',                  // cell_type_text
-    'v',                  // cell_type_number
-    'G',                  // cell.cell_format_general
-    kEnglishMonthsLong,   // months_mmmm
-    kEnglishMonthsShort,  // months_mmm
-    kEnglishDaysLong,     // weekdays_dddd
-    kEnglishDaysShort,    // weekdays_ddd
-    kInvariantLetters,    // months_yyyy, months_d, weekdays_aaaa
+    ']',                      // references.address_r1c1_row_abs_col_rel
+    'b',                      // cell_type_blank
+    'l',                      // cell_type_text
+    'v',                      // cell_type_number
+    'G',                      // cell.cell_format_general
+    kEnglishMonthsLong,       // months_mmmm
+    kEnglishMonthsShort,      // months_mmm
+    kEnglishDaysLong,         // weekdays_dddd
+    kEnglishDaysShort,        // weekdays_ddd
+    kInvariantFormatLetters,  // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"¥", false, false, false, true, true, 0U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
     {"$", "€", "¥", "￥"},                       // value_dollar_prefix, value_euro_prefix, value_yen_prefix
@@ -289,16 +287,16 @@ constexpr LocaleFacts kEnglishFacts{
     'R',
     'C',
     '[',
-    ']',                  // references.address_r1c1_row_abs_col_rel
-    'b',                  // cell_type_blank
-    'l',                  // cell_type_text
-    'v',                  // cell_type_number
-    'G',                  // cell.cell_format_general
-    kEnglishMonthsLong,   // months_mmmm
-    kEnglishMonthsShort,  // months_mmm
-    kEnglishDaysLong,     // weekdays_dddd
-    kEnglishDaysShort,    // weekdays_ddd
-    kInvariantLetters,    // months_yyyy, months_d, weekdays_aaaa
+    ']',                      // references.address_r1c1_row_abs_col_rel
+    'b',                      // cell_type_blank
+    'l',                      // cell_type_text
+    'v',                      // cell_type_number
+    'G',                      // cell.cell_format_general
+    kEnglishMonthsLong,       // months_mmmm
+    kEnglishMonthsShort,      // months_mmm
+    kEnglishDaysLong,         // weekdays_dddd
+    kEnglishDaysShort,        // weekdays_ddd
+    kInvariantFormatLetters,  // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"$", false, false, true, false, true, 2U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
     {"$", "€", "", ""},                          // value_dollar_prefix, value_euro_prefix
@@ -496,16 +494,16 @@ constexpr LocaleFacts kChineseFacts{
     'R',
     'C',
     '[',
-    ']',                  // references.address_r1c1_row_abs_col_rel
-    'b',                  // cell_type_blank
-    'l',                  // cell_type_text
-    'v',                  // cell_type_number
-    'G',                  // cell.cell_format_general
-    kEnglishMonthsLong,   // months_mmmm
-    kEnglishMonthsShort,  // months_mmm
-    kEnglishDaysLong,     // weekdays_dddd
-    kEnglishDaysShort,    // weekdays_ddd
-    kInvariantLetters,    // months_yyyy, months_d, weekdays_aaaa
+    ']',                      // references.address_r1c1_row_abs_col_rel
+    'b',                      // cell_type_blank
+    'l',                      // cell_type_text
+    'v',                      // cell_type_number
+    'G',                      // cell.cell_format_general
+    kEnglishMonthsLong,       // months_mmmm
+    kEnglishMonthsShort,      // months_mmm
+    kEnglishDaysLong,         // weekdays_dddd
+    kEnglishDaysShort,        // weekdays_ddd
+    kInvariantFormatLetters,  // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"¥", false, false, true, false, true, 2U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
     {"$", "€", "¥", ""},    // value_dollar_prefix, value_euro_prefix, value_yen_prefix; ￥ unmeasured
@@ -563,16 +561,16 @@ constexpr LocaleFacts kKoreanFacts{
     'R',
     'C',
     '[',
-    ']',                  // references.address_r1c1_row_abs_col_rel
-    'b',                  // cell_type_blank
-    'l',                  // cell_type_text
-    'v',                  // cell_type_number
-    'G',                  // cell.cell_format_general
-    kEnglishMonthsLong,   // months_mmmm
-    kEnglishMonthsShort,  // months_mmm
-    kEnglishDaysLong,     // weekdays_dddd
-    kEnglishDaysShort,    // weekdays_ddd
-    kInvariantLetters,    // months_yyyy, months_d, weekdays_aaaa
+    ']',                      // references.address_r1c1_row_abs_col_rel
+    'b',                      // cell_type_blank
+    'l',                      // cell_type_text
+    'v',                      // cell_type_number
+    'G',                      // cell.cell_format_general
+    kEnglishMonthsLong,       // months_mmmm
+    kEnglishMonthsShort,      // months_mmm
+    kEnglishDaysLong,         // weekdays_dddd
+    kEnglishDaysShort,        // weekdays_ddd
+    kInvariantFormatLetters,  // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"₩", false, false, true, false, true, 0U},  // text.dollar_negative_minus_sign, text.dollar_zero
     {"$", "€", "₩", ""},                         // value_dollar_prefix, value_euro_prefix, value_won_prefix
@@ -640,7 +638,7 @@ constexpr LocaleFacts kThaiFacts{
     {"ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."},  // months_mmm
     {"วันอาทิตย์", "วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์"},                            // weekdays_dddd
     {"อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์"},                                            // weekdays_ddd
-    kInvariantLetters,  // months_yyyy, months_d, weekdays_aaaa
+    kInvariantFormatLetters,  // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"฿", false, false, true, false, true, 2U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
     {"€", "฿", "", ""},                          // value_euro_prefix, value_baht_prefix, value_dollar_prefix
@@ -770,16 +768,16 @@ constexpr LocaleFacts kTraditionalChineseFacts{
     'R',
     'C',
     '[',
-    ']',                  // references.address_r1c1_row_abs_col_rel
-    'b',                  // cell_type_blank
-    'l',                  // cell_type_text
-    'v',                  // cell_type_number
-    'G',                  // cell.cell_format_general
-    kEnglishMonthsLong,   // months_mmmm
-    kEnglishMonthsShort,  // months_mmm
-    kEnglishDaysLong,     // weekdays_dddd
-    kEnglishDaysShort,    // weekdays_ddd
-    kInvariantLetters,    // months_yyyy, months_d, weekdays_aaaa
+    ']',                      // references.address_r1c1_row_abs_col_rel
+    'b',                      // cell_type_blank
+    'l',                      // cell_type_text
+    'v',                      // cell_type_number
+    'G',                      // cell.cell_format_general
+    kEnglishMonthsLong,       // months_mmmm
+    kEnglishMonthsShort,      // months_mmm
+    kEnglishDaysLong,         // weekdays_dddd
+    kEnglishDaysShort,        // weekdays_ddd
+    kInvariantFormatLetters,  // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"$", false, false, true, false, true,
      2U},                             // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero

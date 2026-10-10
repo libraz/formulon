@@ -26,9 +26,9 @@ namespace number_format_detail {
 // same day, `kDate1904EpochGap` serials earlier.
 constexpr double kMaxDateSerial1900 = 2958465.0;
 
-// Letters of the stored format syntax; also the localized letters of every
-// locale that spells dates in `y m d`.
-inline constexpr FormatLetters kInvariantFormatLetters{'y', 'm', 'd', 'h', 'm', 's', false, false, false, 'a'};
+// Keep the historic detail-namespace spelling available to number_format.cpp;
+// the single definition lives beside FormatLetters in excel_locale.h.
+using ::formulon::kInvariantFormatLetters;
 
 // --- Token representation ----------------------------------------------
 

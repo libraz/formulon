@@ -92,7 +92,7 @@ bool is_date_codepoint(std::uint32_t cp) noexcept {
 
 char date_codepoint_letter(std::uint32_t cp) noexcept {
   if (cp >= 'A' && cp <= 'Z') {
-    return static_cast<char>(cp + ('a' - 'A'));
+    return strings::ascii_to_lower(static_cast<char>(cp));
   }
   if (cp >= 'a' && cp <= 'z') {
     return static_cast<char>(cp);
@@ -116,7 +116,7 @@ char date_codepoint_letter(std::uint32_t cp) noexcept {
     case 'G':
     case 'e':
     case 'E':
-      return c >= 'A' && c <= 'Z' ? static_cast<char>(c + ('a' - 'A')) : c;
+      return strings::ascii_to_lower(c);
     default:
       return '\0';
   }
@@ -453,8 +453,8 @@ bool is_date_letter(char c) noexcept {
 }
 
 std::size_t scan_run(std::string_view fmt, std::size_t& i, char letter) noexcept {
-  const char upper = letter >= 'a' && letter <= 'z' ? static_cast<char>(letter - 32) : letter;
-  const char lower = letter >= 'A' && letter <= 'Z' ? static_cast<char>(letter + 32) : letter;
+  const char upper = strings::ascii_to_upper(letter);
+  const char lower = strings::ascii_to_lower(letter);
   std::size_t start = i;
   while (i < fmt.size() && (fmt[i] == upper || fmt[i] == lower)) {
     ++i;
@@ -584,18 +584,8 @@ int parse_cond_directive(std::string_view body, CondOp* out_op, double* out_valu
 
 int parse_dbnum_directive(std::string_view body) noexcept {
   // Expected form: `dbnumN` where N is `1` to `4`.
-  if (body.size() != 6) {
+  if (body.size() != 6 || !strings::case_insensitive_starts_with(body, "dbnum")) {
     return 0;
-  }
-  static const char kPrefix[5] = {'d', 'b', 'n', 'u', 'm'};
-  for (std::size_t k = 0; k < 5; ++k) {
-    char ch = body[k];
-    if (ch >= 'A' && ch <= 'Z') {
-      ch = static_cast<char>(ch + 32);
-    }
-    if (ch != kPrefix[k]) {
-      return 0;
-    }
   }
   const char d = body[5];
   return d >= '1' && d <= '4' ? d - '0' : 0;

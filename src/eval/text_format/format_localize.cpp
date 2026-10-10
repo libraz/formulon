@@ -34,18 +34,14 @@ bool keyword_at(std::string_view s, std::size_t i, std::string_view word) noexce
   return !is_ascii_letter(word.back()) || end >= s.size() || !is_ascii_letter(s[end]);
 }
 
-char ascii_lower(char c) noexcept {
-  return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
-}
-
 // Lower-cased letter of a body made of one repeated ASCII letter; '\0' otherwise.
 char letter_run(std::string_view body) noexcept {
   if (body.empty() || !is_ascii_letter(body.front())) {
     return '\0';
   }
-  const char unit = ascii_lower(body.front());
+  const char unit = strings::ascii_to_lower(body.front());
   for (const char c : body) {
-    if (ascii_lower(c) != unit) {
+    if (strings::ascii_to_lower(c) != unit) {
       return '\0';
     }
   }
@@ -69,7 +65,7 @@ char alias_run(std::string_view body, const LocaleFacts& facts) noexcept {
   std::size_t i = 0;
   while (i < body.size()) {
     std::size_t len = 0;
-    const char letter = ascii_lower(alias_at(body, i, facts, &len));
+    const char letter = strings::ascii_to_lower(alias_at(body, i, facts, &len));
     if (letter == '\0' || (unit != '\0' && letter != unit)) {
       return '\0';
     }
@@ -94,10 +90,10 @@ bool localize_bracket(std::string_view body, const LocaleFacts& facts, const Loc
   }
   if (const char unit = aliased ? alias_run(body, facts) : ascii_unit; unit != '\0') {
     const FormatLetters& letters = facts.format_letters;
-    const char stored = unit == ascii_lower(letters.hour)     ? 'h'
-                        : unit == ascii_lower(letters.minute) ? 'm'
-                        : unit == ascii_lower(letters.second) ? 's'
-                                                              : '\0';
+    const char stored = unit == strings::ascii_to_lower(letters.hour)     ? 'h'
+                        : unit == strings::ascii_to_lower(letters.minute) ? 'm'
+                        : unit == strings::ascii_to_lower(letters.second) ? 's'
+                                                                          : '\0';
     if (stored != '\0') {
       out.append(body.size(), stored);
       return true;
@@ -206,7 +202,7 @@ LocalizedFormat localize_format(std::string_view fmt, FormatDialect dialect, Exc
         i += len;
         continue;
       }
-      const char lc = ascii_lower(c);
+      const char lc = strings::ascii_to_lower(c);
       if (lc == 'y' || lc == 'm' || lc == 'd' || lc == 'h' || lc == 's') {
         out.push_back('\\');
         out.push_back(c);

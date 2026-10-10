@@ -20,6 +20,7 @@
 #include "eval/text_format/number_format_scanner.h"
 #include "eval/text_format/number_format_types.h"
 #include "excel_locale.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace text_format {
@@ -27,10 +28,6 @@ namespace number_format_detail {
 namespace {
 
 constexpr std::string_view kChineseAmPm = "上午/下午";
-
-char ascii_lower(char c) noexcept {
-  return c >= 'A' && c <= 'Z' ? static_cast<char>(c + ('a' - 'A')) : c;
-}
 
 enum class DateLetter : std::uint8_t {
   kNone,
@@ -44,7 +41,7 @@ enum class DateLetter : std::uint8_t {
 };
 
 DateLetter classify_date_letter(char c, const FormatLetters& letters) noexcept {
-  const char lc = ascii_lower(c);
+  const char lc = strings::ascii_to_lower(c);
   if (letters.case_sensitive) {
     if (c == letters.month) {
       return letters.month_contextual ? DateLetter::kMonthOrMinute : DateLetter::kMonth;
@@ -52,19 +49,19 @@ DateLetter classify_date_letter(char c, const FormatLetters& letters) noexcept {
     if (c == letters.minute) {
       return letters.minute_unconditional ? DateLetter::kMinute : DateLetter::kMonthOrMinute;
     }
-  } else if (lc == ascii_lower(letters.month)) {
+  } else if (lc == strings::ascii_to_lower(letters.month)) {
     return DateLetter::kMonthOrMinute;
   }
-  if (lc == ascii_lower(letters.year)) {
+  if (lc == strings::ascii_to_lower(letters.year)) {
     return DateLetter::kYear;
   }
-  if (lc == ascii_lower(letters.day)) {
+  if (lc == strings::ascii_to_lower(letters.day)) {
     return DateLetter::kDay;
   }
-  if (lc == ascii_lower(letters.hour)) {
+  if (lc == strings::ascii_to_lower(letters.hour)) {
     return DateLetter::kHour;
   }
-  if (lc == ascii_lower(letters.second)) {
+  if (lc == strings::ascii_to_lower(letters.second)) {
     return DateLetter::kSecond;
   }
   return DateLetter::kNone;
@@ -151,7 +148,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
       bool all_m = !body.empty();
       bool all_s = !body.empty();
       for (char ch : body) {
-        const char lo = (ch >= 'A' && ch <= 'Z') ? static_cast<char>(ch + 32) : ch;
+        const char lo = strings::ascii_to_lower(ch);
         if (lo != 'h') {
           all_h = false;
         }
@@ -258,12 +255,8 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
         if (start + 7 > fmt.size()) {
           return false;
         }
-        for (std::size_t k = 0; k < 7; ++k) {
-          const char fc = fmt[start + k];
-          const char fc_lower = (fc >= 'A' && fc <= 'Z') ? static_cast<char>(fc + 32) : fc;
-          if (fc_lower != kWord[k]) {
-            return false;
-          }
+        if (!strings::case_insensitive_starts_with(fmt.substr(start), std::string_view(kWord, 7))) {
+          return false;
         }
         // Boundary check: next byte must not be a letter.
         if (start + 7 < fmt.size()) {
@@ -293,16 +286,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
         if (start + n > fmt.size()) {
           return false;
         }
-        for (std::size_t k = 0; k < n; ++k) {
-          const char fc = fmt[start + k];
-          const char ac = a[k];
-          const char fc_lower = (fc >= 'A' && fc <= 'Z') ? static_cast<char>(fc + 32) : fc;
-          const char ac_lower = (ac >= 'A' && ac <= 'Z') ? static_cast<char>(ac + 32) : ac;
-          if (fc_lower != ac_lower) {
-            return false;
-          }
-        }
-        return true;
+        return strings::case_insensitive_starts_with(fmt.substr(start), std::string_view(a, n));
       };
       if (match_ci(i, "AM/PM")) {
         Token t;
@@ -331,7 +315,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     // weekday letter. `aaa` does NOT collide with `AM/PM` or `A/P` because
     // those are matched first above. A run shorter than 3 is not a weekday
     // token in Excel and is emitted as a literal.
-    if (letters.weekday != '\0' && ascii_lower(c) == letters.weekday) {
+    if (letters.weekday != '\0' && strings::ascii_to_lower(c) == letters.weekday) {
       const std::size_t run = scan_run(fmt, i, letters.weekday);
       if (run >= 3) {
         Token t;
@@ -375,7 +359,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     if (const DateLetter letter = classify_date_letter(c, letters); letter != DateLetter::kNone) {
       const bool exact = letters.case_sensitive && (letter == DateLetter::kMonth || letter == DateLetter::kMinute ||
                                                     letter == DateLetter::kMonthOrMinute);
-      const std::size_t run = exact ? scan_run_exact(fmt, i, c) : scan_run(fmt, i, ascii_lower(c));
+      const std::size_t run = exact ? scan_run_exact(fmt, i, c) : scan_run(fmt, i, strings::ascii_to_lower(c));
       Token t;
       t.width = static_cast<std::uint8_t>(run);
       switch (letter) {
@@ -427,7 +411,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     }
     // An invariant date letter the locale spells differently prints as text.
     if (is_date_letter(c)) {
-      const std::size_t run = scan_run(fmt, i, ascii_lower(c));
+      const std::size_t run = scan_run(fmt, i, strings::ascii_to_lower(c));
       push_literal(i - run, i);
       continue;
     }
@@ -441,7 +425,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
       i += 2;
       continue;
     }
-    if (facts.blank_date_letter != '\0' && ascii_lower(c) == facts.blank_date_letter) {
+    if (facts.blank_date_letter != '\0' && strings::ascii_to_lower(c) == facts.blank_date_letter) {
       scan_run(fmt, i, facts.blank_date_letter);
       Token t;
       t.kind = Tok::DateBlank;
