@@ -1,0 +1,1197 @@
+{
+  "suite": "subtotal",
+  "description": "SUBTOTAL is a function-code-driven aggregator. Codes 1-11 dispatch to AVERAGE / COUNT / COUNTA / MAX / MIN / PRODUCT / STDEV / STDEVP / SUM / VAR / VARP, including hidden rows. Codes 101-111 dispatch to the same aggregators but exclude rows hidden via row-level hiding (column-hide and filter-hide are handled separately). Invalid codes -> #VALUE!.\n",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "ru-RU",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T19:42:54Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "subtotal_average_code_1",
+      "formula": "=SUBTOTAL(1,A1:A4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "subtotal_max_code_4",
+      "formula": "=SUBTOTAL(4,A1:A4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "subtotal_sum_code_9",
+      "formula": "=SUBTOTAL(9,A1:A4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "subtotal_sum_code_109_excl_hidden",
+      "formula": "=SUBTOTAL(109,A1:A4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "subtotal_invalid_code_is_value",
+      "formula": "=SUBTOTAL(99,A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "subtotal_nested_candidate_plain_subtotal",
+      "formula": "=SUBTOTAL(9,A1)",
+      "setup": {
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "subtotal_nested_candidate_let_wrapped",
+      "formula": "=SUBTOTAL(9,A2)",
+      "setup": {
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X1),x)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "subtotal_nested_candidate_lambda_call",
+      "formula": "=SUBTOTAL(9,A2)",
+      "setup": {
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=LAMBDA(r,SUBTOTAL(9,r))(X1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "subtotal_nested_candidate_lowercase",
+      "formula": "=SUBTOTAL(9,A2)",
+      "setup": {
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=subtotal(9,X1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "subtotal_nested_candidate_code_109",
+      "formula": "=SUBTOTAL(9,A2)",
+      "setup": {
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(109,X1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "subtotal_nested_candidate_sumproduct_offset",
+      "formula": "=SUBTOTAL(9,A2)",
+      "setup": {
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=SUMPRODUCT(SUBTOTAL(9,OFFSET(X1,0,0,1,1)))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "subtotal_nested_candidate_aggregate_0",
+      "formula": "=SUBTOTAL(9,A2)",
+      "setup": {
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "subtotal_nested_candidate_aggregate_4",
+      "formula": "=SUBTOTAL(9,A2)",
+      "setup": {
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,4,X1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "subtotal_nested_candidate_dead_if_branch",
+      "formula": "=SUBTOTAL(9,A2)",
+      "setup": {
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X1))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "subtotal_nested_candidate_string_literal_only",
+      "formula": "=SUBTOTAL(9,A2)",
+      "setup": {
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "subtotal_nested_candidate_pointer_cell",
+      "formula": "=SUBTOTAL(9,A2)",
+      "setup": {
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=A1*32"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32.0
+      }
+    },
+    {
+      "id": "subtotal_nested_candidate_indirect_pointer",
+      "formula": "=SUBTOTAL(9,A2)",
+      "setup": {
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=INDIRECT(\"A1\")*1024"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1024.0
+      }
+    },
+    {
+      "id": "subtotal_nested_marker_mask_1",
+      "formula": "=SUBTOTAL(1,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 620.0
+      }
+    },
+    {
+      "id": "subtotal_nested_marker_mask_9",
+      "formula": "=SUBTOTAL(9,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3100.0
+      }
+    },
+    {
+      "id": "subtotal_nested_marker_mask_101",
+      "formula": "=SUBTOTAL(101,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 620.0
+      }
+    },
+    {
+      "id": "subtotal_nested_marker_mask_109",
+      "formula": "=SUBTOTAL(109,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3100.0
+      }
+    },
+    {
+      "id": "subtotal_nested_marker_mask_2",
+      "formula": "=SUBTOTAL(2,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "subtotal_nested_marker_mask_3",
+      "formula": "=SUBTOTAL(3,A1:A11)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "X1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "X2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "X3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "X4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "X5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "X8": {
+          "kind": "number",
+          "value": 128.0
+        },
+        "X9": {
+          "kind": "number",
+          "value": 256.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X1)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=0+SUBTOTAL(9,X2)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=X3"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=LET(x,SUBTOTAL(9,X4),x)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=AGGREGATE(9,0,X5)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A3*32"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=IF(1,64,\"SUBTOTAL(9)\")"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,SUBTOTAL(9,X8),0)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=IF(1,256,AGGREGATE(9,0,X9))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "subtotal_nested_report_block_9",
+      "formula": "=SUBTOTAL(9,A20:A26)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A20:A22)"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 400.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A24:A25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1500.0
+      }
+    },
+    {
+      "id": "subtotal_nested_report_block_1",
+      "formula": "=SUBTOTAL(1,A20:A26)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A20:A22)"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 400.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A24:A25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 300.0
+      }
+    },
+    {
+      "id": "subtotal_nested_report_block_2",
+      "formula": "=SUBTOTAL(2,A20:A26)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A20:A22)"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 400.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A24:A25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "subtotal_nested_report_block_3",
+      "formula": "=SUBTOTAL(3,A20:A26)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A20:A22)"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 400.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A24:A25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "subtotal_nested_report_block_109",
+      "formula": "=SUBTOTAL(109,A20:A26)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A20:A22)"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 400.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A24:A25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1500.0
+      }
+    },
+    {
+      "id": "subtotal_nested_report_block_101",
+      "formula": "=SUBTOTAL(101,A20:A26)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A20:A22)"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 400.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A24:A25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 300.0
+      }
+    },
+    {
+      "id": "subtotal_nested_spill_anchor_9",
+      "formula": "=SUBTOTAL(9,C1:C3)",
+      "setup": {
+        "X10": {
+          "kind": "number",
+          "value": 512.0
+        },
+        "C1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X10)+SEQUENCE(3)*0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "subtotal_nested_spill_anchor_109",
+      "formula": "=SUBTOTAL(109,C1:C3)",
+      "setup": {
+        "X10": {
+          "kind": "number",
+          "value": 512.0
+        },
+        "C1": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,X10)+SEQUENCE(3)*0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "subtotal_nested_whole_column",
+      "formula": "=SUBTOTAL(9,A:A)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A20:A22)"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 400.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=SUBTOTAL(9,A24:A25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1500.0
+      }
+    }
+  ]
+}

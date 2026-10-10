@@ -1,0 +1,134 @@
+{
+  "suite": "text_format_display",
+  "description": "TEXT() renderings that match cell display text (fraction padding, DBNum General, serial 0 dates, era format)",
+  "environment": {
+    "excel_version": "16.113.4",
+    "excel_locale": "nl-NL",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-10T00:21:27Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "text_fraction_pad_0",
+      "formula": "=TEXT(0, \"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0    "
+      }
+    },
+    {
+      "id": "text_fraction_pad_2",
+      "formula": "=TEXT(2, \"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2    "
+      }
+    },
+    {
+      "id": "text_fraction_pad_59",
+      "formula": "=TEXT(59, \"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "59    "
+      }
+    },
+    {
+      "id": "text_fraction_pad_123456789",
+      "formula": "=TEXT(123456789, \"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123456789    "
+      }
+    },
+    {
+      "id": "text_dbnum1_general_1234",
+      "formula": "=TEXT(1234, \"[DBNum1]G/標準\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "/標準"
+      }
+    },
+    {
+      "id": "text_dbnum1_general_1234_5678",
+      "formula": "=TEXT(1234.5678, \"[DBNum1]G/標準\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "/標準"
+      }
+    },
+    {
+      "id": "text_dbnum1_general_1e15",
+      "formula": "=TEXT(1E+15, \"[DBNum1]G/標準\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_date_ymd_serial_0",
+      "formula": "=TEXT(0, \"yyyy/m/d\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_date_era_serial_0",
+      "formula": "=TEXT(0, \"ggge\"\"年\"\"m\"\"月\"\"d\"\"日\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1900年1月0日"
+      }
+    },
+    {
+      "id": "text_date_ymd_serial_half",
+      "formula": "=TEXT(0.5, \"yyyy/m/d\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_date_era_serial_half",
+      "formula": "=TEXT(0.5, \"ggge\"\"年\"\"m\"\"月\"\"d\"\"日\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1900年1月0日"
+      }
+    },
+    {
+      "id": "text_date_ymd_serial_tiny",
+      "formula": "=TEXT(0.00001, \"yyyy/m/d\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_date_era_serial_tiny",
+      "formula": "=TEXT(0.00001, \"ggge\"\"年\"\"m\"\"月\"\"d\"\"日\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1900年1月0日"
+      }
+    }
+  ]
+}

@@ -1,0 +1,1897 @@
+{
+  "suite": "locale_tokens",
+  "description": "Locale-dependent spellings Excel accepts or produces: date format tokens across every month and weekday, General and colour keywords, AM/PM designators, currency text parsing, error names in text output, and formula text separators. Each case is captured under every target, so a token another locale ignores still records what it does here.\n",
+  "environment": {
+    "excel_version": "16.113.4",
+    "excel_locale": "pt-BR",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-10T06:27:07Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "months_mmmm",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"mmmm\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro"
+      }
+    },
+    {
+      "id": "weekdays_mmmm",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"mmmm\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "janeiro|janeiro|janeiro|janeiro|janeiro|janeiro|janeiro"
+      }
+    },
+    {
+      "id": "months_mmm",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"mmm\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez"
+      }
+    },
+    {
+      "id": "weekdays_mmm",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"mmm\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "jan|jan|jan|jan|jan|jan|jan"
+      }
+    },
+    {
+      "id": "months_umumumum",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"MMMM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro"
+      }
+    },
+    {
+      "id": "weekdays_umumumum",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"MMMM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "janeiro|janeiro|janeiro|janeiro|janeiro|janeiro|janeiro"
+      }
+    },
+    {
+      "id": "months_umumum",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"MMM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez"
+      }
+    },
+    {
+      "id": "weekdays_umumum",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"MMM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "jan|jan|jan|jan|jan|jan|jan"
+      }
+    },
+    {
+      "id": "months_dddd",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"dddd\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "segunda-feira|quinta-feira|sexta-feira|segunda-feira|quarta-feira|sábado|segunda-feira|quinta-feira|domingo|terça-feira|sexta-feira|domingo"
+      }
+    },
+    {
+      "id": "weekdays_dddd",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"dddd\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "segunda-feira|terça-feira|quarta-feira|quinta-feira|sexta-feira|sábado|domingo"
+      }
+    },
+    {
+      "id": "months_ddd",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"ddd\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "seg|qui|sex|seg|qua|sáb|seg|qui|dom|ter|sex|dom"
+      }
+    },
+    {
+      "id": "weekdays_ddd",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"ddd\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "seg|ter|qua|qui|sex|sáb|dom"
+      }
+    },
+    {
+      "id": "months_utututut",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"TTTT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TTTT|TTTT|TTTT|TTTT|TTTT|TTTT|TTTT|TTTT|TTTT|TTTT|TTTT|TTTT"
+      }
+    },
+    {
+      "id": "weekdays_utututut",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"TTTT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TTTT|TTTT|TTTT|TTTT|TTTT|TTTT|TTTT"
+      }
+    },
+    {
+      "id": "months_ututut",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"TTT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TTT|TTT|TTT|TTT|TTT|TTT|TTT|TTT|TTT|TTT|TTT|TTT"
+      }
+    },
+    {
+      "id": "weekdays_ututut",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"TTT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TTT|TTT|TTT|TTT|TTT|TTT|TTT"
+      }
+    },
+    {
+      "id": "months_jjjj",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"jjjj\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "jjjj|jjjj|jjjj|jjjj|jjjj|jjjj|jjjj|jjjj|jjjj|jjjj|jjjj|jjjj"
+      }
+    },
+    {
+      "id": "weekdays_jjjj",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"jjjj\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "jjjj|jjjj|jjjj|jjjj|jjjj|jjjj|jjjj"
+      }
+    },
+    {
+      "id": "months_jjj",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"jjj\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "jjj|jjj|jjj|jjj|jjj|jjj|jjj|jjj|jjj|jjj|jjj|jjj"
+      }
+    },
+    {
+      "id": "weekdays_jjj",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"jjj\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "jjj|jjj|jjj|jjj|jjj|jjj|jjj"
+      }
+    },
+    {
+      "id": "months_aaaa",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"aaaa\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024|2024|2024|2024|2024|2024|2024|2024|2024|2024|2024|2024"
+      }
+    },
+    {
+      "id": "weekdays_aaaa",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"aaaa\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024|2024|2024|2024|2024|2024|2024"
+      }
+    },
+    {
+      "id": "months_aaa",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"aaa\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024|2024|2024|2024|2024|2024|2024|2024|2024|2024|2024|2024"
+      }
+    },
+    {
+      "id": "weekdays_aaa",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"aaa\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024|2024|2024|2024|2024|2024|2024"
+      }
+    },
+    {
+      "id": "months_uauauaua",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"AAAA\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024|2024|2024|2024|2024|2024|2024|2024|2024|2024|2024|2024"
+      }
+    },
+    {
+      "id": "weekdays_uauauaua",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"AAAA\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024|2024|2024|2024|2024|2024|2024"
+      }
+    },
+    {
+      "id": "months_ujujujuj",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"JJJJ\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "JJJJ|JJJJ|JJJJ|JJJJ|JJJJ|JJJJ|JJJJ|JJJJ|JJJJ|JJJJ|JJJJ|JJJJ"
+      }
+    },
+    {
+      "id": "weekdays_ujujujuj",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"JJJJ\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "JJJJ|JJJJ|JJJJ|JJJJ|JJJJ|JJJJ|JJJJ"
+      }
+    },
+    {
+      "id": "months_ujuj",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"JJ\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "JJ|JJ|JJ|JJ|JJ|JJ|JJ|JJ|JJ|JJ|JJ|JJ"
+      }
+    },
+    {
+      "id": "weekdays_ujuj",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"JJ\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "JJ|JJ|JJ|JJ|JJ|JJ|JJ"
+      }
+    },
+    {
+      "id": "months_yyyy",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"yyyy\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "yyyy|yyyy|yyyy|yyyy|yyyy|yyyy|yyyy|yyyy|yyyy|yyyy|yyyy|yyyy"
+      }
+    },
+    {
+      "id": "weekdays_yyyy",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"yyyy\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "yyyy|yyyy|yyyy|yyyy|yyyy|yyyy|yyyy"
+      }
+    },
+    {
+      "id": "months_yy",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"yy\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "yy|yy|yy|yy|yy|yy|yy|yy|yy|yy|yy|yy"
+      }
+    },
+    {
+      "id": "weekdays_yy",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"yy\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "yy|yy|yy|yy|yy|yy|yy"
+      }
+    },
+    {
+      "id": "months_utut",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"TT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TT|TT|TT|TT|TT|TT|TT|TT|TT|TT|TT|TT"
+      }
+    },
+    {
+      "id": "weekdays_utut",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"TT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TT|TT|TT|TT|TT|TT|TT"
+      }
+    },
+    {
+      "id": "months_ut",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"T\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "T|T|T|T|T|T|T|T|T|T|T|T"
+      }
+    },
+    {
+      "id": "weekdays_ut",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"T\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "T|T|T|T|T|T|T"
+      }
+    },
+    {
+      "id": "months_jj",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"jj\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "jj|jj|jj|jj|jj|jj|jj|jj|jj|jj|jj|jj"
+      }
+    },
+    {
+      "id": "weekdays_jj",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"jj\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "jj|jj|jj|jj|jj|jj|jj"
+      }
+    },
+    {
+      "id": "months_j",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"j\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "j|j|j|j|j|j|j|j|j|j|j|j"
+      }
+    },
+    {
+      "id": "weekdays_j",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"j\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "j|j|j|j|j|j|j"
+      }
+    },
+    {
+      "id": "months_dd",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"dd\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "01|01|01|01|01|01|01|01|01|01|01|01"
+      }
+    },
+    {
+      "id": "weekdays_dd",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"dd\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "01|02|03|04|05|06|07"
+      }
+    },
+    {
+      "id": "months_d",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"d\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1|1|1|1|1|1|1|1|1|1|1|1"
+      }
+    },
+    {
+      "id": "weekdays_d",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"d\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1|2|3|4|5|6|7"
+      }
+    },
+    {
+      "id": "months_bbbb",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"bbbb\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2567|2567|2567|2567|2567|2567|2567|2567|2567|2567|2567|2567"
+      }
+    },
+    {
+      "id": "weekdays_bbbb",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"bbbb\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2567|2567|2567|2567|2567|2567|2567"
+      }
+    },
+    {
+      "id": "months_e",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"e\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024|2024|2024|2024|2024|2024|2024|2024|2024|2024|2024|2024"
+      }
+    },
+    {
+      "id": "weekdays_e",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"e\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024|2024|2024|2024|2024|2024|2024"
+      }
+    },
+    {
+      "id": "months_ee",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"ee\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024|2024|2024|2024|2024|2024|2024|2024|2024|2024|2024|2024"
+      }
+    },
+    {
+      "id": "weekdays_ee",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"ee\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024|2024|2024|2024|2024|2024|2024"
+      }
+    },
+    {
+      "id": "text_general_standard",
+      "formula": "=TEXT(-1234.5,\"Standard\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_general_g_tongyong",
+      "formula": "=TEXT(-1234.5,\"G/通用格式\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_general_g_pyojun",
+      "formula": "=TEXT(-1234.5,\"G/표준\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_general_g_hyojun",
+      "formula": "=TEXT(-1234.5,\"G/標準\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_general_english",
+      "formula": "=TEXT(-1234.5,\"General\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_red",
+      "formula": "=TEXT(-5,\"0;[Red]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_rot",
+      "formula": "=TEXT(-5,\"0;[Rot]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_rouge",
+      "formula": "=TEXT(-5,\"0;[Rouge]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_hongse",
+      "formula": "=TEXT(-5,\"0;[红色]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_ppalgang",
+      "formula": "=TEXT(-5,\"0;[빨강]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_aka",
+      "formula": "=TEXT(-5,\"0;[赤]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_thai_red",
+      "formula": "=TEXT(-5,\"0;[สีแดง]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_ampm_english",
+      "formula": "=TEXT(0.75,\"h:mm AM/PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "6:00 PM"
+      }
+    },
+    {
+      "id": "text_ampm_zh",
+      "formula": "=TEXT(0.75,\"h:mm 上午/下午\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "6:00 下午"
+      }
+    },
+    {
+      "id": "text_ampm_ko",
+      "formula": "=TEXT(0.75,\"h:mm 오전/오후\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "18:00 오전/오후"
+      }
+    },
+    {
+      "id": "text_ampm_ja",
+      "formula": "=TEXT(0.75,\"h:mm 午前/午後\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "18:00 午前/午後"
+      }
+    },
+    {
+      "id": "text_decimal_comma",
+      "formula": "=TEXT(-1234.5,\"0,00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1234,50"
+      }
+    },
+    {
+      "id": "text_decimal_point",
+      "formula": "=TEXT(-1234.5,\"0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1.235"
+      }
+    },
+    {
+      "id": "text_group_dot_decimal_comma",
+      "formula": "=TEXT(-1234.5,\"#.##0,00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1.234,50"
+      }
+    },
+    {
+      "id": "text_group_space_decimal_comma",
+      "formula": "=TEXT(-1234.5,\"# ##0,00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1 234,50"
+      }
+    },
+    {
+      "id": "text_group_comma_decimal_point",
+      "formula": "=TEXT(-1234.5,\"#,##0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1234,5000"
+      }
+    },
+    {
+      "id": "text_sci_comma",
+      "formula": "=TEXT(-1234.5,\"0,0E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1,2E+03"
+      }
+    },
+    {
+      "id": "text_sci_point",
+      "formula": "=TEXT(-1234.5,\"0.0E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1.235E+00"
+      }
+    },
+    {
+      "id": "value_won_prefix",
+      "formula": "=VALUE(\"₩1,234\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_baht_prefix",
+      "formula": "=VALUE(\"฿1,234\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_euro_suffix_de",
+      "formula": "=VALUE(\"1.234,50 €\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1234.5
+      }
+    },
+    {
+      "id": "value_euro_suffix_fr",
+      "formula": "=VALUE(\"1 234,50 €\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_yuan_suffix",
+      "formula": "=VALUE(\"1234元\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_dotted_ymd",
+      "formula": "=VALUE(\"2024.3.15\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_korean_ymd",
+      "formula": "=VALUE(\"2024년 3월 15일\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_thai_slash_dmy",
+      "formula": "=VALUE(\"15/3/2567\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 243692.0
+      }
+    },
+    {
+      "id": "value_dotted_dmy",
+      "formula": "=VALUE(\"15.3.2024\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arraytotext_error_null",
+      "formula": "=ARRAYTOTEXT(A1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=C1:C2 D1:D2"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NULL!"
+      }
+    },
+    {
+      "id": "arraytotext_error_div0",
+      "formula": "=ARRAYTOTEXT(A1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "arraytotext_error_value",
+      "formula": "=ARRAYTOTEXT(A1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=1+\"a\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arraytotext_error_ref",
+      "formula": "=ARRAYTOTEXT(A1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=INDEX(C1:C2,3)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "arraytotext_error_name",
+      "formula": "=ARRAYTOTEXT(A1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=nosuchname_x"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "arraytotext_error_num",
+      "formula": "=ARRAYTOTEXT(A1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "arraytotext_error_na",
+      "formula": "=ARRAYTOTEXT(A1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "arraytotext_error_calc",
+      "formula": "=ARRAYTOTEXT(A1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=FILTER(C1:C2,C1:C2>5)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "arraytotext_error_spill",
+      "formula": "=ARRAYTOTEXT(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2)"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "formulatext_decimal_number",
+      "formula": "=FORMULATEXT(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1.5+2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=1,5+2"
+      }
+    },
+    {
+      "id": "formulatext_array_constant",
+      "formula": "=FORMULATEXT(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SUM({1,2;3,4})"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SOMA({1\\2;3\\4})"
+      }
+    },
+    {
+      "id": "formulatext_r1c1_style_ref",
+      "formula": "=FORMULATEXT(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=INDIRECT(\"R1C1\",FALSE)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=INDIRETO(\"R1C1\";FALSO)"
+      }
+    },
+    {
+      "id": "indirect_r1c1_de_letters",
+      "formula": "=INDIRECT(\"Z2S3\",FALSE)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "indirect_r1c1_fr_letters",
+      "formula": "=INDIRECT(\"L2C3\",FALSE)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "cell_type_text",
+      "formula": "=CELL(\"type\",A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "l"
+      }
+    },
+    {
+      "id": "cell_type_number",
+      "formula": "=CELL(\"type\",A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "v"
+      }
+    },
+    {
+      "id": "cell_type_blank",
+      "formula": "=CELL(\"type\",A1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "bool_text_true",
+      "formula": "=\"\"&TRUE",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "VERDADEIRO"
+      }
+    },
+    {
+      "id": "bool_text_false",
+      "formula": "=\"\"&FALSE",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "FALSO"
+      }
+    },
+    {
+      "id": "dollar_negative",
+      "formula": "=DOLLAR(-1234.567)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-R$ 1.234,57"
+      }
+    },
+    {
+      "id": "fixed_negative",
+      "formula": "=FIXED(-1234567.891,2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1.234.567,89"
+      }
+    },
+    {
+      "id": "value_month_name_de",
+      "formula": "=VALUE(\"15. März 2024\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_month_name_fr",
+      "formula": "=VALUE(\"15 mars 2024\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_month_name_en",
+      "formula": "=VALUE(\"15 March 2024\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_month_abbrev_de",
+      "formula": "=VALUE(\"15-Mär-2024\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_month_abbrev_fr",
+      "formula": "=VALUE(\"15-mars-2024\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_bool_text_true_de",
+      "formula": "=IF(\"WAHR\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_bool_text_true_fr",
+      "formula": "=IF(\"VRAI\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_ampm_zh",
+      "formula": "=TIMEVALUE(\"下午 3:30\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_ampm_ko",
+      "formula": "=TIMEVALUE(\"오후 3:30\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "number_text_comma_decimal",
+      "formula": "=VALUE(\"1,5\")+0",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "numbervalue_default_comma",
+      "formula": "=NUMBERVALUE(\"1.234,5\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1234.5
+      }
+    },
+    {
+      "id": "general_tiny_number_text",
+      "formula": "=\"\"&1.5E-20",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,5E-20"
+      }
+    },
+    {
+      "id": "char_high_bytes_unicode",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(UNICODE(CHAR(SEQUENCE(128,1,128))),-1))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "196,197,199,201,209,214,220,225,224,226,228,227,229,231,233,232,234,235,237,236,238,239,241,243,242,244,246,245,250,249,251,252,8224,176,162,163,167,8226,182,223,174,169,8482,180,168,8800,198,216,8734,177,8804,8805,165,181,8706,8721,8719,960,8747,170,186,937,230,248,191,161,172,8730,402,8776,8710,171,187,8230,160,192,195,213,338,339,8211,8212,8220,8221,8216,8217,247,9674,255,376,8260,8364,8249,8250,64257,64258,8225,183,8218,8222,8240,194,202,193,203,200,205,206,207,204,211,212,63743,210,218,219,217,305,710,732,175,728,729,730,184,733,731,711"
+      }
+    },
+    {
+      "id": "code_thai_letters",
+      "formula": "=TEXTJOIN(\",\",FALSE,CODE(MID(\"กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮฯะัาำิีึืฺุู฿เแโใไๅๆ็่้๊๋์ํ๎๏๐๑๒๓๔๕๖๗๘๙๚๛\",SEQUENCE(88),1)))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_buddhist_year_bbbb",
+      "formula": "=TEXT(45383,\"bbbb\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2567"
+      }
+    },
+    {
+      "id": "text_buddhist_year_bb",
+      "formula": "=TEXT(45383,\"bb\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "67"
+      }
+    },
+    {
+      "id": "value_baht_prefix_decimal",
+      "formula": "=VALUE(\"฿1,234.50\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "formulatext_bool_literal",
+      "formula": "=FORMULATEXT(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=IF(TRUE,1,0)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SE(VERDADEIRO;1;0)"
+      }
+    },
+    {
+      "id": "formulatext_sci_number",
+      "formula": "=FORMULATEXT(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1.5E-3*2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=0,0015*2"
+      }
+    },
+    {
+      "id": "formulatext_error_literal",
+      "formula": "=FORMULATEXT(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=IFERROR(#N/A,1)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SEERRO(#N/D;1)"
+      }
+    },
+    {
+      "id": "formulatext_string_with_comma",
+      "formula": "=FORMULATEXT(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=CONCAT(\"a,b\",\"1.5\")"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=CONCAT(\"a,b\";\"1.5\")"
+      }
+    },
+    {
+      "id": "formulatext_new_function",
+      "formula": "=FORMULATEXT(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=XLOOKUP(1,{1,2},{3,4})"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=PROCX(1;{1\\2};{3\\4})"
+      }
+    },
+    {
+      "id": "formulatext_range_union",
+      "formula": "=FORMULATEXT(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SUM((C1:C2,D1:D2))"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SOMA((C1:C2;D1:D2))"
+      }
+    },
+    {
+      "id": "imsum_comma_decimal_input",
+      "formula": "=IMSUM(\"1,5+2i\",\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2,5+2i"
+      }
+    },
+    {
+      "id": "imsum_point_decimal_input",
+      "formula": "=IMSUM(\"1.5+2i\",\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "lenb_kanji_not_in_gb2312",
+      "formula": "=LENB(\"漢\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "lenb_hangul",
+      "formula": "=LENB(\"한글\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "code_hangul",
+      "formula": "=CODE(\"한\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 95.0
+      }
+    },
+    {
+      "id": "searchb_question_kanji",
+      "formula": "=SEARCHB(\"?\",\"漢ABC\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "timevalue_comma_fraction",
+      "formula": "=TIMEVALUE(\"0:00:00,5\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.787037037037037e-06
+      }
+    },
+    {
+      "id": "text_sci_point_scaled_en",
+      "formula": "=TEXT(150000000000,\"0.0E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.500E+08"
+      }
+    },
+    {
+      "id": "text_fraction_space",
+      "formula": "=TEXT(1.5,\"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1 1/2"
+      }
+    },
+    {
+      "id": "value_euro_prefix",
+      "formula": "=VALUE(\"€1234\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1234.0
+      }
+    },
+    {
+      "id": "value_dollar_prefix",
+      "formula": "=VALUE(\"$1234\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_yen_prefix",
+      "formula": "=VALUE(\"¥1234\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "formulatext_dollar_function",
+      "formula": "=FORMULATEXT(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=DOLLAR(1)+0"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MOEDA(1)+0"
+      }
+    },
+    {
+      "id": "formulatext_dbcs_usdollar",
+      "formula": "=FORMULATEXT(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=DBCS(\"a\")&USDOLLAR(1)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=DBCS(\"a\")&MOEDA.US(1)"
+      }
+    },
+    {
+      "id": "months_cyr_mmmm",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"ММММ\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ММММ|ММММ|ММММ|ММММ|ММММ|ММММ|ММММ|ММММ|ММММ|ММММ|ММММ|ММММ"
+      }
+    },
+    {
+      "id": "months_cyr_mmm",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"МММ\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "МММ|МММ|МММ|МММ|МММ|МММ|МММ|МММ|МММ|МММ|МММ|МММ"
+      }
+    },
+    {
+      "id": "weekdays_cyr_dddd",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"ДДДД\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ДДДД|ДДДД|ДДДД|ДДДД|ДДДД|ДДДД|ДДДД"
+      }
+    },
+    {
+      "id": "weekdays_cyr_ddd",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"ДДД\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ДДД|ДДД|ДДД|ДДД|ДДД|ДДД|ДДД"
+      }
+    },
+    {
+      "id": "date_cyr_d_mm_yyyy",
+      "formula": "=TEXT(DATE(2024,3,5),\"Д/ММ/ГГГГ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "date_cyr_dd_m_yy",
+      "formula": "=TEXT(DATE(2024,3,5),\"ДД/М/ГГ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "date_cyr_lower",
+      "formula": "=TEXT(DATE(2024,3,5),\"д/мм/гггг\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_cyr_lower",
+      "formula": "=TEXT(TIME(13,4,5),\"ч:мм:сс\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ч:мм:сс"
+      }
+    },
+    {
+      "id": "time_cyr_upper",
+      "formula": "=TEXT(TIME(13,4,5),\"Ч:ММ:СС\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Ч:ММ:СС"
+      }
+    },
+    {
+      "id": "elapsed_cyr_hours",
+      "formula": "=TEXT(1.5,\"[ч]\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_u_hours",
+      "formula": "=TEXT(TIME(13,4,5),\"u:mm:ss\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "u:04:05"
+      }
+    },
+    {
+      "id": "elapsed_u_hours",
+      "formula": "=TEXT(1.5,\"[u]\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "weekdays_gggg",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"gggg\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "||||||"
+      }
+    },
+    {
+      "id": "weekdays_ggg",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"ggg\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "||||||"
+      }
+    },
+    {
+      "id": "text_general_osnovnoy",
+      "formula": "=TEXT(-1234.5,\"Основной\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-Основной"
+      }
+    },
+    {
+      "id": "text_general_standaard",
+      "formula": "=TEXT(-1234.5,\"Standaard\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_general_estandar",
+      "formula": "=TEXT(-1234.5,\"Estándar\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_general_geral",
+      "formula": "=TEXT(-1234.5,\"Geral\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1234,5"
+      }
+    },
+    {
+      "id": "text_color_rojo",
+      "formula": "=TEXT(-5,\"0;[Rojo]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_vermelho",
+      "formula": "=TEXT(-5,\"0;[Vermelho]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5"
+      }
+    },
+    {
+      "id": "text_color_krasny",
+      "formula": "=TEXT(-5,\"0;[Красный]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_rosso",
+      "formula": "=TEXT(-5,\"0;[Rosso]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_rood",
+      "formula": "=TEXT(-5,\"0;[Rood]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_hongse_traditional",
+      "formula": "=TEXT(-5,\"0;[紅色]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_letter_a_negative",
+      "formula": "=TEXT(-1234.5,\"a\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_letter_t_negative",
+      "formula": "=TEXT(-1234.5,\"t\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-t"
+      }
+    },
+    {
+      "id": "text_letter_n_negative",
+      "formula": "=TEXT(-1234.5,\"n\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_letter_r_negative",
+      "formula": "=TEXT(-1234.5,\"r\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-r"
+      }
+    },
+    {
+      "id": "text_letter_aa_positive",
+      "formula": "=TEXT(5,\"aa\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "00"
+      }
+    },
+    {
+      "id": "text_letter_n_time",
+      "formula": "=TEXT(TIME(13,4,5),\"n\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_letter_nn_after_hour",
+      "formula": "=TEXT(TIME(13,4,5),\"h:nn\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_letter_n_date",
+      "formula": "=TEXT(DATE(2024,3,5),\"n\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_letter_r_date",
+      "formula": "=TEXT(DATE(2024,3,5),\"r\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "r"
+      }
+    },
+    {
+      "id": "text_letter_rr_date",
+      "formula": "=TEXT(DATE(2024,3,5),\"rr\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "rr"
+      }
+    },
+    {
+      "id": "text_letter_t_positive",
+      "formula": "=TEXT(1234.5,\"t\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "t"
+      }
+    },
+    {
+      "id": "text_letter_t_digits",
+      "formula": "=TEXT(1234.5,\"t0.0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "t1.235"
+      }
+    },
+    {
+      "id": "text_slash_letters",
+      "formula": "=TEXT(5,\"x/x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_slash_alone",
+      "formula": "=TEXT(5,\"/\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_slash_after_digit",
+      "formula": "=TEXT(5,\"0/\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "date_latin_upper_dashes",
+      "formula": "=TEXT(DATE(2024,3,5),\"D-M-YYYY\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5-3-YYYY"
+      }
+    },
+    {
+      "id": "elapsed_cyr_minutes",
+      "formula": "=TEXT(1.5,\"[мм]\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "elapsed_cyr_seconds_upper",
+      "formula": "=TEXT(1/24,\"[СС]\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_u_upper_hours",
+      "formula": "=TEXT(TIME(13,4,5),\"UU:mm\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "UU:01"
+      }
+    },
+    {
+      "id": "text_letter_x_positive",
+      "formula": "=TEXT(5,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "text_letter_x_negative",
+      "formula": "=TEXT(-5,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-x"
+      }
+    },
+    {
+      "id": "text_letter_x_digits",
+      "formula": "=TEXT(1234.5,\"x0.0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x1.235"
+      }
+    }
+  ]
+}

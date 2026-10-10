@@ -34,6 +34,51 @@ bool keyword_at(std::string_view s, std::size_t i, std::string_view word) noexce
   return !is_ascii_letter(word.back()) || end >= s.size() || !is_ascii_letter(s[end]);
 }
 
+char ascii_lower(char c) noexcept {
+  return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
+}
+
+// Lower-cased letter of a body made of one repeated ASCII letter; '\0' otherwise.
+char letter_run(std::string_view body) noexcept {
+  if (body.empty() || !is_ascii_letter(body.front())) {
+    return '\0';
+  }
+  const char unit = ascii_lower(body.front());
+  for (const char c : body) {
+    if (ascii_lower(c) != unit) {
+      return '\0';
+    }
+  }
+  return unit;
+}
+
+// Format letter an alias spelling at `s[i]` stands for, with its byte length; '\0' when none starts there.
+char alias_at(std::string_view s, std::size_t i, const LocaleFacts& facts, std::size_t* len) noexcept {
+  for (const FormatLetterAlias& alias : facts.format_letter_aliases) {
+    if (!alias.spelling.empty() && s.compare(i, alias.spelling.size(), alias.spelling) == 0) {
+      *len = alias.spelling.size();
+      return alias.letter;
+    }
+  }
+  return '\0';
+}
+
+// Lower-cased letter of a body made of one repeated alias letter; '\0' otherwise.
+char alias_run(std::string_view body, const LocaleFacts& facts) noexcept {
+  char unit = '\0';
+  std::size_t i = 0;
+  while (i < body.size()) {
+    std::size_t len = 0;
+    const char letter = ascii_lower(alias_at(body, i, facts, &len));
+    if (letter == '\0' || (unit != '\0' && letter != unit)) {
+      return '\0';
+    }
+    unit = letter;
+    i += len;
+  }
+  return unit;
+}
+
 // Locale spelling of the indexed colour form (`[色12]`); empty where none
 // is measured.
 std::string_view color_index_prefix(ExcelLocale locale) noexcept {
@@ -51,6 +96,30 @@ std::string_view color_index_prefix(ExcelLocale locale) noexcept {
 // false when the body is a stored colour name the locale does not accept.
 bool localize_bracket(std::string_view body, const LocaleFacts& facts, const LocaleFacts& english,
                       std::string_view index_prefix, std::string& out) {
+  // An elapsed-time body (`[h]`, `[mm]`) spells its unit with the locale's
+  // letter; the invariant letter of a unit the locale spells differently is
+  // rejected (text_format.text_elapsed_hours).
+  const bool aliased = !facts.format_letter_aliases[0].spelling.empty();
+  const char ascii_unit = letter_run(body);
+  if (aliased && (ascii_unit == 'h' || ascii_unit == 'm' || ascii_unit == 's')) {
+    out.append(body);
+    return false;
+  }
+  if (const char unit = aliased ? alias_run(body, facts) : ascii_unit; unit != '\0') {
+    const FormatLetters& letters = facts.format_letters;
+    const char stored = unit == ascii_lower(letters.hour)     ? 'h'
+                        : unit == ascii_lower(letters.minute) ? 'm'
+                        : unit == ascii_lower(letters.second) ? 's'
+                                                              : '\0';
+    if (stored != '\0') {
+      out.append(body.size(), stored);
+      return true;
+    }
+    if (unit == 'h' || unit == 'm' || unit == 's') {
+      out.append(body);
+      return false;
+    }
+  }
   for (std::size_t k = 0; k < facts.color_names.size(); ++k) {
     const std::string_view name = facts.color_names[k];
     if (!name.empty() && strings::case_insensitive_starts_with(body, name)) {
@@ -90,7 +159,7 @@ LocalizedFormat localize_format(std::string_view fmt, FormatDialect dialect, Exc
   const char decimal = facts.decimal_separator;
   const char group = facts.group_separator;
   const bool map_separators = decimal != '.' || group != ',';
-  const bool english_general = facts.general_alias.empty();  // locale_tokens.text_general_english
+  const bool aliased = !facts.format_letter_aliases[0].spelling.empty();
   std::string& out = result.text;
   out.reserve(s.size() + 8U);
 
@@ -130,12 +199,34 @@ LocalizedFormat localize_format(std::string_view fmt, FormatDialect dialect, Exc
       continue;
     }
     if (keyword_at(s, i, kGeneralKeyword)) {
-      if (!english_general) {
+      if (!facts.english_general) {
         result.valid = false;
       }
       out.append(s.substr(i, kGeneralKeyword.size()));
       i += kGeneralKeyword.size();
       continue;
+    }
+    if (aliased) {
+      // AM/PM and A/P keep their Latin letters; the other Latin date letters are text.
+      if (keyword_at(s, i, "AM/PM") || keyword_at(s, i, "A/P")) {
+        const std::size_t len = keyword_at(s, i, "AM/PM") ? 5U : 3U;
+        out.append(s.substr(i, len));
+        i += len;
+        continue;
+      }
+      std::size_t len = 0;
+      if (const char letter = alias_at(s, i, facts, &len); letter != '\0') {
+        out.push_back(letter);
+        i += len;
+        continue;
+      }
+      const char lc = ascii_lower(c);
+      if (lc == 'y' || lc == 'm' || lc == 'd' || lc == 'h' || lc == 's') {
+        out.push_back('\\');
+        out.push_back(c);
+        ++i;
+        continue;
+      }
     }
     if (map_separators) {
       if (c == decimal) {
@@ -150,6 +241,9 @@ LocalizedFormat localize_format(std::string_view fmt, FormatDialect dialect, Exc
         out.push_back(groups ? ',' : c);
         ++i;
         continue;
+      }
+      if (c == '.' && facts.format_rejects_dot) {
+        result.valid = false;
       }
       if (c == '.' || c == ',') {
         // The invariant separator the locale does not use is plain text.

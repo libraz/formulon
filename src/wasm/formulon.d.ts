@@ -522,7 +522,8 @@ export enum CalcMode {
 
 /**
  * Full formula-behaviour profile id: `mac` or `win` combined with one of
- * `ja_JP`, `en_US`, `de_DE`, `fr_FR`, `zh_CN`, `ko_KR`, `th_TH`
+ * `ja_JP`, `en_US`, `de_DE`, `fr_FR`, `zh_CN`, `ko_KR`, `th_TH`, `es_ES`,
+ * `es_MX`, `pt_BR`, `ru_RU`, `zh_TW`, `it_IT`, `nl_NL`
  * (for example `win-365-en_US`). New workbooks default to `win-365-en_US`.
  * The `mac-*` ids and `win-365-ja_JP` follow Excel measurements; every other
  * `win-*` id is estimated from the Mac measurements plus the Windows host
@@ -542,7 +543,21 @@ export type ExcelProfileId =
   | 'mac-365-ko_KR'
   | 'win-365-ko_KR'
   | 'mac-365-th_TH'
-  | 'win-365-th_TH';
+  | 'win-365-th_TH'
+  | 'mac-365-es_ES'
+  | 'win-365-es_ES'
+  | 'mac-365-es_MX'
+  | 'win-365-es_MX'
+  | 'mac-365-pt_BR'
+  | 'win-365-pt_BR'
+  | 'mac-365-ru_RU'
+  | 'win-365-ru_RU'
+  | 'mac-365-zh_TW'
+  | 'win-365-zh_TW'
+  | 'mac-365-it_IT'
+  | 'win-365-it_IT'
+  | 'mac-365-nl_NL'
+  | 'win-365-nl_NL';
 
 /**
  * A wall-clock reading in local civil fields, as read back from
@@ -1064,7 +1079,9 @@ export type LocaleDateOrder = 'mdy' | 'ymd' | 'dmy';
 
 /** Scalar locale facts of one {@link ExcelProfileId}. `measured` is `true`
  *  for the profiles captured from Excel (every `mac-*` id and
- *  `win-365-ja_JP`) and `false` for the estimated `win-*` ids.
+ *  `win-365-ja_JP`) and `false` for the estimated `win-*` ids. Every
+ *  scalar field is captured in each Mac locale, so `measured` covers them
+ *  all; only `errorNames` carries per-entry flags.
  *  `errorNames` is indexed by error-code ordinal. */
 export interface LocaleFacts {
   readonly decimalSeparator: string;

@@ -1,0 +1,3240 @@
+{
+  "suite": "math",
+  "description": "ABS / SIGN / INT / TRUNC / MOD / ROUND* / POWER / SQRT / EXP / LN / LOG / LOG10 / PI / VALUE",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "ru-RU",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T19:17:15Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "abs_positive",
+      "formula": "=ABS(5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "abs_negative",
+      "formula": "=ABS(-5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "abs_zero",
+      "formula": "=ABS(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "abs_fraction",
+      "formula": "=ABS(-3.14)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.14
+      }
+    },
+    {
+      "id": "sign_positive",
+      "formula": "=SIGN(42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "sign_negative",
+      "formula": "=SIGN(-42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "sign_zero",
+      "formula": "=SIGN(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sign_of_bool_true",
+      "formula": "=SIGN(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "int_positive_fraction",
+      "formula": "=INT(3.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "int_negative_fraction",
+      "formula": "=INT(-3.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "int_already_integer",
+      "formula": "=INT(5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "int_negative_already_integer",
+      "formula": "=INT(-5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "trunc_positive_fraction",
+      "formula": "=TRUNC(3.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trunc_negative_fraction",
+      "formula": "=TRUNC(-3.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "trunc_with_digits",
+      "formula": "=TRUNC(3.14159,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.14
+      }
+    },
+    {
+      "id": "trunc_negative_digits",
+      "formula": "=TRUNC(1234,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1200.0
+      }
+    },
+    {
+      "id": "trunc_default_digits_zero",
+      "formula": "=TRUNC(5.99)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "mod_positive",
+      "formula": "=MOD(10,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mod_exact_division",
+      "formula": "=MOD(10,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mod_negative_dividend",
+      "formula": "=MOD(-10,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "mod_zero_divisor_is_div0",
+      "formula": "=MOD(5,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "mod_negative_divisor",
+      "formula": "=MOD(10,-3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "round_half_up",
+      "formula": "=ROUND(2.5,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "round_neg_half",
+      "formula": "=ROUND(-2.5,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "round_to_two_digits",
+      "formula": "=ROUND(3.14159,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.14
+      }
+    },
+    {
+      "id": "round_to_neg_digits",
+      "formula": "=ROUND(1234.5,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1200.0
+      }
+    },
+    {
+      "id": "round_zero_digits_default",
+      "formula": "=ROUND(2.49,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "roundup_positive",
+      "formula": "=ROUNDUP(3.14,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.2
+      }
+    },
+    {
+      "id": "roundup_negative",
+      "formula": "=ROUNDUP(-3.14,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.2
+      }
+    },
+    {
+      "id": "roundup_zero_digits",
+      "formula": "=ROUNDUP(2.1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "roundup_negative_digits",
+      "formula": "=ROUNDUP(123,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 130.0
+      }
+    },
+    {
+      "id": "roundup_zero_input",
+      "formula": "=ROUNDUP(0,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "rounddown_positive",
+      "formula": "=ROUNDDOWN(3.19,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.1
+      }
+    },
+    {
+      "id": "rounddown_negative",
+      "formula": "=ROUNDDOWN(-3.19,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.1
+      }
+    },
+    {
+      "id": "rounddown_zero_digits",
+      "formula": "=ROUNDDOWN(2.9,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "rounddown_negative_digits",
+      "formula": "=ROUNDDOWN(178,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 170.0
+      }
+    },
+    {
+      "id": "rounddown_zero_input",
+      "formula": "=ROUNDDOWN(0,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "power_square",
+      "formula": "=POWER(5,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "power_fraction",
+      "formula": "=POWER(2,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.4142135623730951
+      }
+    },
+    {
+      "id": "power_negative_base_int_exp",
+      "formula": "=POWER(-2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "power_zero_to_zero",
+      "formula": "=POWER(0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "power_negative_base_fractional_exp_is_num",
+      "formula": "=POWER(-4,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "sqrt_of_nine",
+      "formula": "=SQRT(9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "sqrt_of_zero",
+      "formula": "=SQRT(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sqrt_of_negative_is_num",
+      "formula": "=SQRT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "sqrt_fractional_input",
+      "formula": "=SQRT(2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.4142135623730951
+      }
+    },
+    {
+      "id": "exp_of_zero",
+      "formula": "=EXP(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "exp_of_one",
+      "formula": "=EXP(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.718281828459045
+      }
+    },
+    {
+      "id": "exp_of_negative_one",
+      "formula": "=EXP(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.36787944117144233
+      }
+    },
+    {
+      "id": "exp_of_two",
+      "formula": "=EXP(2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.38905609893065
+      }
+    },
+    {
+      "id": "ln_of_one",
+      "formula": "=LN(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "ln_of_e",
+      "formula": "=LN(EXP(1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "ln_of_zero_is_num",
+      "formula": "=LN(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ln_of_negative_is_num",
+      "formula": "=LN(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ln_fractional_input",
+      "formula": "=LN(0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.6931471805599453
+      }
+    },
+    {
+      "id": "log_default_base_10",
+      "formula": "=LOG(1000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "log_explicit_base_2",
+      "formula": "=LOG(8,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "log_of_one_is_zero",
+      "formula": "=LOG(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "log_of_zero_is_num",
+      "formula": "=LOG(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "log_base_one_is_div0",
+      "formula": "=LOG(10,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "log10_of_100",
+      "formula": "=LOG10(100)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "log10_of_one",
+      "formula": "=LOG10(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "log10_of_zero_is_num",
+      "formula": "=LOG10(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "log10_of_negative_is_num",
+      "formula": "=LOG10(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "log10_fractional_input",
+      "formula": "=LOG10(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "exp_of_empty_string",
+      "formula": "=EXP(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sign_of_empty_string",
+      "formula": "=SIGN(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "abs_of_empty_string",
+      "formula": "=ABS(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "int_of_empty_string",
+      "formula": "=INT(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sqrt_of_empty_string",
+      "formula": "=SQRT(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pi_value",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "pi_times_two",
+      "formula": "=PI()*2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.283185307179586
+      }
+    },
+    {
+      "id": "pi_divided_by_two",
+      "formula": "=PI()/2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "pi_squared",
+      "formula": "=PI()^2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.869604401089358
+      }
+    },
+    {
+      "id": "pi_in_round",
+      "formula": "=ROUND(PI(),5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.14159
+      }
+    },
+    {
+      "id": "pi_arithmetic_subtract",
+      "formula": "=PI()-3",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.14159265358979312
+      }
+    },
+    {
+      "id": "value_of_numeric_string",
+      "formula": "=VALUE(\"42\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "value_of_float_string",
+      "formula": "=VALUE(\"3.14\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 41699.0
+      }
+    },
+    {
+      "id": "value_of_non_numeric_text",
+      "formula": "=VALUE(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_of_percent_string",
+      "formula": "=VALUE(\"50%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "value_of_negative_string",
+      "formula": "=VALUE(\"-3.14\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ceiling_pos",
+      "formula": "=CEILING(4.3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "ceiling_neg_same_sign",
+      "formula": "=CEILING(-4.3,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "ceiling_sign_mismatch_rounds_toward_plus_inf",
+      "formula": "=CEILING(-4.3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "ceiling_sig_zero",
+      "formula": "=CEILING(4.3,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "ceiling_sig_two",
+      "formula": "=CEILING(4.3,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "floor_pos",
+      "formula": "=FLOOR(4.7,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "floor_neg_same_sign",
+      "formula": "=FLOOR(-4.3,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "floor_sign_mismatch_rounds_toward_minus_inf",
+      "formula": "=FLOOR(-4.3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "floor_sig_zero_is_div0",
+      "formula": "=FLOOR(4.3,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "floor_sig_two",
+      "formula": "=FLOOR(4.7,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "mround_basic",
+      "formula": "=MROUND(10,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "mround_tie_away_from_zero",
+      "formula": "=MROUND(7.5,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "mround_decimal_midpoint_6_05",
+      "formula": "=MROUND(6.05,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "mround_decimal_midpoint_7_05",
+      "formula": "=MROUND(7.05,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.1000000000000005
+      }
+    },
+    {
+      "id": "mround_decimal_midpoint_1_005",
+      "formula": "=MROUND(1.005,0.01)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_decimal_midpoint_0_145",
+      "formula": "=MROUND(0.145,0.01)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.15
+      }
+    },
+    {
+      "id": "mround_decimal_midpoint_neg_6_05",
+      "formula": "=MROUND(-6.05,-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -6.0
+      }
+    },
+    {
+      "id": "mround_decimal_midpoint_neg_7_05",
+      "formula": "=MROUND(-7.05,-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -7.1000000000000005
+      }
+    },
+    {
+      "id": "mround_decimal_midpoint_neg_1_005",
+      "formula": "=MROUND(-1.005,-0.01)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "mround_decimal_midpoint_neg_0_145",
+      "formula": "=MROUND(-0.145,-0.01)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.15
+      }
+    },
+    {
+      "id": "mround_near_half_below",
+      "formula": "=MROUND(0.49999999999999,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_near_half_above",
+      "formula": "=MROUND(0.50000000000001,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_decimal_exact_multiple",
+      "formula": "=MROUND(7.1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.1000000000000005
+      }
+    },
+    {
+      "id": "mround_midpoint_offset_b0_d_2neg48",
+      "formula": "=MROUND(0+0.5-2^-48,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_offset_b0_d_3x2neg49",
+      "formula": "=MROUND(0+0.5-3*2^-49,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_offset_b0_d_2neg47",
+      "formula": "=MROUND(0+0.5-2^-47,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_offset_b14_d_2neg48",
+      "formula": "=MROUND(14+0.5-2^-48,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "mround_midpoint_offset_b14_d_3x2neg49",
+      "formula": "=MROUND(14+0.5-3*2^-49,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    },
+    {
+      "id": "mround_midpoint_offset_b14_d_2neg47",
+      "formula": "=MROUND(14+0.5-2^-47,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    },
+    {
+      "id": "mround_midpoint_offset_b60_d_2neg48",
+      "formula": "=MROUND(60+0.5-2^-48,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      }
+    },
+    {
+      "id": "mround_midpoint_offset_b60_d_3x2neg49",
+      "formula": "=MROUND(60+0.5-3*2^-49,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "mround_midpoint_offset_b60_d_2neg47",
+      "formula": "=MROUND(60+0.5-2^-47,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "mround_midpoint_offset_b100_d_2neg48",
+      "formula": "=MROUND(100+0.5-2^-48,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "mround_midpoint_offset_b100_d_3x2neg49",
+      "formula": "=MROUND(100+0.5-3*2^-49,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "mround_midpoint_offset_b100_d_2neg47",
+      "formula": "=MROUND(100+0.5-2^-47,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "mround_midpoint_threshold_b0_d_2neg49",
+      "formula": "=MROUND(0+0.5-2^-49,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_threshold_b0_d_2neg46",
+      "formula": "=MROUND(0+0.5-2^-46,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_threshold_b14_d_2neg49",
+      "formula": "=MROUND(14+0.5-2^-49,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "mround_midpoint_threshold_b14_d_2neg46",
+      "formula": "=MROUND(14+0.5-2^-46,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    },
+    {
+      "id": "mround_midpoint_threshold_b60_d_2neg49",
+      "formula": "=MROUND(60+0.5-2^-49,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      }
+    },
+    {
+      "id": "mround_midpoint_threshold_b60_d_2neg46",
+      "formula": "=MROUND(60+0.5-2^-46,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "mround_midpoint_threshold_b100_d_2neg49",
+      "formula": "=MROUND(100+0.5-2^-49,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "mround_midpoint_threshold_b100_d_2neg46",
+      "formula": "=MROUND(100+0.5-2^-46,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "mround_midpoint_exact_b0",
+      "formula": "=MROUND(0+0.5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_exact_b14",
+      "formula": "=MROUND(14+0.5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "mround_midpoint_exact_b60",
+      "formula": "=MROUND(60+0.5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      }
+    },
+    {
+      "id": "mround_midpoint_exact_b100",
+      "formula": "=MROUND(100+0.5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "mround_midpoint_above_b14_d_2neg48",
+      "formula": "=MROUND(14+0.5+2^-48,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "mround_midpoint_above_b60_d_2neg48",
+      "formula": "=MROUND(60+0.5+2^-48,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      }
+    },
+    {
+      "id": "mround_midpoint_above_b100_d_2neg48",
+      "formula": "=MROUND(100+0.5+2^-48,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k063",
+      "formula": "=MROUND(0.5-63*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k064",
+      "formula": "=MROUND(0.5-64*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k065",
+      "formula": "=MROUND(0.5-65*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k066",
+      "formula": "=MROUND(0.5-66*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k067",
+      "formula": "=MROUND(0.5-67*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k068",
+      "formula": "=MROUND(0.5-68*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k069",
+      "formula": "=MROUND(0.5-69*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k070",
+      "formula": "=MROUND(0.5-70*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k071",
+      "formula": "=MROUND(0.5-71*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k072",
+      "formula": "=MROUND(0.5-72*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k073",
+      "formula": "=MROUND(0.5-73*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k074",
+      "formula": "=MROUND(0.5-74*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k075",
+      "formula": "=MROUND(0.5-75*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k076",
+      "formula": "=MROUND(0.5-76*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k077",
+      "formula": "=MROUND(0.5-77*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k078",
+      "formula": "=MROUND(0.5-78*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k079",
+      "formula": "=MROUND(0.5-79*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k080",
+      "formula": "=MROUND(0.5-80*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k081",
+      "formula": "=MROUND(0.5-81*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k082",
+      "formula": "=MROUND(0.5-82*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k083",
+      "formula": "=MROUND(0.5-83*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k084",
+      "formula": "=MROUND(0.5-84*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k085",
+      "formula": "=MROUND(0.5-85*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k086",
+      "formula": "=MROUND(0.5-86*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k087",
+      "formula": "=MROUND(0.5-87*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k088",
+      "formula": "=MROUND(0.5-88*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k089",
+      "formula": "=MROUND(0.5-89*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k090",
+      "formula": "=MROUND(0.5-90*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k091",
+      "formula": "=MROUND(0.5-91*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k092",
+      "formula": "=MROUND(0.5-92*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k093",
+      "formula": "=MROUND(0.5-93*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k094",
+      "formula": "=MROUND(0.5-94*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k095",
+      "formula": "=MROUND(0.5-95*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k096",
+      "formula": "=MROUND(0.5-96*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_ulp_sweep_k097",
+      "formula": "=MROUND(0.5-97*2^-54,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b0_m0p1_k090",
+      "formula": "=ABS((0+0.5-90*2^-54)*0.1)/ABS(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b0_m0p1_pos_k090",
+      "formula": "=MROUND((0+0.5-90*2^-54)*0.1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.1
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b0_m0p1_neg_k090",
+      "formula": "=MROUND(-((0+0.5-90*2^-54)*0.1),-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.1
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b0_m0p1_k091",
+      "formula": "=ABS((0+0.5-91*2^-54)*0.1)/ABS(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.49999999999999495
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b0_m0p1_pos_k091",
+      "formula": "=MROUND((0+0.5-91*2^-54)*0.1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b0_m0p1_neg_k091",
+      "formula": "=MROUND(-((0+0.5-91*2^-54)*0.1),-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b0_m1_k090",
+      "formula": "=ABS((0+0.5-90*2^-54)*1)/ABS(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b0_m1_pos_k090",
+      "formula": "=MROUND((0+0.5-90*2^-54)*1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b0_m1_neg_k090",
+      "formula": "=MROUND(-((0+0.5-90*2^-54)*1),-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b0_m1_k091",
+      "formula": "=ABS((0+0.5-91*2^-54)*1)/ABS(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.49999999999999495
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b0_m1_pos_k091",
+      "formula": "=MROUND((0+0.5-91*2^-54)*1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b0_m1_neg_k091",
+      "formula": "=MROUND(-((0+0.5-91*2^-54)*1),-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b0_m10_k090",
+      "formula": "=ABS((0+0.5-90*2^-54)*10)/ABS(10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b0_m10_pos_k090",
+      "formula": "=MROUND((0+0.5-90*2^-54)*10,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b0_m10_neg_k090",
+      "formula": "=MROUND(-((0+0.5-90*2^-54)*10),-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b0_m10_k091",
+      "formula": "=ABS((0+0.5-91*2^-54)*10)/ABS(10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.49999999999999495
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b0_m10_pos_k091",
+      "formula": "=MROUND((0+0.5-91*2^-54)*10,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b0_m10_neg_k091",
+      "formula": "=MROUND(-((0+0.5-91*2^-54)*10),-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b14_m0p1_k090",
+      "formula": "=ABS((14+0.5-90*2^-54)*0.1)/ABS(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b14_m0p1_pos_k090",
+      "formula": "=MROUND((14+0.5-90*2^-54)*0.1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.4000000000000001
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b14_m0p1_neg_k090",
+      "formula": "=MROUND(-((14+0.5-90*2^-54)*0.1),-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.4000000000000001
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b14_m0p1_k091",
+      "formula": "=ABS((14+0.5-91*2^-54)*0.1)/ABS(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b14_m0p1_pos_k091",
+      "formula": "=MROUND((14+0.5-91*2^-54)*0.1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.4000000000000001
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b14_m0p1_neg_k091",
+      "formula": "=MROUND(-((14+0.5-91*2^-54)*0.1),-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.4000000000000001
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b14_m1_k090",
+      "formula": "=ABS((14+0.5-90*2^-54)*1)/ABS(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b14_m1_pos_k090",
+      "formula": "=MROUND((14+0.5-90*2^-54)*1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b14_m1_neg_k090",
+      "formula": "=MROUND(-((14+0.5-90*2^-54)*1),-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -14.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b14_m1_k091",
+      "formula": "=ABS((14+0.5-91*2^-54)*1)/ABS(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b14_m1_pos_k091",
+      "formula": "=MROUND((14+0.5-91*2^-54)*1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b14_m1_neg_k091",
+      "formula": "=MROUND(-((14+0.5-91*2^-54)*1),-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -14.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b14_m10_k090",
+      "formula": "=ABS((14+0.5-90*2^-54)*10)/ABS(10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b14_m10_pos_k090",
+      "formula": "=MROUND((14+0.5-90*2^-54)*10,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 140.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b14_m10_neg_k090",
+      "formula": "=MROUND(-((14+0.5-90*2^-54)*10),-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -140.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b14_m10_k091",
+      "formula": "=ABS((14+0.5-91*2^-54)*10)/ABS(10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b14_m10_pos_k091",
+      "formula": "=MROUND((14+0.5-91*2^-54)*10,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 140.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b14_m10_neg_k091",
+      "formula": "=MROUND(-((14+0.5-91*2^-54)*10),-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -140.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b60_m0p1_k090",
+      "formula": "=ABS((60+0.5-90*2^-54)*0.1)/ABS(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.49999999999999
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b60_m0p1_pos_k090",
+      "formula": "=MROUND((60+0.5-90*2^-54)*0.1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b60_m0p1_neg_k090",
+      "formula": "=MROUND(-((60+0.5-90*2^-54)*0.1),-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -6.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b60_m0p1_k091",
+      "formula": "=ABS((60+0.5-91*2^-54)*0.1)/ABS(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.49999999999999
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b60_m0p1_pos_k091",
+      "formula": "=MROUND((60+0.5-91*2^-54)*0.1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b60_m0p1_neg_k091",
+      "formula": "=MROUND(-((60+0.5-91*2^-54)*0.1),-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -6.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b60_m1_k090",
+      "formula": "=ABS((60+0.5-90*2^-54)*1)/ABS(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.49999999999999
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b60_m1_pos_k090",
+      "formula": "=MROUND((60+0.5-90*2^-54)*1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b60_m1_neg_k090",
+      "formula": "=MROUND(-((60+0.5-90*2^-54)*1),-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -60.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b60_m1_k091",
+      "formula": "=ABS((60+0.5-91*2^-54)*1)/ABS(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.49999999999999
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b60_m1_pos_k091",
+      "formula": "=MROUND((60+0.5-91*2^-54)*1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b60_m1_neg_k091",
+      "formula": "=MROUND(-((60+0.5-91*2^-54)*1),-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -60.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b60_m10_k090",
+      "formula": "=ABS((60+0.5-90*2^-54)*10)/ABS(10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.499999999999986
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b60_m10_pos_k090",
+      "formula": "=MROUND((60+0.5-90*2^-54)*10,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 600.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b60_m10_neg_k090",
+      "formula": "=MROUND(-((60+0.5-90*2^-54)*10),-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -600.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b60_m10_k091",
+      "formula": "=ABS((60+0.5-91*2^-54)*10)/ABS(10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.499999999999986
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b60_m10_pos_k091",
+      "formula": "=MROUND((60+0.5-91*2^-54)*10,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 600.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b60_m10_neg_k091",
+      "formula": "=MROUND(-((60+0.5-91*2^-54)*10),-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -600.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b100_m0p1_k090",
+      "formula": "=ABS((100+0.5-90*2^-54)*0.1)/ABS(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.5
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b100_m0p1_pos_k090",
+      "formula": "=MROUND((100+0.5-90*2^-54)*0.1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.100000000000001
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b100_m0p1_neg_k090",
+      "formula": "=MROUND(-((100+0.5-90*2^-54)*0.1),-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -10.100000000000001
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b100_m0p1_k091",
+      "formula": "=ABS((100+0.5-91*2^-54)*0.1)/ABS(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.5
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b100_m0p1_pos_k091",
+      "formula": "=MROUND((100+0.5-91*2^-54)*0.1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.100000000000001
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b100_m0p1_neg_k091",
+      "formula": "=MROUND(-((100+0.5-91*2^-54)*0.1),-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -10.100000000000001
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b100_m1_k090",
+      "formula": "=ABS((100+0.5-90*2^-54)*1)/ABS(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.5
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b100_m1_pos_k090",
+      "formula": "=MROUND((100+0.5-90*2^-54)*1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b100_m1_neg_k090",
+      "formula": "=MROUND(-((100+0.5-90*2^-54)*1),-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -101.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b100_m1_k091",
+      "formula": "=ABS((100+0.5-91*2^-54)*1)/ABS(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.5
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b100_m1_pos_k091",
+      "formula": "=MROUND((100+0.5-91*2^-54)*1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b100_m1_neg_k091",
+      "formula": "=MROUND(-((100+0.5-91*2^-54)*1),-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -101.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b100_m10_k090",
+      "formula": "=ABS((100+0.5-90*2^-54)*10)/ABS(10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.5
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b100_m10_pos_k090",
+      "formula": "=MROUND((100+0.5-90*2^-54)*10,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1010.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b100_m10_neg_k090",
+      "formula": "=MROUND(-((100+0.5-90*2^-54)*10),-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1010.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b100_m10_k091",
+      "formula": "=ABS((100+0.5-91*2^-54)*10)/ABS(10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.5
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b100_m10_pos_k091",
+      "formula": "=MROUND((100+0.5-91*2^-54)*10,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1010.0
+      }
+    },
+    {
+      "id": "mround_midpoint_scale_b100_m10_neg_k091",
+      "formula": "=MROUND(-((100+0.5-91*2^-54)*10),-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1010.0
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b0_m0p1_neg_k090",
+      "formula": "=ABS(-((0+0.5-90*2^-54)*0.1))/ABS(-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b0_m0p1_neg_k091",
+      "formula": "=ABS(-((0+0.5-91*2^-54)*0.1))/ABS(-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.49999999999999495
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b0_m1_neg_k090",
+      "formula": "=ABS(-((0+0.5-90*2^-54)*1))/ABS(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b0_m1_neg_k091",
+      "formula": "=ABS(-((0+0.5-91*2^-54)*1))/ABS(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.49999999999999495
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b0_m10_neg_k090",
+      "formula": "=ABS(-((0+0.5-90*2^-54)*10))/ABS(-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b0_m10_neg_k091",
+      "formula": "=ABS(-((0+0.5-91*2^-54)*10))/ABS(-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.49999999999999495
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b14_m0p1_neg_k090",
+      "formula": "=ABS(-((14+0.5-90*2^-54)*0.1))/ABS(-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b14_m0p1_neg_k091",
+      "formula": "=ABS(-((14+0.5-91*2^-54)*0.1))/ABS(-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b14_m1_neg_k090",
+      "formula": "=ABS(-((14+0.5-90*2^-54)*1))/ABS(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b14_m1_neg_k091",
+      "formula": "=ABS(-((14+0.5-91*2^-54)*1))/ABS(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b14_m10_neg_k090",
+      "formula": "=ABS(-((14+0.5-90*2^-54)*10))/ABS(-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b14_m10_neg_k091",
+      "formula": "=ABS(-((14+0.5-91*2^-54)*10))/ABS(-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.499999999999995
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b60_m0p1_neg_k090",
+      "formula": "=ABS(-((60+0.5-90*2^-54)*0.1))/ABS(-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.49999999999999
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b60_m0p1_neg_k091",
+      "formula": "=ABS(-((60+0.5-91*2^-54)*0.1))/ABS(-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.49999999999999
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b60_m1_neg_k090",
+      "formula": "=ABS(-((60+0.5-90*2^-54)*1))/ABS(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.49999999999999
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b60_m1_neg_k091",
+      "formula": "=ABS(-((60+0.5-91*2^-54)*1))/ABS(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.49999999999999
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b60_m10_neg_k090",
+      "formula": "=ABS(-((60+0.5-90*2^-54)*10))/ABS(-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.499999999999986
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b60_m10_neg_k091",
+      "formula": "=ABS(-((60+0.5-91*2^-54)*10))/ABS(-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.499999999999986
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b100_m0p1_neg_k090",
+      "formula": "=ABS(-((100+0.5-90*2^-54)*0.1))/ABS(-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.5
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b100_m0p1_neg_k091",
+      "formula": "=ABS(-((100+0.5-91*2^-54)*0.1))/ABS(-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.5
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b100_m1_neg_k090",
+      "formula": "=ABS(-((100+0.5-90*2^-54)*1))/ABS(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.5
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b100_m1_neg_k091",
+      "formula": "=ABS(-((100+0.5-91*2^-54)*1))/ABS(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.5
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b100_m10_neg_k090",
+      "formula": "=ABS(-((100+0.5-90*2^-54)*10))/ABS(-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.5
+      }
+    },
+    {
+      "id": "mround_midpoint_quotient_b100_m10_neg_k091",
+      "formula": "=ABS(-((100+0.5-91*2^-54)*10))/ABS(-10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.5
+      }
+    },
+    {
+      "id": "mround_quotient_boundary_b0_m01",
+      "formula": "=MROUND((0+0.5-2^-48)*0.1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.1
+      }
+    },
+    {
+      "id": "mround_quotient_boundary_b0_m10",
+      "formula": "=MROUND((0+0.5-2^-48)*10,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "mround_quotient_boundary_b14_m01",
+      "formula": "=MROUND((14+0.5-2^-48)*0.1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "mround_quotient_boundary_b14_m10",
+      "formula": "=MROUND((14+0.5-2^-48)*10,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 150.0
+      }
+    },
+    {
+      "id": "mround_quotient_boundary_b60_m01",
+      "formula": "=MROUND((60+0.5-2^-48)*0.1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.1000000000000005
+      }
+    },
+    {
+      "id": "mround_quotient_boundary_b60_m10",
+      "formula": "=MROUND((60+0.5-2^-48)*10,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 610.0
+      }
+    },
+    {
+      "id": "mround_quotient_boundary_b100_m01",
+      "formula": "=MROUND((100+0.5-2^-48)*0.1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.100000000000001
+      }
+    },
+    {
+      "id": "mround_quotient_boundary_b100_m10",
+      "formula": "=MROUND((100+0.5-2^-48)*10,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1010.0
+      }
+    },
+    {
+      "id": "mround_provenance_arithmetic_6_05",
+      "formula": "=MROUND(6+0.05,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "mround_provenance_value_6_05",
+      "formula": "=MROUND(VALUE(\"6.05\"),VALUE(\"0.1\"))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mround_provenance_cell_reference_6_05",
+      "formula": "=MROUND(A1,B1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 6.05
+        },
+        "B1": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "mround_negative",
+      "formula": "=MROUND(-10,-3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -9.0
+      }
+    },
+    {
+      "id": "mround_sign_mismatch_is_num",
+      "formula": "=MROUND(10,-3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "mround_sign_mismatch_negative_is_num",
+      "formula": "=MROUND(-10,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "mround_zero_zero",
+      "formula": "=MROUND(0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_multiple_zero",
+      "formula": "=MROUND(5,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_equals_round_6_05",
+      "formula": "=MROUND(6.05,10^-1)=ROUND(6.05,1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "mround_equals_round_7_05",
+      "formula": "=MROUND(7.05,10^-1)=ROUND(7.05,1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "mround_equals_round_1_005",
+      "formula": "=MROUND(1.005,10^-2)=ROUND(1.005,2)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "mround_equals_round_0_145",
+      "formula": "=MROUND(0.145,10^-2)=ROUND(0.145,2)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "mround_equals_round_neg_6_05",
+      "formula": "=MROUND(-6.05,-(10^-1))=ROUND(-6.05,1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "mround_equals_round_neg_7_05",
+      "formula": "=MROUND(-7.05,-(10^-1))=ROUND(-7.05,1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "mround_equals_round_neg_1_005",
+      "formula": "=MROUND(-1.005,-(10^-2))=ROUND(-1.005,2)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "mround_equals_round_neg_0_145",
+      "formula": "=MROUND(-0.145,-(10^-2))=ROUND(-0.145,2)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "mround_equals_round_near_half_below",
+      "formula": "=MROUND(0.49999999999999,10^-0)=ROUND(0.49999999999999,0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "mround_equals_round_near_half_above",
+      "formula": "=MROUND(0.50000000000001,10^-0)=ROUND(0.50000000000001,0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "mround_equals_round_7_1",
+      "formula": "=MROUND(7.1,10^-1)=ROUND(7.1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "ceiling_math_default_sig",
+      "formula": "=CEILING.MATH(4.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "ceiling_math_neg_default_mode",
+      "formula": "=CEILING.MATH(-4.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "ceiling_math_neg_mode_away",
+      "formula": "=CEILING.MATH(-4.3,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "ceiling_math_sig_neg_uses_abs",
+      "formula": "=CEILING.MATH(4.3,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "ceiling_math_positive_explicit_sig",
+      "formula": "=CEILING.MATH(4.3,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "floor_math_default_sig",
+      "formula": "=FLOOR.MATH(4.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "floor_math_neg_default_mode",
+      "formula": "=FLOOR.MATH(-4.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "floor_math_neg_mode_toward_zero",
+      "formula": "=FLOOR.MATH(-4.3,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "floor_math_positive_explicit_sig",
+      "formula": "=FLOOR.MATH(4.7,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "floor_math_sig_neg_uses_abs",
+      "formula": "=FLOOR.MATH(4.7,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "sumsq_basic",
+      "formula": "=SUMSQ(3, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "sumsq_range",
+      "formula": "=SUMSQ(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "sumsq_skips_text_in_range",
+      "formula": "=SUMSQ(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 34.0
+      }
+    },
+    {
+      "id": "sumsq_direct_text_is_value",
+      "formula": "=SUMSQ(3, \"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumsq_single_zero",
+      "formula": "=SUMSQ(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumx2py2_basic",
+      "formula": "=SUMX2PY2({1;2;3}, {4;5;6})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 91.0
+      }
+    },
+    {
+      "id": "sumx2my2_basic",
+      "formula": "=SUMX2MY2({1;2;3}, {4;5;6})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -63.0
+      }
+    },
+    {
+      "id": "sumxmy2_basic",
+      "formula": "=SUMXMY2({1;2;3}, {4;5;6})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 27.0
+      }
+    },
+    {
+      "id": "sumx2py2_shape_mismatch_is_na",
+      "formula": "=SUMX2PY2({1;2;3}, {4;5})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2py2_single_point",
+      "formula": "=SUMX2PY2({3}, {4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "sumx2py2_zero_arrays",
+      "formula": "=SUMX2PY2({0;0;0}, {0;0;0})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumx2py2_negatives",
+      "formula": "=SUMX2PY2({-1;-3}, {2;4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "sumx2my2_single_point",
+      "formula": "=SUMX2MY2({2}, {5})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -21.0
+      }
+    },
+    {
+      "id": "sumx2my2_shape_mismatch_is_na",
+      "formula": "=SUMX2MY2({1;2;3}, {4;5})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2my2_equal_arrays_zero",
+      "formula": "=SUMX2MY2({1;2;3}, {1;2;3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumx2my2_swap_negates",
+      "formula": "=SUMX2MY2({4;5;6}, {1;2;3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 63.0
+      }
+    },
+    {
+      "id": "sumxmy2_single_point",
+      "formula": "=SUMXMY2({5}, {3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "sumxmy2_shape_mismatch_is_na",
+      "formula": "=SUMXMY2({1;2}, {3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumxmy2_zero_arrays",
+      "formula": "=SUMXMY2({0;0}, {0;0})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumxmy2_negatives",
+      "formula": "=SUMXMY2({-1;-2}, {1;2})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "seriessum_binary_polynomial",
+      "formula": "=SERIESSUM(2, 0, 1, {1;1;1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "seriessum_step_two",
+      "formula": "=SERIESSUM(2, 2, 2, {1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "seriessum_x_equals_one",
+      "formula": "=SERIESSUM(1, 0, 1, {5;5;5})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "seriessum_negative_x",
+      "formula": "=SERIESSUM(-1, 0, 1, {1;1;1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "seriessum_offset_initial_power",
+      "formula": "=SERIESSUM(3, 2, 1, {1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 36.0
+      }
+    },
+    {
+      "id": "seriessum_scalar_coefficient",
+      "formula": "=SERIESSUM(2, 0, 1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "seriessum_scalar_coefficient_nonunit",
+      "formula": "=SERIESSUM(3, 2, 1, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45.0
+      }
+    },
+    {
+      "id": "seriessum_single_cell_range_coefficient",
+      "formula": "=SERIESSUM(3, 2, 1, A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45.0
+      }
+    },
+    {
+      "id": "seriessum_range_coefficients",
+      "formula": "=SERIESSUM(3, 2, 1, A1:A2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 36.0
+      }
+    },
+    {
+      "id": "seriessum_scalar_text_coefficient",
+      "formula": "=SERIESSUM(2, 0, 1, \"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pf_round_d",
+      "formula": "=ROUND(1.23456,1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.23
+      }
+    },
+    {
+      "id": "pf_int",
+      "formula": "=INT(1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "pf_trunc",
+      "formula": "=TRUNC(1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "atp_mround_bool",
+      "formula": "=MROUND(TRUE,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_mround_omit",
+      "formula": "=MROUND(,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_mround_boolcell",
+      "formula": "=MROUND(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_randbetween_bool",
+      "formula": "=RANDBETWEEN(TRUE,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_randbetween_omit",
+      "formula": "=RANDBETWEEN(,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_randbetween_boolcell",
+      "formula": "=RANDBETWEEN(A1,TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_seriessum_bool",
+      "formula": "=SERIESSUM(TRUE,1,1,{1})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_seriessum_omit",
+      "formula": "=SERIESSUM(,1,1,{1})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_seriessum_boolcell",
+      "formula": "=SERIESSUM(A1,1,1,{1})",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "snap_roundup",
+      "formula": "=ROUNDUP(1.23456,1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.3
+      }
+    },
+    {
+      "id": "snap_rounddown",
+      "formula": "=ROUNDDOWN(1.23456,1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.2
+      }
+    },
+    {
+      "id": "snap_trunc_d",
+      "formula": "=TRUNC(1.23456,1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.2
+      }
+    },
+    {
+      "id": "snap_ceiling_math",
+      "formula": "=CEILING.MATH(1.5,1,0.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "near_mod",
+      "formula": "=MOD(7.9999999,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.9999998999999997
+      }
+    },
+    {
+      "id": "da_sumsq_omit",
+      "formula": "=SUMSQ(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 110.0
+      }
+    },
+    {
+      "id": "da_sumsq_bool",
+      "formula": "=SUMSQ(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 501.0
+      }
+    },
+    {
+      "id": "da_sumsq_numtext",
+      "formula": "=SUMSQ(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 505.0
+      }
+    },
+    {
+      "id": "da_sumsq_badtext",
+      "formula": "=SUMSQ(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumsq_omit",
+      "formula": "=SUMSQ(3,,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 25.0
+      }
+    }
+  ]
+}

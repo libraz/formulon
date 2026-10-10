@@ -2,11 +2,11 @@
   "suite": "locale_tokens",
   "description": "Locale-dependent spellings Excel accepts or produces: date format tokens across every month and weekday, General and colour keywords, AM/PM designators, currency text parsing, error names in text output, and formula text separators. Each case is captured under every target, so a token another locale ignores still records what it does here.\n",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.113.4",
     "excel_locale": "de-DE",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T19:50:46Z"
+    "generated_at": "2026-10-10T06:27:55Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1477,6 +1477,420 @@
       "expect": {
         "kind": "text",
         "value": "=DBCS(\"a\")&USDOLLAR(1)"
+      }
+    },
+    {
+      "id": "months_cyr_mmmm",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"ММММ\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ММММ|ММММ|ММММ|ММММ|ММММ|ММММ|ММММ|ММММ|ММММ|ММММ|ММММ|ММММ"
+      }
+    },
+    {
+      "id": "months_cyr_mmm",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"МММ\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "МММ|МММ|МММ|МММ|МММ|МММ|МММ|МММ|МММ|МММ|МММ|МММ"
+      }
+    },
+    {
+      "id": "weekdays_cyr_dddd",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"ДДДД\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ДДДД|ДДДД|ДДДД|ДДДД|ДДДД|ДДДД|ДДДД"
+      }
+    },
+    {
+      "id": "weekdays_cyr_ddd",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"ДДД\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ДДД|ДДД|ДДД|ДДД|ДДД|ДДД|ДДД"
+      }
+    },
+    {
+      "id": "date_cyr_d_mm_yyyy",
+      "formula": "=TEXT(DATE(2024,3,5),\"Д/ММ/ГГГГ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "date_cyr_dd_m_yy",
+      "formula": "=TEXT(DATE(2024,3,5),\"ДД/М/ГГ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "date_cyr_lower",
+      "formula": "=TEXT(DATE(2024,3,5),\"д/мм/гггг\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_cyr_lower",
+      "formula": "=TEXT(TIME(13,4,5),\"ч:мм:сс\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ч:мм:сс"
+      }
+    },
+    {
+      "id": "time_cyr_upper",
+      "formula": "=TEXT(TIME(13,4,5),\"Ч:ММ:СС\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Ч:ММ:СС"
+      }
+    },
+    {
+      "id": "elapsed_cyr_hours",
+      "formula": "=TEXT(1.5,\"[ч]\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_u_hours",
+      "formula": "=TEXT(TIME(13,4,5),\"u:mm:ss\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "u:04:05"
+      }
+    },
+    {
+      "id": "elapsed_u_hours",
+      "formula": "=TEXT(1.5,\"[u]\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "weekdays_gggg",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"gggg\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "||||||"
+      }
+    },
+    {
+      "id": "weekdays_ggg",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),\"ggg\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "||||||"
+      }
+    },
+    {
+      "id": "text_general_osnovnoy",
+      "formula": "=TEXT(-1234.5,\"Основной\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-Основной"
+      }
+    },
+    {
+      "id": "text_general_standaard",
+      "formula": "=TEXT(-1234.5,\"Standaard\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_general_estandar",
+      "formula": "=TEXT(-1234.5,\"Estándar\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_general_geral",
+      "formula": "=TEXT(-1234.5,\"Geral\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_rojo",
+      "formula": "=TEXT(-5,\"0;[Rojo]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_vermelho",
+      "formula": "=TEXT(-5,\"0;[Vermelho]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_krasny",
+      "formula": "=TEXT(-5,\"0;[Красный]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_rosso",
+      "formula": "=TEXT(-5,\"0;[Rosso]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_rood",
+      "formula": "=TEXT(-5,\"0;[Rood]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_hongse_traditional",
+      "formula": "=TEXT(-5,\"0;[紅色]0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_letter_a_negative",
+      "formula": "=TEXT(-1234.5,\"a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-a"
+      }
+    },
+    {
+      "id": "text_letter_t_negative",
+      "formula": "=TEXT(-1234.5,\"t\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_letter_n_negative",
+      "formula": "=TEXT(-1234.5,\"n\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_letter_r_negative",
+      "formula": "=TEXT(-1234.5,\"r\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-r"
+      }
+    },
+    {
+      "id": "text_letter_aa_positive",
+      "formula": "=TEXT(5,\"aa\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aa"
+      }
+    },
+    {
+      "id": "text_letter_n_time",
+      "formula": "=TEXT(TIME(13,4,5),\"n\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_letter_nn_after_hour",
+      "formula": "=TEXT(TIME(13,4,5),\"h:nn\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_letter_n_date",
+      "formula": "=TEXT(DATE(2024,3,5),\"n\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_letter_r_date",
+      "formula": "=TEXT(DATE(2024,3,5),\"r\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "r"
+      }
+    },
+    {
+      "id": "text_letter_rr_date",
+      "formula": "=TEXT(DATE(2024,3,5),\"rr\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "rr"
+      }
+    },
+    {
+      "id": "text_letter_t_positive",
+      "formula": "=TEXT(1234.5,\"t\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "18"
+      }
+    },
+    {
+      "id": "text_letter_t_digits",
+      "formula": "=TEXT(1234.5,\"t0.0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_slash_letters",
+      "formula": "=TEXT(5,\"x/x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_slash_alone",
+      "formula": "=TEXT(5,\"/\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_slash_after_digit",
+      "formula": "=TEXT(5,\"0/\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "date_latin_upper_dashes",
+      "formula": "=TEXT(DATE(2024,3,5),\"D-M-YYYY\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "D-3-YYYY"
+      }
+    },
+    {
+      "id": "elapsed_cyr_minutes",
+      "formula": "=TEXT(1.5,\"[мм]\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "elapsed_cyr_seconds_upper",
+      "formula": "=TEXT(1/24,\"[СС]\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_u_upper_hours",
+      "formula": "=TEXT(TIME(13,4,5),\"UU:mm\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "UU:04"
+      }
+    },
+    {
+      "id": "text_letter_x_positive",
+      "formula": "=TEXT(5,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "text_letter_x_negative",
+      "formula": "=TEXT(-5,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-x"
+      }
+    },
+    {
+      "id": "text_letter_x_digits",
+      "formula": "=TEXT(1234.5,\"x0.0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x1.235"
       }
     }
   ]

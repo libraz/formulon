@@ -23,7 +23,7 @@ tracks:
     primary: mac-365-ja_JP
     # Mac targets evaluated by their own CTest oracle against the profile id
     # of the same name. The primary's own gate is formulon_oracle_tests.
-    gates: [mac-365-en_US, mac-365-de_DE, mac-365-fr_FR, mac-365-zh_CN, mac-365-ko_KR, mac-365-th_TH]
+    gates: [mac-365-en_US, mac-365-de_DE, mac-365-fr_FR, mac-365-zh_CN, mac-365-ko_KR, mac-365-th_TH, mac-365-ru_RU, mac-365-zh_TW, mac-365-it_IT, mac-365-nl_NL, mac-365-es_ES, mac-365-es_MX, mac-365-pt_BR]
   workbook:
     # The workbook track (pivot tables + print areas) uses win-365-ja_JP
     # as its primary: reliable PivotTable COM automation is only
@@ -169,6 +169,69 @@ targets:
     environment_md: tests/oracle/targets/mac-365-th_TH/ENVIRONMENT.md
     divergence: tests/oracle/targets/mac-365-th_TH/divergence.yaml
 
+  mac-365-es_ES:
+    status: scaffolded
+    driver: macos_excel
+    runs_on: [Darwin]
+    locale: es-ES
+    output_dir: tests/oracle/targets/mac-365-es_ES/golden
+    environment_md: tests/oracle/targets/mac-365-es_ES/ENVIRONMENT.md
+    divergence: tests/oracle/targets/mac-365-es_ES/divergence.yaml
+
+  mac-365-es_MX:
+    status: scaffolded
+    driver: macos_excel
+    runs_on: [Darwin]
+    locale: es-MX
+    output_dir: tests/oracle/targets/mac-365-es_MX/golden
+    environment_md: tests/oracle/targets/mac-365-es_MX/ENVIRONMENT.md
+    divergence: tests/oracle/targets/mac-365-es_MX/divergence.yaml
+
+  mac-365-pt_BR:
+    status: scaffolded
+    driver: macos_excel
+    runs_on: [Darwin]
+    locale: pt-BR
+    output_dir: tests/oracle/targets/mac-365-pt_BR/golden
+    environment_md: tests/oracle/targets/mac-365-pt_BR/ENVIRONMENT.md
+    divergence: tests/oracle/targets/mac-365-pt_BR/divergence.yaml
+
+  mac-365-ru_RU:
+    status: scaffolded
+    driver: macos_excel
+    runs_on: [Darwin]
+    locale: ru-RU
+    output_dir: tests/oracle/targets/mac-365-ru_RU/golden
+    environment_md: tests/oracle/targets/mac-365-ru_RU/ENVIRONMENT.md
+    divergence: tests/oracle/targets/mac-365-ru_RU/divergence.yaml
+
+  mac-365-zh_TW:
+    status: scaffolded
+    driver: macos_excel
+    runs_on: [Darwin]
+    locale: zh-TW
+    output_dir: tests/oracle/targets/mac-365-zh_TW/golden
+    environment_md: tests/oracle/targets/mac-365-zh_TW/ENVIRONMENT.md
+    divergence: tests/oracle/targets/mac-365-zh_TW/divergence.yaml
+
+  mac-365-it_IT:
+    status: scaffolded
+    driver: macos_excel
+    runs_on: [Darwin]
+    locale: it-IT
+    output_dir: tests/oracle/targets/mac-365-it_IT/golden
+    environment_md: tests/oracle/targets/mac-365-it_IT/ENVIRONMENT.md
+    divergence: tests/oracle/targets/mac-365-it_IT/divergence.yaml
+
+  mac-365-nl_NL:
+    status: scaffolded
+    driver: macos_excel
+    runs_on: [Darwin]
+    locale: nl-NL
+    output_dir: tests/oracle/targets/mac-365-nl_NL/golden
+    environment_md: tests/oracle/targets/mac-365-nl_NL/ENVIRONMENT.md
+    divergence: tests/oracle/targets/mac-365-nl_NL/divergence.yaml
+
   win-365-en_US:
     status: wanted
     driver: windows_excel
@@ -226,3 +289,66 @@ targets:
     output_dir: tests/oracle/targets/win-365-th_TH/golden
     environment_md: tests/oracle/targets/win-365-th_TH/ENVIRONMENT.md
     divergence: tests/oracle/targets/win-365-th_TH/divergence.yaml
+
+  win-365-es_ES:
+    status: wanted
+    driver: windows_excel
+    runs_on: [Windows, Linux]
+    locale: es-ES
+    output_dir: tests/oracle/targets/win-365-es_ES/golden
+    environment_md: tests/oracle/targets/win-365-es_ES/ENVIRONMENT.md
+    divergence: tests/oracle/targets/win-365-es_ES/divergence.yaml
+
+  win-365-es_MX:
+    status: wanted
+    driver: windows_excel
+    runs_on: [Windows, Linux]
+    locale: es-MX
+    output_dir: tests/oracle/targets/win-365-es_MX/golden
+    environment_md: tests/oracle/targets/win-365-es_MX/ENVIRONMENT.md
+    divergence: tests/oracle/targets/win-365-es_MX/divergence.yaml
+
+  win-365-pt_BR:
+    status: wanted
+    driver: windows_excel
+    runs_on: [Windows, Linux]
+    locale: pt-BR
+    output_dir: tests/oracle/targets/win-365-pt_BR/golden
+    environment_md: tests/oracle/targets/win-365-pt_BR/ENVIRONMENT.md
+    divergence: tests/oracle/targets/win-365-pt_BR/divergence.yaml
+
+  win-365-ru_RU:
+    status: wanted
+    driver: windows_excel
+    runs_on: [Windows, Linux]
+    locale: ru-RU
+    output_dir: tests/oracle/targets/win-365-ru_RU/golden
+    environment_md: tests/oracle/targets/win-365-ru_RU/ENVIRONMENT.md
+    divergence: tests/oracle/targets/win-365-ru_RU/divergence.yaml
+
+  win-365-zh_TW:
+    status: wanted
+    driver: windows_excel
+    runs_on: [Windows, Linux]
+    locale: zh-TW
+    output_dir: tests/oracle/targets/win-365-zh_TW/golden
+    environment_md: tests/oracle/targets/win-365-zh_TW/ENVIRONMENT.md
+    divergence: tests/oracle/targets/win-365-zh_TW/divergence.yaml
+
+  win-365-it_IT:
+    status: wanted
+    driver: windows_excel
+    runs_on: [Windows, Linux]
+    locale: it-IT
+    output_dir: tests/oracle/targets/win-365-it_IT/golden
+    environment_md: tests/oracle/targets/win-365-it_IT/ENVIRONMENT.md
+    divergence: tests/oracle/targets/win-365-it_IT/divergence.yaml
+
+  win-365-nl_NL:
+    status: wanted
+    driver: windows_excel
+    runs_on: [Windows, Linux]
+    locale: nl-NL
+    output_dir: tests/oracle/targets/win-365-nl_NL/golden
+    environment_md: tests/oracle/targets/win-365-nl_NL/ENVIRONMENT.md
+    divergence: tests/oracle/targets/win-365-nl_NL/divergence.yaml

@@ -1,0 +1,1621 @@
+{
+  "suite": "aggregate_reference_arguments",
+  "description": "AGGREGATE functions 1-13 accept references only; the array form's k and a fourth array argument evaluate per element",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "ru-RU",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T18:26:57Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "agg9_o4_1_2",
+      "formula": "=AGGREGATE(9,4,1,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "35"
+        },
+        "B2": {
+          "kind": "bool",
+          "value": true
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "B6": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B7": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "agg9_o4_B4_B5_B6",
+      "formula": "=AGGREGATE(9,4,B4,B5,B6)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "35"
+        },
+        "B2": {
+          "kind": "bool",
+          "value": true
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "B6": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B7": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "agg9_o4_A1A3x1",
+      "formula": "=AGGREGATE(9,4,A1:A3*1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "35"
+        },
+        "B2": {
+          "kind": "bool",
+          "value": true
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "B6": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B7": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "agg9_o4_A1A3p",
+      "formula": "=AGGREGATE(9,4,(A1:A3))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "35"
+        },
+        "B2": {
+          "kind": "bool",
+          "value": true
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "B6": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B7": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "agg9_o4_B4B6_1",
+      "formula": "=AGGREGATE(9,4,B4:B6,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "35"
+        },
+        "B2": {
+          "kind": "bool",
+          "value": true
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "B6": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B7": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "agg14_array",
+      "formula": "=AGGREGATE(14,4,{3,1,2},1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "35"
+        },
+        "B2": {
+          "kind": "bool",
+          "value": true
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "B6": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B7": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "aggexc_1v_q2",
+      "formula": "=AGGREGATE(19,4,{10},2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "aggpexc_1v",
+      "formula": "=AGGREGATE(18,4,{10},0.5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "agg9_offset",
+      "formula": "=AGGREGATE(9,4,OFFSET(A1,0,0,3))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "agg9_index",
+      "formula": "=AGGREGATE(9,4,INDEX(A1:A3,0,1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "agg9_indirect",
+      "formula": "=AGGREGATE(9,4,INDIRECT(\"A1:A3\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "agg9_if",
+      "formula": "=AGGREGATE(9,4,IF(TRUE,A1:A3))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "agg9_choose",
+      "formula": "=AGGREGATE(9,4,CHOOSE(1,A1:A3))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "agg9_isect",
+      "formula": "=AGGREGATE(9,4,A1:A3 A2:A4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "agg9_union",
+      "formula": "=AGGREGATE(9,4,(A1,A3))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "agg9_spill_lit",
+      "formula": "=AGGREGATE(9,4,TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "agg9_text",
+      "formula": "=AGGREGATE(9,4,\"1\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "agg2_lit",
+      "formula": "=AGGREGATE(2,4,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "agg3_arr",
+      "formula": "=AGGREGATE(3,4,{1,2})",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "agg4_arr",
+      "formula": "=AGGREGATE(4,4,{1,2})",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "agg9_ref_then_arr",
+      "formula": "=AGGREGATE(9,4,A1,{1,2})",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "agg9_xlookup",
+      "formula": "=AGGREGATE(9,4,XLOOKUP(10,A1:A7,A1:A7))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "agg9_let",
+      "formula": "=LET(r,A1:A3,AGGREGATE(9,4,r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "agg9_let_arr",
+      "formula": "=LET(r,{1,2},AGGREGATE(9,4,r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "agg14_computed",
+      "formula": "=AGGREGATE(14,4,A1:A3*1,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "agg14_k_arr",
+      "formula": "=AGGREGATE(14,4,A1:A3,{1,2})",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          30.0,
+          20.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "agg14_lit",
+      "formula": "=AGGREGATE(14,4,5,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "sub9_offset",
+      "formula": "=SUBTOTAL(9,OFFSET(A1,0,0,3))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    }
+  ]
+}

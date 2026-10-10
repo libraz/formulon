@@ -316,3 +316,95 @@ cases:
   - id: formulatext_dbcs_usdollar
     setup: { A1: "=DBCS(\"a\")&USDOLLAR(1)" }
     formula: '=FORMULATEXT(A1)'
+  - id: months_cyr_mmmm
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"ММММ"))'
+  - id: months_cyr_mmm
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),"МММ"))'
+  - id: weekdays_cyr_dddd
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"ДДДД"))'
+  - id: weekdays_cyr_ddd
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"ДДД"))'
+  - id: date_cyr_d_mm_yyyy
+    formula: '=TEXT(DATE(2024,3,5),"Д/ММ/ГГГГ")'
+  - id: date_cyr_dd_m_yy
+    formula: '=TEXT(DATE(2024,3,5),"ДД/М/ГГ")'
+  - id: date_cyr_lower
+    formula: '=TEXT(DATE(2024,3,5),"д/мм/гггг")'
+  - id: time_cyr_lower
+    formula: '=TEXT(TIME(13,4,5),"ч:мм:сс")'
+  - id: time_cyr_upper
+    formula: '=TEXT(TIME(13,4,5),"Ч:ММ:СС")'
+  - id: elapsed_cyr_hours
+    formula: '=TEXT(1.5,"[ч]")'
+  - id: time_u_hours
+    formula: '=TEXT(TIME(13,4,5),"u:mm:ss")'
+  - id: elapsed_u_hours
+    formula: '=TEXT(1.5,"[u]")'
+  - id: weekdays_gggg
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"gggg"))'
+  - id: weekdays_ggg
+    formula: '=TEXTJOIN("|",FALSE,TEXT(DATE(2024,1,SEQUENCE(7)),"ggg"))'
+  - id: text_general_osnovnoy
+    formula: '=TEXT(-1234.5,"Основной")'
+  - id: text_general_standaard
+    formula: '=TEXT(-1234.5,"Standaard")'
+  - id: text_general_estandar
+    formula: '=TEXT(-1234.5,"Estándar")'
+  - id: text_general_geral
+    formula: '=TEXT(-1234.5,"Geral")'
+  - id: text_color_rojo
+    formula: '=TEXT(-5,"0;[Rojo]0")'
+  - id: text_color_vermelho
+    formula: '=TEXT(-5,"0;[Vermelho]0")'
+  - id: text_color_krasny
+    formula: '=TEXT(-5,"0;[Красный]0")'
+  - id: text_color_rosso
+    formula: '=TEXT(-5,"0;[Rosso]0")'
+  - id: text_color_rood
+    formula: '=TEXT(-5,"0;[Rood]0")'
+  - id: text_color_hongse_traditional
+    formula: '=TEXT(-5,"0;[紅色]0")'
+  - id: text_letter_a_negative
+    formula: '=TEXT(-1234.5,"a")'
+  - id: text_letter_t_negative
+    formula: '=TEXT(-1234.5,"t")'
+  - id: text_letter_n_negative
+    formula: '=TEXT(-1234.5,"n")'
+  - id: text_letter_r_negative
+    formula: '=TEXT(-1234.5,"r")'
+  - id: text_letter_aa_positive
+    formula: '=TEXT(5,"aa")'
+  - id: text_letter_n_time
+    formula: '=TEXT(TIME(13,4,5),"n")'
+  - id: text_letter_nn_after_hour
+    formula: '=TEXT(TIME(13,4,5),"h:nn")'
+  - id: text_letter_n_date
+    formula: '=TEXT(DATE(2024,3,5),"n")'
+  - id: text_letter_r_date
+    formula: '=TEXT(DATE(2024,3,5),"r")'
+  - id: text_letter_rr_date
+    formula: '=TEXT(DATE(2024,3,5),"rr")'
+  - id: text_letter_t_positive
+    formula: '=TEXT(1234.5,"t")'
+  - id: text_letter_t_digits
+    formula: '=TEXT(1234.5,"t0.0")'
+  - id: text_slash_letters
+    formula: '=TEXT(5,"x/x")'
+  - id: text_slash_alone
+    formula: '=TEXT(5,"/")'
+  - id: text_slash_after_digit
+    formula: '=TEXT(5,"0/")'
+  - id: date_latin_upper_dashes
+    formula: '=TEXT(DATE(2024,3,5),"D-M-YYYY")'
+  - id: elapsed_cyr_minutes
+    formula: '=TEXT(1.5,"[мм]")'
+  - id: elapsed_cyr_seconds_upper
+    formula: '=TEXT(1/24,"[СС]")'
+  - id: time_u_upper_hours
+    formula: '=TEXT(TIME(13,4,5),"UU:mm")'
+  - id: text_letter_x_positive
+    formula: '=TEXT(5,"x")'
+  - id: text_letter_x_negative
+    formula: '=TEXT(-5,"x")'
+  - id: text_letter_x_digits
+    formula: '=TEXT(1234.5,"x0.0")'

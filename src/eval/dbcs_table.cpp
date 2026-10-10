@@ -63,13 +63,12 @@ unsigned bit_length(std::uint32_t v) noexcept {
 
 }  // namespace
 
-DbcsCells::DbcsCells(const std::uint8_t* encoded, std::size_t size) noexcept : unicode{} {
-  constexpr std::size_t kSlots = kDbcsGridSize * kDbcsGridSize;
+void decode_dbcs_cells(const std::uint8_t* encoded, std::size_t size, std::uint16_t* out, std::size_t slots) noexcept {
   BitReader reader(encoded, size);
   std::size_t slot = 0;
   std::uint32_t prev = 0;
   std::uint32_t acc = kAccInit;
-  while (slot < kSlots && !reader.exhausted()) {
+  while (slot < slots && !reader.exhausted()) {
     const unsigned len = bit_length(acc >> kAccShift);
     const std::uint32_t v = reader.exp_golomb(len > kKBias ? len - kKBias : 0);
     if (v == 0) {
@@ -79,7 +78,7 @@ DbcsCells::DbcsCells(const std::uint8_t* encoded, std::size_t size) noexcept : u
     }
     // Zigzag: even values are positive deltas, odd ones negative.
     prev = (v & 1u) != 0 ? prev - ((v + 1u) >> 1) : prev + (v >> 1);
-    unicode[slot++] = static_cast<std::uint16_t>(prev);
+    out[slot++] = static_cast<std::uint16_t>(prev);
     acc += v - (acc >> kAccShift);
   }
 }
@@ -88,18 +87,36 @@ DbcsCells::DbcsCells(const std::uint8_t* encoded, std::size_t size) noexcept : u
 
 namespace {
 
-const std::uint16_t* cells_for(DbcsCodepage codepage) noexcept {
+const dbcs_detail::DbcsGrid* grid_for(DbcsCodepage codepage) noexcept {
   switch (codepage) {
     case DbcsCodepage::kJis0208:
-      return dbcs_detail::jis0208_cells();
+      return &dbcs_detail::jis0208_grid();
     case DbcsCodepage::kGb2312:
-      return dbcs_detail::gb2312_cells();
+      return &dbcs_detail::gb2312_grid();
     case DbcsCodepage::kKsX1001:
-      return dbcs_detail::ksx1001_cells();
+      return &dbcs_detail::ksx1001_grid();
+    case DbcsCodepage::kBig5:
+      return &dbcs_detail::big5_grid();
     case DbcsCodepage::kNone:
       break;
   }
   return nullptr;
+}
+
+std::size_t trail_total(const dbcs_detail::DbcsShape& shape) noexcept {
+  return static_cast<std::size_t>(shape.trails[0].count) + shape.trails[1].count;
+}
+
+// Offset of `trail` within the shape's trail ranges, or trail_total when outside.
+std::size_t trail_index(const dbcs_detail::DbcsShape& shape, std::uint32_t trail) noexcept {
+  std::size_t before = 0;
+  for (const auto& range : shape.trails) {
+    if (trail >= range.first && trail < static_cast<std::uint32_t>(range.first) + range.count) {
+      return before + (trail - range.first);
+    }
+    before += range.count;
+  }
+  return before;
 }
 
 }  // namespace
@@ -109,28 +126,44 @@ std::uint16_t lookup_unicode_to_dbcs(DbcsCodepage codepage, std::uint32_t codepo
   if (codepoint == 0u || codepoint > 0xFFFFu) {
     return 0u;
   }
-  const std::uint16_t* cells = cells_for(codepage);
-  if (cells == nullptr) {
+  const dbcs_detail::DbcsGrid* grid = grid_for(codepage);
+  if (grid == nullptr) {
     return 0u;
   }
-  constexpr std::size_t kSlots = kDbcsGridSize * kDbcsGridSize;
-  for (std::size_t i = 0; i < kSlots; ++i) {
-    if (cells[i] == codepoint) {
-      return static_cast<std::uint16_t>(((i / kDbcsGridSize + 1) << 8) | (i % kDbcsGridSize + 1));
+  const dbcs_detail::DbcsShape& shape = grid->shape;
+  const std::size_t trails = trail_total(shape);
+  const std::size_t slots = static_cast<std::size_t>(shape.lead_count) * trails;
+  for (std::size_t i = 0; i < slots; ++i) {
+    if (grid->unicode[i] != codepoint) {
+      continue;
     }
+    std::size_t offset = i % trails;
+    std::uint32_t trail = 0;
+    for (const auto& range : shape.trails) {
+      if (offset < range.count) {
+        trail = range.first + static_cast<std::uint32_t>(offset);
+        break;
+      }
+      offset -= range.count;
+    }
+    const std::uint32_t lead = shape.lead_first + static_cast<std::uint32_t>(i / trails);
+    return static_cast<std::uint16_t>((lead << 8) | trail);
   }
   return 0u;
 }
 
-std::uint16_t lookup_dbcs_to_unicode(DbcsCodepage codepage, std::uint8_t row, std::uint8_t cell) noexcept {
-  if (row < 1u || row > kDbcsGridSize || cell < 1u || cell > kDbcsGridSize) {
+std::uint16_t lookup_dbcs_to_unicode(DbcsCodepage codepage, std::uint8_t lead, std::uint8_t trail) noexcept {
+  const dbcs_detail::DbcsGrid* grid = grid_for(codepage);
+  if (grid == nullptr) {
     return 0u;
   }
-  const std::uint16_t* cells = cells_for(codepage);
-  if (cells == nullptr) {
+  const dbcs_detail::DbcsShape& shape = grid->shape;
+  const std::size_t trails = trail_total(shape);
+  const std::size_t t = trail_index(shape, trail);
+  if (lead < shape.lead_first || lead >= static_cast<unsigned>(shape.lead_first) + shape.lead_count || t >= trails) {
     return 0u;
   }
-  return cells[(row - 1u) * kDbcsGridSize + (cell - 1u)];
+  return grid->unicode[static_cast<std::size_t>(lead - shape.lead_first) * trails + t];
 }
 
 std::uint16_t dbcs_code_bias(DbcsCodepage codepage) noexcept {
@@ -140,6 +173,7 @@ std::uint16_t dbcs_code_bias(DbcsCodepage codepage) noexcept {
     case DbcsCodepage::kGb2312:
     case DbcsCodepage::kKsX1001:
       return 0xA0A0u;
+    case DbcsCodepage::kBig5:
     case DbcsCodepage::kNone:
       break;
   }

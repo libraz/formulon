@@ -1,10 +1,10 @@
 # Oracle Environment
 
-This corpus contains 114 suites captured by the maintainers from Mac Excel 365 with the calculation locale set to zh-CN.
+This corpus contains 123 suites captured by the maintainers from Mac Excel 365 with the calculation locale set to zh-CN.
 
-- **Excel version**: `16.113.3`
+- **Excel version**: `16.113.3`, `16.113.4`
 - **Excel locale**: `zh-CN` (`AppleLanguages` = `zh-Hans-CN`, `AppleLocale` = `zh_CN`)
-- **Capture timestamps (UTC)**: `2026-10-08T13:54:40Z` through `2026-10-08T19:51:41Z`
+- **Capture timestamps (UTC)**: `2026-10-08T13:54:40Z` through `2026-10-10T06:28:43Z`
 - **date1904 / iterative**: recorded separately in each golden
 
 `formulon_oracle_zh_cn_tests` evaluates these goldens with the explicit `mac-365-zh_CN` profile. It is registered in CTest with the `oracle` label, independently of the optional variant binary. The ja-JP primary oracle and the `win-365-ja_JP` runtime default remain unchanged.

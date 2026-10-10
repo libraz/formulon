@@ -1,0 +1,46 @@
+{
+  "suite": "lazy_forms",
+  "description": "Representative probes for real lazy forms that are not unavailable stubs. Full workbook-backed coverage lives in unit/integration tests; this suite keeps the oracle catalog from treating their existence as part of the external-stub bucket.",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "pt-BR",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T17:36:15Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "lazy_getpivotdata_no_pivot",
+      "formula": "=GETPIVOTDATA(\"amount\", A1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "lazy_phonetic_literal_text",
+      "formula": "=PHONETIC(\"テスト\")",
+      "setup": {},
+      "skipped": "Excel's PHONETIC takes a reference, so a string literal is refused at entry and leaves no reading. `=PHONETIC(A1)` over an unannotated text cell returns the text on both engines and is captured as lazy_phonetic_unannotated_cell; the annotated and partially annotated cases are pinned against a hand-built rPh package Excel was asked to open. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
+    },
+    {
+      "id": "lazy_phonetic_unannotated_cell",
+      "formula": "=PHONETIC(A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "テスト"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

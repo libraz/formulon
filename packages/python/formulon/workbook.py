@@ -163,6 +163,20 @@ ExcelProfileId = Literal[
     "win-365-ko_KR",
     "mac-365-th_TH",
     "win-365-th_TH",
+    "mac-365-es_ES",
+    "win-365-es_ES",
+    "mac-365-es_MX",
+    "win-365-es_MX",
+    "mac-365-pt_BR",
+    "win-365-pt_BR",
+    "mac-365-ru_RU",
+    "win-365-ru_RU",
+    "mac-365-zh_TW",
+    "win-365-zh_TW",
+    "mac-365-it_IT",
+    "win-365-it_IT",
+    "mac-365-nl_NL",
+    "win-365-nl_NL",
 ]
 
 # `fm_date_order_t` ordinals, indexed by the C value.
@@ -1520,7 +1534,9 @@ class LocaleFacts:
 
     ``measured`` is ``True`` for the profiles captured from Excel (every
     ``mac-*`` id and ``win-365-ja_JP``) and ``False`` for the estimated
-    ``win-*`` ids. ``date_order`` is ``"mdy"``, ``"ymd"`` or ``"dmy"``.
+    ``win-*`` ids. Every scalar field is captured in each Mac locale, so
+    ``measured`` covers them all; only ``error_names`` carries per-entry
+    flags. ``date_order`` is ``"mdy"``, ``"ymd"`` or ``"dmy"``.
     ``error_names`` is indexed by error-code ordinal.
     """
 
@@ -3578,7 +3594,7 @@ class Workbook:
         """Set the workbook's Excel formula profile by id.
 
         New workbooks use ``win-365-en_US`` by default. Ids have the form
-        ``{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}``.
+        ``{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}``.
         """
         h = self._require()
         pid_ptr, _ = LIB.alloc_utf8(profile_id)

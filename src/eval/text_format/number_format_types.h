@@ -28,7 +28,7 @@ constexpr double kMaxDateSerial1900 = 2958465.0;
 
 // Letters of the stored format syntax; also the localized letters of every
 // locale that spells dates in `y m d`.
-inline constexpr FormatLetters kInvariantFormatLetters{'y', 'm', 'd', 'h', 'm', 's', false, false, 'a'};
+inline constexpr FormatLetters kInvariantFormatLetters{'y', 'm', 'd', 'h', 'm', 's', false, false, false, 'a'};
 
 // --- Token representation ----------------------------------------------
 
@@ -71,6 +71,7 @@ enum class Tok : std::uint8_t {
   DateAaaa,       // `aaaa` (or longer run) -- full ja-JP weekday (月曜日 etc.).
   DateB2,         // `b` / `bb` -- Buddhist-era year, 2 digits.
   DateB4,         // `bbb` (or longer run) -- Buddhist-era year.
+  DateBlank,      // it-IT `x` -- a date code that renders nothing.
   FracSecDigits,  // `.0` / `.00` / ... when following a second token
   Literal,        // Arbitrary passthrough bytes (quoted / escaped / other)
   Space,          // `_X` underscore-skip: emits a single space placeholder.
@@ -108,11 +109,13 @@ struct Token {
 //     the main integer placeholder; per-digit kanji elsewhere (era, m, d).
 //   * kDBNum2: 大字 (formal-document) numerals with positional kanji.
 //   * kDBNum3: full-width Arabic digits (U+FF10..U+FF19).
+//   * kThai: Thai digits (U+0E50..U+0E59), set by th-TH's `t`.
 enum class DbNumMode : std::uint8_t {
   kNone = 0,
   kDBNum1,
   kDBNum2,
   kDBNum3,
+  kThai,
 };
 
 // Conditional comparison operator extracted from a `[op N]` section prefix.

@@ -1,0 +1,15 @@
+# Mac Excel 365 (ru-RU) variant-specific divergences.
+#
+# The global registry supplies unscoped skips and entries whose applies_to
+# includes mac-365-ru_RU.
+
+entries:
+  # A point-decimal complex argument is read as a dotted date.
+  - id: imsum_point_decimal_input
+    applies_to: [mac-365-ru_RU]
+    mode: skip-oracle
+    cause: excel-no-value
+    reason: "IMSUM(\"1.5+2i\",\"1\") is 46144+2i in Mac Excel ru-RU: the real part \"1.5\" is read as the day-month date 1 May of the current year (serial 46143 in 2026). The value moves with the capture year, so no golden is reproducible. Value: tests/oracle/targets/mac-365-ru_RU/golden/locale_tokens.golden.json."
+    prefer: mac
+    first_noted: 2026-10-10
+    last_verified_excel_version: "16.113.3"

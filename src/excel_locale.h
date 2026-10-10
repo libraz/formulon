@@ -20,13 +20,14 @@ enum class DateOrder : std::uint8_t {
 
 /// Single-byte code page used by CHAR / CODE for bytes 0x80-0xFF.
 /// `kDbcsHighBlank` decodes the high bytes of a DBCS locale without
-/// single-byte katakana; `kMacThai` is the Mac Thai page.
+/// single-byte katakana; `kMacThai` and `kMacCyrillic` are the Mac pages.
 enum class SbcsCodepage : std::uint8_t {
   kMacRoman = 0,
   kWindows1252 = 1,
   kCp932 = 2,
   kDbcsHighBlank = 3,
   kMacThai = 4,
+  kMacCyrillic = 5,
 };
 
 /// Double-byte character set behind the byte-counting text functions and
@@ -36,6 +37,7 @@ enum class DbcsCodepage : std::uint8_t {
   kJis0208 = 1,
   kGb2312 = 2,
   kKsX1001 = 3,
+  kBig5 = 4,
 };
 
 // Criteria, lookup, and D-function text matching use the host's width and
@@ -47,6 +49,15 @@ enum class WidthFolding : std::uint8_t {
   kNone = 2,
 };
 
+/// What an `r` run in a TEXT format reads as.
+enum class RLetter : std::uint8_t {
+  kLiteral = 0,
+  /// `r` is the era year (`ee`); a longer run adds the era name (`gggee`).
+  kJapaneseEra = 1,
+  /// Any run is the four-digit year.
+  kYear = 2,
+};
+
 /// Letters of the localized TEXT format dialect.
 struct FormatLetters {
   char year, month, day, hour, minute, second;
@@ -54,8 +65,16 @@ struct FormatLetters {
   bool case_sensitive;
   /// The minute letter is a minute regardless of its neighbours.
   bool minute_unconditional;
+  /// A case-sensitive month letter still reads as a minute beside an hour or second.
+  bool month_contextual;
   /// Letter of the aaa / aaaa weekday tokens; `'\0'` when the locale has none.
   char weekday;
+};
+
+/// A non-ASCII spelling of a format letter (`Д` for the day letter).
+struct FormatLetterAlias {
+  std::string_view spelling;
+  char letter;
 };
 
 /// Locale currency used by DOLLAR and the currency-aware renderers.
@@ -67,6 +86,8 @@ struct Currency {
   bool space;
   /// Negative amounts are parenthesised rather than minus-signed.
   bool negative_parens;
+  /// A minus sign sits between a prefix symbol and the number (`¥-1,235`).
+  bool minus_after_symbol;
   /// A value that display-rounds to zero keeps its negative form.
   bool negative_zero_signed;
   std::uint8_t default_decimals;
@@ -101,27 +122,37 @@ struct LocaleFacts {
   std::array<std::string_view, 7> day_long;
   std::array<std::string_view, 7> day_short;
   FormatLetters format_letters;
+  /// Spellings TEXT formats write the letters of `format_letters` in; where any exist, the Latin date letters
+  /// are plain text. Empty slots are unused.
+  std::array<FormatLetterAlias, 10> format_letter_aliases;
   Currency currency;
   /// Currency prefixes VALUE accepts; empty slots are unused.
   std::array<std::string_view, 4> accepted_currency;
-  /// USDOLLAR formats in US dollars; otherwise it is DOLLAR.
-  bool usdollar_in_dollars;
+  /// Symbol USDOLLAR formats US dollars with; empty when USDOLLAR is DOLLAR.
+  std::string_view usdollar_symbol;
   DateOrder date_order;
   bool dotted_date;
   bool kanji_ymd_text;
   bool kanji_time_text;
   bool japanese_era;
+  RLetter r_letter;
   /// Date text takes the `2024년 3월 15일` form.
   bool hangul_ymd_text;
-  /// Date text takes English month names; the hyphenated `d-mmm-yy` form
-  /// takes the English abbreviations everywhere.
+  /// Date text takes English month names.
   bool english_month_names;
+  /// The hyphenated `d-mmm-yy` form takes the English abbreviations.
+  bool hyphen_english_months;
   /// Time text takes a fraction of a second after the decimal separator.
   bool fractional_seconds;
   /// A `.` may directly follow the AM / PM marker (`6 PM.`).
   bool meridiem_dot_attached;
   /// A `.` may follow the AM / PM marker after a space (`6 PM .`).
   bool meridiem_dot_spaced;
+  /// AM / PM marker spellings, which time text also accepts.
+  std::string_view am_name;
+  std::string_view pm_name;
+  /// `A/P` is the short AM / PM marker rather than letters of the format dialect.
+  bool short_meridiem;
   DbcsCodepage dbcs_codepage;
   bool halfwidth_kana_single_byte;
   bool fullwidth_numeric_text;
@@ -130,8 +161,16 @@ struct LocaleFacts {
   bool criteria_header_keeps_halfwidth_kana;
   bool bang_escape;
   bool dbnum;
+  /// A lower-case `t` renders nothing and writes the section's digits in Thai.
+  bool thai_digit_letter;
+  /// Letter, in either case, of a date code that renders nothing; `'\0'` when none.
+  char blank_date_letter;
   bool fullwidth_syntax_fold;
-  /// Locale spelling of the General format; empty when only `General` exists.
+  /// TEXT accepts the English `General` keyword.
+  bool english_general;
+  /// TEXT rejects a format holding a `.` outside quotes and escapes.
+  bool format_rejects_dot;
+  /// Locale spelling of the General format; empty when none is measured.
   std::string_view general_alias;
   /// Colour numbers 1-8 (black blue cyan green magenta red white yellow);
   /// an empty slot is a colour name the locale rejects.

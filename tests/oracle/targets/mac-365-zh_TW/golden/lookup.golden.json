@@ -1,0 +1,4832 @@
+{
+  "suite": "lookup",
+  "description": "MATCH / INDEX / CHOOSE / VLOOKUP / HLOOKUP / XLOOKUP / XMATCH",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "zh-TW",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T20:47:21Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "match_exact_found",
+      "formula": "=MATCH(20,A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "match_exact_not_found",
+      "formula": "=MATCH(25,A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "match_asc_smaller",
+      "formula": "=MATCH(25,A1:A3,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "match_desc_larger",
+      "formula": "=MATCH(15,A1:A3,-1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "match_text_wildcard",
+      "formula": "=MATCH(\"ca?\",A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "cat"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "cart"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "dog"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "index_single_cell",
+      "formula": "=INDEX(A1:A3,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "index_two_d",
+      "formula": "=INDEX(A1:B2,2,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "choose_second_value",
+      "formula": "=CHOOSE(2,\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "choose_index_out_of_range",
+      "formula": "=CHOOSE(5,\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "vlookup_exact_found",
+      "formula": "=VLOOKUP(\"banana\",A1:B3,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "cherry"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "vlookup_exact_not_found",
+      "formula": "=VLOOKUP(\"cherry\",A1:B2,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "vlookup_approx",
+      "formula": "=VLOOKUP(25,A1:B3,2,TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "low"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "text",
+          "value": "mid"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "high"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "mid"
+      }
+    },
+    {
+      "id": "hlookup_exact_found",
+      "formula": "=HLOOKUP(\"b\",A1:C2,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "b"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "c"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "xlookup_exact_found",
+      "formula": "=XLOOKUP(20,A1:A2,B1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ten"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "text",
+          "value": "twenty"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "twenty"
+      }
+    },
+    {
+      "id": "xlookup_if_not_found",
+      "formula": "=XLOOKUP(30,A1:A2,B1:B2,\"missing\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ten"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "text",
+          "value": "twenty"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "missing"
+      }
+    },
+    {
+      "id": "xlookup_match_mode_smaller",
+      "formula": "=XLOOKUP(25,A1:A3,B1:B3,,-1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ten"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "twenty"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "thirty"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "twenty"
+      }
+    },
+    {
+      "id": "xlookup_omitted_modes_default_forward",
+      "formula": "=XLOOKUP(20,A1:A3,B1:B3,,,)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "first"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "last"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "other"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "first"
+      }
+    },
+    {
+      "id": "xlookup_omitted_match_mode_reverse_search",
+      "formula": "=XLOOKUP(20,A1:A3,B1:B3,,,-1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "first"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "last"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "other"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "last"
+      }
+    },
+    {
+      "id": "xlookup_array_vertical_scalar_mixed",
+      "formula": "=XLOOKUP(A1:A3,D1:D3,E1:E3,1/0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "ten"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "twenty"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "thirty"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "twenty",
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "xlookup_array_horizontal_scalar",
+      "formula": "=XLOOKUP(A1:C1,E1:E3,F1:F3,\"missing\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ten"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "twenty"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "thirty"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "thirty",
+          "ten",
+          "missing"
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "xlookup_array_vertical_multicolumn",
+      "formula": "=XLOOKUP(A1:A3,D1:D3,E1:G3,\"missing\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 102.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 103.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 201.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 203.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 301.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 302.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 303.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          201.0,
+          "missing",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "xlookup_array_horizontal_multicolumn",
+      "formula": "=XLOOKUP(A1:C1,E1:E3,F1:H3,\"missing\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "C1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "E1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 102.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 103.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 201.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 203.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 301.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 302.0
+        },
+        "H3": {
+          "kind": "number",
+          "value": 303.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          201.0,
+          "missing",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "xlookup_array_vertical_multirow",
+      "formula": "=XLOOKUP(A1:A3,E1:G1,E2:G4,\"missing\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "E1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 201.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 301.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 102.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 302.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 103.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 203.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 303.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          201.0,
+          "missing",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "xlookup_array_horizontal_multirow",
+      "formula": "=XLOOKUP(A1:C1,E1:G1,E2:G4,\"missing\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "C1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "E1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 201.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 301.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 102.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 302.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 103.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 203.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 303.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          201.0,
+          "missing",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "xlookup_array_vertical_if_not_found_array",
+      "formula": "=XLOOKUP(A1:A3,D1:D3,E1:E3,H1:H3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 900.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 901.0
+        },
+        "H3": {
+          "kind": "number",
+          "value": 902.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          100.0,
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          300.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "xlookup_array_horizontal_if_not_found_array",
+      "formula": "=XLOOKUP(A1:C1,E1:E3,F1:F3,H1:J1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 900.0
+        },
+        "I1": {
+          "kind": "number",
+          "value": 901.0
+        },
+        "J1": {
+          "kind": "number",
+          "value": 902.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          100.0,
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          300.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "xlookup_array_all_hits_keeps_fallback_lazy",
+      "formula": "=XLOOKUP(A1:A2,D1:D2,E1:E2,1/0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 200.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          100.0,
+          200.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "xmatch_exact_found",
+      "formula": "=XMATCH(20,A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "xmatch_wildcard",
+      "formula": "=XMATCH(\"ca?\",A1:A3,2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "cat"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "cart"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "dog"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "xmatch_omitted_modes_default_forward",
+      "formula": "=XMATCH(20,A1:A3,,)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "xmatch_omitted_match_mode_reverse_search",
+      "formula": "=XMATCH(20,A1:A3,,-1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "xmatch_array_vertical_mixed",
+      "formula": "=XMATCH(A1:A3,D1:D3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          }
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "xmatch_array_horizontal_mixed",
+      "formula": "=XMATCH(A1:C1,E1:E3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "C1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "E1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          3.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          }
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "match_text_star_wildcard",
+      "formula": "=MATCH(\"ca*\",A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "cat"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "cart"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "dog"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "match_text_escape_question",
+      "formula": "=MATCH(\"what~?\",A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "what"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "what?"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "where"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "match_case_insensitive",
+      "formula": "=MATCH(\"banana\",A1:A2,0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "match_error_in_array_propagates",
+      "formula": "=MATCH(30,A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "match_error_lookup_value",
+      "formula": "=MATCH(#REF!,A1:A2,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "match_bool_lookup_value",
+      "formula": "=MATCH(FALSE,A1:A2,0)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "match_unsorted_with_approx",
+      "formula": "=MATCH(15,A1:A3,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "vlookup_col_out_of_range",
+      "formula": "=VLOOKUP(\"apple\",A1:B2,3,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "vlookup_zero_col",
+      "formula": "=VLOOKUP(\"apple\",A1:B1,0,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "vlookup_negative_col",
+      "formula": "=VLOOKUP(\"apple\",A1:B1,-1,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "vlookup_wildcard_with_exact",
+      "formula": "=VLOOKUP(\"b*\",A1:B3,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "blueberry"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "vlookup_approx_unsorted",
+      "formula": "=VLOOKUP(15,A1:B3,2,TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "z"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "y"
+      }
+    },
+    {
+      "id": "vlookup_error_in_array",
+      "formula": "=VLOOKUP(\"cherry\",A1:B3,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "cherry"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "xlookup_match_mode_larger",
+      "formula": "=XLOOKUP(25,A1:A3,B1:B3,,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ten"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "twenty"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "thirty"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "thirty"
+      }
+    },
+    {
+      "id": "xlookup_wildcard_match_mode_2",
+      "formula": "=XLOOKUP(\"b*\",A1:A3,B1:B3,,2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "cherry"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "xlookup_search_reverse",
+      "formula": "=XLOOKUP(\"x\",A1:A3,B1:B3,,0,-1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "xlookup_no_match_no_default",
+      "formula": "=XLOOKUP(99,A1:A2,B1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ten"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "twenty"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "xlookup_error_in_lookup_array",
+      "formula": "=XLOOKUP(30,A1:A3,B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ten"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "na"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "thirty"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "thirty"
+      }
+    },
+    {
+      "id": "index_zero_row",
+      "formula": "=INDEX(A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "index_zero_col",
+      "formula": "=INDEX(A1:B2,1,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_zero_row_two_dimensional",
+      "formula": "=INDEX({1,2;3,4},0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_zero_both",
+      "formula": "=INDEX({1,2;3,4},0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_out_of_range",
+      "formula": "=INDEX(A1:A3,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "index_negative_row",
+      "formula": "=INDEX(A1:A2,-1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "index_area_num_multi_area_zero",
+      "formula": "=INDEX((A1:B2,D1:E2),1,1,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "index_area_num_multi_area_out_of_range",
+      "formula": "=INDEX((A1:B2,D1:E2),1,1,3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "index_area_num_multi_area_negative",
+      "formula": "=INDEX((A1:B2,D1:E2),1,1,-1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "index_area_num_single_range_selects_it",
+      "formula": "=INDEX(A1:B2,1,1,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "index_area_num_single_range_out_of_range",
+      "formula": "=INDEX(A1:B2,1,1,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "index_area_num_single_range_zero",
+      "formula": "=INDEX(A1:B2,1,1,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "index_area_num_single_range_negative",
+      "formula": "=INDEX(A1:B2,1,1,-1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "index_area_num_multi_area_whole_area_rows",
+      "formula": "=ROWS(INDEX((A1:B2,D1:E2),0,0,2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "index_area_num_multi_area_whole_area_sum",
+      "formula": "=SUM(INDEX((A1:B2,D1:E2),0,0,2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 210.0
+      }
+    },
+    {
+      "id": "index_area_num_multi_area_whole_area_address",
+      "formula": "=CELL(\"address\",INDEX((A1:B2,D1:E2),0,0,2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$D$1"
+      }
+    },
+    {
+      "id": "index_area_num_multi_area_selects_second",
+      "formula": "=INDEX((A1:B2,D1:E2),1,1,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "index_area_num_truncates",
+      "formula": "=INDEX((A1:B2,D1:E2),1,1,1.9)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "index_area_num_omitted_defaults_first",
+      "formula": "=INDEX((A1:B2,D1:E2),1,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "choose_index_zero",
+      "formula": "=CHOOSE(0,\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "choose_index_negative",
+      "formula": "=CHOOSE(-1,\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "choose_with_error_value",
+      "formula": "=CHOOSE(#REF!,\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "match_jp_wildcard",
+      "formula": "=MATCH(\"り*\",A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "りんご"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "りんごジュース"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ぶどう"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "vlookup_jp_text",
+      "formula": "=VLOOKUP(\"ぶどう\",A1:B2,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "りんご"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ぶどう"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 200.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 200.0
+      }
+    },
+    {
+      "id": "hlookup_approx_sorted",
+      "formula": "=HLOOKUP(25,A1:C2,2,TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "low"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "mid"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "high"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "mid"
+      }
+    },
+    {
+      "id": "hlookup_first_match_wins",
+      "formula": "=HLOOKUP(\"y\",A1:C2,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "y"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "hlookup_not_found_exact",
+      "formula": "=HLOOKUP(\"z\",A1:C2,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "b"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "c"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "hlookup_row_out_of_range",
+      "formula": "=HLOOKUP(\"a\",A1:B2,5,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "xmatch_search_reverse_returns_last",
+      "formula": "=XMATCH(\"x\",A1:A3,0,-1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "xmatch_binary_search_ascending",
+      "formula": "=XMATCH(30,A1:A4,0,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "xmatch_not_found_returns_na",
+      "formula": "=XMATCH(99,A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "lookup_vector_form_exact",
+      "formula": "=LOOKUP(20,A1:A3,B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "low"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "mid"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "high"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "mid"
+      }
+    },
+    {
+      "id": "lookup_vector_form_approx",
+      "formula": "=LOOKUP(25,A1:A3,B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "low"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "mid"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "high"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "mid"
+      }
+    },
+    {
+      "id": "lookup_array_form_square",
+      "formula": "=LOOKUP(2,A1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "c"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "lookup_below_smallest_is_na",
+      "formula": "=LOOKUP(5,A1:A3,B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "low"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "mid"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "high"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "lookup_above_largest_returns_last",
+      "formula": "=LOOKUP(99,A1:A3,B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "low"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "mid"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "high"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "high"
+      }
+    },
+    {
+      "id": "vlookup_array_vertical_exact_mixed",
+      "formula": "=VLOOKUP(A1:A3,D1:E3,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "ten"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "E2": {
+          "kind": "text",
+          "value": "twenty"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E3": {
+          "kind": "text",
+          "value": "thirty"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "twenty",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          }
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "vlookup_array_horizontal_approx",
+      "formula": "=VLOOKUP(A1:C1,E1:F3,2,TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F1": {
+          "kind": "text",
+          "value": "low"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "F2": {
+          "kind": "text",
+          "value": "mid"
+        },
+        "E3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "F3": {
+          "kind": "text",
+          "value": "high"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "mid",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "high"
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "vlookup_array_matrix_exact",
+      "formula": "=VLOOKUP(A1:B2,D1:E3,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 300.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          300.0,
+          100.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          200.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "vlookup_array_invalid_col_precedence",
+      "formula": "=VLOOKUP(A1:A2,D1:E2,3,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 200.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          {
+            "kind": "error",
+            "code": "#REF!"
+          },
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          }
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "hlookup_array_vertical_exact_mixed",
+      "formula": "=HLOOKUP(A1:A3,D1:F2,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D2": {
+          "kind": "text",
+          "value": "ten"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "twenty"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "thirty"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "twenty",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          }
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "hlookup_array_horizontal_approx",
+      "formula": "=HLOOKUP(A1:C1,E1:G2,2,TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E2": {
+          "kind": "text",
+          "value": "low"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "mid"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "high"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "mid",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "high"
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "hlookup_array_matrix_exact",
+      "formula": "=HLOOKUP(A1:B2,D1:F2,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 300.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          300.0,
+          100.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          200.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "hlookup_array_invalid_row_precedence",
+      "formula": "=HLOOKUP(A1:A2,D1:F2,3,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 300.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          {
+            "kind": "error",
+            "code": "#REF!"
+          },
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          }
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "match_array_vertical_exact_mixed",
+      "formula": "=MATCH(A1:A3,D1:D3,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          }
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "match_array_horizontal_approx_ascending",
+      "formula": "=MATCH(A1:C1,E1:E3,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          3.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "match_array_matrix_approx_descending",
+      "formula": "=MATCH(A1:B2,D1:D3,-1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 35.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          3.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "match_array_invalid_match_type_precedence",
+      "formula": "=MATCH(A1:A2,D1:D3,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          }
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "xlookup_array_reference_blank_counta",
+      "formula": "=COUNTA(XLOOKUP(SEQUENCE(3),D1:D3,E1:E3))",
+      "setup": {
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "xlookup_array_reference_blank_count",
+      "formula": "=COUNT(XLOOKUP(SEQUENCE(3),D1:D3,E1:E3))",
+      "setup": {
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "xlookup_array_reference_blank_isblank",
+      "formula": "=ISBLANK(INDEX(XLOOKUP(SEQUENCE(3),D1:D3,E1:E3),2,1))",
+      "setup": {
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "xlookup_scalar_reference_blank_counta",
+      "formula": "=COUNTA(XLOOKUP(2,D1:D3,E1:E3))",
+      "setup": {
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "xlookup_array_reference_blank_fallback_counta",
+      "formula": "=COUNTA(XLOOKUP({1;2;99},D1:D3,E1:E3,INDEX(G1:G1,1)))",
+      "setup": {
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "xlookup_scalar_reference_blank_fallback_counta",
+      "formula": "=COUNTA(XLOOKUP(99,D1:D3,E1:E3,INDEX(G1:G1,1)))",
+      "setup": {
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "vlookup_array_reference_blank_counta",
+      "formula": "=COUNTA(VLOOKUP(SEQUENCE(3),D1:E3,2,FALSE))",
+      "setup": {
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "hlookup_array_reference_blank_counta",
+      "formula": "=COUNTA(HLOOKUP(SEQUENCE(3),D1:F2,2,FALSE))",
+      "setup": {
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "index_array_row_selector_scalar_column",
+      "formula": "=INDEX(D1:E3,A1:A2,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          12.0,
+          32.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "index_scalar_row_array_column_selector",
+      "formula": "=INDEX(D1:E3,2,A1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          21.0,
+          22.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_outer_row_and_column_selectors",
+      "formula": "=INDEX(E1:F3,A1:A3,B1:C1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          11.0,
+          12.0,
+          21.0,
+          22.0,
+          31.0,
+          32.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_unequal_vertical_selector_lengths",
+      "formula": "=INDEX(E1:F3,A1:A3,B1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          11.0,
+          22.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "index_array_selector_bounds_and_error",
+      "formula": "=INDEX(D1:E3,A1:A3,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          11.0,
+          {
+            "kind": "error",
+            "code": "#REF!"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "index_array_row_zero_tile",
+      "formula": "=INDEX({11,12;21,22},{0;2},1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          11.0,
+          21.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "index_array_column_zero_tile",
+      "formula": "=INDEX({11,12;21,22},1,{0,2})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          11.0,
+          12.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_array_selector_error_precedence",
+      "formula": "=INDEX(D1:E2,A1:A2,#REF!)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 22.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#REF!"
+          }
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "index_array_selector_source_error_precedence",
+      "formula": "=INDEX(#REF!,A1:A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          {
+            "kind": "error",
+            "code": "#REF!"
+          },
+          {
+            "kind": "error",
+            "code": "#REF!"
+          }
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "choose_array_index_matrix_scalars",
+      "formula": "=CHOOSE(A1:B2,10,20)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          20.0,
+          20.0,
+          10.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "choose_horizontal_index_vertical_branch_tiles",
+      "formula": "=CHOOSE(A1:B1,D1:D2,E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 22.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          11.0,
+          21.0,
+          12.0,
+          22.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "choose_vertical_index_horizontal_branch_tiles",
+      "formula": "=CHOOSE(A1:A2,D1:E1,F1:G1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 22.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          11.0,
+          12.0,
+          21.0,
+          22.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "choose_array_unselected_branch_shape",
+      "formula": "=CHOOSE(A1:B1,9,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 22.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          9.0,
+          9.0,
+          9.0,
+          9.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "choose_array_unequal_branch_shapes",
+      "formula": "=CHOOSE(A1:B1,D1:D2,E1:F1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 22.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          11.0,
+          22.0,
+          12.0,
+          22.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "choose_array_selected_and_unselected_error",
+      "formula": "=CHOOSE(A1:B1,10,1/0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          }
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_array_selector_reference_blank_counta",
+      "formula": "=COUNTA(INDEX(A1:A3,D1:D3))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "choose_array_selector_reference_blank_counta",
+      "formula": "=COUNTA(CHOOSE(SEQUENCE(1),A1:A3))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "index_column_snaps_near_integer",
+      "formula": "=INDEX(A1:C1,1,1.9999999)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "index_column_below_snap_distance_truncates",
+      "formula": "=INDEX(A1:C1,1,1.999999761)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "index_column_tiny_selects_whole_row",
+      "formula": "=INDEX({1,2,3},1,0.0000001)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "vlookup_index_snaps_near_integer",
+      "formula": "=VLOOKUP(1,A1:C1,2.9999999,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "choosecols_array_index_horizontal",
+      "formula": "=CHOOSECOLS({1,2,3},{1,3})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "choosecols_array_index_vertical_negative",
+      "formula": "=CHOOSECOLS({1,2,3},{-1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          3.0,
+          1.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "choosecols_scalar_and_array_index",
+      "formula": "=CHOOSECOLS({1,2,3},1,{2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "chooserows_array_index_horizontal",
+      "formula": "=CHOOSEROWS({1;2;3},{1,3})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "choosecols_array_index_two_dimensional",
+      "formula": "=CHOOSECOLS({1,2,3},{1,2;2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "index_col_near",
+      "formula": "=INDEX(A1:B1,1,1.9999999)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "choose_near",
+      "formula": "=CHOOSE(1.9999999,\"a\",\"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "index_col_6",
+      "formula": "=INDEX(A1:C1,1,1.999999)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "index_col_95",
+      "formula": "=INDEX(A1:C1,1,1.9999995)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "index_col_5",
+      "formula": "=INDEX(A1:C1,1,1.5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "index_col_8",
+      "formula": "=INDEX(A1:C1,1,1.99999999)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "near_choose",
+      "formula": "=CHOOSE(2.9999999,\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "th_idx_230",
+      "formula": "=INDEX({1,2,3},1,1.99999977)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "th_idx_235",
+      "formula": "=INDEX({1,2,3},1,1.999999765)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "th_idx_238",
+      "formula": "=INDEX({1,2,3},1,1.9999997616)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "th_idx_239",
+      "formula": "=INDEX({1,2,3},1,1.999999761)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "th_idx_240",
+      "formula": "=INDEX({1,2,3},1,1.99999976)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "th_idx_245",
+      "formula": "=INDEX({1,2,3},1,1.999999755)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "th_idx_250",
+      "formula": "=INDEX({1,2,3},1,1.99999975)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "th_idx_260",
+      "formula": "=INDEX({1,2,3},1,1.99999974)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "pf_index_row",
+      "formula": "=INDEX({1;2;3},1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "pf_match_type",
+      "formula": "=MATCH(2,{1,2,3},0.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "pf_vlookup_col",
+      "formula": "=VLOOKUP(1,{1,2,3},1.9999999,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "pf_hlookup_row",
+      "formula": "=HLOOKUP(1,{1;2;3},1.9999999,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "index_col_04",
+      "formula": "=INDEX({1,2,3},1,0.4)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "index_col_09999999",
+      "formula": "=INDEX({1,2,3},1,0.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "index_col_0999999",
+      "formula": "=INDEX({1,2,3},1,0.999999)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "index_row_neg_tiny",
+      "formula": "=INDEX({1,2,3},-0.0000001,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "vlookup_col_09999999",
+      "formula": "=VLOOKUP(1,{1,2},0.9999999,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "vlookup_col_0999999",
+      "formula": "=VLOOKUP(1,{1,2},0.999999,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "vlookup_col_25",
+      "formula": "=VLOOKUP(1,{1,2},2.5,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    }
+  ]
+}

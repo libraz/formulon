@@ -12,8 +12,9 @@
 // that would populate these fields from inside the engine contradicts
 // that contract. Localize / canonicalize read the function-name table
 // FORMULATEXT uses (`eval/locale_function_names.h`) through the profile's
-// locale: de-DE and fr-FR localize the catalog, ja-JP three functions;
-// en-US, zh-CN, ko-KR and th-TH show the canonical name.
+// locale: de-DE, fr-FR, es-ES, es-MX, pt-BR, ru-RU, it-IT and nl-NL localize
+// the catalog, ja-JP three functions and zh-TW one; en-US, zh-CN, ko-KR and
+// th-TH show the canonical name.
 //
 // A runtime-recognised function name comes from one of three sources:
 // the eager `FunctionRegistry`, the tree walker's lazy-dispatch table

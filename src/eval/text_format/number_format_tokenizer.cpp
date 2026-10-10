@@ -47,7 +47,7 @@ DateLetter classify_date_letter(char c, const FormatLetters& letters) noexcept {
   const char lc = ascii_lower(c);
   if (letters.case_sensitive) {
     if (c == letters.month) {
-      return DateLetter::kMonth;
+      return letters.month_contextual ? DateLetter::kMonthOrMinute : DateLetter::kMonth;
     }
     if (c == letters.minute) {
       return letters.minute_unconditional ? DateLetter::kMinute : DateLetter::kMonthOrMinute;
@@ -73,14 +73,8 @@ DateLetter classify_date_letter(char c, const FormatLetters& letters) noexcept {
 bool same_letters(const FormatLetters& a, const FormatLetters& b) noexcept {
   return a.year == b.year && a.month == b.month && a.day == b.day && a.hour == b.hour && a.minute == b.minute &&
          a.second == b.second && a.case_sensitive == b.case_sensitive &&
-         a.minute_unconditional == b.minute_unconditional && a.weekday == b.weekday;
-}
-
-// A calendar letter of either the invariant or the locale table.
-bool is_calendar_letter(char c, const FormatLetters& letters) noexcept {
-  const char lc = ascii_lower(c);
-  return lc == 'y' || lc == 'm' || lc == 'd' || lc == ascii_lower(letters.year) || lc == ascii_lower(letters.month) ||
-         lc == ascii_lower(letters.day);
+         a.minute_unconditional == b.minute_unconditional && a.month_contextual == b.month_contextual &&
+         a.weekday == b.weekday;
 }
 
 }  // namespace
@@ -332,7 +326,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
         i += 5;
         continue;
       }
-      if (match_ci(i, "A/P")) {
+      if ((invariant_letters || facts.short_meridiem) && match_ci(i, "A/P")) {
         Token t;
         t.kind = Tok::AP;
         toks.push_back(t);
@@ -367,8 +361,9 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     }
     // ja-JP era name tokens: `g` (Roman 1-letter), `gg` (1-char kanji),
     // `ggg` or longer (full kanji name). Case-insensitive. The `General`
-    // keyword check above already handled the literal "General" word.
-    if (c == 'g' || c == 'G') {
+    // keyword check above already handled the literal "General" word. A
+    // locale whose own date letter is `g` (it-IT's day) reads it as that.
+    if ((c == 'g' || c == 'G') && classify_date_letter(c, letters) == DateLetter::kNone) {
       const std::size_t run = scan_run(fmt, i, 'g');
       Token t;
       t.width = static_cast<std::uint8_t>(run);
@@ -461,6 +456,37 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
       i += 2;
       continue;
     }
+    if (facts.blank_date_letter != '\0' && ascii_lower(c) == facts.blank_date_letter) {
+      scan_run(fmt, i, facts.blank_date_letter);
+      Token t;
+      t.kind = Tok::DateBlank;
+      toks.push_back(t);
+      continue;
+    }
+    if (c == 't' && facts.thai_digit_letter) {
+      out.dbnum_mode = DbNumMode::kThai;
+      ++i;
+      continue;
+    }
+    // `r` spells the era (`ee`, `gggee`) in ja-JP and the year in zh-TW.
+    if (c == 'r' && facts.r_letter != RLetter::kLiteral) {
+      const std::size_t run = scan_run_exact(fmt, i, 'r');
+      Token t;
+      if (facts.r_letter == RLetter::kYear) {
+        t.kind = Tok::DateY4;
+        toks.push_back(t);
+        continue;
+      }
+      if (run >= 2) {
+        t.kind = Tok::EraGGG;
+        t.width = 3;
+        toks.push_back(t);
+      }
+      t.kind = Tok::EraEE;
+      t.width = 2;
+      toks.push_back(t);
+      continue;
+    }
     // ja-JP era year token `e` / `ee`. A bare `e` (or run of `e`) not
     // followed by `+`/`-` is the era-year placeholder when the section is
     // a date section. The renderer falls back to a literal `e` when the
@@ -529,11 +555,6 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     }
     // Keep the slash's source range so the classifier can tell it from a quoted slash.
     if (c == '/') {
-      // A locale with its own date letters rejects `/` between calendar letters (`yyyy/m/d`).
-      if (!invariant_letters && i > 0 && i + 1 < fmt.size() && is_calendar_letter(fmt[i - 1], letters) &&
-          is_calendar_letter(fmt[i + 1], letters)) {
-        out.has_invalid_bracket = true;
-      }
       Token t;
       t.kind = Tok::Literal;
       t.lit_begin = i;
@@ -542,6 +563,10 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
       toks.push_back(t);
       ++i;
       continue;
+    }
+    // An unescaped `n` is no format code and no text (locale_tokens.text_letter_n_time, text_letter_n_date).
+    if (c == 'n') {
+      out.has_invalid_bracket = true;
     }
     // Fallback: preserve one complete UTF-8 scalar as a literal. Malformed
     // input is consumed one byte at a time by `utf8_scalar_width`, so it is

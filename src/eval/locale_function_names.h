@@ -15,7 +15,7 @@ namespace eval {
 /// UTF-8 field per column; an empty field means the locale shows `NAME`.
 extern const char kLocaleFunctionNames[];
 extern const std::size_t kLocaleFunctionNamesSize;
-inline constexpr int kLocaleFunctionNameColumns = 3;
+inline constexpr int kLocaleFunctionNameColumns = 10;
 
 /// Field of `locale` within a record, or -1 when every name is English.
 int locale_function_name_column(ExcelLocale locale) noexcept;

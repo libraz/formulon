@@ -227,6 +227,8 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
       case Tok::DateB2:
         append_pad2_dbnum(out, static_cast<unsigned>(((ymd.y + kBuddhistEraOffset) % 100 + 100) % 100), dbnum);
         break;
+      case Tok::DateBlank:
+        break;
       case Tok::DateB4:
         append_int_dbnum(out, static_cast<long long>(ymd.y + kBuddhistEraOffset), dbnum);
         break;
@@ -287,7 +289,7 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
         break;
       }
       case Tok::AmPm:
-        out.append(pm ? "PM" : "AM");
+        out.append(pm ? facts.pm_name : facts.am_name);
         break;
       case Tok::AP:
         out.append(pm ? "P" : "A");

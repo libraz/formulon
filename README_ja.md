@@ -30,7 +30,7 @@ Excel との既知の差分は [`tests/divergence.yaml`](https://github.com/libr
 - **ワークブック入出力** — `.xlsx` と `.xlsb` を読み込み、再計算し、書き出します。スタイル、条件付き書式、テーブル、ピボットテーブル、印刷レイアウトも扱います。[ファイル形式](https://formulon.libraz.net/ja/compatibility/file-format-support)
 - **ロケールプロファイル** — 7 ロケール × Mac / Windows ホストの、14 種類の Excel 挙動プロファイルを選べます。[ロケールプロファイル](https://formulon.libraz.net/ja/compatibility/locale-profiles)
 - **Excel oracle** — 数式の結果は、7 ロケールの Mac Excel 365 から取得したゴールデンデータとビット単位で照合しています。ピボットと印刷レイアウトは Windows Excel 365 と照合しています。[Oracle テスト](https://formulon.libraz.net/ja/compatibility/oracle-testing)
-- **サイズ上限つきの WASM** — 非圧縮 3.75 MiB、Brotli 960 KiB を超えると CI が失敗します。[サイズ予算](https://formulon.libraz.net/ja/development/size-budgets)
+- **サイズ上限つきの WASM** — 非圧縮 3.75 MiB、Brotli 1024 KiB を超えると CI が失敗します。[サイズ予算](https://formulon.libraz.net/ja/development/size-budgets)
 
 ## インストール
 
@@ -99,7 +99,7 @@ with formulon.Workbook.create_default() as wb:
         print(profile, [wb.get_display_text(0, row, 0)[0] for row in range(3)])
 ```
 
-プロファイル ID は `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}` です。`mac-*` のすべてと `win-365-ja_JP` は Excel で測定したもので、それ以外の `win-*` は Mac での測定値からの推定です。プロファイルはファイルに保存されないため、アプリケーション側で対象の ID を保持し、読み込み後に設定し直してください。
+プロファイル ID は `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` です。`mac-*` のすべてと `win-365-ja_JP` は Excel で測定したもので、それ以外の `win-*` は Mac での測定値からの推定です。プロファイルはファイルに保存されないため、アプリケーション側で対象の ID を保持し、読み込み後に設定し直してください。
 
 ## 対象外
 

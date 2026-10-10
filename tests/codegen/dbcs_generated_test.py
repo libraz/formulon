@@ -41,7 +41,7 @@ class DbcsGeneratedTest(unittest.TestCase):
         # Mirrors the C++ decoder in src/eval/dbcs_table.cpp.
         gen = self.generator
         for table in gen.TABLES:
-            cells = gen.cells_for(table.codec)
+            cells = gen.cells_for(table)
             data = gen.encode_cells(cells)
             bits = "".join(f"{b:08b}" for b in data)
             pos = 0

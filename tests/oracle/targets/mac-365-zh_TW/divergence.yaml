@@ -1,0 +1,22 @@
+# Mac Excel 365 (zh-TW) variant-specific divergences.
+#
+# The global registry supplies unscoped skips and entries whose applies_to
+# includes mac-365-zh_TW.
+
+entries:
+  - id: lenb_combining_dakuten
+    applies_to: [mac-365-zh_TW]
+    mode: skip-oracle
+    cause: non-identifiable
+    reason: "LENB(\"か\" & UNICHAR(12441)) is 3 in Mac Excel zh-TW: U+3099 counts one byte, while hiragana, hangul, U+3000, U+2460 and U+1F600 count two whether or not Big5 encodes them. One probe cannot tell a combining-mark rule from a U+3099 special case or a code-page conversion artefact, so no byte-count rule is identified. Value: tests/oracle/targets/mac-365-zh_TW/golden/text.golden.json."
+    prefer: mac
+    first_noted: 2026-10-10
+    last_verified_excel_version: "16.113.3"
+  - id: lenb_latin_extended
+    applies_to: [mac-365-zh_TW]
+    mode: skip-oracle
+    cause: non-identifiable
+    reason: "LENB(\"â\") is 1 in Mac Excel zh-TW, where ja-JP, zh-CN and ko-KR count two: U+00E2 is outside Big5, yet hangul, hiragana and U+1F600, also outside it, count two. One probe cannot tell a Latin-1 rule from a single-character special case, so no byte-count rule is identified. Value: tests/oracle/targets/mac-365-zh_TW/golden/text.golden.json."
+    prefer: mac
+    first_noted: 2026-10-10
+    last_verified_excel_version: "16.113.3"

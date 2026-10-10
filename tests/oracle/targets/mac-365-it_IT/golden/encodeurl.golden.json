@@ -1,0 +1,59 @@
+{
+  "suite": "encodeurl",
+  "description": "ENCODEURL -- RFC 3986 percent-encoding with uppercase hex (Excel 365 Mac ja-JP)",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "it-IT",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T22:00:26Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "encodeurl_space",
+      "formula": "=ENCODEURL(\"hello world\")",
+      "setup": {},
+      "skipped": "Mac Excel 365 ja-JP does not register ENCODEURL: the name resolves to #NAME? and Excel's own ERROR.TYPE(ENCODEURL(...)) returns 5, so the primary target produces no value to compare against. Scoped to the Mac target; a Windows host has the function and can capture these cases. Historical Windows files remain reference-only until a product-verified Microsoft 365 capture exists."
+    },
+    {
+      "id": "encodeurl_query_string_chars",
+      "formula": "=ENCODEURL(\"a/b c?d=1&e=2\")",
+      "setup": {},
+      "skipped": "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?; ERROR.TYPE = 5). Formulon: \"a/b c?d=1&e=2\" -> \"a%2Fb%20c%3Fd%3D1%26e%3D2\"."
+    },
+    {
+      "id": "encodeurl_unreserved_passthrough",
+      "formula": "=ENCODEURL(\"ABCabc012-_.~\")",
+      "setup": {},
+      "skipped": "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?; ERROR.TYPE = 5). Formulon: unreserved characters pass through and `~` encodes as %7E (Excel's documented tilde behavior; pinned by tests/unit/eval/builtins_web_test.cpp, not by win-365-ja_JP which is reference-only)."
+    },
+    {
+      "id": "encodeurl_japanese_utf8",
+      "formula": "=ENCODEURL(\"日本語\")",
+      "setup": {},
+      "skipped": "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?; ERROR.TYPE = 5). Formulon: \"日本語\" -> \"%E6%97%A5%E6%9C%AC%E8%AA%9E\" (UTF-8 byte expansion, uppercase hex)."
+    },
+    {
+      "id": "encodeurl_bool_true",
+      "formula": "=ENCODEURL(TRUE)",
+      "setup": {},
+      "skipped": "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?; ERROR.TYPE = 5). Formulon coerces TRUE -> \"TRUE\" then percent-encodes -> \"TRUE\" (all unreserved)."
+    },
+    {
+      "id": "encodeurl_empty_string",
+      "formula": "=ENCODEURL(\"\")",
+      "setup": {},
+      "skipped": "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?; ERROR.TYPE = 5). Formulon: \"\" -> \"\" (empty input passes through)."
+    },
+    {
+      "id": "encodeurl_percent_self_encodes",
+      "formula": "=ENCODEURL(\"100%\")",
+      "setup": {},
+      "skipped": "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?; ERROR.TYPE = 5). Formulon: \"100%\" -> \"100%25\" (percent itself is reserved)."
+    }
+  ]
+}

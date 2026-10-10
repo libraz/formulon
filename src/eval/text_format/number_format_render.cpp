@@ -37,6 +37,7 @@ namespace {
 const char* const kFullwidthDigits[10] = {"\xEF\xBC\x90", "\xEF\xBC\x91", "\xEF\xBC\x92", "\xEF\xBC\x93",
                                           "\xEF\xBC\x94", "\xEF\xBC\x95", "\xEF\xBC\x96", "\xEF\xBC\x97",
                                           "\xEF\xBC\x98", "\xEF\xBC\x99"};
+const char* const kThaiDigits[10] = {"๐", "๑", "๒", "๓", "๔", "๕", "๖", "๗", "๘", "๙"};
 
 }  // namespace
 
@@ -54,6 +55,8 @@ std::string_view dbnum_digit_subst(DbNumMode mode, char c) noexcept {
       return locale_facts(eval::current_eval_profile()).dbnum_digits[1][digit];
     case DbNumMode::kDBNum3:
       return kFullwidthDigits[digit];
+    case DbNumMode::kThai:
+      return kThaiDigits[digit];
     case DbNumMode::kNone:
     default:
       return {};

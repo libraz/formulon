@@ -190,7 +190,7 @@ bool parse_mmm_month(std::string_view& s, int* out_month, bool hyphenated) noexc
   const LocaleFacts& facts = locale_facts(current_eval_profile());
   const bool english = facts.english_month_names;
   for (int tier = 0; tier < 2; ++tier) {
-    const bool english_tier = english || (hyphenated && tier == 1);
+    const bool english_tier = english || (hyphenated && tier == 1 && facts.hyphen_english_months);
     const auto& local_names = tier == 0 ? facts.month_long : facts.month_short;
     const auto* english_names = tier == 0 ? kFullNames : kShortNames;
     for (std::size_t i = 0; i < 12; ++i) {
@@ -708,9 +708,9 @@ bool parse_kanji_time_text(std::string_view s, double* out_frac, std::string_vie
   return true;
 }
 
-// Consumes a 12-hour marker -- A, P, AM or PM, any case, after at least one space -- and an optional trailing "."
-// (attached or after a space, as the locale allows). A lone letter must end the word, so "10:00 Apr 5" does not
-// read "A" as a marker.
+// Consumes a 12-hour marker -- A, P, AM, PM or the locale spelling, any case, after at least one space -- and an
+// optional trailing "." (attached or after a space, as the locale allows). A lone letter must end the word, so
+// "10:00 Apr 5" does not read "A" as a marker.
 bool scan_meridiem(std::string_view* s, bool* pm) noexcept {
   std::string_view tail = *s;
   std::size_t space_count = 0;
@@ -722,6 +722,23 @@ bool scan_meridiem(std::string_view* s, bool* pm) noexcept {
     return false;
   }
   const auto upper = [](char c) { return static_cast<char>(c >= 'a' && c <= 'z' ? c - ('a' - 'A') : c); };
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  // A localized marker (`a.m.`) is taken whole, ending the word.
+  for (const bool is_pm : {false, true}) {
+    const std::string_view name = is_pm ? facts.pm_name : facts.am_name;
+    if (name == (is_pm ? "PM" : "AM") || tail.size() < name.size()) {
+      continue;
+    }
+    bool same = true;
+    for (std::size_t k = 0; k < name.size() && same; ++k) {
+      same = upper(tail[k]) == upper(name[k]);
+    }
+    if (same && (tail.size() == name.size() || tail[name.size()] == ' ' || tail[name.size()] == '\t')) {
+      *pm = is_pm;
+      *s = tail.substr(name.size());
+      return true;
+    }
+  }
   const char c0 = upper(tail[0]);
   if (c0 != 'A' && c0 != 'P') {
     return false;
@@ -733,7 +750,6 @@ bool scan_meridiem(std::string_view* s, bool* pm) noexcept {
   } else {
     return false;
   }
-  const LocaleFacts& facts = locale_facts(current_eval_profile());
   std::string_view dotted = tail;
   while (!dotted.empty() && (dotted[0] == ' ' || dotted[0] == '\t')) {
     dotted.remove_prefix(1);

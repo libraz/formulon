@@ -2,6 +2,7 @@
 // JIS X 0208: 6879 of 8836 cells mapped, 9049 encoded bytes.
 // @size-budget: 10 KB
 
+#include <cstddef>
 #include <cstdint>
 
 #include "eval/dbcs_table.h"
@@ -10,6 +11,9 @@ namespace formulon {
 namespace eval {
 namespace dbcs_detail {
 namespace {
+
+constexpr DbcsShape kShape = {1, 94, {{1, 94}, {0, 0}}};
+constexpr std::size_t kSlots = 8836;
 
 constexpr std::uint8_t kEncoded[] = {
     0x00, 0x18, 0x02, 0x20, 0x05, 0x00, 0x40, 0x68, 0x85, 0x20, 0x02, 0x0D, 0xE1, 0x29, 0x0E, 0x1F, 0x40, 0x01, 0x40,
@@ -493,9 +497,10 @@ constexpr std::uint8_t kEncoded[] = {
 
 }  // namespace
 
-const std::uint16_t* jis0208_cells() noexcept {
-  static const DbcsCells cells(kEncoded, sizeof(kEncoded));
-  return cells.unicode;
+const DbcsGrid& jis0208_grid() noexcept {
+  static const DbcsCells<kSlots> cells(kEncoded, sizeof(kEncoded));
+  static const DbcsGrid grid = {kShape, cells.unicode};
+  return grid;
 }
 
 }  // namespace dbcs_detail

@@ -322,11 +322,11 @@ class GateTargetsTest(unittest.TestCase):
         self.assertEqual(gate_target_names(doc, "formula"), ["b", "a"])
         self.assertEqual(gate_target_names(doc, "cf"), [])
 
-    def test_committed_manifest_gates_six_mac_targets(self) -> None:
+    def test_committed_manifest_gates_thirteen_mac_targets(self) -> None:
         import yaml
 
         doc = yaml.safe_load((Path(__file__).parent / "targets.yaml").read_text(encoding="utf-8"))
-        self.assertEqual(len(gate_target_names(doc, "formula")), 6)
+        self.assertEqual(len(gate_target_names(doc, "formula")), 13)
 
     def test_complete_gate_passes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

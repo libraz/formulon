@@ -26,7 +26,7 @@ parsed or evaluated.
   `fm_function_canonicalize` (and the formula-text and locale-facts calls
   `fm_formula_localize`, `fm_formula_canonicalize`, `fm_locale_facts`) — are
   keyed by an Excel profile id (`{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,
-  zh_CN,ko_KR,th_TH}`) and are **not** driven by this provider. They carry
+  zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`) and are **not** driven by this provider. They carry
   Excel's own spelling of function names, separators and error names; this
   provider carries display text only.
 - `ja-JP` function names are identical to the English canonical names

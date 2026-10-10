@@ -2,6 +2,7 @@
 // KS X 1001: 8225 of 8836 cells mapped, 11013 encoded bytes.
 // @size-budget: 11 KB
 
+#include <cstddef>
 #include <cstdint>
 
 #include "eval/dbcs_table.h"
@@ -10,6 +11,9 @@ namespace formulon {
 namespace eval {
 namespace dbcs_detail {
 namespace {
+
+constexpr DbcsShape kShape = {1, 94, {{1, 94}, {0, 0}}};
+constexpr std::size_t kSlots = 8836;
 
 constexpr std::uint8_t kEncoded[] = {
     0x00, 0x18, 0x02, 0x20, 0x05, 0x00, 0x41, 0x8A, 0x54, 0x9D, 0xB9, 0x00, 0x21, 0x1B, 0xEC, 0xDD, 0x6C, 0xFD, 0x56,
@@ -596,9 +600,10 @@ constexpr std::uint8_t kEncoded[] = {
 
 }  // namespace
 
-const std::uint16_t* ksx1001_cells() noexcept {
-  static const DbcsCells cells(kEncoded, sizeof(kEncoded));
-  return cells.unicode;
+const DbcsGrid& ksx1001_grid() noexcept {
+  static const DbcsCells<kSlots> cells(kEncoded, sizeof(kEncoded));
+  static const DbcsGrid grid = {kShape, cells.unicode};
+  return grid;
 }
 
 }  // namespace dbcs_detail

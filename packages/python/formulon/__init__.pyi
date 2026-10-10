@@ -33,6 +33,20 @@ ExcelProfileId = Literal[
     "win-365-ko_KR",
     "mac-365-th_TH",
     "win-365-th_TH",
+    "mac-365-es_ES",
+    "win-365-es_ES",
+    "mac-365-es_MX",
+    "win-365-es_MX",
+    "mac-365-pt_BR",
+    "win-365-pt_BR",
+    "mac-365-ru_RU",
+    "win-365-ru_RU",
+    "mac-365-zh_TW",
+    "win-365-zh_TW",
+    "mac-365-it_IT",
+    "win-365-it_IT",
+    "mac-365-nl_NL",
+    "win-365-nl_NL",
 ]
 
 __version__: str

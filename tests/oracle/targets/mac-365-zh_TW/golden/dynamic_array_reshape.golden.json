@@ -1,0 +1,2292 @@
+{
+  "suite": "dynamic_array_reshape",
+  "description": "dynamic_array_reshape family — TAKE, DROP, EXPAND, TOCOL, TOROW, WRAPCOLS, WRAPROWS, HSTACK, VSTACK, CHOOSECOLS, CHOOSEROWS, TRIMRANGE. Spill outputs and scalar errors are captured live by the array-aware oracle harness.",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "zh-TW",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T20:22:54Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "take_head_rows_positive",
+      "formula": "=TAKE({1,2,3;4,5,6;7,8,9}, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "id": "take_tail_rows_negative",
+      "formula": "=TAKE({1,2,3;4,5,6;7,8,9}, -1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          7.0,
+          8.0,
+          9.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "take_head_cols_positive",
+      "formula": "=TAKE({1,2,3;4,5,6}, 2, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          4.0,
+          5.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "take_tail_cols_negative",
+      "formula": "=TAKE({1,2,3;4,5,6}, 2, -2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          3.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "take_count_exceeds_dimension",
+      "formula": "=TAKE({10;20;30}, 99)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          20.0,
+          30.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "take_single_cell_result",
+      "formula": "=TAKE({42}, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "take_rows_zero_with_cols",
+      "formula": "=TAKE({1,2,3;4,5,6}, 0, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "take_omitted_rows_keeps_source_height",
+      "formula": "=TAKE({1,2,3;4,5,6},,2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          4.0,
+          5.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "take_omitted_cols_keeps_source_width",
+      "formula": "=TAKE({1,2,3;4,5,6},2,)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "id": "drop_head_rows_positive",
+      "formula": "=DROP({1,2;3,4;5,6}, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "drop_tail_rows_negative",
+      "formula": "=DROP({1,2;3,4;5,6}, -1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "drop_head_cols_positive",
+      "formula": "=DROP({1,2,3;4,5,6}, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          3.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "drop_count_eq_row_count_error",
+      "formula": "=DROP({1;2;3}, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "drop_count_exceeds_row_count_error",
+      "formula": "=DROP({1;2}, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "drop_zero_identity",
+      "formula": "=DROP({1,2;3,4}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "drop_negative_cols_all_error",
+      "formula": "=DROP({1,2;3,4}, 0, -2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "drop_omitted_rows_keeps_source_height",
+      "formula": "=DROP({1,2,3;4,5,6},,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          3.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "drop_omitted_cols_keeps_source_width",
+      "formula": "=DROP({1,2,3;4,5,6},1,)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "expand_explicit_pad_with",
+      "formula": "=EXPAND({1,2;3,4}, 3, 3, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          0.0,
+          3.0,
+          4.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "id": "expand_default_pad_na",
+      "formula": "=EXPAND({1,2;3,4}, 3, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          3.0,
+          4.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "id": "expand_target_rows_smaller_error",
+      "formula": "=EXPAND({1,2;3,4;5,6}, 2, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "expand_target_cols_smaller_error",
+      "formula": "=EXPAND({1,2,3;4,5,6}, 3, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "expand_scalar_to_2x2",
+      "formula": "=EXPAND({7}, 2, 2, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          7.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "expand_col_vector_to_matrix",
+      "formula": "=EXPAND({1;2;3}, 3, 3, 99)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          99.0,
+          99.0,
+          2.0,
+          99.0,
+          99.0,
+          3.0,
+          99.0,
+          99.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "id": "expand_identity_pass_through",
+      "formula": "=EXPAND({1,2;3,4}, 2, 2, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "expand_omitted_rows_keeps_source_height",
+      "formula": "=EXPAND({1,2;3,4},,4)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          3.0,
+          4.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          4
+        ]
+      }
+    },
+    {
+      "id": "expand_omitted_cols_keeps_source_width",
+      "formula": "=EXPAND({1,2;3,4},3,)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "expand_explicit_empty_pad_count",
+      "formula": "=COUNT(EXPAND({1,2;3,4},3,4,))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "expand_explicit_empty_pad_direct_spill",
+      "formula": "=EXPAND({1,2;3,4},3,4,)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          0.0,
+          0.0,
+          3.0,
+          4.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          3,
+          4
+        ]
+      }
+    },
+    {
+      "id": "expand_explicit_empty_pad_spill_ref_count",
+      "formula": "=COUNT(A1#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=EXPAND({1,2;3,4},3,4,)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "expand_explicit_empty_pad_spill_ref_isblank",
+      "formula": "=ISBLANK(INDEX(A1#,3,4))",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=EXPAND({1,2;3,4},3,4,)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "expand_blank_ref_pad_count",
+      "formula": "=COUNT(EXPAND({1,2;3,4},3,4,D1))",
+      "setup": {
+        "D1": {
+          "kind": "blank"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "expand_empty_text_pad_is_text",
+      "formula": "=ISTEXT(INDEX(EXPAND({1,2;3,4},3,4,\"\"),3,4))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "tocol_row_major_default",
+      "formula": "=TOCOL({1,2;3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          4,
+          1
+        ]
+      }
+    },
+    {
+      "id": "tocol_column_major",
+      "formula": "=TOCOL({1,2;3,4}, 0, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          2.0,
+          4.0
+        ],
+        "shape": [
+          4,
+          1
+        ]
+      }
+    },
+    {
+      "id": "tocol_ignore_blanks",
+      "formula": "=TOCOL({1,\"\",2;\"\",3,\"\"}, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          "",
+          2.0,
+          "",
+          3.0,
+          ""
+        ],
+        "shape": [
+          6,
+          1
+        ]
+      }
+    },
+    {
+      "id": "tocol_ignore_errors",
+      "formula": "=TOCOL({1,#N/A;2,3}, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "tocol_ignore_both",
+      "formula": "=TOCOL({1,#N/A;\"\",3}, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          "",
+          3.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "tocol_all_blank_ignore_one_error",
+      "formula": "=TOCOL({\"\",\"\"}, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          ""
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "tocol_single_row_to_column",
+      "formula": "=TOCOL({10,20,30})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          20.0,
+          30.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "torow_row_major_default",
+      "formula": "=TOROW({1,2;3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          1,
+          4
+        ]
+      }
+    },
+    {
+      "id": "torow_column_major",
+      "formula": "=TOROW({1,2;3,4}, 0, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          2.0,
+          4.0
+        ],
+        "shape": [
+          1,
+          4
+        ]
+      }
+    },
+    {
+      "id": "torow_ignore_blanks",
+      "formula": "=TOROW({\"\",1,\"\",2}, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          1.0,
+          "",
+          2.0
+        ],
+        "shape": [
+          1,
+          4
+        ]
+      }
+    },
+    {
+      "id": "torow_ignore_errors",
+      "formula": "=TOROW({#VALUE!,1,#N/A,2}, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "torow_ignore_both",
+      "formula": "=TOROW({\"\",#N/A,1,#VALUE!,2}, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          1.0,
+          2.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "torow_all_errors_ignore_two_error",
+      "formula": "=TOROW({#N/A,#VALUE!}, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "torow_single_column_to_row",
+      "formula": "=TOROW({10;20;30})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          20.0,
+          30.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "wrapcols_even_no_padding",
+      "formula": "=WRAPCOLS({1,2,3,4,5,6}, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          4.0,
+          2.0,
+          5.0,
+          3.0,
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "wrapcols_odd_default_pad_na",
+      "formula": "=WRAPCOLS({1,2,3,4,5}, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          5.0,
+          2.0,
+          4.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "id": "wrapcols_explicit_pad_with",
+      "formula": "=WRAPCOLS({1,2,3,4,5}, 2, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          5.0,
+          2.0,
+          4.0,
+          0.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "id": "wrapcols_zero_count_error",
+      "formula": "=WRAPCOLS({1,2,3}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "wrapcols_count_exceeds_length",
+      "formula": "=WRAPCOLS({1,2,3}, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "wrapcols_column_input",
+      "formula": "=WRAPCOLS({1;2;3;4}, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          2.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "wrapcols_count_one",
+      "formula": "=WRAPCOLS({10,20,30}, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          20.0,
+          30.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "wraprows_even_no_padding",
+      "formula": "=WRAPROWS({1,2,3,4,5,6}, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "id": "wraprows_odd_default_pad_na",
+      "formula": "=WRAPROWS({1,2,3,4,5}, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "id": "wraprows_explicit_pad_with",
+      "formula": "=WRAPROWS({1,2,3,4,5}, 3, -1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          -1.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "id": "wraprows_zero_count_error",
+      "formula": "=WRAPROWS({1,2,3}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "wraprows_count_exceeds_length",
+      "formula": "=WRAPROWS({1,2,3}, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "wraprows_column_input",
+      "formula": "=WRAPROWS({1;2;3;4}, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "wraprows_count_one",
+      "formula": "=WRAPROWS({10,20,30}, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          20.0,
+          30.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "hstack_same_height",
+      "formula": "=HSTACK({1;2;3}, {4;5;6})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          4.0,
+          2.0,
+          5.0,
+          3.0,
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "hstack_ragged_padded",
+      "formula": "=HSTACK({1;2;3}, {4;5})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          4.0,
+          2.0,
+          5.0,
+          3.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "hstack_three_args",
+      "formula": "=HSTACK({1,2}, {3,4}, {5,6})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          1,
+          6
+        ]
+      }
+    },
+    {
+      "id": "hstack_single_row",
+      "formula": "=HSTACK({1,2,3}, {4,5,6})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          1,
+          6
+        ]
+      }
+    },
+    {
+      "id": "hstack_error_cell_propagates",
+      "formula": "=HSTACK({1;#N/A;3}, {4;5;6})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          4.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          5.0,
+          3.0,
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "hstack_scalars",
+      "formula": "=HSTACK({1}, {2})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "hstack_2d_ragged_row_mismatch",
+      "formula": "=HSTACK({1,2;3,4}, {5;6;7})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          5.0,
+          3.0,
+          4.0,
+          6.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          7.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "id": "vstack_same_width",
+      "formula": "=VSTACK({1,2,3}, {4,5,6})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "id": "vstack_ragged_padded",
+      "formula": "=VSTACK({1,2,3}, {4,5})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "id": "vstack_three_args",
+      "formula": "=VSTACK({1;2}, {3;4}, {5;6})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          6,
+          1
+        ]
+      }
+    },
+    {
+      "id": "vstack_single_col",
+      "formula": "=VSTACK({1;2;3}, {4;5;6})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          6,
+          1
+        ]
+      }
+    },
+    {
+      "id": "vstack_error_cell_propagates",
+      "formula": "=VSTACK({1,2,3}, {#VALUE!,5,6})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "id": "vstack_scalars",
+      "formula": "=VSTACK({1}, {2})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "vstack_2d_ragged_col_mismatch",
+      "formula": "=VSTACK({1,2;3,4}, {5,6,7})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          3.0,
+          4.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          5.0,
+          6.0,
+          7.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "id": "choosecols_single_positive",
+      "formula": "=CHOOSECOLS({1,2,3;4,5,6}, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          5.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "choosecols_multiple_positive",
+      "formula": "=CHOOSECOLS({1,2,3;4,5,6}, 1, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          4.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "choosecols_negative_index",
+      "formula": "=CHOOSECOLS({1,2,3;4,5,6}, -1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          3.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "choosecols_repeated_index",
+      "formula": "=CHOOSECOLS({1,2,3;4,5,6}, 2, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          2.0,
+          5.0,
+          5.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "choosecols_out_of_range_positive_error",
+      "formula": "=CHOOSECOLS({1,2,3}, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "choosecols_out_of_range_negative_error",
+      "formula": "=CHOOSECOLS({1,2,3}, -5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "choosecols_index_zero_error",
+      "formula": "=CHOOSECOLS({1,2,3}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "chooserows_single_positive",
+      "formula": "=CHOOSEROWS({1,2,3;4,5,6;7,8,9}, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "chooserows_multiple_positive",
+      "formula": "=CHOOSEROWS({1,2,3;4,5,6;7,8,9}, 1, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          7.0,
+          8.0,
+          9.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "id": "chooserows_negative_index",
+      "formula": "=CHOOSEROWS({1,2,3;4,5,6;7,8,9}, -1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          7.0,
+          8.0,
+          9.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "chooserows_repeated_index",
+      "formula": "=CHOOSEROWS({1,2,3;4,5,6}, 1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "id": "chooserows_out_of_range_positive_error",
+      "formula": "=CHOOSEROWS({1,2;3,4}, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "chooserows_out_of_range_negative_error",
+      "formula": "=CHOOSEROWS({1,2;3,4}, -5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "chooserows_index_zero_error",
+      "formula": "=CHOOSEROWS({1,2;3,4}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "trimrange_default_trim_both_edges",
+      "formula": "=TRIMRANGE(A1:D5)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "trimrange_trim_rows_zero_keeps_all",
+      "formula": "=TRIMRANGE(A1:D5, 0)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          5,
+          2
+        ]
+      }
+    },
+    {
+      "id": "trimrange_trim_rows_leading_only",
+      "formula": "=TRIMRANGE(A1:D5, 1)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          4,
+          2
+        ]
+      }
+    },
+    {
+      "id": "trimrange_trim_rows_trailing_only",
+      "formula": "=TRIMRANGE(A1:D5, 2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.0,
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "trimrange_invalid_mode_value_error",
+      "formula": "=TRIMRANGE(A1:A3, 4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "trimrange_scalar_error_propagates",
+      "formula": "=TRIMRANGE(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "trimrange_all_blank_ref_error",
+      "formula": "=TRIMRANGE(A1:A3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "trimrange_internal_blank_direct_spill",
+      "formula": "=TRIMRANGE(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          0.0,
+          2.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "trimrange_internal_blank_nested_count",
+      "formula": "=COUNT(TRIMRANGE(A1:A3))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "trimrange_internal_blank_nested_counta",
+      "formula": "=COUNTA(TRIMRANGE(A1:A3))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "transpose_all_blank_counta",
+      "formula": "=COUNTA(TRANSPOSE(A1:D1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "filter_all_blank_counta",
+      "formula": "=COUNTA(FILTER(A1:D1,{1,1,1,1}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "transpose_partial_blank_counta",
+      "formula": "=COUNTA(TRANSPOSE(A1:D1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "wraprows_all_blank_counta",
+      "formula": "=COUNTA(WRAPROWS(A1:D1,2))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "wrapcols_all_blank_counta",
+      "formula": "=COUNTA(WRAPCOLS(A1:D1,2))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "tocol_all_blank_counta",
+      "formula": "=COUNTA(TOCOL(A1:D1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "trimref_trailing_sum",
+      "formula": "=SUM(A1:.A10)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "trimref_trailing_rows",
+      "formula": "=ROWS(A1:.A10)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trimref_both_rows",
+      "formula": "=ROWS(A1.:.A10)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "trimref_leading_rows",
+      "formula": "=ROWS(A1.:A10)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "trimref_trimrange_rows",
+      "formula": "=ROWS(TRIMRANGE(A1:A10))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trimref_whole_column",
+      "formula": "=ROWS(A:.A)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trimref_columns",
+      "formula": "=COLUMNS(A1:.E1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trimref_whole_column_leading",
+      "formula": "=ROWS(A.:A)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1048575.0
+      }
+    },
+    {
+      "id": "trimref_whole_column_both",
+      "formula": "=ROWS(A.:.A)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "trimref_two_dimensional",
+      "formula": "=ROWS(A1:.C10)&\"x\"&COLUMNS(A1:.C10)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2x2"
+      }
+    },
+    {
+      "id": "trimref_all_blank",
+      "formula": "=ROWS(A1:.A10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "trimref_interior_gap",
+      "formula": "=ROWS(A1:.A10)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "trimref_both_sum",
+      "formula": "=SUM(A1.:.A10)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trimref_whole_row",
+      "formula": "=COLUMNS(1:.1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 26.0
+      }
+    },
+    {
+      "id": "trimref_whole_row_outside",
+      "formula": "=COLUMNS(1:.1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "formula_cell": "Z2",
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trimref_whole_columns_two",
+      "formula": "=ROWS(A:.B)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "trimref_formula_empty_text",
+      "formula": "=ROWS(A1:.A10)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "trimref_sheet_qualified",
+      "formula": "=ROWS(Sheet2!A1:.A10)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Sheet2!A2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "choosecols_arr1",
+      "formula": "=CHOOSECOLS({1,2,3},{2})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "chooserows_arr1",
+      "formula": "=CHOOSEROWS({1;2;3},{2})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "trimrange_empty",
+      "formula": "=TRIMRANGE(A1:A10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "cc_vertical_idx",
+      "formula": "=CHOOSECOLS({1,2,3},{2;3})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          3.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "cc_2d_idx",
+      "formula": "=CHOOSECOLS({1,2,3},{1,2;3,1})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "cc_neg_arr",
+      "formula": "=CHOOSECOLS({1,2,3},{-1,1})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          3.0,
+          1.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "snap_choosecols_idx",
+      "formula": "=CHOOSECOLS({1,2,3},1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    }
+  ]
+}

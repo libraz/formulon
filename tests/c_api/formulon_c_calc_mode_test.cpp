@@ -185,7 +185,7 @@ TEST(FormulonCApiCalcMode, UnknownExcelProfileIdRejected) {
 
   fm_status_t rc = fm_workbook_set_excel_profile_id(wb.handle, "linux-365-ja_JP");
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  rc = fm_workbook_set_excel_profile_id(wb.handle, "mac-365-nl_NL");
+  rc = fm_workbook_set_excel_profile_id(wb.handle, "mac-365-pt_PT");
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
   const char* profile = nullptr;

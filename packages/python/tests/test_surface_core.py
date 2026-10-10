@@ -255,8 +255,30 @@ class CalcPolicyTests(unittest.TestCase):
             "mac-365-zh_CN": "(\u00a51,234.57)",
             "mac-365-ko_KR": "(\u20a91,235)",
             "mac-365-th_TH": "(\u0e3f1,234.57)",
+            "mac-365-es_ES": "-1.234,57 \u20ac",
+            "mac-365-es_MX": "-$1,234.57",
+            "mac-365-pt_BR": "-R$ 1.234,57",
+            "mac-365-ru_RU": "-1 234,57 \u20bd",
+            "mac-365-zh_TW": "($1,234.57)",
+            "mac-365-it_IT": "-1.234,57 \u20ac",
+            "mac-365-nl_NL": "(\u20ac 1.234,57)",
         }
-        locales = ("ja_JP", "en_US", "de_DE", "fr_FR", "zh_CN", "ko_KR", "th_TH")
+        locales = (
+            "ja_JP",
+            "en_US",
+            "de_DE",
+            "fr_FR",
+            "zh_CN",
+            "ko_KR",
+            "th_TH",
+            "es_ES",
+            "es_MX",
+            "pt_BR",
+            "ru_RU",
+            "zh_TW",
+            "it_IT",
+            "nl_NL",
+        )
         with Workbook.create_default() as wb:
             self.assertEqual(wb.excel_profile_id(), "win-365-en_US")
             wb.set_formula(0, 0, 0, "=DOLLAR(-1234.567)")

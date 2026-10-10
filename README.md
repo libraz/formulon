@@ -30,7 +30,7 @@ Known differences from Excel are listed case by case in [`tests/divergence.yaml`
 - **Workbook I/O** — read, recalculate and write `.xlsx` and `.xlsb`, including styles, conditional formatting, tables, pivot tables and print layout. [File formats](https://formulon.libraz.net/compatibility/file-format-support)
 - **Locale profiles** — 14 Excel behavior profiles across seven locales on Mac and Windows hosts. [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
 - **Excel oracle** — formula results are compared bit for bit against goldens captured from Mac Excel 365 in seven locales; pivot and print layout against Windows Excel 365. [Oracle testing](https://formulon.libraz.net/compatibility/oracle-testing)
-- **Size-budgeted WASM** — CI fails the build above 3.75 MiB uncompressed or 960 KiB Brotli. [Size budgets](https://formulon.libraz.net/development/size-budgets)
+- **Size-budgeted WASM** — CI fails the build above 3.75 MiB uncompressed or 1024 KiB Brotli. [Size budgets](https://formulon.libraz.net/development/size-budgets)
 
 ## Installation
 
@@ -99,7 +99,7 @@ with formulon.Workbook.create_default() as wb:
         print(profile, [wb.get_display_text(0, row, 0)[0] for row in range(3)])
 ```
 
-The ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}`. Every `mac-*` profile and `win-365-ja_JP` is measured against Excel; the other `win-*` profiles are estimated from the Mac measurements. The profile is not saved into the file, so store the id your application targets and apply it again after loading.
+The ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. Every `mac-*` profile and `win-365-ja_JP` is measured against Excel; the other `win-*` profiles are estimated from the Mac measurements. The profile is not saved into the file, so store the id your application targets and apply it again after loading.
 
 ## Non-goals
 

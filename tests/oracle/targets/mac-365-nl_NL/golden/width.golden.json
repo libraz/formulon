@@ -1,0 +1,305 @@
+{
+  "suite": "width",
+  "description": "ASC / JIS / DBCS width-conversion functions for Japanese text (ja-JP)",
+  "environment": {
+    "excel_version": "16.113.4",
+    "excel_locale": "nl-NL",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-10T00:27:13Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "asc_fullwidth_letter",
+      "formula": "=ASC(\"Ａ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Ａ"
+      }
+    },
+    {
+      "id": "asc_fullwidth_ascii_with_space",
+      "formula": "=ASC(\"ＡＢＣ　１２３\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ＡＢＣ　１２３"
+      }
+    },
+    {
+      "id": "asc_voiced_ga",
+      "formula": "=ASC(\"ガ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ガ"
+      }
+    },
+    {
+      "id": "asc_semivoiced_row",
+      "formula": "=ASC(\"パピプペポ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "パピプペポ"
+      }
+    },
+    {
+      "id": "asc_voiced_vu",
+      "formula": "=ASC(\"ヴ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ヴ"
+      }
+    },
+    {
+      "id": "asc_hiragana_passthrough",
+      "formula": "=ASC(\"ひらがな\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ひらがな"
+      }
+    },
+    {
+      "id": "dbcs_alias_ascii",
+      "formula": "=DBCS(\"ABC\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ABC"
+      }
+    },
+    {
+      "id": "asc_idempotent_on_halfwidth",
+      "formula": "=ASC(\"ABC123\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ABC123"
+      }
+    },
+    {
+      "id": "asc_idempotent_on_kanji",
+      "formula": "=ASC(\"漢字\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "漢字"
+      }
+    },
+    {
+      "id": "asc_mixed_fullhalf",
+      "formula": "=ASC(\"ＡB Ｃd\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ＡB Ｃd"
+      }
+    },
+    {
+      "id": "asc_with_kanji",
+      "formula": "=ASC(\"漢ＡＢ字\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "漢ＡＢ字"
+      }
+    },
+    {
+      "id": "asc_punctuation",
+      "formula": "=ASC(\"！＠＃＄％\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "！＠＃＄％"
+      }
+    },
+    {
+      "id": "asc_yen_sign",
+      "formula": "=ASC(\"￥\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "￥"
+      }
+    },
+    {
+      "id": "asc_full_voiced_row",
+      "formula": "=ASC(\"ガギグゲゴ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ガギグゲゴ"
+      }
+    },
+    {
+      "id": "dbcs_voiced_recompose",
+      "formula": "=DBCS(\"ｶﾞ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ｶﾞ"
+      }
+    },
+    {
+      "id": "dbcs_kanji_passthrough",
+      "formula": "=DBCS(\"漢字\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "漢字"
+      }
+    },
+    {
+      "id": "dbcs_ascii_and_space",
+      "formula": "=DBCS(\"ABC 123\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ABC 123"
+      }
+    },
+    {
+      "id": "dbcs_semivoiced_row",
+      "formula": "=DBCS(\"ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ"
+      }
+    },
+    {
+      "id": "dbcs_unvoiced_row",
+      "formula": "=DBCS(\"ｱｲｳｴｵ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ｱｲｳｴｵ"
+      }
+    },
+    {
+      "id": "dbcs_idempotent_on_fullwidth",
+      "formula": "=DBCS(\"ＡＢＣ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ＡＢＣ"
+      }
+    },
+    {
+      "id": "dbcs_idempotent_on_kanji",
+      "formula": "=DBCS(\"漢字\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "漢字"
+      }
+    },
+    {
+      "id": "dbcs_mixed_halfkata_kanji",
+      "formula": "=DBCS(\"漢ｱ字\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "漢ｱ字"
+      }
+    },
+    {
+      "id": "dbcs_orphan_dakuten",
+      "formula": "=DBCS(\"ﾞ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ﾞ"
+      }
+    },
+    {
+      "id": "dbcs_half_punctuation",
+      "formula": "=DBCS(\"!@#$%\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "!@#$%"
+      }
+    },
+    {
+      "id": "dbcs_round_trip",
+      "formula": "=ASC(DBCS(\"ABC123\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ABC123"
+      }
+    },
+    {
+      "id": "dbcs_asc_round_trip",
+      "formula": "=DBCS(ASC(\"ＡＢＣ１２３\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ＡＢＣ１２３"
+      }
+    },
+    {
+      "id": "dbcs_bool_coerces",
+      "formula": "=DBCS(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "WAAR"
+      }
+    },
+    {
+      "id": "dbcs_error_propagates",
+      "formula": "=DBCS(#DIV/0!)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "dbcs_long_halfkana_string",
+      "formula": "=DBCS(\"ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ"
+      }
+    },
+    {
+      "id": "asc_number_coerces_to_text",
+      "formula": "=ASC(123)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123"
+      }
+    },
+    {
+      "id": "asc_error_propagates",
+      "formula": "=ASC(#REF!)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "asc_long_kana_string",
+      "formula": "=ASC(\"アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン"
+      }
+    }
+  ]
+}

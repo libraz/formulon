@@ -24,6 +24,7 @@
 #include "eval/text_format/number_format_scanner.h"
 #include "eval/text_format/number_format_types.h"
 #include "excel_locale.h"
+#include "utils/text_ops.h"
 
 namespace formulon {
 namespace text_format {
@@ -149,6 +150,29 @@ std::vector<std::string_view> split_sections(std::string_view fmt) {
   out.emplace_back(fmt.substr(start));
   return out;
 }
+
+namespace {
+
+// A letter: ASCII, Latin-1 and Latin Extended, Greek or Cyrillic.
+bool is_letter_scalar(std::uint32_t cp) noexcept {
+  return (cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z') ||
+         (cp >= 0xC0 && cp <= 0x24F && cp != 0xD7 && cp != 0xF7) || (cp >= 0x370 && cp <= 0x52F);
+}
+
+// The last scalar of a literal token is a letter.
+bool literal_letter_at(const Token& tk, std::string_view fmt) noexcept {
+  if (tk.kind != Tok::Literal || tk.lit_begin >= tk.lit_end || tk.lit_end > fmt.size()) {
+    return false;
+  }
+  std::size_t at = tk.lit_end - 1;
+  while (at > tk.lit_begin && (static_cast<unsigned char>(fmt[at]) & 0xC0U) == 0x80U) {
+    --at;
+  }
+  std::size_t bytes = 0;
+  return is_letter_scalar(decode_utf8_step(fmt, at, &bytes));
+}
+
+}  // namespace
 
 void classify(Section& section, std::string_view fmt) noexcept {
   disambiguate_minutes(section.tokens);
@@ -512,6 +536,19 @@ void classify(Section& section, std::string_view fmt) noexcept {
           }
         }
       }
+    }
+  }
+
+  // A structural slash needs a neighbour on each side, and the left one may not be a literal letter
+  // (locale_tokens.text_slash_letters, text_slash_alone, text_slash_after_digit, date_cyr_d_mm_yyyy; a letter on
+  // the right is fine: text_format.text_time_a_p in es-ES, text_ampm_ja).
+  for (std::size_t i = 0; i < section.tokens.size(); ++i) {
+    if (!section.tokens[i].fraction_slash_candidate) {
+      continue;
+    }
+    if (i == 0 || i + 1 == section.tokens.size() || literal_letter_at(section.tokens[i - 1], fmt)) {
+      section.has_invalid_bracket = true;
+      break;
     }
   }
 }

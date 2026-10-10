@@ -1,0 +1,1300 @@
+{
+  "suite": "arithmetic_cancellation",
+  "description": "Results that cancel to within 2^-50 of their operands: when the outermost + or - of a formula reads as 0, which wrappers keep the residue, and the same rule inside SUM, AVERAGE and SUBTOTAL but not SUMPRODUCT or SUMIF.\n",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "it-IT",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T21:36:00Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "plain",
+      "formula": "=0.5-0.4-0.1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "paren",
+      "formula": "=(0.5-0.4-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.7755575615628914e-17
+      }
+    },
+    {
+      "id": "times1",
+      "formula": "=1*(0.5-0.4-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.7755575615628914e-17
+      }
+    },
+    {
+      "id": "plus0",
+      "formula": "=0.5-0.4-0.1+0",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.7755575615628914e-17
+      }
+    },
+    {
+      "id": "sum",
+      "formula": "=SUM(0.5,-0.4,-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "abs",
+      "formula": "=ABS(0.5-0.4-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.7755575615628914e-17
+      }
+    },
+    {
+      "id": "if",
+      "formula": "=IF(TRUE,0.5-0.4-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.7755575615628914e-17
+      }
+    },
+    {
+      "id": "rev",
+      "formula": "=0.1+0.2-0.3",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "rev2",
+      "formula": "=0.3-0.1-0.2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "neg",
+      "formula": "=-(0.5-0.4-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.7755575615628914e-17
+      }
+    },
+    {
+      "id": "pow_sub",
+      "formula": "=((-8)^(1/3))-(-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "pow_add",
+      "formula": "=(-8)^(1/3)+2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "cells_two",
+      "formula": "=A1-B1",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1.9999999999999998
+        },
+        "B1": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "cells3",
+      "formula": "=A1-B1-C1",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B1": {
+          "kind": "number",
+          "value": 0.4
+        },
+        "C1": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "text",
+      "formula": "=TEXT(0.5-0.4-0.1,\"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-2.776E-20"
+      }
+    },
+    {
+      "id": "concat",
+      "formula": "=0.5-0.4-0.1&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-2,77555756156289E-17"
+      }
+    },
+    {
+      "id": "cmp",
+      "formula": "=(0.5-0.4-0.1)=0",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "cmp2",
+      "formula": "=0.5-0.4-0.1=0",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "div",
+      "formula": "=(0.5-0.4-0.1)/1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.7755575615628914e-17
+      }
+    },
+    {
+      "id": "let",
+      "formula": "=LET(x,0.5-0.4-0.1,x)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.7755575615628914e-17
+      }
+    },
+    {
+      "id": "array",
+      "formula": "=SUM({0.5}-0.4-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.7755575615628914e-17
+      }
+    },
+    {
+      "id": "big",
+      "formula": "=1E15+0.3-1E15",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mul_last",
+      "formula": "=(1-0.9-0.1)*1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.7755575615628914e-17
+      }
+    },
+    {
+      "id": "k40",
+      "formula": "=1-(1-2^-40)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.094947017729282e-13
+      }
+    },
+    {
+      "id": "kp40",
+      "formula": "=(1+2^-40)-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.094947017729282e-13
+      }
+    },
+    {
+      "id": "kr40",
+      "formula": "=100-(100-100*2^-40)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.094947017729282e-11
+      }
+    },
+    {
+      "id": "k41",
+      "formula": "=1-(1-2^-41)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.547473508864641e-13
+      }
+    },
+    {
+      "id": "kp41",
+      "formula": "=(1+2^-41)-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.547473508864641e-13
+      }
+    },
+    {
+      "id": "kr41",
+      "formula": "=100-(100-100*2^-41)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.547473508864641e-11
+      }
+    },
+    {
+      "id": "k42",
+      "formula": "=1-(1-2^-42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.2737367544323206e-13
+      }
+    },
+    {
+      "id": "kp42",
+      "formula": "=(1+2^-42)-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.2737367544323206e-13
+      }
+    },
+    {
+      "id": "kr42",
+      "formula": "=100-(100-100*2^-42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.2737367544323206e-11
+      }
+    },
+    {
+      "id": "k43",
+      "formula": "=1-(1-2^-43)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.1368683772161603e-13
+      }
+    },
+    {
+      "id": "kp43",
+      "formula": "=(1+2^-43)-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.1368683772161603e-13
+      }
+    },
+    {
+      "id": "kr43",
+      "formula": "=100-(100-100*2^-43)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.1368683772161603e-11
+      }
+    },
+    {
+      "id": "k44",
+      "formula": "=1-(1-2^-44)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.684341886080802e-14
+      }
+    },
+    {
+      "id": "kp44",
+      "formula": "=(1+2^-44)-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.684341886080802e-14
+      }
+    },
+    {
+      "id": "kr44",
+      "formula": "=100-(100-100*2^-44)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.6843418860808015e-12
+      }
+    },
+    {
+      "id": "k45",
+      "formula": "=1-(1-2^-45)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.842170943040401e-14
+      }
+    },
+    {
+      "id": "kp45",
+      "formula": "=(1+2^-45)-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.842170943040401e-14
+      }
+    },
+    {
+      "id": "kr45",
+      "formula": "=100-(100-100*2^-45)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.8421709430404007e-12
+      }
+    },
+    {
+      "id": "k46",
+      "formula": "=1-(1-2^-46)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.4210854715202004e-14
+      }
+    },
+    {
+      "id": "kp46",
+      "formula": "=(1+2^-46)-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.4210854715202004e-14
+      }
+    },
+    {
+      "id": "kr46",
+      "formula": "=100-(100-100*2^-46)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.4210854715202004e-12
+      }
+    },
+    {
+      "id": "k47",
+      "formula": "=1-(1-2^-47)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.105427357601002e-15
+      }
+    },
+    {
+      "id": "kp47",
+      "formula": "=(1+2^-47)-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.105427357601002e-15
+      }
+    },
+    {
+      "id": "kr47",
+      "formula": "=100-(100-100*2^-47)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.105427357601002e-13
+      }
+    },
+    {
+      "id": "k48",
+      "formula": "=1-(1-2^-48)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.552713678800501e-15
+      }
+    },
+    {
+      "id": "kp48",
+      "formula": "=(1+2^-48)-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.552713678800501e-15
+      }
+    },
+    {
+      "id": "kr48",
+      "formula": "=100-(100-100*2^-48)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.552713678800501e-13
+      }
+    },
+    {
+      "id": "k49",
+      "formula": "=1-(1-2^-49)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.7763568394002505e-15
+      }
+    },
+    {
+      "id": "kp49",
+      "formula": "=(1+2^-49)-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.7763568394002505e-15
+      }
+    },
+    {
+      "id": "kr49",
+      "formula": "=100-(100-100*2^-49)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.7053025658242404e-13
+      }
+    },
+    {
+      "id": "k50",
+      "formula": "=1-(1-2^-50)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "kp50",
+      "formula": "=(1+2^-50)-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "kr50",
+      "formula": "=100-(100-100*2^-50)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "k51",
+      "formula": "=1-(1-2^-51)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "kp51",
+      "formula": "=(1+2^-51)-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "kr51",
+      "formula": "=100-(100-100*2^-51)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "k52",
+      "formula": "=1-(1-2^-52)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "kp52",
+      "formula": "=(1+2^-52)-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "kr52",
+      "formula": "=100-(100-100*2^-52)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "k53",
+      "formula": "=1-(1-2^-53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "kp53",
+      "formula": "=(1+2^-53)-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "kr53",
+      "formula": "=100-(100-100*2^-53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "s_basic",
+      "formula": "=SUM(0.5,-0.4,-0.1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "s_k49",
+      "formula": "=SUM(1,-(1-2^-49))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.7763568394002505e-15
+      }
+    },
+    {
+      "id": "s_k50",
+      "formula": "=SUM(1,-(1-2^-50))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "s_order",
+      "formula": "=SUM(-0.1,0.5,-0.4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "s_big",
+      "formula": "=SUM(1E15,0.3,-1E15)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "s_range",
+      "formula": "=SUM(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "s_nested",
+      "formula": "=1*SUM(0.5,-0.4,-0.1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "s_paren",
+      "formula": "=(SUM(0.5,-0.4,-0.1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "s_plus",
+      "formula": "=SUM(0.5,-0.4,-0.1)+0",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "s_mid",
+      "formula": "=SUM(0.5,-0.4)-0.1",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "s_three",
+      "formula": "=SUM(1,1E-16,-1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "s_k50b",
+      "formula": "=SUM(1,2^-50,-1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "s_k49b",
+      "formula": "=SUM(1,2^-49,-1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.7763568394002505e-15
+      }
+    },
+    {
+      "id": "s_k50c",
+      "formula": "=SUM(2^-50,1,-1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sp",
+      "formula": "=SUMPRODUCT({0.5,-0.4,-0.1})",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.7755575615628914e-17
+      }
+    },
+    {
+      "id": "avg",
+      "formula": "=AVERAGE(0.5,-0.4,-0.1)*3",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "subtotal",
+      "formula": "=SUBTOTAL(9,A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumifs",
+      "formula": "=SUMIF(A1:A3,\"<>x\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.7755575615628914e-17
+      }
+    },
+    {
+      "id": "in_if",
+      "formula": "=IF(TRUE,SUM(0.5,-0.4,-0.1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sum_in_sum",
+      "formula": "=SUM(SUM(0.5,-0.4,-0.1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "pos_k50",
+      "formula": "=1-(1-2^-50)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "neg_top",
+      "formula": "=-0.5+0.4+0.1",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mixed_mul",
+      "formula": "=0.5-0.4-0.1*1",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "div_last",
+      "formula": "=0.3/3-0.1",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "snap_cell_ref",
+      "formula": "=B1",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "snap_chain",
+      "formula": "=B1-0",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.5-0.4-0.1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

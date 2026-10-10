@@ -212,7 +212,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("evaluateFormulaArray", &JsWorkbook::evaluateFormulaArray)
       .function("evaluateFormulaText", &JsWorkbook::evaluateFormulaText)
       // Profile ids are {mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,
-      // th_TH}. New workbooks default to win-365-en_US.
+      // th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}. New workbooks default to win-365-en_US.
       .function("excelProfileId", &JsWorkbook::excelProfileId)
       .function("fillCount", &JsWorkbook::fillCount)
       .function("fontCount", &JsWorkbook::fontCount)

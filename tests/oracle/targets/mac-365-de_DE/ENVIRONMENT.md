@@ -1,10 +1,10 @@
 # Oracle Environment
 
-This corpus contains 114 suites captured by the maintainers from Mac Excel 365 with the calculation locale set to de-DE.
+This corpus contains 123 suites captured by the maintainers from Mac Excel 365 with the calculation locale set to de-DE.
 
-- **Excel version**: `16.113.3`
+- **Excel version**: `16.113.3`, `16.113.4`
 - **Excel locale**: `de-DE` (`AppleLanguages` = `de-DE`, `AppleLocale` = `de_DE`)
-- **Capture timestamps (UTC)**: `2026-10-08T09:22:20Z` through `2026-10-08T19:50:46Z`
+- **Capture timestamps (UTC)**: `2026-10-08T09:22:20Z` through `2026-10-10T06:27:55Z`
 - **date1904 / iterative**: recorded separately in each golden
 
 `formulon_oracle_de_de_tests` evaluates these goldens with the explicit `mac-365-de_DE` profile. It is registered in CTest with the `oracle` label, independently of the optional variant binary. The ja-JP primary oracle and the `win-365-ja_JP` runtime default remain unchanged.

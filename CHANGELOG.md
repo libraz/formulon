@@ -9,9 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `de-DE`, `fr-FR`, `zh-CN`, `ko-KR` and `th-TH` Excel profiles, each on a
-  `mac` and a `win` host (`{mac,win}-365-{de_DE,fr_FR,zh_CN,ko_KR,th_TH}`),
-  selectable through the profile-id API in the C ABI, Node, WASM and Python.
+- `de-DE`, `fr-FR`, `zh-CN`, `ko-KR`, `th-TH`, `es-ES`, `es-MX`, `pt-BR`,
+  `ru-RU`, `zh-TW`, `it-IT` and `nl-NL` Excel profiles, each on a `mac` and a
+  `win` host (`{mac,win}-365-{de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,
+  ru_RU,zh_TW,it_IT,nl_NL}`), selectable through the profile-id API in the C
+  ABI, Node, WASM and Python. zh-TW counts and converts double-byte text in
+  Big5, and ru-RU reads `CHAR` / `CODE` in Mac Cyrillic.
   The `mac-*` profiles follow Mac Excel 365 in that locale for number, date
   and boolean text, `TEXT` format codes, R1C1 letters, `CELL` codes,
   `FORMULATEXT`, double-byte text functions and `CHAR` / `CODE`; the `win-*`
@@ -25,7 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   WASM and Python: function-name translation (`fm_function_localize`,
   `fm_function_canonicalize`; `localizeFunctionName`,
   `canonicalizeFunctionName`; `localize_function_name`,
-  `canonicalize_function_name`) for `de-DE` and `fr-FR`; whole-formula text
+  `canonicalize_function_name`) for `de-DE`, `fr-FR`, `es-ES`, `es-MX`,
+  `pt-BR`, `ru-RU`, `it-IT` and `nl-NL`; whole-formula text
   conversion between the stored English form and a profile's spelling
   (`fm_formula_localize`, `fm_formula_canonicalize`, `localizeFormula`,
   `canonicalizeFormula`, `localize_formula`, `canonicalize_formula`); and
@@ -96,7 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of field-name headers, and names a Count Numbers, StdDevp or Varp data field
   `Count of`, `StdDevp of` or `Varp of`; a fr-FR subtotal row reads
   `Total North`.
-- The WASM size report's Brotli ceilings moved to 928 KiB soft and 960 KiB
+- The WASM size report's Brotli ceilings moved to 992 KiB soft and 1024 KiB
   hard; the uncompressed ceilings are unchanged.
 - A workbook without a theme part now resolves theme colors and fonts with the
   current Excel Office theme (Aptos Display / Aptos Narrow, accent1 `156082`),
@@ -223,6 +227,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   field, and the tabular and outline headers show the stored Values
   caption. The report form is read from the row fields, where Excel
   records it, and written back in the attribute combinations Excel saves.
+- `TEXT` format codes follow more of Mac Excel 365's rules in every
+  profile. An unescaped `n` is `#VALUE!`, and so is a `/` that is neither a
+  date separator nor a fraction bar: one with nothing on a side, or a letter
+  that is no date code on its left (`x/x`, or `yyyy/m/d` where `y` and `d`
+  are text). `r` is the era year in ja-JP (`rr` adds the era name) and the
+  year in zh-TW, and `t` writes the digits in Thai in th-TH.
 
 ## [0.13.0] - 2026-10-06
 

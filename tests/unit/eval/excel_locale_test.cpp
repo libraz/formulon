@@ -11,10 +11,12 @@
 namespace formulon {
 namespace {
 
-constexpr std::array<const char*, 14> kAllProfileIds = {
-    "mac-365-ja_JP", "win-365-ja_JP", "mac-365-en_US", "win-365-en_US", "mac-365-de_DE",
-    "win-365-de_DE", "mac-365-fr_FR", "win-365-fr_FR", "mac-365-zh_CN", "win-365-zh_CN",
-    "mac-365-ko_KR", "win-365-ko_KR", "mac-365-th_TH", "win-365-th_TH",
+constexpr std::array<const char*, 28> kAllProfileIds = {
+    "mac-365-ja_JP", "win-365-ja_JP", "mac-365-en_US", "win-365-en_US", "mac-365-de_DE", "win-365-de_DE",
+    "mac-365-fr_FR", "win-365-fr_FR", "mac-365-zh_CN", "win-365-zh_CN", "mac-365-ko_KR", "win-365-ko_KR",
+    "mac-365-th_TH", "win-365-th_TH", "mac-365-es_ES", "win-365-es_ES", "mac-365-es_MX", "win-365-es_MX",
+    "mac-365-pt_BR", "win-365-pt_BR", "mac-365-ru_RU", "win-365-ru_RU", "mac-365-zh_TW", "win-365-zh_TW",
+    "mac-365-it_IT", "win-365-it_IT", "mac-365-nl_NL", "win-365-nl_NL",
 };
 
 constexpr ExcelProfile profile_of(ExcelHost host, ExcelLocale locale) noexcept {
@@ -32,7 +34,7 @@ TEST(ExcelLocale, ProfileIdsRoundTrip) {
 
 TEST(ExcelLocale, InvalidIdsLeaveTheProfileUnchanged) {
   for (const char* id :
-       {"", "mac-365-en_GB", "mac-365-nl_NL", "win-365-en-US", "MAC-365-ja_JP", "win-365-en_US-extra"}) {
+       {"", "mac-365-en_GB", "mac-365-pt_PT", "win-365-en-US", "MAC-365-ja_JP", "win-365-en_US-extra"}) {
     ExcelProfile profile = mac_365_ja_jp_profile();
     EXPECT_FALSE(parse_excel_profile_id(id, &profile)) << id;
     EXPECT_TRUE(same_profile(profile, mac_365_ja_jp_profile())) << id;
@@ -79,25 +81,36 @@ void ExpectFactsEqual(const LocaleFacts& lhs, const LocaleFacts& rhs) {
   EXPECT_EQ(lhs.format_letters.second, rhs.format_letters.second);
   EXPECT_EQ(lhs.format_letters.case_sensitive, rhs.format_letters.case_sensitive);
   EXPECT_EQ(lhs.format_letters.minute_unconditional, rhs.format_letters.minute_unconditional);
+  EXPECT_EQ(lhs.format_letters.month_contextual, rhs.format_letters.month_contextual);
+  for (std::size_t i = 0; i < lhs.format_letter_aliases.size(); ++i) {
+    EXPECT_EQ(lhs.format_letter_aliases[i].spelling, rhs.format_letter_aliases[i].spelling);
+    EXPECT_EQ(lhs.format_letter_aliases[i].letter, rhs.format_letter_aliases[i].letter);
+  }
   EXPECT_EQ(lhs.format_letters.weekday, rhs.format_letters.weekday);
   EXPECT_EQ(lhs.currency.symbol, rhs.currency.symbol);
   EXPECT_EQ(lhs.currency.suffix, rhs.currency.suffix);
   EXPECT_EQ(lhs.currency.space, rhs.currency.space);
   EXPECT_EQ(lhs.currency.negative_parens, rhs.currency.negative_parens);
+  EXPECT_EQ(lhs.currency.minus_after_symbol, rhs.currency.minus_after_symbol);
   EXPECT_EQ(lhs.currency.negative_zero_signed, rhs.currency.negative_zero_signed);
   EXPECT_EQ(lhs.currency.default_decimals, rhs.currency.default_decimals);
   EXPECT_EQ(lhs.accepted_currency, rhs.accepted_currency);
-  EXPECT_EQ(lhs.usdollar_in_dollars, rhs.usdollar_in_dollars);
+  EXPECT_EQ(lhs.usdollar_symbol, rhs.usdollar_symbol);
   EXPECT_EQ(lhs.date_order, rhs.date_order);
   EXPECT_EQ(lhs.dotted_date, rhs.dotted_date);
   EXPECT_EQ(lhs.kanji_ymd_text, rhs.kanji_ymd_text);
   EXPECT_EQ(lhs.kanji_time_text, rhs.kanji_time_text);
   EXPECT_EQ(lhs.japanese_era, rhs.japanese_era);
+  EXPECT_EQ(lhs.r_letter, rhs.r_letter);
   EXPECT_EQ(lhs.hangul_ymd_text, rhs.hangul_ymd_text);
   EXPECT_EQ(lhs.english_month_names, rhs.english_month_names);
+  EXPECT_EQ(lhs.hyphen_english_months, rhs.hyphen_english_months);
   EXPECT_EQ(lhs.fractional_seconds, rhs.fractional_seconds);
   EXPECT_EQ(lhs.meridiem_dot_attached, rhs.meridiem_dot_attached);
   EXPECT_EQ(lhs.meridiem_dot_spaced, rhs.meridiem_dot_spaced);
+  EXPECT_EQ(lhs.am_name, rhs.am_name);
+  EXPECT_EQ(lhs.pm_name, rhs.pm_name);
+  EXPECT_EQ(lhs.short_meridiem, rhs.short_meridiem);
   EXPECT_EQ(lhs.dbcs_codepage, rhs.dbcs_codepage);
   EXPECT_EQ(lhs.halfwidth_kana_single_byte, rhs.halfwidth_kana_single_byte);
   EXPECT_EQ(lhs.fullwidth_numeric_text, rhs.fullwidth_numeric_text);
@@ -106,7 +119,11 @@ void ExpectFactsEqual(const LocaleFacts& lhs, const LocaleFacts& rhs) {
   EXPECT_EQ(lhs.criteria_header_keeps_halfwidth_kana, rhs.criteria_header_keeps_halfwidth_kana);
   EXPECT_EQ(lhs.bang_escape, rhs.bang_escape);
   EXPECT_EQ(lhs.dbnum, rhs.dbnum);
+  EXPECT_EQ(lhs.thai_digit_letter, rhs.thai_digit_letter);
+  EXPECT_EQ(lhs.blank_date_letter, rhs.blank_date_letter);
   EXPECT_EQ(lhs.fullwidth_syntax_fold, rhs.fullwidth_syntax_fold);
+  EXPECT_EQ(lhs.english_general, rhs.english_general);
+  EXPECT_EQ(lhs.format_rejects_dot, rhs.format_rejects_dot);
   EXPECT_EQ(lhs.general_alias, rhs.general_alias);
   EXPECT_EQ(lhs.color_names, rhs.color_names);
   EXPECT_EQ(lhs.dbnum_digits, rhs.dbnum_digits);
@@ -143,6 +160,7 @@ void ExpectInvariantFormatLetters(const FormatLetters& letters) {
   EXPECT_EQ(letters.second, 's');
   EXPECT_FALSE(letters.case_sensitive);
   EXPECT_FALSE(letters.minute_unconditional);
+  EXPECT_FALSE(letters.month_contextual);
   EXPECT_EQ(letters.weekday, 'a');
 }
 
@@ -267,17 +285,21 @@ TEST(ExcelLocale, EveryLocaleNamesEveryErrorMonthAndDay) {
     for (std::size_t i = 0; i < facts.error_names.size(); ++i) {
       EXPECT_FALSE(facts.error_names[i].empty()) << id << " error " << i;
     }
+    // Names are reached through a month or day letter; a locale without one
+    // (ru-RU reads no Latin date letter) names none.
+    const bool has_month = facts.format_letters.month != '\0';
+    const bool has_day = facts.format_letters.day != '\0';
     for (const std::string_view name : facts.month_long) {
-      EXPECT_FALSE(name.empty()) << id;
+      EXPECT_EQ(name.empty(), !has_month) << id;
     }
     for (const std::string_view name : facts.month_short) {
-      EXPECT_FALSE(name.empty()) << id;
+      EXPECT_EQ(name.empty(), !has_month) << id;
     }
     for (const std::string_view name : facts.day_long) {
-      EXPECT_FALSE(name.empty()) << id;
+      EXPECT_EQ(name.empty(), !has_day) << id;
     }
     for (const std::string_view name : facts.day_short) {
-      EXPECT_FALSE(name.empty()) << id;
+      EXPECT_EQ(name.empty(), !has_day) << id;
     }
     for (const std::string_view name : facts.weekday_long) {
       EXPECT_FALSE(name.empty()) << id;
@@ -304,18 +326,26 @@ TEST(ExcelLocale, NewLocaleSeparatorsAndBooleansMatchTheGoldens) {
     char group;
     char list;
     char array_column;
+    char array_row;
     std::string_view true_name;
     std::string_view false_name;
     DateOrder date_order;
   };
   // locale_tokens.fixed_negative, formulatext_bool_literal, formulatext_array_constant,
   // bool_text_true / bool_text_false; value_coercion_probes.value_slash_date_short.
-  constexpr std::array<Case, 5> kCases{{
-      {ExcelLocale::kDeDE, ',', '.', ';', '.', "WAHR", "FALSCH", DateOrder::kDMY},
-      {ExcelLocale::kFrFR, ',', ' ', ';', '.', "VRAI", "FAUX", DateOrder::kDMY},
-      {ExcelLocale::kZhCN, '.', ',', ',', ',', "TRUE", "FALSE", DateOrder::kYMD},
-      {ExcelLocale::kKoKR, '.', ',', ',', ',', "TRUE", "FALSE", DateOrder::kYMD},
-      {ExcelLocale::kThTH, '.', ',', ',', ',', "TRUE", "FALSE", DateOrder::kDMY},
+  constexpr std::array<Case, 12> kCases{{
+      {ExcelLocale::kDeDE, ',', '.', ';', '.', ';', "WAHR", "FALSCH", DateOrder::kDMY},
+      {ExcelLocale::kFrFR, ',', ' ', ';', '.', ';', "VRAI", "FAUX", DateOrder::kDMY},
+      {ExcelLocale::kZhCN, '.', ',', ',', ',', ';', "TRUE", "FALSE", DateOrder::kYMD},
+      {ExcelLocale::kKoKR, '.', ',', ',', ',', ';', "TRUE", "FALSE", DateOrder::kYMD},
+      {ExcelLocale::kThTH, '.', ',', ',', ',', ';', "TRUE", "FALSE", DateOrder::kDMY},
+      {ExcelLocale::kRuRU, ',', ' ', ';', ';', ':', "ИСТИНА", "ЛОЖЬ", DateOrder::kDMY},
+      {ExcelLocale::kZhTW, '.', ',', ',', ',', ';', "TRUE", "FALSE", DateOrder::kYMD},
+      {ExcelLocale::kItIT, ',', '.', ';', '\\', '.', "VERO", "FALSO", DateOrder::kDMY},
+      {ExcelLocale::kNlNL, ',', '.', ';', '\\', ';', "WAAR", "ONWAAR", DateOrder::kDMY},
+      {ExcelLocale::kEsES, ',', '.', ';', '\\', ';', "VERDADERO", "FALSO", DateOrder::kDMY},
+      {ExcelLocale::kEsMX, '.', ',', ',', ',', ';', "VERDADERO", "FALSO", DateOrder::kDMY},
+      {ExcelLocale::kPtBR, ',', '.', ';', '\\', ';', "VERDADEIRO", "FALSO", DateOrder::kDMY},
   }};
   for (const Case& c : kCases) {
     for (const ExcelHost host : {ExcelHost::kMac365, ExcelHost::kWin365}) {
@@ -326,7 +356,7 @@ TEST(ExcelLocale, NewLocaleSeparatorsAndBooleansMatchTheGoldens) {
       EXPECT_EQ(facts.group_separator, c.group);
       EXPECT_EQ(facts.list_separator, c.list);
       EXPECT_EQ(facts.array_column_separator, c.array_column);
-      EXPECT_EQ(facts.array_row_separator, ';');
+      EXPECT_EQ(facts.array_row_separator, c.array_row);
       EXPECT_EQ(facts.true_name, c.true_name);
       EXPECT_EQ(facts.false_name, c.false_name);
       EXPECT_EQ(facts.date_order, c.date_order);
@@ -339,6 +369,17 @@ TEST(ExcelLocale, NewLocaleSeparatorsAndBooleansMatchTheGoldens) {
   EXPECT_EQ(locale_facts(profile_of(ExcelHost::kMac365, ExcelLocale::kFrFR))
                 .error_names[static_cast<std::size_t>(ErrorCode::NA)],
             "#N/A");
+  // arraytotext.arraytotext_error_literal_in_array_default, arraytotext_only_error_cells_default
+  for (const ExcelLocale locale : {ExcelLocale::kEsES, ExcelLocale::kEsMX, ExcelLocale::kPtBR}) {
+    EXPECT_EQ(locale_facts(profile_of(ExcelHost::kMac365, locale)).error_names[static_cast<std::size_t>(ErrorCode::NA)],
+              "#N/D");
+  }
+  EXPECT_EQ(locale_facts(profile_of(ExcelHost::kMac365, ExcelLocale::kEsES))
+                .error_names[static_cast<std::size_t>(ErrorCode::Div0)],
+            "#¡DIV/0!");
+  EXPECT_EQ(locale_facts(profile_of(ExcelHost::kMac365, ExcelLocale::kEsMX))
+                .error_names[static_cast<std::size_t>(ErrorCode::Div0)],
+            "#DIV/0!");
 }
 
 TEST(ExcelLocale, CodePageDependsOnLocaleAndHost) {
@@ -353,6 +394,10 @@ TEST(ExcelLocale, CodePageDependsOnLocaleAndHost) {
     EXPECT_EQ(sbcs_codepage(profile_of(host, ExcelLocale::kZhCN)), SbcsCodepage::kDbcsHighBlank);
     EXPECT_EQ(sbcs_codepage(profile_of(host, ExcelLocale::kKoKR)), SbcsCodepage::kDbcsHighBlank);
     EXPECT_EQ(sbcs_codepage(profile_of(host, ExcelLocale::kThTH)), SbcsCodepage::kMacThai);
+    EXPECT_EQ(sbcs_codepage(profile_of(host, ExcelLocale::kRuRU)), SbcsCodepage::kMacCyrillic);
+    EXPECT_EQ(sbcs_codepage(profile_of(host, ExcelLocale::kZhTW)), SbcsCodepage::kDbcsHighBlank);
+    EXPECT_EQ(sbcs_codepage(profile_of(host, ExcelLocale::kItIT)), host_page);
+    EXPECT_EQ(sbcs_codepage(profile_of(host, ExcelLocale::kNlNL)), host_page);
   }
 }
 
@@ -362,6 +407,8 @@ TEST(ExcelLocale, DbcsCodepageFollowsTheLocale) {
   EXPECT_EQ(locale_facts(profile_of(ExcelHost::kMac365, ExcelLocale::kZhCN)).dbcs_codepage, DbcsCodepage::kGb2312);
   EXPECT_EQ(locale_facts(profile_of(ExcelHost::kMac365, ExcelLocale::kKoKR)).dbcs_codepage, DbcsCodepage::kKsX1001);
   EXPECT_EQ(locale_facts(profile_of(ExcelHost::kMac365, ExcelLocale::kThTH)).dbcs_codepage, DbcsCodepage::kNone);
+  EXPECT_EQ(locale_facts(profile_of(ExcelHost::kMac365, ExcelLocale::kZhTW)).dbcs_codepage, DbcsCodepage::kBig5);
+  EXPECT_EQ(locale_facts(profile_of(ExcelHost::kMac365, ExcelLocale::kRuRU)).dbcs_codepage, DbcsCodepage::kNone);
 }
 
 TEST(ExcelLocale, WidthFoldingDependsOnHostExceptForChinese) {
@@ -373,6 +420,8 @@ TEST(ExcelLocale, WidthFoldingDependsOnHostExceptForChinese) {
   EXPECT_EQ(width_folding(profile_of(ExcelHost::kWin365, ExcelLocale::kKoKR)), WidthFolding::kWin);
   EXPECT_EQ(width_folding(profile_of(ExcelHost::kMac365, ExcelLocale::kZhCN)), WidthFolding::kNone);
   EXPECT_EQ(width_folding(profile_of(ExcelHost::kWin365, ExcelLocale::kZhCN)), WidthFolding::kNone);
+  EXPECT_EQ(width_folding(profile_of(ExcelHost::kMac365, ExcelLocale::kZhTW)), WidthFolding::kNone);
+  EXPECT_EQ(width_folding(profile_of(ExcelHost::kWin365, ExcelLocale::kZhTW)), WidthFolding::kNone);
 }
 
 }  // namespace

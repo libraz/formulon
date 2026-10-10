@@ -241,10 +241,11 @@ CurrencyStyle locale_dollar_style() {
 
 // USDOLLAR formats in US dollars where the locale says so; elsewhere it is DOLLAR itself.
 CurrencyStyle locale_usdollar_style() {
-  if (!locale_facts(current_eval_profile()).usdollar_in_dollars) {
+  const std::string_view symbol = locale_facts(current_eval_profile()).usdollar_symbol;
+  if (symbol.empty()) {
     return locale_dollar_style();
   }
-  return CurrencyStyle{Currency{"$", false, false, true, true, 2U}, 2};
+  return CurrencyStyle{Currency{symbol, false, false, true, false, true, 2U}, 2};
 }
 
 Value format_currency(const Value* args, std::uint32_t arity, Arena& arena, const CurrencyStyle& style) {
@@ -271,20 +272,22 @@ Value format_currency(const Value* args, std::uint32_t arity, Arena& arena, cons
   const bool negative = decimals < 0 ? value < 0.0 : num.value() < 0.0;
   const Currency& currency = style.currency;
   std::string fmt;
-  fmt.reserve(body.size() + currency.symbol.size() + 4u);
+  fmt.reserve(body.size() + currency.symbol.size() + 6u);
   const bool parens = negative && currency.negative_parens;
   if (parens) {
     fmt.push_back('(');
   }
-  if (negative && !parens && currency.suffix) {
+  if (negative && !parens && !currency.minus_after_symbol) {
     fmt.push_back('-');
   }
+  // Quoted, so a lettered symbol (`US$`) stays text rather than date codes.
+  const std::string symbol = "\"" + std::string(currency.symbol) + "\"";
   if (!currency.suffix) {
-    fmt.append(currency.symbol);
+    fmt.append(symbol);
     if (currency.space) {
       fmt.push_back(' ');
     }
-    if (negative && !parens) {
+    if (negative && !parens && currency.minus_after_symbol) {
       fmt.push_back('-');
     }
   }
@@ -293,7 +296,7 @@ Value format_currency(const Value* args, std::uint32_t arity, Arena& arena, cons
     if (currency.space) {
       fmt.push_back(' ');
     }
-    fmt.append(currency.symbol);
+    fmt.append(symbol);
   }
   if (parens) {
     fmt.push_back(')');

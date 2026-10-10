@@ -1,0 +1,668 @@
+{
+  "suite": "dynamic_array",
+  "description": "Dynamic-array (spilling) functions. SEQUENCE is the first acceptance case for cell-level spill machinery; the oracle reads back the anchor scalar (top-left of the spill region) since xlwings does not surface phantom cells through a single-cell read.",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "es-ES",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T07:02:59Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "sequence_3",
+      "formula": "=SEQUENCE(3)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "sequence_2_3",
+      "formula": "=SEQUENCE(2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "id": "sequence_2_2_10_5",
+      "formula": "=SEQUENCE(2,2,10,5)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          15.0,
+          20.0,
+          25.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "sequence_3_1_10_neg2",
+      "formula": "=SEQUENCE(3,1,10,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          8.0,
+          6.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "sequence_3_1_half_quarter",
+      "formula": "=SEQUENCE(3,1,0.5,0.25)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.5,
+          0.75,
+          1.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "sequence_zero_rows_value",
+      "formula": "=SEQUENCE(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "sequence_negative_rows_value",
+      "formula": "=SEQUENCE(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sequence_text_arg_value",
+      "formula": "=SEQUENCE(\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "transpose_array_literal",
+      "formula": "=TRANSPOSE({1,2,3;4,5,6})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          4.0,
+          2.0,
+          5.0,
+          3.0,
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "transpose_range",
+      "formula": "=TRANSPOSE(A1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          2.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "transpose_scalar",
+      "formula": "=TRANSPOSE(42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "transpose_single_row_to_column",
+      "formula": "=TRANSPOSE({1,2,3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          4,
+          1
+        ]
+      }
+    },
+    {
+      "id": "transpose_single_column_to_row",
+      "formula": "=TRANSPOSE({1;2;3;4})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          1,
+          4
+        ]
+      }
+    },
+    {
+      "id": "transpose_text_array",
+      "formula": "=TRANSPOSE({\"a\",\"b\";\"c\",\"d\"})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "c",
+          "b",
+          "d"
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "spill_ref_after_sequence_sum",
+      "formula": "=SUM(A1#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "whole_column_sum_sequence_5",
+      "formula": "=SUM(A:A)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "whole_column_count_sequence_5",
+      "formula": "=COUNT(A:A)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "whole_column_sum_sequence_3x2",
+      "formula": "=SUM(B:B)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "whole_row_sum_sequence_2x3",
+      "formula": "=SUM(2:2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2,3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "whole_column_sum_xfd_sequence_2",
+      "formula": "=SUM(XFD:XFD)",
+      "setup": {
+        "XFD1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "explicit_xfd_range_sum_sequence_2",
+      "formula": "=SUM(XFD1:XFD2)",
+      "setup": {
+        "XFD1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "anchorarray_static_value_anchor",
+      "formula": "=_xlfn.ANCHORARRAY(B1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "skipped": "Excel discards `=_xlfn.ANCHORARRAY(B1)` at entry, so there is no reading to compare. Entering `=B1#` on the same sheet returns #REF!, matching Formulon; that is captured as anchorarray_hash_static_value_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
+    },
+    {
+      "id": "anchorarray_blank_anchor",
+      "formula": "=_xlfn.ANCHORARRAY(E1)",
+      "setup": {},
+      "skipped": "Excel discards `=_xlfn.ANCHORARRAY(E1)` at entry. The `=E1#` spelling returns #REF! for a genuinely blank anchor, captured as anchorarray_hash_blank_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
+    },
+    {
+      "id": "anchorarray_resolves_sequence_sum",
+      "formula": "=SUM(_xlfn.ANCHORARRAY(A1))",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "skipped": "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
+    },
+    {
+      "id": "anchorarray_resolves_sequence_rows",
+      "formula": "=ROWS(_xlfn.ANCHORARRAY(A1))",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "skipped": "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
+    },
+    {
+      "id": "anchorarray_offset_resolved_anchor",
+      "formula": "=SUM(_xlfn.ANCHORARRAY(OFFSET(A1,1,0)))",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2,2)"
+        }
+      },
+      "skipped": "Excel discards the explicit `_xlfn.ANCHORARRAY` spelling at entry even when the setup spill is valid. The `ref#` spelling resolves the spill and is captured as anchorarray_hash_resolves_sequence_sum / _rows and anchorarray_hash_offset_resolved_anchor. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
+    },
+    {
+      "id": "anchorarray_hash_resolves_sequence_sum",
+      "formula": "=SUM(A1#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_resolves_sequence_rows",
+      "formula": "=ROWS(A1#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_offset_resolved_anchor",
+      "formula": "=SUM(OFFSET(A1,1,0)#)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_static_value_anchor",
+      "formula": "=B1#",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "anchorarray_hash_blank_anchor",
+      "formula": "=E1#",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "anchorarray_hash_indirect_anchor",
+      "formula": "=SUM(INDIRECT(\"A1\")#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_choose_anchor",
+      "formula": "=SUM(CHOOSE(1,A1)#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_if_anchor",
+      "formula": "=SUM(IF(TRUE,A1)#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_parenthesised_anchor",
+      "formula": "=SUM((A1)#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_let_bound_anchor",
+      "formula": "=LET(x,A1,SUM(x#))",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_nested_offset_anchor",
+      "formula": "=SUM(OFFSET(OFFSET(A1,0,0),0,0)#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "anchorarray_hash_multi_cell_anchor",
+      "formula": "=SUM(OFFSET(A1,0,0,2,2)#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2,2)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "anchorarray_hash_computed_anchor_without_spill",
+      "formula": "=SUM(OFFSET(A1,0,5)#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "pf_sequence",
+      "formula": "=ROWS(SEQUENCE(2.9999999))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "snap_sequence_cols",
+      "formula": "=COLUMNS(SEQUENCE(1,2.9999999))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "snap_randarray_rows",
+      "formula": "=ROWS(RANDARRAY(2.9999999))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "choosecols_neg_sum",
+      "formula": "=SUM(-CHOOSECOLS(A1:C1,{1,2}))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -30.0
+      }
+    },
+    {
+      "id": "sum_3d_range",
+      "formula": "=SUM(Sheet1:Sheet3!A1:A2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "Sheet2!A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "Sheet2!A2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "Sheet3!A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Sheet3!A2": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 17.0
+      }
+    },
+    {
+      "id": "sum_omit",
+      "formula": "=SUM(3,,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    }
+  ]
+}

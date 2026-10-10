@@ -1,5 +1,5 @@
 // Unit tests for the DBCS code page tables behind CHAR / CODE. Expected values
-// come from code_char_jp_probes on the Mac ja-JP, zh-CN and ko-KR targets.
+// come from code_char_jp_probes on the Mac ja-JP, zh-CN, ko-KR and zh-TW targets.
 
 #include "eval/dbcs_table.h"
 
@@ -55,6 +55,50 @@ TEST(DbcsTable, KsX1001UnicodeToCode) {
   EXPECT_EQ(code_of(DbcsCodepage::kKsX1001, 0x93ACu), 64480u);  // 鎬
   EXPECT_EQ(code_of(DbcsCodepage::kKsX1001, 0xD55Cu), 51153u);  // 한
   EXPECT_EQ(code_of(DbcsCodepage::kKsX1001, 0xFFE5u), 41421u);  // ￥
+}
+
+TEST(DbcsTable, Big5UnicodeToCode) {
+  EXPECT_EQ(code_of(DbcsCodepage::kBig5, 0x6F22u), 47742u);  // 漢
+  EXPECT_EQ(code_of(DbcsCodepage::kBig5, 0x93ACu), 49902u);  // 鎬
+  EXPECT_EQ(code_of(DbcsCodepage::kBig5, 0x4E00u), 42048u);  // 一
+  EXPECT_EQ(code_of(DbcsCodepage::kBig5, 0xFF21u), 41679u);  // Ａ
+  EXPECT_EQ(code_of(DbcsCodepage::kBig5, 0xFF10u), 41647u);  // ０
+  EXPECT_EQ(code_of(DbcsCodepage::kBig5, 0x3000u), 41280u);  // fullwidth space
+  EXPECT_EQ(code_of(DbcsCodepage::kBig5, 0x3002u), 41283u);  // 。
+  EXPECT_EQ(code_of(DbcsCodepage::kBig5, 0x300Cu), 41333u);  // 「
+  EXPECT_EQ(code_of(DbcsCodepage::kBig5, 0x3042u), 95u);     // あ, ETEN kana
+  EXPECT_EQ(code_of(DbcsCodepage::kBig5, 0x30F4u), 95u);     // ヴ
+  EXPECT_EQ(code_of(DbcsCodepage::kBig5, 0x9AD9u), 95u);     // 髙
+  EXPECT_EQ(code_of(DbcsCodepage::kBig5, 0xFFE5u), 95u);     // ￥
+  EXPECT_EQ(code_of(DbcsCodepage::kBig5, 0xD55Cu), 95u);     // 한
+}
+
+TEST(DbcsTable, Big5CodeSpace) {
+  EXPECT_EQ(lookup_dbcs_to_unicode(DbcsCodepage::kBig5, 0xBA, 0x7E), 0x6F22u);
+  EXPECT_EQ(lookup_dbcs_to_unicode(DbcsCodepage::kBig5, 0xA4, 0x40), 0x4E00u);
+  EXPECT_EQ(lookup_dbcs_to_unicode(DbcsCodepage::kBig5, 0xA4, 0x7F), 0u);  // between the trail ranges
+  EXPECT_EQ(lookup_dbcs_to_unicode(DbcsCodepage::kBig5, 0xA4, 0x3F), 0u);
+  EXPECT_EQ(lookup_dbcs_to_unicode(DbcsCodepage::kBig5, 0xA0, 0x40), 0u);
+  EXPECT_EQ(lookup_dbcs_to_unicode(DbcsCodepage::kBig5, 0xFA, 0x40), 0u);
+  EXPECT_EQ(lookup_dbcs_to_unicode(DbcsCodepage::kBig5, 0xC6, 0xA5), 0u);
+  EXPECT_EQ(dbcs_code_bias(DbcsCodepage::kBig5), 0u);
+}
+
+TEST(DbcsTable, Big5EveryMappedCellRoundTrips) {
+  int mapped = 0;
+  for (unsigned lead = 0xA1; lead <= 0xF9; ++lead) {
+    for (unsigned trail = 0x40; trail <= 0xFE; ++trail) {
+      const std::uint16_t cp = lookup_dbcs_to_unicode(DbcsCodepage::kBig5, static_cast<std::uint8_t>(lead),
+                                                      static_cast<std::uint8_t>(trail));
+      if (cp == 0u) {
+        continue;
+      }
+      ++mapped;
+      ASSERT_EQ(lookup_unicode_to_dbcs(DbcsCodepage::kBig5, cp), static_cast<std::uint16_t>((lead << 8) | trail))
+          << "U+" << std::hex << cp;
+    }
+  }
+  EXPECT_EQ(mapped, 13457);
 }
 
 TEST(DbcsTable, CodeBias) {

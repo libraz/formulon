@@ -2,6 +2,7 @@
 // GB 2312: 7445 of 8836 cells mapped, 11142 encoded bytes.
 // @size-budget: 11 KB
 
+#include <cstddef>
 #include <cstdint>
 
 #include "eval/dbcs_table.h"
@@ -10,6 +11,9 @@ namespace formulon {
 namespace eval {
 namespace dbcs_detail {
 namespace {
+
+constexpr DbcsShape kShape = {1, 94, {{1, 94}, {0, 0}}};
+constexpr std::size_t kSlots = 8836;
 
 constexpr std::uint8_t kEncoded[] = {
     0x00, 0x18, 0x02, 0x20, 0x05, 0x00, 0x57, 0xC8, 0x17, 0x98, 0xE0, 0x07, 0x87, 0xA1, 0x8A, 0xDA, 0x00, 0x84, 0xFB,
@@ -603,9 +607,10 @@ constexpr std::uint8_t kEncoded[] = {
 
 }  // namespace
 
-const std::uint16_t* gb2312_cells() noexcept {
-  static const DbcsCells cells(kEncoded, sizeof(kEncoded));
-  return cells.unicode;
+const DbcsGrid& gb2312_grid() noexcept {
+  static const DbcsCells<kSlots> cells(kEncoded, sizeof(kEncoded));
+  static const DbcsGrid grid = {kShape, cells.unicode};
+  return grid;
 }
 
 }  // namespace dbcs_detail

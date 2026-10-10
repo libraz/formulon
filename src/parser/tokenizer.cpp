@@ -1062,10 +1062,11 @@ void Tokenizer::scan_error_literal() {
   std::size_t probe = byte_pos_ + 1;  // skip '#'
   while (probe < source_.size()) {
     const unsigned char c = static_cast<unsigned char>(source_[probe]);
-    // Accept letters, digits, `/`, `_`, `?`, `!`: enough to cover every
-    // error-literal spelling. Stop before whitespace / operators.
+    // Accept letters, digits, `/`, `_`, `?`, `!`, `.` and non-ASCII bytes:
+    // enough to cover every error-literal spelling, localized ones
+    // (`#Н/Д`, `#DELING.DOOR.0!`) included. Stop before whitespace / operators.
     if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '/' || c == '_' ||
-        c == '?' || c == '!') {
+        c == '?' || c == '!' || c == '.' || c >= 0x80) {
       ++probe;
       continue;
     }
@@ -1075,10 +1076,8 @@ void Tokenizer::scan_error_literal() {
   ErrorCode code;
   std::size_t match_len = 0;
   if (match_error_literal(run, &code, &match_len) || match_locale_error(run, &code, &match_len)) {
-    // Consume only the matched literal; catalog entries are pure ASCII so
-    // the byte length equals the codepoint count advanced here. Any trailing
-    // run bytes (an operator or reference glued to the literal) stay for the
-    // main loop.
+    // Consume only the matched literal. Any trailing run bytes (an operator
+    // or reference glued to the literal) stay for the main loop.
     const std::size_t match_end = byte_pos_ + match_len;
     while (byte_pos_ < match_end) {
       advance_one();

@@ -22,6 +22,13 @@ enum class ExcelLocale : std::uint8_t {
   kZhCN = 4,
   kKoKR = 5,
   kThTH = 6,
+  kEsES = 7,
+  kEsMX = 8,
+  kPtBR = 9,
+  kRuRU = 10,
+  kZhTW = 11,
+  kItIT = 12,
+  kNlNL = 13,
 };
 
 struct ExcelProfile {
@@ -67,7 +74,7 @@ struct ExcelProfileIdEntry {
   const char* id;
 };
 
-inline constexpr std::array<ExcelProfileIdEntry, 14> kExcelProfileIds = {{
+inline constexpr std::array<ExcelProfileIdEntry, 28> kExcelProfileIds = {{
     {mac_365_ja_jp_profile(), "mac-365-ja_JP"},
     {win_365_ja_jp_profile(), "win-365-ja_JP"},
     {mac_365_en_us_profile(), "mac-365-en_US"},
@@ -82,6 +89,20 @@ inline constexpr std::array<ExcelProfileIdEntry, 14> kExcelProfileIds = {{
     {ExcelProfile{ExcelHost::kWin365, ExcelLocale::kKoKR}, "win-365-ko_KR"},
     {ExcelProfile{ExcelHost::kMac365, ExcelLocale::kThTH}, "mac-365-th_TH"},
     {ExcelProfile{ExcelHost::kWin365, ExcelLocale::kThTH}, "win-365-th_TH"},
+    {ExcelProfile{ExcelHost::kMac365, ExcelLocale::kEsES}, "mac-365-es_ES"},
+    {ExcelProfile{ExcelHost::kWin365, ExcelLocale::kEsES}, "win-365-es_ES"},
+    {ExcelProfile{ExcelHost::kMac365, ExcelLocale::kEsMX}, "mac-365-es_MX"},
+    {ExcelProfile{ExcelHost::kWin365, ExcelLocale::kEsMX}, "win-365-es_MX"},
+    {ExcelProfile{ExcelHost::kMac365, ExcelLocale::kPtBR}, "mac-365-pt_BR"},
+    {ExcelProfile{ExcelHost::kWin365, ExcelLocale::kPtBR}, "win-365-pt_BR"},
+    {ExcelProfile{ExcelHost::kMac365, ExcelLocale::kRuRU}, "mac-365-ru_RU"},
+    {ExcelProfile{ExcelHost::kWin365, ExcelLocale::kRuRU}, "win-365-ru_RU"},
+    {ExcelProfile{ExcelHost::kMac365, ExcelLocale::kZhTW}, "mac-365-zh_TW"},
+    {ExcelProfile{ExcelHost::kWin365, ExcelLocale::kZhTW}, "win-365-zh_TW"},
+    {ExcelProfile{ExcelHost::kMac365, ExcelLocale::kItIT}, "mac-365-it_IT"},
+    {ExcelProfile{ExcelHost::kWin365, ExcelLocale::kItIT}, "win-365-it_IT"},
+    {ExcelProfile{ExcelHost::kMac365, ExcelLocale::kNlNL}, "mac-365-nl_NL"},
+    {ExcelProfile{ExcelHost::kWin365, ExcelLocale::kNlNL}, "win-365-nl_NL"},
 }};
 
 }  // namespace detail

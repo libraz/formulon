@@ -1,0 +1,575 @@
+{
+  "suite": "power_negative_base",
+  "description": "A negative base raised to a fractional exponent: the odd roots Excel accepts (1/e rounding to an odd integer at 15 significant digits) and the exponents that stay #NUM!, through both the ^ operator and POWER.\n",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "zh-TW",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T21:02:00Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "op_00",
+      "formula": "=(-8)^(1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.9999999999999998
+      }
+    },
+    {
+      "id": "fn_00",
+      "formula": "=POWER(-8,1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.9999999999999998
+      }
+    },
+    {
+      "id": "op_01",
+      "formula": "=(-8)^(2/3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_01",
+      "formula": "=POWER(-8,2/3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_02",
+      "formula": "=(-8)^(-1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.5000000000000001
+      }
+    },
+    {
+      "id": "fn_02",
+      "formula": "=POWER(-8,-1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.5000000000000001
+      }
+    },
+    {
+      "id": "op_03",
+      "formula": "=(-27)^(1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.9999999999999996
+      }
+    },
+    {
+      "id": "fn_03",
+      "formula": "=POWER(-27,1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.9999999999999996
+      }
+    },
+    {
+      "id": "op_04",
+      "formula": "=(-32)^(1/5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "fn_04",
+      "formula": "=POWER(-32,1/5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "op_05",
+      "formula": "=(-32)^(2/5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_05",
+      "formula": "=POWER(-32,2/5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_06",
+      "formula": "=(-32)^(3/5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_06",
+      "formula": "=POWER(-32,3/5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_07",
+      "formula": "=(-8)^(1/3+1E-12)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_07",
+      "formula": "=POWER(-8,1/3+1E-12)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_08",
+      "formula": "=(-8)^(1/3+1E-15)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_08",
+      "formula": "=POWER(-8,1/3+1E-15)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_09",
+      "formula": "=(-8)^0.333333333333333",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.9999999999999984
+      }
+    },
+    {
+      "id": "fn_09",
+      "formula": "=POWER(-8,0.333333333333333)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.9999999999999984
+      }
+    },
+    {
+      "id": "op_10",
+      "formula": "=(-8)^0.3333333333",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_10",
+      "formula": "=POWER(-8,0.3333333333)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_11",
+      "formula": "=(-8)^0.333",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_11",
+      "formula": "=POWER(-8,0.333)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_12",
+      "formula": "=(-2)^0.5",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_12",
+      "formula": "=POWER(-2,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_13",
+      "formula": "=(-2)^(1/7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.1040895136738123
+      }
+    },
+    {
+      "id": "fn_13",
+      "formula": "=POWER(-2,1/7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.1040895136738123
+      }
+    },
+    {
+      "id": "op_14",
+      "formula": "=(-2)^(1/9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.080059738892306
+      }
+    },
+    {
+      "id": "fn_14",
+      "formula": "=POWER(-2,1/9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.080059738892306
+      }
+    },
+    {
+      "id": "op_15",
+      "formula": "=(-2)^(1/1001)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0006926945279553
+      }
+    },
+    {
+      "id": "fn_15",
+      "formula": "=POWER(-2,1/1001)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0006926945279553
+      }
+    },
+    {
+      "id": "op_16",
+      "formula": "=(-2)^(1/1000001)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0000006931467276
+      }
+    },
+    {
+      "id": "fn_16",
+      "formula": "=POWER(-2,1/1000001)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0000006931467276
+      }
+    },
+    {
+      "id": "op_17",
+      "formula": "=(-2)^(1/99999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0000069315651443
+      }
+    },
+    {
+      "id": "fn_17",
+      "formula": "=POWER(-2,1/99999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0000069315651443
+      }
+    },
+    {
+      "id": "op_18",
+      "formula": "=(-8)^(4/3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_18",
+      "formula": "=POWER(-8,4/3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_19",
+      "formula": "=(-8)^(5/3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_19",
+      "formula": "=POWER(-8,5/3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_20",
+      "formula": "=(-8)^(1/1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_20",
+      "formula": "=POWER(-8,1/1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_21",
+      "formula": "=(-2)^(3/7)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_21",
+      "formula": "=POWER(-2,3/7)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_22",
+      "formula": "=(-1)^(1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "fn_22",
+      "formula": "=POWER(-1,1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "op_23",
+      "formula": "=(-0.5)^(1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.7937005259840998
+      }
+    },
+    {
+      "id": "fn_23",
+      "formula": "=POWER(-0.5,1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.7937005259840998
+      }
+    },
+    {
+      "id": "op_24",
+      "formula": "=(-8)^(1/6)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_24",
+      "formula": "=POWER(-8,1/6)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_25",
+      "formula": "=(-64)^(1/6)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_25",
+      "formula": "=POWER(-64,1/6)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_26",
+      "formula": "=(-8)^1.5",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_26",
+      "formula": "=POWER(-8,1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_27",
+      "formula": "=(-8)^(-2/3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fn_27",
+      "formula": "=POWER(-8,-2/3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "op_28",
+      "formula": "=(-2)^(1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.2599210498948732
+      }
+    },
+    {
+      "id": "fn_28",
+      "formula": "=POWER(-2,1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.2599210498948732
+      }
+    },
+    {
+      "id": "op_29",
+      "formula": "=(-1E300)^(1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -9.999999999999825e+99
+      }
+    },
+    {
+      "id": "fn_29",
+      "formula": "=POWER(-1E300,1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -9.999999999999825e+99
+      }
+    },
+    {
+      "id": "cancel_a",
+      "formula": "=((-8)^(1/3))-(-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "cancel_b",
+      "formula": "=((-27)^(1/3))-(-3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

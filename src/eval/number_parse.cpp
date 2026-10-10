@@ -44,8 +44,9 @@ std::string_view strip_currency(std::string_view s) noexcept {
 }
 
 // Strips a trailing Euro suffix (`23€` -> `23`). Mac Excel 365 accepts Euro
-// both as prefix and suffix; no other symbol is accepted as a suffix. A
-// suffix-currency locale also allows the blank before the symbol.
+// both as prefix and suffix, with or without a blank before it, in every
+// locale that accepts Euro (nl-NL, a prefix-currency locale, included); no
+// other symbol is accepted as a suffix.
 std::string_view strip_trailing_euro(std::string_view s) noexcept {
   constexpr std::string_view kEuro = "\xE2\x82\xAC";
   if (s.size() < kEuro.size() || s.substr(s.size() - kEuro.size()) != kEuro) {
@@ -60,7 +61,7 @@ std::string_view strip_trailing_euro(std::string_view s) noexcept {
     return s;
   }
   s.remove_suffix(kEuro.size());
-  return facts.currency.suffix ? trim_ascii(s) : s;
+  return trim_ascii(s);
 }
 
 }  // namespace

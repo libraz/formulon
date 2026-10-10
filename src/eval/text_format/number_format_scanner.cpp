@@ -641,6 +641,7 @@ bool is_date_tok(Tok t) noexcept {
     case Tok::DateAaaa:
     case Tok::DateB2:
     case Tok::DateB4:
+    case Tok::DateBlank:
     case Tok::DateM:
     case Tok::DateMM:
     case Tok::DateMin:

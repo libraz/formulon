@@ -362,6 +362,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/dbcs_jis0208_table.cpp
   src/eval/dbcs_gb2312_table.cpp
   src/eval/dbcs_ksx1001_table.cpp
+  src/eval/dbcs_big5_table.cpp
   src/eval/locale_text.cpp
   src/eval/locale_function_names.cpp
   src/eval/formula_localize.cpp

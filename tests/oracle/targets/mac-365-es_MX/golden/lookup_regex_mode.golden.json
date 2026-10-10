@@ -1,0 +1,231 @@
+{
+  "suite": "lookup_regex_mode",
+  "description": "XMATCH and XLOOKUP match_mode 3 (regular expression): partial matching, case sensitivity, number and boolean cells, numeric lookup values, invalid and empty patterns, reverse search.\n",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "es-MX",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T16:01:23Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "partial_first",
+      "formula": "=XMATCH(\"a.c\",A1:A2,3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "xabcx"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "anchored",
+      "formula": "=XMATCH(\"^a.c$\",A1:A2,3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "xabcx"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "case_sens",
+      "formula": "=XMATCH(\"abc\",A1:A2,3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ABC"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "number_cell",
+      "formula": "=XMATCH(\"12\",A1:A2,3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "number_lookup",
+      "formula": "=XMATCH(42,A1:A2,3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "42"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "bad_regex",
+      "formula": "=XMATCH(\"(\",A1:A2,3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "reverse",
+      "formula": "=XMATCH(\"b\",A1:A2,3,-1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "xlookup_partial",
+      "formula": "=XLOOKUP(\"a.c\",A1:A2,B1:B2,\"none\",3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "xabcx"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "xlookup_none",
+      "formula": "=XLOOKUP(\"z\",A1:A2,B1:B2,,3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "bool_cell",
+      "formula": "=XMATCH(\"TRUE\",A1:A2,3)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "text",
+          "value": "TRUE"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "empty_pattern",
+      "formula": "=XMATCH(\"\",A1:A2,3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    }
+  ]
+}

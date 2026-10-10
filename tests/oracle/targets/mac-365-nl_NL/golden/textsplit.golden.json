@@ -1,0 +1,124 @@
+{
+  "suite": "textsplit",
+  "description": "TEXTSPLIT rectangle-shaping splitter — six perspectives spanning 1D row split, 2D grid split, ignore_empty collapse, delimiter-array union (longest match wins), ragged-row padding, and match_mode out-of-range error.",
+  "environment": {
+    "excel_version": "16.113.4",
+    "excel_locale": "nl-NL",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-10T00:22:52Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "textsplit_col_delim_basic",
+      "formula": "=TEXTSPLIT(\"a,b,c\", \",\")",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "b",
+          "c"
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "textsplit_col_delim_no_match",
+      "formula": "=TEXTSPLIT(\"abc\", \",\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
+      "id": "textsplit_both_delim_2x2",
+      "formula": "=TEXTSPLIT(\"a,b;c,d\", \",\", \";\")",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "b",
+          "c",
+          "d"
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "textsplit_ignore_empty_collapse",
+      "formula": "=TEXTSPLIT(\"a,,b\", \",\", , TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "b"
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "textsplit_delim_array_union",
+      "formula": "=TEXTSPLIT(\"a,b;c\", {\",\",\";\"})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "b",
+          "c"
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
+    },
+    {
+      "id": "textsplit_ragged_pad_na",
+      "formula": "=TEXTSPLIT(\"a,b;c\", \",\", \";\")",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "b",
+          "c",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "textsplit_match_mode_invalid",
+      "formula": "=TEXTSPLIT(\"a,b\", \",\", , , 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

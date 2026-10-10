@@ -2298,8 +2298,9 @@ FM_API fm_status_t fm_workbook_clear_pinned_now(fm_workbook_t* wb);
  * The returned pointer is a static view into Formulon's profile table and
  * remains valid for the process lifetime. New workbooks default to
  * `win-365-en_US`. The id is `<host>-365-<locale>` with host `mac` or `win`
- * and locale `ja_JP`, `en_US`, `de_DE`, `fr_FR`, `zh_CN`, `ko_KR` or
- * `th_TH` (14 ids); the corresponding setter accepts exactly that set.
+ * and locale `ja_JP`, `en_US`, `de_DE`, `fr_FR`, `zh_CN`, `ko_KR`, `th_TH`,
+ * `es_ES`, `es_MX`, `pt_BR`, `ru_RU`, `zh_TW`, `it_IT` or `nl_NL` (28 ids); the corresponding setter accepts exactly
+ * that set.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb` or `out_profile_id` is NULL.
@@ -2310,7 +2311,8 @@ FM_API fm_status_t fm_workbook_excel_profile_id(const fm_workbook_t* wb, const c
  * @brief Sets the workbook's Excel formula profile by id.
  *
  * New workbooks use `win-365-en_US` by default. Supported ids are
- * `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}`. The `mac-*`
+ * `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,
+ * pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. The `mac-*`
  * ids and `win-365-ja_JP` follow Excel measurements; the other `win-*` ids
  * are estimated from the Mac measurements plus the Windows host rules.
  *
@@ -4486,10 +4488,12 @@ FM_API fm_status_t fm_function_name_at(size_t idx, const char** out_name);
  *
  * `*out_localized` is a static view into process-static storage and must not
  * be freed. `profile_id` is one of `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,
- * zh_CN,ko_KR,th_TH}`. `de-DE` and `fr-FR` return the function names Excel
- * shows in that locale; `en-US`, `zh-CN`, `ko-KR` and `th-TH` show the
- * canonical names and return `canonical_name` unchanged. `ja-JP` renames
- * only `DOLLAR` (`YEN`), `USDOLLAR` (`DOLLAR`) and `DBCS` (`JIS`).
+ * zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. `de-DE`,
+ * `fr-FR`, `es-ES`, `es-MX`, `pt-BR`, `ru-RU`, `it-IT` and `nl-NL` return the
+ * function names Excel shows in that locale; `en-US`, `zh-CN`, `ko-KR` and
+ * `th-TH` show the canonical names and return `canonical_name` unchanged.
+ * `ja-JP` renames only `DOLLAR` (`YEN`), `USDOLLAR` (`DOLLAR`) and `DBCS`
+ * (`JIS`); `zh-TW` renames only `DBCS` (`BIG5`).
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when any pointer argument is `NULL`;

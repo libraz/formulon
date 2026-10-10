@@ -1,0 +1,746 @@
+{
+  "suite": "locale_profile_measurements",
+  "description": "Behaviour that may differ between Excel locales and hosts: width and kana folding at COUNTIF criteria, exact MATCH / XLOOKUP / VLOOKUP and DCOUNT criteria; a blank scalar reference in GCD / LCM; a fractional INDEX row; and two-digit years in DATEVALUE and VALUE.\n",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "es-MX",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T15:54:44Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "fold_countif_fullwidth_digits",
+      "formula": "=COUNTIF(A1:A4, \"１２３\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "123"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "１２３"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "124"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "１２４"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "fold_countif_fullwidth_latin",
+      "formula": "=COUNTIF(A1:A4, \"ＡＢＣ\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ABC"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ＡＢＣ"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ABD"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "ＡＢＤ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "fold_countif_halfwidth_kana",
+      "formula": "=COUNTIF(A1:A4, \"ｱ\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ｱ"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "イ"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "ｲ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "fold_countif_hiragana_katakana",
+      "formula": "=COUNTIF(A1:A4, \"あ\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "あ"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "イ"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "い"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "fold_match_fullwidth_digits",
+      "formula": "=MATCH(\"１２３\", A1:A3, 0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "123"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "１２３"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "124"
+        }
+      },
+      "skipped": "Mac Excel 365 ja-JP folds fullwidth numeric text \"１２３\" to \"123\" in exact MATCH lookup and returns the first matching entry (1); Formulon selects the later exact-spelling entry (2). Probe: locale_profile_measurements.fold_match_fullwidth_digits. Resolve when exact lookup equality folds fullwidth numeric text."
+    },
+    {
+      "id": "fold_match_fullwidth_latin",
+      "formula": "=MATCH(\"ＡＢＣ\", A1:A3, 0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ABC"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ＡＢＣ"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ABD"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "fold_match_halfwidth_kana",
+      "formula": "=MATCH(\"ｱ\", A1:A3, 0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ｱ"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "イ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "fold_match_hiragana_katakana",
+      "formula": "=MATCH(\"あ\", A1:A3, 0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "あ"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "イ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "fold_xlookup_fullwidth_digits",
+      "formula": "=XLOOKUP(\"１２３\", A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "123"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "１２３"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "124"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 303.0
+        }
+      },
+      "skipped": "Mac Excel 365 ja-JP folds fullwidth numeric text \"１２３\" to \"123\" in exact XLOOKUP lookup and returns the first matching entry (101); Formulon selects the later exact-spelling entry (202). Probe: locale_profile_measurements.fold_xlookup_fullwidth_digits. Resolve when exact lookup equality folds fullwidth numeric text."
+    },
+    {
+      "id": "fold_xlookup_fullwidth_latin",
+      "formula": "=XLOOKUP(\"ＡＢＣ\", A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ABC"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ＡＢＣ"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ABD"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 303.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "fold_xlookup_halfwidth_kana",
+      "formula": "=XLOOKUP(\"ｱ\", A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ｱ"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "イ"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 303.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "fold_xlookup_hiragana_katakana",
+      "formula": "=XLOOKUP(\"あ\", A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "あ"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "イ"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 303.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "fold_dcount_fullwidth_digits",
+      "formula": "=DCOUNT(A1:B4, \"Value\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Key"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Value"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "123"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "１２３"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "124"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 303.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Key"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "１２３"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "fold_dcount_fullwidth_latin",
+      "formula": "=DCOUNT(A1:B4, \"Value\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Key"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Value"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ABC"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ＡＢＣ"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "ABD"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 303.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Key"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "ＡＢＣ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "fold_dcount_halfwidth_kana",
+      "formula": "=DCOUNT(A1:B4, \"Value\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Key"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Value"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ｱ"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "イ"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 303.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Key"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "ｱ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "fold_dcount_hiragana_katakana",
+      "formula": "=DCOUNT(A1:B4, \"Value\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Key"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Value"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "あ"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "イ"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 303.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Key"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "あ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "fold_vlookup_fullwidth_digits",
+      "formula": "=VLOOKUP(\"１２３\", A1:B3, 2, FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "123"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "１２３"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "124"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 303.0
+        }
+      },
+      "skipped": "Mac Excel 365 ja-JP folds fullwidth numeric text \"１２３\" to \"123\" in exact VLOOKUP lookup and returns the first matching entry (101); Formulon selects the later exact-spelling entry (202). Probe: locale_profile_measurements.fold_vlookup_fullwidth_digits. Resolve when exact lookup equality folds fullwidth numeric text."
+    },
+    {
+      "id": "fold_vlookup_fullwidth_latin",
+      "formula": "=VLOOKUP(\"ＡＢＣ\", A1:B3, 2, FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ABC"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ＡＢＣ"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ABD"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 303.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "fold_vlookup_halfwidth_kana",
+      "formula": "=VLOOKUP(\"ｱ\", A1:B3, 2, FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ｱ"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "イ"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 303.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "fold_vlookup_hiragana_katakana",
+      "formula": "=VLOOKUP(\"あ\", A1:B3, 2, FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "あ"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 202.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "イ"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 303.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "gcd_blank_scalar_ref",
+      "formula": "=GCD(10, 3, A3)",
+      "setup": {
+        "A3": {
+          "kind": "blank"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "lcm_blank_scalar_ref",
+      "formula": "=LCM(10, 3, A3)",
+      "setup": {
+        "A3": {
+          "kind": "blank"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "index_fractional_row",
+      "formula": "=INDEX(A1:A3, 0.4)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "A"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "B"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "C"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "A",
+          "B",
+          "C"
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "datevalue_two_digit_year",
+      "formula": "=DATEVALUE(\"3/15/29\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_two_digit_year",
+      "formula": "=VALUE(\"3-15-29\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

@@ -23,6 +23,7 @@ using AggregationLabels = std::array<std::string_view, kAggregationCount>;
 // Labels per `pivot::Aggregation`, in enum order, as Mac Excel 365 names a
 // data field after its function is switched in each UI locale. Only ja-JP
 // gives CountNumbers its own label; every other locale reuses Count's.
+// es-MX shares the es-ES labels.
 constexpr AggregationLabels kJaJpAggregationLabels{
     "合計", "個数", "平均", "最大", "最小", "積", "数値の個数", "標本標準偏差", "標準偏差", "標本分散", "分散",
 };
@@ -66,6 +67,36 @@ constexpr AggregationLabels kThThAggregationLabels{
     "ค่าความแปรปรวนของประชากร",
 };
 
+constexpr AggregationLabels kEsEsAggregationLabels{
+    "Suma", "Cuenta", "Promedio", "Máx.", "Mín.", "Producto", "Cuenta", "Desvest", "Desvestp", "Var", "Varp",
+};
+constexpr AggregationLabels kPtBrAggregationLabels{
+    "Soma", "Contagem", "Média", "Máx.", "Mín.", "Produto", "Contagem", "DesvPad", "DesvPadp", "Var.", "Varp",
+};
+constexpr AggregationLabels kRuRuAggregationLabels{
+    "Сумма",
+    "Количество",
+    "Среднее",
+    "Максимум",
+    "Минимум",
+    "Произведение",
+    "Количество",
+    "Стандартное отклонение",
+    "Несмещенное отклонение",
+    "Дисперсия",
+    "Несмещенная дисперсия",
+};
+constexpr AggregationLabels kZhTwAggregationLabels{
+    "加總", "計數", "平均值", "最大", "最小", "乘積", "計數", "標準差", "母體標準差", "變異數", "母體變異值",
+};
+constexpr AggregationLabels kItItAggregationLabels{
+    "Somma",         "Conteggio",          "Media",    "Max",           "Min", "Prodotto", "Conteggio",
+    "Dev. standard", "Dev. standard pop.", "Varianza", "Varianza pop.",
+};
+constexpr AggregationLabels kNlNlAggregationLabels{
+    "Som", "Aantal", "Gemiddelde", "Max", "Min", "Product", "Aantal", "Stdev", "Stdevp", "Var", "VARP",
+};
+
 struct PivotLocaleLabels {
   AggregationLabels aggregation_labels;
   std::string_view grand_total_label;
@@ -85,7 +116,7 @@ struct PivotLocaleLabels {
 // Indexed by `ExcelLocale`. Measured on Mac Excel 365 by switching the UI
 // locale and reading what Excel renders and names. `values_label` is the
 // dataCaption Excel stores when a pivot is created in that UI.
-constexpr std::array<PivotLocaleLabels, 7> kLocaleLabels{{
+constexpr std::array<PivotLocaleLabels, 14> kLocaleLabels{{
     {kJaJpAggregationLabels, "総計", "値", "行ラベル", "列ラベル", "", " 集計", "(空白)", "(すべて)",
      "(複数のアイテム)", " / ", "全体の ", ""},
     {kEnUsAggregationLabels, "Grand Total", "Values", "Row Labels", "Column Labels", "", " Total", "(blank)", "(All)",
@@ -100,9 +131,23 @@ constexpr std::array<PivotLocaleLabels, 7> kLocaleLabels{{
      "(다중 항목)", " : ", "전체 ", ""},
     {kThThAggregationLabels, "ผลรวมทั้งหมด", "ค่า", "ป้ายชื่อแถว", "ป้ายชื่อคอลัมน์", "", " ผลรวม", "(ว่าง)", "(ทั้งหมด)",
      "(หลายรายการ)", " ของ ", "ผลรวม ", ""},
+    {kEsEsAggregationLabels, "Total general", "Valores", "Etiquetas de fila", "Etiquetas de columna", "Total ", "",
+     "(en blanco)", "(Todas)", "(Varios elementos)", " de ", "Total ", ""},
+    {kEsEsAggregationLabels, "Total general", "Valores", "Etiquetas de fila", "Etiquetas de columna", "Total ", "",
+     "(en blanco)", "(Todas)", "(Varios elementos)", " de ", "Total ", ""},
+    {kPtBrAggregationLabels, "Total Geral", "Valores", "Rótulos de Linha", "Rótulos de Coluna", "", " Total", "(vazio)",
+     "(Tudo)", "(Vários itens)", " de ", "Total ", ""},
+    {kRuRuAggregationLabels, "Общий итог", "Значения", "Названия строк", "Названия столбцов", "", " Итог", "(пусто)",
+     "(Все)", "(несколько элементов)", " по полю ", "Итог ", ""},
+    {kZhTwAggregationLabels, "總計", "值", "列標籤", "欄標籤", "", " 合計", "(空白)", "(全部)", "(多重項目)", " - ", "",
+     " 的加總"},
+    {kItItAggregationLabels, "Totale complessivo", "Valori", "Etichette di riga", "Etichette di colonna", "", " Totale",
+     "(vuoto)", "(Tutto)", "(più elementi)", " di ", "", " totale"},
+    {kNlNlAggregationLabels, "Eindtotaal", "Waarden", "Rijlabels", "Kolomlabels", "Totaal ", "", "(leeg)", "(Alle)",
+     "(Meerdere items)", " van ", "Totaal ", ""},
 }};
 
-static_assert(kLocaleLabels.size() == static_cast<std::size_t>(ExcelLocale::kThTH) + 1U,
+static_assert(kLocaleLabels.size() == static_cast<std::size_t>(ExcelLocale::kNlNL) + 1U,
               "one label set per ExcelLocale");
 
 const PivotLocaleLabels& locale_labels(ExcelLocale locale) noexcept {

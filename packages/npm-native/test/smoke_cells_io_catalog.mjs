@@ -479,8 +479,30 @@ const PROFILE_DOLLAR = {
   'mac-365-zh_CN': '(¥1,234.57)',
   'mac-365-ko_KR': '(₩1,235)',
   'mac-365-th_TH': '(฿1,234.57)',
+  'mac-365-es_ES': '-1.234,57 €',
+  'mac-365-es_MX': '-$1,234.57',
+  'mac-365-pt_BR': '-R$ 1.234,57',
+  'mac-365-ru_RU': '-1 234,57 ₽',
+  'mac-365-zh_TW': '($1,234.57)',
+  'mac-365-it_IT': '-1.234,57 €',
+  'mac-365-nl_NL': '(€ 1.234,57)',
 };
-const PROFILE_LOCALES = ['ja_JP', 'en_US', 'de_DE', 'fr_FR', 'zh_CN', 'ko_KR', 'th_TH'];
+const PROFILE_LOCALES = [
+  'ja_JP',
+  'en_US',
+  'de_DE',
+  'fr_FR',
+  'zh_CN',
+  'ko_KR',
+  'th_TH',
+  'es_ES',
+  'es_MX',
+  'pt_BR',
+  'ru_RU',
+  'zh_TW',
+  'it_IT',
+  'nl_NL',
+];
 
 test('setExcelProfileId switches a live workbook through every profile id', async () => {
   const mod = await getModule();

@@ -1,0 +1,73 @@
+{
+  "suite": "indirect_r1c1",
+  "description": "INDIRECT's `a1` flag. The `a1 = FALSE` cases show the R1C1 grammar being read rather than the flag being ignored: `R2C3` resolves to the same cell `C2` names, and the string ADDRESS itself emits under `a1 = FALSE` round trips back through INDIRECT.\nThe `a1 = TRUE` cases are what make that meaningful. The first shows the reference resolves at all; the second shows Excel rejects R1C1 text when the flag says A1 -- without it, \"R2C3 resolved\" would not distinguish Excel honouring the flag from Excel ignoring ref_text's syntax entirely. Each style rejects the other's spelling, so the flag selects a grammar instead of adding a fallback.\nRelative axes (`R[1]C[-1]`, bare `RC`) are not covered here: they measure from the cell holding the formula, and the harness places every case at a fixed anchor, so a golden would pin the anchor rather than the semantics. Those live in tests/unit/eval/builtins_references_test.cpp.\n",
+  "environment": {
+    "excel_version": "16.113.4",
+    "excel_locale": "nl-NL",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T23:41:18Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "indirect_a1_true_resolves",
+      "formula": "=INDIRECT(\"C2\", TRUE)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "indirect_r1c1_text_under_a1_true_is_ref",
+      "formula": "=INDIRECT(\"R2C3\", TRUE)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "indirect_r1c1_absolute",
+      "formula": "=INDIRECT(\"R2C3\", FALSE)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "indirect_r1c1_from_address",
+      "formula": "=INDIRECT(ADDRESS(2,3,1,FALSE), FALSE)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    }
+  ]
+}

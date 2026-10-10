@@ -39,6 +39,13 @@ LOCALES = (
     ("zh_CN", "kZhCN"),
     ("ko_KR", "kKoKR"),
     ("th_TH", "kThTH"),
+    ("es_ES", "kEsES"),
+    ("es_MX", "kEsMX"),
+    ("pt_BR", "kPtBR"),
+    ("ru_RU", "kRuRU"),
+    ("zh_TW", "kZhTW"),
+    ("it_IT", "kItIT"),
+    ("nl_NL", "kNlNL"),
 )
 
 # Catalog functions Excel never displays by name, so no capture can exist.

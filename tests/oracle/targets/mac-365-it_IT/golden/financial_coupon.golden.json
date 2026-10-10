@@ -1,0 +1,499 @@
+{
+  "suite": "financial_coupon",
+  "description": "Coupon-date financial builtins — COUPPCD / COUPNCD / COUPNUM / COUPDAYBS / COUPDAYSNC / COUPDAYS. See `eval/builtins/financial_coupon.cpp` and the shared engine in `eval/coupon_schedule.cpp`.",
+  "environment": {
+    "excel_version": "16.113.3",
+    "excel_locale": "it-IT",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-09T22:03:13Z"
+  },
+  "tolerance": {
+    "abs": 1e-09,
+    "rel": 1e-06
+  },
+  "cases": [
+    {
+      "id": "couppcd_canonical_semi_annual_basis_1",
+      "formula": "=COUPPCD(DATE(2011,1,25), DATE(2011,11,15), 2, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 40497.0
+      }
+    },
+    {
+      "id": "coupncd_canonical_semi_annual_basis_1",
+      "formula": "=COUPNCD(DATE(2011,1,25), DATE(2011,11,15), 2, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 40678.0
+      }
+    },
+    {
+      "id": "coupnum_canonical_semi_annual_basis_1",
+      "formula": "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "coupdaybs_canonical_semi_annual_basis_1",
+      "formula": "=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 71.0
+      }
+    },
+    {
+      "id": "coupdaysnc_canonical_semi_annual_basis_1",
+      "formula": "=COUPDAYSNC(DATE(2011,1,25), DATE(2011,11,15), 2, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 110.0
+      }
+    },
+    {
+      "id": "coupdays_canonical_semi_annual_basis_1",
+      "formula": "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 181.0
+      }
+    },
+    {
+      "id": "coupdays_semi_annual_basis_0",
+      "formula": "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "coupdays_semi_annual_basis_2",
+      "formula": "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "coupdays_semi_annual_basis_3",
+      "formula": "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 182.5
+      }
+    },
+    {
+      "id": "coupdays_semi_annual_basis_4",
+      "formula": "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "coupnum_annual",
+      "formula": "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coupnum_quarterly",
+      "formula": "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 4, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "couppcd_end_of_month_may31",
+      "formula": "=COUPPCD(DATE(2020,6,1), DATE(2020,8,31), 4, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43982.0
+      }
+    },
+    {
+      "id": "couppcd_end_of_month_feb29_leap",
+      "formula": "=COUPPCD(DATE(2020,3,1), DATE(2020,8,31), 4, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43890.0
+      }
+    },
+    {
+      "id": "couppcd_settlement_after_maturity_is_num",
+      "formula": "=COUPPCD(DATE(2011,11,15), DATE(2011,1,25), 2, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "couppcd_bad_frequency_is_num",
+      "formula": "=COUPPCD(DATE(2011,1,25), DATE(2011,11,15), 3, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "couppcd_bad_basis_is_num",
+      "formula": "=COUPPCD(DATE(2011,1,25), DATE(2011,11,15), 2, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "coupncd_basis_0",
+      "formula": "=COUPNCD(DATE(2011,1,25), DATE(2011,11,15), 2, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 40678.0
+      }
+    },
+    {
+      "id": "coupncd_basis_2",
+      "formula": "=COUPNCD(DATE(2011,1,25), DATE(2011,11,15), 2, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 40678.0
+      }
+    },
+    {
+      "id": "coupncd_basis_3",
+      "formula": "=COUPNCD(DATE(2011,1,25), DATE(2011,11,15), 2, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 40678.0
+      }
+    },
+    {
+      "id": "coupncd_basis_4",
+      "formula": "=COUPNCD(DATE(2011,1,25), DATE(2011,11,15), 2, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 40678.0
+      }
+    },
+    {
+      "id": "coupdaybs_basis_0",
+      "formula": "=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 70.0
+      }
+    },
+    {
+      "id": "coupdaybs_basis_2",
+      "formula": "=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 71.0
+      }
+    },
+    {
+      "id": "coupdaybs_basis_3",
+      "formula": "=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 71.0
+      }
+    },
+    {
+      "id": "coupdaybs_basis_4",
+      "formula": "=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 70.0
+      }
+    },
+    {
+      "id": "coupdaysnc_basis_0",
+      "formula": "=COUPDAYSNC(DATE(2011,1,25), DATE(2011,11,15), 2, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 110.0
+      }
+    },
+    {
+      "id": "coupdaysnc_basis_2",
+      "formula": "=COUPDAYSNC(DATE(2011,1,25), DATE(2011,11,15), 2, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 110.0
+      }
+    },
+    {
+      "id": "coupdaysnc_basis_3",
+      "formula": "=COUPDAYSNC(DATE(2011,1,25), DATE(2011,11,15), 2, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 110.0
+      }
+    },
+    {
+      "id": "coupdaysnc_basis_4",
+      "formula": "=COUPDAYSNC(DATE(2011,1,25), DATE(2011,11,15), 2, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 110.0
+      }
+    },
+    {
+      "id": "coupnum_basis_0",
+      "formula": "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "coupnum_basis_2",
+      "formula": "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "coupnum_basis_3",
+      "formula": "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "coupnum_basis_4",
+      "formula": "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "couppcd_settlement_at_coupon_boundary",
+      "formula": "=COUPPCD(DATE(2011,5,15), DATE(2011,11,15), 2, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 40678.0
+      }
+    },
+    {
+      "id": "couppcd_settlement_just_before_coupon",
+      "formula": "=COUPPCD(DATE(2011,5,14), DATE(2011,11,15), 2, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 40497.0
+      }
+    },
+    {
+      "id": "couppcd_settlement_just_after_coupon",
+      "formula": "=COUPPCD(DATE(2011,5,16), DATE(2011,11,15), 2, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 40678.0
+      }
+    },
+    {
+      "id": "coupnum_frequency_truncates_fractional",
+      "formula": "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2.7, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "coupnum_basis_truncates_fractional",
+      "formula": "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2, 1.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "coupncd_settlement_eq_maturity_is_num",
+      "formula": "=COUPNCD(DATE(2011,11,15), DATE(2011,11,15), 2, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "coupnum_zero_frequency_is_num",
+      "formula": "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "coupnum_negative_frequency_is_num",
+      "formula": "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), -2, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "coupdays_negative_basis_is_num",
+      "formula": "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, -1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "atp_coupnum_bool",
+      "formula": "=COUPNUM(TRUE,40000,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_coupnum_omit",
+      "formula": "=COUPNUM(,40000,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_coupnum_boolcell",
+      "formula": "=COUPNUM(A1,40000,2)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_coupdays_bool",
+      "formula": "=COUPDAYS(TRUE,DATE(2030,1,15),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_coupdays_omit",
+      "formula": "=COUPDAYS(,DATE(2030,1,15),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_coupdaybs_bool",
+      "formula": "=COUPDAYBS(TRUE,DATE(2030,1,15),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_coupdaybs_omit",
+      "formula": "=COUPDAYBS(,DATE(2030,1,15),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_coupncd_bool",
+      "formula": "=COUPNCD(TRUE,DATE(2030,1,15),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_coupncd_omit",
+      "formula": "=COUPNCD(,DATE(2030,1,15),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "a4_couppcd_bool",
+      "formula": "=COUPPCD(TRUE,DATE(2030,1,15),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "a4_couppcd_omit",
+      "formula": "=COUPPCD(,DATE(2030,1,15),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

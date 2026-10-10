@@ -517,7 +517,7 @@ Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     const int bias = dbcs_code_bias(facts.dbcs_codepage);
     const int hi = (n >> 8) - (bias >> 8);
     const int lo = (n & 0xFF) - (bias & 0xFF);
-    if (n > 0xFFFF || hi < 1 || hi > 94 || lo < 1 || lo > 94) {
+    if (n > 0xFFFF || hi < 0 || hi > 0xFF || lo < 0 || lo > 0xFF) {
       return Value::error(ErrorCode::Value);
     }
     cp = lookup_dbcs_to_unicode(facts.dbcs_codepage, static_cast<std::uint8_t>(hi), static_cast<std::uint8_t>(lo));
