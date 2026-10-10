@@ -1,0 +1,15 @@
+locale	excel_version	month	decimal	han	kana_greek	enye	cyr_latin
+ja_JP	16.113.4	January	1.5	1	1	0	0
+en_US	16.113.4	January	1.5	0	0	0	0
+de_DE	16.113.4	00	1,5	0	0	0	0
+fr_FR	16.113.4	janvier	1,5	0	0	0	0
+es_ES	16.113.4	enero	1,5	0	0	1	0
+es_MX	16.113.4	enero	1.5	0	0	1	0
+pt_BR	16.113.4	janeiro	1,5	0	0	0	0
+it_IT	16.113.4	gennaio	1,5	0	0	0	0
+nl_NL	16.113.4	januari	1,5	0	0	0	0
+ru_RU	16.113.4	mmmm	1,5	0	0	0	1
+th_TH	16.113.4	มกราคม	1.5	0	0	0	0
+ko_KR	16.113.4	January	1.5	1	0	0	0
+zh_CN	16.113.4	January	1.5	1	0	0	0
+zh_TW	16.113.4	January	1.5	0	0	0	0
