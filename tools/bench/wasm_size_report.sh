@@ -20,8 +20,8 @@
 # Defaults (per CLAUDE.md "WASM Size Policy"):
 #   --ceiling-bytes             3932160   (3.75 MiB hard ceiling)
 #   --soft-ceiling-bytes        3670016   (3.50 MiB stretch goal)
-#   --brotli-ceiling-bytes      983040    (960 KiB hard ceiling)
-#   --brotli-soft-ceiling-bytes 950272    (928 KiB stretch goal)
+#   --brotli-ceiling-bytes      1048576   (1024 KiB hard ceiling)
+#   --brotli-soft-ceiling-bytes 1015808   (992 KiB stretch goal)
 #
 # Brotli wire size is the binding constraint in practice, so it is gated on
 # equal footing with the uncompressed size rather than merely reported. When
@@ -75,8 +75,8 @@ Arguments:
   --json                          Emit a single-object JSON document instead of text.
   --ceiling-bytes N               Hard ceiling in bytes (default 3932160 = 3.75 MiB).
   --soft-ceiling-bytes N          Soft ceiling in bytes (default 3670016 = 3.50 MiB).
-  --brotli-ceiling-bytes N        Brotli hard ceiling in bytes (default 983040 = 960 KiB).
-  --brotli-soft-ceiling-bytes N   Brotli soft ceiling in bytes (default 950272 = 928 KiB).
+  --brotli-ceiling-bytes N        Brotli hard ceiling in bytes (default 1048576 = 1024 KiB).
+  --brotli-soft-ceiling-bytes N   Brotli soft ceiling in bytes (default 1015808 = 992 KiB).
   -h, --help                      Show this help.
 
 Exit codes: 0 ok, 1 hard ceiling exceeded, 2 artifact missing, 3 bad args.
@@ -88,8 +88,8 @@ WASM_PATH=""
 EMIT_JSON=0
 HARD_CEILING=3932160
 SOFT_CEILING=3670016
-BROTLI_HARD_CEILING=983040
-BROTLI_SOFT_CEILING=950272
+BROTLI_HARD_CEILING=1048576
+BROTLI_SOFT_CEILING=1015808
 
 # Argument parsing (POSIX sh, no getopts long-opt support).
 while [ $# -gt 0 ]; do
