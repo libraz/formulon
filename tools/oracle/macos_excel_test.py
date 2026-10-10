@@ -715,6 +715,12 @@ class MacExcelLocaleTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             macos_excel._classify_value(_FakeErrorTextCell("#XYZ!"), None)
 
+    def test_column_overflow_hashes_keep_the_read_value(self) -> None:
+        cell = _FakeErrorTextCell("##########")
+        cell.value = True
+        result = macos_excel._classify_value(cell, lambda _expression: 0)
+        self.assertEqual((result.kind, result.value), ("bool", True))
+
     def test_mac_locale_joins_language_and_region(self) -> None:
         values = {
             ("com.microsoft.Excel", "AppleLanguages"): "zh-Hans",

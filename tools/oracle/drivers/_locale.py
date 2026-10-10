@@ -120,6 +120,10 @@ LOCALIZED_ERROR_TO_CANONICAL: Dict[str, str] = {
     "#VERW!": "#REF!",
     "#LEEG!": "#NULL!",
     "#DEEL/0!": "#DIV/0!",
+    "#DELING.DOOR.0!": "#DIV/0!",
+    # ru-RU
+    "#Н/Д": "#N/A",
+    "#ДЕЛ/0!": "#DIV/0!",
     # es-ES (and most es-* variants)
     "#¡VALOR!": "#VALUE!",
     "#¡DIV/0!": "#DIV/0!",

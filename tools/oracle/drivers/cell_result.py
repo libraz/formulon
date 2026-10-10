@@ -112,6 +112,10 @@ def error_display_from_cell(cell, displayed_text: DisplayedText, evaluate: Optio
         for name in _ERR_DISPLAY_NAMES:
             if text == name:
                 return name
+    # A value too wide for its column renders as a run of '#' (a long localized
+    # TRUE such as VERDADEIRO); the bridge still read the value itself.
+    if text and set(text) == {"#"} and raw is not None and not isinstance(raw, str):
+        return None
     if text and text.startswith("#"):
         name = _error_name_from_excel(evaluate, cell)
         if name is not None:
