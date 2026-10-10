@@ -17,6 +17,17 @@ namespace formulon_node {
 
 namespace {
 
+struct CacheRecordArgs {
+  uint32_t cache_id;
+  std::size_t record_idx;
+  std::size_t field_idx;
+};
+
+CacheRecordArgs ReadCacheRecord(const Napi::CallbackInfo& info) {
+  return {Workbook::ArgU32(info, 0), static_cast<std::size_t>(Workbook::ArgU32(info, 1)),
+          static_cast<std::size_t>(Workbook::ArgU32(info, 2))};
+}
+
 // Shared body of the per-cache count getters (fields, records).
 using CacheCountFn = fm_status_t (*)(const fm_workbook_t*, uint32_t, size_t*);
 
@@ -270,11 +281,10 @@ Napi::Value Workbook::PivotCacheRecordSetNumber(const Napi::CallbackInfo& info) 
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const uint32_t cache_id = ArgU32(info, 0);
-  const std::size_t record_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const CacheRecordArgs record = ReadCacheRecord(info);
   const double value = ArgDouble(info, 3);
-  fm_status_t rc = fm_workbook_pivot_cache_record_set_number(handle_, cache_id, record_idx, field_idx, value);
+  fm_status_t rc =
+      fm_workbook_pivot_cache_record_set_number(handle_, record.cache_id, record.record_idx, record.field_idx, value);
   return MakeStatus(env, rc);
 }
 
@@ -283,11 +293,10 @@ Napi::Value Workbook::PivotCacheRecordSetText(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const uint32_t cache_id = ArgU32(info, 0);
-  const std::size_t record_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const CacheRecordArgs record = ReadCacheRecord(info);
   const std::string utf8 = ArgString(info, 3);
-  fm_status_t rc = fm_workbook_pivot_cache_record_set_text(handle_, cache_id, record_idx, field_idx, utf8.c_str());
+  fm_status_t rc = fm_workbook_pivot_cache_record_set_text(handle_, record.cache_id, record.record_idx,
+                                                           record.field_idx, utf8.c_str());
   return MakeStatus(env, rc);
 }
 
@@ -296,11 +305,10 @@ Napi::Value Workbook::PivotCacheRecordSetBool(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const uint32_t cache_id = ArgU32(info, 0);
-  const std::size_t record_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const CacheRecordArgs record = ReadCacheRecord(info);
   const bool value = ArgBool(info, 3);
-  fm_status_t rc = fm_workbook_pivot_cache_record_set_bool(handle_, cache_id, record_idx, field_idx, value ? 1 : 0);
+  fm_status_t rc = fm_workbook_pivot_cache_record_set_bool(handle_, record.cache_id, record.record_idx,
+                                                           record.field_idx, value ? 1 : 0);
   return MakeStatus(env, rc);
 }
 
@@ -309,10 +317,9 @@ Napi::Value Workbook::PivotCacheRecordSetBlank(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const uint32_t cache_id = ArgU32(info, 0);
-  const std::size_t record_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
-  fm_status_t rc = fm_workbook_pivot_cache_record_set_blank(handle_, cache_id, record_idx, field_idx);
+  const CacheRecordArgs record = ReadCacheRecord(info);
+  fm_status_t rc =
+      fm_workbook_pivot_cache_record_set_blank(handle_, record.cache_id, record.record_idx, record.field_idx);
   return MakeStatus(env, rc);
 }
 
@@ -321,12 +328,10 @@ Napi::Value Workbook::PivotCacheRecordSetError(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const uint32_t cache_id = ArgU32(info, 0);
-  const std::size_t record_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const CacheRecordArgs record = ReadCacheRecord(info);
   const int32_t error_code = info.Length() > 3 ? info[3].As<Napi::Number>().Int32Value() : 0;
-  fm_status_t rc = fm_workbook_pivot_cache_record_set_error(handle_, cache_id, record_idx, field_idx,
-                                                            static_cast<fm_error_code_t>(error_code));
+  fm_status_t rc = fm_workbook_pivot_cache_record_set_error(handle_, record.cache_id, record.record_idx,
+                                                            record.field_idx, static_cast<fm_error_code_t>(error_code));
   return MakeStatus(env, rc);
 }
 

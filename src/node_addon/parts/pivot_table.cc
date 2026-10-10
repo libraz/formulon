@@ -14,6 +14,17 @@ namespace formulon_node {
 
 namespace {
 
+struct PivotFieldArgs {
+  std::size_t sheet;
+  std::size_t pivot_idx;
+  std::size_t field_idx;
+};
+
+PivotFieldArgs ReadPivotField(const Napi::CallbackInfo& info) {
+  return {static_cast<std::size_t>(Workbook::ArgU32(info, 0)), static_cast<std::size_t>(Workbook::ArgU32(info, 1)),
+          static_cast<std::size_t>(Workbook::ArgU32(info, 2))};
+}
+
 // Shared bodies for the entries that take `(sheet, pivot[, index])` and
 // return a Status or a count.
 using PivotCountFn = fm_status_t (*)(const fm_workbook_t*, size_t, size_t, size_t*);
@@ -61,11 +72,9 @@ Napi::Value InvokePivotFieldI32(const Napi::CallbackInfo& info, fm_workbook_t* h
   if (handle == nullptr) {
     return MakeErrorStatus(env, kBindingInvalidHandle);
   }
-  const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
-  const std::size_t pivot_idx = static_cast<std::size_t>(Workbook::ArgU32(info, 1));
-  const std::size_t field_idx = static_cast<std::size_t>(Workbook::ArgU32(info, 2));
+  const PivotFieldArgs field = ReadPivotField(info);
   const std::int32_t value = Workbook::ArgI32(info, 3);
-  fm_status_t rc = fn(handle, sheet, pivot_idx, field_idx, value);
+  fm_status_t rc = fn(handle, field.sheet, field.pivot_idx, field.field_idx, value);
   return MakeStatus(env, rc);
 }
 
@@ -214,13 +223,12 @@ Napi::Value Workbook::PivotFieldSetSort(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const PivotFieldArgs field = ReadPivotField(info);
   const bool ascending = ArgBool(info, 3);
   const std::string by_field = ArgString(info, 4);
   const char* by = by_field.empty() ? nullptr : by_field.c_str();
-  fm_status_t rc = fm_workbook_pivot_field_set_sort(handle_, sheet, pivot_idx, field_idx, ascending ? 1 : 0, by);
+  fm_status_t rc =
+      fm_workbook_pivot_field_set_sort(handle_, field.sheet, field.pivot_idx, field.field_idx, ascending ? 1 : 0, by);
   return MakeStatus(env, rc);
 }
 
@@ -229,11 +237,10 @@ Napi::Value Workbook::PivotFieldSetSubtotalTop(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const PivotFieldArgs field = ReadPivotField(info);
   const bool top = ArgBool(info, 3);
-  fm_status_t rc = fm_workbook_pivot_field_set_subtotal_top(handle_, sheet, pivot_idx, field_idx, top ? 1 : 0);
+  fm_status_t rc =
+      fm_workbook_pivot_field_set_subtotal_top(handle_, field.sheet, field.pivot_idx, field.field_idx, top ? 1 : 0);
   return MakeStatus(env, rc);
 }
 
@@ -242,13 +249,11 @@ Napi::Value Workbook::PivotFieldAddItem(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const PivotFieldArgs field = ReadPivotField(info);
   const std::string name = ArgString(info, 3);
   const bool visible = ArgBool(info, 4);
-  fm_status_t rc =
-      fm_workbook_pivot_field_add_item(handle_, sheet, pivot_idx, field_idx, name.c_str(), visible ? 1 : 0);
+  fm_status_t rc = fm_workbook_pivot_field_add_item(handle_, field.sheet, field.pivot_idx, field.field_idx,
+                                                    name.c_str(), visible ? 1 : 0);
   return MakeStatus(env, rc);
 }
 
@@ -257,13 +262,11 @@ Napi::Value Workbook::PivotFieldAddItemAt(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const PivotFieldArgs field = ReadPivotField(info);
   const uint32_t cache_index = ArgU32(info, 3);
   const bool visible = ArgBool(info, 4);
-  fm_status_t rc =
-      fm_workbook_pivot_field_add_item_at(handle_, sheet, pivot_idx, field_idx, cache_index, visible ? 1 : 0);
+  fm_status_t rc = fm_workbook_pivot_field_add_item_at(handle_, field.sheet, field.pivot_idx, field.field_idx,
+                                                       cache_index, visible ? 1 : 0);
   return MakeStatus(env, rc);
 }
 
@@ -276,13 +279,11 @@ Napi::Value Workbook::PivotFieldSetItemVisible(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const PivotFieldArgs field = ReadPivotField(info);
   const std::size_t item_idx = static_cast<std::size_t>(ArgU32(info, 3));
   const bool visible = ArgBool(info, 4);
-  fm_status_t rc =
-      fm_workbook_pivot_field_set_item_visible(handle_, sheet, pivot_idx, field_idx, item_idx, visible ? 1 : 0);
+  fm_status_t rc = fm_workbook_pivot_field_set_item_visible(handle_, field.sheet, field.pivot_idx, field.field_idx,
+                                                            item_idx, visible ? 1 : 0);
   return MakeStatus(env, rc);
 }
 
@@ -299,9 +300,7 @@ Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const PivotFieldArgs field = ReadPivotField(info);
   const std::int32_t granularity = ArgI32(info, 3);
   const std::int32_t calendar = ArgI32(info, 4);
   const int32_t start_year = info.Length() > 5 ? info[5].As<Napi::Number>().Int32Value() : -1;
@@ -310,8 +309,8 @@ Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
   const double start_serial = info.Length() > 8 ? info[8].As<Napi::Number>().DoubleValue() : -1.0;
   const double end_serial = info.Length() > 9 ? info[9].As<Napi::Number>().DoubleValue() : -1.0;
   fm_status_t rc =
-      fm_workbook_pivot_field_set_date_group(handle_, sheet, pivot_idx, field_idx, granularity, calendar, start_year,
-                                             end_year, interval_days, start_serial, end_serial);
+      fm_workbook_pivot_field_set_date_group(handle_, field.sheet, field.pivot_idx, field.field_idx, granularity,
+                                             calendar, start_year, end_year, interval_days, start_serial, end_serial);
   return MakeStatus(env, rc);
 }
 
@@ -324,11 +323,10 @@ Napi::Value Workbook::PivotFieldSetNumberFormat(const Napi::CallbackInfo& info) 
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const PivotFieldArgs field = ReadPivotField(info);
   const std::string utf8 = ArgString(info, 3);
-  fm_status_t rc = fm_workbook_pivot_field_set_number_format(handle_, sheet, pivot_idx, field_idx, utf8.c_str());
+  fm_status_t rc =
+      fm_workbook_pivot_field_set_number_format(handle_, field.sheet, field.pivot_idx, field.field_idx, utf8.c_str());
   return MakeStatus(env, rc);
 }
 
