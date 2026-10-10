@@ -140,6 +140,22 @@ def _file_header(summary: str) -> str:
     return f"// {summary}\n{_GEN_BANNER}\n"
 
 
+def _entries_by_area(entries: List[dict]) -> Dict[str, List[dict]]:
+    """Group manifest entries by area, retaining manifest order within each group."""
+    by_area: Dict[str, List[dict]] = {}
+    for entry in entries:
+        by_area.setdefault(entry["area"], []).append(entry)
+    return by_area
+
+
+def _select_body_template(body: str, templates: Dict[str, str]) -> str:
+    """Return the surface-specific template for a manifest body kind."""
+    try:
+        return templates[body]
+    except KeyError as exc:
+        raise AssertionError(f"unknown body kind: {body}") from exc
+
+
 # ---------------------------------------------------------------------------
 # C ABI emitter
 # ---------------------------------------------------------------------------
@@ -221,15 +237,18 @@ extern "C" fm_status_t {name}(const fm_workbook_t* wb, size_t sheet_index, size_
 }}
 """
 
+_CAPI_BODY_TEMPLATES = {
+    "direct_size_t": _CAPI_BODY_DIRECT_SIZE_T,
+    "status_uint32_out": _CAPI_BODY_STATUS_U32_OUT,
+    "status_sizet_out_with_sheet": _CAPI_BODY_STATUS_SIZE_WITH_SHEET,
+}
+
 
 def _emit_capi(entries: List[dict]) -> Dict[str, str]:
     """Emit one .cpp per `area` containing the C ABI bodies."""
     files: Dict[str, str] = {}
-    by_area: Dict[str, List[dict]] = {}
-    for e in entries:
-        by_area.setdefault(e["area"], []).append(e)
 
-    for area, items in sorted(by_area.items()):
+    for area, items in sorted(_entries_by_area(entries).items()):
         summary = (
             f"Generated C ABI bodies for the `{area}` group. The public\n"
             "// declarations live in src/c_api/formulon_c.h; this TU only\n"
@@ -260,15 +279,7 @@ def _emit_capi(entries: List[dict]) -> Dict[str, str]:
 
 
 def _emit_capi_entry(e: dict) -> str:
-    body = e["body"]
-    if body == "direct_size_t":
-        tmpl = _CAPI_BODY_DIRECT_SIZE_T
-    elif body == "status_uint32_out":
-        tmpl = _CAPI_BODY_STATUS_U32_OUT
-    elif body == "status_sizet_out_with_sheet":
-        tmpl = _CAPI_BODY_STATUS_SIZE_WITH_SHEET
-    else:
-        raise AssertionError(f"unknown body kind: {body}")
+    tmpl = _select_body_template(e["body"], _CAPI_BODY_TEMPLATES)
     return tmpl.format(name=e["name"], accessor=e["accessor"])
 
 
@@ -312,15 +323,18 @@ JsNumberResult JsWorkbook::{embind_cpp}(uint32_t sheet) const {{
 }}
 """
 
+_EMBIND_BODY_TEMPLATES = {
+    "direct_size_t": _EMBIND_BODY_DIRECT_SIZE_T,
+    "status_uint32_out": _EMBIND_BODY_STATUS_U32_OUT,
+    "status_sizet_out_with_sheet": _EMBIND_BODY_STATUS_SIZE_WITH_SHEET,
+}
+
 
 def _emit_embind(entries: List[dict]) -> Dict[str, str]:
     """Emit one .cpp per `area` containing JsWorkbook bodies."""
     files: Dict[str, str] = {}
-    by_area: Dict[str, List[dict]] = {}
-    for e in entries:
-        by_area.setdefault(e["area"], []).append(e)
 
-    for area, items in sorted(by_area.items()):
+    for area, items in sorted(_entries_by_area(entries).items()):
         summary = (
             f"Generated embind glue for the `{area}` group: JsWorkbook\n"
             "// method bodies that delegate to the C ABI passthroughs."
@@ -350,15 +364,7 @@ def _emit_embind(entries: List[dict]) -> Dict[str, str]:
 
 
 def _emit_embind_entry(e: dict) -> str:
-    body = e["body"]
-    if body == "direct_size_t":
-        tmpl = _EMBIND_BODY_DIRECT_SIZE_T
-    elif body == "status_uint32_out":
-        tmpl = _EMBIND_BODY_STATUS_U32_OUT
-    elif body == "status_sizet_out_with_sheet":
-        tmpl = _EMBIND_BODY_STATUS_SIZE_WITH_SHEET
-    else:
-        raise AssertionError(f"unknown body kind: {body}")
+    tmpl = _select_body_template(e["body"], _EMBIND_BODY_TEMPLATES)
     return tmpl.format(embind_cpp=e["embind_cpp"], capi=e["name"])
 
 
@@ -405,15 +411,18 @@ Napi::Value Workbook::{node_cpp}(const Napi::CallbackInfo& info) {{
 }}
 """
 
+_NODE_BODY_TEMPLATES = {
+    "direct_size_t": _NODE_BODY_DIRECT_SIZE_T,
+    "status_uint32_out": _NODE_BODY_STATUS_U32_OUT,
+    "status_sizet_out_with_sheet": _NODE_BODY_STATUS_SIZE_WITH_SHEET,
+}
+
 
 def _emit_node(entries: List[dict]) -> Dict[str, str]:
     """Emit one .cc per `area` containing Workbook N-API method bodies."""
     files: Dict[str, str] = {}
-    by_area: Dict[str, List[dict]] = {}
-    for e in entries:
-        by_area.setdefault(e["area"], []).append(e)
 
-    for area, items in sorted(by_area.items()):
+    for area, items in sorted(_entries_by_area(entries).items()):
         summary = (
             f"Generated N-API glue for the `{area}` group: Workbook\n"
             "// method bodies that delegate to the C ABI passthroughs."
@@ -437,15 +446,7 @@ def _emit_node(entries: List[dict]) -> Dict[str, str]:
 
 
 def _emit_node_entry(e: dict) -> str:
-    body = e["body"]
-    if body == "direct_size_t":
-        tmpl = _NODE_BODY_DIRECT_SIZE_T
-    elif body == "status_uint32_out":
-        tmpl = _NODE_BODY_STATUS_U32_OUT
-    elif body == "status_sizet_out_with_sheet":
-        tmpl = _NODE_BODY_STATUS_SIZE_WITH_SHEET
-    else:
-        raise AssertionError(f"unknown body kind: {body}")
+    tmpl = _select_body_template(e["body"], _NODE_BODY_TEMPLATES)
     return tmpl.format(node_cpp=e["node_cpp"], capi=e["name"])
 
 
@@ -488,6 +489,21 @@ def _write_if_changed(path: Path, content: str) -> bool:
     return True
 
 
+def _sync_outputs(files: Dict[str, str], out_dir: Path, check: bool) -> bool:
+    """Format and check or write one generated binding surface."""
+    drift = False
+    for name, raw_content in sorted(files.items()):
+        target = out_dir / name
+        content = _clang_format(raw_content, target)
+        if check:
+            if not target.exists() or target.read_text() != content:
+                sys.stderr.write(f"drift: {target}\n")
+                drift = True
+        elif _write_if_changed(target, content):
+            sys.stdout.write(f"wrote {target}\n")
+    return drift
+
+
 def main(argv: List[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Generate binding glue from the YAML manifest.")
     p.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
@@ -518,39 +534,12 @@ def main(argv: List[str] | None = None) -> int:
     embind_files = _emit_embind(entries)
     node_files = _emit_node(entries)
 
-    for name, content in sorted(capi_files.items()):
-        target = args.out_c_api / name
-        content = _clang_format(content, target)
-        if args.check:
-            if not target.exists() or target.read_text() != content:
-                sys.stderr.write(f"drift: {target}\n")
-                drift = True
-        else:
-            wrote = _write_if_changed(target, content)
-            if wrote:
-                sys.stdout.write(f"wrote {target}\n")
-    for name, content in sorted(embind_files.items()):
-        target = args.out_embind / name
-        content = _clang_format(content, target)
-        if args.check:
-            if not target.exists() or target.read_text() != content:
-                sys.stderr.write(f"drift: {target}\n")
-                drift = True
-        else:
-            wrote = _write_if_changed(target, content)
-            if wrote:
-                sys.stdout.write(f"wrote {target}\n")
-    for name, content in sorted(node_files.items()):
-        target = args.out_node / name
-        content = _clang_format(content, target)
-        if args.check:
-            if not target.exists() or target.read_text() != content:
-                sys.stderr.write(f"drift: {target}\n")
-                drift = True
-        else:
-            wrote = _write_if_changed(target, content)
-            if wrote:
-                sys.stdout.write(f"wrote {target}\n")
+    for files, out_dir in (
+        (capi_files, args.out_c_api),
+        (embind_files, args.out_embind),
+        (node_files, args.out_node),
+    ):
+        drift = _sync_outputs(files, out_dir, args.check) or drift
 
     # A manifest/header mismatch fails in either mode; generated-file drift
     # is only an error under --check (generate mode writes the fix instead).
