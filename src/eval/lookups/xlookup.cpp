@@ -15,6 +15,7 @@
 
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
+#include "eval/collation.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/jp_fold.h"
@@ -96,15 +97,7 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, i
   }
   // Same kind — compare values directly.
   if (cell_rank == 1) {
-    // Mac fold (see classic.cpp::lookup_scan) before the ASCII
-    // case-insensitive compare so kana variants order together in
-    // XLOOKUP / XMATCH approximate paths. Digit folding here is unmeasured.
-    if (width_folding(profile) == WidthFolding::kMac) {
-      *out_cmp = strings::case_insensitive_compare(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false),
-                                                   fold_jp_text(lookup.as_text(), /*fold_fullwidth_digits=*/false));
-    } else {
-      *out_cmp = strings::case_insensitive_compare(cell.as_text(), lookup.as_text());
-    }
+    *out_cmp = collate(cell.as_text(), lookup.as_text(), profile, CollationStrength::kDynamic);
     return true;
   }
   if (cell_rank == 2) {
@@ -168,25 +161,22 @@ std::string xlookup_exact_key(std::string_view text, ExcelProfile profile) {
 // exact-match block). MATCH's approximate modes (match_type +-1) do fold a
 // blank lookup_value to 0 for ordering purposes, which is the rule this
 // comment used to (over-)generalize to MATCH as a whole.
-// When `wildcards` is true AND lookup_value is text, pattern matching is
-// always routed through `wildcard_match` so that `~*` continues to mean
-// "literal *". See the VLOOKUP comment at the top of `lookup_scan` for why
-// we deliberately do not gate on `scan_has_wildcard`.
+// When `wildcards` is true and the text has an unescaped `*` / `?`, the
+// folded keys go through `wildcard_match`; otherwise the unescaped literal is
+// compared through the collator.
 bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards, ExcelProfile profile) {
   if (lookup.is_text()) {
     if (!cell.is_text()) {
       return false;
     }
-    // Mac Excel folds kana, width variants, and full-width digits before
-    // lower-casing in exact mode; zh-CN folds width only. Windows keeps the
-    // broad kana fold OFF (see lookup_kana_folding_probes) but still composes
-    // a half-width voicing mark onto its base (`ｶﾞ` -> `ガ`).
-    const std::string pat_lower = xlookup_exact_key(lookup.as_text(), profile);
-    const std::string cell_lower = xlookup_exact_key(cell.as_text(), profile);
-    if (wildcards) {
-      return wildcard_match(pat_lower, cell_lower);
+    if (!wildcards) {
+      return collate(cell.as_text(), lookup.as_text(), profile, CollationStrength::kDynamic) == 0;
     }
-    return pat_lower == cell_lower;
+    const std::string_view raw = lookup.as_text();
+    if (!scan_has_wildcard(raw)) {
+      return collate(cell.as_text(), unescape_wildcard_literal(raw), profile, CollationStrength::kDynamic) == 0;
+    }
+    return wildcard_match(xlookup_exact_key(raw, profile), xlookup_exact_key(cell.as_text(), profile));
   }
   if (lookup.is_number() || lookup.is_blank()) {
     const double target = lookup.is_blank() ? 0.0 : lookup.as_number();

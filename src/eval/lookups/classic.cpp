@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "eval/coerce.h"
+#include "eval/collation.h"
 #include "eval/declared_rect.h"
 #include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
@@ -47,18 +48,6 @@ std::string lookup_text_key(std::string_view s, ExcelProfile profile) {
     return fold_and_lower(s, /*fold_fullwidth_digits=*/true);
   }
   return strings::to_ascii_lower(compose_jp_halfwidth_voicing(s));
-}
-
-// Normalised form of `s` for the case-insensitive ordering compare used by
-// approximate matching. Case folding is left to `case_insensitive_compare`,
-// so this returns the composed / folded (not lowercased) form: the Mac path
-// folds broadly (`fold_jp_text`); other profiles compose the half-width
-// voicing mark, mirroring `lookup_text_key`.
-std::string lookup_text_cmp_key(std::string_view s, ExcelProfile profile) {
-  if (width_folding(profile) == WidthFolding::kMac) {
-    return fold_jp_text(s, /*fold_fullwidth_digits=*/false);
-  }
-  return compose_jp_halfwidth_voicing(s);
 }
 
 // ---------------------------------------------------------------------------
@@ -133,10 +122,9 @@ bool resolve_table_array(const parser::AstNode& arg_node, Arena& arena, const Fu
 // Returns the 0-based offset along the scanned axis on match, or `SIZE_MAX`
 // when no match was found.
 //
-// In exact mode, text-vs-text matching always routes through
-// `wildcard_match` so the caller doesn't need a separate "has wildcards?"
-// branch. `~X` always means "literal X" and a pattern with no `*` / `?` /
-// `~` degenerates to a byte-exact compare, matching Excel's rules.
+// In exact mode, a text lookup without unescaped `*` / `?` compares the
+// unescaped literal through the collator; otherwise it goes through
+// `wildcard_match` on the folded keys.
 //
 // Cross-type comparisons (Number vs Text, Bool vs anything else) produce "no
 // match" - the scanned cell is skipped. This is the same accepted divergence
@@ -162,12 +150,18 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
     // treated as a literal X. Every other kind-pairing is a literal
     // equality compare.
     if (lookup_value.is_text()) {
-      // Mac Excel folds kana variants (hira<->kata, half<->full-width
-      // katakana with voicing composition, full<->half-width ASCII letters,
-      // punctuation, space, and digits) before text equality. Apply the
-      // same normalisation on both sides before ASCII-lowercasing so e.g.
-      // `ｶﾞ` -> `ガ` and `Ａ` -> `a`.
-      const std::string pat_lower = lookup_text_key(lookup_value.as_text(), profile);
+      const std::string_view raw = lookup_value.as_text();
+      if (!scan_has_wildcard(raw)) {
+        const std::string literal = unescape_wildcard_literal(raw);
+        for (std::size_t i = 0; i < n; ++i) {
+          const Value& cell = cell_at(i);
+          if (cell.is_text() && collate(cell.as_text(), literal, profile, CollationStrength::kClassicExact) == 0) {
+            return i;
+          }
+        }
+        return SIZE_MAX;
+      }
+      const std::string pat_lower = lookup_text_key(raw, profile);
       for (std::size_t i = 0; i < n; ++i) {
         const Value& cell = cell_at(i);
         if (!cell.is_text()) {
@@ -226,8 +220,9 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
   // Hoisted out of the scan loop below: `lookup_value` and `profile` are
   // loop-invariant, so the text-mode branch normalises the lookup side
   // once rather than once per scanned cell.
-  const std::string lookup_key =
-      lookup_value.is_text() ? lookup_text_cmp_key(lookup_value.as_text(), profile) : std::string();
+  const std::string lookup_key = lookup_value.is_text()
+                                     ? collation_key(lookup_value.as_text(), profile, CollationStrength::kCompare)
+                                     : std::string();
 
   std::size_t best = SIZE_MAX;
   for (std::size_t i = 0; i < n; ++i) {
@@ -235,10 +230,7 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
     int cmp = 0;  // sign of (cell - lookup_value)
     bool comparable = false;
     if (lookup_value.is_text() && cell.is_text()) {
-      // Normalise (see exact-mode branch above) before the ASCII
-      // case-insensitive compare so kana / half-width voicing variants order
-      // together.
-      cmp = strings::case_insensitive_compare(lookup_text_cmp_key(cell.as_text(), profile), lookup_key);
+      cmp = collate_key_compare(collation_key(cell.as_text(), profile, CollationStrength::kCompare), lookup_key);
       comparable = true;
     } else if ((lookup_value.is_number() || lookup_value.is_blank()) && cell.is_number()) {
       // Blank cells in the scanned axis are NOT treated as numeric 0 in
@@ -446,12 +438,18 @@ Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int
   // not count.
   if (match_type == 0) {
     if (lookup.is_text()) {
-      // The wildcard matcher handles `*` / `?` as metacharacters and
-      // `~X` as an escaped literal. Running it on a pattern with no real
-      // wildcards is still correct — `~*` becomes a literal `*` compare,
-      // `foo` becomes a byte-exact compare. Lowering both sides gives
-      // Excel's case-insensitive ASCII equality.
-      const std::string pat_lower = lookup_text_key(lookup.as_text(), profile);
+      const std::string_view raw = lookup.as_text();
+      if (!scan_has_wildcard(raw)) {
+        const std::string literal = unescape_wildcard_literal(raw);
+        for (std::size_t i = 0; i < n; ++i) {
+          const Value& cell = cells[i];
+          if (cell.is_text() && collate(cell.as_text(), literal, profile, CollationStrength::kClassicExact) == 0) {
+            return Value::number(static_cast<double>(i + 1));
+          }
+        }
+        return Value::error(ErrorCode::NA);
+      }
+      const std::string pat_lower = lookup_text_key(raw, profile);
       for (std::size_t i = 0; i < n; ++i) {
         const Value& cell = cells[i];
         if (!cell.is_text()) {
@@ -507,11 +505,10 @@ Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int
   };
   // `lookup` and `profile` are loop-invariant; normalise the lookup side
   // once rather than once per scanned cell (see classic.cpp::lookup_scan).
-  const std::string lookup_key = lookup.is_text() ? lookup_text_cmp_key(lookup.as_text(), profile) : std::string();
+  const std::string lookup_key =
+      lookup.is_text() ? collation_key(lookup.as_text(), profile, CollationStrength::kCompare) : std::string();
   auto cmp_text = [&](std::string_view a) -> int {
-    // Normalise (see classic.cpp::lookup_scan / lookup_text_cmp_key) so kana /
-    // half-width voicing variants order together in MATCH approximate mode.
-    return strings::case_insensitive_compare(lookup_text_cmp_key(a, profile), lookup_key);
+    return collate_key_compare(collation_key(a, profile, CollationStrength::kCompare), lookup_key);
   };
 
   // `last_valid_pos` is the running best position under the ordering rule.

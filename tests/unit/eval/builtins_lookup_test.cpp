@@ -6,6 +6,8 @@
 
 #include "builtins_lookup_test_helpers.h"
 #include "eval/builtins.h"
+#include "eval/eval_profile_scope.h"
+#include "excel_profile.h"
 #include "util/test_eval_helpers.h"
 
 namespace formulon {
@@ -377,6 +379,163 @@ TEST(BuiltinsLookup, TwoArgFormReturnsLookupVectorCell) {
   const Value v = EvalSourceIn("=LOOKUP(2.5, A1:A3)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+// ---- text collation ----
+
+Value EvalWithProfile(const std::string& formula, ExcelProfile profile) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(profile);
+  return EvalSourceIn(formula, wb, wb.sheet(0));
+}
+
+// `want` is the 1-based hit (2) or 0 for #N/A.
+::testing::AssertionResult ExpectHit(const Value& v, int want) {
+  if (want == 0) {
+    if (v.is_error() && v.as_error() == ErrorCode::NA) {
+      return ::testing::AssertionSuccess();
+    }
+    return ::testing::AssertionFailure() << "expected #N/A, got " << v.debug_to_string();
+  }
+  if (v.is_number() && v.as_number() == static_cast<double>(want)) {
+    return ::testing::AssertionSuccess();
+  }
+  return ::testing::AssertionFailure() << "expected " << want << ", got " << v.debug_to_string();
+}
+
+struct MatchRow {
+  const char* a;
+  const char* b;
+  int want;
+};
+
+const MatchRow kMatchMacJa[] = {
+    {"ß", "ss", 0},      {"ĳ", "ij", 0},  {"①", "1", 2},   {"²", "2", 2},   {"Ａ", "A", 2},      {"ａ", "A", 2},
+    {"ｱ", "ア", 2},      {"ぁ", "あ", 2}, {"ア", "あ", 2}, {"ヴ", "ゔ", 2}, {"かー", "かあ", 2}, {"Ⅰ", "i", 2},
+    {"Ä", "ä", 2},       {"A", "a", 2},   {"ｶﾞ", "ガ", 0}, {"１", "1", 2},  {"　", " ", 2},      {"ゝ", "ヽ", 2},
+    {"ё", "Ё", 2},       {"ς", "σ", 2},   {"ä", "a", 0},   {"æ", "ae", 0},  {"ss", "ß", 0},      {"เก", "กา", 0},
+    {"かゝ", "かか", 2}, {"ガ", "ｶﾞ", 0},
+};
+
+const MatchRow kMatchMacEn[] = {
+    {"ß", "ss", 0},      {"ĳ", "ij", 0},  {"①", "1", 2},   {"²", "2", 2},   {"Ａ", "A", 2},      {"ａ", "A", 2},
+    {"ｱ", "ア", 2},      {"ぁ", "あ", 2}, {"ア", "あ", 2}, {"ヴ", "ゔ", 2}, {"かー", "かあ", 0}, {"Ⅰ", "i", 2},
+    {"Ä", "ä", 2},       {"A", "a", 2},   {"ｶﾞ", "ガ", 0}, {"１", "1", 2},  {"　", " ", 2},      {"ゝ", "ヽ", 0},
+    {"ё", "Ё", 2},       {"ς", "σ", 2},   {"ä", "a", 0},   {"æ", "ae", 0},  {"ss", "ß", 0},      {"เก", "กา", 0},
+    {"かゝ", "かか", 0}, {"ガ", "ｶﾞ", 0},
+};
+
+const MatchRow kMatchMacZhCn[] = {
+    {"ß", "ss", 0},      {"ĳ", "ij", 0},  {"①", "1", 0},   {"²", "2", 0},   {"Ａ", "A", 0},      {"ａ", "A", 0},
+    {"ｱ", "ア", 0},      {"ぁ", "あ", 0}, {"ア", "あ", 0}, {"ヴ", "ゔ", 0}, {"かー", "かあ", 0}, {"Ⅰ", "i", 0},
+    {"Ä", "ä", 2},       {"A", "a", 2},   {"ｶﾞ", "ガ", 0}, {"１", "1", 0},  {"　", " ", 0},      {"ゝ", "ヽ", 2},
+    {"ё", "Ё", 2},       {"ς", "σ", 2},   {"ä", "a", 0},   {"æ", "ae", 0},  {"ss", "ß", 0},      {"เก", "กา", 0},
+    {"かゝ", "かか", 0}, {"ガ", "ｶﾞ", 0},
+};
+
+TEST(BuiltinsMatchCollation, MacJaFixture) {
+  const ExcelProfile profile = mac_365_ja_jp_profile();
+  ScopedEvalProfile scope(profile);
+  for (const MatchRow& r : kMatchMacJa) {
+    const Value v = EvalWithProfile(
+        std::string("=MATCH(\"" + std::string(r.a) + "\",{\"zz\";\"" + std::string(r.b) + "\"},0)"), profile);
+    ExpectHit(v, r.want) << r.a << " vs " << r.b;
+  }
+}
+
+TEST(BuiltinsMatchCollation, MacEnFixture) {
+  const ExcelProfile profile = mac_365_en_us_profile();
+  ScopedEvalProfile scope(profile);
+  for (const MatchRow& r : kMatchMacEn) {
+    const Value v = EvalWithProfile(
+        std::string("=MATCH(\"" + std::string(r.a) + "\",{\"zz\";\"" + std::string(r.b) + "\"},0)"), profile);
+    ExpectHit(v, r.want) << r.a << " vs " << r.b;
+  }
+}
+
+TEST(BuiltinsMatchCollation, MacZhCnFixture) {
+  const ExcelProfile profile = ExcelProfile{ExcelHost::kMac365, ExcelLocale::kZhCN};
+  ScopedEvalProfile scope(profile);
+  for (const MatchRow& r : kMatchMacZhCn) {
+    const Value v = EvalWithProfile(
+        std::string("=MATCH(\"" + std::string(r.a) + "\",{\"zz\";\"" + std::string(r.b) + "\"},0)"), profile);
+    ExpectHit(v, r.want) << r.a << " vs " << r.b;
+  }
+}
+
+TEST(BuiltinsMatchCollation, WindowsKeepsByteModel) {
+  {
+    const ExcelProfile p = win_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=MATCH("ｶﾞ",{"zz";"ガ"},0))", p);
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=MATCH("ｶﾞ",{"zz";"ガ"},0))";
+  }
+  {
+    const ExcelProfile p = win_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=MATCH("Ａ",{"zz";"A"},0))", p);
+    EXPECT_TRUE(ExpectHit(v, 0)) << R"(=MATCH("Ａ",{"zz";"A"},0))";
+  }
+  {
+    const ExcelProfile p = win_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=MATCH("a",{"zz";"A"},0))", p);
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=MATCH("a",{"zz";"A"},0))";
+  }
+}
+
+TEST(BuiltinsMatchCollation, WildcardsKeepFoldedPath) {
+  {
+    const ExcelProfile p = mac_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=MATCH("a*",{"zz";"ABC"},0))", p);
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=MATCH("a*",{"zz";"ABC"},0))";
+  }
+  {
+    const ExcelProfile p = mac_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=MATCH("a~*",{"zz";"A*"},0))", p);
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=MATCH("a~*",{"zz";"A*"},0))";
+  }
+  {
+    const ExcelProfile p = mac_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=MATCH("a?c",{"zz";"ABC"},0))", p);
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=MATCH("a?c",{"zz";"ABC"},0))";
+  }
+  {
+    const ExcelProfile p = mac_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=MATCH("a~*",{"zz";"ab"},0))", p);
+    EXPECT_TRUE(ExpectHit(v, 0)) << R"(=MATCH("a~*",{"zz";"ab"},0))";
+  }
+}
+
+TEST(BuiltinsMatchCollation, ZhApproximateIsDirectional) {
+  {
+    const ExcelProfile p = ExcelProfile{ExcelHost::kMac365, ExcelLocale::kZhCN};
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=MATCH("A",{"Ａ";"B"},1))", p);
+    EXPECT_TRUE(ExpectHit(v, 0)) << R"(=MATCH("A",{"Ａ";"B"},1))";
+  }
+  {
+    const ExcelProfile p = ExcelProfile{ExcelHost::kMac365, ExcelLocale::kZhCN};
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=MATCH("Ａ",{"A";"B"},1))", p);
+    EXPECT_TRUE(ExpectHit(v, 1)) << R"(=MATCH("Ａ",{"A";"B"},1))";
+  }
+  {
+    const ExcelProfile p = ExcelProfile{ExcelHost::kMac365, ExcelLocale::kZhTW};
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=MATCH("A",{"Ａ";"B"},1))", p);
+    EXPECT_TRUE(ExpectHit(v, 0)) << R"(=MATCH("A",{"Ａ";"B"},1))";
+  }
+  {
+    const ExcelProfile p = ExcelProfile{ExcelHost::kMac365, ExcelLocale::kZhTW};
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=MATCH("Ａ",{"A";"B"},1))", p);
+    EXPECT_TRUE(ExpectHit(v, 1)) << R"(=MATCH("Ａ",{"A";"B"},1))";
+  }
 }
 
 }  // namespace

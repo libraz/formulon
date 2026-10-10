@@ -9,9 +9,11 @@
 #include <string_view>
 
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -499,6 +501,214 @@ TEST(BuiltinsHLookup, CrossSheetTableArray) {
 TEST(BuiltinsHLookup, WrongArityIsValueError) {
   EXPECT_EQ(EvalSource("=HLOOKUP(1)").as_error(), ErrorCode::Value);
   EXPECT_EQ(EvalSource("=HLOOKUP(1, 2, 3, TRUE, 5)").as_error(), ErrorCode::Value);
+}
+
+// ---- text collation ----
+
+Value EvalWithProfile(const std::string& formula, ExcelProfile profile) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(profile);
+  return EvalSourceIn(formula, wb, wb.sheet(0));
+}
+
+// `want` is the 1-based hit (2) or 0 for #N/A.
+::testing::AssertionResult ExpectHit(const Value& v, int want) {
+  if (want == 0) {
+    if (v.is_error() && v.as_error() == ErrorCode::NA) {
+      return ::testing::AssertionSuccess();
+    }
+    return ::testing::AssertionFailure() << "expected #N/A, got " << v.debug_to_string();
+  }
+  if (v.is_number() && v.as_number() == static_cast<double>(want)) {
+    return ::testing::AssertionSuccess();
+  }
+  return ::testing::AssertionFailure() << "expected " << want << ", got " << v.debug_to_string();
+}
+
+struct VLookupRow {
+  const char* a;
+  const char* b;
+  int want;
+};
+
+const VLookupRow kVLookupMacJa[] = {
+    {"ß", "ss", 0},      {"ĳ", "ij", 0},  {"①", "1", 2},   {"²", "2", 2},   {"Ａ", "A", 2},      {"ａ", "A", 2},
+    {"ｱ", "ア", 2},      {"ぁ", "あ", 2}, {"ア", "あ", 2}, {"ヴ", "ゔ", 2}, {"かー", "かあ", 2}, {"Ⅰ", "i", 2},
+    {"Ä", "ä", 2},       {"A", "a", 2},   {"ｶﾞ", "ガ", 0}, {"１", "1", 2},  {"　", " ", 2},      {"ゝ", "ヽ", 2},
+    {"ё", "Ё", 2},       {"ς", "σ", 2},   {"ä", "a", 0},   {"æ", "ae", 0},  {"ss", "ß", 0},      {"เก", "กา", 0},
+    {"かゝ", "かか", 2}, {"ガ", "ｶﾞ", 0},
+};
+
+const VLookupRow kVLookupMacEn[] = {
+    {"ß", "ss", 0},      {"ĳ", "ij", 0},  {"①", "1", 2},   {"²", "2", 2},   {"Ａ", "A", 2},      {"ａ", "A", 2},
+    {"ｱ", "ア", 2},      {"ぁ", "あ", 2}, {"ア", "あ", 2}, {"ヴ", "ゔ", 2}, {"かー", "かあ", 0}, {"Ⅰ", "i", 2},
+    {"Ä", "ä", 2},       {"A", "a", 2},   {"ｶﾞ", "ガ", 0}, {"１", "1", 2},  {"　", " ", 2},      {"ゝ", "ヽ", 0},
+    {"ё", "Ё", 2},       {"ς", "σ", 2},   {"ä", "a", 0},   {"æ", "ae", 0},  {"ss", "ß", 0},      {"เก", "กา", 0},
+    {"かゝ", "かか", 0}, {"ガ", "ｶﾞ", 0},
+};
+
+const VLookupRow kVLookupMacZhCn[] = {
+    {"ß", "ss", 0},      {"ĳ", "ij", 0},  {"①", "1", 0},   {"²", "2", 0},   {"Ａ", "A", 0},      {"ａ", "A", 0},
+    {"ｱ", "ア", 0},      {"ぁ", "あ", 0}, {"ア", "あ", 0}, {"ヴ", "ゔ", 0}, {"かー", "かあ", 0}, {"Ⅰ", "i", 0},
+    {"Ä", "ä", 2},       {"A", "a", 2},   {"ｶﾞ", "ガ", 0}, {"１", "1", 0},  {"　", " ", 0},      {"ゝ", "ヽ", 2},
+    {"ё", "Ё", 2},       {"ς", "σ", 2},   {"ä", "a", 0},   {"æ", "ae", 0},  {"ss", "ß", 0},      {"เก", "กา", 0},
+    {"かゝ", "かか", 0}, {"ガ", "ｶﾞ", 0},
+};
+
+TEST(BuiltinsVLookupCollation, MacJaFixture) {
+  const ExcelProfile profile = mac_365_ja_jp_profile();
+  ScopedEvalProfile scope(profile);
+  for (const VLookupRow& r : kVLookupMacJa) {
+    const Value v = EvalWithProfile(
+        std::string("=VLOOKUP(\"" + std::string(r.a) + "\",{\"zz\",1;\"" + std::string(r.b) + "\",2},2,FALSE)"),
+        profile);
+    ExpectHit(v, r.want) << r.a << " vs " << r.b;
+  }
+}
+
+TEST(BuiltinsVLookupCollation, MacEnFixture) {
+  const ExcelProfile profile = mac_365_en_us_profile();
+  ScopedEvalProfile scope(profile);
+  for (const VLookupRow& r : kVLookupMacEn) {
+    const Value v = EvalWithProfile(
+        std::string("=VLOOKUP(\"" + std::string(r.a) + "\",{\"zz\",1;\"" + std::string(r.b) + "\",2},2,FALSE)"),
+        profile);
+    ExpectHit(v, r.want) << r.a << " vs " << r.b;
+  }
+}
+
+TEST(BuiltinsVLookupCollation, MacZhCnFixture) {
+  const ExcelProfile profile = ExcelProfile{ExcelHost::kMac365, ExcelLocale::kZhCN};
+  ScopedEvalProfile scope(profile);
+  for (const VLookupRow& r : kVLookupMacZhCn) {
+    const Value v = EvalWithProfile(
+        std::string("=VLOOKUP(\"" + std::string(r.a) + "\",{\"zz\",1;\"" + std::string(r.b) + "\",2},2,FALSE)"),
+        profile);
+    ExpectHit(v, r.want) << r.a << " vs " << r.b;
+  }
+}
+
+struct HLookupRow {
+  const char* a;
+  const char* b;
+  int want;
+};
+
+const HLookupRow kHLookupMacJa[] = {
+    {"ß", "ss", 0},      {"ĳ", "ij", 0},  {"①", "1", 2},   {"²", "2", 2},   {"Ａ", "A", 2},      {"ａ", "A", 2},
+    {"ｱ", "ア", 2},      {"ぁ", "あ", 2}, {"ア", "あ", 2}, {"ヴ", "ゔ", 2}, {"かー", "かあ", 2}, {"Ⅰ", "i", 2},
+    {"Ä", "ä", 2},       {"A", "a", 2},   {"ｶﾞ", "ガ", 0}, {"１", "1", 2},  {"　", " ", 2},      {"ゝ", "ヽ", 2},
+    {"ё", "Ё", 2},       {"ς", "σ", 2},   {"ä", "a", 0},   {"æ", "ae", 0},  {"ss", "ß", 0},      {"เก", "กา", 0},
+    {"かゝ", "かか", 2}, {"ガ", "ｶﾞ", 0},
+};
+
+const HLookupRow kHLookupMacEn[] = {
+    {"ß", "ss", 0},      {"ĳ", "ij", 0},  {"①", "1", 2},   {"²", "2", 2},   {"Ａ", "A", 2},      {"ａ", "A", 2},
+    {"ｱ", "ア", 2},      {"ぁ", "あ", 2}, {"ア", "あ", 2}, {"ヴ", "ゔ", 2}, {"かー", "かあ", 0}, {"Ⅰ", "i", 2},
+    {"Ä", "ä", 2},       {"A", "a", 2},   {"ｶﾞ", "ガ", 0}, {"１", "1", 2},  {"　", " ", 2},      {"ゝ", "ヽ", 0},
+    {"ё", "Ё", 2},       {"ς", "σ", 2},   {"ä", "a", 0},   {"æ", "ae", 0},  {"ss", "ß", 0},      {"เก", "กา", 0},
+    {"かゝ", "かか", 0}, {"ガ", "ｶﾞ", 0},
+};
+
+const HLookupRow kHLookupMacZhCn[] = {
+    {"ß", "ss", 0},      {"ĳ", "ij", 0},  {"①", "1", 0},   {"²", "2", 0},   {"Ａ", "A", 0},      {"ａ", "A", 0},
+    {"ｱ", "ア", 0},      {"ぁ", "あ", 0}, {"ア", "あ", 0}, {"ヴ", "ゔ", 0}, {"かー", "かあ", 0}, {"Ⅰ", "i", 0},
+    {"Ä", "ä", 2},       {"A", "a", 2},   {"ｶﾞ", "ガ", 0}, {"１", "1", 0},  {"　", " ", 0},      {"ゝ", "ヽ", 2},
+    {"ё", "Ё", 2},       {"ς", "σ", 2},   {"ä", "a", 0},   {"æ", "ae", 0},  {"ss", "ß", 0},      {"เก", "กา", 0},
+    {"かゝ", "かか", 0}, {"ガ", "ｶﾞ", 0},
+};
+
+TEST(BuiltinsHLookupCollation, MacJaFixture) {
+  const ExcelProfile profile = mac_365_ja_jp_profile();
+  ScopedEvalProfile scope(profile);
+  for (const HLookupRow& r : kHLookupMacJa) {
+    const Value v = EvalWithProfile(
+        std::string("=HLOOKUP(\"" + std::string(r.a) + "\",{\"zz\",\"" + std::string(r.b) + "\";1,2},2,FALSE)"),
+        profile);
+    ExpectHit(v, r.want) << r.a << " vs " << r.b;
+  }
+}
+
+TEST(BuiltinsHLookupCollation, MacEnFixture) {
+  const ExcelProfile profile = mac_365_en_us_profile();
+  ScopedEvalProfile scope(profile);
+  for (const HLookupRow& r : kHLookupMacEn) {
+    const Value v = EvalWithProfile(
+        std::string("=HLOOKUP(\"" + std::string(r.a) + "\",{\"zz\",\"" + std::string(r.b) + "\";1,2},2,FALSE)"),
+        profile);
+    ExpectHit(v, r.want) << r.a << " vs " << r.b;
+  }
+}
+
+TEST(BuiltinsHLookupCollation, MacZhCnFixture) {
+  const ExcelProfile profile = ExcelProfile{ExcelHost::kMac365, ExcelLocale::kZhCN};
+  ScopedEvalProfile scope(profile);
+  for (const HLookupRow& r : kHLookupMacZhCn) {
+    const Value v = EvalWithProfile(
+        std::string("=HLOOKUP(\"" + std::string(r.a) + "\",{\"zz\",\"" + std::string(r.b) + "\";1,2},2,FALSE)"),
+        profile);
+    ExpectHit(v, r.want) << r.a << " vs " << r.b;
+  }
+}
+
+TEST(BuiltinsVLookupCollation, WindowsKeepsByteModel) {
+  {
+    const ExcelProfile p = win_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=VLOOKUP("ｶﾞ",{"zz",1;"ガ",2},2,FALSE))", p);
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=VLOOKUP("ｶﾞ",{"zz",1;"ガ",2},2,FALSE))";
+  }
+  {
+    const ExcelProfile p = win_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=VLOOKUP("Ａ",{"zz",1;"A",2},2,FALSE))", p);
+    EXPECT_TRUE(ExpectHit(v, 0)) << R"(=VLOOKUP("Ａ",{"zz",1;"A",2},2,FALSE))";
+  }
+}
+
+TEST(BuiltinsVLookupCollation, WildcardsKeepFoldedPath) {
+  {
+    const ExcelProfile p = mac_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=VLOOKUP("a*",{"zz",1;"ABC",2},2,FALSE))", p);
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=VLOOKUP("a*",{"zz",1;"ABC",2},2,FALSE))";
+  }
+  {
+    const ExcelProfile p = mac_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=VLOOKUP("a~*",{"zz",1;"A*",2},2,FALSE))", p);
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=VLOOKUP("a~*",{"zz",1;"A*",2},2,FALSE))";
+  }
+}
+
+TEST(BuiltinsHLookupCollation, WindowsKeepsByteModel) {
+  {
+    const ExcelProfile p = win_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=HLOOKUP("ｶﾞ",{"zz","ガ";1,2},2,FALSE))", p);
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=HLOOKUP("ｶﾞ",{"zz","ガ";1,2},2,FALSE))";
+  }
+  {
+    const ExcelProfile p = win_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=HLOOKUP("Ａ",{"zz","A";1,2},2,FALSE))", p);
+    EXPECT_TRUE(ExpectHit(v, 0)) << R"(=HLOOKUP("Ａ",{"zz","A";1,2},2,FALSE))";
+  }
+}
+
+TEST(BuiltinsHLookupCollation, WildcardsKeepFoldedPath) {
+  {
+    const ExcelProfile p = mac_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=HLOOKUP("a*",{"zz","ABC";1,2},2,FALSE))", p);
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=HLOOKUP("a*",{"zz","ABC";1,2},2,FALSE))";
+  }
+  {
+    const ExcelProfile p = mac_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=HLOOKUP("a~*",{"zz","A*";1,2},2,FALSE))", p);
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=HLOOKUP("a~*",{"zz","A*";1,2},2,FALSE))";
+  }
 }
 
 }  // namespace
