@@ -787,30 +787,16 @@ class _WasmInstance:
     def read_cstr(self, ptr: int) -> str:
         """Decode a NUL-terminated UTF-8 C string from ``ptr``.
 
-        Returns the empty string when ``ptr`` is 0. The whole scan runs
-        under ``_call_lock`` (see :meth:`read_bytes`) so a concurrent
-        WASM call on another thread cannot grow memory mid-read.
+        Returns the empty string when ``ptr`` is 0. The memory/instance
+        check happens before taking ``_call_lock``; the scan itself is
+        delegated to the unlocked helper while the lock is held so a
+        concurrent WASM call cannot grow memory mid-read.
         """
         if ptr == 0:
             return ""
         self._ensure()
-        assert self._memory is not None
-        # Stream a chunk at a time to avoid copying the whole memory.
-        chunks: list[bytes] = []
-        offset = ptr
-        chunk_size = 256
         with self._call_lock:
-            mem_len = self._memory.data_len(self._store)
-            while offset < mem_len:
-                end = min(offset + chunk_size, mem_len)
-                buf = bytes(self._memory.read(self._store, offset, end))
-                nul = buf.find(b"\x00")
-                if nul >= 0:
-                    chunks.append(buf[:nul])
-                    break
-                chunks.append(buf)
-                offset = end
-        return b"".join(chunks).decode("utf-8", errors="replace")
+            return self._read_cstr_unlocked(ptr)
 
     def _read_cstr_unlocked(self, ptr: int) -> str:
         """Decode a C string while the caller already owns ``_call_lock``."""

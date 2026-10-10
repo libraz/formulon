@@ -15,8 +15,8 @@ Napi::Object MakeStatusEnvelope(Napi::Env env, bool ok, fm_status_t code, const 
   Napi::Object o = Napi::Object::New(env);
   o.Set("ok", Napi::Boolean::New(env, ok));
   o.Set("status", Napi::Number::New(env, static_cast<int32_t>(code)));
-  o.Set("message", Napi::String::New(env, message != nullptr ? message : ""));
-  o.Set("context", Napi::String::New(env, context != nullptr ? context : ""));
+  o.Set("message", JsString(env, message));
+  o.Set("context", JsString(env, context));
   return o;
 }
 
@@ -447,7 +447,7 @@ Napi::Object MakeNumberFieldResult(Napi::Env env, Napi::Object status, const cha
 }
 
 Napi::Object MakeStringFieldResult(Napi::Env env, Napi::Object status, const char* field, const char* value) {
-  return MakeFieldResult(env, status, field, Napi::String::New(env, value != nullptr ? value : ""));
+  return MakeFieldResult(env, status, field, JsString(env, value));
 }
 
 Napi::Object MakeNumberFieldResult(Napi::Env env, fm_status_t code, const char* field, double value) {
@@ -506,8 +506,8 @@ Napi::Object TranslatePivotCell(Napi::Env env, const fm_pivot_cell_t& cell) {
   out.Set("value", TranslateValue(env, cell.value));
   out.Set("kind", Napi::Number::New(env, static_cast<int32_t>(cell.kind)));
   out.Set("depth", Napi::Number::New(env, cell.depth));
-  out.Set("fieldName", Napi::String::New(env, cell.field_name != nullptr ? cell.field_name : ""));
-  out.Set("numberFormat", Napi::String::New(env, cell.number_format != nullptr ? cell.number_format : ""));
+  out.Set("fieldName", JsString(env, cell.field_name));
+  out.Set("numberFormat", JsString(env, cell.number_format));
   return out;
 }
 

@@ -2139,6 +2139,16 @@ def _read_count(fn, *args, default_op: str = "count") -> int:
         LIB.free(out)
 
 
+def _read_cstr_out(fn, *args, default_op: str = "text") -> str:
+    """Call a ``(..., out_cstr*)`` ABI function and decode its result."""
+    out = _alloc_out_ptr()
+    try:
+        _check(fn(*args, out), getattr(fn, "__name__", default_op))
+        return LIB.read_cstr(LIB.read_u32(out))
+    finally:
+        LIB.free(out)
+
+
 def _image_anchor_fields(
     anchor_kind,
     edit_as,
@@ -2652,13 +2662,12 @@ class Workbook:
     def sheet_name(self, index: int) -> str:
         """Display name (UTF-8) of the sheet at ``index``."""
         h = self._require()
-        out_ptr = _alloc_out_ptr()
-        try:
-            status = LIB.fm_workbook_sheet_name(h, _uint(index, "index"), out_ptr)
-            _check(status, "fm_workbook_sheet_name")
-            return LIB.read_cstr(LIB.read_u32(out_ptr))
-        finally:
-            LIB.free(out_ptr)
+        return _read_cstr_out(
+            LIB.fm_workbook_sheet_name,
+            h,
+            _uint(index, "index"),
+            default_op="fm_workbook_sheet_name",
+        )
 
     def add_sheet(self, name: str) -> None:
         """Append a new sheet with the given UTF-8 display name."""
@@ -2805,17 +2814,14 @@ class Workbook:
         concatenated, without the spans.
         """
         h = self._require()
-        count_out = _alloc_out_ptr()
-        try:
-            _check(
-                LIB.fm_workbook_get_cell_phonetic_run_count(
-                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), count_out
-                ),
-                "fm_workbook_get_cell_phonetic_run_count",
-            )
-            count = LIB.read_u32(count_out)
-        finally:
-            LIB.free(count_out)
+        count = _read_count(
+            LIB.fm_workbook_get_cell_phonetic_run_count,
+            h,
+            _uint(sheet, "sheet_index"),
+            _uint(row, "row"),
+            _uint(col, "col"),
+            default_op="fm_workbook_get_cell_phonetic_run_count",
+        )
         out: List[PhoneticRun] = []
         run_ptr = S.alloc_struct(LIB, S.PHONETIC_RUN)
         try:
@@ -2908,17 +2914,14 @@ class Workbook:
         ``sheet``, ``row`` and ``col`` are all 0-based.
         """
         h = self._require()
-        out = _alloc_out_ptr()
-        try:
-            _check(
-                LIB.fm_workbook_get_cell_phonetic(
-                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), out
-                ),
-                "fm_workbook_get_cell_phonetic",
-            )
-            return LIB.read_cstr(LIB.read_u32(out))
-        finally:
-            LIB.free(out)
+        return _read_cstr_out(
+            LIB.fm_workbook_get_cell_phonetic,
+            h,
+            _uint(sheet, "sheet_index"),
+            _uint(row, "row"),
+            _uint(col, "col"),
+            default_op="fm_workbook_get_cell_phonetic",
+        )
 
     # -- Cell read ---------------------------------------------------------
     def get_value(self, sheet: int, row: int, col: int) -> Value:
@@ -3671,17 +3674,14 @@ class Workbook:
     def lambda_text_at(self, sheet: int, row: int, col: int) -> str:
         """Render the lambda cached at ``(sheet, row, col)`` as text."""
         h = self._require()
-        out = _alloc_out_ptr()
-        try:
-            _check(
-                LIB.fm_workbook_lambda_text_at(
-                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), out
-                ),
-                "fm_workbook_lambda_text_at",
-            )
-            return LIB.read_cstr(LIB.read_u32(out))
-        finally:
-            LIB.free(out)
+        return _read_cstr_out(
+            LIB.fm_workbook_lambda_text_at,
+            h,
+            _uint(sheet, "sheet_index"),
+            _uint(row, "row"),
+            _uint(col, "col"),
+            default_op="fm_workbook_lambda_text_at",
+        )
 
     # -- Merges ------------------------------------------------------------
     def add_merge(self, sheet: int, merge: MergeRange) -> None:
@@ -4262,12 +4262,14 @@ class Workbook:
 
     def _read_formula_text(self, fn, op: str, sheet: int, row: int, col: int) -> Optional[str]:
         h = self._require()
-        out = _alloc_out_ptr()
-        try:
-            _check(fn(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), out), op)
-            text = LIB.read_cstr(LIB.read_u32(out))
-        finally:
-            LIB.free(out)
+        text = _read_cstr_out(
+            fn,
+            h,
+            _uint(sheet, "sheet_index"),
+            _uint(row, "row"),
+            _uint(col, "col"),
+            default_op=op,
+        )
         return text or None
 
     def get_formula(self, sheet: int, row: int, col: int) -> Optional[str]:
@@ -5232,15 +5234,12 @@ class Workbook:
         does not interpret.
         """
         h = self._require()
-        out = _alloc_out_ptr()
-        try:
-            _check(
-                LIB.fm_sheet_get_auto_filter_xml(h, _uint(sheet, "sheet_index"), out),
-                "fm_sheet_get_auto_filter_xml",
-            )
-            return LIB.read_cstr(LIB.read_u32(out))
-        finally:
-            LIB.free(out)
+        return _read_cstr_out(
+            LIB.fm_sheet_get_auto_filter_xml,
+            h,
+            _uint(sheet, "sheet_index"),
+            default_op="fm_sheet_get_auto_filter_xml",
+        )
 
     def set_auto_filter_xml(self, sheet: int, xml: str) -> None:
         """Replace the sheet's ``<autoFilter>`` XML fragment.
@@ -5271,12 +5270,12 @@ class Workbook:
 
     def _get_print_xml(self, sheet: int, export: str) -> str:
         h = self._require()
-        out = _alloc_out_ptr()
-        try:
-            _check(getattr(LIB, export)(h, _uint(sheet, "sheet_index"), out), export)
-            return LIB.read_cstr(LIB.read_u32(out))
-        finally:
-            LIB.free(out)
+        return _read_cstr_out(
+            getattr(LIB, export),
+            h,
+            _uint(sheet, "sheet_index"),
+            default_op=export,
+        )
 
     def _set_print_xml(self, sheet: int, export: str, xml: str) -> None:
         h = self._require()
@@ -5366,12 +5365,12 @@ class Workbook:
         paginator resolves rather than the authored shape.
         """
         h = self._require()
-        out = _alloc_out_ptr()
-        try:
-            _check(LIB.fm_sheet_get_print_area(h, _uint(sheet, "sheet_index"), out), "fm_sheet_get_print_area")
-            return LIB.read_cstr(LIB.read_u32(out))
-        finally:
-            LIB.free(out)
+        return _read_cstr_out(
+            LIB.fm_sheet_get_print_area,
+            h,
+            _uint(sheet, "sheet_index"),
+            default_op="fm_sheet_get_print_area",
+        )
 
     def set_print_area(self, sheet: int, ranges_a1: str) -> None:
         """Write ``_xlnm.Print_Area`` from one or more A1 ranges.
@@ -6369,15 +6368,12 @@ class Workbook:
     def get_num_fmt(self, num_fmt_id: int) -> str:
         """Return the format code registered for ``num_fmt_id``."""
         h = self._require()
-        out = _alloc_out_ptr()
-        try:
-            _check(
-                LIB.fm_styles_get_num_fmt_string(h, _uint(num_fmt_id, "num_fmt_id", 16), out),
-                "fm_styles_get_num_fmt_string",
-            )
-            return LIB.read_cstr(LIB.read_u32(out))
-        finally:
-            LIB.free(out)
+        return _read_cstr_out(
+            LIB.fm_styles_get_num_fmt_string,
+            h,
+            _uint(num_fmt_id, "num_fmt_id", 16),
+            default_op="fm_styles_get_num_fmt_string",
+        )
 
     def font_count(self) -> int:
         """Return the number of font records registered."""
@@ -7047,17 +7043,13 @@ class Workbook:
     def pivot_cache_field_name(self, cache_id: int, field_idx: int) -> str:
         """Read the name of cache field ``field_idx``."""
         h = self._require()
-        out = _alloc_out_ptr()
-        try:
-            _check(
-                LIB.fm_workbook_pivot_cache_field_name(
-                    h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx"), out
-                ),
-                "fm_workbook_pivot_cache_field_name",
-            )
-            return LIB.read_cstr(LIB.read_u32(out))
-        finally:
-            LIB.free(out)
+        return _read_cstr_out(
+            LIB.fm_workbook_pivot_cache_field_name,
+            h,
+            _uint(cache_id, "cache_id"),
+            _uint(field_idx, "field_idx"),
+            default_op="fm_workbook_pivot_cache_field_name",
+        )
 
     def pivot_cache_field_add(self, cache_id: int, name: str) -> int:
         """Append a field to the cache; return its index."""
@@ -7957,12 +7949,11 @@ class Workbook:
     @staticmethod
     def function_name_at(index: int) -> str:
         """Return the canonical name of the ``index``-th function."""
-        out = _alloc_out_ptr()
-        try:
-            _check(LIB.fm_function_name_at(_uint(index, "idx"), out), "fm_function_name_at")
-            return LIB.read_cstr(LIB.read_u32(out))
-        finally:
-            LIB.free(out)
+        return _read_cstr_out(
+            LIB.fm_function_name_at,
+            _uint(index, "idx"),
+            default_op="fm_function_name_at",
+        )
 
     @staticmethod
     def function_metadata(name: str) -> Optional[FunctionMetadata]:
@@ -8007,14 +7998,11 @@ class Workbook:
         """Call a ``(text, profile_id) -> text`` catalog entry point."""
         text_ptr, _ = LIB.alloc_utf8(text)
         pid_ptr, _ = LIB.alloc_utf8(profile_id)
-        out = _alloc_out_ptr()
         try:
-            _check(getattr(LIB, fn_name)(text_ptr, pid_ptr, out), fn_name)
-            return LIB.read_cstr(LIB.read_u32(out))
+            return _read_cstr_out(getattr(LIB, fn_name), text_ptr, pid_ptr, default_op=fn_name)
         finally:
             LIB.free(text_ptr)
             LIB.free(pid_ptr)
-            LIB.free(out)
 
     @staticmethod
     def localize_function_name(canonical_name: str, profile_id: ExcelProfileId) -> str:

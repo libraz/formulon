@@ -19,6 +19,18 @@ namespace formulon {
 namespace wasm {
 namespace parts {
 
+namespace {
+
+using ProfileTextMapFn = fm_status_t (*)(const char*, const char*, const char**);
+
+JsStringResult map_profile_text(ProfileTextMapFn fn, const std::string& text, const std::string& profile_id) {
+  const char* out = nullptr;
+  const fm_status_t rc = fn(text.c_str(), profile_id.c_str(), &out);
+  return string_result(rc, out);
+}
+
+}  // namespace
+
 // ---- Trace helpers -----------------------------------------------------
 //
 // Shared bridge for `precedents` / `dependents`: invokes the C ABI
@@ -111,28 +123,20 @@ emscripten::val JsWorkbook::functionNames() const {
 
 JsStringResult JsWorkbook::localizeFunctionName(const std::string& canonical_name,
                                                 const std::string& profile_id) const {
-  const char* out = nullptr;
-  const fm_status_t rc = fm_function_localize(canonical_name.c_str(), profile_id.c_str(), &out);
-  return string_result(rc, out);
+  return map_profile_text(fm_function_localize, canonical_name, profile_id);
 }
 
 JsStringResult JsWorkbook::canonicalizeFunctionName(const std::string& localized_name,
                                                     const std::string& profile_id) const {
-  const char* out = nullptr;
-  const fm_status_t rc = fm_function_canonicalize(localized_name.c_str(), profile_id.c_str(), &out);
-  return string_result(rc, out);
+  return map_profile_text(fm_function_canonicalize, localized_name, profile_id);
 }
 
 JsStringResult JsWorkbook::localizeFormula(const std::string& formula, const std::string& profile_id) const {
-  const char* out = nullptr;
-  const fm_status_t rc = fm_formula_localize(formula.c_str(), profile_id.c_str(), &out);
-  return string_result(rc, out);
+  return map_profile_text(fm_formula_localize, formula, profile_id);
 }
 
 JsStringResult JsWorkbook::canonicalizeFormula(const std::string& formula, const std::string& profile_id) const {
-  const char* out = nullptr;
-  const fm_status_t rc = fm_formula_canonicalize(formula.c_str(), profile_id.c_str(), &out);
-  return string_result(rc, out);
+  return map_profile_text(fm_formula_canonicalize, formula, profile_id);
 }
 
 emscripten::val JsWorkbook::localeFacts(const std::string& profile_id) const {
