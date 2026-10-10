@@ -7,6 +7,7 @@
 
 #include "eval/builtins/text_format.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -430,7 +431,9 @@ Value NumberValue_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // `NUMBERVALUE("(1234)", ".")` as -1234 contrary to the original
   // assumption documented in `tests/divergence.yaml`.
   bool paren_negated = false;
-  const std::string normalized = normalize_locale_numeric(text.value(), &paren_negated);
+  std::string normalized = normalize_locale_numeric(text.value(), &paren_negated);
+  // Spaces are dropped wherever they sit (value_numbervalue.numbervalue_inner_spaces).
+  normalized.erase(std::remove(normalized.begin(), normalized.end(), ' '), normalized.end());
   double parsed = 0.0;
   if (parse_numeric(normalized, decimal_sep, group_sep, &parsed, /*strict_groups=*/false)) {
     return Value::number(paren_negated ? -parsed : parsed);
