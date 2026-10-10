@@ -6,7 +6,7 @@
     "excel_locale": "ko-KR",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-10T06:29:08Z"
+    "generated_at": "2026-10-10T12:25:56Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1891,6 +1891,682 @@
       "expect": {
         "kind": "text",
         "value": "x1234.5"
+      }
+    },
+    {
+      "id": "arraytotext_range_error_null",
+      "formula": "=ARRAYTOTEXT(A1:B1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=C1:C2 D1:D2"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#NULL!, 1"
+      }
+    },
+    {
+      "id": "arraytotext_range_error_value",
+      "formula": "=ARRAYTOTEXT(A1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1+\"a\""
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#VALUE!, 1"
+      }
+    },
+    {
+      "id": "arraytotext_range_error_ref",
+      "formula": "=ARRAYTOTEXT(A1:B1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=INDEX(C1:C2,3)"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#REF!, 1"
+      }
+    },
+    {
+      "id": "arraytotext_range_error_name",
+      "formula": "=ARRAYTOTEXT(A1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=nosuchname_x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#NAME?, 1"
+      }
+    },
+    {
+      "id": "arraytotext_range_error_num",
+      "formula": "=ARRAYTOTEXT(A1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#NUM!, 1"
+      }
+    },
+    {
+      "id": "arraytotext_range_error_calc",
+      "formula": "=ARRAYTOTEXT(A1:B1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=FILTER(C1:C2,C1:C2>5)"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#CALC!, 1"
+      }
+    },
+    {
+      "id": "arraytotext_range_error_spill",
+      "formula": "=ARRAYTOTEXT(A1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2)"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#분산!, 1"
+      }
+    },
+    {
+      "id": "arraytotext_error_literal_getting_data",
+      "formula": "=ARRAYTOTEXT({1,#GETTING_DATA})",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1, #GETTING_DATA"
+      }
+    },
+    {
+      "id": "text_colors_de_de",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(-5,\"0;[\"&{\"Schwarz\",\"Blau\",\"Zyan\",\"Grün\",\"Magenta\",\"Rot\",\"Weiß\",\"Gelb\"}&\"]0\"),\"x\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x|x|x|x|x|x|x|x"
+      }
+    },
+    {
+      "id": "text_colors_fr_fr",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(-5,\"0;[\"&{\"Noir\",\"Bleu\",\"Cyan\",\"Vert\",\"Magenta\",\"Rouge\",\"Blanc\",\"Jaune\"}&\"]0\"),\"x\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x|x|x|x|x|x|x|x"
+      }
+    },
+    {
+      "id": "text_colors_it_it",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(-5,\"0;[\"&{\"Nero\",\"Blu\",\"Celeste\",\"Verde\",\"Fucsia\",\"Rosso\",\"Bianco\",\"Giallo\"}&\"]0\"),\"x\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x|x|x|x|x|x|x|x"
+      }
+    },
+    {
+      "id": "text_colors_nl_nl",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(-5,\"0;[\"&{\"Zwart\",\"Blauw\",\"Cyaan\",\"Groen\",\"Magenta\",\"Rood\",\"Wit\",\"Geel\"}&\"]0\"),\"x\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x|x|x|x|x|x|x|x"
+      }
+    },
+    {
+      "id": "text_colors_es_es",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(-5,\"0;[\"&{\"Negro\",\"Azul\",\"Cian\",\"Verde\",\"Magenta\",\"Rojo\",\"Blanco\",\"Amarillo\"}&\"]0\"),\"x\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x|x|x|x|x|x|x|x"
+      }
+    },
+    {
+      "id": "text_colors_pt_br",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(-5,\"0;[\"&{\"Preto\",\"Azul\",\"Ciano\",\"Verde\",\"Magenta\",\"Vermelho\",\"Branco\",\"Amarelo\"}&\"]0\"),\"x\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x|x|x|x|x|x|x|x"
+      }
+    },
+    {
+      "id": "text_colors_ru_ru",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(-5,\"0;[\"&{\"Черный\",\"Синий\",\"Голубой\",\"Зеленый\",\"Фиолетовый\",\"Красный\",\"Белый\",\"Желтый\"}&\"]0\"),\"x\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x|x|x|x|x|x|x|x"
+      }
+    },
+    {
+      "id": "text_colors_th_th",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(-5,\"0;[\"&{\"ดำ\",\"น้ำเงิน\",\"ฟ้า\",\"เขียว\",\"ม่วงมาเจนต้า\",\"แดง\",\"ขาว\",\"เหลือง\"}&\"]0\"),\"x\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x|x|x|x|x|x|x|x"
+      }
+    },
+    {
+      "id": "text_colors_zh_cn",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(-5,\"0;[\"&{\"黑色\",\"蓝色\",\"蓝绿色\",\"绿色\",\"洋红\",\"红色\",\"白色\",\"黄色\"}&\"]0\"),\"x\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x|x|x|x|x|x|x|x"
+      }
+    },
+    {
+      "id": "text_colors_zh_tw",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(-5,\"0;[\"&{\"黑色\",\"藍色\",\"青色\",\"綠色\",\"洋紅\",\"紅色\",\"白色\",\"黃色\"}&\"]0\"),\"x\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x|x|x|x|x|x|x|x"
+      }
+    },
+    {
+      "id": "text_colors_ko_kr",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(-5,\"0;[\"&{\"검정\",\"파랑\",\"녹청\",\"녹색\",\"자홍\",\"빨강\",\"흰색\",\"노랑\"}&\"]0\"),\"x\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5|5|5|5|5|5|5|5"
+      }
+    },
+    {
+      "id": "text_colors_ja_jp",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(-5,\"0;[\"&{\"黒\",\"青\",\"水\",\"緑\",\"紫\",\"赤\",\"白\",\"黄\"}&\"]0\"),\"x\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x|x|x|x|x|x|x|x"
+      }
+    },
+    {
+      "id": "text_colors_en_us",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(-5,\"0;[\"&{\"Black\",\"Blue\",\"Cyan\",\"Green\",\"Magenta\",\"Red\",\"White\",\"Yellow\"}&\"]0\"),\"x\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x|x|x|x|x|x|x|x"
+      }
+    },
+    {
+      "id": "text_color_index_prefixes",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(-5,\"0;[\"&{\"Farbe\",\"Couleur\",\"Colore\",\"Kleur\",\"Color\",\"Cor\",\"Цвет\",\"สี\",\"颜色\",\"色彩\",\"색\",\"色\"}&\"3]0\"),\"x\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x|x|x|x|x|x|x|x|x|x|5|x"
+      }
+    },
+    {
+      "id": "text_fullwidth_number_syntax",
+      "formula": "=TEXT(1234.5,\"＃，＃＃０．００\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,234.50"
+      }
+    },
+    {
+      "id": "text_fullwidth_percent_syntax",
+      "formula": "=TEXT(0.25,\"０％\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "25%"
+      }
+    },
+    {
+      "id": "text_fullwidth_date_syntax",
+      "formula": "=TEXT(DATE(2024,3,5),\"ｙｙｙｙ／ｍ／ｄ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024/3/5"
+      }
+    },
+    {
+      "id": "dbnum_digits",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(1234567890,\"[DBNum\"&{1,2,3,4}&\"]0\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "一二三四五六七八九０|壹貳參四伍六七八九零|１２３４５６７８９０|일이삼사오육칠팔구영"
+      }
+    },
+    {
+      "id": "dbnum_place_units",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT({10,100,1000,10000,100000000}/86400,\"[DBNum\"&{1;2;3;4}&\"][s]\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "一十|一百|一千|一万|一億|壹拾|壹百|壹阡|壹萬|壹億|十|百|千|１万|１億|일십|일백|일천|일만|일억"
+      }
+    },
+    {
+      "id": "dbnum_place_one_filler",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT({11,101,110,1010,10100,90090,100100,1000001,1402560,100000001,100001000,10001000}/86400,\"[DBNum\"&{1;2;3;4}&\"][s]\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "一十一|一百一|一百一十|一千一十|一万一百|九万九十|一十万一百|一百万一|一百四十万二千五百六十|一億一|一億一千|一千万一千|壹拾壹|壹百壹|壹百壹拾|壹阡壹拾|壹萬壹百|九萬九拾|壹拾萬壹百|壹百萬壹|壹百四拾萬貳阡伍百六拾|壹億壹|壹億壹阡|壹阡萬壹阡|十１|百１|百十|千十|１万百|９万９十|十万百|百万１|百４十万２千５百６十|１億１|１億千|千万千|일십일|일백일|일백일십|일천일십|일만일백|구만구십|일십만일백|일백만일|일백사십만이천오백육십|일억일|일억일천|일천만일천"
+      }
+    },
+    {
+      "id": "dbnum_general_ja_jp",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT({0,10,101,1234.5,-12,1E+12,1234567890123,0.5},\"[DBNum\"&{1;2;3;4}&\"]G/標準\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "/標準|/標準|/標準|/標準|#|#|#|/標準|/標準|/標準|/標準|/標準|#|#|#|/標準|/標準|/標準|/標準|/標準|#|#|#|/標準|/標準|/標準|/標準|/標準|#|#|#|/標準"
+      }
+    },
+    {
+      "id": "dbnum_general_zh",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT({0,10,101,1234.5,-12,1E+12,1234567890123,0.5},\"[DBNum\"&{1;2;3;4}&\"]G/通用格式\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "/通用格式|/通用格式|/通用格式|/通用格式|#|#|#|/通用格式|/通用格式|/通用格式|/通用格式|/通用格式|#|#|#|/通用格式|/通用格式|/通用格式|/通用格式|/通用格式|#|#|#|/通用格式|/通用格式|/通用格式|/通用格式|/通用格式|#|#|#|/通用格式"
+      }
+    },
+    {
+      "id": "dbnum_general_ko_kr",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT({0,10,101,1234.5,-12,1E+12,1234567890123,0.5},\"[DBNum\"&{1;2;3;4}&\"]G/표준\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "０|一十|一百一|一千二百三十四.五|-一十二|一兆|一兆二千三百四十五億六千七百八十九万一百二十三|０.五|零|壹拾|壹百壹|壹阡貳百參拾四.伍|-壹拾貳|壹兆|壹兆貳阡參百四拾伍億六阡七百八拾九萬壹百貳拾參|零.伍|０|十|百１|千２百３十４.５|-十２|１兆|１兆２千３百４十５億６千７百８十９万百２十３|０.５|영|일십|일백일|일천이백삼십사.오|-일십이|일조|일조이천삼백사십오억육천칠백팔십구만일백이십삼|영.오"
+      }
+    },
+    {
+      "id": "dbnum_date_fields",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(DATE(2000,10,9)+TIME(1,20,5),\"[DBNum\"&{1;2;3;4}&\"]\"&{\"yy\",\"m\",\"mm\",\"d\",\"dd\",\"h\",\"hh\",\"h:mm:ss\",\"e\",\"ee\",\"b\",\"bb\",\"bbbb\",\"yyyy\"}),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "００|十|十|九|０九|一|０一|一:二十:０五|二０００|二０００|四三四三|四三四三|二五四三|二０００|零零|壹拾|壹拾|九|零九|壹|零壹|壹:貳拾:零伍|貳零零零|貳零零零|四參四參|四參四參|貳伍四參|貳零零零|００|１０|１０|９|０９|１|０１|１:２０:０５|２０００|２０００|４３４３|４３４３|２５４３|２０００|영영|십|십|구|영구|일|영일|일:이십:영오|이영영영|이영영영|사삼사삼|사삼사삼|이오사삼|이영영영"
+      }
+    },
+    {
+      "id": "dbnum_date_fields_two_digit",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(DATE(2011,11,20)+TIME(23,59,30),\"[DBNum\"&{1;2;3;4}&\"]\"&{\"yy\",\"m\",\"d\",\"h\",\"h:mm:ss\",\"e\",\"b\"}),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "十一|十一|二十|二十三|二十三:五十九:三十|二０一一|五四五四|壹拾壹|壹拾壹|貳拾|貳拾參|貳拾參:伍拾九:參拾|貳零壹壹|伍四伍四|１１|１１|２０|２３|２３:５９:３０|２０１１|５４５４|십일|십일|이십|이십삼|이십삼:오십구:삼십|이영일일|오사오사"
+      }
+    },
+    {
+      "id": "dbnum_elapsed_padded",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(TIME(5,3,7),\"[DBNum\"&{1;2;3;4}&\"]\"&{\"[hh]\",\"[mm]\",\"[ss]\",\"[h]:mm\"}),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "０五|三百三|一万八千一百八十七|五:０三|零伍|參百參|壹萬八阡壹百八拾七|伍:零參|０５|３百３|１万８千百８十７|５:０３|영오|삼백삼|일만팔천일백팔십칠|오:영삼"
+      }
+    },
+    {
+      "id": "lcid_names_411",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"[$-411]mmmm\"),TEXT(DATE(2024,SEQUENCE(12),1),\"[$-411]mmm\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-411]dddd\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-411]ddd\"),TEXT(TIME({1,13},0,0),\"[$-411]h AM/PM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1月|2月|3月|4月|5月|6月|7月|8月|9月|10月|11月|12月|1月|2月|3月|4月|5月|6月|7月|8月|9月|10月|11月|12月|日曜日|月曜日|火曜日|水曜日|木曜日|金曜日|土曜日|日|月|火|水|木|金|土|1 午前|1 午後"
+      }
+    },
+    {
+      "id": "lcid_names_409",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"[$-409]mmmm\"),TEXT(DATE(2024,SEQUENCE(12),1),\"[$-409]mmm\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-409]dddd\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-409]ddd\"),TEXT(TIME({1,13},0,0),\"[$-409]h AM/PM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sun|Mon|Tue|Wed|Thu|Fri|Sat|1 AM|1 PM"
+      }
+    },
+    {
+      "id": "lcid_names_407",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"[$-407]mmmm\"),TEXT(DATE(2024,SEQUENCE(12),1),\"[$-407]mmm\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-407]dddd\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-407]ddd\"),TEXT(TIME({1,13},0,0),\"[$-407]h AM/PM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember|Jan|Feb|Mär|Apr|Mai|Jun|Jul|Aug|Sep|Okt|Nov|Dez|Sonntag|Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|So|Mo|Di|Mi|Do|Fr|Sa|1 AM|1 PM"
+      }
+    },
+    {
+      "id": "lcid_names_40c",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"[$-40C]mmmm\"),TEXT(DATE(2024,SEQUENCE(12),1),\"[$-40C]mmm\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-40C]dddd\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-40C]ddd\"),TEXT(TIME({1,13},0,0),\"[$-40C]h AM/PM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|janv.|févr.|mars|avr.|mai|juin|juil.|août|sept.|oct.|nov.|déc.|dimanche|lundi|mardi|mercredi|jeudi|vendredi|samedi|dim.|lun.|mar.|mer.|jeu.|ven.|sam.|1 AM|1 PM"
+      }
+    },
+    {
+      "id": "lcid_names_804",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"[$-804]mmmm\"),TEXT(DATE(2024,SEQUENCE(12),1),\"[$-804]mmm\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-804]dddd\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-804]ddd\"),TEXT(TIME({1,13},0,0),\"[$-804]h AM/PM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "一月|二月|三月|四月|五月|六月|七月|八月|九月|十月|十一月|十二月|1月|2月|3月|4月|5月|6月|7月|8月|9月|10月|11月|12月|星期日|星期一|星期二|星期三|星期四|星期五|星期六|周日|周一|周二|周三|周四|周五|周六|1 上午|1 下午"
+      }
+    },
+    {
+      "id": "lcid_names_412",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"[$-412]mmmm\"),TEXT(DATE(2024,SEQUENCE(12),1),\"[$-412]mmm\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-412]dddd\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-412]ddd\"),TEXT(TIME({1,13},0,0),\"[$-412]h AM/PM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1월|2월|3월|4월|5월|6월|7월|8월|9월|10월|11월|12월|1월|2월|3월|4월|5월|6월|7월|8월|9월|10월|11월|12월|일요일|월요일|화요일|수요일|목요일|금요일|토요일|일|월|화|수|목|금|토|1 오전|1 오후"
+      }
+    },
+    {
+      "id": "lcid_names_41e",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"[$-41E]mmmm\"),TEXT(DATE(2024,SEQUENCE(12),1),\"[$-41E]mmm\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-41E]dddd\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-41E]ddd\"),TEXT(TIME({1,13},0,0),\"[$-41E]h AM/PM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม|ม.ค.|ก.พ.|มี.ค.|เม.ย.|พ.ค.|มิ.ย.|ก.ค.|ส.ค.|ก.ย.|ต.ค.|พ.ย.|ธ.ค.|วันอาทิตย์|วันจันทร์|วันอังคาร|วันพุธ|วันพฤหัสบดี|วันศุกร์|วันเสาร์|อาทิตย์|จันทร์|อังคาร|พุธ|พฤหัส|ศุกร์|เสาร์|1 AM|1 PM"
+      }
+    },
+    {
+      "id": "lcid_names_c0a",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"[$-C0A]mmmm\"),TEXT(DATE(2024,SEQUENCE(12),1),\"[$-C0A]mmm\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-C0A]dddd\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-C0A]ddd\"),TEXT(TIME({1,13},0,0),\"[$-C0A]h AM/PM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|ene.|feb.|mar.|abr.|may.|jun.|jul.|ago.|sep.|oct.|nov.|dic.|domingo|lunes|martes|miércoles|jueves|viernes|sábado|do.|lu.|ma.|mi.|ju.|vi.|sá.|1 a. m.|1 p. m."
+      }
+    },
+    {
+      "id": "lcid_names_80a",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"[$-80A]mmmm\"),TEXT(DATE(2024,SEQUENCE(12),1),\"[$-80A]mmm\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-80A]dddd\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-80A]ddd\"),TEXT(TIME({1,13},0,0),\"[$-80A]h AM/PM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|ene.|feb.|mar.|abr.|may.|jun.|jul.|ago.|sep.|oct.|nov.|dic.|domingo|lunes|martes|miércoles|jueves|viernes|sábado|dom.|lun.|mar.|mié.|jue.|vie.|sáb.|1 a. m.|1 p. m."
+      }
+    },
+    {
+      "id": "lcid_names_416",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"[$-416]mmmm\"),TEXT(DATE(2024,SEQUENCE(12),1),\"[$-416]mmm\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-416]dddd\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-416]ddd\"),TEXT(TIME({1,13},0,0),\"[$-416]h AM/PM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|jan.|fev.|mar.|abr.|mai.|jun.|jul.|ago.|set.|out.|nov.|dez.|domingo|segunda-feira|terça-feira|quarta-feira|quinta-feira|sexta-feira|sábado|dom.|seg.|ter.|qua.|qui.|sex.|sáb.|1 AM|1 PM"
+      }
+    },
+    {
+      "id": "lcid_names_419",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"[$-419]mmmm\"),TEXT(DATE(2024,SEQUENCE(12),1),\"[$-419]mmm\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-419]dddd\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-419]ddd\"),TEXT(TIME({1,13},0,0),\"[$-419]h AM/PM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "январь|февраль|март|апрель|май|июнь|июль|август|сентябрь|октябрь|ноябрь|декабрь|янв.|февр.|март|апр.|май|июнь|июль|авг.|сент.|окт.|нояб.|дек.|воскресенье|понедельник|вторник|среда|четверг|пятница|суббота|Вс|Пн|Вт|Ср|Чт|Пт|Сб|1 AM|1 PM"
+      }
+    },
+    {
+      "id": "lcid_names_404",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"[$-404]mmmm\"),TEXT(DATE(2024,SEQUENCE(12),1),\"[$-404]mmm\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-404]dddd\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-404]ddd\"),TEXT(TIME({1,13},0,0),\"[$-404]h AM/PM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1月|2月|3月|4月|5月|6月|7月|8月|9月|10月|11月|12月|1月|2月|3月|4月|5月|6月|7月|8月|9月|10月|11月|12月|星期日|星期一|星期二|星期三|星期四|星期五|星期六|週日|週一|週二|週三|週四|週五|週六|1 上午|1 下午"
+      }
+    },
+    {
+      "id": "lcid_names_410",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"[$-410]mmmm\"),TEXT(DATE(2024,SEQUENCE(12),1),\"[$-410]mmm\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-410]dddd\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-410]ddd\"),TEXT(TIME({1,13},0,0),\"[$-410]h AM/PM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|gen|feb|mar|apr|mag|giu|lug|ago|set|ott|nov|dic|domenica|lunedì|martedì|mercoledì|giovedì|venerdì|sabato|dom|lun|mar|mer|gio|ven|sab|1 AM|1 PM"
+      }
+    },
+    {
+      "id": "lcid_names_413",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(DATE(2024,SEQUENCE(12),1),\"[$-413]mmmm\"),TEXT(DATE(2024,SEQUENCE(12),1),\"[$-413]mmm\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-413]dddd\"),TEXT(DATE(2024,3,SEQUENCE(7,1,3)),\"[$-413]ddd\"),TEXT(TIME({1,13},0,0),\"[$-413]h AM/PM\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december|jan|feb|mrt|apr|mei|jun|jul|aug|sep|okt|nov|dec|zondag|maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zo|ma|di|wo|do|vr|za|1 AM|1 PM"
+      }
+    },
+    {
+      "id": "lcid_regional_variants",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(DATE(2024,3,5)+0.6,\"[$-\"&{\"807\",\"80C\",\"810\",\"813\",\"40A\",\"ja\",\"en\",\"zh-Hant\"}&\"]mmmm ddd h AM/PM\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "März Di 2 PM|mars mar. 2 PM|marzo mar 2 PM|maart di 2 PM|marzo ma. 2 p. m.|3月 火 2 午後|March Tue 2 PM|3月 週二 2 下午"
+      }
+    },
+    {
+      "id": "lcid_language_names",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(DATE(2024,3,5)+0.6,\"[$-\"&{\"de\",\"fr\",\"ko\",\"th\",\"ru\",\"it\",\"nl\",\"ja-JP-x-foo\",\"pt-BR-x-y\"}&\"]mmm ddd h AM/PM\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Mär Di 2 PM|mars mar. 2 PM|3월 화 2 오후|มี.ค. อังคาร 2 PM|март Вт 2 PM|mar mar 2 PM|mrt di 2 PM|3月 火 2 午後|mar. ter. 2 PM"
+      }
+    },
+    {
+      "id": "lcid_numeral_systems",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(1234.5,\"[$-\"&DEC2HEX(SEQUENCE(40))&\"000000]#,##0.00\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,234.50|١,٢٣٤.٥٠|۱,۲۳۴.۵۰|१,२३४.५०|১,২৩৪.৫০|੧,੨੩੪.੫੦|૧,૨૩૪.૫૦|୧,୨୩୪.୫୦|௧,௨௩௪.௫0|౧,౨౩౪.౫౦|೧,೨೩೪.೫೦|൧,൨൩൪.൫൦|๑,๒๓๔.๕๐|໑,໒໓໔.໕໐|༡,༢༣༤.༥༠|၁,၂၃၄.၅၀|፩,፪፫፬.፭0|១,២៣៤.៥០|᠑,᠒᠓᠔.᠕᠐|1,234.50|1,234.50|1,234.50|1,234.50|1,234.50|1,234.50|1,234.50|一,二三四.五〇|壱,弐参四.伍〇|１,２３４.５０|一,二三四.五○|壹,贰叁肆.伍零|１,２３４.５０|一,二三四.五○|壹,貳參肆.伍零|１,２３４.５０|一,二三四.五０|壹,貳參四.伍零|１,２３４.５０|일,이삼사.오영|1,234.50"
+      }
+    },
+    {
+      "id": "lcid_numeral_general",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT({100001,10000000,1000000000001,0.000012,-0.5,1E+20},\"[$-\"&{\"1B\";\"1E\";\"24\";\"27\";\"D\"}&\"000000]G/標準\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "/標準|#|#|/標準|#|#|/標準|#|#|/標準|#|#|/標準|#|#|/標準|#|#|/標準|#|#|/標準|#|#|/標準|#|#|/標準|#|#"
+      }
+    },
+    {
+      "id": "lcid_numeral_fields",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(DATE(2019,4,30)+TIME(23,45,56),\"[$-\"&{\"1B\";\"1E\";\"27\";\"D\"}&\"000000]\"&{\"d\",\"mm\",\"yy\",\"[h]\",\"b\"}),\"#\"),IFERROR(TEXT(1234.5,\"[$-D000000]\"&{\"0 \"\"12\"\" \\3\",\"0.00E+00\",\"0.0%\"}),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "三十|〇四|十九|百四万六千六十三|一九一九|三十|○四|十九|一百○四万六千○六十三|一九一九|삼십|영사|십구|일백사만육천육십삼|일구일구|๓๐|๐๔|๑๙|๑๐๔๖๐๖๓|๑๙|๑๒๓๕ 12 3|๑.๒๓E+๐๓|๑๒๓๔๕๐.๐%"
+      }
+    },
+    {
+      "id": "lcid_calendars",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(DATE({2024,1990,1912},{3,1,7},{5,8,30})+0.55,\"[$-\"&{\"30411\";\"30409\";\"40404\";\"50412\";\"7041E\";\"20411\";\"10411\";\"D0409\"}&\"]yyyy yy e g mmmm dddd b bbbb h AM/PM\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "06 06 6 R 3月 火曜日 24 2024 1 午後|02 02 2 H 1月 月曜日 90 1990 1 午後|01 01 1 T 7月 火曜日 12 1912 1 午後|06 06 6 R March Tuesday 24 2024 1 PM|02 02 2 H January Monday 90 1990 1 PM|01 01 1 T July Tuesday 12 1912 1 PM|2024 2024 2024  三月 星期二 24 2024 1 下午|1990 1990 1990  一月 星期一 90 1990 1 下午|1912 1912 1912  七月 星期二 12 1912 1 下午|4357 57 2024  3월 화요일 24 2024 1 오후|4323 23 1990  1월 월요일 90 1990 1 오후|4245 45 1912  7월 화요일 12 1912 1 오후|2567 67 2024  มีนาคม วันอังคาร 67 2567 1 PM|2533 33 1990  มกราคม วันจันทร์ 33 2533 1 PM|2455 55 1912  กรกฎาคม วันอังคาร 55 2455 1 PM|2024 24 2024  March Tuesday 24 2024 1 午後|1990 90 1990  January Monday 90 1990 1 午後|1912 12 1912  July Tuesday 12 1912 1 午後|2024 24 2024  3月 火曜日 24 2024 1 午後|1990 90 1990  1月 月曜日 90 1990 1 午後|1912 12 1912  7月 火曜日 12 1912 1 午後|2024 24 2024  3월 화요일 24 2024 1 PM|1990 90 1990  1월 월요일 90 1990 1 PM|1912 12 1912  7월 화요일 12 1912 1 PM"
+      }
+    },
+    {
+      "id": "lcid_gannen",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(DATE({2019,1989,1926},{5,1,12},{1,8,25}),\"[$-ja-JP-x-gannen]\"&{\"ggge\";\"e\";\"rr\";\"[DBNum1]ggge\"}),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "令和元|平成元|昭和元|1|1|1|rr|rr|rr|令和一|平成一|昭和一"
+      }
+    },
+    {
+      "id": "lcid_parse_variants",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(DATE(2024,3,5),\"[$-\"&{\"40c\",\"0040C\",\"JA-jp\",\"th-TH,107\",\"ja-JP,103\",\"ZZZ\",\"\",\"0\",\"1\",\"€-407\",\"-411\",\"ja-JP,\",\"ja-JP-x-sysdate\",\"409][$-411\"}&\"]mmmm e b\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "mars 2024 24|mars 2024 24|3月 6 24|มีนาคม 2024 67|3月 6 24|March 2024 24|March 2024 24|March 2024 24|March 2024 24|#|#|#|#|#"
+      }
+    },
+    {
+      "id": "lcid_section_scope",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT({-7,0,7},\"[$-2000000]0;(0);\"\"z\"\"0\"),\"#\"),IFERROR(TEXT(-7,\"0;[$-2000000](0)\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "(٧)|z٠|٧|(7)"
+      }
+    },
+    {
+      "id": "lcid_section_scope_names",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(0,{\"[$-411]mmmm;0;mmmm\",\"mmmm;0;[$-411]mmmm\",\"[$-409]0;0;e\"}),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1月|January|1900"
+      }
+    },
+    {
+      "id": "lcid_section_scope_negative",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(-5,{\"[$-D000000]0;\"\"x\"\"@\",\"[$-x-sysdate]0;0\",\"[$-409]0;[DBNum1]0\"}),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-๕|5|5"
+      }
+    },
+    {
+      "id": "lcid_dbnum4_sections",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT({1234,-1234,0},\"[$-412][DBNum4]0;[DBNum4]0;[DBNum4]0\"),\"#\"),IFERROR(TEXT(1234,\"[DBNum4][$-412]0\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "일이삼사|일이삼사|영|일이삼사"
+      }
+    },
+    {
+      "id": "lcid_symbol_text_section",
+      "formula": "=TEXTJOIN(\"|\",FALSE,TEXT(\"txt\",{\"[$JPY-411]@\",\"[$€-407]@\",\"[$-411]@\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "JPYtxt|€txt|txt"
+      }
+    },
+    {
+      "id": "lcid_r_letter",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(DATE(2024,3,5),\"[$-\"&{\"411\",\"30411\",\"7041E\",\"50412\",\"409\"}&\"]r rr\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "r rr|r rr|r rr|r rr|r rr"
+      }
+    },
+    {
+      "id": "text_system_date_tag",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(DATE({2024,2024,1900},{3,1,1},{5,2,1})+TIME({13,3,0},{7,4,0},{9,5,0}),\"[$-F800]\"),\"#\"),IFERROR(TEXT({0,1234.5,-1},\"[$-x-sysdate]\"),\"#\"),IFERROR(TEXT(DATE(2024,3,5),\"[$-10F800]dddd\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024년 3월 5일 화요일|2024년 1월 2일 화요일|1900년 1월 1일 일요일|1900년 1월 0일 토요일|1903년 5월 18일 월요일|#|2024년 3월 5일 화요일"
+      }
+    },
+    {
+      "id": "text_system_time_tag",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(TIME({3,13,0,23,12},{4,7,0,59,0},{5,9,0,59,1}),\"[$-F400]\"),\"#\"),IFERROR(TEXT({0.5,-1},\"[$-x-systime]\"),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "오전 3시 4분 5초|오후 1시 7분 9초|오전 12시 0분 0초|오후 11시 59분 59초|오후 12시 0분 1초|오후 12시 0분 0초|#"
+      }
+    },
+    {
+      "id": "text_section_bare_digit",
+      "formula": "=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT({\"abc12\";12},{\"@ 9\",\"@\"\"9\"\"\",\"@ 0\"}),\"#\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "#|abc129|#|#|12|#"
       }
     }
   ]
