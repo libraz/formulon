@@ -19,45 +19,48 @@ namespace formulon {
 namespace text_format {
 namespace number_format_detail {
 
-// --- DBNum digit substitution -----------------------------------------
+// --- Digit-style substitution ----------------------------------------
 //
-// `[DBNumN]` writes digit placeholders and full years digit by digit through
-// the locale's digit table (`=TEXT(1234,"[DBNum1]0")` -> 一二三四). General,
-// elapsed time and the other date fields are written with place units
-// (千二百三十四), in the per-locale style `LocaleFacts::dbnum` describes.
+// A section's digit style (`Section::digit_style`, null for ASCII) writes
+// digit placeholders and full years digit by digit (`=TEXT(1234,"[DBNum1]0")`
+// -> 一二三四). A style with place units writes General, elapsed time and the
+// other date fields with them (千二百三十四); a digit set substitutes every digit.
 
-// Returns the per-digit substitution for `c` under `mode`, or an empty
-// string if no substitution applies (caller falls back to `c` verbatim).
-std::string_view dbnum_digit_subst(DbNumMode mode, char c) noexcept;
+// Returns the substitution for `c` under `style`, or an empty string if none
+// applies (caller falls back to `c` verbatim).
+std::string_view dbnum_digit_subst(const DbnumStyle* style, char c) noexcept;
 
-// Append a single ASCII digit `c`, substituting it via `mode` if applicable.
+// Append a single ASCII digit `c`, substituting it via `style` if applicable.
 // Non-digit characters fall through verbatim.
-void append_digit_dbnum(std::string& out, DbNumMode mode, char c);
+void append_digit_dbnum(std::string& out, const DbnumStyle* style, char c);
 
-// Append every character of `chars`, substituting digits via `mode`.
-void append_chars_dbnum(std::string& out, DbNumMode mode, std::string_view chars);
+// Append every character of `chars`, substituting digits via `style`.
+void append_chars_dbnum(std::string& out, const DbnumStyle* style, std::string_view chars);
 
-// Appends `value` to `out` with each digit substituted per `mode`.
-void append_int_dbnum(std::string& out, long long value, DbNumMode mode);
+// Appends `value` to `out` with each digit substituted per `style`.
+void append_int_dbnum(std::string& out, long long value, const DbnumStyle* style);
 
-// Appends the decimal integer `digits` with the place units of `mode`'s
-// style; digit by digit when `mode` has no style.
-void append_dbnum_positional(std::string& out, DbNumMode mode, std::string_view digits);
+// Appends the decimal integer `digits` with the place units of `style`;
+// digit by digit when it has none.
+void append_dbnum_positional(std::string& out, const DbnumStyle* style, std::string_view digits);
 
-// True when `mode` is a `[DBNumN]` style with numerals of its own, rather
-// than one the locale accepts and leaves in ASCII digits.
-bool dbnum_writes_numerals(DbNumMode mode) noexcept;
+// True when `style` writes numerals with place units of its own, rather than
+// leaving ASCII digits or substituting digit by digit.
+bool dbnum_writes_numerals(const DbnumStyle* style) noexcept;
 
 // Appends a date or time field zero-padded to `width` digits, with place
-// units where `mode`'s style writes date fields that way.
-void append_dbnum_date_field(std::string& out, DbNumMode mode, unsigned value, std::size_t width);
+// units where `style` writes date fields that way.
+void append_dbnum_date_field(std::string& out, const DbnumStyle* style, unsigned value, std::size_t width);
 
 // Append `n` zero-padded to two characters without any DBNum substitution
 // (ASCII output).
 void append_pad2(std::string& out, unsigned n);
 
 // Appends `value` zero-padded to 2 digits, with DBNum substitution applied.
-void append_pad2_dbnum(std::string& out, unsigned value, DbNumMode mode);
+void append_pad2_dbnum(std::string& out, unsigned value, const DbnumStyle* style);
+
+// Writes a percent token: its kept full-width glyph, else `%`.
+void append_percent(std::string& out, std::string_view fmt, const Token& token);
 
 // True when every byte in `digits` is the ASCII '0' character. Used by
 // the numeric walker to suppress a stray minus sign when a tiny negative

@@ -241,10 +241,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `[DBNum4]` is Hangul in ko-KR. Digit placeholders and full years stay
   digit by digit, with each locale's digits (`[DBNum2]` 0 is `〇` in ja-JP,
   `零` elsewhere). `[DBNum4]` is accepted, and changes nothing outside ko-KR.
+- `[$-…]` locale tags in number formats now take effect the way Mac Excel
+  365 applies them, for every section of the format:
+  - the language of the first section's tag (`[$-411]`, `[$-de-DE]`, `[$-ko]`)
+    switches month and day names, AM/PM and `[DBNumN]` styles to that
+    language's own spellings for the fourteen profile languages and the
+    regional LCIDs that share them; any other language keeps the profile's
+    names, and the Japanese era is available only under a Japanese tag;
+  - calendars `03` (Japanese era years), `05` (Dangi), `07` (Thai Buddhist),
+    `04` (Taiwan), `02` (English names), `0D` and `15` change years and
+    names, and `ja-JP-x-gannen` writes the first era year as 元;
+  - numeral systems `02`-`13` substitute the Unicode digits of Arabic-Indic,
+    Devanagari, Thai, Lao, Khmer and the other scripts, and `1B`-`27` write
+    the ja-JP, zh-CN, zh-TW and ko-KR DBNum styles;
+  - `[$-F800]` / `[$-x-sysdate]` and `[$-F400]` / `[$-x-systime]` show the
+    system long date and time; any tag makes `b` the Gregorian year, a
+    second tag in a section or a malformed one is `#VALUE!`, and a text
+    section writes a tag's currency symbol.
+
+  Hijri, Hebrew, Persian, Saka and lunisolar calendars, and languages
+  outside the profiles (such as Arabic or en-GB), are not modelled.
 - `TEXT` accepts every colour name and the indexed-colour prefix in each
   profile's spelling (`[Blau]`, `[Farbe3]`, `[แดง]`), and `ARRAYTOTEXT`
-  writes errors in each profile's spelling, including `#SPILL!` (`#スピル!`
-  in ja-JP) and the French, Spanish and Mexican Spanish names.
+  writes errors in each profile's spelling, including `#SPILL!` and `#CALC!`
+  (`#スピル!` in ja-JP, `#ÜBERLAUF!` in de-DE, `#BEREKENEN!` in nl-NL).
 
 ### Fixed
 
@@ -252,6 +272,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   value one by one, pairing an array fallback by position, instead of
   passing the array through unchanged.
 - `NUMBERVALUE` drops spaces anywhere in its text (`"1 234.5"` is 1234.5).
+- `TEXT` returns `#VALUE!` for a text section holding an unquoted digit
+  (`"@ 9"`), as Excel does.
 
 ## [0.13.0] - 2026-10-06
 

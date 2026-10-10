@@ -1,5 +1,7 @@
 #include "excel_locale.h"
 
+#include "utils/strings.h"
+
 namespace formulon {
 namespace {
 
@@ -35,21 +37,26 @@ constexpr ErrorNames kThaiErrorNames{
     "#CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
 };
 constexpr ErrorNames kGermanErrorNames{
-    "#NULL!", "#DIV/0!", "#WERT!",    "#BEZUG!",   "#NAME?",     "#ZAHL!", "#NV",      "#DATEN_ABRUFEN", "#SPILL!",
+    "#NULL!", "#DIV/0!", "#WERT!",    "#BEZUG!",   "#NAME?",     "#ZAHL!", "#NV",      "#DATEN_ABRUFEN", "#ÜBERLAUF!",
     "#CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
 };
 constexpr ErrorNames kFrenchErrorNames{
-    "#NUL!",     "#DIV/0!", "#VALEUR!", "#REF!",     "#NOM?",     "#NOMBRE!",   "#N/A",   "#CHARGEMENT_DONNEES",
-    "#SPILL!",   "#CALC!",  "#FIELD!",  "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!",
+    "#NUL!",         "#DIV/0!", "#VALEUR!", "#REF!",     "#NOM?",     "#NOMBRE!",   "#N/A",   "#CHARGEMENT_DONNEES",
+    "#PROPAGATION!", "#CALC!",  "#FIELD!",  "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!",
     "#UNKNOWN!",
 };
 constexpr ErrorNames kSpanishErrorNames{
-    "#¡NULO!", "#¡DIV/0!", "#¡VALOR!",  "#¡REF!",    "#¿NOMBRE?",  "#¡NUM!", "#N/D",     "#OBTENIENDO_DATOS", "#SPILL!",
-    "#CALC!",  "#FIELD!",  "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
+    "#¡NULO!",           "#¡DIV/0!", "#¡VALOR!", "#¡REF!",    "#¿NOMBRE?", "#¡NUM!",     "#N/D",   "#OBTENIENDO_DATOS",
+    "#¡DESBORDAMIENTO!", "#CALC!",   "#FIELD!",  "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!",
+    "#UNKNOWN!",
 };
 constexpr ErrorNames kMexicanSpanishErrorNames{
-    "#NULO!",  "#DIV/0!", "#VALOR!",   "#REF!",     "#NOMBRE?",   "#N¡NUM!", "#N/D",     "#OBTENIENDO_DATOS", "#SPILL!",
-    "#¡CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!",  "#PYTHON!", "#UNKNOWN!",
+    "#NULO!",    "#DIV/0!",           "#VALOR!",
+    "#REF!",     "#NOMBRE?",          "#N¡NUM!",
+    "#N/D",      "#OBTENIENDO_DATOS", "#¡DESBORDAMIENTO!",
+    "#¡CALC!",   "#FIELD!",           "#BLOCKED!",
+    "#CONNECT!", "#EXTERNAL!",        "#BUSY!",
+    "#PYTHON!",  "#UNKNOWN!",
 };
 constexpr ErrorNames kPortugueseErrorNames{
     "#NULO!", "#DIV/0!", "#VALOR!",   "#REF!",     "#NOME?",     "#NÚM!",  "#N/D",     "#OBTENDO_DADOS", "#DESPEJAR!",
@@ -61,14 +68,16 @@ constexpr ErrorNames kRussianErrorNames{
     "#CONNECT!", "#EXTERNAL!",       "#BUSY!",    "#PYTHON!", "#UNKNOWN!",
 };
 constexpr ErrorNames kItalianErrorNames{
-    "#NULL!",    "#DIV/0!", "#VALORE!", "#RIF!",     "#NOME?",    "#NUM!",      "#N/D",   "#ESTRAZIONE_DATI_IN_CORSO",
-    "#SPILL!",   "#CALC!",  "#FIELD!",  "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!",
+    "#NULL!",       "#DIV/0!",    "#VALORE!", "#RIF!",
+    "#NOME?",       "#NUM!",      "#N/D",     "#ESTRAZIONE_DATI_IN_CORSO",
+    "#ESPANSIONE!", "#CALC!",     "#FIELD!",  "#BLOCKED!",
+    "#CONNECT!",    "#EXTERNAL!", "#BUSY!",   "#PYTHON!",
     "#UNKNOWN!",
 };
 constexpr ErrorNames kDutchErrorNames{
-    "#LEEG!",    "#DELING.DOOR.0!",   "#WAARDE!", "#VERW!",   "#NAAM?",    "#GETAL!",
-    "#N/B",      "#GEGEVENS.OPHALEN", "#SPILL!",  "#CALC!",   "#FIELD!",   "#BLOCKED!",
-    "#CONNECT!", "#EXTERNAL!",        "#BUSY!",   "#PYTHON!", "#UNKNOWN!",
+    "#LEEG!",    "#DELING.DOOR.0!",   "#WAARDE!",    "#VERW!",      "#NAAM?",    "#GETAL!",
+    "#N/B",      "#GEGEVENS.OPHALEN", "#OVERLOPEN!", "#BEREKENEN!", "#FIELD!",   "#BLOCKED!",
+    "#CONNECT!", "#EXTERNAL!",        "#BUSY!",      "#PYTHON!",    "#UNKNOWN!",
 };
 
 constexpr Names12 kEnglishMonthsLong{"January", "February", "March",     "April",   "May",      "June",
@@ -206,6 +215,221 @@ constexpr DbnumStyles kTraditionalChineseDbnumStyles{{
     kAsciiDbnumStyle,
 }};
 
+// `[DBNum4]` stays in ASCII digits in the section carrying a ko-KR tag (locale_tokens.lcid_dbnum4_sections).
+// Digit sets of `[$-02000000]`-`[$-13000000]` in code order; Tamil and Ethiopic
+// write an ASCII 0 (locale_tokens.lcid_numeral_systems).
+constexpr std::array<DbnumStyle, 18> kNumeralSystemStyles{{
+    {{"٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"}, {}, {}, false, false, false, false},
+    {{"۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"}, {}, {}, false, false, false, false},
+    {{"०", "१", "२", "३", "४", "५", "६", "७", "८", "९"}, {}, {}, false, false, false, false},
+    {{"০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"}, {}, {}, false, false, false, false},
+    {{"੦", "੧", "੨", "੩", "੪", "੫", "੬", "੭", "੮", "੯"}, {}, {}, false, false, false, false},
+    {{"૦", "૧", "૨", "૩", "૪", "૫", "૬", "૭", "૮", "૯"}, {}, {}, false, false, false, false},
+    {{"୦", "୧", "୨", "୩", "୪", "୫", "୬", "୭", "୮", "୯"}, {}, {}, false, false, false, false},
+    {{"0", "௧", "௨", "௩", "௪", "௫", "௬", "௭", "௮", "௯"}, {}, {}, false, false, false, false},
+    {{"౦", "౧", "౨", "౩", "౪", "౫", "౬", "౭", "౮", "౯"}, {}, {}, false, false, false, false},
+    {{"೦", "೧", "೨", "೩", "೪", "೫", "೬", "೭", "೮", "೯"}, {}, {}, false, false, false, false},
+    {{"൦", "൧", "൨", "൩", "൪", "൫", "൬", "൭", "൮", "൯"}, {}, {}, false, false, false, false},
+    {{"๐", "๑", "๒", "๓", "๔", "๕", "๖", "๗", "๘", "๙"}, {}, {}, false, false, false, false},
+    {{"໐", "໑", "໒", "໓", "໔", "໕", "໖", "໗", "໘", "໙"}, {}, {}, false, false, false, false},
+    {{"༠", "༡", "༢", "༣", "༤", "༥", "༦", "༧", "༨", "༩"}, {}, {}, false, false, false, false},
+    {{"၀", "၁", "၂", "၃", "၄", "၅", "၆", "၇", "၈", "၉"}, {}, {}, false, false, false, false},
+    {{"0", "፩", "፪", "፫", "፬", "፭", "፮", "፯", "፰", "፱"}, {}, {}, false, false, false, false},
+    {{"០", "១", "២", "៣", "៤", "៥", "៦", "៧", "៨", "៩"}, {}, {}, false, false, false, false},
+    {{"᠐", "᠑", "᠒", "᠓", "᠔", "᠕", "᠖", "᠗", "᠘", "᠙"}, {}, {}, false, false, false, false},
+}};
+
+// locale_tokens.lcid_names_411
+constexpr TagLanguage kTagJapanese{
+    {"1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"},
+    {"1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"},
+    {"日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"},
+    {"日", "月", "火", "水", "木", "金", "土"},
+    "午前",
+    "午後",
+    &kJapaneseDbnumStyles,
+    true,
+};
+
+// locale_tokens.lcid_names_409
+constexpr TagLanguage kTagEnglish{
+    {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November",
+     "December"},
+    {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"},
+    {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"},
+    {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"},
+    "AM",
+    "PM",
+    nullptr,
+    false,
+};
+
+// locale_tokens.lcid_names_407
+constexpr TagLanguage kTagGerman{
+    {"Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November",
+     "Dezember"},
+    {"Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"},
+    {"Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"},
+    {"So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"},
+    "AM",
+    "PM",
+    nullptr,
+    false,
+};
+
+// locale_tokens.lcid_names_40c
+constexpr TagLanguage kTagFrench{
+    {"janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre",
+     "décembre"},
+    {"janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."},
+    {"dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"},
+    {"dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."},
+    "AM",
+    "PM",
+    nullptr,
+    false,
+};
+
+// locale_tokens.lcid_names_804
+constexpr TagLanguage kTagChinese{
+    {"一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"},
+    {"1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"},
+    {"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"},
+    {"周日", "周一", "周二", "周三", "周四", "周五", "周六"},
+    "上午",
+    "下午",
+    &kChineseDbnumStyles,
+    false,
+};
+
+// locale_tokens.lcid_names_412
+constexpr TagLanguage kTagKorean{
+    {"1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"},
+    {"1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"},
+    {"일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"},
+    {"일", "월", "화", "수", "목", "금", "토"},
+    "오전",
+    "오후",
+    &kKoreanDbnumStyles,
+    false,
+};
+
+// locale_tokens.lcid_names_41e
+constexpr TagLanguage kTagThai{
+    {"มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน",
+     "ธันวาคม"},
+    {"ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."},
+    {"วันอาทิตย์", "วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์"},
+    {"อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์"},
+    "AM",
+    "PM",
+    nullptr,
+    false,
+};
+
+// locale_tokens.lcid_names_c0a
+constexpr TagLanguage kTagSpanish{
+    {"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre",
+     "diciembre"},
+    {"ene.", "feb.", "mar.", "abr.", "may.", "jun.", "jul.", "ago.", "sep.", "oct.", "nov.", "dic."},
+    {"domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"},
+    {"do.", "lu.", "ma.", "mi.", "ju.", "vi.", "sá."},
+    "a. m.",
+    "p. m.",
+    nullptr,
+    false,
+};
+
+// locale_tokens.lcid_names_80a
+constexpr TagLanguage kTagMexicanSpanish{
+    {"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre",
+     "diciembre"},
+    {"ene.", "feb.", "mar.", "abr.", "may.", "jun.", "jul.", "ago.", "sep.", "oct.", "nov.", "dic."},
+    {"domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"},
+    {"dom.", "lun.", "mar.", "mié.", "jue.", "vie.", "sáb."},
+    "a. m.",
+    "p. m.",
+    nullptr,
+    false,
+};
+
+// locale_tokens.lcid_names_416
+constexpr TagLanguage kTagPortuguese{
+    {"janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro",
+     "dezembro"},
+    {"jan.", "fev.", "mar.", "abr.", "mai.", "jun.", "jul.", "ago.", "set.", "out.", "nov.", "dez."},
+    {"domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"},
+    {"dom.", "seg.", "ter.", "qua.", "qui.", "sex.", "sáb."},
+    "AM",
+    "PM",
+    nullptr,
+    false,
+};
+
+// locale_tokens.lcid_names_419
+constexpr TagLanguage kTagRussian{
+    {"январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь",
+     "декабрь"},
+    {"янв.", "февр.", "март", "апр.", "май", "июнь", "июль", "авг.", "сент.", "окт.", "нояб.", "дек."},
+    {"воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"},
+    {"Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"},
+    "AM",
+    "PM",
+    nullptr,
+    false,
+};
+
+// 0xFC19 writes genitive month names, as the ru-RU system long date does (locale_tokens.text_system_date_tag).
+constexpr TagLanguage kTagRussianGenitive{
+    {"января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября",
+     "декабря"},
+    kTagRussian.month_short,
+    kTagRussian.day_long,
+    kTagRussian.day_short,
+    kTagRussian.am_name,
+    kTagRussian.pm_name,
+    nullptr,
+    false,
+};
+
+// locale_tokens.lcid_names_404
+constexpr TagLanguage kTagTraditionalChinese{
+    {"1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"},
+    {"1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"},
+    {"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"},
+    {"週日", "週一", "週二", "週三", "週四", "週五", "週六"},
+    "上午",
+    "下午",
+    &kTraditionalChineseDbnumStyles,
+    false,
+};
+
+// locale_tokens.lcid_names_410
+constexpr TagLanguage kTagItalian{
+    {"gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre",
+     "novembre", "dicembre"},
+    {"gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"},
+    {"domenica", "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato"},
+    {"dom", "lun", "mar", "mer", "gio", "ven", "sab"},
+    "AM",
+    "PM",
+    nullptr,
+    false,
+};
+
+// locale_tokens.lcid_names_413
+constexpr TagLanguage kTagDutch{
+    {"januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november",
+     "december"},
+    {"jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"},
+    {"zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"},
+    {"zo", "ma", "di", "wo", "do", "vr", "za"},
+    "AM",
+    "PM",
+    nullptr,
+    false,
+};
+
 // @size-budget: 12 KB
 constexpr LocaleFacts kJapaneseFacts{
     '.',                  // locale_tokens.fixed_negative
@@ -257,9 +481,10 @@ constexpr LocaleFacts kJapaneseFacts{
     true,                   // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     true,                   // text_format.text_four_section_text
     &kJapaneseDbnumStyles,  // locale_tokens.dbnum_digits
+    false,                  // locale_tokens.lcid_dbnum4_sections
     false,                  // locale_tokens.text_letter_t_digits
     '\0',                   // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    true,                   // existing ja behaviour; unmeasured
+    false,                  // locale_tokens.text_fullwidth_number_syntax, text_fullwidth_percent_syntax
     false,                  // text_general_english
     false,                  // text_decimal_point
     "G/標準",               // text_general_g_hyojun
@@ -323,10 +548,11 @@ constexpr LocaleFacts kEnglishFacts{
     false,
     false,
     false,
-    nullptr,  // locale_tokens.dbnum_digits
-    false,    // locale_tokens.text_letter_t_digits
-    '\0',     // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,
+    nullptr,             // locale_tokens.dbnum_digits
+    false,               // locale_tokens.lcid_dbnum4_sections
+    false,               // locale_tokens.text_letter_t_digits
+    '\0',                // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
+    true,                // locale_tokens.text_fullwidth_number_syntax, text_fullwidth_percent_syntax
     true,                // text_general_english
     false,               // text_decimal_point
     "",                  // text_general_english
@@ -394,9 +620,10 @@ constexpr LocaleFacts kGermanFacts{
     false,       // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,       // text_format.text_four_section_text
     nullptr,     // locale_tokens.dbnum_digits
+    false,       // locale_tokens.lcid_dbnum4_sections
     false,       // locale_tokens.text_letter_t_digits
     '\0',        // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,       // unmeasured
+    true,        // locale_tokens.text_fullwidth_number_syntax, text_fullwidth_percent_syntax
     false,       // text_general_english
     false,       // text_decimal_point
     "Standard",  // text_general_standard
@@ -464,9 +691,10 @@ constexpr LocaleFacts kFrenchFacts{
     false,       // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,       // text_format.text_four_section_text
     nullptr,     // locale_tokens.dbnum_digits
+    false,       // locale_tokens.lcid_dbnum4_sections
     false,       // locale_tokens.text_letter_t_digits
     '\0',        // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,       // unmeasured
+    true,        // locale_tokens.text_fullwidth_number_syntax, text_fullwidth_percent_syntax
     false,       // text_general_english
     false,       // text_decimal_point
     "Standard",  // text_general_standard
@@ -531,9 +759,10 @@ constexpr LocaleFacts kChineseFacts{
     false,  // no width folding (dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header)
     true,   // text_format.text_four_section_text
     &kChineseDbnumStyles,  // locale_tokens.dbnum_digits
+    false,                 // locale_tokens.lcid_dbnum4_sections
     false,                 // locale_tokens.text_letter_t_digits
     '\0',                  // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,                 // unmeasured
+    false,                 // locale_tokens.text_fullwidth_number_syntax, text_fullwidth_percent_syntax
     false,                 // text_general_english
     false,                 // text_decimal_point
     "G/通用格式",          // text_general_g_tongyong
@@ -598,9 +827,10 @@ constexpr LocaleFacts kKoreanFacts{
     false,                   // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     true,                    // text_format.text_four_section_text
     &kKoreanDbnumStyles,     // locale_tokens.dbnum_digits
+    false,                   // locale_tokens.lcid_dbnum4_sections
     false,                   // locale_tokens.text_letter_t_digits
     '\0',                    // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,                   // unmeasured
+    false,                   // locale_tokens.text_fullwidth_number_syntax, text_fullwidth_percent_syntax
     false,                   // text_general_english
     false,                   // text_decimal_point
     "G/표준",                // text_general_g_pyojun
@@ -666,9 +896,10 @@ constexpr LocaleFacts kThaiFacts{
     false,    // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,    // text_format.text_four_section_text
     nullptr,  // locale_tokens.dbnum_digits
+    true,     // locale_tokens.lcid_dbnum4_sections
     true,     // locale_tokens.text_letter_t_digits
     '\0',     // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,    // unmeasured
+    true,     // locale_tokens.text_fullwidth_number_syntax, text_fullwidth_percent_syntax
     true,     // text_general_english
     false,    // text_decimal_point
     "",       // text_general_english
@@ -737,9 +968,10 @@ constexpr LocaleFacts kRussianFacts{
     false,                // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,                // text_format.text_four_section_text
     nullptr,              // locale_tokens.dbnum_digits
+    false,                // locale_tokens.lcid_dbnum4_sections
     false,                // locale_tokens.text_letter_t_digits
     '\0',                 // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,                // unmeasured
+    true,                 // locale_tokens.text_fullwidth_number_syntax, text_fullwidth_percent_syntax
     false,                // text_general_english
     true,                 // text_decimal_point
     "Основной",           // text_general_osnovnoy; General and Standard are rejected (text_general_english,
@@ -806,9 +1038,10 @@ constexpr LocaleFacts kTraditionalChineseFacts{
     false,                            // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     true,                             // text_format.text_four_section_text
     &kTraditionalChineseDbnumStyles,  // locale_tokens.dbnum_digits
+    false,                            // locale_tokens.lcid_dbnum4_sections
     false,                            // locale_tokens.text_letter_t_digits
     '\0',          // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,         // unmeasured
+    false,         // locale_tokens.text_fullwidth_number_syntax, text_fullwidth_percent_syntax
     false,         // text_general_english
     false,         // text_decimal_point
     "G/通用格式",  // text_general_g_tongyong
@@ -877,9 +1110,10 @@ constexpr LocaleFacts kItalianFacts{
     false,                // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,                // text_format.text_four_section_text
     nullptr,              // locale_tokens.dbnum_digits
+    false,                // locale_tokens.lcid_dbnum4_sections
     false,                // locale_tokens.text_letter_t_digits
     'x',                  // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,                // unmeasured
+    true,                 // locale_tokens.text_fullwidth_number_syntax, text_fullwidth_percent_syntax
     false,                // text_general_english
     false,                // text_decimal_point
     "Standard",           // text_general_standard
@@ -947,9 +1181,10 @@ constexpr LocaleFacts kDutchFacts{
     false,                // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,                // text_format.text_four_section_text
     nullptr,              // locale_tokens.dbnum_digits
+    false,                // locale_tokens.lcid_dbnum4_sections
     false,                // locale_tokens.text_letter_t_digits
     '\0',                 // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,                // unmeasured
+    true,                 // locale_tokens.text_fullwidth_number_syntax, text_fullwidth_percent_syntax
     false,                // text_general_english
     false,                // text_decimal_point
     "Standaard",          // text_general_standaard; General and Standard are rejected (text_general_english,
@@ -1024,9 +1259,10 @@ constexpr LocaleFacts kSpanishFacts{
     false,                // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,                // text_format.text_four_section_text
     nullptr,              // locale_tokens.dbnum_digits
+    false,                // locale_tokens.lcid_dbnum4_sections
     false,                // locale_tokens.text_letter_t_digits
     '\0',                 // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,                // unmeasured
+    true,                 // locale_tokens.text_fullwidth_number_syntax, text_fullwidth_percent_syntax
     false,                // text_general_english
     false,                // text_decimal_point
     "Estándar",           // text_general_estandar; General and Standard are rejected (text_general_english,
@@ -1095,9 +1331,10 @@ constexpr LocaleFacts kMexicanSpanishFacts{
     false,                // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,                // text_format.text_four_section_text
     nullptr,              // locale_tokens.dbnum_digits
+    false,                // locale_tokens.lcid_dbnum4_sections
     false,                // locale_tokens.text_letter_t_digits
     '\0',                 // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,                // unmeasured
+    true,                 // locale_tokens.text_fullwidth_number_syntax, text_fullwidth_percent_syntax
     false,                // text_general_english
     false,                // text_decimal_point
     "Estándar",           // text_general_estandar; General and Standard are rejected (text_general_english,
@@ -1166,9 +1403,10 @@ constexpr LocaleFacts kPortugueseFacts{
     false,                // dfunc_kana_folding_probes.dsum_criteria_header_halfwidth_vs_fullwidth_db_header
     false,                // text_format.text_four_section_text
     nullptr,              // locale_tokens.dbnum_digits
+    false,                // locale_tokens.lcid_dbnum4_sections
     false,                // locale_tokens.text_letter_t_digits
     '\0',                 // locale_tokens.text_letter_x_positive, text_letter_x_negative, text_slash_letters
-    false,                // unmeasured
+    true,                 // locale_tokens.text_fullwidth_number_syntax, text_fullwidth_percent_syntax
     false,                // text_general_english
     false,                // text_decimal_point
     "Geral",  // text_general_geral; General and Standard are rejected (text_general_english, text_general_standard)
@@ -1255,6 +1493,190 @@ WidthFolding width_folding(ExcelProfile profile) noexcept {
     return WidthFolding::kNone;
   }
   return profile.host == ExcelHost::kMac365 ? WidthFolding::kMac : WidthFolding::kWin;
+}
+
+const TagLanguage* tag_language_for_lcid(std::uint16_t lcid) noexcept {
+  // Regional LCIDs measured to share the base spellings (locale_tokens.lcid_regional_variants).
+  switch (lcid) {
+    case 0x0411:
+      return &kTagJapanese;
+    case 0x0409:
+      return &kTagEnglish;
+    case 0x0407:
+    case 0x0807:
+      return &kTagGerman;
+    case 0x040C:
+    case 0x080C:
+      return &kTagFrench;
+    case 0x0804:
+      return &kTagChinese;
+    case 0x0412:
+      return &kTagKorean;
+    case 0x041E:
+      return &kTagThai;
+    case 0x0C0A:
+    case 0x040A:
+      return &kTagSpanish;
+    case 0x080A:
+      return &kTagMexicanSpanish;
+    case 0x0416:
+      return &kTagPortuguese;
+    case 0x0419:
+      return &kTagRussian;
+    case 0xFC19:
+      return &kTagRussianGenitive;
+    case 0x0404:
+      return &kTagTraditionalChinese;
+    case 0x0410:
+    case 0x0810:
+      return &kTagItalian;
+    case 0x0413:
+    case 0x0813:
+      return &kTagDutch;
+    default:
+      return nullptr;
+  }
+}
+
+const TagLanguage* tag_language_for_name(std::string_view name) noexcept {
+  // Bare language names measured to match the regional tables (locale_tokens.lcid_language_names).
+  struct NamedLcid {
+    std::string_view name;
+    std::uint16_t lcid;
+  };
+  static constexpr NamedLcid kNames[] = {
+      {"ja-JP", 0x0411}, {"ja", 0x0411},    {"en-US", 0x0409}, {"en", 0x0409},    {"de-DE", 0x0407},
+      {"fr-FR", 0x040C}, {"zh-CN", 0x0804}, {"ko-KR", 0x0412}, {"th-TH", 0x041E}, {"es-ES", 0x0C0A},
+      {"es-MX", 0x080A}, {"pt-BR", 0x0416}, {"ru-RU", 0x0419}, {"zh-TW", 0x0404}, {"zh-Hant", 0x0404},
+      {"it-IT", 0x0410}, {"nl-NL", 0x0413}, {"de", 0x0407},    {"fr", 0x040C},    {"ko", 0x0412},
+      {"th", 0x041E},    {"ru", 0x0419},    {"it", 0x0410},    {"nl", 0x0413},
+  };
+  for (const NamedLcid& entry : kNames) {
+    if (strings::case_insensitive_eq(entry.name, name)) {
+      return tag_language_for_lcid(entry.lcid);
+    }
+  }
+  return nullptr;
+}
+
+const TagLanguage& native_tag_language(ExcelLocale locale) noexcept {
+  switch (locale) {
+    case ExcelLocale::kJaJP:
+      return kTagJapanese;
+    case ExcelLocale::kEnUS:
+      return kTagEnglish;
+    case ExcelLocale::kDeDE:
+      return kTagGerman;
+    case ExcelLocale::kFrFR:
+      return kTagFrench;
+    case ExcelLocale::kZhCN:
+      return kTagChinese;
+    case ExcelLocale::kKoKR:
+      return kTagKorean;
+    case ExcelLocale::kThTH:
+      return kTagThai;
+    case ExcelLocale::kEsES:
+      return kTagSpanish;
+    case ExcelLocale::kEsMX:
+      return kTagMexicanSpanish;
+    case ExcelLocale::kPtBR:
+      return kTagPortuguese;
+    case ExcelLocale::kRuRU:
+      return kTagRussian;
+    case ExcelLocale::kZhTW:
+      return kTagTraditionalChinese;
+    case ExcelLocale::kItIT:
+      return kTagItalian;
+    case ExcelLocale::kNlNL:
+      return kTagDutch;
+  }
+  return kTagEnglish;
+}
+
+const DbnumStyle* numeral_system_style(std::uint8_t code) noexcept {
+  // 1B-27 are the ja, zh-CN, zh-TW and ko DBNum styles in turn (locale_tokens.lcid_numeral_systems).
+  constexpr std::uint8_t kFirstDigitSet = 0x02;
+  constexpr std::uint8_t kFirstCjk = 0x1B;
+  if (code >= kFirstDigitSet && code < kFirstDigitSet + kNumeralSystemStyles.size()) {
+    return &kNumeralSystemStyles[code - kFirstDigitSet];
+  }
+  if (code >= kFirstCjk && code < kFirstCjk + 3U) {
+    return &kJapaneseDbnumStyles[code - kFirstCjk];
+  }
+  if (code >= kFirstCjk + 3U && code < kFirstCjk + 6U) {
+    return &kChineseDbnumStyles[code - kFirstCjk - 3U];
+  }
+  if (code >= kFirstCjk + 6U && code < kFirstCjk + 9U) {
+    return &kTraditionalChineseDbnumStyles[code - kFirstCjk - 6U];
+  }
+  if (code >= kFirstCjk + 9U && code < kFirstCjk + 13U) {
+    return &kKoreanDbnumStyles[code - kFirstCjk - 9U];
+  }
+  return nullptr;
+}
+
+std::string_view system_date_format(ExcelProfile profile) noexcept {
+  // locale_tokens.text_system_date_tag; ru-RU writes genitive month names through 0xFC19.
+  switch (profile.locale) {
+    case ExcelLocale::kJaJP:
+      return "[$-411]yyyy\"年\"m\"月\"d\"日\" dddd";
+    case ExcelLocale::kEnUS:
+      return "[$-409]dddd\", \"mmmm\" \"d\", \"yyyy";
+    case ExcelLocale::kDeDE:
+      return "[$-407]dddd\", \"d\". \"mmmm\" \"yyyy";
+    case ExcelLocale::kFrFR:
+      return "[$-40C]dddd\" \"d\" \"mmmm\" \"yyyy";
+    case ExcelLocale::kZhCN:
+      return "[$-804]yyyy\"年\"m\"月\"d\"日\" dddd";
+    case ExcelLocale::kKoKR:
+      return "[$-412]yyyy\"년\" m\"월\" d\"일\" dddd";
+    case ExcelLocale::kThTH:
+      return "[$-41E]dddd\"ที่ \"d mmmm\"  \"yyyy";
+    case ExcelLocale::kEsES:
+      return "[$-C0A]dddd\", \"d\" de \"mmmm\" de \"yyyy";
+    case ExcelLocale::kEsMX:
+      return "[$-80A]dddd\", \"d\" de \"mmmm\" de \"yyyy";
+    case ExcelLocale::kPtBR:
+      return "[$-416]dddd\", \"d\" de \"mmmm\" de \"yyyy";
+    case ExcelLocale::kRuRU:
+      return "[$-FC19]dddd\", \"d\" \"mmmm\" \"yyyy\" г.\"";
+    case ExcelLocale::kZhTW:
+      return "[$-404]yyyy\"年\"m\"月\"d\"日\" dddd";
+    case ExcelLocale::kItIT:
+      return "[$-410]dddd\" \"d\" \"mmmm\" \"yyyy";
+    case ExcelLocale::kNlNL:
+      return "[$-413]dddd\" \"d\" \"mmmm\" \"yyyy";
+  }
+  return {};
+}
+
+std::string_view system_time_format(ExcelProfile profile) noexcept {
+  // locale_tokens.text_system_time_tag.
+  switch (profile.locale) {
+    case ExcelLocale::kJaJP:
+    case ExcelLocale::kEsES:
+      return "h:mm:ss";
+    case ExcelLocale::kEnUS:
+      return "[$-409]h:mm:ss AM/PM";
+    case ExcelLocale::kEsMX:
+      return "[$-80A]h:mm:ss AM/PM";
+    case ExcelLocale::kZhCN:
+      return "\"z\"hh:mm:ss";
+    case ExcelLocale::kZhTW:
+      return "\"z B\"h:mm:ss";
+    case ExcelLocale::kKoKR:
+      return "[$-412]AM/PM h\"시\" m\"분\" s\"초\"";
+    case ExcelLocale::kThTH:
+      return "h\" นาฬิกา \"mm\" นาที \"ss\" วินาที\"";
+    case ExcelLocale::kDeDE:
+    case ExcelLocale::kFrFR:
+    case ExcelLocale::kPtBR:
+    case ExcelLocale::kRuRU:
+    case ExcelLocale::kItIT:
+    case ExcelLocale::kNlNL:
+      return "hh:mm:ss";
+  }
+  return {};
 }
 
 }  // namespace formulon

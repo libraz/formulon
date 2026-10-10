@@ -224,8 +224,10 @@ void format_general(std::string& out, double v) {
 
 // `[DBNumN]General`: the integer part with place units, the fraction digit by
 // digit. A magnitude General would show in scientific form is written out to
-// 15 significant digits instead (1E+15 -> 千兆).
-void append_dbnum_general(std::string& out, DbNumMode mode, double abs_v, char decimal_separator) {
+// 15 significant digits instead (1E+15 -> 千兆), unless the style comes from a
+// numeral-system tag, which keeps the scientific form (locale_tokens.lcid_numeral_general).
+void append_dbnum_general(std::string& out, const DbnumStyle* style, bool keep_scientific, double abs_v,
+                          char decimal_separator) {
   std::string general;
   format_general(general, abs_v);
   std::string int_digits;
@@ -234,7 +236,7 @@ void append_dbnum_general(std::string& out, DbNumMode mode, double abs_v, char d
     const std::size_t dot = general.find('.');
     int_digits = general.substr(0, dot);
     frac_digits = dot == std::string::npos ? std::string() : general.substr(dot + 1U);
-  } else if (abs_v >= 1.0) {
+  } else if (abs_v >= 1.0 && !keep_scientific) {
     const int exp10 = static_cast<int>(std::floor(std::log10(abs_v)));
     bool negative = false;
     format_fixed_digits(abs_v, std::max(0, 14 - exp10), &negative, &int_digits, &frac_digits);
@@ -243,13 +245,13 @@ void append_dbnum_general(std::string& out, DbNumMode mode, double abs_v, char d
     }
   } else {
     std::replace(general.begin(), general.end(), '.', decimal_separator);
-    append_chars_dbnum(out, mode, general);
+    append_chars_dbnum(out, style, general);
     return;
   }
-  append_dbnum_positional(out, mode, int_digits);
+  append_dbnum_positional(out, style, int_digits);
   if (!frac_digits.empty()) {
     out.push_back(decimal_separator);
-    append_chars_dbnum(out, mode, frac_digits);
+    append_chars_dbnum(out, style, frac_digits);
   }
 }
 
@@ -491,12 +493,12 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
     if (section.thousands_separator && int_cursor > 0 && (n_int_digits - int_cursor) % 3 == 0) {
       result.push_back(facts.group_separator);
     }
-    append_digit_dbnum(result, section.dbnum_mode, digit);
+    append_digit_dbnum(result, section.digit_style, digit);
     ++int_cursor;
   };
 
   // Helper: emit a single fractional digit with DBNum substitution.
-  auto emit_frac_digit_char = [&](char digit) { append_digit_dbnum(result, section.dbnum_mode, digit); };
+  auto emit_frac_digit_char = [&](char digit) { append_digit_dbnum(result, section.digit_style, digit); };
 
   for (std::size_t i = 0; i < section.tokens.size(); ++i) {
     const Token& tk = section.tokens[i];
@@ -511,10 +513,10 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
           }
           if (slot != nullptr && !slot->empty()) {
             for (char d : *slot) {
-              append_digit_dbnum(result, section.dbnum_mode, d);
+              append_digit_dbnum(result, section.digit_style, d);
             }
           } else if (tk.kind == Tok::DigitZero) {
-            append_digit_dbnum(result, section.dbnum_mode, '0');
+            append_digit_dbnum(result, section.digit_style, '0');
           } else if (tk.kind == Tok::DigitPad) {
             result.push_back(' ');
           }
@@ -563,7 +565,7 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
         // special meaning in Excel's format language.
         break;
       case Tok::Percent:
-        result.push_back('%');
+        append_percent(result, fmt, tk);
         break;
       case Tok::Literal:
         if (tk.lit_end > tk.lit_begin) {
@@ -579,17 +581,18 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
         // on the absolute value; the sign prefix was already emitted above
         // (for single-section formats) or stripped by the section selector
         // (two-section formats pass an already-positive `value`).
-        // `[DBNumN]` writes the integer part with place units; Thai digits
-        // substitute digit by digit, and non-digit bytes (the decimal point,
-        // exponent marker, ...) pass through unchanged.
-        if (section.dbnum_mode != DbNumMode::kNone && section.dbnum_mode != DbNumMode::kThai) {
-          append_dbnum_general(result, section.dbnum_mode, std::fabs(value), facts.decimal_separator);
+        // A digit style with place units writes the integer part with them; a
+        // digit set substitutes digit by digit, and non-digit bytes (the
+        // decimal point, exponent marker, ...) pass through unchanged.
+        if (section.digit_style != nullptr) {
+          append_dbnum_general(result, section.digit_style, section.digit_style_from_tag, std::fabs(value),
+                               facts.decimal_separator);
           break;
         }
         std::string general;
         format_general(general, std::fabs(value));
         std::replace(general.begin(), general.end(), '.', facts.decimal_separator);
-        append_chars_dbnum(result, section.dbnum_mode, general);
+        result.append(general);
         break;
       }
       case Tok::SciPlus:

@@ -32,20 +32,6 @@ namespace text_format {
 namespace number_format_detail {
 namespace {
 
-const char* const kThaiDigits[10] = {"๐", "๑", "๒", "๓", "๔", "๕", "๖", "๗", "๘", "๙"};
-
-// The current locale's style for a `[DBNumN]` mode, or null for any other mode.
-const DbnumStyle* dbnum_style(DbNumMode mode) noexcept {
-  if (mode < DbNumMode::kDBNum1 || mode > DbNumMode::kDBNum4) {
-    return nullptr;
-  }
-  const DbnumStyles* styles = locale_facts(eval::current_eval_profile()).dbnum;
-  if (styles == nullptr) {
-    return nullptr;
-  }
-  return &(*styles)[static_cast<std::size_t>(mode) - static_cast<std::size_t>(DbNumMode::kDBNum1)];
-}
-
 // Appends one group of up to four digits (not all zero) with place units;
 // `*pending_zero` tracks a skipped place for the zero filler.
 void append_place_group(std::string& out, const DbnumStyle& style, bool place_one, bool zero_filler,
@@ -113,20 +99,15 @@ void append_place_number(std::string& out, const DbnumStyle& style, bool place_o
 
 // --- Shared helpers declared in `render_common.h` ---------------------
 
-std::string_view dbnum_digit_subst(DbNumMode mode, char c) noexcept {
-  if (c < '0' || c > '9') {
+std::string_view dbnum_digit_subst(const DbnumStyle* style, char c) noexcept {
+  if (style == nullptr || c < '0' || c > '9') {
     return {};
   }
-  const std::size_t digit = static_cast<std::size_t>(c - '0');
-  if (mode == DbNumMode::kThai) {
-    return kThaiDigits[digit];
-  }
-  const DbnumStyle* style = dbnum_style(mode);
-  return style == nullptr ? std::string_view() : style->digits[digit];
+  return style->digits[static_cast<std::size_t>(c - '0')];
 }
 
-void append_digit_dbnum(std::string& out, DbNumMode mode, char c) {
-  const std::string_view sub = dbnum_digit_subst(mode, c);
+void append_digit_dbnum(std::string& out, const DbnumStyle* style, char c) {
+  const std::string_view sub = dbnum_digit_subst(style, c);
   if (!sub.empty()) {
     out.append(sub);
   } else {
@@ -134,25 +115,19 @@ void append_digit_dbnum(std::string& out, DbNumMode mode, char c) {
   }
 }
 
-void append_chars_dbnum(std::string& out, DbNumMode mode, std::string_view chars) {
+void append_chars_dbnum(std::string& out, const DbnumStyle* style, std::string_view chars) {
   for (char c : chars) {
-    append_digit_dbnum(out, mode, c);
+    append_digit_dbnum(out, style, c);
   }
 }
 
-void append_int_dbnum(std::string& out, long long value, DbNumMode mode) {
-  std::string buf = std::to_string(value);
-  if (mode == DbNumMode::kNone) {
-    out.append(buf);
-    return;
-  }
-  append_chars_dbnum(out, mode, buf);
+void append_int_dbnum(std::string& out, long long value, const DbnumStyle* style) {
+  append_chars_dbnum(out, style, std::to_string(value));
 }
 
-void append_dbnum_positional(std::string& out, DbNumMode mode, std::string_view digits) {
-  const DbnumStyle* style = dbnum_style(mode);
+void append_dbnum_positional(std::string& out, const DbnumStyle* style, std::string_view digits) {
   if (style == nullptr || style->place_units[0].empty()) {
-    append_chars_dbnum(out, mode, digits);
+    append_chars_dbnum(out, style, digits);
     return;
   }
   const std::size_t first = digits.find_first_not_of('0');
@@ -163,21 +138,19 @@ void append_dbnum_positional(std::string& out, DbNumMode mode, std::string_view 
   append_place_number(out, *style, style->place_one, style->zero_filler, digits.substr(first));
 }
 
-void append_dbnum_date_field(std::string& out, DbNumMode mode, unsigned value, std::size_t width) {
+void append_dbnum_date_field(std::string& out, const DbnumStyle* style, unsigned value, std::size_t width) {
   const std::string digits = std::to_string(value);
   for (std::size_t i = digits.size(); i < width; ++i) {
-    append_digit_dbnum(out, mode, '0');
+    append_digit_dbnum(out, style, '0');
   }
-  const DbnumStyle* style = dbnum_style(mode);
   if (style == nullptr || !style->date_positional || value == 0U) {
-    append_chars_dbnum(out, mode, digits);
+    append_chars_dbnum(out, style, digits);
     return;
   }
   append_place_number(out, *style, style->date_place_one, /*zero_filler=*/false, digits);
 }
 
-bool dbnum_writes_numerals(DbNumMode mode) noexcept {
-  const DbnumStyle* style = dbnum_style(mode);
+bool dbnum_writes_numerals(const DbnumStyle* style) noexcept {
   return style != nullptr && !style->place_units[0].empty();
 }
 
@@ -188,15 +161,19 @@ void append_pad2(std::string& out, unsigned n) {
   out.append(std::to_string(n));
 }
 
-void append_pad2_dbnum(std::string& out, unsigned value, DbNumMode mode) {
-  if (mode == DbNumMode::kNone) {
-    append_pad2(out, value);
-    return;
-  }
+void append_pad2_dbnum(std::string& out, unsigned value, const DbnumStyle* style) {
   if (value < 10u) {
-    append_digit_dbnum(out, mode, '0');
+    append_digit_dbnum(out, style, '0');
   }
-  append_int_dbnum(out, static_cast<long long>(value), mode);
+  append_int_dbnum(out, static_cast<long long>(value), style);
+}
+
+void append_percent(std::string& out, std::string_view fmt, const Token& token) {
+  if (token.lit_end > token.lit_begin) {
+    out.append(fmt.substr(token.lit_begin, token.lit_end - token.lit_begin));
+  } else {
+    out.push_back('%');
+  }
 }
 
 bool decimal_digits_all_zero(std::string_view digits) noexcept {
@@ -265,10 +242,14 @@ void render_text_section(const Section& /*section*/, std::string_view fmt, std::
       continue;
     }
     if (c == '[') {
-      // Skip to matching `]` (colour / locale markers discarded).
+      // Skip to matching `]`; a `[$JPY-411]` marker writes its symbol (locale_tokens.lcid_symbol_text_section).
       std::size_t j = i + 1;
       while (j < fmt.size() && fmt[j] != ']') {
         ++j;
+      }
+      if (j > i + 1 && fmt[i + 1] == '$') {
+        const std::string_view body = fmt.substr(i + 2, j - i - 2);
+        out.append(body.substr(0, body.find('-')));
       }
       i = j < fmt.size() ? j + 1 : j;
       continue;

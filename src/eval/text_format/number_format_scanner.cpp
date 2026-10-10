@@ -288,7 +288,7 @@ std::size_t utf8_scalar_width(std::string_view fmt, std::size_t i) noexcept {
   return decode_utf8(fmt, i).width;
 }
 
-std::string normalize_ja_jp_format_syntax(std::string_view fmt) {
+std::string normalize_fullwidth_format_syntax(std::string_view fmt, std::string_view literal_glyphs) {
   std::string out;
   out.reserve(fmt.size());
   std::size_t i = 0;
@@ -407,6 +407,11 @@ std::string normalize_ja_jp_format_syntax(std::string_view fmt) {
     // full-width block are format syntax. Bracket state is tracked after the
     // fold so full-width brackets can delimit a normalised bracket body.
     const char syntax = syntax_ascii(cp);
+    if (syntax != '\0' && !in_bracket && literal_glyphs.find(syntax) != std::string_view::npos) {
+      append_raw(out, fmt, i, i + width);
+      i += width;
+      continue;
+    }
     if (syntax != '\0') {
       out.push_back(syntax);
       if (syntax == '[') {
@@ -589,6 +594,107 @@ int parse_dbnum_directive(std::string_view body) noexcept {
   }
   const char d = body[5];
   return d >= '1' && d <= '4' ? d - '0' : 0;
+}
+
+namespace {
+
+// Parses hex digits, keeping the low 32 bits of a longer run; false for anything else.
+bool parse_tag_hex(std::string_view text, std::uint32_t* out) noexcept {
+  if (text.empty()) {
+    return false;
+  }
+  std::uint32_t value = 0;
+  for (const char c : text) {
+    const char lc = strings::ascii_to_lower(c);
+    std::uint32_t digit = 0;
+    if (lc >= '0' && lc <= '9') {
+      digit = static_cast<std::uint32_t>(lc - '0');
+    } else if (lc >= 'a' && lc <= 'f') {
+      digit = static_cast<std::uint32_t>(lc - 'a' + 10);
+    } else {
+      return false;
+    }
+    value = (value << 4U) | digit;
+  }
+  *out = value;
+  return true;
+}
+
+void set_tag_language(std::uint16_t lcid, FormatTag* tag) noexcept {
+  // LCIDs below 0x400 name no language (locale_tokens.lcid_parse_variants).
+  constexpr std::uint16_t kFirstLanguage = 0x0400;
+  if (lcid >= kFirstLanguage) {
+    tag->language_set = true;
+    tag->language = tag_language_for_lcid(lcid);
+  }
+}
+
+}  // namespace
+
+bool parse_format_tag(std::string_view spec, FormatTag* tag) noexcept {
+  constexpr std::uint32_t kLanguageMask = 0xFFFF;
+  constexpr std::uint32_t kSystemDate = 0xF800;
+  constexpr std::uint32_t kSystemTime = 0xF400;
+  constexpr std::string_view kSysDate = "x-sysdate";
+  constexpr std::string_view kSysTime = "x-systime";
+  constexpr std::string_view kPrivateUse = "-x-";
+  constexpr std::string_view kGannen = "-x-gannen";
+  if (spec.empty()) {
+    return true;
+  }
+  // A language name that also reads as hex (`de`) is the name.
+  std::uint32_t value = 0;
+  if (tag_language_for_name(spec) == nullptr && parse_tag_hex(spec, &value)) {
+    const std::uint32_t language = value & kLanguageMask;
+    if (language == kSystemDate || language == kSystemTime) {
+      tag->system = language == kSystemDate ? SystemFormat::kLongDate : SystemFormat::kTime;
+      return true;
+    }
+    tag->numeral = static_cast<std::uint8_t>(value >> 24U);
+    tag->calendar = static_cast<std::uint8_t>(value >> 16U);
+    set_tag_language(static_cast<std::uint16_t>(language), tag);
+    return true;
+  }
+  // A name is ASCII and starts with a subtag; a `,` needs a suffix (locale_tokens.lcid_parse_variants).
+  std::string_view name = spec.substr(0, spec.find(','));
+  if (name.empty() || name.front() == '-' || name.size() + 1U == spec.size()) {
+    return false;
+  }
+  for (const char c : name) {
+    if (static_cast<unsigned char>(c) >= 0x80U) {
+      return false;
+    }
+  }
+  if (strings::case_insensitive_eq(name, kSysDate) || strings::case_insensitive_eq(name, kSysTime)) {
+    tag->system = strings::case_insensitive_eq(name, kSysDate) ? SystemFormat::kLongDate : SystemFormat::kTime;
+    return true;
+  }
+  if (strings::case_insensitive_contains(name, kSysDate) || strings::case_insensitive_contains(name, kSysTime)) {
+    return false;
+  }
+  std::uint32_t suffix = 0;
+  if (name.size() < spec.size() && !parse_tag_hex(spec.substr(name.size() + 1U), &suffix)) {
+    return true;
+  }
+  const bool gannen = strings::case_insensitive_contains(name, kGannen);
+  // Private-use subtags (`-x-...`) do not change the language.
+  for (std::size_t k = 0; k + kPrivateUse.size() <= name.size(); ++k) {
+    if (strings::case_insensitive_starts_with(name.substr(k), kPrivateUse)) {
+      name = name.substr(0, k);
+      break;
+    }
+  }
+  const TagLanguage* language = tag_language_for_name(name);
+  if (language == nullptr) {
+    return true;
+  }
+  // The suffix packs the numeral system above the calendar (`th-TH,107`).
+  tag->language_set = true;
+  tag->language = language;
+  tag->gannen = gannen;
+  tag->calendar = static_cast<std::uint8_t>(suffix);
+  tag->numeral = static_cast<std::uint8_t>(suffix >> 8U);
+  return true;
 }
 
 bool is_date_tok(Tok t) noexcept {

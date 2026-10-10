@@ -763,6 +763,83 @@ TEST(NumberFormatGeneral, JaJpKeywordHonoursDbNumQualifier) {
 }
 
 // ---------------------------------------------------------------------------
+// `[$-...]` locale tags (locale_tokens.lcid_*).
+// ---------------------------------------------------------------------------
+
+constexpr double kMarch5th2024 = 45356.0;
+
+FormatStatus StatusJaJp(double value, std::string_view format) {
+  const eval::ScopedEvalProfile profile_scope(mac_365_ja_jp_profile());
+  std::string out;
+  return apply_format(value, format, out);
+}
+
+TEST(NumberFormatLocaleTag, LanguageSwitchesNamesAndEra) {
+  EXPECT_EQ(Render(kMarch5th2024, "[$-411]mmmm dddd"), "3月 火曜日");
+  EXPECT_EQ(Render(kMarch5th2024, "[$-407]mmmm ddd"), "März Di");
+  EXPECT_EQ(Render(kMarch5th2024, "[$-JA-jp]mmmm"), "3月");
+  EXPECT_EQ(Render(kMarch5th2024 + 0.55, "[$-412]h AM/PM"), "1 오후");
+  EXPECT_EQ(Render(kMarch5th2024 + 0.55, "[$-C0A]h A/P"), "1 p.\u202Fm.");
+  // A language other than Japanese turns the era letters into the year.
+  EXPECT_EQ(Render(kMarch5th2024, "[$-409]e g"), "2024 ");
+  EXPECT_EQ(Render(kMarch5th2024, "[$-411]ggge"), "令和6");
+  // Unmodelled languages keep the profile's names.
+  EXPECT_EQ(Render(kMarch5th2024, "[$-809]mmmm"), "March");
+}
+
+TEST(NumberFormatLocaleTag, CalendarsChangeTheYear) {
+  EXPECT_EQ(Render(kMarch5th2024, "[$-30409]yyyy g"), "06 R");
+  EXPECT_EQ(Render(kMarch5th2024, "[$-50412]yyyy yy"), "4357 57");
+  EXPECT_EQ(Render(kMarch5th2024, "[$-7041E]yyyy b mmm"), "2567 67 มี.ค.");
+  EXPECT_EQ(Render(kMarch5th2024, "[$-40404]yy mmmm"), "2024 三月");
+  // Any tag makes `b` the Gregorian year; without one it is the Buddhist year.
+  EXPECT_EQ(Render(kMarch5th2024, "[$-411]b"), "24");
+  EXPECT_EQ(Render(kMarch5th2024, "b"), "67");
+}
+
+TEST(NumberFormatLocaleTag, GannenWritesTheFirstEraYear) {
+  constexpr double kMay1st2019 = 43586.0;
+  EXPECT_EQ(Render(kMay1st2019, "[$-ja-JP-x-gannen]ggge"), "令和元");
+  EXPECT_EQ(Render(kMay1st2019, "[$-ja-JP-x-gannen]e"), "1");
+}
+
+TEST(NumberFormatLocaleTag, NumeralSystemsSubstituteEveryDigit) {
+  EXPECT_EQ(Render(1234.5, "[$-D000000]#,##0.00"), "๑,๒๓๔.๕๐");
+  EXPECT_EQ(Render(1234.5, "[$-D000000]0 \"12\""), "๑๒๓๕ 12");
+  EXPECT_EQ(Render(100001.0, "[$-1B000000]G/標準"), "十万一");
+  // A numeral-system General keeps the scientific form `[DBNum1]` expands.
+  EXPECT_EQ(Render(1000000000001.0, "[$-1B000000]G/標準"), "一E+一二");
+  // The first section's tag governs the other sections.
+  EXPECT_EQ(Render(-7.0, "[$-2000000]0;(0)"), "(٧)");
+  EXPECT_EQ(Render(-7.0, "0;[$-2000000](0)"), "(7)");
+}
+
+TEST(NumberFormatLocaleTag, SystemDateAndTime) {
+  EXPECT_EQ(Render(kMarch5th2024 + 0.5, "[$-F800]"), "2024年3月5日 火曜日");
+  EXPECT_EQ(Render(kMarch5th2024 + 0.5, "[$-x-sysdate]dddd"), "2024年3月5日 火曜日");
+  EXPECT_EQ(Render(0.5, "[$-F400]"), "12:00:00");
+  EXPECT_EQ(StatusJaJp(-1.0, "[$-F800]"), FormatStatus::kValueError);
+}
+
+TEST(NumberFormatLocaleTag, RejectedSpecs) {
+  EXPECT_EQ(StatusJaJp(kMarch5th2024, "[$-411][$-409]mmmm"), FormatStatus::kValueError);
+  EXPECT_EQ(StatusJaJp(1.0, "[$-€-407]0"), FormatStatus::kValueError);
+  EXPECT_EQ(StatusJaJp(1.0, "[$--411]0"), FormatStatus::kValueError);
+  EXPECT_EQ(StatusJaJp(1.0, "[$-ja-JP,]0"), FormatStatus::kValueError);
+  EXPECT_EQ(Render(1.5, "[$-ZZZ]0.0"), "1.5");
+}
+
+TEST(NumberFormatLocaleTag, TextSectionWritesTheSymbol) {
+  const eval::ScopedEvalProfile profile_scope(mac_365_ja_jp_profile());
+  std::string out;
+  EXPECT_EQ(apply_text_format("txt", "[$JPY-411]@", out), FormatStatus::kOk);
+  EXPECT_EQ(out, "JPYtxt");
+  out.clear();
+  // An unquoted digit other than 0 makes a text section invalid.
+  EXPECT_EQ(apply_text_format("txt", "@ 9", out), FormatStatus::kValueError);
+}
+
+// ---------------------------------------------------------------------------
 // Interleaved digit + literal positional rendering.
 // ---------------------------------------------------------------------------
 

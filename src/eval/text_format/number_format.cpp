@@ -13,6 +13,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -57,7 +58,8 @@ void parse_format(std::string_view format, FormatDialect dialect, ParsedFormat& 
   parsed.sections.reserve(parsed.raw.size());
   for (const auto& raw : parsed.raw) {
     Section s;
-    number_format_detail::tokenize_section(raw, s, letters);
+    number_format_detail::tokenize_section(raw, s, letters,
+                                           parsed.sections.empty() ? nullptr : &parsed.sections.front().tag);
     number_format_detail::classify(s, raw);
     parsed.sections.push_back(std::move(s));
   }
@@ -273,9 +275,27 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
     }
   }
 
+  if (section.tag.system != number_format_detail::SystemFormat::kNone) {
+    // `[$-F800]` / `[$-F400]` show the value in the system's own date or time
+    // form, whatever else the section holds (locale_tokens.text_system_date_tag).
+    if (value < 0.0) {
+      return FormatStatus::kValueError;
+    }
+    const ExcelProfile profile = eval::current_eval_profile();
+    const std::string_view system = section.tag.system == number_format_detail::SystemFormat::kLongDate
+                                        ? system_date_format(profile)
+                                        : system_time_format(profile);
+    return apply_format(value, system, out, date1904, FormatDialect::kStored);
+  }
   if (section.is_text) {
-    // A number selecting a text-only section (`@`, `"pre"@`) renders as General without its literals.
-    return apply_format(value, "General", out, date1904, FormatDialect::kStored);
+    // A number selecting a text-only section (`@`, `"pre"@`) renders as General without its
+    // literals, in the format's numeral system (locale_tokens.lcid_section_scope).
+    std::string general = "General";
+    if (const std::uint8_t numeral = sections.front().tag.numeral; numeral != 0) {
+      constexpr std::string_view kHex = "0123456789ABCDEF";
+      general = std::string("[$-") + kHex[numeral >> 4U] + kHex[numeral & 0xFU] + "000000]General";
+    }
+    return apply_format(value, general, out, date1904, FormatDialect::kStored);
   }
   if (section.is_date) {
     // The calendar runs from serial 0 to 9999-12-31. The 1904 system also

@@ -76,7 +76,7 @@ bool same_letters(const FormatLetters& a, const FormatLetters& b) noexcept {
 
 }  // namespace
 
-void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& letters) {
+void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& letters, const FormatTag* format_tag) {
   std::vector<Token>& toks = out.tokens;
   const LocaleFacts& facts = locale_facts(eval::current_eval_profile());
   const bool invariant_letters = same_letters(letters, kInvariantFormatLetters);
@@ -93,6 +93,14 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
   };
 
   bool saw_color = false;
+  bool saw_tag = false;
+  FormatTag own_tag;
+  // An unquoted digit other than 0 makes a text section invalid (locale_tokens.text_section_bare_digit).
+  bool bare_digit = false;
+  // 0, a `[DBNumN]` index, or th-TH's `t`; resolved once the section's tag is known.
+  constexpr int kThaiDigitChoice = 5;
+  constexpr std::uint8_t kThaiNumeralSystem = 0x0D;
+  int digit_choice = 0;
   std::size_t i = 0;
   while (i < fmt.size()) {
     const char c = fmt[i];
@@ -124,7 +132,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     }
     // Bracketed specifier. Recognised kinds:
     //   `[h]` / `[m]` / `[s]`   -> elapsed-time tokens (any run length).
-    //   `[$...]`                -> locale-currency marker; silently dropped.
+    //   `[$...]`                -> currency symbol and locale tag.
     //   `[Red]` / ...           -> named color qualifier; silently dropped
     //                               (no color in text).
     //   `[ColorN]`              -> indexed color qualifier; silently dropped.
@@ -173,8 +181,9 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
         // Locale-currency marker. Form: `[$<symbol>-<lcid>]` or `[$<symbol>]`
         // or `[$-<lcid>]`. The `<symbol>` portion (everything after `$` up
         // to the optional `-LCID` suffix) is emitted as a literal prefix;
-        // the LCID is metadata only and is discarded. Mac Excel 365 emits
-        // e.g. `[$JPY-411]#,##0` -> `JPY1,234,567`.
+        // the spec after `-` switches names, calendar and digits for the
+        // section (`FormatTag`). Mac Excel 365 emits e.g. `[$JPY-411]#,##0`
+        // -> `JPY1,234,567`.
         //
         // `body_begin` points at the `$` in `fmt`; the symbol bytes start
         // at `body_begin + 1` and run until either `-` or the end of body.
@@ -187,6 +196,17 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
           }
         }
         push_literal(sym_begin, sym_end);
+        // One tag per section (locale_tokens.lcid_parse_variants).
+        if (saw_tag) {
+          out.has_invalid_bracket = true;
+        }
+        saw_tag = true;
+        if (sym_end < body_begin + body.size()) {
+          own_tag.present = true;
+          if (!parse_format_tag(fmt.substr(sym_end + 1, body_begin + body.size() - sym_end - 1), &own_tag)) {
+            out.has_invalid_bracket = true;
+          }
+        }
       } else if (all_s) {
         Token t;
         t.kind = Tok::DateElapsedS;
@@ -204,11 +224,8 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
         saw_color = true;
         out.has_color = true;
       } else if (const int dbnum = parse_dbnum_directive(body); dbnum > 0) {
-        // `[DBNum1]`-`[DBNum4]`: digit style for the rest of the section,
-        // last write wins; inert in a locale without DBNum styles.
-        if (facts.dbnum != nullptr) {
-          out.dbnum_mode = static_cast<DbNumMode>(static_cast<int>(DbNumMode::kDBNum1) + dbnum - 1);
-        }
+        // `[DBNum1]`-`[DBNum4]`: digit style for the section, last write wins.
+        digit_choice = dbnum;
       } else {
         // Conditional-section directive `[>1000]`, `[<=0]`, ...
         // Only one predicate per section; if a second one appears,
@@ -433,7 +450,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
       continue;
     }
     if (c == 't' && facts.thai_digit_letter) {
-      out.dbnum_mode = DbNumMode::kThai;
+      digit_choice = kThaiDigitChoice;
       ++i;
       continue;
     }
@@ -441,8 +458,10 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     if (c == 'r' && facts.r_letter != RLetter::kLiteral) {
       const std::size_t run = scan_run_exact(fmt, i, 'r');
       Token t;
+      // zh-TW's `r` and `rr` write the year as `e` does (locale_tokens.lcid_r_letter).
       if (facts.r_letter == RLetter::kYear) {
-        t.kind = Tok::DateY4;
+        t.kind = Tok::EraE;
+        t.width = 1;
         toks.push_back(t);
         continue;
       }
@@ -466,6 +485,17 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
       t.width = static_cast<std::uint8_t>(run);
       t.kind = (run >= 2) ? Tok::EraEE : Tok::EraE;
       toks.push_back(t);
+      continue;
+    }
+    // A kept full-width percent sign scales and writes itself (locale_tokens.text_fullwidth_percent_syntax).
+    constexpr std::string_view kFullwidthPercent = "\xEF\xBC\x85";
+    if (fmt.substr(i, kFullwidthPercent.size()) == kFullwidthPercent) {
+      Token t;
+      t.kind = Tok::Percent;
+      t.lit_begin = i;
+      t.lit_end = i + kFullwidthPercent.size();
+      toks.push_back(t);
+      i = t.lit_end;
       continue;
     }
     // Numeric specifiers.
@@ -522,20 +552,25 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
       default:
         break;
     }
-    // Keep the slash's source range so the classifier can tell it from a quoted slash.
-    if (c == '/') {
+    // Keep the slash's source range so the classifier can tell it from a quoted slash; a kept
+    // full-width slash parses as `/` and writes itself (locale_tokens.text_fullwidth_date_syntax).
+    constexpr std::string_view kFullwidthSlash = "\xEF\xBC\x8F";
+    if (c == '/' || fmt.substr(i, kFullwidthSlash.size()) == kFullwidthSlash) {
       Token t;
       t.kind = Tok::Literal;
       t.lit_begin = i;
-      t.lit_end = i + 1;
+      t.lit_end = i + (c == '/' ? 1U : kFullwidthSlash.size());
       t.fraction_slash_candidate = true;
       toks.push_back(t);
-      ++i;
+      i = t.lit_end;
       continue;
     }
     // An unescaped `n` is no format code and no text (locale_tokens.text_letter_n_time, text_letter_n_date).
     if (c == 'n') {
       out.has_invalid_bracket = true;
+    }
+    if (c >= '1' && c <= '9') {
+      bare_digit = true;
     }
     // Fallback: preserve one complete UTF-8 scalar as a literal. Malformed
     // input is consumed one byte at a time by `utf8_scalar_width`, so it is
@@ -543,6 +578,39 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     const std::size_t literal_width = utf8_scalar_width(fmt, i);
     push_literal(i, i + literal_width);
     i += literal_width;
+  }
+  if (bare_digit) {
+    for (const Token& tk : toks) {
+      if (tk.kind == Tok::At) {
+        out.has_invalid_bracket = true;
+        break;
+      }
+    }
+  }
+  // The first section's tag governs every section; a later section's own tag
+  // only contributes a system date or time (locale_tokens.lcid_section_scope).
+  out.tag = format_tag != nullptr ? *format_tag : own_tag;
+  out.tag.system = own_tag.system;
+  const bool tag_in_section = format_tag == nullptr && saw_tag;
+  // A numeral-system tag decides the digits and silences `[DBNumN]`
+  // (locale_tokens.lcid_numeral_systems); a tag language brings its own DBNum styles.
+  if (out.tag.numeral != 0) {
+    out.digit_style = numeral_system_style(out.tag.numeral);
+    out.digit_style_from_tag = out.digit_style != nullptr;
+  } else if (digit_choice == kThaiDigitChoice) {
+    out.digit_style = numeral_system_style(kThaiNumeralSystem);
+  } else if (digit_choice > 0) {
+    const DbnumStyles* styles = facts.dbnum;
+    // `[DBNum4]` keeps the profile's style in the tagged section (locale_tokens.lcid_dbnum4_sections).
+    constexpr int kDbnum4 = 4;
+    const bool profile_dbnum4 = digit_choice == kDbnum4 && (tag_in_section || facts.dbnum4_keeps_profile_style);
+    if (out.tag.language_set && !profile_dbnum4) {
+      const TagLanguage* language = out.tag.language;
+      styles = language == nullptr ? nullptr : language->dbnum;
+    }
+    if (styles != nullptr) {
+      out.digit_style = &(*styles)[static_cast<std::size_t>(digit_choice - 1)];
+    }
   }
 }
 

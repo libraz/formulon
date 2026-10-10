@@ -121,6 +121,23 @@ struct DbnumStyle {
 
 using DbnumStyles = std::array<DbnumStyle, 4>;
 
+/// Names and digit styles a `[$-LCID]` format tag selects: the language's own
+/// spellings, which differ from the untagged names of a profile in that locale.
+struct TagLanguage {
+  std::array<std::string_view, 12> month_long;
+  std::array<std::string_view, 12> month_short;
+  /// dddd / ddd (and aaaa / aaa) names, Sunday first.
+  std::array<std::string_view, 7> day_long;
+  std::array<std::string_view, 7> day_short;
+  /// Written for every AM/PM, am/pm, A/P and a/p marker.
+  std::string_view am_name;
+  std::string_view pm_name;
+  /// `[DBNum1]`-`[DBNum4]` styles; null where they change nothing.
+  const DbnumStyles* dbnum;
+  /// `e`, `g` and `r` write the Japanese era.
+  bool japanese_era;
+};
+
 struct LocaleFacts {
   char decimal_separator;
   char group_separator;
@@ -188,11 +205,15 @@ struct LocaleFacts {
   bool bang_escape;
   /// `[DBNum1]`-`[DBNum4]` styles; null where the directives change nothing.
   const DbnumStyles* dbnum;
+  /// Under a `[$-…]` language, `[DBNum4]` keeps the profile's style in every section rather than
+  /// only in the tagged one.
+  bool dbnum4_keeps_profile_style;
   /// A lower-case `t` renders nothing and writes the section's digits in Thai.
   bool thai_digit_letter;
   /// Letter, in either case, of a date code that renders nothing; `'\0'` when none.
   char blank_date_letter;
-  bool fullwidth_syntax_fold;
+  /// Full-width punctuation that renders as a literal (`／`, `％`) keeps its glyph instead of folding to ASCII.
+  bool fullwidth_literal_glyph;
   /// TEXT accepts the English `General` keyword.
   bool english_general;
   /// TEXT rejects a format holding a `.` outside quotes and escapes.
@@ -221,6 +242,18 @@ const LocaleFacts& locale_facts(ExcelProfile profile) noexcept;
 bool error_name_measured(std::size_t error_ordinal) noexcept;
 SbcsCodepage sbcs_codepage(ExcelProfile profile) noexcept;
 WidthFolding width_folding(ExcelProfile profile) noexcept;
+
+/// Language a numeric `[$-LCID]` tag names, or null when its spellings are not modelled.
+const TagLanguage* tag_language_for_lcid(std::uint16_t lcid) noexcept;
+/// Language a named tag (`[$-ja-JP]`, case-insensitive) names, or null when not modelled.
+const TagLanguage* tag_language_for_name(std::string_view name) noexcept;
+/// The tag language of the locale's own LCID.
+const TagLanguage& native_tag_language(ExcelLocale locale) noexcept;
+/// Digit style of the `NN` byte of `[$-NN000000]`; null for ASCII digits.
+const DbnumStyle* numeral_system_style(std::uint8_t code) noexcept;
+/// Invariant format codes `[$-F800]` / `[$-x-sysdate]` and `[$-F400]` / `[$-x-systime]` render through.
+std::string_view system_date_format(ExcelProfile profile) noexcept;
+std::string_view system_time_format(ExcelProfile profile) noexcept;
 
 }  // namespace formulon
 

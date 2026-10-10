@@ -121,7 +121,8 @@ void ExpectFactsEqual(const LocaleFacts& lhs, const LocaleFacts& rhs) {
   EXPECT_EQ(lhs.dbnum, rhs.dbnum);
   EXPECT_EQ(lhs.thai_digit_letter, rhs.thai_digit_letter);
   EXPECT_EQ(lhs.blank_date_letter, rhs.blank_date_letter);
-  EXPECT_EQ(lhs.fullwidth_syntax_fold, rhs.fullwidth_syntax_fold);
+  EXPECT_EQ(lhs.fullwidth_literal_glyph, rhs.fullwidth_literal_glyph);
+  EXPECT_EQ(lhs.dbnum4_keeps_profile_style, rhs.dbnum4_keeps_profile_style);
   EXPECT_EQ(lhs.english_general, rhs.english_general);
   EXPECT_EQ(lhs.format_rejects_dot, rhs.format_rejects_dot);
   EXPECT_EQ(lhs.general_alias, rhs.general_alias);
@@ -212,7 +213,7 @@ void ExpectJapaneseFacts(const LocaleFacts& facts) {
   EXPECT_TRUE(facts.criteria_header_keeps_halfwidth_kana);
   EXPECT_TRUE(facts.bang_escape);
   ASSERT_NE(facts.dbnum, nullptr);
-  EXPECT_TRUE(facts.fullwidth_syntax_fold);
+  EXPECT_FALSE(facts.fullwidth_literal_glyph);
   EXPECT_EQ(facts.general_alias, "G/標準");
   EXPECT_EQ(facts.color_names, (std::array<std::string_view, 8>{"黒", "青", "水", "緑", "紫", "赤", "白", "黄"}));
   EXPECT_EQ(facts.color_index_prefix, "色");
@@ -256,7 +257,7 @@ void ExpectEnglishFacts(const LocaleFacts& facts) {
   EXPECT_FALSE(facts.criteria_header_keeps_halfwidth_kana);
   EXPECT_FALSE(facts.bang_escape);
   EXPECT_EQ(facts.dbnum, nullptr);
-  EXPECT_FALSE(facts.fullwidth_syntax_fold);
+  EXPECT_TRUE(facts.fullwidth_literal_glyph);
   EXPECT_EQ(facts.general_alias, "");
   EXPECT_EQ(facts.color_names,
             (std::array<std::string_view, 8>{"Black", "Blue", "Cyan", "Green", "Magenta", "Red", "White", "Yellow"}));
@@ -435,6 +436,27 @@ TEST(ExcelLocale, WidthFoldingDependsOnHostExceptForChinese) {
   EXPECT_EQ(width_folding(profile_of(ExcelHost::kWin365, ExcelLocale::kZhCN)), WidthFolding::kNone);
   EXPECT_EQ(width_folding(profile_of(ExcelHost::kMac365, ExcelLocale::kZhTW)), WidthFolding::kNone);
   EXPECT_EQ(width_folding(profile_of(ExcelHost::kWin365, ExcelLocale::kZhTW)), WidthFolding::kNone);
+}
+
+TEST(ExcelLocale, TagLanguagesFollowMeasuredLcidsAndNames) {
+  ASSERT_NE(tag_language_for_lcid(0x0411), nullptr);
+  EXPECT_EQ(tag_language_for_lcid(0x0411)->month_long[2], "3月");
+  EXPECT_TRUE(tag_language_for_lcid(0x0411)->japanese_era);
+  EXPECT_EQ(tag_language_for_lcid(0x0807), tag_language_for_lcid(0x0407));
+  EXPECT_EQ(tag_language_for_lcid(0x0809), nullptr);
+  EXPECT_EQ(tag_language_for_name("JA-jp"), tag_language_for_lcid(0x0411));
+  EXPECT_EQ(tag_language_for_name("de"), tag_language_for_lcid(0x0407));
+  EXPECT_EQ(tag_language_for_name("es"), nullptr);
+  EXPECT_EQ(&native_tag_language(ExcelLocale::kZhTW), tag_language_for_lcid(0x0404));
+}
+
+TEST(ExcelLocale, NumeralSystemsMapToDigitStyles) {
+  ASSERT_NE(numeral_system_style(0x0D), nullptr);
+  EXPECT_EQ(numeral_system_style(0x0D)->digits[1], "๑");
+  EXPECT_EQ(numeral_system_style(0x09)->digits[0], "0");
+  EXPECT_EQ(numeral_system_style(0x1B), &(*locale_facts(mac_365_ja_jp_profile()).dbnum)[0]);
+  EXPECT_EQ(numeral_system_style(0x01), nullptr);
+  EXPECT_EQ(numeral_system_style(0x28), nullptr);
 }
 
 }  // namespace

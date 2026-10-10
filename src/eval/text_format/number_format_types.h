@@ -102,15 +102,25 @@ struct Token {
   bool fraction_slash_candidate = false;
 };
 
-// Digit-substitution mode set by a `[DBNum1]`-`[DBNum4]` section directive
-// (styles in `LocaleFacts::dbnum`) or by th-TH's `t` (Thai digits).
-enum class DbNumMode : std::uint8_t {
+// What a `[$-...]` tag switches for its section (`NNCCLLLL`: numeral system,
+// calendar, language; or a named tag such as `ja-JP` or `x-sysdate`).
+enum class SystemFormat : std::uint8_t {
   kNone = 0,
-  kDBNum1,
-  kDBNum2,
-  kDBNum3,
-  kDBNum4,
-  kThai,
+  kLongDate,
+  kTime,
+};
+
+struct FormatTag {
+  // A `[$-...]` tag, whatever its spec: `b` / `bbbb` write the Gregorian year.
+  bool present = false;
+  // The tag names a language; `language` is null when its spellings are not modelled.
+  bool language_set = false;
+  const TagLanguage* language = nullptr;
+  std::uint8_t calendar = 0;
+  std::uint8_t numeral = 0;
+  // `-x-gannen`: era year 1 is written 元 after an era name.
+  bool gannen = false;
+  SystemFormat system = SystemFormat::kNone;
 };
 
 // Conditional comparison operator extracted from a `[op N]` section prefix.
@@ -142,9 +152,14 @@ struct Section {
   // Set when the section carries a colour qualifier in the parse dialect.
   bool has_color = false;
 
-  // DBNum1/2/3 digit-substitution mode. Set by the tokenizer when a
-  // `[DBNumN]` directive is observed; consumed by the renderer.
-  DbNumMode dbnum_mode = DbNumMode::kNone;
+  // Digit style of a `[DBNumN]` directive, th-TH's `t` or a numeral-system
+  // tag; null for ASCII digits.
+  const DbnumStyle* digit_style = nullptr;
+  // The style comes from a numeral-system tag, which keeps General's scientific form.
+  bool digit_style_from_tag = false;
+
+  // The section's `[$-...]` tag; a second one in a section is invalid.
+  FormatTag tag;
 
   // Conditional-section directive (`[>1000]`, `[<=0]`, etc.). When `cond_op`
   // is non-`kNone`, `apply_format` consults the predicate `value <op> cond_value`
@@ -223,7 +238,9 @@ std::vector<std::string_view> split_sections(std::string_view fmt);
 // reading date letters through `letters`. Writes the token list into
 // `out.tokens` and surfaces invalid bracket qualifiers (unknown colour names,
 // malformed conditional tests, etc.) through `out.has_invalid_bracket`.
-void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& letters);
+// `format_tag` is the first section's tag when tokenizing a later section.
+void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& letters,
+                      const FormatTag* format_tag = nullptr);
 
 // Populate the numeric/date summary on `section`. Also detect fractional
 // seconds `.0...` that immediately follow a second token (used to format

@@ -36,14 +36,94 @@ std::string_view name_entry(const std::array<std::string_view, N>& table, long l
 
 // Buddhist-era year (2024 -> 2567, text_buddhist_year_bbbb).
 constexpr int kBuddhistEraOffset = 543;
+// Dangi year of the Korean calendar (2024 -> 4357, locale_tokens.lcid_calendars).
+constexpr int kDangiOffset = 2333;
+
+// `CC` calendar bytes of a `[$-CCLLLL]` tag that change the output (locale_tokens.lcid_calendars).
+constexpr std::uint8_t kCalendarDefault = 0x00;
+constexpr std::uint8_t kCalendarEnglishNames = 0x02;
+constexpr std::uint8_t kCalendarJapanese = 0x03;
+constexpr std::uint8_t kCalendarTaiwan = 0x04;
+constexpr std::uint8_t kCalendarKorean = 0x05;
+constexpr std::uint8_t kCalendarThai = 0x07;
+// Julian and Taiwan lunisolar: Gregorian dates under the profile's own names.
+constexpr std::uint8_t kCalendarJulian = 0x0D;
+constexpr std::uint8_t kCalendarTaiwanLunisolar = 0x15;
+constexpr std::uint16_t kEnglishLcid = 0x0409;
+constexpr std::uint16_t kChineseLcid = 0x0804;
+constexpr std::uint16_t kTraditionalChineseLcid = 0x0404;
+constexpr std::uint16_t kThaiLcid = 0x041E;
+constexpr std::string_view kGannen = "元";
+
+using Names12 = std::array<std::string_view, 12>;
+using Names7 = std::array<std::string_view, 7>;
+
+// The name tables a section writes: the profile's, or those its tag selects.
+struct DateNames {
+  const Names12* month_long;
+  const Names12* month_short;
+  const Names7* day_long;
+  const Names7* day_short;
+  const Names7* weekday_long;
+  const Names7* weekday_short;
+  std::string_view am;
+  std::string_view pm;
+  // A tag language writes its AM/PM for every meridiem marker, A/P included.
+  bool tag_meridiem;
+};
+
+void use_tag_names(const TagLanguage& language, DateNames* names) noexcept {
+  names->month_long = &language.month_long;
+  names->month_short = &language.month_short;
+  names->day_long = &language.day_long;
+  names->day_short = &language.day_short;
+  names->weekday_long = &language.day_long;
+  names->weekday_short = &language.day_short;
+}
+
+DateNames date_names(const FormatTag& tag, const LocaleFacts& facts, ExcelLocale locale) noexcept {
+  DateNames names{&facts.month_long, &facts.month_short,  &facts.day_long,
+                  &facts.day_short,  &facts.weekday_long, &facts.weekday_short,
+                  facts.am_name,     facts.pm_name,       false};
+  if (tag.language != nullptr) {
+    use_tag_names(*tag.language, &names);
+    names.am = tag.language->am_name;
+    names.pm = tag.language->pm_name;
+    names.tag_meridiem = true;
+  }
+  // A calendar brings its own month and day names; AM/PM stay the language's.
+  switch (tag.calendar) {
+    case kCalendarEnglishNames:
+      use_tag_names(*tag_language_for_lcid(kEnglishLcid), &names);
+      break;
+    case kCalendarTaiwan: {
+      const TagLanguage& months = *tag_language_for_lcid(kChineseLcid);
+      use_tag_names(*tag_language_for_lcid(kTraditionalChineseLcid), &names);
+      names.month_long = &months.month_long;
+      names.month_short = &months.month_long;
+      break;
+    }
+    case kCalendarKorean:
+    case kCalendarJulian:
+    case kCalendarTaiwanLunisolar:
+      use_tag_names(native_tag_language(locale), &names);
+      break;
+    case kCalendarThai:
+      use_tag_names(*tag_language_for_lcid(kThaiLcid), &names);
+      break;
+    default:
+      break;
+  }
+  return names;
+}
 
 // Elapsed time is zero-padded to the token width and written like General.
-void append_elapsed_int_dbnum(std::string& out, long long value, std::size_t width, DbNumMode mode) {
+void append_elapsed_int_dbnum(std::string& out, long long value, std::size_t width, const DbnumStyle* style) {
   const std::string digits = std::to_string(value);
   for (std::size_t i = digits.size(); i < width; ++i) {
-    append_digit_dbnum(out, mode, '0');
+    append_digit_dbnum(out, style, '0');
   }
-  append_dbnum_positional(out, mode, digits);
+  append_dbnum_positional(out, style, digits);
 }
 
 constexpr std::size_t kMaxMeaningfulFractionDigits = 15;
@@ -114,7 +194,25 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
   const ::formulon::date_time::YMD ymd = date1904 ? ::formulon::date_time::ymd_from_serial(calendar_serial, true)
                                                   : ::formulon::date_time::legacy_1900_ymd(calendar_serial);
   const int sun0 = ::formulon::date_time::weekday_sun0(calendar_serial, date1904);
-  const LocaleFacts& facts = locale_facts(eval::current_eval_profile());
+  const ExcelProfile profile = eval::current_eval_profile();
+  const LocaleFacts& facts = locale_facts(profile);
+  const FormatTag& tag = section.tag;
+  const DateNames names = date_names(tag, facts, profile.locale);
+  // `e`, `g` and `r` write the era under the Japanese calendar or a Japanese
+  // language; any other tag language or calendar turns them into the year.
+  const bool tag_era = tag.language_set ? tag.language != nullptr && tag.language->japanese_era : facts.japanese_era;
+  const bool era_on = tag.calendar == kCalendarJapanese || (tag.calendar == kCalendarDefault && tag_era);
+  const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
+  const int era_year = ymd.y - era.year_anchor + 1;
+  int calendar_year = ymd.y;
+  if (tag.calendar == kCalendarKorean) {
+    calendar_year += kDangiOffset;
+  } else if (tag.calendar == kCalendarThai) {
+    calendar_year += kBuddhistEraOffset;
+  }
+  // `b` is the Buddhist year unless a tag other than the Thai calendar is present.
+  const int b_year = tag.calendar == kCalendarThai || !tag.present ? ymd.y + kBuddhistEraOffset : ymd.y;
+  bool era_name_written = false;
 
   // Elapsed fields use the same rounded second as ordinary h/m/s fields.
   // `day_floor` is only a few million in the supported date range, so this
@@ -142,24 +240,27 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
     }
   }
 
-  const DbNumMode dbnum = section.dbnum_mode;
+  const DbnumStyle* const dbnum = section.digit_style;
   for (std::size_t i = 0; i < section.tokens.size(); ++i) {
     const Token& tk = section.tokens[i];
     switch (tk.kind) {
-      case Tok::DateY2: {
-        unsigned y2 = static_cast<unsigned>(((ymd.y % 100) + 100) % 100);
-        append_dbnum_date_field(out, dbnum, y2, 2U);
-        break;
-      }
+      case Tok::DateY2:
       case Tok::DateY4: {
+        // The Japanese calendar writes the two-digit era year for both widths;
+        // the Taiwan calendar writes the full year for both.
+        if (tag.calendar == kCalendarJapanese) {
+          append_dbnum_date_field(out, dbnum, static_cast<unsigned>(era_year), 2U);
+          break;
+        }
+        if (tk.kind == Tok::DateY2 && tag.calendar != kCalendarTaiwan) {
+          const unsigned y2 = static_cast<unsigned>(((calendar_year % 100) + 100) % 100);
+          append_dbnum_date_field(out, dbnum, y2, 2U);
+          break;
+        }
         char buf[16];
-        const int n = format_signed(buf, sizeof(buf), ymd.y, 4);
+        const int n = format_signed(buf, sizeof(buf), calendar_year, 4);
         if (n > 0) {
-          if (dbnum == DbNumMode::kNone) {
-            out.append(buf, static_cast<std::size_t>(n));
-          } else {
-            append_chars_dbnum(out, dbnum, std::string_view(buf, static_cast<std::size_t>(n)));
-          }
+          append_chars_dbnum(out, dbnum, std::string_view(buf, static_cast<std::size_t>(n)));
         }
         break;
       }
@@ -170,14 +271,14 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
         append_dbnum_date_field(out, dbnum, ymd.m, 2U);
         break;
       case Tok::DateMMM:
-        out.append(name_entry(facts.month_short, static_cast<long long>(ymd.m) - 1));
+        out.append(name_entry(*names.month_short, static_cast<long long>(ymd.m) - 1));
         break;
       case Tok::DateMMMM:
-        out.append(name_entry(facts.month_long, static_cast<long long>(ymd.m) - 1));
+        out.append(name_entry(*names.month_long, static_cast<long long>(ymd.m) - 1));
         break;
       case Tok::DateMMMMM: {
         // `mmmmm` (run length >= 5) emits the first scalar of the month name.
-        const std::string_view name = name_entry(facts.month_long, static_cast<long long>(ymd.m) - 1);
+        const std::string_view name = name_entry(*names.month_long, static_cast<long long>(ymd.m) - 1);
         if (!name.empty()) {
           out.append(name.substr(0, utf8_scalar_width(name, 0)));
         }
@@ -190,43 +291,27 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
         append_dbnum_date_field(out, dbnum, ymd.d, 2U);
         break;
       case Tok::DateDDD:
-        out.append(name_entry(facts.day_short, sun0));
+        out.append(name_entry(*names.day_short, sun0));
         break;
       case Tok::DateDDDD:
-        out.append(name_entry(facts.day_long, sun0));
+        out.append(name_entry(*names.day_long, sun0));
         break;
       case Tok::DateAaa:
-        out.append(facts.weekday_short[static_cast<std::size_t>(sun0)]);
+        out.append(name_entry(*names.weekday_short, sun0));
         break;
       case Tok::DateAaaa:
-        out.append(facts.weekday_long[static_cast<std::size_t>(sun0)]);
+        out.append(name_entry(*names.weekday_long, sun0));
         break;
-      case Tok::EraG: {
-        if (!facts.japanese_era) {
-          break;
+      case Tok::EraG:
+      case Tok::EraGG:
+      case Tok::EraGGG:
+        if (era_on) {
+          out.append(tk.kind == Tok::EraG ? era.roman : tk.kind == Tok::EraGG ? era.kanji1 : era.kanji2);
+          era_name_written = true;
         }
-        const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
-        out.append(era.roman);
         break;
-      }
-      case Tok::EraGG: {
-        if (!facts.japanese_era) {
-          break;
-        }
-        const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
-        out.append(era.kanji1);
-        break;
-      }
-      case Tok::EraGGG: {
-        if (!facts.japanese_era) {
-          break;
-        }
-        const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
-        out.append(era.kanji2);
-        break;
-      }
       case Tok::DateB2: {
-        const auto b2 = static_cast<unsigned>(((ymd.y + kBuddhistEraOffset) % 100 + 100) % 100);
+        const auto b2 = static_cast<unsigned>((b_year % 100 + 100) % 100);
         append_pad2_dbnum(out, b2, dbnum);
         // Under a `[DBNumN]` style the two digits are written twice (locale_tokens.dbnum_date_fields).
         if (dbnum_writes_numerals(dbnum)) {
@@ -237,31 +322,22 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
       case Tok::DateBlank:
         break;
       case Tok::DateB4:
-        append_int_dbnum(out, static_cast<long long>(ymd.y + kBuddhistEraOffset), dbnum);
+        append_int_dbnum(out, static_cast<long long>(b_year), dbnum);
         break;
-      case Tok::EraE: {
-        if (!facts.japanese_era) {
-          append_int_dbnum(out, static_cast<long long>(ymd.y), dbnum);
-          break;
-        }
-        const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
-        const int era_year = ymd.y - era.year_anchor + 1;
-        if (era_year >= 0) {
-          append_dbnum_date_field(out, dbnum, static_cast<unsigned>(era_year), 1U);
-        } else {
-          append_int_dbnum(out, static_cast<long long>(era_year), dbnum);
-        }
-        break;
-      }
+      case Tok::EraE:
       case Tok::EraEE: {
-        if (!facts.japanese_era) {
+        if (!era_on) {
           append_int_dbnum(out, static_cast<long long>(ymd.y), dbnum);
           break;
         }
-        const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
-        const int era_year = ymd.y - era.year_anchor + 1;
-        if (era_year >= 0 && era_year < 100) {
-          append_dbnum_date_field(out, dbnum, static_cast<unsigned>(era_year), 2U);
+        // `-x-gannen` writes the first era year as 元 after an era name (locale_tokens.lcid_gannen).
+        if (tag.gannen && era_name_written && era_year == 1 && dbnum == nullptr) {
+          out.append(kGannen);
+          break;
+        }
+        const std::size_t width = tk.kind == Tok::EraE ? 1U : 2U;
+        if (era_year >= 0 && (width == 1U || era_year < 100)) {
+          append_dbnum_date_field(out, dbnum, static_cast<unsigned>(era_year), width);
         } else {
           append_int_dbnum(out, static_cast<long long>(era_year), dbnum);
         }
@@ -300,10 +376,14 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
         break;
       }
       case Tok::AmPm:
-        out.append(pm ? facts.pm_name : facts.am_name);
+        out.append(pm ? names.pm : names.am);
         break;
       case Tok::AP:
-        out.append(pm ? "P" : "A");
+        if (names.tag_meridiem) {
+          out.append(pm ? names.pm : names.am);
+        } else {
+          out.append(pm ? "P" : "A");
+        }
         break;
       case Tok::AmPmChinese:
         out.append(pm ? "下午" : "上午");

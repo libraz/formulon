@@ -130,16 +130,28 @@ bool localize_bracket(std::string_view body, const LocaleFacts& facts, const Loc
 LocalizedFormat localize_format(std::string_view fmt, FormatDialect dialect, ExcelProfile profile) {
   const LocaleFacts& facts = locale_facts(profile);
   LocalizedFormat result;
-  const std::string folded = facts.fullwidth_syntax_fold ? normalize_ja_jp_format_syntax(fmt) : std::string();
-  const std::string_view s = facts.fullwidth_syntax_fold ? std::string_view(folded) : fmt;
-  if (dialect == FormatDialect::kStored) {
+  const bool stored = dialect == FormatDialect::kStored;
+  const char decimal = stored ? '.' : facts.decimal_separator;
+  const char group = stored ? ',' : facts.group_separator;
+  // Full-width punctuation in a literal role keeps its glyph (locale_tokens.text_fullwidth_*); a
+  // `.` or `,` is a literal only where it neither separates nor is rejected.
+  std::string literal_glyphs;
+  if (facts.fullwidth_literal_glyph) {
+    literal_glyphs = "%/:-+";
+    for (const char sep : {'.', ','}) {
+      if (sep != decimal && sep != group && !(sep == '.' && facts.format_rejects_dot)) {
+        literal_glyphs.push_back(sep);
+      }
+    }
+  }
+  const std::string folded = normalize_fullwidth_format_syntax(fmt, literal_glyphs);
+  const std::string_view s = folded;
+  if (stored) {
     result.text.assign(s);
     return result;
   }
 
   const LocaleFacts& english = locale_facts(mac_365_en_us_profile());
-  const char decimal = facts.decimal_separator;
-  const char group = facts.group_separator;
   const bool map_separators = decimal != '.' || group != ',';
   const bool aliased = !facts.format_letter_aliases[0].spelling.empty();
   std::string& out = result.text;
@@ -217,9 +229,9 @@ LocalizedFormat localize_format(std::string_view fmt, FormatDialect dialect, Exc
         continue;
       }
       if (c == group) {
-        // A blank groups only between digit placeholders (`# ##0`); elsewhere it is text.
-        const bool groups = group != ' ' || (i > 0 && i + 1 < s.size() && is_digit_placeholder(s[i - 1]) &&
-                                             is_digit_placeholder(s[i + 1]));
+        // A blank after a digit placeholder groups (`# ##0`) or, trailing, scales by 1000
+        // (locale_tokens.lcid_numeral_fields); elsewhere it is text.
+        const bool groups = group != ' ' || (i > 0 && is_digit_placeholder(s[i - 1]));
         out.push_back(groups ? ',' : c);
         ++i;
         continue;

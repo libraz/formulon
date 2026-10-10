@@ -223,7 +223,7 @@ void emit_fraction_digits(const Section& section, std::string_view digits, int b
     // Overflow: Excel never produces this for our caps, but be defensive.
     // Emit the digits verbatim (the widest available run cap is enforced
     // by the search above so this case is essentially unreachable).
-    append_chars_dbnum(out, section.dbnum_mode, digits);
+    append_chars_dbnum(out, section.digit_style, digits);
     return;
   }
   const int pad = width - static_cast<int>(digits.size());
@@ -237,14 +237,14 @@ void emit_fraction_digits(const Section& section, std::string_view digits, int b
     if (is_padding) {
       // Leading-position behaviour by placeholder kind.
       if (kind == Tok::DigitZero) {
-        append_digit_dbnum(out, section.dbnum_mode, '0');
+        append_digit_dbnum(out, section.digit_style, '0');
       } else if (kind == Tok::DigitPad) {
         out.push_back(' ');
       }
       // `#`: emit nothing.
     } else {
       const char d = trailing_pad ? digits[static_cast<std::size_t>(k)] : digits[digit_cursor++];
-      append_digit_dbnum(out, section.dbnum_mode, d);
+      append_digit_dbnum(out, section.digit_style, d);
     }
   }
 }
@@ -336,7 +336,7 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
     } else if (tk.kind == Tok::Space) {
       result.push_back(' ');
     } else if (tk.kind == Tok::Percent) {
-      result.push_back('%');
+      append_percent(result, fmt, tk);
     }
   };
 
@@ -404,7 +404,7 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
       result.append(denominator_digits);
     } else {
       for (std::size_t digit = 0; digit < denominator_digits.size(); ++digit) {
-        append_digit_dbnum(result, section.dbnum_mode, '0');
+        append_digit_dbnum(result, section.digit_style, '0');
       }
       result.append(static_cast<std::size_t>(den_end - den_begin) - denominator_digits.size(), ' ');
     }

@@ -22,12 +22,13 @@ namespace formulon {
 namespace text_format {
 namespace number_format_detail {
 
-// Normalises the syntax-bearing full-width forms accepted by the ja-JP
-// TEXT() parser. This is deliberately not a general NFKC pass: quoted text,
+// Normalises the syntax-bearing full-width forms accepted by the TEXT()
+// parser. This is deliberately not a general NFKC pass: quoted text,
 // escape/underscore/asterisk payloads, and malformed UTF-8 are copied byte
-// for byte. The returned string owns the normalised view consumed by the
-// tokenizer, so literal token offsets remain stable for the whole parse.
-std::string normalize_ja_jp_format_syntax(std::string_view fmt);
+// for byte, and so is a full-width form of a `literal_glyphs` character
+// outside brackets. The returned string owns the normalised view consumed by
+// the tokenizer, so literal token offsets remain stable for the whole parse.
+std::string normalize_fullwidth_format_syntax(std::string_view fmt, std::string_view literal_glyphs);
 
 // Returns the byte width of the UTF-8 scalar beginning at `i`, or one byte for
 // malformed/truncated input. Callers use this for payload consumption so a
@@ -78,6 +79,12 @@ int parse_cond_directive(std::string_view body, CondOp* out_op, double* out_valu
 // Matching is case-insensitive: `[DBNum1]`, `[dbnum2]`, `[DbNum3]` all parse.
 // Returns the directive index (1 to 4) on a hit, otherwise 0.
 int parse_dbnum_directive(std::string_view body) noexcept;
+
+// Reads the spec after the `-` of a `[$symbol-spec]` tag into `tag`: hex
+// `NNCCLLLL` (numeral system, calendar, language), or a name such as `ja-JP`,
+// `ja-JP-x-gannen` or `x-sysdate` with an optional `,NNCC` hex suffix. An
+// unknown name leaves `tag` unchanged; false for a spec Excel rejects.
+bool parse_format_tag(std::string_view spec, FormatTag* tag) noexcept;
 
 // Returns true if `tok` is a date-family token (including elapsed brackets).
 bool is_date_tok(Tok t) noexcept;
