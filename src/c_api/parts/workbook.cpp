@@ -7,7 +7,6 @@
 #include "workbook.h"
 
 #include <cstdint>
-#include <cstring>
 #include <memory>
 #include <new>
 #include <string>
@@ -29,6 +28,7 @@
 using formulon::c_api::parts::check_formula_parses;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
@@ -102,12 +102,7 @@ fm_status_t save_with_diagnostics_impl(const fm_workbook_t* wb, std::int32_t for
                                "format=" + std::to_string(static_cast<int>(format)));
   }
 
-  auto* buffer = new uint8_t[bytes.size()];
-  if (!bytes.empty()) {
-    std::memcpy(buffer, bytes.data(), bytes.size());
-  }
-  *out_bytes = buffer;
-  *out_len = bytes.size();
+  copy_owned_bytes(bytes, out_bytes, out_len);
   *out_diagnostics = diagnostics;
   return 0;
 }

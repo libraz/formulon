@@ -4,7 +4,9 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <limits>
+#include <new>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -58,6 +60,20 @@ thread_local std::string g_last_error_message;
 thread_local std::string g_last_error_context;
 
 }  // namespace
+
+const char* store_cstr(TextStore& store, std::string_view text) {
+  store.emplace_back(text.data(), text.size());
+  return store.back().c_str();
+}
+
+void copy_owned_bytes(const std::vector<std::uint8_t>& bytes, std::uint8_t** out_bytes, std::size_t* out_len) {
+  auto* buffer = new std::uint8_t[bytes.size()];
+  if (!bytes.empty()) {
+    std::memcpy(buffer, bytes.data(), bytes.size());
+  }
+  *out_bytes = buffer;
+  *out_len = bytes.size();
+}
 
 void clear_last_error() {
   g_last_error_message.clear();

@@ -20,6 +20,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::store_cstr;
 
 namespace {
 
@@ -59,11 +60,6 @@ fm_workbook_t* reset_scratch(const fm_workbook_t* wb) {
   return scratch;
 }
 
-const char* keep(fm_workbook_t* scratch, const std::string& text) {
-  scratch->read_scratch.emplace_back(text);
-  return scratch->read_scratch.back().c_str();
-}
-
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_threaded_comment_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
@@ -98,16 +94,17 @@ extern "C" fm_status_t fm_sheet_threaded_comment_at(const fm_workbook_t* wb, siz
   std::vector<fm_mention> mentions;
   mentions.reserve(c.mentions.size());
   for (const formulon::Mention& m : c.mentions) {
-    mentions.push_back(fm_mention{keep(scratch, m.person_id), keep(scratch, m.mention_id), m.start, m.length});
+    mentions.push_back(fm_mention{store_cstr(scratch->read_scratch, m.person_id),
+                                  store_cstr(scratch->read_scratch, m.mention_id), m.start, m.length});
   }
   *out = fm_threaded_comment{};
-  out->id = keep(scratch, c.id);
+  out->id = store_cstr(scratch->read_scratch, c.id);
   out->row = c.row;
   out->col = c.col;
-  out->person_id = keep(scratch, c.person_id);
-  out->created = keep(scratch, c.created);
-  out->text = keep(scratch, c.text);
-  out->parent_id = keep(scratch, c.parent_id);
+  out->person_id = store_cstr(scratch->read_scratch, c.person_id);
+  out->created = store_cstr(scratch->read_scratch, c.created);
+  out->text = store_cstr(scratch->read_scratch, c.text);
+  out->parent_id = store_cstr(scratch->read_scratch, c.parent_id);
   out->done = c.done ? 1 : 0;
   out->mention_count = static_cast<uint32_t>(mentions.size());
   out->mentions = scratch->mention_scratch.adopt(std::move(mentions));
@@ -205,10 +202,10 @@ extern "C" fm_status_t fm_workbook_person_at(const fm_workbook_t* wb, size_t idx
   }
   const formulon::Person& p = persons[idx];
   fm_workbook_t* scratch = reset_scratch(wb);
-  out->id = keep(scratch, p.id);
-  out->display_name = keep(scratch, p.display_name);
-  out->user_id = keep(scratch, p.user_id);
-  out->provider_id = keep(scratch, p.provider_id);
+  out->id = store_cstr(scratch->read_scratch, p.id);
+  out->display_name = store_cstr(scratch->read_scratch, p.display_name);
+  out->user_id = store_cstr(scratch->read_scratch, p.user_id);
+  out->provider_id = store_cstr(scratch->read_scratch, p.provider_id);
   return 0;
 }
 

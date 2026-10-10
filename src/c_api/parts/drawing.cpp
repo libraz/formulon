@@ -5,7 +5,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <string>
 #include <vector>
 
@@ -22,8 +21,10 @@
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::store_cstr;
 
 namespace {
 
@@ -31,11 +32,6 @@ constexpr const char* kNullPointer = "NULL argument";
 
 fm_image_info to_fm(const formulon::ImageInfo& info) {
   return fm_image_info{static_cast<int32_t>(info.format), info.px_width, info.px_height};
-}
-
-const char* keep(fm_workbook_t* scratch, const std::string& text) {
-  scratch->read_scratch.emplace_back(text);
-  return scratch->read_scratch.back().c_str();
 }
 
 }  // namespace
@@ -110,9 +106,9 @@ extern "C" fm_status_t fm_sheet_drawing_object_at(const fm_workbook_t* wb, size_
   out->cx = obj.cx;
   out->cy = obj.cy;
   out->image_format = static_cast<int32_t>(obj.image_format);
-  out->name = keep(scratch, obj.name);
-  out->descr = keep(scratch, obj.descr);
-  out->media_path = keep(scratch, obj.media_path);
+  out->name = store_cstr(scratch->read_scratch, obj.name);
+  out->descr = store_cstr(scratch->read_scratch, obj.descr);
+  out->media_path = store_cstr(scratch->read_scratch, obj.media_path);
   return 0;
 }
 
@@ -267,12 +263,7 @@ extern "C" fm_status_t fm_sheet_snapshot_image(const fm_workbook_t* wb, size_t s
     return set_last_error(snapshot.error());
   }
   const std::vector<std::uint8_t>& bytes = snapshot.value();
-  auto* buffer = new uint8_t[bytes.size()];
-  if (!bytes.empty()) {
-    std::memcpy(buffer, bytes.data(), bytes.size());
-  }
-  *out_bytes = buffer;
-  *out_len = bytes.size();
+  copy_owned_bytes(bytes, out_bytes, out_len);
   return 0;
 }
 

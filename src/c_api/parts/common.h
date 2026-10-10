@@ -37,6 +37,15 @@ namespace parts {
 // would invalidate every previously surfaced view.
 using TextStore = std::deque<std::string>;
 
+// Appends a copy to `store` and returns its stable NUL-terminated view.
+const char* store_cstr(TextStore& store, std::string_view text);
+
+// Allocates an owned copy of `bytes` for a C-ABI out parameter. The caller
+// remains responsible for validating the out pointers before calling this;
+// zero-length input intentionally still uses `new[]` so `fm_buffer_free` can
+// release the returned pointer exactly like a non-empty buffer.
+void copy_owned_bytes(const std::vector<std::uint8_t>& bytes, std::uint8_t** out_bytes, std::size_t* out_len);
+
 // Per-handle stash for the most recent ad-hoc array evaluation
 // (`fm_workbook_evaluate_formula_array`). The two-step array surface
 // evaluates once, stashes the whole result here, then hands cells back one

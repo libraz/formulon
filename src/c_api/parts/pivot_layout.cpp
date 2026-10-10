@@ -13,7 +13,6 @@
 #include <memory>
 #include <new>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -32,6 +31,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::value_to_fm;
 
@@ -66,11 +66,6 @@ fm_pivot_cell_kind_t pivot_cell_kind_to_fm(formulon::pivot::PivotCellKind kind) 
       return FM_PIVOT_CELL_BLANK;
   }
   return FM_PIVOT_CELL_BLANK;
-}
-
-const char* store_cstr(TextStore& store, std::string_view text) {
-  store.emplace_back(text.data(), text.size());
-  return store.back().c_str();
 }
 
 }  // namespace
