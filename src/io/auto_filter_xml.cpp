@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "io/xml_utils.h"
+#include "io/xsd_bool.h"
 #include "io/xsd_double.h"
 #include "pugixml.hpp"
 
@@ -464,14 +465,6 @@ void read_sort_state(Reader& r, const pugi::xml_node& node, SortState& sort) {
   }
 }
 
-void append_number(std::string& out, const char* name, double value) {
-  out.push_back(' ');
-  out.append(name);
-  out.append("=\"");
-  append_xml_number(out, value);
-  out.push_back('"');
-}
-
 void append_ref(std::string& out, const MergeRange& rect) {
   std::string ref;
   append_a1_rectangle(ref, rect);
@@ -487,7 +480,7 @@ void write_attrs(std::string& out, const AttrSpec* specs, std::size_t n, const v
       case AttrKind::kBool: {
         const bool value = *static_cast<const bool*>(target);
         if (value != spec.bool_default) {
-          append_xml_attr(out, spec.name, value ? "1" : "0");
+          emit_xsd_bool_attr(out, spec.name, value);
         }
         break;
       }
@@ -501,11 +494,11 @@ void write_attrs(std::string& out, const AttrSpec* specs, std::size_t n, const v
         break;
       case AttrKind::kNumber:
         if (const auto& value = *static_cast<const std::optional<double>*>(target)) {
-          append_number(out, spec.name, *value);
+          append_xml_attr_number(out, spec.name, *value);
         }
         break;
       case AttrKind::kNumberRequired:
-        append_number(out, spec.name, *static_cast<const double*>(target));
+        append_xml_attr_number(out, spec.name, *static_cast<const double*>(target));
         break;
       case AttrKind::kText:
       case AttrKind::kTextAlways: {

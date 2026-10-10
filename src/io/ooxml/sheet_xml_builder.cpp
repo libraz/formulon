@@ -27,6 +27,7 @@
 #include "io/ooxml_writer_cell.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "io/xsd_bool.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/double_format.h"
@@ -82,9 +83,9 @@ std::string BuildMergeCellsBlock(const Sheet& sheet) {
   }
   std::string out;
   out.reserve(64 + sheet.merges().size() * 32);
-  out.append("<mergeCells count=\"");
-  out.append(std::to_string(sheet.merges().size()));
-  out.append("\">");
+  out.append("<mergeCells");
+  append_xml_attr_uint(out, "count", sheet.merges().size());
+  out.append(">");
   for (const MergeRange& m : sheet.merges()) {
     out.append("<mergeCell ref=\"");
     AppendRangeRef(out, m);
@@ -100,9 +101,9 @@ std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::External
   }
   std::string out;
   out.reserve(96 + sheet.validations().size() * 96);
-  out.append("<dataValidations count=\"");
-  out.append(std::to_string(sheet.validations().size()));
-  out.append("\">");
+  out.append("<dataValidations");
+  append_xml_attr_uint(out, "count", sheet.validations().size());
+  out.append(">");
   for (const DataValidation& v : sheet.validations()) {
     out.append("<dataValidation");
     if (const std::string_view t = enum_name(kDataValidationTypeNames, v.type); !t.empty()) {
@@ -115,19 +116,19 @@ std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::External
       append_xml_attr(out, "errorStyle", es);
     }
     if (v.allow_blank) {
-      out.append(" allowBlank=\"1\"");
+      emit_xsd_bool_attr(out, "allowBlank", true);
     }
     if (v.show_input_message) {
-      out.append(" showInputMessage=\"1\"");
+      emit_xsd_bool_attr(out, "showInputMessage", true);
     }
     if (v.show_error_message) {
-      out.append(" showErrorMessage=\"1\"");
+      emit_xsd_bool_attr(out, "showErrorMessage", true);
     }
     // `showDropDown` is inverted per ECMA-376: writing "1" SUPPRESSES the
     // in-cell arrow, so it is only emitted when the arrow should be
     // hidden. Omitting the attribute preserves Excel's default (shown).
     if (!v.show_dropdown) {
-      out.append(" showDropDown=\"1\"");
+      emit_xsd_bool_attr(out, "showDropDown", true);
     }
     if (!v.error_title.empty()) {
       append_xml_attr(out, "errorTitle", v.error_title);
@@ -343,21 +344,16 @@ std::string BuildPageBreaksXml(std::string_view element, const std::vector<Manua
   }
   out.push_back('<');
   out.append(element);
-  out.append(" count=\"");
-  out.append(std::to_string(breaks.size()));
-  out.append("\" manualBreakCount=\"");
-  out.append(std::to_string(manual_count));
-  out.append("\">");
+  append_xml_attr_uint(out, "count", breaks.size());
+  append_xml_attr_uint(out, "manualBreakCount", manual_count);
+  out.append(">");
   for (const ManualBreak& brk : breaks) {
-    out.append("<brk id=\"");
-    out.append(std::to_string(static_cast<std::uint64_t>(brk.id)));
-    out.append("\" min=\"");
-    out.append(std::to_string(brk.min));
-    out.append("\" max=\"");
-    out.append(std::to_string(brk.max));
-    out.append("\"");
+    out.append("<brk");
+    append_xml_attr_uint(out, "id", brk.id);
+    append_xml_attr_uint(out, "min", brk.min);
+    append_xml_attr_uint(out, "max", brk.max);
     if (brk.manual) {
-      out.append(" man=\"1\"");
+      emit_xsd_bool_attr(out, "man", true);
     }
     out.append("/>");
   }
@@ -399,19 +395,19 @@ std::string BuildSheetViewXml(const SheetView& view) {
   // order. Emit each only when it differs from its schema default so a
   // near-default sheet stays compact.
   if (!view.show_grid_lines) {
-    out.append(" showGridLines=\"0\"");
+    emit_xsd_bool_attr(out, "showGridLines", false);
   }
   if (!view.show_row_col_headers) {
-    out.append(" showRowColHeaders=\"0\"");
+    emit_xsd_bool_attr(out, "showRowColHeaders", false);
   }
   if (!view.show_zeros) {
-    out.append(" showZeros=\"0\"");
+    emit_xsd_bool_attr(out, "showZeros", false);
   }
   if (view.right_to_left) {
-    out.append(" rightToLeft=\"1\"");
+    emit_xsd_bool_attr(out, "rightToLeft", true);
   }
   if (view.tab_selected) {
-    out.append(" tabSelected=\"1\"");
+    emit_xsd_bool_attr(out, "tabSelected", true);
   }
   if (!view.view_mode.empty()) {
     append_xml_attr(out, "view", view.view_mode);
@@ -436,7 +432,8 @@ std::string BuildSheetViewXml(const SheetView& view) {
   if (view.freeze_rows != 0U) {
     append_xml_attr_uint(out, "ySplit", view.freeze_rows);
   }
-  out.append(" state=\"frozen\"/></sheetView></sheetViews>");
+  append_xml_attr(out, "state", "frozen");
+  out.append("/></sheetView></sheetViews>");
   return out;
 }
 
@@ -461,16 +458,16 @@ std::string BuildSheetFormatPrXml(const SheetFormatDefaults& defaults) {
     append_xml_attr_number(out, "defaultRowHeight", defaults.default_row_height);
   }
   if (defaults.custom_height) {
-    out.append(" customHeight=\"1\"");
+    emit_xsd_bool_attr(out, "customHeight", true);
   }
   if (defaults.zero_height) {
-    out.append(" zeroHeight=\"1\"");
+    emit_xsd_bool_attr(out, "zeroHeight", true);
   }
   if (defaults.thick_top) {
-    out.append(" thickTop=\"1\"");
+    emit_xsd_bool_attr(out, "thickTop", true);
   }
   if (defaults.thick_bottom) {
-    out.append(" thickBottom=\"1\"");
+    emit_xsd_bool_attr(out, "thickBottom", true);
   }
   if (defaults.outline_level_row != 0U) {
     append_xml_attr_uint(out, "outlineLevelRow", defaults.outline_level_row);
@@ -522,9 +519,7 @@ std::string BuildSheetProtectionXml(const SheetProtection& p) {
     if (v == default_value) {
       return;
     }
-    out.push_back(' ');
-    out.append(name);
-    out.append(v ? "=\"1\"" : "=\"0\"");
+    emit_xsd_bool_attr(out, name, v);
   };
   append_bool("sheet", p.sheet, false);
   append_bool("objects", p.objects, false);
@@ -557,30 +552,27 @@ std::string BuildColsXml(const SheetLayout& layout) {
   out.reserve(32U + layout.columns.size() * 96U);
   out.append("<cols>");
   for (const ColumnLayout& col : layout.columns) {
-    out.append("<col min=\"");
-    out.append(std::to_string(col.first + 1U));
-    out.append("\" max=\"");
-    out.append(std::to_string(col.last + 1U));
-    out.push_back('"');
+    out.append("<col");
+    append_xml_attr_uint(out, "min", col.first + 1U);
+    append_xml_attr_uint(out, "max", col.last + 1U);
     // Keep the legacy convenience of treating a non-zero programmatic
     // width as logically explicit, while preserving an explicit width="0"
     // and distinguishing it from an absent width.
     const bool has_width = HasExplicitColumnWidth(col);
     if (has_width) {
-      out.append(" width=\"");
       // Shortest round-trip spelling, the same one cell values use: a
       // recalc-save neither drifts the column metric nor respells 8.7 as
       // 8.6999999999999993. Matches the row-height writer.
-      append_xml_number(out, col.width);
+      append_xml_attr_number(out, "width", col.width);
       // Excel emits `customWidth="1"` whenever an explicit `width` is
       // present so a reload preserves the column metric.
-      out.append("\" customWidth=\"1\"");
+      emit_xsd_bool_attr(out, "customWidth", true);
     }
     if (col.has_style) {
       append_xml_attr_uint(out, "style", col.style_xf);
     }
     if (col.hidden) {
-      out.append(" hidden=\"1\"");
+      emit_xsd_bool_attr(out, "hidden", true);
     }
     if (col.outline_level != 0U) {
       append_xml_attr_uint(out, "outlineLevel", col.outline_level);
@@ -809,9 +801,9 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   }
   flush_raw_before("tableParts");
   if (!sheet_tables.empty()) {
-    out.append("  <tableParts count=\"");
-    out.append(std::to_string(sheet_tables.size()));
-    out.append("\">\n");
+    out.append("  <tableParts");
+    append_xml_attr_uint(out, "count", sheet_tables.size());
+    out.append(">\n");
     for (std::size_t i = 0; i < sheet_tables.size(); ++i) {
       out.append("    <tablePart r:id=\"");
       // `table_rids` is index-aligned with `sheet_tables`: it names the

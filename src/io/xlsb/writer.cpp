@@ -44,7 +44,6 @@
 #include "io/xlsb/sst_writer.h"
 #include "io/xlsb/styles_writer.h"
 #include "io/xlsb/workbook_bin_writer.h"
-#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "miniz.h"
 #include "parser/ast.h"
@@ -464,18 +463,10 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   out.append(kXmlDecl);
   out.append("<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n");
   auto append_default = [&out](std::string_view extension, std::string_view content_type) {
-    out.append("  <Default Extension=\"");
-    AppendXmlAttrEscaped(out, extension);
-    out.append("\" ContentType=\"");
-    AppendXmlAttrEscaped(out, content_type);
-    out.append("\"/>\n");
-  };
-  auto append_override = [&out](std::string_view path, std::string_view content_type) {
-    out.append("  <Override PartName=\"/");
-    AppendXmlAttrEscaped(out, path);
-    out.append("\" ContentType=\"");
-    AppendXmlAttrEscaped(out, content_type);
-    out.append("\"/>\n");
+    out.append("  <Default");
+    append_xml_attr(out, "Extension", extension);
+    append_xml_attr(out, "ContentType", content_type);
+    out.append("/>\n");
   };
   std::string_view rels_default = kCtPackageRels;
   std::string_view xml_default = kCtXml;
@@ -503,9 +494,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     append_default(def.extension, def.content_type);
   }
   if (plan.workbook_bin_override) {
-    out.append("  <Override PartName=\"/xl/workbook.bin\" ContentType=\"");
-    AppendXmlAttrEscaped(out, kCtWorkbookXlsb);
-    out.append("\"/>\n");
+    AppendOverride(out, "xl/workbook.bin", kCtWorkbookXlsb);
   }
   // A source `rels` Default may use a vendor-specific type. Generated
   // relationship parts still need their canonical OPC semantics, so pin
@@ -515,10 +504,10 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   // source registry uses a noncanonical `xml` type; adding an Override for
   // that part would change the source registry's meaning.
   if (rels_default != kCtPackageRels) {
-    append_override("_rels/.rels", kCtPackageRels);
-    append_override("xl/_rels/workbook.bin.rels", kCtPackageRels);
+    AppendOverride(out, "_rels/.rels", kCtPackageRels);
+    AppendOverride(out, "xl/_rels/workbook.bin.rels", kCtPackageRels);
     for (std::size_t i = 1; i <= plan.external_link_count; ++i) {
-      append_override(ExternalLinkRelsPath(i), kCtPackageRels);
+      AppendOverride(out, ExternalLinkRelsPath(i), kCtPackageRels);
     }
     for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
       bool has_emitted_sheet_rels = std::any_of(wb.sheet(i).hyperlinks().begin(), wb.sheet(i).hyperlinks().end(),
@@ -535,34 +524,24 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
         }
       }
       if (has_emitted_sheet_rels) {
-        append_override("xl/worksheets/_rels/sheet" + std::to_string(i + 1U) + ".bin.rels", kCtPackageRels);
+        AppendOverride(out, "xl/worksheets/_rels/sheet" + std::to_string(i + 1U) + ".bin.rels", kCtPackageRels);
       }
     }
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    out.append("  <Override PartName=\"/xl/worksheets/sheet");
-    out.append(std::to_string(i + 1));
-    out.append(".bin\" ContentType=\"");
-    out.append(kCtWorksheetXlsb);
-    out.append("\"/>\n");
+    AppendOverride(out, "xl/worksheets/sheet" + std::to_string(i + 1U) + ".bin", kCtWorksheetXlsb);
   }
   if (plan.has_text_cells) {
-    out.append("  <Override PartName=\"/xl/sharedStrings.bin\" ContentType=\"");
-    out.append(kCtSharedStringsXlsb);
-    out.append("\"/>\n");
+    AppendOverride(out, "xl/sharedStrings.bin", kCtSharedStringsXlsb);
   }
   if (plan.has_generated_dynamic_metadata) {
-    out.append("  <Override PartName=\"/xl/metadata.bin\" ContentType=\"");
-    out.append(kCtSheetMetadataXlsb);
-    out.append("\"/>\n");
+    AppendOverride(out, "xl/metadata.bin", kCtSheetMetadataXlsb);
   }
   if (plan.has_generated_styles) {
-    out.append("  <Override PartName=\"/xl/styles.bin\" ContentType=\"");
-    out.append(kCtStylesXlsb);
-    out.append("\"/>\n");
+    AppendOverride(out, "xl/styles.bin", kCtStylesXlsb);
   }
   for (std::size_t i = 1; i <= plan.external_link_count; ++i) {
-    append_override(external_link_part_path(i), kCtExternalLinkXlsb);
+    AppendOverride(out, external_link_part_path(i), kCtExternalLinkXlsb);
   }
   // Passthrough overrides: only for entries that carried an explicit
   // ContentType in the source archive. Default-typed parts (empty
@@ -571,11 +550,8 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     if (part->content_type.empty()) {
       continue;
     }
-    out.append("  <Override PartName=\"/");
-    AppendXmlAttrEscaped(out, part->path);
-    out.append("\" ContentType=\"");
-    AppendXmlAttrEscaped(out, part->content_type);
-    out.append("\"/>\n");
+    AppendOverride(out, part->path, part->content_type, /*escape_path=*/true,
+                   /*escape_content_type=*/true);
   }
   out.append("</Types>\n");
   return out;
@@ -607,17 +583,7 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, WriteDi
       continue;
     }
     const std::string target = rel.target_external ? rel.target : TargetRelativeToWorksheet(rel.target);
-    entries.append("  <Relationship Id=\"");
-    AppendXmlAttrEscaped(entries, rel.id);
-    entries.append("\" Type=\"");
-    AppendXmlAttrEscaped(entries, rel.type);
-    entries.append("\" Target=\"");
-    AppendXmlAttrEscaped(entries, target);
-    if (rel.target_external) {
-      entries.append("\" TargetMode=\"External\"/>\n");
-    } else {
-      entries.append("\"/>\n");
-    }
+    AppendRelationship(entries, rel.id, rel.type, target, rel.target_external, /*escape_target=*/true);
   }
   const std::vector<std::string> hyperlink_rids = hyperlink_relationship_ids(sheet);
   std::unordered_set<std::string> emitted_hyperlink_rids;
@@ -630,13 +596,8 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, WriteDi
     if (!emitted_hyperlink_rids.insert(hyperlink_rids[i]).second) {
       continue;
     }
-    entries.append("  <Relationship Id=\"");
-    AppendXmlAttrEscaped(entries, hyperlink_rids[i]);
-    entries.append("\" Type=\"");
-    AppendXmlAttrEscaped(entries, kRelHyperlink);
-    entries.append("\" Target=\"");
-    AppendXmlAttrEscaped(entries, hyperlink.target);
-    entries.append("\" TargetMode=\"External\"/>\n");
+    AppendRelationship(entries, hyperlink_rids[i], kRelHyperlink, hyperlink.target,
+                       /*target_external=*/true, /*escape_target=*/true);
   }
   if (entries.empty()) {
     return {};
@@ -658,13 +619,8 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
   std::uint32_t next_rid = 1;
   for (std::size_t i = 0; i < sheet_count; ++i) {
-    out.append("  <Relationship Id=\"rId");
-    out.append(std::to_string(next_rid++));
-    out.append("\" Type=\"");
-    out.append(kRelWorksheet);
-    out.append("\" Target=\"worksheets/sheet");
-    out.append(std::to_string(i + 1));
-    out.append(".bin\"/>\n");
+    const std::string target = "worksheets/sheet" + std::to_string(i + 1U) + ".bin";
+    AppendRelationship(out, next_rid++, kRelWorksheet, target);
   }
   // The ids `BrtSupBookSrc` names each link by, numbered right after the sheets.
   for (std::size_t i = 0; i < link_rel_ids.size(); ++i) {

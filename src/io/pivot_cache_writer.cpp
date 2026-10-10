@@ -10,8 +10,8 @@
 #include <string>
 #include <string_view>
 
-#include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "io/xsd_bool.h"
 #include "pivot/pivot_cache.h"
 #include "value.h"
 
@@ -28,26 +28,26 @@ constexpr std::string_view kRelsNs = "http://schemas.openxmlformats.org/officeDo
 /// fallback that should not fire on a well-formed `PivotCache`.
 void AppendInlineTypedValue(std::string& out, const Value& v) {
   if (v.is_text()) {
-    out.append("<s v=\"");
-    AppendXmlAttrEscaped(out, v.as_text());
-    out.append("\"/>");
+    out.append("<s");
+    append_xml_attr(out, "v", v.as_text());
+    out.append("/>");
     return;
   }
   if (v.is_number()) {
-    out.append("<n v=\"");
+    out.append("<n");
     // Shared with the sheet writer so a value is spelled the same way
     // wherever it lands in the package. NaN / infinities never reach
     // here: the reader rejects non-numeric `<n v=...>` payloads, and a
     // caller wanting to keep such a payload has to encode it as an
     // Error value upstream.
-    append_xml_number(out, v.as_number());
-    out.append("\"/>");
+    append_xml_attr_number(out, "v", v.as_number());
+    out.append("/>");
     return;
   }
   if (v.is_boolean()) {
-    out.append("<b v=\"");
-    out.push_back(v.as_boolean() ? '1' : '0');
-    out.append("\"/>");
+    out.append("<b");
+    emit_xsd_bool_attr(out, "v", v.as_boolean());
+    out.append("/>");
     return;
   }
   if (v.is_blank()) {
@@ -55,12 +55,12 @@ void AppendInlineTypedValue(std::string& out, const Value& v) {
     return;
   }
   if (v.is_error()) {
-    out.append("<e v=\"");
+    out.append("<e");
     // Error display names are static literals (see `display_name` in
     // value.h); they contain no XML-critical characters but we still
     // route through the escaper to keep the encoding rule uniform.
-    AppendXmlAttrEscaped(out, display_name(v.as_error()));
-    out.append("\"/>");
+    append_xml_attr(out, "v", display_name(v.as_error()));
+    out.append("/>");
     return;
   }
   // Array / Ref / Lambda variants should never appear in a cache; emit
@@ -77,35 +77,9 @@ void AppendInlineTypedValue(std::string& out, const Value& v) {
 /// malformed input.
 void AppendSharedIndex(std::string& out, double raw) {
   long long idx = (raw < 0.0) ? 0 : static_cast<long long>(raw);
-  out.append("<x v=\"");
-  out.append(std::to_string(idx));
-  out.append("\"/>");
-}
-
-/// Appends ` name="value"` when `value` is non-empty, escaping the body.
-/// Used for the `<worksheetSource>` ref / sheet / name attributes.
-void AppendOptionalAttr(std::string& out, std::string_view name, std::string_view value) {
-  if (value.empty()) {
-    return;
-  }
-  out.push_back(' ');
-  out.append(name);
-  out.append("=\"");
-  AppendXmlAttrEscaped(out, value);
-  out.push_back('"');
-}
-
-/// Appends ` name="0"` / ` name="1"` when the attribute was present in the
-/// source (`has`). Emitting the exact captured value — not "only when
-/// true" — is what lets the default-true hints (containsString /
-/// containsSemiMixedTypes / containsNonDate) round-trip without flipping.
-void AppendBoolHint(std::string& out, std::string_view name, bool has, bool value) {
-  if (!has) {
-    return;
-  }
-  out.push_back(' ');
-  out.append(name);
-  out.append(value ? "=\"1\"" : "=\"0\"");
+  out.append("<x");
+  append_xml_attr_int(out, "v", idx);
+  out.append("/>");
 }
 
 /// Emits the captured `<sharedItems>` content-hint / range attributes
@@ -113,25 +87,41 @@ void AppendBoolHint(std::string& out, std::string_view name, bool has, bool valu
 /// Emits nothing when no hints were captured; callers pick the fallback
 /// placeholder for the range-typed / empty case.
 void AppendSharedItemsHints(std::string& out, const pivot::SharedItemsHints& h) {
-  AppendBoolHint(out, "containsSemiMixedTypes", h.has_contains_semi_mixed, h.contains_semi_mixed);
-  AppendBoolHint(out, "containsNonDate", h.has_contains_non_date, h.contains_non_date);
-  AppendBoolHint(out, "containsDate", h.has_contains_date, h.contains_date);
-  AppendBoolHint(out, "containsString", h.has_contains_string, h.contains_string);
-  AppendBoolHint(out, "containsBlank", h.has_contains_blank, h.contains_blank);
-  AppendBoolHint(out, "containsMixedTypes", h.has_contains_mixed_types, h.contains_mixed_types);
-  AppendBoolHint(out, "containsNumber", h.has_contains_number, h.contains_number);
-  AppendBoolHint(out, "containsInteger", h.has_contains_integer, h.contains_integer);
-  if (h.has_min_value) {
-    AppendOptionalAttr(out, "minValue", h.min_value);
+  if (h.has_contains_semi_mixed) {
+    emit_xsd_bool_attr(out, "containsSemiMixedTypes", h.contains_semi_mixed);
   }
-  if (h.has_max_value) {
-    AppendOptionalAttr(out, "maxValue", h.max_value);
+  if (h.has_contains_non_date) {
+    emit_xsd_bool_attr(out, "containsNonDate", h.contains_non_date);
   }
-  if (h.has_min_date) {
-    AppendOptionalAttr(out, "minDate", h.min_date);
+  if (h.has_contains_date) {
+    emit_xsd_bool_attr(out, "containsDate", h.contains_date);
   }
-  if (h.has_max_date) {
-    AppendOptionalAttr(out, "maxDate", h.max_date);
+  if (h.has_contains_string) {
+    emit_xsd_bool_attr(out, "containsString", h.contains_string);
+  }
+  if (h.has_contains_blank) {
+    emit_xsd_bool_attr(out, "containsBlank", h.contains_blank);
+  }
+  if (h.has_contains_mixed_types) {
+    emit_xsd_bool_attr(out, "containsMixedTypes", h.contains_mixed_types);
+  }
+  if (h.has_contains_number) {
+    emit_xsd_bool_attr(out, "containsNumber", h.contains_number);
+  }
+  if (h.has_contains_integer) {
+    emit_xsd_bool_attr(out, "containsInteger", h.contains_integer);
+  }
+  if (h.has_min_value && !h.min_value.empty()) {
+    append_xml_attr(out, "minValue", h.min_value);
+  }
+  if (h.has_max_value && !h.max_value.empty()) {
+    append_xml_attr(out, "maxValue", h.max_value);
+  }
+  if (h.has_min_date && !h.min_date.empty()) {
+    append_xml_attr(out, "minDate", h.min_date);
+  }
+  if (h.has_max_date && !h.max_date.empty()) {
+    append_xml_attr(out, "maxDate", h.max_date);
   }
 }
 
@@ -150,13 +140,11 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
   out.reserve(256 + cache.fields().size() * 96 + shared_items_total * 48);
 
   out.append(kXmlDecl);
-  out.append("<pivotCacheDefinition xmlns=\"");
-  out.append(kPivotNs);
-  out.append("\" xmlns:r=\"");
-  out.append(kRelsNs);
-  out.append("\" r:id=\"rId1\" recordCount=\"");
-  out.append(std::to_string(cache.records().size()));
-  out.append("\"");
+  out.append("<pivotCacheDefinition");
+  append_xml_attr(out, "xmlns", kPivotNs);
+  append_xml_attr(out, "xmlns:r", kRelsNs);
+  append_xml_attr(out, "r:id", "rId1");
+  append_xml_attr_uint(out, "recordCount", cache.records().size());
   // Re-emit any unmodelled root attributes captured on read (refreshedBy,
   // refreshedDate, createdVersion, ...).
   append_raw_attrs(out, cache.passthrough_attrs());
@@ -169,26 +157,31 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
   const pivot::WorksheetSource& wsrc = cache.worksheet_source();
   if (wsrc.present) {
     out.append("<cacheSource type=\"worksheet\"><worksheetSource");
-    AppendOptionalAttr(out, "ref", wsrc.ref);
-    AppendOptionalAttr(out, "sheet", wsrc.sheet);
-    AppendOptionalAttr(out, "name", wsrc.name);
+    if (!wsrc.ref.empty()) {
+      append_xml_attr(out, "ref", wsrc.ref);
+    }
+    if (!wsrc.sheet.empty()) {
+      append_xml_attr(out, "sheet", wsrc.sheet);
+    }
+    if (!wsrc.name.empty()) {
+      append_xml_attr(out, "name", wsrc.name);
+    }
     out.append("/></cacheSource>");
   } else {
     out.append("<cacheSource type=\"worksheet\"/>");
   }
 
-  out.append("<cacheFields count=\"");
-  out.append(std::to_string(cache.fields().size()));
-  out.append("\">");
+  out.append("<cacheFields");
+  append_xml_attr_uint(out, "count", cache.fields().size());
+  out.append(">");
 
   for (const pivot::PivotCacheField& field : cache.fields()) {
-    out.append("<cacheField name=\"");
-    AppendXmlAttrEscaped(out, field.name);
-    out.append("\"");
+    out.append("<cacheField");
+    append_xml_attr(out, "name", field.name);
     // `databaseField` defaults to true; emit `="0"` only for a
     // grouping-derived field so it is excluded from record output on read.
     if (!field.is_database_field) {
-      out.append(" databaseField=\"0\"");
+      emit_xsd_bool_attr(out, "databaseField", false);
     }
     out.append(">");
 
@@ -201,7 +194,7 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
       if (field.shared_items_hints.present) {
         AppendSharedItemsHints(out, field.shared_items_hints);
       } else {
-        out.append(" containsNumber=\"1\"");
+        emit_xsd_bool_attr(out, "containsNumber", true);
       }
       out.append("/>");
     } else {
@@ -210,9 +203,8 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
       // field's hints survive the round trip instead of being dropped.
       out.append("<sharedItems");
       AppendSharedItemsHints(out, field.shared_items_hints);
-      out.append(" count=\"");
-      out.append(std::to_string(field.shared_items.size()));
-      out.append("\">");
+      append_xml_attr_uint(out, "count", field.shared_items.size());
+      out.append(">");
       for (const Value& item : field.shared_items) {
         AppendInlineTypedValue(out, item);
       }
@@ -238,11 +230,10 @@ std::string write_pivot_cache_records(const pivot::PivotCache& cache) {
   out.reserve(128 + cache.records().size() * (16 + field_count * 12));
 
   out.append(kXmlDecl);
-  out.append("<pivotCacheRecords xmlns=\"");
-  out.append(kPivotNs);
-  out.append("\" count=\"");
-  out.append(std::to_string(cache.records().size()));
-  out.append("\">");
+  out.append("<pivotCacheRecords");
+  append_xml_attr(out, "xmlns", kPivotNs);
+  append_xml_attr_uint(out, "count", cache.records().size());
+  out.append(">");
 
   for (const pivot::PivotCacheRecord& record : cache.records()) {
     out.append("<r>");

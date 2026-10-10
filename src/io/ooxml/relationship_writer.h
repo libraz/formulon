@@ -50,8 +50,10 @@ std::string TargetRelativeToWorksheet(std::string_view package_path);
 /// Types builder for the per-table / per-pivot / per-comments /
 /// passthrough Override blocks. `path` is escaped to defend against
 /// passthrough paths carrying XML-critical characters; `ct` is a
-/// writer-controlled string view and is emitted verbatim.
-void AppendOverride(std::string& out, std::string_view path, std::string_view ct, bool escape_path = false);
+/// writer-controlled string view and is emitted verbatim unless
+/// `escape_content_type` is true for a passthrough content type.
+void AppendOverride(std::string& out, std::string_view path, std::string_view ct, bool escape_path = false,
+                    bool escape_content_type = false);
 
 /// Appends a single `<Relationship Id="<id>" Type="<type>"
 /// Target="<target>"/>` entry plus its trailing newline. `id` and `type` are

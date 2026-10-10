@@ -3,11 +3,10 @@
 #include "io/xlsb/protection_records.h"
 
 #include <array>
-#include <string_view>
 
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
-#include "io/xml_escape.h"
+#include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "pugixml.hpp"
 #include "utils/number_text.h"
@@ -91,14 +90,6 @@ bool ParseLegacyHex(const std::string& text, std::uint16_t& out) {
   }
   out = static_cast<std::uint16_t>(v);
   return true;
-}
-
-void AppendAttr(std::string& xml, std::string_view name, std::string_view value) {
-  xml.push_back(' ');
-  xml.append(name);
-  xml.append("=\"");
-  AppendXmlAttrEscaped(xml, value);
-  xml.push_back('"');
 }
 
 constexpr char kBase64Alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -278,16 +269,16 @@ bool decode_book_protection(ByteSpan payload, ByteSpan iso, std::string& xml) {
   }
   xml = "<workbookProtection";
   if (pwd.value() != 0U) {
-    AppendAttr(xml, "workbookPassword", LegacyHex(pwd.value()));
+    append_xml_attr(xml, "workbookPassword", LegacyHex(pwd.value()));
   }
   if (!algorithm.empty()) {
-    AppendAttr(xml, "workbookAlgorithmName", algorithm);
-    AppendAttr(xml, "workbookHashValue", base64_encode(hash.data(), hash.size()));
-    AppendAttr(xml, "workbookSaltValue", base64_encode(salt.data(), salt.size()));
-    AppendAttr(xml, "workbookSpinCount", std::to_string(spin));
+    append_xml_attr(xml, "workbookAlgorithmName", algorithm);
+    append_xml_attr(xml, "workbookHashValue", base64_encode(hash.data(), hash.size()));
+    append_xml_attr(xml, "workbookSaltValue", base64_encode(salt.data(), salt.size()));
+    append_xml_attr_uint(xml, "workbookSpinCount", spin);
   }
   if ((flags.value() & 1U) != 0U) {
-    AppendAttr(xml, "lockStructure", "1");
+    emit_xsd_bool_attr(xml, "lockStructure", true);
   }
   xml.append("/>");
   return true;

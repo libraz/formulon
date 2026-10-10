@@ -10,8 +10,8 @@
 #include "color_resolve.h"
 #include "io/color_spec_xml.h"
 #include "io/styles_vocab.h"
-#include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "io/xsd_bool.h"
 #include "styles.h"
 #include "utils/number_text.h"
 
@@ -22,12 +22,6 @@ namespace {
 // The XML declaration comes from `xml_utils.h`, which every part writer
 // shares so the prologue stays byte-identical across the package.
 constexpr std::string_view kXmlNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-void AppendUint(std::string& out, std::uint64_t v) {
-  char buf[24];
-  format_unsigned(buf, sizeof(buf), v);
-  out.append(buf);
-}
 
 void AppendArgb(std::string& out, std::uint32_t argb) {
   char buf[12];
@@ -69,9 +63,9 @@ const char* VertAlignName(std::uint8_t v) {
 
 void AppendVertAlign(std::string& out, std::uint8_t v) {
   if (const char* name = VertAlignName(v); name != nullptr) {
-    out.append("<vertAlign val=\"");
-    out.append(name);
-    out.append("\"/>");
+    out.append("<vertAlign");
+    append_xml_attr(out, "val", name);
+    out.append("/>");
   }
 }
 
@@ -85,19 +79,19 @@ const char* FontSchemeName(std::uint8_t v) {
 /// its source.
 void AppendFontFamilyCharsetScheme(std::string& out, const FontRecord& f) {
   if (f.has_family) {
-    out.append("<family val=\"");
-    AppendUint(out, f.family);
-    out.append("\"/>");
+    out.append("<family");
+    append_xml_attr_uint(out, "val", f.family);
+    out.append("/>");
   }
   if (f.has_charset) {
-    out.append("<charset val=\"");
-    AppendUint(out, f.charset);
-    out.append("\"/>");
+    out.append("<charset");
+    append_xml_attr_uint(out, "val", f.charset);
+    out.append("/>");
   }
   if (const char* sname = FontSchemeName(f.scheme); sname != nullptr) {
-    out.append("<scheme val=\"");
-    out.append(sname);
-    out.append("\"/>");
+    out.append("<scheme");
+    append_xml_attr(out, "val", sname);
+    out.append("/>");
   }
 }
 
@@ -140,7 +134,7 @@ void AppendFontToggle(std::string& out, std::string_view name, bool was_explicit
   out.push_back('<');
   out.append(name);
   if (!value) {
-    out.append(" val=\"0\"");
+    emit_xsd_bool_attr(out, "val", false);
   }
   out.append("/>");
 }
@@ -157,20 +151,20 @@ void AppendNumFmts(std::string& out, const StylesTable& table) {
   if (emit_count == 0) {
     return;
   }
-  out.append("  <numFmts count=\"");
-  AppendUint(out, emit_count);
-  out.append("\">\n");
+  out.append("  <numFmts");
+  append_xml_attr_uint(out, "count", emit_count);
+  out.append(">\n");
   for (const NumFmtRecord& n : table.num_fmts) {
     if (n.id < 164U) {
       continue;
     }
-    out.append("    <numFmt numFmtId=\"");
-    AppendUint(out, n.id);
-    out.append("\" formatCode=\"");
-    if (n.format_string_index < table.num_fmt_strings.size()) {
-      AppendXmlAttrEscaped(out, table.num_fmt_strings[n.format_string_index]);
-    }
-    out.append("\"/>\n");
+    out.append("    <numFmt");
+    append_xml_attr_uint(out, "numFmtId", n.id);
+    append_xml_attr(out, "formatCode",
+                    n.format_string_index < table.num_fmt_strings.size()
+                        ? std::string_view(table.num_fmt_strings[n.format_string_index])
+                        : std::string_view{});
+    out.append("/>\n");
   }
   out.append("  </numFmts>\n");
 }
@@ -195,9 +189,9 @@ void AppendFonts(std::string& out, const StylesTable& table) {
   // Fonts vector always carries at least one entry (the default).
   // Reader guarantees this; writer preserves it.
   const std::size_t count = table.fonts.empty() ? std::size_t{1} : table.fonts.size();
-  out.append("  <fonts count=\"");
-  AppendUint(out, count);
-  out.append("\">\n");
+  out.append("  <fonts");
+  append_xml_attr_uint(out, "count", count);
+  out.append(">\n");
   if (table.fonts.empty()) {
     out.append("    <font><sz val=\"11\"/><name val=\"Calibri\"/></font>\n");
   } else {
@@ -207,19 +201,19 @@ void AppendFonts(std::string& out, const StylesTable& table) {
       AppendFontToggle(out, "i", f.has_italic, f.italic);
       AppendFontToggle(out, "strike", f.has_strike, f.strike);
       if (const char* uname = UnderlineName(f.underline); uname != nullptr) {
-        out.append("<u val=\"");
-        out.append(uname);
-        out.append("\"/>");
+        out.append("<u");
+        append_xml_attr(out, "val", uname);
+        out.append("/>");
       }
       AppendVertAlign(out, f.vert_align);
-      out.append("<sz val=\"");
-      append_xml_number(out, f.size);
-      out.append("\"/>");
+      out.append("<sz");
+      append_xml_attr_number(out, "val", f.size);
+      out.append("/>");
       AppendColor(out, "color", f.color, f.color_argb);
       if (!f.name.empty()) {
-        out.append("<name val=\"");
-        AppendXmlAttrEscaped(out, f.name);
-        out.append("\"/>");
+        out.append("<name");
+        append_xml_attr(out, "val", f.name);
+        out.append("/>");
       } else {
         out.append("<name val=\"Calibri\"/>");
       }
@@ -232,9 +226,9 @@ void AppendFonts(std::string& out, const StylesTable& table) {
 
 void AppendFills(std::string& out, const StylesTable& table) {
   const std::size_t count = table.fills.empty() ? std::size_t{1} : table.fills.size();
-  out.append("  <fills count=\"");
-  AppendUint(out, count);
-  out.append("\">\n");
+  out.append("  <fills");
+  append_xml_attr_uint(out, "count", count);
+  out.append(">\n");
   if (table.fills.empty()) {
     out.append("    <fill><patternFill patternType=\"none\"/></fill>\n");
   } else {
@@ -249,19 +243,19 @@ void AppendFills(std::string& out, const StylesTable& table) {
 
 void AppendBorders(std::string& out, const StylesTable& table) {
   const std::size_t count = table.borders.empty() ? std::size_t{1} : table.borders.size();
-  out.append("  <borders count=\"");
-  AppendUint(out, count);
-  out.append("\">\n");
+  out.append("  <borders");
+  append_xml_attr_uint(out, "count", count);
+  out.append(">\n");
   if (table.borders.empty()) {
     out.append("    <border/>\n");
   } else {
     for (const BorderRecord& b : table.borders) {
       out.append("    <border");
       if (b.diagonal_up) {
-        out.append(" diagonalUp=\"1\"");
+        emit_xsd_bool_attr(out, "diagonalUp", true);
       }
       if (b.diagonal_down) {
-        out.append(" diagonalDown=\"1\"");
+        emit_xsd_bool_attr(out, "diagonalDown", true);
       }
       out.append(">");
       AppendBorderSide(out, "left", b.left);
@@ -283,23 +277,17 @@ void AppendBorders(std::string& out, const StylesTable& table) {
 // model byte-for-byte unchanged.
 void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id, const StyleTableCounts& bounds) {
   const auto in_bounds = [](std::uint32_t index, std::size_t count) { return index < count ? index : 0U; };
-  out.append("    <xf numFmtId=\"");
-  AppendUint(out, xf.num_fmt_id);
-  out.append("\" fontId=\"");
-  AppendUint(out, in_bounds(xf.font_index, bounds.fonts));
-  out.append("\" fillId=\"");
-  AppendUint(out, in_bounds(xf.fill_index, bounds.fills));
-  out.append("\" borderId=\"");
-  AppendUint(out, in_bounds(xf.border_index, bounds.borders));
-  out.append("\"");
+  out.append("    <xf");
+  append_xml_attr_uint(out, "numFmtId", xf.num_fmt_id);
+  append_xml_attr_uint(out, "fontId", in_bounds(xf.font_index, bounds.fonts));
+  append_xml_attr_uint(out, "fillId", in_bounds(xf.fill_index, bounds.fills));
+  append_xml_attr_uint(out, "borderId", in_bounds(xf.border_index, bounds.borders));
   if (emit_xf_id) {
     append_xml_attr_uint(out, "xfId", in_bounds(xf.xf_id, bounds.cell_style_xfs));
   }
   auto append_apply = [&out](const char* name, bool value) {
     if (value) {
-      out.append(" ");
-      out.append(name);
-      out.append("=\"1\"");
+      emit_xsd_bool_attr(out, name, true);
     }
   };
   append_apply("applyNumberFormat", xf.apply_number_format);
@@ -326,10 +314,10 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id, const Sty
       append_xml_attr(out, "vertical", valign);
     }
     if (HasWrapText(xf)) {
-      out.append(xf.wrap_text ? " wrapText=\"1\"" : " wrapText=\"0\"");
+      emit_xsd_bool_attr(out, "wrapText", xf.wrap_text);
     }
     if (HasJustifyLastLine(xf)) {
-      out.append(xf.justify_last_line ? " justifyLastLine=\"1\"" : " justifyLastLine=\"0\"");
+      emit_xsd_bool_attr(out, "justifyLastLine", xf.justify_last_line);
     }
     if (xf.has_text_rotation) {
       append_xml_attr_uint(out, "textRotation", xf.text_rotation);
@@ -352,11 +340,10 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id, const Sty
     // Child order in CT_Xf is alignment then protection. Both defaults
     // (locked=1, hidden=0) are emitted explicitly so the element survives
     // a re-read even when it matches the schema default.
-    out.append("<protection locked=\"");
-    out.append(xf.locked ? "1" : "0");
-    out.append("\" hidden=\"");
-    out.append(xf.hidden ? "1" : "0");
-    out.append("\"/>");
+    out.append("<protection");
+    emit_xsd_bool_attr(out, "locked", xf.locked);
+    emit_xsd_bool_attr(out, "hidden", xf.hidden);
+    out.append("/>");
   }
   out.append("</xf>\n");
 }
@@ -372,9 +359,9 @@ void AppendCellStyleXfs(std::string& out, const StylesTable& table) {
     out.append("  </cellStyleXfs>\n");
     return;
   }
-  out.append("  <cellStyleXfs count=\"");
-  AppendUint(out, table.cell_style_xfs.size());
-  out.append("\">\n");
+  out.append("  <cellStyleXfs");
+  append_xml_attr_uint(out, "count", table.cell_style_xfs.size());
+  out.append(">\n");
   const StyleTableCounts bounds = EmittedCounts(table);
   for (const CellXf& xf : table.cell_style_xfs) {
     AppendXfBody(out, xf, /*emit_xf_id=*/false, bounds);
@@ -384,9 +371,9 @@ void AppendCellStyleXfs(std::string& out, const StylesTable& table) {
 
 void AppendCellXfs(std::string& out, const StylesTable& table) {
   const std::size_t count = table.cell_xfs.empty() ? std::size_t{1} : table.cell_xfs.size();
-  out.append("  <cellXfs count=\"");
-  AppendUint(out, count);
-  out.append("\">\n");
+  out.append("  <cellXfs");
+  append_xml_attr_uint(out, "count", count);
+  out.append(">\n");
   if (table.cell_xfs.empty()) {
     out.append("    <xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>\n");
   } else {
@@ -416,16 +403,14 @@ void AppendCellStyles(std::string& out, const StylesTable& table) {
     return;
   }
   const std::size_t extra = synthesize_normal && !has_normal ? 1U : 0U;
-  out.append("  <cellStyles count=\"");
-  AppendUint(out, table.cell_styles.size() + extra);
-  out.append("\">\n");
+  out.append("  <cellStyles");
+  append_xml_attr_uint(out, "count", table.cell_styles.size() + extra);
+  out.append(">\n");
   for (const CellStyleRecord& cs : table.cell_styles) {
-    out.append("    <cellStyle name=\"");
-    AppendXmlAttrEscaped(out, cs.name);
-    out.append("\" xfId=\"");
+    out.append("    <cellStyle");
+    append_xml_attr(out, "name", cs.name);
     const std::size_t style_xf_count = table.cell_style_xfs.empty() ? 1U : table.cell_style_xfs.size();
-    AppendUint(out, cs.xf_id < style_xf_count ? cs.xf_id : 0U);
-    out.append("\"");
+    append_xml_attr_uint(out, "xfId", cs.xf_id < style_xf_count ? cs.xf_id : 0U);
     if (cs.builtin_id != CellStyleRecord::kBuiltinIdNone) {
       append_xml_attr_uint(out, "builtinId", cs.builtin_id);
     }
@@ -433,10 +418,10 @@ void AppendCellStyles(std::string& out, const StylesTable& table) {
       append_xml_attr_uint(out, "iLevel", cs.i_level);
     }
     if (cs.hidden) {
-      out.append(" hidden=\"1\"");
+      emit_xsd_bool_attr(out, "hidden", true);
     }
     if (cs.custom_builtin) {
-      out.append(" customBuiltin=\"1\"");
+      emit_xsd_bool_attr(out, "customBuiltin", true);
     }
     out.append("/>\n");
   }
@@ -476,15 +461,15 @@ void AppendFontFragment(std::string& out, const FontRecord& f) {
   AppendFontToggle(out, "i", f.has_italic, f.italic);
   AppendFontToggle(out, "strike", f.has_strike, f.strike);
   if (const char* uname = UnderlineName(f.underline); uname != nullptr) {
-    out.append("<u val=\"");
-    out.append(uname);
-    out.append("\"/>");
+    out.append("<u");
+    append_xml_attr(out, "val", uname);
+    out.append("/>");
   }
   AppendVertAlign(out, f.vert_align);
   if (f.has_size) {
-    out.append("<sz val=\"");
-    append_xml_number(out, f.size);
-    out.append("\"/>");
+    out.append("<sz");
+    append_xml_attr_number(out, "val", f.size);
+    out.append("/>");
   }
   // A differential font without a colour leaves the colour unchanged;
   // 0xFF000000 is the "automatic" sentinel an unstated colour carries.
@@ -492,18 +477,17 @@ void AppendFontFragment(std::string& out, const FontRecord& f) {
     AppendColor(out, "color", f.color, f.color_argb);
   }
   if (!f.name.empty()) {
-    out.append("<name val=\"");
-    AppendXmlAttrEscaped(out, f.name);
-    out.append("\"/>");
+    out.append("<name");
+    append_xml_attr(out, "val", f.name);
+    out.append("/>");
   }
   AppendFontFamilyCharsetScheme(out, f);
   out.append("</font>");
 }
 
 void AppendFillFragment(std::string& out, const FillRecord& fill) {
-  out.append("<fill><patternFill patternType=\"");
-  out.append(FillPatternName(fill.pattern));
-  out.append("\"");
+  out.append("<fill><patternFill");
+  append_xml_attr(out, "patternType", FillPatternName(fill.pattern));
   const bool has_fg = has_color(fill.fg, fill.fg_argb);
   const bool has_bg = has_color(fill.bg, fill.bg_argb);
   if (has_fg || has_bg) {
@@ -524,10 +508,10 @@ void AppendFillFragment(std::string& out, const FillRecord& fill) {
 void AppendBorderFragment(std::string& out, const BorderRecord& b) {
   out.append("<border");
   if (b.diagonal_up) {
-    out.append(" diagonalUp=\"1\"");
+    emit_xsd_bool_attr(out, "diagonalUp", true);
   }
   if (b.diagonal_down) {
-    out.append(" diagonalDown=\"1\"");
+    emit_xsd_bool_attr(out, "diagonalDown", true);
   }
   out.append(">");
   AppendBorderSide(out, "left", b.left);
@@ -542,20 +526,19 @@ void AppendDxfs(std::string& out, const StylesTable& table) {
   if (table.dxfs.empty()) {
     return;
   }
-  out.append("  <dxfs count=\"");
-  AppendUint(out, table.dxfs.size());
-  out.append("\">\n");
+  out.append("  <dxfs");
+  append_xml_attr_uint(out, "count", table.dxfs.size());
+  out.append(">\n");
   for (const DifferentialFormat& dxf : table.dxfs) {
     out.append("    <dxf>");
     if (dxf.has_font) {
       AppendFontFragment(out, dxf.font);
     }
     if (dxf.has_num_fmt) {
-      out.append("<numFmt numFmtId=\"");
-      AppendUint(out, dxf.num_fmt_id);
-      out.append("\" formatCode=\"");
-      AppendXmlAttrEscaped(out, dxf.num_fmt_code);
-      out.append("\"/>");
+      out.append("<numFmt");
+      append_xml_attr_uint(out, "numFmtId", dxf.num_fmt_id);
+      append_xml_attr(out, "formatCode", dxf.num_fmt_code);
+      out.append("/>");
     }
     if (dxf.has_fill) {
       AppendFillFragment(out, dxf.fill);

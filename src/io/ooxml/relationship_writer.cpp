@@ -9,6 +9,7 @@
 #include <string_view>
 
 #include "io/xml_escape.h"
+#include "io/xml_utils.h"
 
 namespace formulon {
 namespace io {
@@ -36,7 +37,8 @@ std::string TargetRelativeToWorksheet(std::string_view package_path) {
   return out;
 }
 
-void AppendOverride(std::string& out, std::string_view path, std::string_view ct, bool escape_path) {
+void AppendOverride(std::string& out, std::string_view path, std::string_view ct, bool escape_path,
+                    bool escape_content_type) {
   out.append("  <Override PartName=\"/");
   if (escape_path) {
     AppendXmlAttrEscaped(out, path);
@@ -44,17 +46,20 @@ void AppendOverride(std::string& out, std::string_view path, std::string_view ct
     out.append(path.data(), path.size());
   }
   out.append("\" ContentType=\"");
-  out.append(ct.data(), ct.size());
+  if (escape_content_type) {
+    AppendXmlAttrEscaped(out, ct);
+  } else {
+    out.append(ct.data(), ct.size());
+  }
   out.append("\"/>\n");
 }
 
 void AppendRelationship(std::string& out, std::string_view id, std::string_view type, std::string_view target,
                         bool target_external, bool escape_target) {
-  out.append("  <Relationship Id=\"");
-  AppendXmlAttrEscaped(out, id);
-  out.append("\" Type=\"");
-  AppendXmlAttrEscaped(out, type);
-  out.append("\" Target=\"");
+  out.append("  <Relationship");
+  append_xml_attr(out, "Id", id);
+  append_xml_attr(out, "Type", type);
+  out.append(" Target=\"");
   if (escape_target) {
     // `Target` is an `xsd:anyURI` the rels reader takes verbatim from the
     // parser, so it gets the attribute rule and no OOXML escaping.

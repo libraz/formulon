@@ -127,21 +127,16 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
   }
   out.append("  <definedNames>\n");
   for (const DefinedName& n : names) {
-    out.append("    <definedName name=\"");
-    AppendXmlAttrEscaped(out, n.name);
-    out.push_back('"');
+    out.append("    <definedName");
+    append_xml_attr(out, "name", n.name);
     if (n.local_sheet_id >= 0) {
-      out.append(" localSheetId=\"");
-      out.append(std::to_string(n.local_sheet_id));
-      out.push_back('"');
+      append_xml_attr_int(out, "localSheetId", n.local_sheet_id);
     }
     if (n.hidden) {
-      out.append(" hidden=\"1\"");
+      emit_xsd_bool_attr(out, "hidden", true);
     }
     if (!n.comment.empty()) {
-      out.append(" comment=\"");
-      AppendXmlAttrEscaped(out, n.comment);
-      out.push_back('"');
+      append_xml_attr(out, "comment", n.comment);
     }
     out.push_back('>');
     // Re-apply Excel's hidden storage prefixes (`_xlfn.` / `_xlfn._xlws.`
@@ -205,13 +200,15 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   // Track which extensions we have already declared so the captured
   // source `<Default>` entries below do not duplicate the fixed ones.
   std::unordered_set<std::string> emitted_default_extensions;
-  out.append("  <Default Extension=\"rels\" ContentType=\"");
-  out.append(kCtPackageRels);
-  out.append("\"/>\n");
+  out.append("  <Default");
+  append_xml_attr(out, "Extension", "rels");
+  append_xml_attr(out, "ContentType", kCtPackageRels);
+  out.append("/>\n");
   emitted_default_extensions.insert("rels");
-  out.append("  <Default Extension=\"xml\" ContentType=\"");
-  out.append(kCtXml);
-  out.append("\"/>\n");
+  out.append("  <Default");
+  append_xml_attr(out, "Extension", "xml");
+  append_xml_attr(out, "ContentType", kCtXml);
+  out.append("/>\n");
   emitted_default_extensions.insert("xml");
   // VML drawings are referenced by extension via a Default; this lets
   // the per-sheet VML stub avoid an Override entry. Emitted only when
@@ -224,9 +221,10 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     }
   }
   if (any_comments) {
-    out.append("  <Default Extension=\"vml\" ContentType=\"");
-    out.append(kCtVmlDrawing);
-    out.append("\"/>\n");
+    out.append("  <Default");
+    append_xml_attr(out, "Extension", "vml");
+    append_xml_attr(out, "ContentType", kCtVmlDrawing);
+    out.append("/>\n");
     emitted_default_extensions.insert("vml");
   }
   // Round-trip the source `<Default>` registrations. Binary and media
@@ -249,11 +247,10 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     if (!emitted_default_extensions.insert(def.extension).second) {
       continue;
     }
-    out.append("  <Default Extension=\"");
-    AppendXmlAttrEscaped(out, def.extension);
-    out.append("\" ContentType=\"");
-    AppendXmlAttrEscaped(out, def.content_type);
-    out.append("\"/>\n");
+    out.append("  <Default");
+    append_xml_attr(out, "Extension", def.extension);
+    append_xml_attr(out, "ContentType", def.content_type);
+    out.append("/>\n");
   }
   AppendOverride(out, "xl/workbook.xml", workbook_kind_content_type(wb.kind()));
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
@@ -319,11 +316,8 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     }
     // Passthrough payloads may carry XML-critical bytes in either path
     // or content type (rare but legal); escape both.
-    out.append("  <Override PartName=\"/");
-    AppendXmlAttrEscaped(out, part->path);
-    out.append("\" ContentType=\"");
-    AppendXmlAttrEscaped(out, part->content_type);
-    out.append("\"/>\n");
+    AppendOverride(out, part->path, part->content_type, /*escape_path=*/true,
+                   /*escape_content_type=*/true);
   }
   out.append("</Types>\n");
   return out;
@@ -420,13 +414,11 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   }
   out.append("  <sheets>\n");
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    out.append("    <sheet name=\"");
-    AppendXmlAttrEscaped(out, wb.sheet(i).name());
-    out.append("\" sheetId=\"");
-    out.append(std::to_string(i + 1));
-    out.append("\" r:id=\"rId");
-    out.append(std::to_string(i + 1));
-    out.push_back('"');
+    out.append("    <sheet");
+    append_xml_attr(out, "name", wb.sheet(i).name());
+    append_xml_attr_uint(out, "sheetId", i + 1U);
+    const std::string rid = "rId" + std::to_string(i + 1U);
+    append_xml_attr(out, "r:id", rid);
     // Excel records tab visibility on the workbook part via the
     // `state` attribute. We OR-merge that with `<sheetPr><tabHidden/>`
     // on the worksheet part inside `BuildWorksheetXml`, so either
@@ -438,10 +430,10 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
       case SheetVisibility::kVisible:
         break;
       case SheetVisibility::kHidden:
-        out.append(" state=\"hidden\"");
+        append_xml_attr(out, "state", "hidden");
         break;
       case SheetVisibility::kVeryHidden:
-        out.append(" state=\"veryHidden\"");
+        append_xml_attr(out, "state", "veryHidden");
         break;
     }
     out.append("/>\n");
@@ -457,9 +449,10 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
       if (!ExternalLinkPartIsWritten(e)) {
         continue;
       }
-      external_refs.append("    <externalReference r:id=\"rId");
-      external_refs.append(std::to_string(e.workbook_rid));
-      external_refs.append("\"/>\n");
+      external_refs.append("    <externalReference");
+      const std::string rid = "rId" + std::to_string(e.workbook_rid);
+      append_xml_attr(external_refs, "r:id", rid);
+      external_refs.append("/>\n");
     }
     if (!external_refs.empty()) {
       out.append("  <externalReferences>\n");
@@ -486,17 +479,15 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
     if (!calc_mode_default || !iterate_default) {
       out.append("  <calcPr");
       if (calc_mode == Workbook::CalcMode::kManual) {
-        out.append(" calcMode=\"manual\"");
+        append_xml_attr(out, "calcMode", "manual");
       } else if (calc_mode == Workbook::CalcMode::kAutoNoTable) {
-        out.append(" calcMode=\"autoNoTable\"");
+        append_xml_attr(out, "calcMode", "autoNoTable");
       }
       if (iter.enabled) {
-        out.append(" iterate=\"1\"");
+        emit_xsd_bool_attr(out, "iterate", true);
       }
       if (iter.max_iterations != kDefaultMaxIterations) {
-        out.append(" iterateCount=\"");
-        out.append(std::to_string(iter.max_iterations));
-        out.push_back('"');
+        append_xml_attr_uint(out, "iterateCount", iter.max_iterations);
       }
       if (iter.max_change != kDefaultMaxChange) {
         out.append(" iterateDelta=\"");
@@ -510,11 +501,11 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   if (!plan.pivot_caches.empty()) {
     out.append("  <pivotCaches>\n");
     for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {
-      out.append("    <pivotCache cacheId=\"");
-      out.append(std::to_string(c.cache_id));
-      out.append("\" r:id=\"rId");
-      out.append(std::to_string(c.workbook_rid));
-      out.append("\"/>\n");
+      out.append("    <pivotCache");
+      append_xml_attr_uint(out, "cacheId", c.cache_id);
+      const std::string rid = "rId" + std::to_string(c.workbook_rid);
+      append_xml_attr(out, "r:id", rid);
+      out.append("/>\n");
     }
     out.append("  </pivotCaches>\n");
   }
