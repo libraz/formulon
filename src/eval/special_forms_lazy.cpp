@@ -15,7 +15,9 @@
 
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
+#include "eval/collation.h"
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/external_ref.h"
 #include "eval/lazy_impls.h"
 #include "eval/logical_coerce.h"
@@ -637,7 +639,7 @@ bool switch_equal(const Value& lhs, const Value& rhs) {
     case ValueKind::Bool:
       return lhs.as_boolean() == rhs.as_boolean();
     case ValueKind::Text:
-      return strings::case_insensitive_eq(lhs.as_text(), rhs.as_text());
+      return collate(lhs.as_text(), rhs.as_text(), current_eval_profile(), CollationStrength::kCompare) == 0;
     case ValueKind::Blank:
       return true;
     default:

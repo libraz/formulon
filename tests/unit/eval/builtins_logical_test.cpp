@@ -6,9 +6,12 @@
 
 #include <array>
 #include <cstdint>
+#include <string>
 #include <string_view>
 
+#include "eval/eval_profile_scope.h"
 #include "eval/tree_walker.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -911,6 +914,65 @@ TEST(BuiltinsSwitch, ArraySubjectLandsArmErrorsPerCell) {
     ASSERT_TRUE(cell.is_number()) << "cell " << i << " kind=" << static_cast<int>(cell.kind());
     EXPECT_EQ(cell.as_number(), 0.0) << "cell " << i;
   }
+}
+
+// ---------------------------------------------------------------------------
+// SWITCH text equality follows the profile's collation.
+// ---------------------------------------------------------------------------
+
+struct EqCase {
+  const char* a;
+  const char* b;
+  bool ja;   // Mac ja_JP
+  bool en;   // Mac en_US
+  bool zh;   // Mac zh_CN
+  bool win;  // win-365-ja_JP
+};
+
+// Equality under the compare strength, one row per measured pair.
+const EqCase kEqCases[] = {
+    {"ß", "ss", true, true, true, false},   {"①", "1", true, true, false, false},
+    {"Ａ", "A", true, true, false, false},  {"ｱ", "ア", true, true, false, false},
+    {"ア", "あ", true, true, false, false}, {"かー", "かあ", true, false, false, false},
+    {"ä", "a", false, false, false, false}, {"Ä", "ä", true, true, true, false},
+    {"A", "a", true, true, true, true},     {"ｶﾞ", "ガ", true, true, false, false},
+    {"ゝ", "ヽ", true, false, true, false},
+};
+
+constexpr ExcelProfile kMacZhCn{ExcelHost::kMac365, ExcelLocale::kZhCN};
+
+// SWITCH on text matches only what the profile's collation calls equal.
+bool SwitchMatches(ExcelProfile profile, const char* a, const char* b) {
+  ScopedEvalProfile scope(profile);
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(profile);
+  const std::string src = std::string("=SWITCH(\"") + a + "\",\"" + b + "\",1,0)";
+  const Value v = EvalSourceIn(src, wb, wb.sheet(0));
+  EXPECT_TRUE(v.is_number()) << src;
+  return v.is_number() && v.as_number() == 1.0;
+}
+
+void CheckSwitch(ExcelProfile profile, bool EqCase::*field) {
+  for (const EqCase& c : kEqCases) {
+    EXPECT_EQ(SwitchMatches(profile, c.a, c.b), c.*field) << c.a << " vs " << c.b;
+    EXPECT_EQ(SwitchMatches(profile, c.b, c.a), c.*field) << c.b << " vs " << c.a;
+  }
+}
+
+TEST(BuiltinsSwitchCollation, MacJa) {
+  CheckSwitch(mac_365_ja_jp_profile(), &EqCase::ja);
+}
+
+TEST(BuiltinsSwitchCollation, MacEn) {
+  CheckSwitch(mac_365_en_us_profile(), &EqCase::en);
+}
+
+TEST(BuiltinsSwitchCollation, MacZhCn) {
+  CheckSwitch(kMacZhCn, &EqCase::zh);
+}
+
+TEST(BuiltinsSwitchCollation, WinJa) {
+  CheckSwitch(win_365_ja_jp_profile(), &EqCase::win);
 }
 
 }  // namespace

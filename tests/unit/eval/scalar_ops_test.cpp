@@ -11,6 +11,8 @@
 
 #include <limits>
 
+#include "eval/eval_profile_scope.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "value.h"
@@ -200,6 +202,106 @@ TEST(ApplyUnary, PercentOnTrueCoercesToOne) {
   const Value v = apply_unary(parser::UnaryOp::Percent, Value::boolean(true));
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 0.01);
+}
+
+// ---------------------------------------------------------------------------
+// Text comparison goes through the profile's collation.
+// ---------------------------------------------------------------------------
+
+struct EqCase {
+  const char* a;
+  const char* b;
+  bool ja;   // Mac ja_JP
+  bool en;   // Mac en_US
+  bool zh;   // Mac zh_CN
+  bool win;  // win-365-ja_JP
+};
+
+// Equality under the compare strength, one row per measured pair.
+const EqCase kEqCases[] = {
+    {"ß", "ss", true, true, true, false},   {"①", "1", true, true, false, false},
+    {"Ａ", "A", true, true, false, false},  {"ｱ", "ア", true, true, false, false},
+    {"ア", "あ", true, true, false, false}, {"かー", "かあ", true, false, false, false},
+    {"ä", "a", false, false, false, false}, {"Ä", "ä", true, true, true, false},
+    {"A", "a", true, true, true, true},     {"ｶﾞ", "ガ", true, true, false, false},
+    {"ゝ", "ヽ", true, false, true, false},
+};
+
+struct OrderCase {
+  const char* a;
+  const char* b;
+  int mac;  // sign on every measured Mac locale
+  int win;  // sign under the byte model
+};
+
+// Ordering under the compare strength.
+const OrderCase kOrderCases[] = {
+    {"a", "b", -1, -1},   {"B", "a", 1, 1},   {"ä", "b", -1, 1}, {"y", "ä", 1, -1},
+    {"あ", "か", -1, -1}, {"1", "a", -1, -1}, {"あ", "a", 1, 1}, {" ", "a", -1, -1},
+};
+
+int sign_of(int v) {
+  return v < 0 ? -1 : v > 0 ? 1 : 0;
+}
+
+int text_cmp(const char* a, const char* b) {
+  bool unordered = false;
+  const int c = compare_values(Value::text(a), Value::text(b), &unordered);
+  EXPECT_FALSE(unordered);
+  return sign_of(c);
+}
+
+void CheckEquality(ExcelProfile profile, bool EqCase::*field) {
+  ScopedEvalProfile scope(profile);
+  for (const EqCase& c : kEqCases) {
+    EXPECT_EQ(text_cmp(c.a, c.b) == 0, c.*field) << c.a << " vs " << c.b;
+    EXPECT_EQ(text_cmp(c.b, c.a) == 0, c.*field) << c.b << " vs " << c.a;
+  }
+}
+
+void CheckOrdering(ExcelProfile profile, bool mac) {
+  ScopedEvalProfile scope(profile);
+  for (const OrderCase& c : kOrderCases) {
+    const int want = mac ? c.mac : c.win;
+    EXPECT_EQ(text_cmp(c.a, c.b), want) << c.a << " vs " << c.b;
+    EXPECT_EQ(text_cmp(c.b, c.a), -want) << c.b << " vs " << c.a;
+  }
+}
+
+constexpr ExcelProfile kMacZhCn{ExcelHost::kMac365, ExcelLocale::kZhCN};
+
+TEST(CompareValuesCollation, MacJaEquality) {
+  CheckEquality(mac_365_ja_jp_profile(), &EqCase::ja);
+}
+
+TEST(CompareValuesCollation, MacEnEquality) {
+  CheckEquality(mac_365_en_us_profile(), &EqCase::en);
+}
+
+TEST(CompareValuesCollation, MacZhCnEquality) {
+  CheckEquality(kMacZhCn, &EqCase::zh);
+}
+
+TEST(CompareValuesCollation, WinJaEquality) {
+  CheckEquality(win_365_ja_jp_profile(), &EqCase::win);
+}
+
+TEST(CompareValuesCollation, MacOrdering) {
+  CheckOrdering(mac_365_ja_jp_profile(), true);
+  CheckOrdering(mac_365_en_us_profile(), true);
+  CheckOrdering(kMacZhCn, true);
+}
+
+TEST(CompareValuesCollation, WinOrderingIsByteModel) {
+  CheckOrdering(win_365_ja_jp_profile(), false);
+}
+
+TEST(CompareValuesCollation, NonTextOperandsUnchanged) {
+  ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  bool unordered = false;
+  EXPECT_LT(compare_values(Value::number(1e300), Value::text("a"), &unordered), 0);
+  EXPECT_LT(compare_values(Value::text("zzz"), Value::boolean(false), &unordered), 0);
+  EXPECT_EQ(compare_values(Value::blank(), Value::text(""), &unordered), 0);
 }
 
 }  // namespace

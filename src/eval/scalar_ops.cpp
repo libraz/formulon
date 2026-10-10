@@ -18,6 +18,8 @@
 
 #include "double-conversion/double-conversion.h"
 #include "eval/coerce.h"
+#include "eval/collation.h"
+#include "eval/eval_profile_scope.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/expected.h"  // FM_CHECK
@@ -150,20 +152,7 @@ int compare_values(const Value& lhs, const Value& rhs, bool* out_unordered) {
       return compare_numeric_values(a, b, out_unordered);
     }
     case 1: {
-      const std::string_view a = lhs.as_text();
-      const std::string_view b = rhs.as_text();
-      const std::size_t n = a.size() < b.size() ? a.size() : b.size();
-      for (std::size_t i = 0; i < n; ++i) {
-        const char ca = strings::ascii_to_lower(a[i]);
-        const char cb = strings::ascii_to_lower(b[i]);
-        if (ca != cb) {
-          return ca < cb ? -1 : 1;
-        }
-      }
-      if (a.size() != b.size()) {
-        return a.size() < b.size() ? -1 : 1;
-      }
-      return 0;
+      return collate(lhs.as_text(), rhs.as_text(), current_eval_profile(), CollationStrength::kCompare);
     }
     case 2: {
       const bool a = lhs.as_boolean();
