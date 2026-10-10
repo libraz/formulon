@@ -22,19 +22,6 @@ namespace io {
 namespace ooxml {
 namespace {
 
-/// Maps an Excel error display name (`"#N/A"`) to its `ErrorCode`,
-/// scanning the same `kErrorTable` the writer formats from so the two
-/// directions cannot drift. Unknown spellings become `#N/A`, which is
-/// what a cached cell Excel could not classify already shows.
-ErrorCode ErrorFromDisplay(std::string_view text) {
-  for (std::size_t i = 0; i < std::size(kErrorTable); ++i) {
-    if (text == kErrorTable[i].display_name) {
-      return static_cast<ErrorCode>(i);
-    }
-  }
-  return ErrorCode::NA;
-}
-
 /// Parses the `refersTo` of an external `<definedName>` into the
 /// rectangle it names.
 ///
@@ -158,7 +145,7 @@ void DecodeExternalBook(const pugi::xml_node& book_node, ExternalBook* out) {
         } else if (type == "b") {
           out_cell.value = Value::boolean(raw == "1");
         } else if (type == "e") {
-          out_cell.value = Value::error(ErrorFromDisplay(raw));
+          out_cell.value = Value::error(error_from_display_name(raw).value_or(ErrorCode::NA));
         } else {
           // No `t` (or an unrecognised one) is the numeric default.
           out_cell.value = Value::number(cell.child("v").text().as_double());

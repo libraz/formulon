@@ -46,81 +46,6 @@ namespace formulon {
 namespace io {
 namespace {
 
-/// Tries to map an Excel error display name (e.g. `"#DIV/0!"`) to its
-/// `ErrorCode`. Returns `false` on unknown spellings; the caller surfaces
-/// `kIoSheetCorrupt`.
-bool ParseErrorDisplay(std::string_view text, ErrorCode* out) {
-  if (text == "#NULL!") {
-    *out = ErrorCode::Null;
-    return true;
-  }
-  if (text == "#DIV/0!") {
-    *out = ErrorCode::Div0;
-    return true;
-  }
-  if (text == "#VALUE!") {
-    *out = ErrorCode::Value;
-    return true;
-  }
-  if (text == "#REF!") {
-    *out = ErrorCode::Ref;
-    return true;
-  }
-  if (text == "#NAME?") {
-    *out = ErrorCode::Name;
-    return true;
-  }
-  if (text == "#NUM!") {
-    *out = ErrorCode::Num;
-    return true;
-  }
-  if (text == "#N/A") {
-    *out = ErrorCode::NA;
-    return true;
-  }
-  if (text == "#GETTING_DATA") {
-    *out = ErrorCode::GettingData;
-    return true;
-  }
-  if (text == "#SPILL!") {
-    *out = ErrorCode::Spill;
-    return true;
-  }
-  if (text == "#CALC!") {
-    *out = ErrorCode::Calc;
-    return true;
-  }
-  if (text == "#FIELD!") {
-    *out = ErrorCode::Field;
-    return true;
-  }
-  if (text == "#BLOCKED!") {
-    *out = ErrorCode::Blocked;
-    return true;
-  }
-  if (text == "#CONNECT!") {
-    *out = ErrorCode::Connect;
-    return true;
-  }
-  if (text == "#EXTERNAL!") {
-    *out = ErrorCode::External;
-    return true;
-  }
-  if (text == "#BUSY!") {
-    *out = ErrorCode::Busy;
-    return true;
-  }
-  if (text == "#PYTHON!") {
-    *out = ErrorCode::Python;
-    return true;
-  }
-  if (text == "#UNKNOWN!") {
-    *out = ErrorCode::Unknown;
-    return true;
-  }
-  return false;
-}
-
 /// Thin wrappers over the shared A1 helpers in `utils/a1_ref.h`, preserving
 /// the legacy "0 = error" sentinel that the original local helpers used.
 /// Excel rows are 1-based so a 0 result is unambiguously an error.
@@ -315,13 +240,13 @@ Expected<ParsedCell, Error> decode_cell_payload(std::string_view t, std::string_
       return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='e' without <v> child",
                         "context=cell_parser");
     }
-    ErrorCode code{};
-    if (!ParseErrorDisplay(v_text, &code)) {
+    const auto code = error_from_display_name(v_text);
+    if (!code.has_value()) {
       std::string ctx("context=cell_parser v=");
       ctx.append(v_text);
       return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: unrecognised error display", std::move(ctx));
     }
-    out.value = Value::error(code);
+    out.value = Value::error(*code);
     return out;
   }
   if (t == "d") {

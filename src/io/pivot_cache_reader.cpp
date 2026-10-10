@@ -27,47 +27,6 @@
 namespace formulon::io {
 namespace {
 
-/// Maps an Excel error display name (e.g. `"#DIV/0!"`) to its `ErrorCode`.
-/// Unknown spellings fall back to `ErrorCode::Value`, matching how Excel
-/// itself reports unrecognised cache error payloads to users.
-ErrorCode ParseErrorDisplay(std::string_view text) {
-  if (text == "#NULL!")
-    return ErrorCode::Null;
-  if (text == "#DIV/0!")
-    return ErrorCode::Div0;
-  if (text == "#VALUE!")
-    return ErrorCode::Value;
-  if (text == "#REF!")
-    return ErrorCode::Ref;
-  if (text == "#NAME?")
-    return ErrorCode::Name;
-  if (text == "#NUM!")
-    return ErrorCode::Num;
-  if (text == "#N/A")
-    return ErrorCode::NA;
-  if (text == "#GETTING_DATA")
-    return ErrorCode::GettingData;
-  if (text == "#SPILL!")
-    return ErrorCode::Spill;
-  if (text == "#CALC!")
-    return ErrorCode::Calc;
-  if (text == "#FIELD!")
-    return ErrorCode::Field;
-  if (text == "#BLOCKED!")
-    return ErrorCode::Blocked;
-  if (text == "#CONNECT!")
-    return ErrorCode::Connect;
-  if (text == "#EXTERNAL!")
-    return ErrorCode::External;
-  if (text == "#BUSY!")
-    return ErrorCode::Busy;
-  if (text == "#PYTHON!")
-    return ErrorCode::Python;
-  if (text == "#UNKNOWN!")
-    return ErrorCode::Unknown;
-  return ErrorCode::Value;
-}
-
 /// Returns true iff the boolean attribute body is the OOXML literal
 /// `"1"` (true) or `"0"` (false). On unrecognised input, defaults to
 /// `false` and reports failure via the `*ok` flag.
@@ -138,7 +97,7 @@ Expected<Value, Error> DecodeTypedValue(const pugi::xml_node& node, std::deque<s
     return Value::blank();
   }
   if (name == "e") {
-    return Value::error(ParseErrorDisplay(node.attribute("v").as_string()));
+    return Value::error(error_from_display_name(node.attribute("v").as_string()).value_or(ErrorCode::Value));
   }
   // Sentinel: caller must check `is_typed_value_node` before calling.
   return make_error(FormulonErrorCode::kIoSheetCorrupt, "pivot cache: unexpected child element",

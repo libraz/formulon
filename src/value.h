@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -182,6 +183,17 @@ constexpr ErrorCode error_from_ooxml_code(std::int32_t code) noexcept {
     }
   }
   return ErrorCode::Unknown;
+}
+
+/// Inverse of `display_name`: maps an Excel-visible error token back to its
+/// `ErrorCode`, or returns empty for an unrecognised spelling.
+constexpr std::optional<ErrorCode> error_from_display_name(std::string_view text) noexcept {
+  for (std::size_t i = 0; i < std::size(kErrorTable); ++i) {
+    if (text == kErrorTable[i].display_name) {
+      return static_cast<ErrorCode>(i);
+    }
+  }
+  return std::nullopt;
 }
 
 /// Returns the tokenised Excel display name for `e` (e.g. `"#DIV/0!"`).
