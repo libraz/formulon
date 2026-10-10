@@ -32,6 +32,22 @@ enum class TrimRefMode : std::uint8_t {
   Both = 3,
 };
 
+/// Formula spelling of a trim-reference operator. Invalid values fall back
+/// to the plain range operator so formatters remain conservative.
+inline constexpr const char* trim_ref_operator(TrimRefMode mode) noexcept {
+  switch (mode) {
+    case TrimRefMode::Leading:
+      return ".:";
+    case TrimRefMode::Trailing:
+      return ":.";
+    case TrimRefMode::Both:
+      return ".:.";
+    case TrimRefMode::None:
+      break;
+  }
+  return ":";
+}
+
 /// Token kind enumeration.
 ///
 /// Values are used as dispatch keys by the Pratt parser; add new kinds at

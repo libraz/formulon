@@ -397,7 +397,7 @@ bool IsBareColumnToken(std::string_view name) noexcept {
     if (!detail::IsAsciiLetter(c)) {
       return false;
     }
-    const char upper = (c >= 'a' && c <= 'z') ? static_cast<char>(c - ('a' - 'A')) : c;
+    const char upper = strings::ascii_to_upper(c);
     column = column * 26U + static_cast<std::uint32_t>(upper - 'A') + 1U;
   }
   return column <= detail::kMaxColumn;
@@ -506,21 +506,6 @@ void FormatUnion(const AstNode& node, std::string& out, const ParenCounts& paren
   }
 }
 
-// Spells the trim-reference operator for `mode`.
-const char* TrimRefOperator(TrimRefMode mode) noexcept {
-  switch (mode) {
-    case TrimRefMode::Leading:
-      return ".:";
-    case TrimRefMode::Trailing:
-      return ":.";
-    case TrimRefMode::Both:
-      return ".:.";
-    case TrimRefMode::None:
-      break;
-  }
-  return ":";
-}
-
 // Prints a `_TRO_*` call over a range as its operator (`A1:.A10`, `A.:A`) by
 // respelling the range's own `:`; false, printing nothing, for any other
 // argument.
@@ -545,7 +530,7 @@ bool FormatTrimRef(const AstNode& node, TrimRefMode mode, std::string& out, cons
     return false;
   }
   out.append(text, 0, colon);
-  out.append(TrimRefOperator(mode));
+  out.append(trim_ref_operator(mode));
   out.append(text, colon + 1, std::string::npos);
   return true;
 }

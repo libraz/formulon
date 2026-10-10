@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "parser/parser_detail.h"
 #include "parser/reference.h"
 #include "utils/strings.h"
 
@@ -12,18 +13,15 @@ namespace {
 
 constexpr std::size_t kMaxIndexDigits = 9;
 
-bool IsDigit(char c) noexcept {
-  return c >= '0' && c <= '9';
-}
-
 // A byte of a book or sheet run: letters, digits, `.`, `_` and non-ASCII.
 bool IsRunByte(char c) noexcept {
   const auto u = static_cast<unsigned char>(c);
-  return u >= 0x80 || IsDigit(c) || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '.' || c == '_';
+  return u >= 0x80 || detail::IsAsciiDigit(c) || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '.' ||
+         c == '_';
 }
 
 int HexValue(char c) noexcept {
-  if (IsDigit(c)) {
+  if (detail::IsAsciiDigit(c)) {
     return c - '0';
   }
   if (c >= 'A' && c <= 'F') {
@@ -130,7 +128,7 @@ std::size_t ParseBracketIndex(std::string_view s, std::size_t pos, std::uint32_t
   }
   std::size_t i = pos + 1;
   std::uint32_t value = 0;
-  while (i < s.size() && IsDigit(s[i])) {
+  while (i < s.size() && detail::IsAsciiDigit(s[i])) {
     value = value * 10 + static_cast<std::uint32_t>(s[i] - '0');
     ++i;
   }

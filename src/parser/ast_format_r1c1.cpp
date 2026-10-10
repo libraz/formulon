@@ -221,7 +221,7 @@ struct Emitter {
                                                                node.as_call_arg(0).kind() == NodeKind::RangeOp &&
                                                                parens.count(&node.as_call_arg(0)) == 0U) {
           emit(node.as_call_arg(0).as_range_lhs(), out);
-          out.append(mode == TrimRefMode::Leading ? ".:" : mode == TrimRefMode::Trailing ? ":." : ".:.");
+          out.append(trim_ref_operator(mode));
           emit(node.as_call_arg(0).as_range_rhs(), out);
           return;
         }

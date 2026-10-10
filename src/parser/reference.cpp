@@ -23,10 +23,6 @@ namespace parser {
 
 namespace {
 
-bool IsDigit(char c) noexcept {
-  return c >= '0' && c <= '9';
-}
-
 // True when every byte of `name` belongs to the bare qualifier run.
 bool IsBareRun(std::string_view name) noexcept {
   return detail::BareQualifierRunLength(name, 0) == name.size();
@@ -35,7 +31,7 @@ bool IsBareRun(std::string_view name) noexcept {
 // True when `name` contains a byte outside `[A-Za-z0-9_.]`.
 bool HasNonBareAsciiByte(std::string_view name) noexcept {
   for (char c : name) {
-    const bool bare = detail::IsAsciiLetter(c) || IsDigit(c) || c == '_' || c == '.';
+    const bool bare = detail::IsAsciiLetter(c) || detail::IsAsciiDigit(c) || c == '_' || c == '.';
     if (!bare) {
       return true;
     }
@@ -46,7 +42,7 @@ bool HasNonBareAsciiByte(std::string_view name) noexcept {
 // Advances `*i` over a run of ASCII digits and returns how many it skipped.
 std::size_t SkipDigits(std::string_view name, std::size_t* i) noexcept {
   const std::size_t start = *i;
-  while (*i < name.size() && IsDigit(name[*i])) {
+  while (*i < name.size() && detail::IsAsciiDigit(name[*i])) {
     ++*i;
   }
   return *i - start;
@@ -59,7 +55,7 @@ bool IsA1CellShaped(std::string_view name) noexcept {
   std::size_t i = 0;
   std::uint32_t col = 0;
   while (i < name.size() && detail::IsAsciiLetter(name[i]) && i < 3) {
-    const char upper = name[i] >= 'a' ? static_cast<char>(name[i] - ('a' - 'A')) : name[i];
+    const char upper = strings::ascii_to_upper(name[i]);
     col = col * 26U + static_cast<std::uint32_t>(upper - 'A') + 1U;
     ++i;
   }
@@ -78,9 +74,7 @@ bool IsA1CellShaped(std::string_view name) noexcept {
 // case-insensitively: the absolute R1C1 shapes a sheet name could be read as.
 bool IsR1C1Shaped(std::string_view name) noexcept {
   std::size_t i = 0;
-  const auto at = [&](char upper) {
-    return i < name.size() && (name[i] == upper || name[i] == static_cast<char>(upper + ('a' - 'A')));
-  };
+  const auto at = [&](char upper) { return i < name.size() && strings::ascii_to_upper(name[i]) == upper; };
   if (at('R')) {
     ++i;
     SkipDigits(name, &i);
@@ -102,7 +96,7 @@ bool IsR1C1Shaped(std::string_view name) noexcept {
 // ASCII run, a leading digit (read as a number), TRUE / FALSE (read as a
 // bool) and an R1C1 shape.
 bool LocalSheetNeedsQuotingInEitherNotation(std::string_view name) noexcept {
-  return name.empty() || HasNonBareAsciiByte(name) || IsDigit(name.front()) ||
+  return name.empty() || HasNonBareAsciiByte(name) || detail::IsAsciiDigit(name.front()) ||
          strings::case_insensitive_eq(name, "TRUE") || strings::case_insensitive_eq(name, "FALSE") ||
          IsR1C1Shaped(name);
 }
@@ -122,7 +116,7 @@ bool external_book_needs_quoting(std::string_view book) noexcept {
 }
 
 bool external_sheet_needs_quoting(std::string_view sheet) noexcept {
-  return !sheet.empty() && (IsDigit(sheet.front()) || !IsBareRun(sheet));
+  return !sheet.empty() && (detail::IsAsciiDigit(sheet.front()) || !IsBareRun(sheet));
 }
 
 std::string format_a1(const Reference& r) {

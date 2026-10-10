@@ -31,10 +31,6 @@ bool IsStorageOperatorCall(const AstNode& node) {
          trim_ref_call_mode(node) != TrimRefMode::None;
 }
 
-const char* TrimRefOperator(TrimRefMode mode) {
-  return mode == TrimRefMode::Leading ? ".:" : mode == TrimRefMode::Trailing ? ":." : ".:.";
-}
-
 bool HasStorageOperatorCall(const AstNode& node) {
   if (IsStorageOperatorCall(node)) {
     return true;
@@ -104,12 +100,12 @@ class OperatorRespeller {
   // operator. An argument that is no range keeps the call spelling.
   std::string trim_ref(const AstNode& call, const AstNode& arg, TrimRefMode mode) const {
     if (arg.paren_depth() == 0U && arg.kind() == NodeKind::RangeOp) {
-      return text(arg.as_range_lhs(), true) + TrimRefOperator(mode) + text(arg.as_range_rhs(), true);
+      return text(arg.as_range_lhs(), true) + trim_ref_operator(mode) + text(arg.as_range_rhs(), true);
     }
     if (arg.paren_depth() == 0U && arg.kind() == NodeKind::Ref) {
       const std::string ref(src_.substr(arg.range().start, arg.range().end - arg.range().start));
       if (const std::size_t colon = ref.rfind(':'); colon != std::string::npos) {
-        return ref.substr(0, colon) + TrimRefOperator(mode) + ref.substr(colon + 1);
+        return ref.substr(0, colon) + trim_ref_operator(mode) + ref.substr(colon + 1);
       }
     }
     const TextRange r = call.range();
