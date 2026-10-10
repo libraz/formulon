@@ -295,6 +295,55 @@ Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegi
   return Value::boolean(false);
 }
 
+namespace {
+
+// IFERROR / IFNA over an array `primary`: each caught element takes the
+// fallback's cell at its position, broadcast as IF broadcasts its arms. The
+// fallback is evaluated only when some element is caught.
+Value replace_array_errors(const parser::AstNode& call, const Value& primary, bool na_only, Arena& arena,
+                           const FunctionRegistry& registry, const EvalContext& ctx) {
+  Value primary_slot = Value::blank();
+  const ArrayView pv = as_array_view(primary, &primary_slot);
+  const auto caught = [na_only](const Value& v) { return v.is_error() && (!na_only || v.as_error() == ErrorCode::NA); };
+  bool any_caught = false;
+  for (std::uint32_t r = 0; r < pv.rows && !any_caught; ++r) {
+    for (std::uint32_t c = 0; c < pv.cols && !any_caught; ++c) {
+      const Value* cell = broadcast_cell(pv, r, c);
+      any_caught = cell != nullptr && caught(*cell);
+    }
+  }
+  if (!any_caught) {
+    return primary;
+  }
+  const Value fallback = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  Value fallback_slot = Value::blank();
+  const ArrayView fv = as_array_view(fallback, &fallback_slot);
+  const std::uint32_t out_rows = pv.rows > fv.rows ? pv.rows : fv.rows;
+  const std::uint32_t out_cols = pv.cols > fv.cols ? pv.cols : fv.cols;
+  Value* buf = nullptr;
+  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buf, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  std::size_t i = 0;
+  for (std::uint32_t r = 0; r < out_rows; ++r) {
+    for (std::uint32_t c = 0; c < out_cols; ++c, ++i) {
+      const Value* cell = broadcast_cell(pv, r, c);
+      if (cell == nullptr) {
+        buf[i] = Value::error(ErrorCode::NA);
+      } else if (!caught(*cell)) {
+        buf[i] = *cell;
+      } else {
+        const Value* pick = broadcast_cell(fv, r, c);
+        buf[i] = pick == nullptr ? Value::error(ErrorCode::NA) : *pick;
+      }
+    }
+  }
+  return Value::array(out);
+}
+
+}  // namespace
+
 // IFERROR(value, fallback) - returns `value` unchanged unless it is any
 // error, in which case `fallback` is evaluated and returned. The fallback
 // subtree is NOT evaluated when `value` is non-error (true short-circuit).
@@ -305,6 +354,9 @@ Value eval_iferror_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return Value::error(ErrorCode::Value);
   }
   const Value primary = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (primary.is_array()) {
+    return replace_array_errors(call, primary, /*na_only=*/false, arena, registry, ctx);
+  }
   if (!primary.is_error()) {
     return primary;
   }
@@ -327,6 +379,9 @@ Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   // here or `ISBLANK(IFNA(<blank>, x))` would diverge from the IFERROR
   // analog (which preserves Blank).
   const Value primary = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (primary.is_array()) {
+    return replace_array_errors(call, primary, /*na_only=*/true, arena, registry, ctx);
+  }
   if (!(primary.is_error() && primary.as_error() == ErrorCode::NA)) {
     return primary;
   }
