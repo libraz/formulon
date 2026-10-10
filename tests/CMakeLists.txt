@@ -475,99 +475,51 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   # WASM/N-API `.d.ts` surfaces, and a README method-count blurb against
   # what is actually registered in the source. Pure static regex analysis
   # (no build artifacts, no network), so it stays in the fast-loop gate.
-  add_test(
-    NAME binding_drift_python_exports
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py python-exports
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  add_test(
-    NAME binding_drift_python_struct_layouts
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py python-struct-layouts
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
+  function(formulon_add_binding_drift_test name selector)
+    add_test(
+      NAME ${name}
+      COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py ${selector}
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+  endfunction()
+
+  formulon_add_binding_drift_test(binding_drift_python_exports python-exports)
+  formulon_add_binding_drift_test(binding_drift_python_struct_layouts python-struct-layouts)
   # The two checks that cross the ABI boundary for functions rather than for
   # struct layouts: what the Python binding calls, against what the C header
   # declares. Everything else here compares two hand-maintained descriptions.
-  add_test(
-    NAME binding_drift_python_call_signatures
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py python-call-signatures
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  add_test(
-    NAME binding_drift_python_inline_structs
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py python-inline-structs
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  add_test(
-    NAME binding_drift_dts_wasm
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py dts-wasm
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  add_test(
-    NAME binding_drift_dts_node
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py dts-node
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
+  formulon_add_binding_drift_test(binding_drift_python_call_signatures python-call-signatures)
+  formulon_add_binding_drift_test(binding_drift_python_inline_structs python-inline-structs)
+  formulon_add_binding_drift_test(binding_drift_dts_wasm dts-wasm)
+  formulon_add_binding_drift_test(binding_drift_dts_node dts-node)
   # The two `dts-*` checks above compare method names only. These compare
   # what the two surfaces say about shapes: the return type of every shared
   # method, the field set of every shared record type, and the presence and
   # source text of the helpers that have no native entry point behind them
   # and so exist once per package.
-  add_test(
-    NAME binding_drift_dts_shared_shapes
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py dts-shared-shapes
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  add_test(
-    NAME binding_drift_pure_js_helpers
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py pure-js-helpers
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  add_test(
-    NAME binding_drift_readme_counts
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py readme-counts
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  add_test(
-    NAME binding_drift_dts_enums
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py dts-enums
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  add_test(
-    NAME binding_drift_style_record_fields
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py style-record-fields
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
+  formulon_add_binding_drift_test(binding_drift_dts_shared_shapes dts-shared-shapes)
+  formulon_add_binding_drift_test(binding_drift_pure_js_helpers pure-js-helpers)
+  formulon_add_binding_drift_test(binding_drift_readme_counts readme-counts)
+  formulon_add_binding_drift_test(binding_drift_dts_enums dts-enums)
+  formulon_add_binding_drift_test(binding_drift_style_record_fields style-record-fields)
   # Byte-compares the files `stage.mjs` copies verbatim into the native
   # package against their sources. Unlike the sibling checks this one has an
   # input that need not exist: `dist/` is a build output, so in an unstaged
   # tree the check reports itself as skipped rather than passing silently.
   # That makes it a local-loop guard only -- a job that must not publish a
   # one-sided edit has to run it after staging, where the skip cannot apply.
-  add_test(
-    NAME binding_drift_staged_dist
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py staged-dist
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
+  formulon_add_binding_drift_test(binding_drift_staged_dist staged-dist)
   # The released C ABI surface is still declared, or its loss is on the
   # ledger. This is the only artifact that notices a deleted or renamed base
   # entry point: five of the eight base/`_ex` families have no in-repo caller,
   # so the C API tests recompile against the new header and pass while a
   # consumer built against the release loses the symbol at link time.
-  add_test(
-    NAME binding_drift_abi_baseline
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py abi-baseline
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
+  formulon_add_binding_drift_test(binding_drift_abi_baseline abi-baseline)
   # The numeric status codes the C header's doc comments print beside an
   # enumerator name, against src/utils/error.h. `fm_status_t` is a bare
   # `int32_t`, so a binding author comparing against a stale number never
   # matches, and mis-classifies whatever code holds that value instead.
-  add_test(
-    NAME binding_drift_header_error_codes
-    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py header-error-codes
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
+  formulon_add_binding_drift_test(binding_drift_header_error_codes header-error-codes)
   # Structural invariants enforced by "exactly one implementation exists":
   # the bounds-checked array-allocation seam (what keeps a wasm32
   # `rows * cols` from wrapping into a short buffer) and the raw-XML
