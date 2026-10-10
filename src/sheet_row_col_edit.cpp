@@ -436,6 +436,14 @@ void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
   }
 }
 
+void Sheet::finalize_structural_edit_locked(const StructuralEdit& edit) {
+  clear_committed_spills_locked();
+  rebuild_formula_index_locked();
+  shift_blocked_spills_locked(edit);
+  shift_sheet_metadata(edit);
+  cell_enumeration_revision_.bump();
+}
+
 void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {
   if (count == 0U) {
     return;
@@ -459,12 +467,8 @@ void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {
     node.key() = static_cast<std::uint32_t>(shifted);
     rows_.insert(std::move(node));
   }
-  clear_committed_spills_locked();
-  rebuild_formula_index_locked();
   const StructuralEdit edit{row, count, /*is_delete=*/false, /*row_axis=*/true};
-  shift_blocked_spills_locked(edit);
-  shift_sheet_metadata(edit);
-  cell_enumeration_revision_.bump();
+  finalize_structural_edit_locked(edit);
 }
 
 void Sheet::delete_rows(std::uint32_t row, std::uint32_t count) {
@@ -487,12 +491,8 @@ void Sheet::delete_rows(std::uint32_t row, std::uint32_t count) {
     node.key() = key - count;
     rows_.insert(std::move(node));
   }
-  clear_committed_spills_locked();
-  rebuild_formula_index_locked();
   const StructuralEdit edit{row, count, /*is_delete=*/true, /*row_axis=*/true};
-  shift_blocked_spills_locked(edit);
-  shift_sheet_metadata(edit);
-  cell_enumeration_revision_.bump();
+  finalize_structural_edit_locked(edit);
 }
 
 void Sheet::insert_cols(std::uint32_t col, std::uint32_t count) {
@@ -548,12 +548,8 @@ void Sheet::insert_cols(std::uint32_t col, std::uint32_t count) {
       cells[i] = Cell{};
     }
   }
-  clear_committed_spills_locked();
-  rebuild_formula_index_locked();
   const StructuralEdit edit{col, count, /*is_delete=*/false, /*row_axis=*/false};
-  shift_blocked_spills_locked(edit);
-  shift_sheet_metadata(edit);
-  cell_enumeration_revision_.bump();
+  finalize_structural_edit_locked(edit);
 }
 
 void Sheet::delete_cols(std::uint32_t col, std::uint32_t count) {
@@ -584,12 +580,8 @@ void Sheet::delete_cols(std::uint32_t col, std::uint32_t count) {
       row.set_first_col(col);
     }
   }
-  clear_committed_spills_locked();
-  rebuild_formula_index_locked();
   const StructuralEdit edit{col, count, /*is_delete=*/true, /*row_axis=*/false};
-  shift_blocked_spills_locked(edit);
-  shift_sheet_metadata(edit);
-  cell_enumeration_revision_.bump();
+  finalize_structural_edit_locked(edit);
 }
 
 }  // namespace formulon

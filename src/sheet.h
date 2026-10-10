@@ -61,9 +61,9 @@ class PivotTable;
 /// dropped or clamped, and a coordinate past it moves back by `count`.
 ///
 /// The four public `Sheet` edit methods each build one of these and hand it
-/// to `Sheet::shift_sheet_metadata`, which is the single place that
-/// enumerates the modelled structures. A structure that is not listed there
-/// does not move, and that failure is silent in a user's file —
+/// to `Sheet::finalize_structural_edit_locked`, which invokes the single
+/// place that enumerates the modelled structures. A structure that is not
+/// listed there does not move, and that failure is silent in a user's file —
 /// `tests/integration/structural_edit_matrix_test.cpp` asserts each one's
 /// post-edit coordinate.
 struct StructuralEdit {
@@ -1464,6 +1464,10 @@ class Sheet {
   /// moves the coordinates inside them, since that needs the file-format
   /// readers. The AutoFilter moves through `shift_auto_filter`.
   void shift_sheet_metadata(const StructuralEdit& edit);
+
+  /// Completes a row/column structural edit after its cell storage has moved.
+  /// Caller must hold `spill_mutex_`.
+  void finalize_structural_edit_locked(const StructuralEdit& edit);
 
   // ---------------------------------------------------------------------------
   // Non-locking spill/cell helpers (caller must already hold `spill_mutex_`).
