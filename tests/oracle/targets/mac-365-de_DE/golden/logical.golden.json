@@ -2,11 +2,11 @@
   "suite": "logical",
   "description": "TRUE / FALSE / NOT / AND / OR / IF / IFERROR / IFNA",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.113.4",
     "excel_locale": "de-DE",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T10:20:33Z"
+    "generated_at": "2026-10-10T12:20:04Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -496,6 +496,91 @@
       "expect": {
         "kind": "text",
         "value": "plain"
+      }
+    },
+    {
+      "id": "iferror_array_elementwise",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(1/{1,0,4},\"x\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,x,0,25"
+      }
+    },
+    {
+      "id": "iferror_array_fallback_pairs",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR({1,#N/A,#DIV/0!},{\"a\",\"b\",\"c\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,b,c"
+      }
+    },
+    {
+      "id": "iferror_array_fallback_broadcast",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR({#N/A;1},{\"a\",\"b\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a,b,1,1"
+      }
+    },
+    {
+      "id": "iferror_array_aggregated",
+      "formula": "=SUM(IFERROR(1/{1,0,2},0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "iferror_array_unused_error_fallback",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR({1,2},1/0))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,2"
+      }
+    },
+    {
+      "id": "iferror_range_elementwise",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(A1:A3,\"x\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,x,3"
+      }
+    },
+    {
+      "id": "ifna_array_catches_na_element",
+      "formula": "=INDEX(IFNA({1,#N/A,#DIV/0!},\"x\"),2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "ifna_array_keeps_other_errors",
+      "formula": "=ERROR.TYPE(INDEX(IFNA({1,#N/A,#DIV/0!},\"x\"),3))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
       }
     },
     {

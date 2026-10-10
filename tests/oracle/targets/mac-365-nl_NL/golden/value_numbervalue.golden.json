@@ -6,7 +6,7 @@
     "excel_locale": "nl-NL",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-10T00:23:42Z"
+    "generated_at": "2026-10-10T12:11:31Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -542,6 +542,42 @@
       "expect": {
         "kind": "number",
         "value": 1234.56
+      }
+    },
+    {
+      "id": "numbervalue_inner_spaces",
+      "formula": "=NUMBERVALUE(\"1 234.5\", \".\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1234.5
+      }
+    },
+    {
+      "id": "numbervalue_spaced_digits",
+      "formula": "=NUMBERVALUE(\"1 2 3\", \".\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 123.0
+      }
+    },
+    {
+      "id": "numbervalue_spaced_sign",
+      "formula": "=NUMBERVALUE(\"- 5\", \".\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "numbervalue_nbsp_inside",
+      "formula": "=NUMBERVALUE(\"1\"&UNICHAR(160)&\"234\", \".\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
       }
     },
     {

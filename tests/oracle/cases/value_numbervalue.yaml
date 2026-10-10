@@ -236,6 +236,19 @@ cases:
     description: "Three-arg form with space as group separator"
     formula: "=NUMBERVALUE(\"1 234,56\", \",\", \" \")"
 
+  - id: numbervalue_inner_spaces
+    description: "Spaces inside the text are dropped"
+    formula: "=NUMBERVALUE(\"1 234.5\", \".\")"
+
+  - id: numbervalue_spaced_digits
+    formula: "=NUMBERVALUE(\"1 2 3\", \".\")"
+
+  - id: numbervalue_spaced_sign
+    formula: "=NUMBERVALUE(\"- 5\", \".\")"
+
+  - id: numbervalue_nbsp_inside
+    formula: "=NUMBERVALUE(\"1\"&UNICHAR(160)&\"234\", \".\")"
+
   - id: numbervalue_trailing_currency_is_value
     description: "1234円 — NUMBERVALUE should not strip kanji currency suffix"
     formula: "=NUMBERVALUE(\"1234円\", \".\")"

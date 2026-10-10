@@ -178,6 +178,35 @@ cases:
     formula: "=IFERROR(\"plain\",\"fallback\")"
 
   # -- IFNA ----------------------------------------------------------------
+  - id: iferror_array_elementwise
+    description: "An array value is caught element by element"
+    formula: "=TEXTJOIN(\",\",FALSE,IFERROR(1/{1,0,4},\"x\"))"
+
+  - id: iferror_array_fallback_pairs
+    description: "An array fallback is paired with the caught element's position"
+    formula: "=TEXTJOIN(\",\",FALSE,IFERROR({1,#N/A,#DIV/0!},{\"a\",\"b\",\"c\"}))"
+
+  - id: iferror_array_fallback_broadcast
+    description: "A column value and a row fallback broadcast to a grid"
+    formula: "=TEXTJOIN(\",\",FALSE,IFERROR({#N/A;1},{\"a\",\"b\"}))"
+
+  - id: iferror_array_aggregated
+    formula: "=SUM(IFERROR(1/{1,0,2},0))"
+
+  - id: iferror_array_unused_error_fallback
+    description: "An error fallback no element needs leaves the array as is"
+    formula: "=TEXTJOIN(\",\",FALSE,IFERROR({1,2},1/0))"
+
+  - id: iferror_range_elementwise
+    setup: { A1: 1, A2: "=1/0", A3: 3 }
+    formula: "=TEXTJOIN(\",\",FALSE,IFERROR(A1:A3,\"x\"))"
+
+  - id: ifna_array_catches_na_element
+    formula: "=INDEX(IFNA({1,#N/A,#DIV/0!},\"x\"),2)"
+
+  - id: ifna_array_keeps_other_errors
+    formula: "=ERROR.TYPE(INDEX(IFNA({1,#N/A,#DIV/0!},\"x\"),3))"
+
   - id: ifna_passes_through
     formula: "=IFNA(10,\"fallback\")"
 
