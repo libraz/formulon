@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 #include "utils/strings.h"
@@ -27,6 +28,20 @@ bool scan_has_wildcard(std::string_view rhs) {
     }
   }
   return false;
+}
+
+std::string unescape_wildcard_literal(std::string_view pattern) {
+  std::string out;
+  out.reserve(pattern.size());
+  for (std::size_t i = 0; i < pattern.size(); ++i) {
+    if (pattern[i] == '~' && i + 1 < pattern.size()) {
+      out.push_back(pattern[i + 1]);
+      ++i;
+      continue;
+    }
+    out.push_back(pattern[i]);
+  }
+  return out;
 }
 
 namespace {

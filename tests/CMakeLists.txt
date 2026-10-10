@@ -245,6 +245,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/stats/incomplete_beta_test.cpp
   unit/eval/coerce_test.cpp
   unit/eval/criteria_test.cpp
+  unit/eval/collation_test.cpp
   unit/eval/wildcard_test.cpp
   unit/eval/jp_fold_test.cpp
   unit/eval/builtins_countif_test.cpp
@@ -398,6 +399,8 @@ target_compile_definitions(formulon_unit_tests
     # symmetry tests (tests/unit/io/roundtrip_symmetry_test.cpp) to load real
     # Excel-produced packages under tests/fixtures/.
     FORMULON_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures"
+    # Measured collation tables and probe fixtures read by tests/unit/eval/collation_test.cpp.
+    FORMULON_COLLATION_DATA_DIR="${CMAKE_SOURCE_DIR}/tools/collation/data"
 )
 
 # `gtest_discover_tests` registers the suite but cannot apply
@@ -457,6 +460,12 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     NAME DbcsTableDrift
     COMMAND ${_FORMULON_BEHAVIOR_PY} -m unittest
             ${CMAKE_SOURCE_DIR}/tests/codegen/dbcs_generated_test.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME CollationTableDrift
+    COMMAND ${_FORMULON_BEHAVIOR_PY} -m unittest
+            ${CMAKE_SOURCE_DIR}/tests/codegen/collation_generated_test.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   add_test(

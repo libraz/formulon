@@ -8,6 +8,7 @@
 #define FORMULON_EVAL_WILDCARD_H_
 
 #include <cstddef>
+#include <string>
 #include <string_view>
 
 namespace formulon {
@@ -27,6 +28,11 @@ bool wildcard_match(std::string_view pattern, std::string_view text);
 /// byte, so `"~*"` contains no wildcard but `"*~*"` does. Returns `true` on
 /// the first unescaped metacharacter encountered.
 bool scan_has_wildcard(std::string_view rhs);
+
+/// Removes the escapes of a pattern without wildcards: `~X` becomes `X` for
+/// any `X`, and a trailing lone `~` stays. Used for the literal comparison of
+/// a criterion or lookup value whose only metacharacters are escaped.
+std::string unescape_wildcard_literal(std::string_view pattern);
 
 /// Returns the byte offset where `pattern` first matches a prefix of
 /// `text` starting at that offset (wildcards: `*`, `?`, `~` for escape).

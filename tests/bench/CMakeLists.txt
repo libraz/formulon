@@ -22,6 +22,7 @@ set(_BENCH_NAMES
   bench_recalc_1m_wide
   bench_io_100mb_read
   bench_eval_hot_path
+  bench_text_collation
 )
 
 set(_BENCH_RESULTS_DIR "${CMAKE_BINARY_DIR}/bench_results")
