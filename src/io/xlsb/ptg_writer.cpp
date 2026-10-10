@@ -56,9 +56,6 @@ bool ReturnsReference(std::string_view name) {
   return false;
 }
 
-constexpr std::uint16_t kColRelBit = 0x4000;
-constexpr std::uint16_t kRowRelBit = 0x8000;
-
 constexpr std::uint8_t kPtgTypeMask = 0x1FU;
 
 constexpr std::uint8_t ValueClassPtg(std::uint8_t reference_class_ptg) {
@@ -129,12 +126,12 @@ std::uint8_t error_wire_code(ErrorCode e) {
 /// The relative bit is *set* when the coordinate is relative (i.e. not
 /// `$`-anchored), matching the decoder.
 std::uint16_t pack_area_col(const parser::Reference& ref) {
-  std::uint16_t col = static_cast<std::uint16_t>(ref.col & 0x3FFF);
+  std::uint16_t col = static_cast<std::uint16_t>(ref.col & kPtgColumnMask);
   if (!ref.col_abs) {
-    col |= kColRelBit;
+    col |= kPtgColumnRelativeBit;
   }
   if (!ref.row_abs) {
-    col |= kRowRelBit;
+    col |= kPtgRowRelativeBit;
   }
   return col;
 }
@@ -186,7 +183,7 @@ parser::Reference OffsetFrom(parser::Reference ref, PtgBaseCell base) {
     ref.row = (ref.row - base.row) & ((1U << 20) - 1U);
   }
   if (!ref.col_abs) {
-    ref.col = (ref.col - base.col) & 0x3FFFU;
+    ref.col = (ref.col - base.col) & kPtgColumnMask;
   }
   return ref;
 }

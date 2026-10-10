@@ -30,14 +30,8 @@ namespace io {
 namespace xlsb {
 namespace {
 
-// MS-XLSB column field: low 14 bits are the 0-based column, bit 14 is
-// the "column relative" flag and bit 15 the "row relative" flag. An
-// absolute coordinate is the *cleared* relative bit.
-constexpr std::uint16_t kColMask = 0x3FFF;
 /// Rows in the grid; a relative row offset is stored modulo this.
 constexpr std::uint32_t kRowCount = 1U << 20;
-constexpr std::uint16_t kColRelBit = 0x4000;
-constexpr std::uint16_t kRowRelBit = 0x8000;
 
 // Excel sheet dimensions: the RefErr forms encode the maximum sentinel
 // row/col; we never rely on those because the RefErr Ptg kind already
@@ -146,9 +140,9 @@ parser::Reference make_corner(std::uint32_t row, std::uint16_t col, std::string_
   parser::Reference ref;
   ref.sheet = sheet;
   ref.row = row;
-  ref.col = static_cast<std::uint32_t>(col & kColMask);
-  ref.col_abs = (col & kColRelBit) == 0;
-  ref.row_abs = (col & kRowRelBit) == 0;
+  ref.col = static_cast<std::uint32_t>(col & kPtgColumnMask);
+  ref.col_abs = (col & kPtgColumnRelativeBit) == 0;
+  ref.row_abs = (col & kPtgRowRelativeBit) == 0;
   return ref;
 }
 
@@ -239,7 +233,7 @@ void resolve_relative(parser::Reference& ref, PtgBaseCell base) {
     ref.row = (base.row + ref.row) & (kRowCount - 1U);
   }
   if (!ref.col_abs) {
-    ref.col = (base.col + ref.col) & kColMask;
+    ref.col = (base.col + ref.col) & kPtgColumnMask;
   }
 }
 
@@ -307,11 +301,6 @@ Expected<std::pair<parser::Reference, parser::Reference>, Error> read_checked_ar
     return std::move(domain_or.error());
   }
   return area_or;
-}
-
-/// Case-insensitive `s` starts-with `prefix` check (ASCII-fold).
-bool starts_with_ci(std::string_view s, std::string_view prefix) {
-  return s.size() >= prefix.size() && strings::case_insensitive_eq(s.substr(0, prefix.size()), prefix);
 }
 
 }  // namespace
@@ -437,7 +426,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     // reference inside a LET body matches the plain-identifier `NameRef`
     // the text parser would have produced for the same formula.
     const std::string_view name = entry.name;
-    const std::string_view display_name = starts_with_ci(name, "_xlpm.") ? name.substr(6) : name;
+    const std::string_view display_name = strings::case_insensitive_starts_with(name, "_xlpm.") ? name.substr(6) : name;
     if (entry.itab >= 0 && (qualified || entry.itab != host_itab) &&
         static_cast<std::size_t>(entry.itab) < sheet_names.size()) {
       const std::string& sheet = sheet_names[static_cast<std::size_t>(entry.itab)];
@@ -505,7 +494,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                             "context=xlsb_ptg_reader");
         }
         const std::string_view raw = param->as_name();
-        params[i] = starts_with_ci(raw, "_xlpm.") ? raw.substr(6) : raw;
+        params[i] = strings::case_insensitive_starts_with(raw, "_xlpm.") ? raw.substr(6) : raw;
       }
       auto* body = const_cast<parser::AstNode*>(ops[cparams - 1]);
       parser::AstNode* n = parser::make_lambda(arena, params, param_count, /*optional_count=*/0, body);
@@ -514,7 +503,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       }
       return n;
     }
-    if (starts_with_ci(callee, "_xlfn.LET")) {
+    if (strings::case_insensitive_starts_with(callee, "_xlfn.LET")) {
       // LET(name1, value1, [name2, value2, ...], body): an odd count of
       // >= 3 real operands (name/value pairs plus a trailing body).
       if (real_count < 3 || (real_count % 2) == 0) {
@@ -534,7 +523,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                             "context=xlsb_ptg_reader");
         }
         std::string_view raw = name_node->as_name();
-        names[b] = starts_with_ci(raw, "_xlpm.") ? raw.substr(6) : raw;
+        names[b] = strings::case_insensitive_starts_with(raw, "_xlpm.") ? raw.substr(6) : raw;
         exprs[b] = ops[2 + (2 * b)];
       }
       auto* body = const_cast<parser::AstNode*>(ops[cparams - 1]);

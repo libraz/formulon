@@ -41,6 +41,7 @@
 #include <string>
 #include <utility>
 
+#include "io/xlsb/brt_color.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/xf_flags.h"
 #include "utils/status_macros.h"
@@ -119,7 +120,7 @@ Expected<void, Error> DecodeColor(ByteSpan& p, std::uint32_t unset_argb, std::ui
     case 3U:
       spec.kind = ColorSpec::Kind::kTheme;
       spec.theme = index_or.value();
-      spec.tint = static_cast<double>(static_cast<std::int16_t>(tint_or.value())) / 32767.0;
+      spec.tint = static_cast<double>(static_cast<std::int16_t>(tint_or.value())) / kBrtColorTintScale;
       break;
     default:
       // A selector outside the four defined values names no colour this

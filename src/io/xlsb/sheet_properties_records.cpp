@@ -124,7 +124,8 @@ WorksheetProperties ParseSheetProperties(std::string_view raw) {
   if (const pugi::xml_attribute theme = tab.attribute("theme")) {
     out.color_type = 3U;
     out.color_index = static_cast<std::uint8_t>(std::min<unsigned>(theme.as_uint(0U), 0xFFU));
-    const double tint = std::clamp(std::round(tab.attribute("tint").as_double(0.0) * 32767.0), -32767.0, 32767.0);
+    const double tint = std::clamp(std::round(tab.attribute("tint").as_double(0.0) * kBrtColorTintScale),
+                                   -kBrtColorTintScale, kBrtColorTintScale);
     out.color_tint = static_cast<std::int16_t>(tint);
     return out;
   }
@@ -193,7 +194,7 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
     case 3U:
       tab.kind = ColorSpec::Kind::kTheme;
       tab.theme = color_index_or.value();
-      tab.tint = static_cast<double>(static_cast<std::int16_t>(color_tint_or.value())) / 32767.0;
+      tab.tint = static_cast<double>(static_cast<std::int16_t>(color_tint_or.value())) / kBrtColorTintScale;
       break;
     default:
       tab.kind = ColorSpec::Kind::kAuto;

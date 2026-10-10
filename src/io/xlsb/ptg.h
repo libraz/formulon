@@ -24,6 +24,13 @@ namespace formulon {
 namespace io {
 namespace xlsb {
 
+/// Bit layout of the u16 column field in `RgceLoc` / `RgceArea` Ptg data.
+/// The low 14 bits carry the zero-based column; the two high bits mark a
+/// relative column and row respectively.
+inline constexpr std::uint16_t kPtgColumnMask = 0x3FFFU;
+inline constexpr std::uint16_t kPtgColumnRelativeBit = 0x4000U;
+inline constexpr std::uint16_t kPtgRowRelativeBit = 0x8000U;
+
 /// Implementation status of a Ptg in the v1.0 reader/writer.
 ///
 ///   * `Full`             — round-trips Reader + Writer (Ptg ↔ AST).

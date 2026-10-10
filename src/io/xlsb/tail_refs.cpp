@@ -42,10 +42,6 @@ constexpr std::uint32_t kFrtRanges = 0x02U;
 constexpr std::uint32_t kFrtRangesAndFormulas = 0x06U;
 constexpr std::size_t kSqrefOffset = 12U;
 
-constexpr std::uint16_t kColMask = 0x3FFF;
-constexpr std::uint16_t kColRelBit = 0x4000;
-constexpr std::uint16_t kRowRelBit = 0x8000;
-
 std::uint32_t LoadU32(const std::uint8_t* p) {
   return static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8) |
          (static_cast<std::uint32_t>(p[2]) << 16) | (static_cast<std::uint32_t>(p[3]) << 24);
@@ -358,12 +354,12 @@ bool RemapRefToken(std::uint8_t* tag, const RefContext& ctx) {
     parser::Reference r;
     r.sheet = sheet;
     r.row = row;
-    r.col = col & kColMask;
-    r.col_abs = (col & kColRelBit) == 0U;
-    r.row_abs = (col & kRowRelBit) == 0U;
+    r.col = col & kPtgColumnMask;
+    r.col_abs = (col & kPtgColumnRelativeBit) == 0U;
+    r.row_abs = (col & kPtgRowRelativeBit) == 0U;
     if (relative) {
       r.row = r.row_abs ? r.row : (ctx.old_base->row + r.row) & kRowMask;
-      r.col = r.col_abs ? r.col : (ctx.old_base->col + r.col) & kColMask;
+      r.col = r.col_abs ? r.col : (ctx.old_base->col + r.col) & kPtgColumnMask;
     }
     return r;
   };
@@ -372,10 +368,11 @@ bool RemapRefToken(std::uint8_t* tag, const RefContext& ctx) {
     std::uint32_t col = r.col;
     if (relative) {
       row = r.row_abs ? row : (row - ctx.new_base->row) & kRowMask;
-      col = r.col_abs ? col : (col - ctx.new_base->col) & kColMask;
+      col = r.col_abs ? col : (col - ctx.new_base->col) & kPtgColumnMask;
     }
     StoreU32(row_at, row);
-    StoreU16(col_at, static_cast<std::uint16_t>(col | (r.col_abs ? 0U : kColRelBit) | (r.row_abs ? 0U : kRowRelBit)));
+    StoreU16(col_at, static_cast<std::uint16_t>(col | (r.col_abs ? 0U : kPtgColumnRelativeBit) |
+                                                (r.row_abs ? 0U : kPtgRowRelativeBit)));
   };
   const auto to_error = [&]() {
     const std::uint8_t error_kind = three_d ? kind + 2U : (area ? 0x0BU : 0x0AU);
