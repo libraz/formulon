@@ -173,16 +173,16 @@ bool read_layout_and_mask(const parser::AstNode& call, std::uint32_t filter_arg_
 std::vector<std::uint32_t> collect_included_rows(const std::vector<bool>& include_row, std::uint32_t data_start_row);
 
 /// Excel-canonical cell equality for GROUPBY / PIVOTBY group keys. Mirrors
-/// UNIQUE's rules with one difference: Text comparison runs through
-/// `fold_jp_text` first so half-width katakana folds to full-width.
+/// UNIQUE's rules: text compares with the active profile's collator at
+/// dynamic strength.
 bool group_cell_equal(const Value& a, const Value& b);
 
 /// Multi-column key equality: walks each column of the keys and compares
 /// cellwise via `group_cell_equal`.
 bool group_key_equal(const ArrayValue& keys, std::uint32_t row_a, std::uint32_t row_b);
 
-/// Builds a hashable canonical key for one row. Text cells are Japanese-folded
-/// once here; all scalar kinds retain their type tag. Values which cannot be
+/// Builds a hashable canonical key for one row. Text cells become their
+/// dynamic-strength collation key; all scalar kinds retain their type tag. Values which cannot be
 /// equal under `group_cell_equal` receive a row-unique key.
 std::string normalized_group_key(const ArrayValue& keys, std::uint32_t row);
 
@@ -223,8 +223,8 @@ void emit_row(std::vector<std::vector<Value>>* rows, const std::vector<Value>& r
 Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint32_t out_cols, Arena& arena);
 
 /// Comparator helper for sort tie-breaking: ascending compare on a single
-/// scalar Value. Numbers compare by value; text compares by Mac-folded
-/// UTF-8 bytes; cross-kind pairs use the kind() ordinal so ordering is
+/// scalar Value. Numbers compare by value; text compares with the active
+/// profile's collator at dynamic strength; cross-kind pairs use the kind() ordinal so ordering is
 /// stable but unspecified in detail. Errors and Blanks are pushed to the
 /// end (Excel's "blanks last" rule).
 int cmp_value_asc(const Value& a, const Value& b);

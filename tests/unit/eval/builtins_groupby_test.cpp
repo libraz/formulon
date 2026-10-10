@@ -22,7 +22,7 @@
 //   * Argument domain checks: out-of-range `field_headers`, `total_depth`,
 //     `sort_order`; mismatched row counts.
 //   * Empty data after filter -> #CALC!.
-//   * Group-key equality with ja-JP text (`fold_jp_text`).
+//   * Group-key equality and order under the profile's text collation.
 //   * Aggregator returning array -> #CALC! for that cell.
 
 #include <array>
@@ -704,20 +704,6 @@ TEST(GroupBy, AllExcludedAfterFilterYieldsValueError) {
 }
 
 // ---------------------------------------------------------------------------
-// ja-JP key folding
-// ---------------------------------------------------------------------------
-
-TEST(GroupBy, JapaneseKeyFoldingHalfWidthMatchesFullWidth) {
-  // Half-width "ｱ" (U+FF71) and full-width "ア" (U+30A2) should fold to the
-  // same group key under fold_jp_text. The aggregator therefore sees both
-  // rows in a single group totalling 30.
-  const Value v = EvalSrc("=GROUPBY({\"\xef\xbd\xb1\";\"\xe3\x82\xa2\"}, {10;20}, SUM, 0, 0)");
-  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  EXPECT_EQ(v.as_array_rows(), 1U);
-  EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 30.0);
-}
-
-// ---------------------------------------------------------------------------
 // Multi-cell aggregator return -> #CALC! per cell
 // ---------------------------------------------------------------------------
 
@@ -1265,6 +1251,157 @@ TEST(GroupByMeasured, Gb2LitTotalLen) {
   const Value v = EvalSrc("=ISBLANK(INDEX(GROUPBY({\"b\",\"y\";\"a\",\"z\";\"a\",\"y\"},{1;2;3},SUM,0),4,2))");
   ASSERT_TRUE(v.is_boolean()) << v.debug_to_string();
   EXPECT_EQ(v.as_boolean(), false);
+}
+
+// ---------------------------------------------------------------------------
+// Text collation of group keys
+// ---------------------------------------------------------------------------
+
+// Mac Excel `=ROWS(GROUPBY({a;b},{1;2},SUM,0,0))` per locale, copied from the
+// `groupby` column of tools/collation/data/fixtures/eq_{ja_JP,en_US,zh_CN}.tsv.
+struct CollationPair {
+  const char* a;
+  const char* b;
+  double ja_jp;
+  double en_us;
+  double zh_cn;
+};
+
+constexpr std::array<CollationPair, 26> kMeasuredGroupCounts = {{
+    {"\xC3\x9F", "ss", 1, 1, 1},                                        // U+00DF | U+0073 U+0073
+    {"\xC4\xB3", "ij", 1, 1, 1},                                        // U+0133 | U+0069 U+006A
+    {"\xE2\x91\xA0", "1", 1, 1, 1},                                     // U+2460 | U+0031
+    {"\xC2\xB2", "2", 1, 1, 1},                                         // U+00B2 | U+0032
+    {"\xEF\xBC\xA1", "A", 1, 1, 1},                                     // U+FF21 | U+0041
+    {"\xEF\xBD\x81", "A", 1, 1, 1},                                     // U+FF41 | U+0041
+    {"\xEF\xBD\xB1", "\xE3\x82\xA2", 1, 1, 1},                          // U+FF71 | U+30A2
+    {"\xE3\x81\x81", "\xE3\x81\x82", 1, 1, 2},                          // U+3041 | U+3042
+    {"\xE3\x82\xA2", "\xE3\x81\x82", 1, 1, 2},                          // U+30A2 | U+3042
+    {"\xE3\x83\xB4", "\xE3\x82\x94", 1, 1, 2},                          // U+30F4 | U+3094
+    {"\xE3\x81\x8B\xE3\x83\xBC", "\xE3\x81\x8B\xE3\x81\x82", 1, 2, 2},  // U+304B U+30FC | U+304B U+3042
+    {"\xE2\x85\xA0", "i", 1, 1, 2},                                     // U+2160 | U+0069
+    {"\xC3\x84", "\xC3\xA4", 1, 1, 1},                                  // U+00C4 | U+00E4
+    {"A", "a", 1, 1, 1},                                                // U+0041 | U+0061
+    {"\xEF\xBD\xB6\xEF\xBE\x9E", "\xE3\x82\xAC", 1, 1, 1},              // U+FF76 U+FF9E | U+30AC
+    {"\xEF\xBC\x91", "1", 1, 1, 1},                                     // U+FF11 | U+0031
+    {"\xE3\x80\x80", " ", 1, 1, 1},                                     // U+3000 | U+0020
+    {"\xE3\x82\x9D", "\xE3\x83\xBD", 1, 2, 1},                          // U+309D | U+30FD
+    {"\xD1\x91", "\xD0\x81", 1, 1, 1},                                  // U+0451 | U+0401
+    {"\xCF\x82", "\xCF\x83", 1, 1, 1},                                  // U+03C2 | U+03C3
+    {"\xC3\xA4", "a", 2, 2, 2},                                         // U+00E4 | U+0061
+    {"\xC3\xA6", "ae", 2, 2, 1},                                        // U+00E6 | U+0061 U+0065
+    {"ss", "\xC3\x9F", 1, 1, 1},                                        // U+0073 U+0073 | U+00DF
+    {"\xE0\xB9\x80\xE0\xB8\x81", "\xE0\xB8\x81\xE0\xB8\xB2", 2, 2, 2},  // U+0E40 U+0E01 | U+0E01 U+0E32
+    {"\xE3\x81\x8B\xE3\x82\x9D", "\xE3\x81\x8B\xE3\x81\x8B", 1, 2, 2},  // U+304B U+309D | U+304B U+304B
+    {"\xE3\x82\xAC", "\xEF\xBD\xB6\xEF\xBE\x9E", 1, 1, 1},              // U+30AC | U+FF76 U+FF9E
+}};
+
+ExcelProfile MacProfile(ExcelLocale locale) {
+  return ExcelProfile{ExcelHost::kMac365, locale};
+}
+
+std::string Pair(const char* a, const char* b) {
+  return std::string("{\"") + a + "\";\"" + b + "\"}";
+}
+
+double EvalNumber(const std::string& src, ExcelProfile profile) {
+  const Value v = EvalSrcWithProfile(src, profile);
+  EXPECT_TRUE(v.is_number()) << src << " -> " << v.debug_to_string();
+  return v.is_number() ? v.as_number() : -1.0;
+}
+
+std::string EvalText(const std::string& src, ExcelProfile profile) {
+  const Value v = EvalSrcWithProfile(src, profile);
+  EXPECT_TRUE(v.is_text()) << src << " -> " << v.debug_to_string();
+  return v.is_text() ? std::string(v.as_text()) : std::string();
+}
+
+TEST(GroupByCollation, MacGroupCountsMatchMeasurement) {
+  for (const CollationPair& pair : kMeasuredGroupCounts) {
+    const std::string src = "=ROWS(GROUPBY(" + Pair(pair.a, pair.b) + ",{1;2},SUM,0,0))";
+    EXPECT_EQ(EvalNumber(src, MacProfile(ExcelLocale::kJaJP)), pair.ja_jp) << "ja_JP " << src;
+    EXPECT_EQ(EvalNumber(src, MacProfile(ExcelLocale::kEnUS)), pair.en_us) << "en_US " << src;
+    EXPECT_EQ(EvalNumber(src, MacProfile(ExcelLocale::kZhCN)), pair.zh_cn) << "zh_CN " << src;
+  }
+}
+
+TEST(GroupByCollation, MergedKeysSumIntoOneGroup) {
+  // U+FF71 and U+30A2 form one group in every measured Mac locale.
+  const Value v = EvalSrcWithProfile("=GROUPBY({\"\xEF\xBD\xB1\";\"\xE3\x82\xA2\"},{10;20},SUM,0,0)",
+                                     MacProfile(ExcelLocale::kJaJP));
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 30.0);
+}
+
+// Distinct keys sort as Mac Excel's SORT orders the same pair (the
+// colfn_sort_* goldens in tools/collation/data/oracle_draft/targets).
+TEST(GroupByCollation, MacKeyOrderFollowsDynamicCollation) {
+  struct OrderCase {
+    ExcelLocale locale;
+    const char* a;
+    const char* b;
+    const char* first;
+  };
+  const std::array<OrderCase, 7> cases = {{
+      {ExcelLocale::kJaJP, "\xC3\xA4", "a", "a"},
+      {ExcelLocale::kEnUS, "\xC3\xA4", "a", "a"},
+      {ExcelLocale::kZhCN, "\xC3\xA4", "a", "a"},
+      {ExcelLocale::kEnUS, "\xE3\x81\x8B\xE3\x83\xBC", "\xE3\x81\x8B\xE3\x81\x82", "\xE3\x81\x8B\xE3\x83\xBC"},
+      {ExcelLocale::kZhCN, "\xE3\x81\x8B\xE3\x83\xBC", "\xE3\x81\x8B\xE3\x81\x82", "\xE3\x81\x8B\xE3\x81\x82"},
+      {ExcelLocale::kJaJP, "\xE0\xB9\x80\xE0\xB8\x81", "\xE0\xB8\x81\xE0\xB8\xB2", "\xE0\xB8\x81\xE0\xB8\xB2"},
+      {ExcelLocale::kZhCN, "\xE0\xB9\x80\xE0\xB8\x81", "\xE0\xB8\x81\xE0\xB8\xB2", "\xE0\xB9\x80\xE0\xB8\x81"},
+  }};
+  for (const OrderCase& c : cases) {
+    const std::string src = "=INDEX(GROUPBY(" + Pair(c.a, c.b) + ",{1;2},SUM,0,0),1,1)";
+    EXPECT_EQ(EvalText(src, MacProfile(c.locale)), c.first) << src;
+  }
+}
+
+// Windows keeps the byte model: ASCII case folds and a half-width voicing
+// mark composes (win-365-ja_JP unique_case_insensitive_text and
+// xlookup_exact_voiced_compose), but hiragana and katakana stay apart
+// (xlookup_exact_hira_eq_kata).
+TEST(GroupByCollation, WindowsJaJpKeepsTheByteModel) {
+  const ExcelProfile win = win_365_ja_jp_profile();
+  EXPECT_EQ(EvalNumber("=ROWS(GROUPBY({\"A\";\"a\"},{1;2},SUM,0,0))", win), 1.0);
+  EXPECT_EQ(EvalNumber("=ROWS(GROUPBY({\"\xEF\xBD\xB6\xEF\xBE\x9E\";\"\xE3\x82\xAC\"},{1;2},SUM,0,0))", win), 1.0);
+  EXPECT_EQ(EvalNumber("=ROWS(GROUPBY({\"\xE3\x81\x82\";\"\xE3\x82\xA2\"},{1;2},SUM,0,0))", win), 2.0);
+}
+
+// PIVOTBY merges row and column items at the same strength as GROUPBY, so
+// the measured GROUPBY counts carry over: one header row (or column) plus
+// one per group.
+TEST(PivotByCollation, MacRowGroupCountsMatchMeasurement) {
+  for (const CollationPair& pair : kMeasuredGroupCounts) {
+    const std::string src = "=ROWS(PIVOTBY(" + Pair(pair.a, pair.b) + ",{\"X\";\"X\"},{1;2},SUM,0,0,,0))";
+    EXPECT_EQ(EvalNumber(src, MacProfile(ExcelLocale::kJaJP)), 1 + pair.ja_jp) << "ja_JP " << src;
+    EXPECT_EQ(EvalNumber(src, MacProfile(ExcelLocale::kEnUS)), 1 + pair.en_us) << "en_US " << src;
+    EXPECT_EQ(EvalNumber(src, MacProfile(ExcelLocale::kZhCN)), 1 + pair.zh_cn) << "zh_CN " << src;
+  }
+}
+
+TEST(PivotByCollation, MacColumnGroupCountsMatchMeasurement) {
+  for (const CollationPair& pair : kMeasuredGroupCounts) {
+    const std::string src = "=COLUMNS(PIVOTBY({\"X\";\"X\"}," + Pair(pair.a, pair.b) + ",{1;2},SUM,0,0,,0))";
+    EXPECT_EQ(EvalNumber(src, MacProfile(ExcelLocale::kJaJP)), 1 + pair.ja_jp) << "ja_JP " << src;
+    EXPECT_EQ(EvalNumber(src, MacProfile(ExcelLocale::kEnUS)), 1 + pair.en_us) << "en_US " << src;
+    EXPECT_EQ(EvalNumber(src, MacProfile(ExcelLocale::kZhCN)), 1 + pair.zh_cn) << "zh_CN " << src;
+  }
+}
+
+TEST(PivotByCollation, MacRowOrderFollowsDynamicCollation) {
+  // zh_CN sorts かあ before かー (colfn_sort_choon).
+  const std::string src =
+      "=INDEX(PIVOTBY({\"\xE3\x81\x8B\xE3\x83\xBC\";\"\xE3\x81\x8B\xE3\x81\x82\"},{\"X\";\"X\"},{1;2},SUM,0,0,,0),2,1)";
+  EXPECT_EQ(EvalText(src, MacProfile(ExcelLocale::kZhCN)), "\xE3\x81\x8B\xE3\x81\x82");
+  EXPECT_EQ(EvalText(src, MacProfile(ExcelLocale::kEnUS)), "\xE3\x81\x8B\xE3\x83\xBC");
+}
+
+TEST(PivotByCollation, WindowsJaJpKeepsTheByteModel) {
+  const ExcelProfile win = win_365_ja_jp_profile();
+  EXPECT_EQ(EvalNumber("=ROWS(PIVOTBY({\"A\";\"a\"},{\"X\";\"X\"},{1;2},SUM,0,0,,0))", win), 2.0);
+  EXPECT_EQ(EvalNumber("=ROWS(PIVOTBY({\"\xE3\x81\x82\";\"\xE3\x82\xA2\"},{\"X\";\"X\"},{1;2},SUM,0,0,,0))", win), 3.0);
 }
 
 }  // namespace

@@ -33,6 +33,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/eval_profile_scope.h"
 #include "pivot/aggregator.h"
 #include "pivot/date_serial.h"
 #include "pivot/field_lookup.h"
@@ -149,6 +150,8 @@ Aggregation aggregation_from_subtotal_fn(SubtotalFn fn) {
 
 Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache& cache,
                                       const PivotLayoutOptions& options, const PivotFilterEnv& env) {
+  // Item identity, ordering and label filters collate under this profile.
+  const eval::ScopedEvalProfile profile_scope(options.profile);
   // 1. Validate.
   if (table.pivot_cache_id() != cache.cache_id()) {
     return make_error(FormulonErrorCode::kEvalPivotMissing, "pivot table cache_id does not match supplied PivotCache",

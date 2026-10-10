@@ -23,8 +23,9 @@ namespace formulon::pivot {
 /// Returns the layout-option overrides appropriate for the locale of
 /// the given Excel profile.
 ///
-/// The host (Mac vs Windows) is intentionally ignored: pivot labels
-/// follow the workbook's display locale, not the running Excel binary.
+/// Labels ignore the host (Mac vs Windows): they follow the workbook's
+/// display locale, not the running Excel binary. The profile itself is
+/// carried through so item identity and ordering collate per profile.
 /// Every locale renders Excel's compact / tabular / outline layout; the
 /// field-name header projection of a default-constructed
 /// `PivotLayoutOptions{}` is not reachable from a profile.

@@ -1,16 +1,21 @@
 // Ordering and comparator behavior for `formulon::pivot::evaluate`.
 
+#include <array>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <map>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "eval/eval_profile_scope.h"
 #include "eval/groupby_pivotby/common.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
+#include "pivot/pivot_locale.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -26,6 +31,7 @@ using test::build_sum_amount_table;
 using test::owned_text;
 
 TEST(PivotComparatorParity, BoolVsTextMatchesGroupByOrder) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
   const Value text_val = Value::text("zebra");
   const Value bool_val = Value::boolean(false);
 
@@ -39,6 +45,7 @@ TEST(PivotComparatorParity, BoolVsTextMatchesGroupByOrder) {
 }
 
 TEST(PivotComparatorParity, NumberBeforeTextBeforeBool) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
   const Value num = Value::number(1.0);
   const Value text_val = Value::text("a");
   const Value bool_val = Value::boolean(true);
@@ -51,6 +58,7 @@ TEST(PivotComparatorParity, NumberBeforeTextBeforeBool) {
 }
 
 TEST(PivotComparatorParity, OrdersNonFiniteNumbersAfterFiniteValues) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
   const Value negative_infinity = Value::number(-std::numeric_limits<double>::infinity());
   const Value finite = Value::number(42.0);
   const Value positive_infinity = Value::number(std::numeric_limits<double>::infinity());
@@ -262,15 +270,160 @@ TEST(PivotEvaluator, SortedSubtotalWalkPreservesTypedDuplicateDisplayLabels) {
   EXPECT_GT(cells.rows, result.row_subtotals.size());
 }
 
-TEST(PivotComparatorParity, FoldsHalfWidthKatakana) {
-  // U+FF76 (halfwidth ｶ) folds to U+30AB (fullwidth カ); after folding the
-  // two are equal, so neither orders before the other.
-  const Value full = Value::text("\xE3\x82\xAB");  // カ
-  const Value half = Value::text("\xEF\xBD\xB6");  // ｶ
+TEST(PivotComparatorParity, MergesWhatGroupByMerges) {
+  // U+FF71 and U+30A2 are one GROUPBY group on Mac ja_JP
+  // (tools/collation/data/fixtures/eq_ja_JP.tsv).
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  const Value full = Value::text("\xE3\x82\xA2");
+  const Value half = Value::text("\xEF\xBD\xB1");
   EXPECT_FALSE(value_less(full, half));
   EXPECT_FALSE(value_less(half, full));
-  // GROUPBY / SORT agrees they are equal.
   EXPECT_EQ(eval::cmp_value_asc(full, half), 0);
+}
+
+// One row field over `labels`, one record per label with amount 10 * (i + 1).
+PivotCache build_label_cache(const std::vector<std::string>& labels) {
+  PivotCache cache;
+  cache.set_cache_id(5);
+  cache.mutable_fields().push_back(PivotCacheField{"Item", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+  for (std::size_t i = 0; i < labels.size(); ++i) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, labels[i]));
+    rec.cells.push_back(Value::number(10.0 * static_cast<double>(i + 1U)));
+    cache.mutable_records().push_back(std::move(rec));
+  }
+  return cache;
+}
+
+PivotTable build_label_table() {
+  PivotTable table;
+  table.set_pivot_cache_id(5);
+  PivotField item_f;
+  item_f.source_name = "Item";
+  item_f.axis = PivotAxis::Row;
+  PivotField amount_f;
+  amount_f.source_name = "Amount";
+  amount_f.axis = PivotAxis::Value;
+  table.mutable_fields().push_back(std::move(item_f));
+  table.mutable_fields().push_back(std::move(amount_f));
+  PivotDataField sum_amount;
+  sum_amount.name = "Sum of Amount";
+  sum_amount.field_index = 1;
+  sum_amount.aggregation = Aggregation::Sum;
+  table.mutable_data_fields().push_back(std::move(sum_amount));
+  table.mutable_row_field_order() = {0};
+  return table;
+}
+
+PivotResult evaluate_labels(const std::vector<std::string>& labels, ExcelProfile profile,
+                            const PivotTable& table = build_label_table()) {
+  const PivotCache cache = build_label_cache(labels);
+  auto r_or = evaluate(table, cache, pivot_layout_options_for(profile));
+  EXPECT_TRUE(static_cast<bool>(r_or));
+  return r_or ? std::move(r_or.value()) : PivotResult{};
+}
+
+ExcelProfile mac(ExcelLocale locale) {
+  return ExcelProfile{ExcelHost::kMac365, locale};
+}
+
+// Item counts per locale, from the `groupby` column of
+// tools/collation/data/fixtures/eq_{ja_JP,en_US,zh_CN}.tsv; pivot items merge
+// at the same strength as GROUPBY keys.
+TEST(PivotEvaluatorCollation, MacItemsMergeAsMeasured) {
+  struct ItemCase {
+    const char* a;
+    const char* b;
+    std::size_t ja_jp;
+    std::size_t en_us;
+    std::size_t zh_cn;
+  };
+  const std::array<ItemCase, 6> cases = {{
+      {"\xEF\xBD\xB6\xEF\xBE\x9E", "\xE3\x82\xAC", 1U, 1U, 1U},              // U+FF76 U+FF9E | U+30AC
+      {"\xE3\x82\xA2", "\xE3\x81\x82", 1U, 1U, 2U},                          // U+30A2 | U+3042
+      {"\xE3\x81\x8B\xE3\x83\xBC", "\xE3\x81\x8B\xE3\x81\x82", 1U, 2U, 2U},  // U+304B U+30FC | U+304B U+3042
+      {"\xE3\x82\x9D", "\xE3\x83\xBD", 1U, 2U, 1U},                          // U+309D | U+30FD
+      {"\xC3\xA6", "ae", 2U, 2U, 1U},                                        // U+00E6 | U+0061 U+0065
+      {"\xC3\xA4", "a", 2U, 2U, 2U},                                         // U+00E4 | U+0061
+  }};
+  for (const ItemCase& c : cases) {
+    const std::vector<std::string> labels{c.a, c.b};
+    EXPECT_EQ(evaluate_labels(labels, mac(ExcelLocale::kJaJP)).rows.size(), c.ja_jp) << c.a << " | " << c.b;
+    EXPECT_EQ(evaluate_labels(labels, mac(ExcelLocale::kEnUS)).rows.size(), c.en_us) << c.a << " | " << c.b;
+    EXPECT_EQ(evaluate_labels(labels, mac(ExcelLocale::kZhCN)).rows.size(), c.zh_cn) << c.a << " | " << c.b;
+  }
+}
+
+TEST(PivotEvaluatorCollation, MergedItemsAggregateTogether) {
+  const PivotResult r = evaluate_labels({"\xEF\xBD\xB1", "\xE3\x82\xA2"}, mac(ExcelLocale::kJaJP));
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 30.0);
+}
+
+// Distinct items order as Mac Excel's SORT orders the same pair
+// (colfn_sort_choon / colfn_sort_thai_prefix goldens).
+TEST(PivotEvaluatorCollation, MacItemOrderFollowsDynamicCollation) {
+  const std::string ka_choon = "\xE3\x81\x8B\xE3\x83\xBC";
+  const std::string ka_a = "\xE3\x81\x8B\xE3\x81\x82";
+  const PivotResult en = evaluate_labels({ka_a, ka_choon}, mac(ExcelLocale::kEnUS));
+  ASSERT_EQ(en.rows.size(), 2U);
+  EXPECT_EQ(en.rows[0].label, ka_choon);
+  const PivotResult zh = evaluate_labels({ka_choon, ka_a}, mac(ExcelLocale::kZhCN));
+  ASSERT_EQ(zh.rows.size(), 2U);
+  EXPECT_EQ(zh.rows[0].label, ka_a);
+
+  const std::string thai_e_ko = "\xE0\xB9\x80\xE0\xB8\x81";
+  const std::string thai_ko_aa = "\xE0\xB8\x81\xE0\xB8\xB2";
+  const PivotResult ja = evaluate_labels({thai_e_ko, thai_ko_aa}, mac(ExcelLocale::kJaJP));
+  ASSERT_EQ(ja.rows.size(), 2U);
+  EXPECT_EQ(ja.rows[0].label, thai_ko_aa);
+  const PivotResult zh_thai = evaluate_labels({thai_ko_aa, thai_e_ko}, mac(ExcelLocale::kZhCN));
+  ASSERT_EQ(zh_thai.rows.size(), 2U);
+  EXPECT_EQ(zh_thai.rows[0].label, thai_e_ko);
+}
+
+// Windows keeps the byte model (win-365-ja_JP unique_case_insensitive_text,
+// xlookup_exact_voiced_compose, xlookup_exact_hira_eq_kata).
+TEST(PivotEvaluatorCollation, WindowsJaJpKeepsTheByteModel) {
+  const ExcelProfile win = win_365_ja_jp_profile();
+  EXPECT_EQ(evaluate_labels({"A", "a"}, win).rows.size(), 1U);
+  EXPECT_EQ(evaluate_labels({"\xEF\xBD\xB6\xEF\xBE\x9E", "\xE3\x82\xAC"}, win).rows.size(), 1U);
+  EXPECT_EQ(evaluate_labels({"\xE3\x81\x82", "\xE3\x82\xA2"}, win).rows.size(), 2U);
+}
+
+PivotTable caption_filtered_table(CaptionPredicate predicate, std::string value) {
+  PivotTable table = build_label_table();
+  AuthoredCaptionFilter f;
+  f.field_index = 0;
+  f.predicate = predicate;
+  f.value = std::move(value);
+  table.mutable_authored_caption_filters().push_back(std::move(f));
+  return table;
+}
+
+// A caption filter compares at the strength that merged the items.
+TEST(PivotEvaluatorCollation, CaptionEqualUsesItemIdentity) {
+  const std::vector<std::string> labels{"\xE3\x82\xA2", "\xE3\x82\xA4"};                          // ア, イ
+  const PivotTable equal_hira = caption_filtered_table(CaptionPredicate::Equal, "\xE3\x81\x82");  // あ
+  const PivotResult mac_r = evaluate_labels(labels, mac(ExcelLocale::kJaJP), equal_hira);
+  ASSERT_EQ(mac_r.rows.size(), 1U);
+  EXPECT_EQ(mac_r.rows[0].label, "\xE3\x82\xA2");
+  EXPECT_EQ(evaluate_labels(labels, mac(ExcelLocale::kZhCN), equal_hira).rows.size(), 0U);
+  EXPECT_EQ(evaluate_labels(labels, win_365_ja_jp_profile(), equal_hira).rows.size(), 0U);
+
+  const PivotTable not_equal_hira = caption_filtered_table(CaptionPredicate::NotEqual, "\xE3\x81\x82");
+  const PivotResult mac_ne = evaluate_labels(labels, mac(ExcelLocale::kJaJP), not_equal_hira);
+  ASSERT_EQ(mac_ne.rows.size(), 1U);
+  EXPECT_EQ(mac_ne.rows[0].label, "\xE3\x82\xA4");
+}
+
+TEST(PivotEvaluatorCollation, CaptionOrderingUsesItemOrder) {
+  // かー sorts after かあ in zh_CN and before it in en_US.
+  const std::vector<std::string> labels{"\xE3\x81\x8B\xE3\x83\xBC"};
+  const PivotTable greater = caption_filtered_table(CaptionPredicate::GreaterThan, "\xE3\x81\x8B\xE3\x81\x82");
+  EXPECT_EQ(evaluate_labels(labels, mac(ExcelLocale::kZhCN), greater).rows.size(), 1U);
+  EXPECT_EQ(evaluate_labels(labels, mac(ExcelLocale::kEnUS), greater).rows.size(), 0U);
 }
 
 }  // namespace

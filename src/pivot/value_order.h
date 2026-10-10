@@ -12,9 +12,9 @@
 //   * groups same-kind values together (so we don't interleave numbers
 //     into strings);
 //   * sorts numerically within `Number`;
-//   * sorts case-sensitively within `Text` (good enough for MVP — the
-//     primary oracle is ja-JP which Excel collates byte-wise on the
-//     wire; the locale-aware compare will arrive with date grouping);
+//   * sorts `Text` at the dynamic collation strength of the profile set by
+//     `pivot::evaluate`'s `ScopedEvalProfile`, which is also what makes two
+//     items one;
 //   * is total across kinds so `std::map` stays well-formed.
 //
 // Kind ordering: Number < Text < Bool < Error < everything else, sourced
@@ -27,11 +27,13 @@
 #ifndef FORMULON_PIVOT_VALUE_ORDER_H_
 #define FORMULON_PIVOT_VALUE_ORDER_H_
 
+#include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <string>
 
-#include "eval/jp_fold.h"
+#include "eval/collation.h"
+#include "eval/eval_profile_scope.h"
 #include "utils/double_format.h"
 #include "utils/error.h"
 #include "value.h"
@@ -62,11 +64,10 @@ inline bool value_less(const Value& a, const Value& b) noexcept {
       // false < true.
       return !a.as_boolean() && b.as_boolean();
     case ValueKind::Text:
-      // Match the GROUPBY / SORT comparator (`groupby_pivotby/common.cpp`)
-      // by folding through `fold_jp_text` before the byte compare, so the
-      // two families cannot diverge on Japanese text collation (half-width
-      // kana, hiragana/katakana, full-width ASCII).
-      return eval::fold_jp_text(a.as_text()) < eval::fold_jp_text(b.as_text());
+      // Same strength as the GROUPBY / SORT comparator.
+      assert(eval::eval_profile_scope_active());
+      return eval::collate(a.as_text(), b.as_text(), eval::current_eval_profile(), eval::CollationStrength::kDynamic) <
+             0;
     case ValueKind::Error:
       return static_cast<std::uint16_t>(a.as_error()) < static_cast<std::uint16_t>(b.as_error());
     default:

@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "excel_profile.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "utils/error.h"
@@ -74,8 +75,9 @@ struct PivotLayoutOptions {
   std::string column_labels_label;                        ///< e.g. "列ラベル"; empty disables.
   std::string subtotal_prefix;                            ///< e.g. "Total " (fr-FR); placed before the group label.
   std::string subtotal_suffix;                            ///< e.g. " 集計"; empty falls back to grand_total_label.
-  std::string data_total_prefix = "Total ";  ///< Grand total of one of several data fields, e.g. "全体の ".
-  std::string data_total_suffix;             ///< e.g. "汇总" (zh-CN); placed after the data-field name.
+  std::string data_total_prefix = "Total ";        ///< Grand total of one of several data fields, e.g. "全体の ".
+  std::string data_total_suffix;                   ///< e.g. "汇总" (zh-CN); placed after the data-field name.
+  ExcelProfile profile = default_excel_profile();  ///< Collates item text while the pivot is evaluated.
 };
 
 struct PivotCell {

@@ -2,6 +2,7 @@
 #include "pivot/filter_engine.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -13,6 +14,8 @@
 #include <variant>
 #include <vector>
 
+#include "eval/collation.h"
+#include "eval/eval_profile_scope.h"
 #include "pivot/date_serial.h"
 #include "pivot/field_lookup.h"
 #include "pivot/pivot_cache.h"
@@ -160,22 +163,11 @@ bool label_filter_passes(const PivotFilter& f, std::string_view label) {
   return true;
 }
 
-// Three-way ASCII-case-insensitive comparison, ordering by folded bytes
-// and breaking ties on length.
-int CaseInsensitiveCompare(std::string_view lhs, std::string_view rhs) {
-  const std::size_t common = lhs.size() < rhs.size() ? lhs.size() : rhs.size();
-  for (std::size_t i = 0; i < common; ++i) {
-    // Keep the historical signed-char comparison for non-ASCII bytes.
-    const char a = strings::ascii_to_lower(lhs[i]);
-    const char b = strings::ascii_to_lower(rhs[i]);
-    if (a != b) {
-      return a < b ? -1 : 1;
-    }
-  }
-  if (lhs.size() == rhs.size()) {
-    return 0;
-  }
-  return lhs.size() < rhs.size() ? -1 : 1;
+// Equality and ordering of a caption filter use the strength that merged the
+// items, so which spelling of a merged item survives cannot change the result.
+int caption_collate(std::string_view lhs, std::string_view rhs) {
+  assert(eval::eval_profile_scope_active());
+  return eval::collate(lhs, rhs, eval::current_eval_profile(), eval::CollationStrength::kDynamic);
 }
 
 // Evaluates one decoded `<filters>` caption entry against `label`.
@@ -186,13 +178,13 @@ int CaseInsensitiveCompare(std::string_view lhs, std::string_view rhs) {
 bool caption_filter_passes(const AuthoredCaptionFilter& f, std::string_view label) {
   const std::string_view value = f.value;
   const auto between = [&]() {
-    return CaseInsensitiveCompare(label, value) >= 0 && CaseInsensitiveCompare(label, f.value_high) <= 0;
+    return caption_collate(label, value) >= 0 && caption_collate(label, f.value_high) <= 0;
   };
   switch (f.predicate) {
     case CaptionPredicate::Equal:
-      return strings::case_insensitive_eq(label, value);
+      return caption_collate(label, value) == 0;
     case CaptionPredicate::NotEqual:
-      return !strings::case_insensitive_eq(label, value);
+      return caption_collate(label, value) != 0;
     case CaptionPredicate::BeginsWith:
       return strings::case_insensitive_starts_with(label, value);
     case CaptionPredicate::NotBeginsWith:
@@ -206,13 +198,13 @@ bool caption_filter_passes(const AuthoredCaptionFilter& f, std::string_view labe
     case CaptionPredicate::NotContains:
       return !strings::case_insensitive_contains(label, value);
     case CaptionPredicate::GreaterThan:
-      return CaseInsensitiveCompare(label, value) > 0;
+      return caption_collate(label, value) > 0;
     case CaptionPredicate::GreaterThanOrEqual:
-      return CaseInsensitiveCompare(label, value) >= 0;
+      return caption_collate(label, value) >= 0;
     case CaptionPredicate::LessThan:
-      return CaseInsensitiveCompare(label, value) < 0;
+      return caption_collate(label, value) < 0;
     case CaptionPredicate::LessThanOrEqual:
-      return CaseInsensitiveCompare(label, value) <= 0;
+      return caption_collate(label, value) <= 0;
     case CaptionPredicate::Between:
       return between();
     case CaptionPredicate::NotBetween:

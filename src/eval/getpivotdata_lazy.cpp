@@ -51,6 +51,7 @@
 
 #include "eval/getpivotdata_lazy.h"
 
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -61,7 +62,9 @@
 #include <vector>
 
 #include "eval/coerce.h"
+#include "eval/collation.h"
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/lazy_impls.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -174,7 +177,8 @@ std::size_t axis_leaf_count(const pivot::AxisHierarchyNode& node) noexcept {
 
 // Walks an axis hierarchy tree following `path`. Each `path[i]` retains the
 // original typed item and its display label. Typed identity is tried first;
-// a label is a fallback only when it identifies one child uniquely. Returns
+// a label, collated at the dynamic strength, is a fallback only when it
+// identifies one child uniquely. Returns
 // the leaf index assigned to the matching leaf, or
 // `static_cast<std::size_t>(-1)` on any mismatch or ambiguity.
 //
@@ -186,6 +190,7 @@ std::size_t walk_hierarchy(const std::vector<pivot::AxisHierarchyNode>& roots,
   if (path.empty() || roots.empty()) {
     return static_cast<std::size_t>(-1);
   }
+  assert(eval_profile_scope_active());
   std::size_t leaf_index = 0;
   const std::vector<pivot::AxisHierarchyNode>* level = &roots;
   for (std::size_t depth = 0; depth < path.size(); ++depth) {
@@ -199,7 +204,7 @@ std::size_t walk_hierarchy(const std::vector<pivot::AxisHierarchyNode>& roots,
         ++typed_matches;
         typed_match = &node;
       }
-      if (node.label == want.label) {
+      if (collate(node.label, want.label, current_eval_profile(), CollationStrength::kDynamic) == 0) {
         ++label_matches;
         label_match = &node;
       }

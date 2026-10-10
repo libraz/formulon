@@ -183,6 +183,7 @@ pivot::PivotLayoutOptions pivot_layout_options_for(ExcelProfile profile) {
   options.multiple_items_label = labels.multiple_items_label;
   options.data_total_prefix = labels.data_total_prefix;
   options.data_total_suffix = labels.data_total_suffix;
+  options.profile = profile;
   return options;
 }
 

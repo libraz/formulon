@@ -1,6 +1,7 @@
 
 #include "eval/groupby_pivotby/common.h"
 
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -13,10 +14,11 @@
 
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
+#include "eval/collation.h"
 #include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
-#include "eval/jp_fold.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
@@ -29,7 +31,6 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
-#include "utils/strings.h"
 #include "value.h"
 #include "value_sort_order.h"
 
@@ -286,16 +287,30 @@ std::vector<std::uint32_t> collect_included_rows(const std::vector<bool>& includ
   return rows;
 }
 
-// Excel-canonical cell equality for GROUPBY group keys. Mirrors UNIQUE's
-// rules with one difference: Text comparison runs through `fold_jp_text`
-// first so `ｱ` (half-width katakana) folds to `ア` (full-width), matching
-// Mac Excel COUNTIF / VLOOKUP ja-JP behaviour. Numbers compare with `==`,
-// so `+0.0` and `-0.0` fall in one group. Cross-kind pairs are never equal — `Number 0`
-// and `Bool FALSE` form distinct groups.
+// Excel-canonical cell equality for GROUPBY group keys. Text compares at the
+// dynamic collation strength of the evaluating profile. Numbers compare with
+// `==`, so `+0.0` and `-0.0` fall in one group. Cross-kind pairs are never
+// equal: `Number 0` and `Bool FALSE` form distinct groups.
 bool group_cell_equal(const Value& a, const Value& b) {
-  FoldCompareOptions opts;
-  opts.case_insensitive = true;
-  return value_equal_folded_text(a, b, opts);
+  if (a.kind() != b.kind()) {
+    return false;
+  }
+  switch (a.kind()) {
+    case ValueKind::Blank:
+      return true;
+    case ValueKind::Number:
+      return a.as_number() == b.as_number();
+    case ValueKind::Bool:
+      return a.as_boolean() == b.as_boolean();
+    case ValueKind::Error:
+      return a.as_error() == b.as_error();
+    case ValueKind::Text:
+      assert(eval_profile_scope_active());
+      return collate(a.as_text(), b.as_text(), current_eval_profile(), CollationStrength::kDynamic) == 0;
+    default:
+      // Array / Ref / Lambda never merge, so each row forms its own group.
+      return false;
+  }
 }
 
 bool group_key_equal(const ArrayValue& keys, std::uint32_t row_a, std::uint32_t row_b) {
@@ -341,10 +356,11 @@ std::string normalized_group_key(const ArrayValue& keys, std::uint32_t row) {
         out.push_back('\0');
         break;
       case ValueKind::Text: {
-        const std::string folded = strings::to_ascii_lower(fold_jp_text(v.as_text()));
-        out.append(std::to_string(folded.size()));
+        assert(eval_profile_scope_active());
+        const std::string key = collation_key(v.as_text(), current_eval_profile(), CollationStrength::kDynamic);
+        out.append(std::to_string(key.size()));
         out.push_back(':');
-        out.append(folded);
+        out.append(key);
         break;
       }
       default:
@@ -480,9 +496,35 @@ int cmp_value_asc(const Value& a, const Value& b) {
   if (ba != bb) {
     return ba < bb ? -1 : 1;
   }
-  FoldCompareOptions opts;
-  opts.case_insensitive = true;
-  return value_compare_folded_text(a, b, opts);
+  switch (a.kind()) {
+    case ValueKind::Number: {
+      const double na = a.as_number();
+      const double nb = b.as_number();
+      if (na < nb) {
+        return -1;
+      }
+      return na > nb ? 1 : 0;
+    }
+    case ValueKind::Text:
+      assert(eval_profile_scope_active());
+      return collate(a.as_text(), b.as_text(), current_eval_profile(), CollationStrength::kDynamic);
+    case ValueKind::Bool:
+      if (a.as_boolean() == b.as_boolean()) {
+        return 0;
+      }
+      return a.as_boolean() ? 1 : -1;
+    case ValueKind::Error: {
+      const auto ea = static_cast<int>(a.as_error());
+      const auto eb = static_cast<int>(b.as_error());
+      if (ea < eb) {
+        return -1;
+      }
+      return ea > eb ? 1 : 0;
+    }
+    default:
+      // Blank, and kinds with no in-kind order.
+      return 0;
+  }
 }
 
 int cmp_keys_asc(const ArrayValue& keys, std::uint32_t a_row, std::uint32_t b_row) {
