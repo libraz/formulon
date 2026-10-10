@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "cli/c_api_raii.h"
 #include "cli/cli.h"
 #include "cli/diagnostics.h"
 #include "cli/file_io.h"
@@ -38,28 +39,6 @@ namespace formulon {
 namespace cli {
 
 namespace {
-
-// Same RAII pattern as `eval_cmd.cpp`. Duplicated rather than shared
-// because the CLI handlers are deliberately small and a shared helper
-// header would obscure their independence.
-struct WorkbookGuard {
-  fm_workbook_t* handle = nullptr;
-  WorkbookGuard() = default;
-  WorkbookGuard(const WorkbookGuard&) = delete;
-  WorkbookGuard& operator=(const WorkbookGuard&) = delete;
-  ~WorkbookGuard() { fm_workbook_destroy(handle); }
-};
-
-// Heap buffer returned by `fm_workbook_save` paired with its dedicated
-// `fm_buffer_free` deallocator.
-struct SaveBuffer {
-  std::uint8_t* data = nullptr;
-  std::size_t len = 0;
-  SaveBuffer() = default;
-  SaveBuffer(const SaveBuffer&) = delete;
-  SaveBuffer& operator=(const SaveBuffer&) = delete;
-  ~SaveBuffer() { fm_buffer_free(data); }
-};
 
 void print_recalc_usage(std::ostream& out) {
   out << "Usage: formulon recalc [--iterative] [--threads N] [--quiet] <in.xlsx-or-xlsb> -o <out.xlsx-or-xlsb>\n"

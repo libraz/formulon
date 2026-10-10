@@ -24,6 +24,7 @@
 #include <string_view>
 
 #include "c_api/formulon_c.h"
+#include "cli/c_api_raii.h"
 #include "cli/cli.h"
 #include "cli/diagnostics.h"
 #include "cli/render.h"
@@ -32,16 +33,6 @@ namespace formulon {
 namespace cli {
 
 namespace {
-
-// RAII wrapper so the workbook handle is released even when an early
-// return path is taken. Mirrors the helper in `tests/c_api/`.
-struct WorkbookGuard {
-  fm_workbook_t* handle = nullptr;
-  WorkbookGuard() = default;
-  WorkbookGuard(const WorkbookGuard&) = delete;
-  WorkbookGuard& operator=(const WorkbookGuard&) = delete;
-  ~WorkbookGuard() { fm_workbook_destroy(handle); }
-};
 
 void print_eval_usage(std::ostream& out) {
   out << "Usage: formulon eval [--json] [--repeat N] [--] <formula>\n"

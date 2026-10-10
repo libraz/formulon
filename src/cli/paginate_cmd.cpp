@@ -9,17 +9,13 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "cli/c_api_raii.h"
 #include "cli/cli.h"
 #include "cli/diagnostics.h"
 #include "cli/file_io.h"
 
 namespace formulon::cli {
 namespace {
-
-struct WorkbookGuard {
-  fm_workbook_t* handle = nullptr;
-  ~WorkbookGuard() { fm_workbook_destroy(handle); }
-};
 
 struct PaginationGuard {
   fm_pagination_t* handle = nullptr;

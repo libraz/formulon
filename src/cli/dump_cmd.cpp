@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "cli/c_api_raii.h"
 #include "cli/cli.h"
 #include "cli/diagnostics.h"
 #include "cli/file_io.h"
@@ -34,14 +35,6 @@ namespace formulon {
 namespace cli {
 
 namespace {
-
-struct WorkbookGuard {
-  fm_workbook_t* handle = nullptr;
-  WorkbookGuard() = default;
-  WorkbookGuard(const WorkbookGuard&) = delete;
-  WorkbookGuard& operator=(const WorkbookGuard&) = delete;
-  ~WorkbookGuard() { fm_workbook_destroy(handle); }
-};
 
 enum class DumpMode { kFormulas, kValues, kSheets, kMetadata };
 
