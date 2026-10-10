@@ -219,7 +219,7 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
       return {Value::number(minute_index), std::move(label)};
     }
     case DateGrouping::Second: {
-      const double second_index = std::floor(serial * 86400.0);
+      const double second_index = std::floor(serial * static_cast<double>(date_time::kSecondsPerDay));
       const HMS hms = hms_from_fraction(serial);
       std::string label;
       append_year(label, ymd.y);

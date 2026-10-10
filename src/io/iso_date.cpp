@@ -41,20 +41,6 @@ bool TakeChar(std::string_view s, std::size_t* pos, char lit) noexcept {
   return true;
 }
 
-bool IsLeapYear(int year) noexcept {
-  return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
-}
-
-/// Returns the number of days in `month` (1-12) of `year`. `month` must
-/// already be validated to `[1, 12]` by the caller.
-int DaysInMonth(int year, int month) noexcept {
-  static constexpr int kDaysInMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-  if (month == 2 && IsLeapYear(year)) {
-    return 29;
-  }
-  return kDaysInMonth[month - 1];
-}
-
 // ISO 8601 permits a UTC marker or a signed hour/minute offset. Excel keeps
 // the wall-clock value, so the validated offset is intentionally ignored.
 bool TakeTimezoneSuffix(std::string_view s, std::size_t* pos) noexcept {
@@ -97,7 +83,8 @@ bool parse_iso_date_serial(std::string_view text, double* out_serial) noexcept {
   // `2024-02-30`, `2023-02-29`): `serial_from_ymd` silently normalizes an
   // out-of-range day into the following month, which would violate this
   // parser's "strict" lexical contract by accepting non-canonical input.
-  if (month < 1 || month > 12 || day < 1 || day > DaysInMonth(year, month)) {
+  if (month < 1 || month > 12 || day < 1 ||
+      day > static_cast<int>(date_time::days_in_month(year, static_cast<unsigned>(month)))) {
     return false;
   }
 
@@ -118,7 +105,7 @@ bool parse_iso_date_serial(std::string_view text, double* out_serial) noexcept {
     }
     double frac =
         (static_cast<double>(hour) * 3600.0 + static_cast<double>(minute) * 60.0 + static_cast<double>(second)) /
-        86400.0;
+        static_cast<double>(date_time::kSecondsPerDay);
 
     // Optional fractional seconds: '.' followed by one or more digits.
     if (pos < text.size() && text[pos] == '.') {
@@ -126,7 +113,7 @@ bool parse_iso_date_serial(std::string_view text, double* out_serial) noexcept {
       double scale = 0.1;
       bool any = false;
       while (pos < text.size() && text[pos] >= '0' && text[pos] <= '9') {
-        frac += (text[pos] - '0') * scale / 86400.0;
+        frac += (text[pos] - '0') * scale / static_cast<double>(date_time::kSecondsPerDay);
         scale *= 0.1;
         ++pos;
         any = true;
