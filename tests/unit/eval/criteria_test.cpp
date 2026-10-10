@@ -7,10 +7,19 @@
 
 #include "eval/criteria.h"
 
+#include <fstream>
 #include <string>
+#include <vector>
 
+#include "eval/eval_profile_scope.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "utils/text_ops.h"
 #include "value.h"
+
+#ifndef FORMULON_COLLATION_DATA_DIR
+#error "FORMULON_COLLATION_DATA_DIR must name tools/collation/data"
+#endif
 
 namespace formulon {
 namespace eval {
@@ -654,6 +663,157 @@ TEST(WildcardCriterion, NotEqPatternCountsNonTextCells) {
   EXPECT_FALSE(matches_criterion(Value::text("12 Oak"), c));
   EXPECT_TRUE(matches_criterion(Value::text("hello"), c));
   EXPECT_TRUE(matches_criterion(Value::number(1213.0), c));
+}
+
+// ---------------------------------------------------------------------------
+// Collation-backed text matching.
+// ---------------------------------------------------------------------------
+
+ExcelProfile mac_profile(ExcelLocale locale) {
+  return ExcelProfile{ExcelHost::kMac365, locale};
+}
+
+ExcelProfile win_profile(ExcelLocale locale) {
+  return ExcelProfile{ExcelHost::kWin365, locale};
+}
+
+// "U+0061 U+0301" -> UTF-8.
+std::string decode_codepoints(const std::string& field) {
+  std::string out;
+  std::size_t i = 0;
+  while (i < field.size()) {
+    const std::size_t space = field.find(' ', i);
+    const std::size_t end = space == std::string::npos ? field.size() : space;
+    out += encode_utf8_codepoint(static_cast<std::uint32_t>(std::stoul(field.substr(i + 2, end - i - 2), nullptr, 16)));
+    i = end + 1;
+  }
+  return out;
+}
+
+bool countif_hit(const std::string& criterion, const std::string& cell, ExcelProfile profile) {
+  const ScopedEvalProfile scope(profile);
+  return matches_criterion(Value::text(cell), parse_criterion(Value::text(criterion)), profile);
+}
+
+bool dcount_hit(const std::string& criterion, const std::string& cell, ExcelProfile profile) {
+  const ScopedEvalProfile scope(profile);
+  return matches_criterion(Value::text(cell), parse_criterion_dfunc(Value::text(criterion)), profile);
+}
+
+// Drives the countif / countifeq / sumif / dcount columns of the measured
+// equality table. Row a is the criterion and b the cell; rows whose criterion
+// is numeric or carries a comparator or wildcard take other criteria paths.
+void check_eq_columns(const char* tag, ExcelLocale locale) {
+  const ExcelProfile profile = mac_profile(locale);
+  std::ifstream in(std::string(FORMULON_COLLATION_DATA_DIR) + "/fixtures/eq_" + tag + ".tsv");
+  ASSERT_TRUE(in.good());
+  std::string line;
+  std::getline(in, line);
+  std::vector<std::string> header;
+  const auto split = [](const std::string& text) {
+    std::vector<std::string> fields;
+    std::size_t start = 0;
+    for (std::size_t tab = text.find('\t'); tab != std::string::npos; tab = text.find('\t', start)) {
+      fields.push_back(text.substr(start, tab - start));
+      start = tab + 1;
+    }
+    fields.push_back(text.substr(start));
+    return fields;
+  };
+  header = split(line);
+  int checked = 0;
+  while (std::getline(in, line)) {
+    if (line.empty()) {
+      continue;
+    }
+    const std::vector<std::string> row = split(line);
+    ASSERT_EQ(row.size(), header.size());
+    const std::string a = decode_codepoints(row[0]);
+    const std::string b = decode_codepoints(row[1]);
+    const ParsedCriterion probe = parse_criterion(Value::text(a));
+    if (probe.rhs_is_number || probe.has_wildcard || probe.op != CriteriaOp::Eq || a.empty()) {
+      continue;
+    }
+    for (std::size_t col = 2; col < header.size(); ++col) {
+      const std::string& fn = header[col];
+      bool got = false;
+      std::string hit = "1";
+      if (fn == "countif" || fn == "countifeq" || fn == "sumif") {
+        got = countif_hit(a, b, profile);
+        hit = fn == "sumif" ? "2" : "1";
+      } else if (fn == "dcount") {
+        got = dcount_hit(a, b, profile);
+      } else {
+        continue;
+      }
+      ++checked;
+      EXPECT_EQ(got, row[col] == hit) << tag << " " << fn << " " << row[0] << " | " << row[1] << " = " << row[col];
+    }
+  }
+  EXPECT_GT(checked, 100);
+}
+
+TEST(CriteriaCollation, MacJaJpEqTable) {
+  check_eq_columns("ja_JP", ExcelLocale::kJaJP);
+}
+
+TEST(CriteriaCollation, MacEnUsEqTable) {
+  check_eq_columns("en_US", ExcelLocale::kEnUS);
+}
+
+TEST(CriteriaCollation, MacZhCnEqTable) {
+  check_eq_columns("zh_CN", ExcelLocale::kZhCN);
+}
+
+TEST(CriteriaCollation, MacThThEqTable) {
+  check_eq_columns("th_TH", ExcelLocale::kThTH);
+}
+
+TEST(CriteriaCollation, DcountPrefixCellsEn) {
+  const ExcelProfile en = mac_profile(ExcelLocale::kEnUS);
+  EXPECT_FALSE(dcount_hit("\xC3\x9F", "ss", en));  // criterion ß, cell ss
+  EXPECT_TRUE(dcount_hit("ss", "\xC3\x9F", en));
+  EXPECT_FALSE(dcount_hit("\xC4\xB3", "ij", en));    // criterion ĳ, cell ij
+  EXPECT_TRUE(dcount_hit("\xEF\xBC\x91", "1", en));  // full-width 1 against 1
+}
+
+TEST(CriteriaCollation, DcountPrefixCellsJa) {
+  const ExcelProfile ja = mac_profile(ExcelLocale::kJaJP);
+  EXPECT_TRUE(dcount_hit("\xEF\xBD\xB6\xEF\xBE\x9E", "\xE3\x82\xAC", ja));  // criterion ｶﾞ, cell ガ
+}
+
+TEST(CriteriaCollation, DcountPrefixCellsZh) {
+  const ExcelProfile zh = mac_profile(ExcelLocale::kZhCN);
+  EXPECT_FALSE(dcount_hit("\xC3\xA6", "ae", zh));  // criterion æ, cell ae
+  EXPECT_TRUE(dcount_hit("ss", "\xC3\x9F", zh));
+  EXPECT_TRUE(dcount_hit("\xEF\xBC\x91", "1", zh));
+}
+
+TEST(CriteriaCollation, JaIterationMarkCountif) {
+  const ExcelProfile ja = mac_profile(ExcelLocale::kJaJP);
+  EXPECT_TRUE(countif_hit("\xE3\x81\x8B\xE3\x82\x9D", "\xE3\x81\x8B\xE3\x81\x8B", ja));  // かゝ vs かか
+  EXPECT_TRUE(countif_hit("\xE3\x81\x8B\xE3\x81\x8B", "\xE3\x81\x8B\xE3\x82\x9D", ja));
+}
+
+TEST(CriteriaCollation, MacOrderingUsesCollation) {
+  const ExcelProfile en = mac_profile(ExcelLocale::kEnUS);
+  const ScopedEvalProfile scope(en);
+  const ParsedCriterion gt = parse_criterion(Value::text(">b"));
+  EXPECT_TRUE(matches_criterion(Value::text("C"), gt, en));
+  EXPECT_FALSE(matches_criterion(Value::text("B"), gt, en));
+  EXPECT_FALSE(matches_criterion(Value::text("a"), gt, en));
+  const ParsedCriterion ne = parse_criterion(Value::text("<>ss"));
+  EXPECT_FALSE(matches_criterion(Value::text("\xC3\x9F"), ne, en));
+}
+
+TEST(CriteriaCollation, WindowsJaKeepsByteModel) {
+  const ExcelProfile win = win_profile(ExcelLocale::kJaJP);
+  // Measured on Windows ja-JP: half-width kana equal only themselves.
+  EXPECT_TRUE(countif_hit("\xEF\xBD\xB1", "\xEF\xBD\xB1", win));
+  EXPECT_FALSE(countif_hit("\xEF\xBD\xB1", "\xE3\x82\xA2", win));
+  EXPECT_FALSE(countif_hit("\xE3\x81\x82", "\xE3\x82\xA2", win));
+  EXPECT_TRUE(countif_hit("ABC", "abc", win));
+  EXPECT_TRUE(countif_hit("\xEF\xBC\x91\xEF\xBC\x92x", "12x", win));
 }
 
 }  // namespace

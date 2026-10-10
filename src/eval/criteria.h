@@ -142,6 +142,14 @@ struct ParsedCriterion {
   /// selected by `op`/`has_wildcard`, themselves fixed).
   const std::string& cached_folded_rhs(ExcelProfile profile, bool unescape_first) const;
 
+  /// Pre-folded `rhs_text` and its `kCompare` collation key for Mac profiles,
+  /// cached per (profile, unescape_first) like `cached_folded_rhs`.
+  struct CollationRhs {
+    std::string prefolded;
+    std::string key;
+  };
+  const CollationRhs& cached_collation_rhs(ExcelProfile profile, bool unescape_first) const;
+
  private:
   /// Owns the re-buffered RHS when the parser needed to strip a comparator
   /// prefix from an interned `Value::text` view. External callers should
@@ -159,6 +167,10 @@ struct ParsedCriterion {
   mutable bool rhs_fold_cache_unescape_first_ = false;
   mutable ExcelProfile rhs_fold_cache_profile_{};
   mutable std::string rhs_fold_cache_;
+  mutable bool rhs_key_cached_ = false;
+  mutable bool rhs_key_cache_unescape_first_ = false;
+  mutable ExcelProfile rhs_key_cache_profile_{};
+  mutable CollationRhs rhs_key_cache_;
 
   friend ParsedCriterion parse_criterion(const Value&);
   friend ParsedCriterion parse_criterion_dfunc(const Value&);
