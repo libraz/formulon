@@ -137,30 +137,18 @@ bool extract_topleft_ref(const parser::AstNode& ref_node, Arena& arena, const Fu
   if (k == parser::NodeKind::RangeOp) {
     const parser::AstNode& lhs_ast = ref_node.as_range_lhs();
     const parser::AstNode& rhs_ast = ref_node.as_range_rhs();
-    std::string_view lhs_sheet;
-    std::string_view rhs_sheet;
-    std::uint32_t lhs_top = 0;
-    std::uint32_t lhs_left = 0;
-    std::uint32_t lhs_bottom = 0;
-    std::uint32_t lhs_right = 0;
-    std::uint32_t rhs_top = 0;
-    std::uint32_t rhs_left = 0;
-    std::uint32_t rhs_bottom = 0;
-    std::uint32_t rhs_right = 0;
+    std::uint32_t top = 0;
+    std::uint32_t left = 0;
+    std::uint32_t bottom = 0;
+    std::uint32_t right = 0;
     ErrorCode err = ErrorCode::Ref;
-    if (!resolve_range_endpoint(lhs_ast, arena, registry, ctx, &lhs_sheet, &lhs_top, &lhs_left, &lhs_bottom, &lhs_right,
-                                &err) ||
-        !resolve_range_endpoint(rhs_ast, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom, &rhs_right,
-                                &err)) {
+    if (!resolve_range_endpoints(lhs_ast, rhs_ast, arena, registry, ctx, out_sheet, &top, &left, &bottom, &right,
+                                 &err)) {
       *out_err = Value::error(err);
       return false;
     }
-    if (!merge_range_endpoint_sheets(lhs_ast, lhs_sheet, rhs_ast, rhs_sheet, ctx, out_sheet, &err)) {
-      *out_err = Value::error(err);
-      return false;
-    }
-    *out_row = lhs_top < rhs_top ? lhs_top : rhs_top;
-    *out_col = lhs_left < rhs_left ? lhs_left : rhs_left;
+    *out_row = top;
+    *out_col = left;
     return true;
   }
 

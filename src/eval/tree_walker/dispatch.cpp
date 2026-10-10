@@ -387,32 +387,20 @@ Shaped broadcast_scalar_call_shaped(const FunctionDef& def, const std::vector<Va
 bool union_endpoint_refs(const parser::AstNode& lhs_ast, const parser::AstNode& rhs_ast, Arena& arena,
                          const FunctionRegistry& registry, const EvalContext& ctx, parser::Reference* out_lhs,
                          parser::Reference* out_rhs, ErrorCode* out_err) {
-  std::string_view lhs_sheet;
-  std::string_view rhs_sheet;
-  std::uint32_t lhs_top = 0;
-  std::uint32_t lhs_left = 0;
-  std::uint32_t lhs_bottom = 0;
-  std::uint32_t lhs_right = 0;
-  std::uint32_t rhs_top = 0;
-  std::uint32_t rhs_left = 0;
-  std::uint32_t rhs_bottom = 0;
-  std::uint32_t rhs_right = 0;
-  if (!resolve_range_endpoint(lhs_ast, arena, registry, ctx, &lhs_sheet, &lhs_top, &lhs_left, &lhs_bottom, &lhs_right,
-                              out_err) ||
-      !resolve_range_endpoint(rhs_ast, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom, &rhs_right,
-                              out_err)) {
-    return false;
-  }
   std::string_view sheet;
-  if (!merge_range_endpoint_sheets(lhs_ast, lhs_sheet, rhs_ast, rhs_sheet, ctx, &sheet, out_err)) {
+  std::uint32_t top = 0;
+  std::uint32_t left = 0;
+  std::uint32_t bottom = 0;
+  std::uint32_t right = 0;
+  if (!resolve_range_endpoints(lhs_ast, rhs_ast, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, out_err)) {
     return false;
   }
   out_lhs->sheet = sheet;
-  out_lhs->row = std::min(lhs_top, rhs_top);
-  out_lhs->col = std::min(lhs_left, rhs_left);
+  out_lhs->row = top;
+  out_lhs->col = left;
   out_rhs->sheet = sheet;
-  out_rhs->row = std::max(lhs_bottom, rhs_bottom);
-  out_rhs->col = std::max(lhs_right, rhs_right);
+  out_rhs->row = bottom;
+  out_rhs->col = right;
   return true;
 }
 

@@ -481,12 +481,10 @@ bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const
   return false;
 }
 
-namespace {
-
-bool union_range_endpoints(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                           const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                           std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                           ErrorCode* out_err) {
+bool resolve_range_endpoints(const parser::AstNode& lhs, const parser::AstNode& rhs, Arena& arena,
+                             const FunctionRegistry& registry, const EvalContext& ctx, std::string_view* out_sheet,
+                             std::uint32_t* out_top_row, std::uint32_t* out_left_col, std::uint32_t* out_bottom_row,
+                             std::uint32_t* out_right_col, ErrorCode* out_err) {
   std::string_view lhs_sheet;
   std::string_view rhs_sheet;
   std::uint32_t lhs_top = 0;
@@ -497,14 +495,15 @@ bool union_range_endpoints(const parser::AstNode& node, Arena& arena, const Func
   std::uint32_t rhs_left = 0;
   std::uint32_t rhs_bottom = 0;
   std::uint32_t rhs_right = 0;
-  if (!resolve_range_endpoint(node.as_range_lhs(), arena, registry, ctx, &lhs_sheet, &lhs_top, &lhs_left, &lhs_bottom,
-                              &lhs_right, out_err) ||
-      !resolve_range_endpoint(node.as_range_rhs(), arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom,
-                              &rhs_right, out_err)) {
+  if (!resolve_range_endpoint(lhs, arena, registry, ctx, &lhs_sheet, &lhs_top, &lhs_left, &lhs_bottom, &lhs_right,
+                              out_err)) {
     return false;
   }
-  if (!merge_range_endpoint_sheets(node.as_range_lhs(), lhs_sheet, node.as_range_rhs(), rhs_sheet, ctx, out_sheet,
-                                   out_err)) {
+  if (!resolve_range_endpoint(rhs, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom, &rhs_right,
+                              out_err)) {
+    return false;
+  }
+  if (!merge_range_endpoint_sheets(lhs, lhs_sheet, rhs, rhs_sheet, ctx, out_sheet, out_err)) {
     return false;
   }
   *out_top_row = std::min(lhs_top, rhs_top);
@@ -512,6 +511,16 @@ bool union_range_endpoints(const parser::AstNode& node, Arena& arena, const Func
   *out_bottom_row = std::max(lhs_bottom, rhs_bottom);
   *out_right_col = std::max(lhs_right, rhs_right);
   return true;
+}
+
+namespace {
+
+bool union_range_endpoints(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                           std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                           ErrorCode* out_err) {
+  return resolve_range_endpoints(node.as_range_lhs(), node.as_range_rhs(), arena, registry, ctx, out_sheet, out_top_row,
+                                 out_left_col, out_bottom_row, out_right_col, out_err);
 }
 
 // Resolves an `IntersectOp` operand AST into a rectangle. Accepts the

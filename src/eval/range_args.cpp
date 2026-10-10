@@ -300,37 +300,25 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     // `resolve_range_endpoint` normalises every shape to a rectangle so we
     // can union them and feed `expand_range` two synthetic Refs on the
     // sheet `merge_range_endpoint_sheets` settles.
-    std::string_view lhs_sheet;
-    std::string_view rhs_sheet;
-    std::uint32_t lhs_top = 0;
-    std::uint32_t lhs_left = 0;
-    std::uint32_t lhs_bottom = 0;
-    std::uint32_t lhs_right = 0;
-    std::uint32_t rhs_top = 0;
-    std::uint32_t rhs_left = 0;
-    std::uint32_t rhs_bottom = 0;
-    std::uint32_t rhs_right = 0;
     ErrorCode endpoint_err = ErrorCode::Ref;
-    if (!resolve_range_endpoint(lhs_ast, arena, registry, ctx, &lhs_sheet, &lhs_top, &lhs_left, &lhs_bottom, &lhs_right,
-                                &endpoint_err) ||
-        !resolve_range_endpoint(rhs_ast, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom, &rhs_right,
-                                &endpoint_err)) {
-      *out_err_code = endpoint_err;
-      return false;
-    }
     std::string_view union_sheet;
-    if (!merge_range_endpoint_sheets(lhs_ast, lhs_sheet, rhs_ast, rhs_sheet, ctx, &union_sheet, &endpoint_err)) {
+    std::uint32_t union_top = 0;
+    std::uint32_t union_left = 0;
+    std::uint32_t union_bottom = 0;
+    std::uint32_t union_right = 0;
+    if (!resolve_range_endpoints(lhs_ast, rhs_ast, arena, registry, ctx, &union_sheet, &union_top, &union_left,
+                                 &union_bottom, &union_right, &endpoint_err)) {
       *out_err_code = endpoint_err;
       return false;
     }
     parser::Reference union_lhs{};
     parser::Reference union_rhs{};
     union_lhs.sheet = union_sheet;
-    union_lhs.row = std::min(lhs_top, rhs_top);
-    union_lhs.col = std::min(lhs_left, rhs_left);
+    union_lhs.row = union_top;
+    union_lhs.col = union_left;
     union_rhs.sheet = union_sheet;
-    union_rhs.row = std::max(lhs_bottom, rhs_bottom);
-    union_rhs.col = std::max(lhs_right, rhs_right);
+    union_rhs.row = union_bottom;
+    union_rhs.col = union_right;
     auto expanded = ctx.expand_range(union_lhs, union_rhs, arena, registry);
     if (!expanded) {
       *out_err_code = expanded.error();
