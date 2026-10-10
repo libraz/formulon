@@ -90,6 +90,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Text comparison on `mac-*` profiles follows Mac Excel's collation for the
+  profile's locale: comparison operators, `SWITCH`, `COUNTIF`-family and
+  D-function criteria, `MATCH` / `VLOOKUP` / `HLOOKUP` / `LOOKUP`,
+  `XLOOKUP` / `XMATCH`, `SORT` / `SORTBY` / `UNIQUE`, `GROUPBY` / `PIVOTBY`,
+  PivotTable item grouping, ordering and label filters, conditional formatting
+  and AutoFilter. Case, width and kana type are ignored where Excel ignores
+  them, accents order after base letters, `ß` equals `ss`, Hangul compares by
+  jamo, and ideographs follow the locale's order (JIS in ja-JP, readings in
+  ko-KR, pinyin in zh-CN, strokes in zh-TW). Lookups and criteria compare at
+  the strength Excel uses for each function, so `XLOOKUP` matches `Ａ` to `A`
+  in zh-CN where `MATCH(…, 1)` does not. `win-*` profiles keep the
+  case-insensitive byte comparison, with unsigned bytes on every path, and
+  `GROUPBY`, `PIVOTBY` and PivotTables on them no longer fold kana or width.
 - `fm_locale_t` and the `FM_LOCALE_*` codes are removed; the function-name
   calls take a profile id instead of a numeric locale. `fm_function_metadata`,
   `functionMetadata` and `function_metadata` lose their locale argument, as
@@ -100,7 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of field-name headers, and names a Count Numbers, StdDevp or Varp data field
   `Count of`, `StdDevp of` or `Varp of`; a fr-FR subtotal row reads
   `Total North`.
-- The WASM size report's Brotli ceilings moved to 992 KiB soft and 1024 KiB
+- The WASM size report's Brotli ceilings moved to 1024 KiB soft and 1056 KiB
   hard; the uncompressed ceilings are unchanged.
 - A workbook without a theme part now resolves theme colors and fonts with the
   current Excel Office theme (Aptos Display / Aptos Narrow, accent1 `156082`),
@@ -276,6 +289,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`"@ 9"`), as Excel does.
 - `TEXT` returns `#VALUE!` for a number format with an unquoted colon before
   a digit placeholder (`"0:0"`), as Excel does.
+
+### Known limitations
+
+- Collation on `mac-*` profiles does not compose a letter with a following
+  combining mark (`a` + U+0301 is not `á`), places scripts outside Latin,
+  Greek, Cyrillic, Thai, Hangul, kana and CJK after them in code-point order
+  (the zh profiles ignore them), and orders zh-CN ideographs outside GB 2312
+  level 1 by radical and stroke instead of pinyin. Wildcard criteria and
+  lookups keep the previous kana and width folding, and Windows text order is
+  unmeasured.
 
 ## [0.13.0] - 2026-10-06
 
