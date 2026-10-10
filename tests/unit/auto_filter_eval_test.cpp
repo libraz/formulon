@@ -2,12 +2,14 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <iterator>
 #include <memory>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "sheet.h"
@@ -66,7 +68,7 @@ void SetRowHidden(Sheet& sheet, std::uint32_t row, bool hidden) {
 }
 
 // Every sheet of this workbook was filtered and then saved by Excel, so its
-// saved row-hidden state is the visible set Excel computed. Relative-date
+// saved row-hidden state is the visible set Mac Excel (ja-JP) computed. Relative-date
 // cases were filtered on Monday 2026-10-05.
 std::unique_ptr<Workbook> LoadKinds() {
   const std::vector<std::uint8_t> bytes = ReadFile("auto_filter_kinds.xlsx");
@@ -77,6 +79,7 @@ std::unique_ptr<Workbook> LoadKinds() {
   }
   auto wb = std::make_unique<Workbook>(std::move(read.value().workbook));
   wb->set_pinned_now(date_time::CivilTime{{2026, 10, 5U}, {12U, 0U, 0U}});
+  wb->set_excel_profile(mac_365_ja_jp_profile());
   return wb;
 }
 
@@ -236,6 +239,130 @@ TEST(AutoFilterEval, TableCriterionMakesSheetFiltered) {
   filter.columns.push_back(column);
   ASSERT_TRUE(static_cast<bool>(wb.set_table_auto_filter(0, filter)));
   EXPECT_TRUE(sheet_has_filter_criteria(&wb, wb.sheet(0)));
+}
+
+// Locale collation: value-list and custom filters follow the workbook profile.
+// Expectations are the measured equality and ordering fixtures
+// (tools/collation/data/fixtures).
+struct FilterEqualityCase {
+  const char* label;
+  const char* a;
+  const char* b;
+  bool ja;
+  bool en;
+  bool zh;
+  bool win_ja;
+};
+
+constexpr FilterEqualityCase kFilterEqualityCases[] = {
+    {"circled one vs 1", "\xE2\x91\xA0", "1", true, true, false, false},
+    {"fullwidth A vs A", "\xEF\xBC\xA1", "A", true, true, false, false},
+    {"katakana a vs hiragana a", "\xE3\x82\xA2", "\xE3\x81\x82", true, true, false, false},
+    {"iteration marks", "\xE3\x82\x9D", "\xE3\x83\xBD", true, false, true, false},
+    {"sharp s vs ss", "\xC3\x9F", "ss", true, true, true, false},
+    {"a-umlaut vs a", "\xC3\xA4", "a", false, false, false, false},
+    {"A vs a", "A", "a", true, true, true, true},
+};
+
+struct FilterProfile {
+  const char* name;
+  ExcelProfile profile;
+};
+
+const FilterProfile kFilterProfiles[] = {
+    {"mac-ja_JP", {ExcelHost::kMac365, ExcelLocale::kJaJP}},
+    {"mac-en_US", {ExcelHost::kMac365, ExcelLocale::kEnUS}},
+    {"mac-zh_CN", {ExcelHost::kMac365, ExcelLocale::kZhCN}},
+    {"win-ja_JP", {ExcelHost::kWin365, ExcelLocale::kJaJP}},
+};
+
+bool ExpectedFilterEqual(const FilterEqualityCase& c, std::size_t p) {
+  switch (p) {
+    case 0:
+      return c.ja;
+    case 1:
+      return c.en;
+    case 2:
+      return c.zh;
+    default:
+      return c.win_ja;
+  }
+}
+
+// One header row and one body row holding `cell`; returns the body row's flag.
+bool BodyRowVisible(ExcelProfile profile, const char* cell, FilterColumn column) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(profile);
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::text("h"));
+  sheet.set_cell_value(1, 0, Value::text(cell));
+  AutoFilter filter;
+  filter.range = MergeRange{0, 0, 1, 0};
+  filter.columns.push_back(std::move(column));
+  auto visible = evaluate_auto_filter(wb, sheet, filter);
+  EXPECT_TRUE(static_cast<bool>(visible));
+  return visible && visible.value().size() == 1U && visible.value()[0];
+}
+
+TEST(AutoFilterEvalCollation, ValueListEqualityFollowsProfile) {
+  for (std::size_t p = 0; p < std::size(kFilterProfiles); ++p) {
+    for (const FilterEqualityCase& c : kFilterEqualityCases) {
+      FilterColumn column;
+      column.kind = FilterKind::kValues;
+      column.values.values.push_back(c.b);
+      EXPECT_EQ(BodyRowVisible(kFilterProfiles[p].profile, c.a, column), ExpectedFilterEqual(c, p))
+          << kFilterProfiles[p].name << " " << c.label;
+    }
+  }
+}
+
+TEST(AutoFilterEvalCollation, CustomEqualityFollowsProfile) {
+  for (std::size_t p = 0; p < std::size(kFilterProfiles); ++p) {
+    for (const FilterEqualityCase& c : kFilterEqualityCases) {
+      for (FilterOperator op : {FilterOperator::kEqual, FilterOperator::kNotEqual}) {
+        FilterColumn column;
+        column.kind = FilterKind::kCustom;
+        column.custom.filters.push_back(CustomFilter{op, c.b});
+        const bool equal = ExpectedFilterEqual(c, p);
+        EXPECT_EQ(BodyRowVisible(kFilterProfiles[p].profile, c.a, column),
+                  op == FilterOperator::kEqual ? equal : !equal)
+            << kFilterProfiles[p].name << " " << c.label;
+      }
+    }
+  }
+}
+
+// A wildcard criterion keeps the engine's pattern matching on every profile.
+TEST(AutoFilterEvalCollation, WildcardCriterionIsUnchanged) {
+  for (const FilterProfile& fp : kFilterProfiles) {
+    FilterColumn column;
+    column.kind = FilterKind::kCustom;
+    column.custom.filters.push_back(CustomFilter{FilterOperator::kEqual, "a*"});
+    EXPECT_TRUE(BodyRowVisible(fp.profile, "ab", column)) << fp.name;
+    EXPECT_FALSE(BodyRowVisible(fp.profile, "ba", column)) << fp.name;
+  }
+}
+
+// An escaped metacharacter is a literal: "~*" matches the text "*" only.
+TEST(AutoFilterEvalCollation, EscapedCriterionIsLiteral) {
+  for (const FilterProfile& fp : kFilterProfiles) {
+    FilterColumn column;
+    column.kind = FilterKind::kCustom;
+    column.custom.filters.push_back(CustomFilter{FilterOperator::kEqual, "~*"});
+    EXPECT_TRUE(BodyRowVisible(fp.profile, "*", column)) << fp.name;
+    EXPECT_FALSE(BodyRowVisible(fp.profile, "ab", column)) << fp.name;
+  }
+}
+
+// "$" sorts after "%" on ja_JP and en_US and before it on zh_CN.
+TEST(AutoFilterEvalCollation, CustomOrderingFollowsProfile) {
+  const bool expected_greater[] = {true, true, false};
+  for (std::size_t p = 0; p < 3U; ++p) {
+    FilterColumn column;
+    column.kind = FilterKind::kCustom;
+    column.custom.filters.push_back(CustomFilter{FilterOperator::kGreaterThan, "%"});
+    EXPECT_EQ(BodyRowVisible(kFilterProfiles[p].profile, "$", column), expected_greater[p]) << kFilterProfiles[p].name;
+  }
 }
 
 }  // namespace

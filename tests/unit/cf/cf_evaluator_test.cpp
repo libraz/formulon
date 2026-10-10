@@ -2,11 +2,22 @@
 
 #include "cf/cf_evaluator.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
+#include <optional>
+#include <string>
+#include <utility>
+
 #include "cell.h"
 #include "cf/cf_match.h"
 #include "cf/cf_types.h"
 #include "cf_evaluator_fixtures.h"
+#include "eval/eval_context.h"
+#include "eval/function_registry.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "sheet.h"
 #include "utils/error.h"
 #include "value.h"
 namespace formulon::cf {
@@ -470,6 +481,126 @@ TEST(CFEvaluator, MakeMatchPropagatesEmptyDxf) {
   r.dxf_id.reset();
   CFMatch m = make_match(r);
   EXPECT_FALSE(m.dxf_id.has_value());
+}
+
+// ---------------------------------------------------------------------------
+// Locale collation: text cell-value and duplicate / unique rules follow the
+// profile of the evaluation context. Expectations are the measured equality
+// and ordering fixtures (tools/collation/data/fixtures).
+// ---------------------------------------------------------------------------
+
+struct CollationProfile {
+  const char* name;
+  ExcelProfile profile;
+};
+
+struct EqualityCase {
+  const char* label;
+  const char* a;
+  const char* b;
+  bool ja;
+  bool en;
+  bool zh;
+  bool win_ja;
+};
+
+constexpr EqualityCase kEqualityCases[] = {
+    {"circled one vs 1", "\xE2\x91\xA0", "1", true, true, false, false},
+    {"fullwidth A vs A", "\xEF\xBC\xA1", "A", true, true, false, false},
+    {"katakana a vs hiragana a", "\xE3\x82\xA2", "\xE3\x81\x82", true, true, false, false},
+    {"iteration marks", "\xE3\x82\x9D", "\xE3\x83\xBD", true, false, true, false},
+    {"sharp s vs ss", "\xC3\x9F", "ss", true, true, true, false},
+    {"a-umlaut vs a", "\xC3\xA4", "a", false, false, false, false},
+    {"A vs a", "A", "a", true, true, true, true},
+};
+
+const CollationProfile kProfiles[] = {
+    {"mac-ja_JP", {ExcelHost::kMac365, ExcelLocale::kJaJP}},
+    {"mac-en_US", {ExcelHost::kMac365, ExcelLocale::kEnUS}},
+    {"mac-zh_CN", {ExcelHost::kMac365, ExcelLocale::kZhCN}},
+    {"win-ja_JP", {ExcelHost::kWin365, ExcelLocale::kJaJP}},
+};
+
+bool ExpectedEqual(const EqualityCase& c, std::size_t profile_index) {
+  switch (profile_index) {
+    case 0:
+      return c.ja;
+    case 1:
+      return c.en;
+    case 2:
+      return c.zh;
+    default:
+      return c.win_ja;
+  }
+}
+
+class CFEvaluatorCollation : public ::testing::Test {
+ protected:
+  void SetProfile(ExcelProfile profile) {
+    harness_.sheet.mutable_conditional_formats().clear();
+    eval_ctx_.emplace(harness_.eval_ctx.with_excel_profile(profile));
+    host_.arena = &harness_.arena;
+    host_.registry = &eval::default_registry();
+    host_.eval_ctx = &*eval_ctx_;
+  }
+
+  void AddRule(CFRule rule, std::uint32_t last_row) {
+    ConditionalFormat block;
+    block.sqref.push_back(MakeRange(0U, 0U, last_row, 0U));
+    block.rules.push_back(std::move(rule));
+    harness_.sheet.mutable_conditional_formats().push_back(std::move(block));
+  }
+
+  bool Matches(std::uint32_t row) { return !evaluate_cf_at(harness_.sheet, At(row, 0U), host_).empty(); }
+
+  CFEvalHarness harness_;
+  std::optional<eval::EvalContext> eval_ctx_;
+  CFHost host_;
+};
+
+TEST_F(CFEvaluatorCollation, CellIsEqualFollowsProfile) {
+  for (std::size_t p = 0; p < std::size(kProfiles); ++p) {
+    for (const EqualityCase& c : kEqualityCases) {
+      SetProfile(kProfiles[p].profile);
+      harness_.sheet.set_cell_value(0, 0, Value::text(c.a));
+      CFRule rule = MakeRule(RuleType::CellIs);
+      rule.op = CellIsOperator::Equal;
+      rule.formula1 = std::string("\"") + c.b + "\"";
+      AddRule(std::move(rule), 0U);
+      EXPECT_EQ(Matches(0U), ExpectedEqual(c, p)) << kProfiles[p].name << " " << c.label;
+    }
+  }
+}
+
+TEST_F(CFEvaluatorCollation, DuplicateAndUniqueFollowProfile) {
+  for (std::size_t p = 0; p < std::size(kProfiles); ++p) {
+    for (const EqualityCase& c : kEqualityCases) {
+      for (RuleType type : {RuleType::DuplicateValues, RuleType::UniqueValues}) {
+        SetProfile(kProfiles[p].profile);
+        harness_.sheet.set_cell_value(0, 0, Value::text(c.a));
+        harness_.sheet.set_cell_value(1, 0, Value::text(c.b));
+        AddRule(MakeRule(type), 1U);
+        const bool equal = ExpectedEqual(c, p);
+        const bool want = type == RuleType::DuplicateValues ? equal : !equal;
+        EXPECT_EQ(Matches(0U), want) << kProfiles[p].name << " " << c.label;
+        EXPECT_EQ(Matches(1U), want) << kProfiles[p].name << " " << c.label;
+      }
+    }
+  }
+}
+
+// "$" sorts after "%" on ja_JP and en_US and before it on zh_CN.
+TEST_F(CFEvaluatorCollation, CellIsOrderingFollowsProfile) {
+  const bool expected_greater[] = {true, true, false};
+  for (std::size_t p = 0; p < 3U; ++p) {
+    SetProfile(kProfiles[p].profile);
+    harness_.sheet.set_cell_value(0, 0, Value::text("$"));
+    CFRule rule = MakeRule(RuleType::CellIs);
+    rule.op = CellIsOperator::GreaterThan;
+    rule.formula1 = "\"%\"";
+    AddRule(std::move(rule), 0U);
+    EXPECT_EQ(Matches(0U), expected_greater[p]) << kProfiles[p].name;
+  }
 }
 
 }  // namespace

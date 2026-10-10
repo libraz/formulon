@@ -13,7 +13,9 @@
 #include "cf/cf_evaluator.h"
 #include "cf/cf_match.h"
 #include "color_resolve.h"
+#include "eval/collation.h"
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/text_format/display_text.h"
@@ -51,42 +53,9 @@ bool is_blank_value(const Value& v) {
   return v.is_blank() || (v.is_text() && v.as_text().empty());
 }
 
-/// Sort class of one byte in Excel's text order: symbols and spaces, then
-/// digits, then letters, then everything beyond ASCII.
-int collation_class(unsigned char c) {
-  if (c >= 0x80U) {
-    return 3;
-  }
-  if (c >= '0' && c <= '9') {
-    return 1;
-  }
-  const char lower = strings::ascii_to_lower(static_cast<char>(c));
-  if (lower >= 'a' && lower <= 'z') {
-    return 2;
-  }
-  return 0;
-}
-
-/// Case-insensitive text comparison in Excel's sort order (-1 / 0 / +1).
+/// Text comparison at the operator strength of the active profile (-1 / 0 / +1).
 int collate(std::string_view a, std::string_view b) {
-  const std::size_t n = std::min(a.size(), b.size());
-  for (std::size_t i = 0; i < n; ++i) {
-    const auto ca = static_cast<unsigned char>(strings::ascii_to_lower(a[i]));
-    const auto cb = static_cast<unsigned char>(strings::ascii_to_lower(b[i]));
-    if (ca == cb) {
-      continue;
-    }
-    const int ka = collation_class(ca);
-    const int kb = collation_class(cb);
-    if (ka != kb) {
-      return ka < kb ? -1 : 1;
-    }
-    return ca < cb ? -1 : 1;
-  }
-  if (a.size() != b.size()) {
-    return a.size() < b.size() ? -1 : 1;
-  }
-  return 0;
+  return eval::collate(a, b, eval::current_eval_profile(), eval::CollationStrength::kCompare);
 }
 
 /// Parses a criterion value as a number; the whole string must be numeric.
@@ -156,7 +125,7 @@ bool match_values(const ValueFilters& f, const Run& run, std::uint32_t row, std:
     return f.blank;
   }
   for (const std::string& want : f.values) {
-    if (strings::case_insensitive_eq(want, shown.text)) {
+    if (collate(want, shown.text) == 0) {
       return true;
     }
   }
@@ -168,6 +137,14 @@ bool match_values(const ValueFilters& f, const Run& run, std::uint32_t row, std:
     }
   }
   return false;
+}
+
+/// Wildcard patterns match as before; a wildcard-free criterion collates.
+bool text_equals(std::string_view criterion, std::string_view text) {
+  if (eval::scan_has_wildcard(criterion)) {
+    return eval::wildcard_match(criterion, text);
+  }
+  return collate(eval::unescape_wildcard_literal(criterion), text) == 0;
 }
 
 /// Equality of one custom condition: a single space (or nothing) names the
@@ -185,10 +162,10 @@ bool custom_equals(const CustomFilter& c, const Value& v, const Run& run, std::u
     return n.has_value() && !eval::scan_has_wildcard(c.val) && *n == v.as_number();
   }
   if (v.is_text()) {
-    return eval::wildcard_match(c.val, v.as_text());
+    return text_equals(c.val, v.as_text());
   }
   const text_format::DisplayText shown = text_format::format_cell_for_display(run.wb, run.sheet, row, col);
-  return eval::wildcard_match(c.val, shown.text);
+  return text_equals(c.val, shown.text);
 }
 
 bool match_custom_one(const CustomFilter& c, const Value& v, const Run& run, std::uint32_t row, std::uint32_t col) {
@@ -519,9 +496,12 @@ Expected<std::vector<bool>, Error> evaluate_auto_filter(const Workbook& wb, cons
   }
   const eval::EvalContext* ctx = deps.eval_ctx;
   if (ctx == nullptr) {
-    own_ctx.emplace(eval::EvalContext(wb, sheet, own_state).with_pinned_now(wb.pinned_now()));
+    own_ctx.emplace(eval::EvalContext(wb, sheet, own_state)
+                        .with_pinned_now(wb.pinned_now())
+                        .with_excel_profile(wb.excel_profile()));
     ctx = &*own_ctx;
   }
+  const eval::ScopedEvalProfile profile_scope(ctx->excel_profile());
 
   const MergeRange& range = filter.range;
   const std::uint32_t body_rows = range.last_row - range.first_row;

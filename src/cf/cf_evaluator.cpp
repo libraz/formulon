@@ -23,6 +23,8 @@
 #include "cf/cf_types.h"
 #include "cf/rule_match.h"
 #include "cf/scale_evaluator.h"
+#include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/index_sort.h"
@@ -124,6 +126,7 @@ std::vector<CFMatch> evaluate_cf_at_impl(const Sheet& sheet, CellAddress target,
   if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
     return matches;
   }
+  const eval::ScopedEvalProfile profile_scope(host.eval_ctx->excel_profile());
 
   // Collect (block_index, rule_index, priority) for every rule whose
   // sqref contains `target`. Indices instead of pointers keeps the

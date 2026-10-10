@@ -17,7 +17,9 @@
 #include "cf/cf_types.h"
 #include "eval/builtin_names.h"
 #include "eval/coerce.h"
+#include "eval/collation.h"
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/scalar_ops.h"
 #include "eval/tree_walker.h"
 #include "parser/ast.h"
@@ -209,7 +211,8 @@ bool cf_values_equal(const Value& lhs, const Value& rhs) {
     return lhs.as_boolean() == rhs.as_boolean();
   }
   if (lhs.is_text() && rhs.is_text()) {
-    return strings::case_insensitive_eq(lhs.as_text(), rhs.as_text());
+    return eval::collate(lhs.as_text(), rhs.as_text(), eval::current_eval_profile(),
+                         eval::CollationStrength::kCompare) == 0;
   }
   return false;
 }
