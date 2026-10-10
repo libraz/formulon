@@ -465,6 +465,16 @@ cases:
     formula: '=TEXT(0.25,"０％")'
   - id: text_fullwidth_date_syntax
     formula: '=TEXT(DATE(2024,3,5),"ｙｙｙｙ／ｍ／ｄ")'
+  - id: text_colon_before_digit
+    formula: '=TEXTJOIN("|",FALSE,IFERROR(TEXT(1234.5,{"0:0",":0","""x"":0","0 :0","0:","0.0:","0\:0"}),"#"))'
+  - id: text_fullwidth_time_colon
+    formula: '=TEXTJOIN("|",FALSE,IFERROR(TEXT(1234.5,{"0：0","0："}),"#"),IFERROR(TEXT(TIME(3,4,5),{"h：mm","[mm]：ss","hh：mm：ss"}),"#"),IFERROR(TEXT("t","@："),"#"))'
+  - id: text_fullwidth_fraction_slash
+    formula: '=TEXTJOIN("|",FALSE,IFERROR(TEXT(1234.5,{"# ?／?","0／0"}),"#"))'
+  - id: text_fullwidth_signs
+    formula: '=TEXTJOIN("|",FALSE,IFERROR(TEXT(1234.5,{"0－0","＋0","0－","0.00E＋00"}),"#"))'
+  - id: text_blank_after_placeholder
+    formula: '=TEXTJOIN("|",FALSE,IFERROR(TEXT(1234.5,{"0 ","0 ""x""","0 0","0,00 ""x""","0 ;0","0 _)"}),"#"),IFERROR(TEXT(0.25,{"0 %","0 ％","0,0 %"}),"#"))&"|"'
   - id: dbnum_digits
     formula: '=TEXTJOIN("|",FALSE,IFERROR(TEXT(1234567890,"[DBNum"&{1,2,3,4}&"]0"),"#"))'
   - id: dbnum_place_units
