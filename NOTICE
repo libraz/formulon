@@ -8,3 +8,10 @@ Copyright (c) 2023 EqualTo GmbH, 2023 Nicolas Hatcher.
 
 The fixtures are retained in tests/oracle/external/ironcalc/fixtures/.
 License texts are reproduced at tests/oracle/external/ironcalc/.
+
+This product includes data derived from the Unicode Character Database
+(Unihan, Unicode 18.0.0: kTotalStrokes), Copyright (c) 1991-2026 Unicode, Inc.,
+distributed under the Unicode License v3.
+
+The extracted data is retained in tools/collation/data/unihan_total_strokes.tsv.
+The license text is reproduced at tools/collation/data/UNICODE-LICENSE.txt.

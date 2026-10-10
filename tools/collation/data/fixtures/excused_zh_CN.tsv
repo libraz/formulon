@@ -1,0 +1,537 @@
+a	b	strength	expected	model
+U+00E1	U+0061 U+0301	compare	0	+
+U+304B U+3041	U+30AB U+30A2	compare	-	+
+U+4E9C	U+4E00	compare	-	+
+U+4E9C	U+4E2D	compare	-	+
+U+4E9C	U+611B	compare	+	-
+U+4E9C	U+6771	compare	+	-
+U+4E9C	U+5B78	compare	+	-
+U+4E9C	U+6F22	compare	+	-
+U+4E9C	U+5B57	compare	-	+
+U+4E9C	U+4E59	compare	-	+
+U+4E9C	U+9F8D	compare	+	-
+U+4E9C	U+55CE	compare	+	-
+U+4E9C	U+4E2D U+30FC	compare	-	+
+U+4E00	U+4E9C	compare	+	-
+U+4E00	U+611B	compare	+	-
+U+4E00	U+6771	compare	+	-
+U+4E00	U+5B78	compare	+	-
+U+4E00	U+6F22	compare	+	-
+U+4E00	U+9F8D	compare	+	-
+U+4E00	U+55CE	compare	+	-
+U+65E5	U+611B	compare	+	-
+U+65E5	U+6771	compare	+	-
+U+65E5	U+6F22	compare	+	-
+U+65E5	U+9F8D	compare	+	-
+U+65E5	U+55CE	compare	+	-
+U+672C	U+611B	compare	+	-
+U+4E2D	U+4E9C	compare	+	-
+U+4E2D	U+611B	compare	+	-
+U+4E2D	U+6771	compare	+	-
+U+4E2D	U+5B78	compare	+	-
+U+4E2D	U+6F22	compare	+	-
+U+4E2D	U+9F8D	compare	+	-
+U+4E2D	U+55CE	compare	+	-
+U+B098	U+611B	compare	+	-
+U+B098	U+6771	compare	+	-
+U+4E8C	U+611B	compare	+	-
+U+4E8C	U+6771	compare	+	-
+U+4E09	U+611B	compare	+	-
+U+4E09	U+6771	compare	+	-
+U+4E09	U+6F22	compare	+	-
+U+4E09	U+9F8D	compare	+	-
+U+4E09	U+55CE	compare	+	-
+U+4EBA	U+611B	compare	+	-
+U+4EBA	U+6771	compare	+	-
+U+4EBA	U+6F22	compare	+	-
+U+4EBA	U+9F8D	compare	+	-
+U+4EBA	U+55CE	compare	+	-
+U+5927	U+611B	compare	+	-
+U+611B	U+4E9C	compare	-	+
+U+611B	U+4E00	compare	-	+
+U+611B	U+65E5	compare	-	+
+U+611B	U+672C	compare	-	+
+U+611B	U+4E2D	compare	-	+
+U+611B	U+B098	compare	-	+
+U+611B	U+4E8C	compare	-	+
+U+611B	U+4E09	compare	-	+
+U+611B	U+4EBA	compare	-	+
+U+611B	U+5927	compare	-	+
+U+611B	U+5B89	compare	-	+
+U+611B	U+738B	compare	-	+
+U+611B	U+5C71	compare	-	+
+U+611B	U+6C34	compare	-	+
+U+611B	U+6728	compare	-	+
+U+611B	U+706B	compare	-	+
+U+611B	U+91D1	compare	-	+
+U+611B	U+571F	compare	-	+
+U+611B	U+4EAC	compare	-	+
+U+611B	U+56FD	compare	-	+
+U+611B	U+5B78	compare	-	+
+U+611B	U+5B66	compare	-	+
+U+611B	U+751F	compare	-	+
+U+611B	U+5B57	compare	-	+
+U+611B	U+5BB6	compare	-	+
+U+611B	U+4E59	compare	-	+
+U+611B	U+4E01	compare	-	+
+U+611B	U+55CE	compare	-	+
+U+611B	U+5BB6 U+007A	compare	-	+
+U+611B	U+523B	compare	-	+
+U+611B	U+523B U+007A	compare	-	+
+U+611B	U+4E2D U+30FC	compare	-	+
+U+5B89	U+611B	compare	+	-
+U+738B	U+611B	compare	+	-
+U+738B	U+6771	compare	+	-
+U+738B	U+6F22	compare	+	-
+U+738B	U+9F8D	compare	+	-
+U+738B	U+55CE	compare	+	-
+U+5C71	U+611B	compare	+	-
+U+5C71	U+6771	compare	+	-
+U+5C71	U+6F22	compare	+	-
+U+5C71	U+9F8D	compare	+	-
+U+5C71	U+55CE	compare	+	-
+U+6C34	U+611B	compare	+	-
+U+6C34	U+6771	compare	+	-
+U+6C34	U+6F22	compare	+	-
+U+6C34	U+9F8D	compare	+	-
+U+6C34	U+55CE	compare	+	-
+U+6728	U+611B	compare	+	-
+U+6728	U+6771	compare	+	-
+U+6728	U+6F22	compare	+	-
+U+6728	U+9F8D	compare	+	-
+U+6728	U+55CE	compare	+	-
+U+706B	U+611B	compare	+	-
+U+706B	U+6771	compare	+	-
+U+706B	U+6F22	compare	+	-
+U+91D1	U+611B	compare	+	-
+U+91D1	U+6771	compare	+	-
+U+91D1	U+6F22	compare	+	-
+U+571F	U+611B	compare	+	-
+U+571F	U+6771	compare	+	-
+U+571F	U+6F22	compare	+	-
+U+571F	U+9F8D	compare	+	-
+U+571F	U+55CE	compare	+	-
+U+6771	U+4E9C	compare	-	+
+U+6771	U+4E00	compare	-	+
+U+6771	U+65E5	compare	-	+
+U+6771	U+4E2D	compare	-	+
+U+6771	U+B098	compare	-	+
+U+6771	U+4E8C	compare	-	+
+U+6771	U+4E09	compare	-	+
+U+6771	U+4EBA	compare	-	+
+U+6771	U+738B	compare	-	+
+U+6771	U+5C71	compare	-	+
+U+6771	U+6C34	compare	-	+
+U+6771	U+6728	compare	-	+
+U+6771	U+706B	compare	-	+
+U+6771	U+91D1	compare	-	+
+U+6771	U+571F	compare	-	+
+U+6771	U+4EAC	compare	-	+
+U+6771	U+56FD	compare	-	+
+U+6771	U+5B78	compare	-	+
+U+6771	U+5B66	compare	-	+
+U+6771	U+751F	compare	-	+
+U+6771	U+5B57	compare	-	+
+U+6771	U+5BB6	compare	-	+
+U+6771	U+4E59	compare	-	+
+U+6771	U+55CE	compare	-	+
+U+6771	U+5BB6 U+007A	compare	-	+
+U+6771	U+523B	compare	-	+
+U+6771	U+523B U+007A	compare	-	+
+U+6771	U+4E2D U+30FC	compare	-	+
+U+4EAC	U+611B	compare	+	-
+U+4EAC	U+6771	compare	+	-
+U+4EAC	U+6F22	compare	+	-
+U+56FD	U+611B	compare	+	-
+U+56FD	U+6771	compare	+	-
+U+5B78	U+4E9C	compare	-	+
+U+5B78	U+4E00	compare	-	+
+U+5B78	U+4E2D	compare	-	+
+U+5B78	U+611B	compare	+	-
+U+5B78	U+6771	compare	+	-
+U+5B78	U+6F22	compare	+	-
+U+5B78	U+5B57	compare	-	+
+U+5B78	U+4E59	compare	-	+
+U+5B78	U+9F8D	compare	+	-
+U+5B78	U+4E2D U+30FC	compare	-	+
+U+5B66	U+611B	compare	+	-
+U+5B66	U+6771	compare	+	-
+U+5B66	U+6F22	compare	+	-
+U+5B66	U+9F8D	compare	+	-
+U+5B66	U+55CE	compare	+	-
+U+751F	U+611B	compare	+	-
+U+751F	U+6771	compare	+	-
+U+751F	U+6F22	compare	+	-
+U+751F	U+9F8D	compare	+	-
+U+751F	U+55CE	compare	+	-
+U+6F22	U+4E9C	compare	-	+
+U+6F22	U+4E00	compare	-	+
+U+6F22	U+65E5	compare	-	+
+U+6F22	U+4E2D	compare	-	+
+U+6F22	U+4E09	compare	-	+
+U+6F22	U+4EBA	compare	-	+
+U+6F22	U+738B	compare	-	+
+U+6F22	U+5C71	compare	-	+
+U+6F22	U+6C34	compare	-	+
+U+6F22	U+6728	compare	-	+
+U+6F22	U+706B	compare	-	+
+U+6F22	U+91D1	compare	-	+
+U+6F22	U+571F	compare	-	+
+U+6F22	U+4EAC	compare	-	+
+U+6F22	U+5B78	compare	-	+
+U+6F22	U+5B66	compare	-	+
+U+6F22	U+751F	compare	-	+
+U+6F22	U+5B57	compare	-	+
+U+6F22	U+5BB6	compare	-	+
+U+6F22	U+4E59	compare	-	+
+U+6F22	U+55CE	compare	-	+
+U+6F22	U+5BB6 U+007A	compare	-	+
+U+6F22	U+523B	compare	-	+
+U+6F22	U+523B U+007A	compare	-	+
+U+6F22	U+4E2D U+30FC	compare	-	+
+U+5B57	U+4E9C	compare	+	-
+U+5B57	U+611B	compare	+	-
+U+5B57	U+6771	compare	+	-
+U+5B57	U+5B78	compare	+	-
+U+5B57	U+6F22	compare	+	-
+U+5B57	U+9F8D	compare	+	-
+U+5B57	U+55CE	compare	+	-
+U+5BB6	U+611B	compare	+	-
+U+5BB6	U+6771	compare	+	-
+U+5BB6	U+6F22	compare	+	-
+U+4E59	U+4E9C	compare	+	-
+U+4E59	U+611B	compare	+	-
+U+4E59	U+6771	compare	+	-
+U+4E59	U+5B78	compare	+	-
+U+4E59	U+6F22	compare	+	-
+U+4E59	U+9F8D	compare	+	-
+U+4E59	U+55CE	compare	+	-
+U+4E01	U+611B	compare	+	-
+U+9F8D	U+4E9C	compare	-	+
+U+9F8D	U+4E00	compare	-	+
+U+9F8D	U+65E5	compare	-	+
+U+9F8D	U+4E2D	compare	-	+
+U+9F8D	U+4E09	compare	-	+
+U+9F8D	U+4EBA	compare	-	+
+U+9F8D	U+738B	compare	-	+
+U+9F8D	U+5C71	compare	-	+
+U+9F8D	U+6C34	compare	-	+
+U+9F8D	U+6728	compare	-	+
+U+9F8D	U+571F	compare	-	+
+U+9F8D	U+5B78	compare	-	+
+U+9F8D	U+5B66	compare	-	+
+U+9F8D	U+751F	compare	-	+
+U+9F8D	U+5B57	compare	-	+
+U+9F8D	U+4E59	compare	-	+
+U+9F8D	U+55CE	compare	-	+
+U+9F8D	U+4E2D U+30FC	compare	-	+
+U+55CE	U+4E9C	compare	-	+
+U+55CE	U+4E00	compare	-	+
+U+55CE	U+65E5	compare	-	+
+U+55CE	U+4E2D	compare	-	+
+U+55CE	U+4E09	compare	-	+
+U+55CE	U+4EBA	compare	-	+
+U+55CE	U+611B	compare	+	-
+U+55CE	U+738B	compare	-	+
+U+55CE	U+5C71	compare	-	+
+U+55CE	U+6C34	compare	-	+
+U+55CE	U+6728	compare	-	+
+U+55CE	U+571F	compare	-	+
+U+55CE	U+6771	compare	+	-
+U+55CE	U+5B66	compare	-	+
+U+55CE	U+751F	compare	-	+
+U+55CE	U+6F22	compare	+	-
+U+55CE	U+5B57	compare	-	+
+U+55CE	U+4E59	compare	-	+
+U+55CE	U+9F8D	compare	+	-
+U+55CE	U+4E2D U+30FC	compare	-	+
+U+5BB6 U+007A	U+611B	compare	+	-
+U+5BB6 U+007A	U+6771	compare	+	-
+U+5BB6 U+007A	U+6F22	compare	+	-
+U+523B	U+611B	compare	+	-
+U+523B	U+6771	compare	+	-
+U+523B	U+6F22	compare	+	-
+U+523B U+007A	U+611B	compare	+	-
+U+523B U+007A	U+6771	compare	+	-
+U+523B U+007A	U+6F22	compare	+	-
+U+0061 U+0001	U+0061 U+0301	compare	-	+
+U+0061 U+0301	U+00E1	compare	0	-
+U+0061 U+0301	U+0061 U+0001	compare	+	-
+U+0061 U+0301 U+0062	U+00E1 U+0062	compare	0	-
+U+00E1 U+0062	U+0061 U+0301 U+0062	compare	0	+
+U+30AB U+30A2	U+304B U+3041	compare	+	-
+U+4E2D U+30FC	U+4E9C	compare	+	-
+U+4E2D U+30FC	U+611B	compare	+	-
+U+4E2D U+30FC	U+6771	compare	+	-
+U+4E2D U+30FC	U+5B78	compare	+	-
+U+4E2D U+30FC	U+6F22	compare	+	-
+U+4E2D U+30FC	U+9F8D	compare	+	-
+U+4E2D U+30FC	U+55CE	compare	+	-
+U+00E1	U+0061 U+0301	dynamic	0	+
+U+304B U+3041	U+30AB U+30A2	dynamic	-	+
+U+4E9C	U+4E00	dynamic	-	+
+U+4E9C	U+4E2D	dynamic	-	+
+U+4E9C	U+611B	dynamic	+	-
+U+4E9C	U+6771	dynamic	+	-
+U+4E9C	U+5B78	dynamic	+	-
+U+4E9C	U+6F22	dynamic	+	-
+U+4E9C	U+5B57	dynamic	-	+
+U+4E9C	U+4E59	dynamic	-	+
+U+4E9C	U+9F8D	dynamic	+	-
+U+4E9C	U+55CE	dynamic	+	-
+U+4E9C	U+4E2D U+30FC	dynamic	-	+
+U+4E00	U+4E9C	dynamic	+	-
+U+4E00	U+611B	dynamic	+	-
+U+4E00	U+6771	dynamic	+	-
+U+4E00	U+5B78	dynamic	+	-
+U+4E00	U+6F22	dynamic	+	-
+U+4E00	U+9F8D	dynamic	+	-
+U+4E00	U+55CE	dynamic	+	-
+U+65E5	U+611B	dynamic	+	-
+U+65E5	U+6771	dynamic	+	-
+U+65E5	U+6F22	dynamic	+	-
+U+65E5	U+9F8D	dynamic	+	-
+U+65E5	U+55CE	dynamic	+	-
+U+672C	U+611B	dynamic	+	-
+U+4E2D	U+4E9C	dynamic	+	-
+U+4E2D	U+611B	dynamic	+	-
+U+4E2D	U+6771	dynamic	+	-
+U+4E2D	U+5B78	dynamic	+	-
+U+4E2D	U+6F22	dynamic	+	-
+U+4E2D	U+9F8D	dynamic	+	-
+U+4E2D	U+55CE	dynamic	+	-
+U+B098	U+611B	dynamic	+	-
+U+B098	U+6771	dynamic	+	-
+U+4E8C	U+611B	dynamic	+	-
+U+4E8C	U+6771	dynamic	+	-
+U+4E09	U+611B	dynamic	+	-
+U+4E09	U+6771	dynamic	+	-
+U+4E09	U+6F22	dynamic	+	-
+U+4E09	U+9F8D	dynamic	+	-
+U+4E09	U+55CE	dynamic	+	-
+U+4EBA	U+611B	dynamic	+	-
+U+4EBA	U+6771	dynamic	+	-
+U+4EBA	U+6F22	dynamic	+	-
+U+4EBA	U+9F8D	dynamic	+	-
+U+4EBA	U+55CE	dynamic	+	-
+U+5927	U+611B	dynamic	+	-
+U+611B	U+4E9C	dynamic	-	+
+U+611B	U+4E00	dynamic	-	+
+U+611B	U+65E5	dynamic	-	+
+U+611B	U+672C	dynamic	-	+
+U+611B	U+4E2D	dynamic	-	+
+U+611B	U+B098	dynamic	-	+
+U+611B	U+4E8C	dynamic	-	+
+U+611B	U+4E09	dynamic	-	+
+U+611B	U+4EBA	dynamic	-	+
+U+611B	U+5927	dynamic	-	+
+U+611B	U+5B89	dynamic	-	+
+U+611B	U+738B	dynamic	-	+
+U+611B	U+5C71	dynamic	-	+
+U+611B	U+6C34	dynamic	-	+
+U+611B	U+6728	dynamic	-	+
+U+611B	U+706B	dynamic	-	+
+U+611B	U+91D1	dynamic	-	+
+U+611B	U+571F	dynamic	-	+
+U+611B	U+4EAC	dynamic	-	+
+U+611B	U+56FD	dynamic	-	+
+U+611B	U+5B78	dynamic	-	+
+U+611B	U+5B66	dynamic	-	+
+U+611B	U+751F	dynamic	-	+
+U+611B	U+5B57	dynamic	-	+
+U+611B	U+5BB6	dynamic	-	+
+U+611B	U+4E59	dynamic	-	+
+U+611B	U+4E01	dynamic	-	+
+U+611B	U+55CE	dynamic	-	+
+U+611B	U+5BB6 U+007A	dynamic	-	+
+U+611B	U+523B	dynamic	-	+
+U+611B	U+523B U+007A	dynamic	-	+
+U+611B	U+4E2D U+30FC	dynamic	-	+
+U+5B89	U+611B	dynamic	+	-
+U+738B	U+611B	dynamic	+	-
+U+738B	U+6771	dynamic	+	-
+U+738B	U+6F22	dynamic	+	-
+U+738B	U+9F8D	dynamic	+	-
+U+738B	U+55CE	dynamic	+	-
+U+5C71	U+611B	dynamic	+	-
+U+5C71	U+6771	dynamic	+	-
+U+5C71	U+6F22	dynamic	+	-
+U+5C71	U+9F8D	dynamic	+	-
+U+5C71	U+55CE	dynamic	+	-
+U+6C34	U+611B	dynamic	+	-
+U+6C34	U+6771	dynamic	+	-
+U+6C34	U+6F22	dynamic	+	-
+U+6C34	U+9F8D	dynamic	+	-
+U+6C34	U+55CE	dynamic	+	-
+U+6728	U+611B	dynamic	+	-
+U+6728	U+6771	dynamic	+	-
+U+6728	U+6F22	dynamic	+	-
+U+6728	U+9F8D	dynamic	+	-
+U+6728	U+55CE	dynamic	+	-
+U+706B	U+611B	dynamic	+	-
+U+706B	U+6771	dynamic	+	-
+U+706B	U+6F22	dynamic	+	-
+U+91D1	U+611B	dynamic	+	-
+U+91D1	U+6771	dynamic	+	-
+U+91D1	U+6F22	dynamic	+	-
+U+571F	U+611B	dynamic	+	-
+U+571F	U+6771	dynamic	+	-
+U+571F	U+6F22	dynamic	+	-
+U+571F	U+9F8D	dynamic	+	-
+U+571F	U+55CE	dynamic	+	-
+U+6771	U+4E9C	dynamic	-	+
+U+6771	U+4E00	dynamic	-	+
+U+6771	U+65E5	dynamic	-	+
+U+6771	U+4E2D	dynamic	-	+
+U+6771	U+B098	dynamic	-	+
+U+6771	U+4E8C	dynamic	-	+
+U+6771	U+4E09	dynamic	-	+
+U+6771	U+4EBA	dynamic	-	+
+U+6771	U+738B	dynamic	-	+
+U+6771	U+5C71	dynamic	-	+
+U+6771	U+6C34	dynamic	-	+
+U+6771	U+6728	dynamic	-	+
+U+6771	U+706B	dynamic	-	+
+U+6771	U+91D1	dynamic	-	+
+U+6771	U+571F	dynamic	-	+
+U+6771	U+4EAC	dynamic	-	+
+U+6771	U+56FD	dynamic	-	+
+U+6771	U+5B78	dynamic	-	+
+U+6771	U+5B66	dynamic	-	+
+U+6771	U+751F	dynamic	-	+
+U+6771	U+5B57	dynamic	-	+
+U+6771	U+5BB6	dynamic	-	+
+U+6771	U+4E59	dynamic	-	+
+U+6771	U+55CE	dynamic	-	+
+U+6771	U+5BB6 U+007A	dynamic	-	+
+U+6771	U+523B	dynamic	-	+
+U+6771	U+523B U+007A	dynamic	-	+
+U+6771	U+4E2D U+30FC	dynamic	-	+
+U+4EAC	U+611B	dynamic	+	-
+U+4EAC	U+6771	dynamic	+	-
+U+4EAC	U+6F22	dynamic	+	-
+U+56FD	U+611B	dynamic	+	-
+U+56FD	U+6771	dynamic	+	-
+U+5B78	U+4E9C	dynamic	-	+
+U+5B78	U+4E00	dynamic	-	+
+U+5B78	U+4E2D	dynamic	-	+
+U+5B78	U+611B	dynamic	+	-
+U+5B78	U+6771	dynamic	+	-
+U+5B78	U+6F22	dynamic	+	-
+U+5B78	U+5B57	dynamic	-	+
+U+5B78	U+4E59	dynamic	-	+
+U+5B78	U+9F8D	dynamic	+	-
+U+5B78	U+4E2D U+30FC	dynamic	-	+
+U+5B66	U+611B	dynamic	+	-
+U+5B66	U+6771	dynamic	+	-
+U+5B66	U+6F22	dynamic	+	-
+U+5B66	U+9F8D	dynamic	+	-
+U+5B66	U+55CE	dynamic	+	-
+U+751F	U+611B	dynamic	+	-
+U+751F	U+6771	dynamic	+	-
+U+751F	U+6F22	dynamic	+	-
+U+751F	U+9F8D	dynamic	+	-
+U+751F	U+55CE	dynamic	+	-
+U+6F22	U+4E9C	dynamic	-	+
+U+6F22	U+4E00	dynamic	-	+
+U+6F22	U+65E5	dynamic	-	+
+U+6F22	U+4E2D	dynamic	-	+
+U+6F22	U+4E09	dynamic	-	+
+U+6F22	U+4EBA	dynamic	-	+
+U+6F22	U+738B	dynamic	-	+
+U+6F22	U+5C71	dynamic	-	+
+U+6F22	U+6C34	dynamic	-	+
+U+6F22	U+6728	dynamic	-	+
+U+6F22	U+706B	dynamic	-	+
+U+6F22	U+91D1	dynamic	-	+
+U+6F22	U+571F	dynamic	-	+
+U+6F22	U+4EAC	dynamic	-	+
+U+6F22	U+5B78	dynamic	-	+
+U+6F22	U+5B66	dynamic	-	+
+U+6F22	U+751F	dynamic	-	+
+U+6F22	U+5B57	dynamic	-	+
+U+6F22	U+5BB6	dynamic	-	+
+U+6F22	U+4E59	dynamic	-	+
+U+6F22	U+55CE	dynamic	-	+
+U+6F22	U+5BB6 U+007A	dynamic	-	+
+U+6F22	U+523B	dynamic	-	+
+U+6F22	U+523B U+007A	dynamic	-	+
+U+6F22	U+4E2D U+30FC	dynamic	-	+
+U+5B57	U+4E9C	dynamic	+	-
+U+5B57	U+611B	dynamic	+	-
+U+5B57	U+6771	dynamic	+	-
+U+5B57	U+5B78	dynamic	+	-
+U+5B57	U+6F22	dynamic	+	-
+U+5B57	U+9F8D	dynamic	+	-
+U+5B57	U+55CE	dynamic	+	-
+U+5BB6	U+611B	dynamic	+	-
+U+5BB6	U+6771	dynamic	+	-
+U+5BB6	U+6F22	dynamic	+	-
+U+4E59	U+4E9C	dynamic	+	-
+U+4E59	U+611B	dynamic	+	-
+U+4E59	U+6771	dynamic	+	-
+U+4E59	U+5B78	dynamic	+	-
+U+4E59	U+6F22	dynamic	+	-
+U+4E59	U+9F8D	dynamic	+	-
+U+4E59	U+55CE	dynamic	+	-
+U+4E01	U+611B	dynamic	+	-
+U+9F8D	U+4E9C	dynamic	-	+
+U+9F8D	U+4E00	dynamic	-	+
+U+9F8D	U+65E5	dynamic	-	+
+U+9F8D	U+4E2D	dynamic	-	+
+U+9F8D	U+4E09	dynamic	-	+
+U+9F8D	U+4EBA	dynamic	-	+
+U+9F8D	U+738B	dynamic	-	+
+U+9F8D	U+5C71	dynamic	-	+
+U+9F8D	U+6C34	dynamic	-	+
+U+9F8D	U+6728	dynamic	-	+
+U+9F8D	U+571F	dynamic	-	+
+U+9F8D	U+5B78	dynamic	-	+
+U+9F8D	U+5B66	dynamic	-	+
+U+9F8D	U+751F	dynamic	-	+
+U+9F8D	U+5B57	dynamic	-	+
+U+9F8D	U+4E59	dynamic	-	+
+U+9F8D	U+55CE	dynamic	-	+
+U+9F8D	U+4E2D U+30FC	dynamic	-	+
+U+55CE	U+4E9C	dynamic	-	+
+U+55CE	U+4E00	dynamic	-	+
+U+55CE	U+65E5	dynamic	-	+
+U+55CE	U+4E2D	dynamic	-	+
+U+55CE	U+4E09	dynamic	-	+
+U+55CE	U+4EBA	dynamic	-	+
+U+55CE	U+611B	dynamic	+	-
+U+55CE	U+738B	dynamic	-	+
+U+55CE	U+5C71	dynamic	-	+
+U+55CE	U+6C34	dynamic	-	+
+U+55CE	U+6728	dynamic	-	+
+U+55CE	U+571F	dynamic	-	+
+U+55CE	U+6771	dynamic	+	-
+U+55CE	U+5B66	dynamic	-	+
+U+55CE	U+751F	dynamic	-	+
+U+55CE	U+6F22	dynamic	+	-
+U+55CE	U+5B57	dynamic	-	+
+U+55CE	U+4E59	dynamic	-	+
+U+55CE	U+9F8D	dynamic	+	-
+U+55CE	U+4E2D U+30FC	dynamic	-	+
+U+5BB6 U+007A	U+611B	dynamic	+	-
+U+5BB6 U+007A	U+6771	dynamic	+	-
+U+5BB6 U+007A	U+6F22	dynamic	+	-
+U+523B	U+611B	dynamic	+	-
+U+523B	U+6771	dynamic	+	-
+U+523B	U+6F22	dynamic	+	-
+U+523B U+007A	U+611B	dynamic	+	-
+U+523B U+007A	U+6771	dynamic	+	-
+U+523B U+007A	U+6F22	dynamic	+	-
+U+0061 U+0001	U+0061 U+0301	dynamic	-	+
+U+0061 U+0301	U+00E1	dynamic	0	-
+U+0061 U+0301	U+0061 U+0001	dynamic	+	-
+U+0061 U+0301 U+0062	U+00E1 U+0062	dynamic	0	-
+U+00E1 U+0062	U+0061 U+0301 U+0062	dynamic	0	+
+U+30AB U+30A2	U+304B U+3041	dynamic	+	-
+U+4E2D U+30FC	U+4E9C	dynamic	+	-
+U+4E2D U+30FC	U+611B	dynamic	+	-
+U+4E2D U+30FC	U+6771	dynamic	+	-
+U+4E2D U+30FC	U+5B78	dynamic	+	-
+U+4E2D U+30FC	U+6F22	dynamic	+	-
+U+4E2D U+30FC	U+9F8D	dynamic	+	-
+U+4E2D U+30FC	U+55CE	dynamic	+	-
