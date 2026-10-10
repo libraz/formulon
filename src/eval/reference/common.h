@@ -4,8 +4,8 @@
 // of the public eval surface; sibling TUs include it directly to share
 // the small carrier structs (`OffsetBase`, `IndirectReference`) and the
 // rectangle-construction helpers (`resolve_indirect_reference`,
-// `resolve_offset_base`, `compute_offset_rect`, `apply_offset`,
-// `read_int`) that the three reference-family pipelines all touch.
+// `resolve_offset_base`, `compute_offset_rect`, `apply_offset`) that the
+// three reference-family pipelines all touch.
 //
 // The public A1-text parser (`parse_a1_ref`, `column_letters`, `A1Parse`)
 // lives in `eval/a1_parse.h`, with its bodies in `eval/a1_parse.cpp`.
@@ -20,7 +20,6 @@
 #ifndef FORMULON_EVAL_REFERENCE_COMMON_H_
 #define FORMULON_EVAL_REFERENCE_COMMON_H_
 
-#include <cmath>
 #include <cstdint>
 #include <string_view>
 
@@ -82,10 +81,6 @@ struct IndirectReference {
 // if the result falls outside [0, max). `max` is `Sheet::kMaxRows` or
 // `Sheet::kMaxCols`.
 bool apply_offset(std::uint32_t base, int offset, std::uint32_t max, std::uint32_t* out);
-
-// Reads an integer arg via truncation. `#VALUE!` on coercion failure,
-// `#NUM!` on NaN/Inf.
-Expected<int, ErrorCode> read_int(const Value& v);
 
 // Evaluates the INDIRECT call AST, decoding its text argument into a
 // rectangle. Returns `false` on any error and writes the Excel-visible

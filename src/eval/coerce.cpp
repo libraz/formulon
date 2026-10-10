@@ -150,6 +150,14 @@ Expected<double, ErrorCode> coerce_to_index_number(const Value& v) {
   return truncate_index(number.value());
 }
 
+Expected<int, ErrorCode> coerce_to_truncated_int(const Value& v) {
+  auto number = coerce_to_index_number(v);
+  if (!number) {
+    return std::move(number.error());
+  }
+  return static_cast<int>(number.value());
+}
+
 std::string_view clip_to_text_cap(std::string_view text) noexcept {
   // Each UTF-16 unit takes at least one byte, so a short text cannot exceed the cap.
   if (text.size() <= kExcelTextCapUnits || utf16_units_in(text) <= kExcelTextCapUnits) {

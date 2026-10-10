@@ -27,32 +27,14 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Helper: coerce an arg to a finite integer. Empty / non-finite / NaN
-// surfaces the matching Excel error. Caller checks the returned int against
-// its domain-specific bounds.
-Expected<int, ErrorCode> read_int(const Value& v) {
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    return std::move(coerced.error());
-  }
-  const double d = coerced.value();
-  if (std::isnan(d) || std::isinf(d)) {
-    return ErrorCode::Num;
-  }
-  return static_cast<int>(std::trunc(d));
-}
-
-// `read_int` for ADDRESS's row / column, which snap to a near integer. A raw
-// value below 1 is `#VALUE!` before the snap, and above `max` after it.
+// ADDRESS's row / column snap to a near integer. A raw value below 1 is
+// `#VALUE!` before the snap, and above `max` after it.
 Expected<int, ErrorCode> read_snapped_coordinate(const Value& v, std::uint32_t max) {
   auto coerced = coerce_to_number(v);
   if (!coerced) {
     return std::move(coerced.error());
   }
   const double d = coerced.value();
-  if (std::isnan(d) || std::isinf(d)) {
-    return ErrorCode::Num;
-  }
   if (d < 1.0) {
     return ErrorCode::Value;
   }
@@ -68,7 +50,7 @@ Expected<int, ErrorCode> read_optional_int(const Value* args, std::uint32_t arit
   if (arity <= index) {
     return default_value;
   }
-  return read_int(args[index]);
+  return coerce_to_truncated_int(args[index]);
 }
 
 Expected<bool, ErrorCode> read_optional_bool(const Value* args, std::uint32_t arity, std::uint32_t index,

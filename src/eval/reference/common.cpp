@@ -1,8 +1,8 @@
 //
 // Shared bodies for the reference-family lazy impls. Hosts:
 //
-//   * Small helpers `apply_offset` / `read_int` that the OFFSET and
-//     CHOOSE expanders share with the intersection resolver.
+//   * Small helper `apply_offset` that the OFFSET and CHOOSE expanders share
+//     with the intersection resolver.
 //   * The rectangle-construction routines `resolve_indirect_reference`,
 //     `resolve_offset_base`, and `compute_offset_rect`. These touch both
 //     the INDIRECT and OFFSET pipelines (and are reached from the
@@ -46,18 +46,6 @@ bool apply_offset(std::uint32_t base, int offset, std::uint32_t max, std::uint32
   }
   *out = static_cast<std::uint32_t>(sum);
   return true;
-}
-
-Expected<int, ErrorCode> read_int(const Value& v) {
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    return std::move(coerced.error());
-  }
-  const double d = coerced.value();
-  if (std::isnan(d) || std::isinf(d)) {
-    return ErrorCode::Num;
-  }
-  return static_cast<int>(std::trunc(d));
 }
 
 bool resolve_indirect_reference(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -284,7 +272,7 @@ bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
       *out_err = v.as_error();
       return false;
     }
-    auto parsed = read_int(v);
+    auto parsed = coerce_to_truncated_int(v);
     if (!parsed) {
       *out_err = parsed.error();
       return false;
@@ -312,10 +300,6 @@ bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
       return false;
     }
     const double d = coerced.value();
-    if (std::isnan(d) || std::isinf(d)) {
-      *out_err = ErrorCode::Num;
-      return false;
-    }
     int truncated = static_cast<int>(std::trunc(d));
     if (truncated == 0 && d != 0.0) {
       truncated = (d > 0.0) ? 1 : -1;

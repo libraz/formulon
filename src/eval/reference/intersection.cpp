@@ -165,7 +165,7 @@ bool resolve_choose_call(const parser::AstNode& node, Arena& arena, const Functi
     *out_err = idx_val.as_error();
     return false;
   }
-  auto idx_int = refs_internal::read_int(idx_val);
+  auto idx_int = coerce_to_truncated_int(idx_val);
   if (!idx_int) {
     *out_err = idx_int.error();
     return false;
