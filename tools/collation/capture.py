@@ -737,7 +737,10 @@ _STR = 'LAMBDA(x,IF(x="","",CONCAT(UNICHAR(--TEXTSPLIT(x&"","_")))))'
 def str_pairs(x: Excel, pairs: list[tuple[str, str]], tests: list[str]):
     """Evaluate `tests` (expressions over a and b) for arbitrary string pairs."""
     sh = x.sheet()
-    to_cell = lambda s: "_".join(str(ord(ch)) for ch in s) if s else None
+
+    def to_cell(s):
+        return "_".join(str(ord(ch)) for ch in s) if s else None
+
     x.column(sh, [to_cell(a) for a, _ in pairs], 1)
     x.column(sh, [to_cell(b) for _, b in pairs], 2)
     n = len(pairs)
@@ -855,7 +858,10 @@ def capture_tail(x: Excel, order):
                     rows.append((form, c, c2, xs, ys))
                     pairs.append((a, b))
     res = str_pairs(x, pairs, ["a<b", "a=b"])
-    sign = lambda lt, eq: "-" if lt else "0" if eq else "+"
+
+    def sign(lt, eq):
+        return "-" if lt else "0" if eq else "+"
+
     return [(f, f"U+{c:04X}", f"U+{c2:04X}", enc(xs), enc(ys), sign(*r)) for (f, c, c2, xs, ys), r in zip(rows, res)]
 
 
@@ -1100,9 +1106,12 @@ def validate(only: list[str] | None) -> int:
             continue
         diff = set(exp_by_loc[tag].items()) ^ set(exp_by_loc[base].items())
         print(f"expansions {tag} vs {base}: {len(diff)} differing rows")
+
     # Switching check: locales whose orders coincide (outside the RTL scripts, which vary
     # between Excel launches) must be exactly the groups the measurements predict.
-    rtl = lambda cp: 0x590 <= cp <= 0x8FF or 0xFB1D <= cp <= 0xFDFF or 0xFE70 <= cp <= 0xFEFF or cp in (0x200E, 0x200F)
+    def rtl(cp):
+        return 0x590 <= cp <= 0x8FF or 0xFB1D <= cp <= 0xFDFF or 0xFE70 <= cp <= 0xFEFF or cp in (0x200E, 0x200F)
+
     sig = {}
     for tag in tags:
         rows = read_tsv(DATA / f"order_{tag}.tsv")
