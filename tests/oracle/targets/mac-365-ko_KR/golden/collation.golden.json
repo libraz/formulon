@@ -1,12 +1,12 @@
 {
   "suite": "collation",
-  "description": "Mac Excel text collation through the comparison operators: one representative pair per script, per context rule (R1-R7), the trailing-ignorable rule (D9) and the zh word-sort symbols (D16). Each probe returns LT / EQ / GT. Control, combining and ignorable characters are built with UNICHAR so the formula text stays ASCII-safe. Captured per locale target; no spill, every probe resolves to a single scalar.\n",
+  "description": "Mac Excel text collation through the comparison operators: one representative pair per script, per context rule (expansion, halfwidth voicing, kana marks, Thai reordering, ignorables, Hangul jamo, ko hanja), the trailing-ignorable rule and the zh word-sort symbols. Each probe returns LT / EQ / GT. Control, combining and ignorable characters are built with UNICHAR so the formula text stays ASCII-safe. Captured per locale target; no spill, every probe resolves to a single scalar.\n",
   "environment": {
     "excel_version": "16.113.4",
-    "excel_locale": "nl-NL",
+    "excel_locale": "ko-KR",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-10T22:10:30Z"
+    "generated_at": "2026-10-10T22:20:30Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -226,7 +226,7 @@
       "setup": {},
       "expect": {
         "kind": "text",
-        "value": "GT"
+        "value": "LT"
       }
     },
     {
@@ -298,7 +298,7 @@
       "setup": {},
       "expect": {
         "kind": "text",
-        "value": "LT"
+        "value": "GT"
       }
     },
     {
@@ -316,7 +316,7 @@
       "setup": {},
       "expect": {
         "kind": "text",
-        "value": "GT"
+        "value": "LT"
       }
     },
     {
@@ -325,7 +325,7 @@
       "setup": {},
       "expect": {
         "kind": "text",
-        "value": "GT"
+        "value": "LT"
       }
     },
     {
@@ -739,7 +739,7 @@
       "setup": {},
       "expect": {
         "kind": "text",
-        "value": "LT"
+        "value": "GT"
       }
     },
     {

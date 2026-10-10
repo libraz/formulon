@@ -1,8 +1,8 @@
 suite: collation
 description: >
   Mac Excel text collation through the comparison operators: one representative pair per
-  script, per context rule (R1-R7), the trailing-ignorable rule (D9) and the zh word-sort
-  symbols (D16). Each probe returns LT / EQ / GT. Control, combining and ignorable characters
+  script, per context rule (expansion, halfwidth voicing, kana marks, Thai reordering, ignorables, Hangul jamo, ko hanja), the trailing-ignorable rule and the zh word-sort
+  symbols. Each probe returns LT / EQ / GT. Control, combining and ignorable characters
   are built with UNICHAR so the formula text stays ASCII-safe. Captured per locale target;
   no spill, every probe resolves to a single scalar.
 tolerance: { abs: 0, rel: 0 }
@@ -205,203 +205,203 @@ cases:
     formula: "=IF(\"½\"<\"1\",\"LT\",IF(\"½\"=\"1\",\"EQ\",\"GT\"))"
 
   - id: col_r1_sharp_s
-    description: "R1 sharp s vs ss"
+    description: "expansion: sharp s vs ss"
     formula: "=IF(\"ß\"<\"ss\",\"LT\",IF(\"ß\"=\"ss\",\"EQ\",\"GT\"))"
 
   - id: col_r1_ij_lig
-    description: "R1 ij ligature vs ij"
+    description: "expansion: ij ligature vs ij"
     formula: "=IF(\"ĳ\"<\"ij\",\"LT\",IF(\"ĳ\"=\"ij\",\"EQ\",\"GT\"))"
 
   - id: col_r1_ae_lig
-    description: "R1 ae ligature vs ae"
+    description: "expansion: ae ligature vs ae"
     formula: "=IF(\"æ\"<\"ae\",\"LT\",IF(\"æ\"=\"ae\",\"EQ\",\"GT\"))"
 
   - id: col_r1_oe_lig
-    description: "R1 oe ligature vs oe"
+    description: "expansion: oe ligature vs oe"
     formula: "=IF(\"œ\"<\"oe\",\"LT\",IF(\"œ\"=\"oe\",\"EQ\",\"GT\"))"
 
   - id: col_r1_strasse_ss
-    description: "R1 strasse with sharp s vs ss"
+    description: "expansion: strasse with sharp s vs ss"
     formula: "=IF(\"straße\"<\"strasse\",\"LT\",IF(\"straße\"=\"strasse\",\"EQ\",\"GT\"))"
 
   - id: col_r1_strasse_sz
-    description: "R1 strasse with sharp s vs sz"
+    description: "expansion: strasse with sharp s vs sz"
     formula: "=IF(\"straße\"<\"strasze\",\"LT\",IF(\"straße\"=\"strasze\",\"EQ\",\"GT\"))"
 
   - id: col_r2_halfwidth_voiced
-    description: "R2 half-width ka+voiced mark vs full-width ga"
+    description: "halfwidth voicing: half-width ka+voiced mark vs full-width ga"
     formula: "=IF(\"ｶﾞ\"<\"ガ\",\"LT\",IF(\"ｶﾞ\"=\"ガ\",\"EQ\",\"GT\"))"
 
   - id: col_r2_halfwidth_voiced_vs_base
-    description: "R2 half-width ka+voiced mark vs half-width ka"
+    description: "halfwidth voicing: half-width ka+voiced mark vs half-width ka"
     formula: "=IF(\"ｶﾞ\"<\"ｶ\",\"LT\",IF(\"ｶﾞ\"=\"ｶ\",\"EQ\",\"GT\"))"
 
   - id: col_r2_halfwidth_semivoiced
-    description: "R2 half-width ha+semi-voiced mark vs full-width pa"
+    description: "halfwidth voicing: half-width ha+semi-voiced mark vs full-width pa"
     formula: "=IF(\"ﾊﾟ\"<\"パ\",\"LT\",IF(\"ﾊﾟ\"=\"パ\",\"EQ\",\"GT\"))"
 
   - id: col_r2_halfwidth_voiced_composed
-    description: "R2 half-width ka+U+FF9E (code points) vs full-width ga"
+    description: "halfwidth voicing: half-width ka+U+FF9E (code points) vs full-width ga"
     formula: "=IF(\"ｶ\"&UNICHAR(65438)<\"ガ\",\"LT\",IF(\"ｶ\"&UNICHAR(65438)=\"ガ\",\"EQ\",\"GT\"))"
 
   - id: col_r3_choon_hira
-    description: "R3 ka+prolonged mark vs ka+a"
+    description: "kana mark: ka+prolonged mark vs ka+a"
     formula: "=IF(\"かー\"<\"かあ\",\"LT\",IF(\"かー\"=\"かあ\",\"EQ\",\"GT\"))"
 
   - id: col_r3_choon_kata
-    description: "R3 katakana ka+prolonged mark vs ka+a"
+    description: "kana mark: katakana ka+prolonged mark vs ka+a"
     formula: "=IF(\"カー\"<\"カア\",\"LT\",IF(\"カー\"=\"カア\",\"EQ\",\"GT\"))"
 
   - id: col_r3_choon_after_n
-    description: "R3 n+prolonged mark vs n (standalone weight)"
+    description: "kana mark: n+prolonged mark vs n (standalone weight)"
     formula: "=IF(\"んー\"<\"ん\",\"LT\",IF(\"んー\"=\"ん\",\"EQ\",\"GT\"))"
 
   - id: col_r3_choon_after_latin
-    description: "R3 a+prolonged mark vs a"
+    description: "kana mark: a+prolonged mark vs a"
     formula: "=IF(\"aー\"<\"a\",\"LT\",IF(\"aー\"=\"a\",\"EQ\",\"GT\"))"
 
   - id: col_r3_choon_after_kanji
-    description: "R3 kanji+prolonged mark vs kanji"
+    description: "kana mark: kanji+prolonged mark vs kanji"
     formula: "=IF(\"中ー\"<\"中\",\"LT\",IF(\"中ー\"=\"中\",\"EQ\",\"GT\"))"
 
   - id: col_r3_iter_hira
-    description: "R3 ka+hiragana iteration mark vs ka+ka"
+    description: "kana mark: ka+hiragana iteration mark vs ka+ka"
     formula: "=IF(\"かゝ\"<\"かか\",\"LT\",IF(\"かゝ\"=\"かか\",\"EQ\",\"GT\"))"
 
   - id: col_r3_iter_voiced_base
-    description: "R3 ga+iteration mark vs ga+ka"
+    description: "kana mark: ga+iteration mark vs ga+ka"
     formula: "=IF(\"がゝ\"<\"がか\",\"LT\",IF(\"がゝ\"=\"がか\",\"EQ\",\"GT\"))"
 
   - id: col_r3_iter_voiced_mark
-    description: "R3 ka+voiced iteration mark vs ka+ga"
+    description: "kana mark: ka+voiced iteration mark vs ka+ga"
     formula: "=IF(\"かゞ\"<\"かが\",\"LT\",IF(\"かゞ\"=\"かが\",\"EQ\",\"GT\"))"
 
   - id: col_r3_iter_kata_after_hira
-    description: "R3 ka+katakana iteration mark vs ka+ka (hiragana prefix)"
+    description: "kana mark: ka+katakana iteration mark vs ka+ka (hiragana prefix)"
     formula: "=IF(\"かヽ\"<\"かか\",\"LT\",IF(\"かヽ\"=\"かか\",\"EQ\",\"GT\"))"
 
   - id: col_r3_iter_kata
-    description: "R3 katakana ka+katakana iteration mark vs ka+ka"
+    description: "kana mark: katakana ka+katakana iteration mark vs ka+ka"
     formula: "=IF(\"カヽ\"<\"カカ\",\"LT\",IF(\"カヽ\"=\"カカ\",\"EQ\",\"GT\"))"
 
   - id: col_r4_thai_prefix_vowel
-    description: "R4 Thai prefix vowel+ko vs ko+aa"
+    description: "Thai reorder: Thai prefix vowel+ko vs ko+aa"
     formula: "=IF(\"เก\"<\"กา\",\"LT\",IF(\"เก\"=\"กา\",\"EQ\",\"GT\"))"
 
   - id: col_r4_thai_prefix_vs_base
-    description: "R4 Thai prefix vowel+ko vs ko"
+    description: "Thai reorder: Thai prefix vowel+ko vs ko"
     formula: "=IF(\"เก\"<\"ก\",\"LT\",IF(\"เก\"=\"ก\",\"EQ\",\"GT\"))"
 
   - id: col_r4_thai_prefix_non_consonant
-    description: "R4 Thai prefix vowel before non-consonant vs after"
+    description: "Thai reorder: Thai prefix vowel before non-consonant vs after"
     formula: "=IF(\"เ\"&\"1\"<\"เ\"&\"a\",\"LT\",IF(\"เ\"&\"1\"=\"เ\"&\"a\",\"EQ\",\"GT\"))"
 
   - id: col_r4_thai_prefix_alone
-    description: "R4 Thai prefix vowel alone vs ko"
+    description: "Thai reorder: Thai prefix vowel alone vs ko"
     formula: "=IF(\"เ\"<\"ก\",\"LT\",IF(\"เ\"=\"ก\",\"EQ\",\"GT\"))"
 
   - id: col_r5_control_mid
-    description: "R5 control character inside a word vs plain"
+    description: "ignorable: control character inside a word vs plain"
     formula: "=IF(\"a\"&UNICHAR(1)&\"b\"<\"ab\",\"LT\",IF(\"a\"&UNICHAR(1)&\"b\"=\"ab\",\"EQ\",\"GT\"))"
 
   - id: col_r5_zwsp_mid
-    description: "R5 zero-width space inside a word vs plain"
+    description: "ignorable: zero-width space inside a word vs plain"
     formula: "=IF(\"a\"&UNICHAR(8203)&\"b\"<\"ab\",\"LT\",IF(\"a\"&UNICHAR(8203)&\"b\"=\"ab\",\"EQ\",\"GT\"))"
 
   - id: col_r5_softhyphen_mid
-    description: "R5 soft hyphen inside a word vs plain"
+    description: "ignorable: soft hyphen inside a word vs plain"
     formula: "=IF(\"a\"&UNICHAR(173)&\"b\"<\"ab\",\"LT\",IF(\"a\"&UNICHAR(173)&\"b\"=\"ab\",\"EQ\",\"GT\"))"
 
   - id: col_r5_ideographic_space_mid
-    description: "R5 ideographic space inside a word vs plain"
+    description: "ignorable: ideographic space inside a word vs plain"
     formula: "=IF(\"a　b\"<\"ab\",\"LT\",IF(\"a　b\"=\"ab\",\"EQ\",\"GT\"))"
 
   - id: col_r5_space_mid
-    description: "R5 space inside a word vs plain"
+    description: "ignorable: space inside a word vs plain"
     formula: "=IF(\"a b\"<\"ab\",\"LT\",IF(\"a b\"=\"ab\",\"EQ\",\"GT\"))"
 
   - id: col_r6_hangul_decomp
-    description: "R6 Hangul syllable gag vs ga+final jamo U+11A8"
+    description: "Hangul jamo: Hangul syllable gag vs ga+final jamo U+11A8"
     formula: "=IF(\"각\"<\"가\"&UNICHAR(4520),\"LT\",IF(\"각\"=\"가\"&UNICHAR(4520),\"EQ\",\"GT\"))"
 
   - id: col_r6_hangul_syl_vs_two
-    description: "R6 Hangul gan vs ga+na"
+    description: "Hangul jamo: Hangul gan vs ga+na"
     formula: "=IF(\"간\"<\"가나\",\"LT\",IF(\"간\"=\"가나\",\"EQ\",\"GT\"))"
 
   - id: col_r6_hangul_z_vs_gaag
-    description: "R6 Hangul ga+z vs gaag+a (ko Hangul before Latin)"
+    description: "Hangul jamo: Hangul ga+z vs gaag+a (ko Hangul before Latin)"
     formula: "=IF(\"가z\"<\"갂a\",\"LT\",IF(\"가z\"=\"갂a\",\"EQ\",\"GT\"))"
 
   - id: col_r6_hangul_vs_compat_jamo
-    description: "R6 Hangul gag vs ga+compatibility giyeok"
+    description: "Hangul jamo: Hangul gag vs ga+compatibility giyeok"
     formula: "=IF(\"각\"<\"가ㄱ\",\"LT\",IF(\"각\"=\"가ㄱ\",\"EQ\",\"GT\"))"
 
   - id: col_r6_hangul_syl_jamo_tail
-    description: "R6 Hangul gag+giyeok vs gaag"
+    description: "Hangul jamo: Hangul gag+giyeok vs gaag"
     formula: "=IF(\"각ㄱ\"<\"갂\",\"LT\",IF(\"각ㄱ\"=\"갂\",\"EQ\",\"GT\"))"
 
   - id: col_r7_ko_hanja_reading
-    description: "R7 hanja ka vs its Hangul reading ga"
+    description: "ko hanja: hanja ka vs its Hangul reading ga"
     formula: "=IF(\"家\"<\"가\",\"LT\",IF(\"家\"=\"가\",\"EQ\",\"GT\"))"
 
   - id: col_r7_ko_hanja_z
-    description: "R7 hanja ka+z vs ga+a"
+    description: "ko hanja: hanja ka+z vs ga+a"
     formula: "=IF(\"家z\"<\"가a\",\"LT\",IF(\"家z\"=\"가a\",\"EQ\",\"GT\"))"
 
   - id: col_r7_ko_hanja_gag
-    description: "R7 hanja kokku+z vs gag+a"
+    description: "ko hanja: hanja kokku+z vs gag+a"
     formula: "=IF(\"刻z\"<\"각a\",\"LT\",IF(\"刻z\"=\"각a\",\"EQ\",\"GT\"))"
 
   - id: col_d9_tail_control
-    description: "D9 trailing control character vs plain"
+    description: "trailing ignorable: trailing control character vs plain"
     formula: "=IF(\"a\"&UNICHAR(1)<\"a\",\"LT\",IF(\"a\"&UNICHAR(1)=\"a\",\"EQ\",\"GT\"))"
 
   - id: col_d9_tail_zwsp
-    description: "D9 trailing zero-width space vs plain"
+    description: "trailing ignorable: trailing zero-width space vs plain"
     formula: "=IF(\"a\"&UNICHAR(8203)<\"a\",\"LT\",IF(\"a\"&UNICHAR(8203)=\"a\",\"EQ\",\"GT\"))"
 
   - id: col_d9_tail_vs_next
-    description: "D9 trailing ignorable vs next letter"
+    description: "trailing ignorable: trailing ignorable vs next letter"
     formula: "=IF(\"a\"&UNICHAR(1)<\"b\",\"LT\",IF(\"a\"&UNICHAR(1)=\"b\",\"EQ\",\"GT\"))"
 
   - id: col_d9_tail_longer
-    description: "D9 trailing ignorable vs longer word"
+    description: "trailing ignorable: trailing ignorable vs longer word"
     formula: "=IF(\"a\"&UNICHAR(1)<\"ab\",\"LT\",IF(\"a\"&UNICHAR(1)=\"ab\",\"EQ\",\"GT\"))"
 
   - id: col_d9_tail_two_kinds
-    description: "D9 two different trailing ignorables"
+    description: "trailing ignorable: two different trailing ignorables"
     formula: "=IF(\"a\"&UNICHAR(1)<\"a\"&UNICHAR(173),\"LT\",IF(\"a\"&UNICHAR(1)=\"a\"&UNICHAR(173),\"EQ\",\"GT\"))"
 
   - id: col_d9_tail_vs_empty
-    description: "D9 lone control character vs empty string"
+    description: "trailing ignorable: lone control character vs empty string"
     formula: "=IF(UNICHAR(1)<\"\",\"LT\",IF(UNICHAR(1)=\"\",\"EQ\",\"GT\"))"
 
   - id: col_d9_tail_after_kana
-    description: "D9 trailing ignorable after kana vs plain"
+    description: "trailing ignorable: trailing ignorable after kana vs plain"
     formula: "=IF(\"あ\"&UNICHAR(8203)<\"あ\",\"LT\",IF(\"あ\"&UNICHAR(8203)=\"あ\",\"EQ\",\"GT\"))"
 
   - id: col_d16_hyphen_mid
-    description: "D16 hyphen inside a word vs plain"
+    description: "zh word sort: hyphen inside a word vs plain"
     formula: "=IF(\"a-b\"<\"ab\",\"LT\",IF(\"a-b\"=\"ab\",\"EQ\",\"GT\"))"
 
   - id: col_d16_apostrophe_mid
-    description: "D16 apostrophe inside a word vs plain"
+    description: "zh word sort: apostrophe inside a word vs plain"
     formula: "=IF(\"a'b\"<\"ab\",\"LT\",IF(\"a'b\"=\"ab\",\"EQ\",\"GT\"))"
 
   - id: col_d16_coop
-    description: "D16 co-op vs coop"
+    description: "zh word sort: co-op vs coop"
     formula: "=IF(\"co-op\"<\"coop\",\"LT\",IF(\"co-op\"=\"coop\",\"EQ\",\"GT\"))"
 
   - id: col_d16_apostrophe_vs_longer
-    description: "D16 a'b vs abc"
+    description: "zh word sort: a'b vs abc"
     formula: "=IF(\"a'b\"<\"abc\",\"LT\",IF(\"a'b\"=\"abc\",\"EQ\",\"GT\"))"
 
   - id: col_d16_hyphen_vs_longer
-    description: "D16 a-b vs abc"
+    description: "zh word sort: a-b vs abc"
     formula: "=IF(\"a-b\"<\"abc\",\"LT\",IF(\"a-b\"=\"abc\",\"EQ\",\"GT\"))"
 
   - id: col_d16_hyphen_vs_apostrophe
-    description: "D16 a-b vs a'b"
+    description: "zh word sort: a-b vs a'b"
     formula: "=IF(\"a-b\"<\"a'b\",\"LT\",IF(\"a-b\"=\"a'b\",\"EQ\",\"GT\"))"
 
   - id: col_comb_acute_decomposed
