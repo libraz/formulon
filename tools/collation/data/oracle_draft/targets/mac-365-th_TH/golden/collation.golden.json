@@ -1,0 +1,944 @@
+{
+  "suite": "collation",
+  "description": "Mac Excel text collation through the comparison operators: one representative pair per script, per context rule (R1-R7), the trailing-ignorable rule (D9) and the zh word-sort symbols (D16). Each probe returns LT / EQ / GT. Control, combining and ignorable characters are built with UNICHAR so the formula text stays ASCII-safe. Captured per locale target; no spill, every probe resolves to a single scalar.\n",
+  "environment": {
+    "excel_version": "16.113.4",
+    "excel_locale": "th-TH",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-10T22:17:12Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "col_latin_a_b",
+      "formula": "=IF(\"a\"<\"b\",\"LT\",IF(\"a\"=\"b\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_latin_case",
+      "formula": "=IF(\"a\"<\"A\",\"LT\",IF(\"a\"=\"A\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_latin_case_vs_next",
+      "formula": "=IF(\"A\"<\"b\",\"LT\",IF(\"A\"=\"b\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_digit_2_10",
+      "formula": "=IF(\"2\"<\"10\",\"LT\",IF(\"2\"=\"10\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_digit_vs_latin",
+      "formula": "=IF(\"9\"<\"a\",\"LT\",IF(\"9\"=\"a\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_accent_a_acute",
+      "formula": "=IF(\"a\"<\"á\",\"LT\",IF(\"a\"=\"á\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_accent_acute_vs_b",
+      "formula": "=IF(\"á\"<\"b\",\"LT\",IF(\"á\"=\"b\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_accent_diaeresis_vs_b",
+      "formula": "=IF(\"ä\"<\"b\",\"LT\",IF(\"ä\"=\"b\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_accent_nz_enye",
+      "formula": "=IF(\"ñ\"<\"nz\",\"LT\",IF(\"ñ\"=\"nz\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_accent_fr_cote",
+      "formula": "=IF(\"coté\"<\"côte\",\"LT\",IF(\"coté\"=\"côte\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_accent_de_umlaut_exp",
+      "formula": "=IF(\"ä\"<\"ae\",\"LT\",IF(\"ä\"=\"ae\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_accent_de_umlaut_ctx",
+      "formula": "=IF(\"äz\"<\"aea\",\"LT\",IF(\"äz\"=\"aea\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_greek_alpha_beta",
+      "formula": "=IF(\"α\"<\"β\",\"LT\",IF(\"α\"=\"β\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_greek_final_sigma",
+      "formula": "=IF(\"ς\"<\"σ\",\"LT\",IF(\"ς\"=\"σ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_greek_vs_latin",
+      "formula": "=IF(\"α\"<\"a\",\"LT\",IF(\"α\"=\"a\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_cyrillic_a_b",
+      "formula": "=IF(\"а\"<\"б\",\"LT\",IF(\"а\"=\"б\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_cyrillic_vs_latin",
+      "formula": "=IF(\"а\"<\"a\",\"LT\",IF(\"а\"=\"a\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_cyrillic_yo",
+      "formula": "=IF(\"е\"<\"ё\",\"LT\",IF(\"е\"=\"ё\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_cyrillic_yo_case",
+      "formula": "=IF(\"ё\"<\"Ё\",\"LT\",IF(\"ё\"=\"Ё\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_thai_ko_kho",
+      "formula": "=IF(\"ก\"<\"ข\",\"LT\",IF(\"ก\"=\"ข\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_thai_vs_latin",
+      "formula": "=IF(\"ก\"<\"a\",\"LT\",IF(\"ก\"=\"a\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_hangul_ga_na",
+      "formula": "=IF(\"가\"<\"나\",\"LT\",IF(\"가\"=\"나\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_hangul_jamo_vs_syllable",
+      "formula": "=IF(\"ㄱ\"<\"가\",\"LT\",IF(\"ㄱ\"=\"가\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_hangul_vs_latin",
+      "formula": "=IF(\"가\"<\"a\",\"LT\",IF(\"가\"=\"a\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_kana_hira_kata",
+      "formula": "=IF(\"あ\"<\"ア\",\"LT\",IF(\"あ\"=\"ア\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_kana_hira_order",
+      "formula": "=IF(\"あ\"<\"い\",\"LT\",IF(\"あ\"=\"い\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_kana_voiced",
+      "formula": "=IF(\"か\"<\"が\",\"LT\",IF(\"か\"=\"が\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_kana_voiced_vs_next",
+      "formula": "=IF(\"が\"<\"き\",\"LT\",IF(\"が\"=\"き\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_kana_halfwidth_kata",
+      "formula": "=IF(\"ｶ\"<\"カ\",\"LT\",IF(\"ｶ\"=\"カ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_kana_small",
+      "formula": "=IF(\"ぁ\"<\"あ\",\"LT\",IF(\"ぁ\"=\"あ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_kana_vs_greek",
+      "formula": "=IF(\"あ\"<\"α\",\"LT\",IF(\"あ\"=\"α\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_kana_vs_kanji",
+      "formula": "=IF(\"あ\"<\"亜\",\"LT\",IF(\"あ\"=\"亜\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_kanji_a_ichi",
+      "formula": "=IF(\"亜\"<\"一\",\"LT\",IF(\"亜\"=\"一\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_kanji_chinese_order",
+      "formula": "=IF(\"阿\"<\"愛\",\"LT\",IF(\"阿\"=\"愛\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_kanji_vs_latin",
+      "formula": "=IF(\"中\"<\"a\",\"LT\",IF(\"中\"=\"a\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_fullwidth_latin_upper",
+      "formula": "=IF(\"Ａ\"<\"A\",\"LT\",IF(\"Ａ\"=\"A\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_fullwidth_latin_lower",
+      "formula": "=IF(\"ａ\"<\"A\",\"LT\",IF(\"ａ\"=\"A\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_fullwidth_digit",
+      "formula": "=IF(\"１\"<\"1\",\"LT\",IF(\"１\"=\"1\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_fullwidth_space",
+      "formula": "=IF(\"　\"<\" \",\"LT\",IF(\"　\"=\" \",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_symbol_bang_hash",
+      "formula": "=IF(\"!\"<\"#\",\"LT\",IF(\"!\"=\"#\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_symbol_vs_digit",
+      "formula": "=IF(\"!\"<\"0\",\"LT\",IF(\"!\"=\"0\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_symbol_space_vs_a",
+      "formula": "=IF(\" \"<\"a\",\"LT\",IF(\" \"=\"a\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_symbol_euro_pound",
+      "formula": "=IF(\"€\"<\"£\",\"LT\",IF(\"€\"=\"£\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_symbol_star_arrow",
+      "formula": "=IF(\"★\"<\"→\",\"LT\",IF(\"★\"=\"→\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_symbol_trademark",
+      "formula": "=IF(\"™\"<\"T\",\"LT\",IF(\"™\"=\"T\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_digit_circled",
+      "formula": "=IF(\"①\"<\"1\",\"LT\",IF(\"①\"=\"1\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_digit_superscript",
+      "formula": "=IF(\"²\"<\"2\",\"LT\",IF(\"²\"=\"2\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_digit_roman",
+      "formula": "=IF(\"Ⅰ\"<\"i\",\"LT\",IF(\"Ⅰ\"=\"i\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_digit_half",
+      "formula": "=IF(\"½\"<\"1\",\"LT\",IF(\"½\"=\"1\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_r1_sharp_s",
+      "formula": "=IF(\"ß\"<\"ss\",\"LT\",IF(\"ß\"=\"ss\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_r1_ij_lig",
+      "formula": "=IF(\"ĳ\"<\"ij\",\"LT\",IF(\"ĳ\"=\"ij\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_r1_ae_lig",
+      "formula": "=IF(\"æ\"<\"ae\",\"LT\",IF(\"æ\"=\"ae\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_r1_oe_lig",
+      "formula": "=IF(\"œ\"<\"oe\",\"LT\",IF(\"œ\"=\"oe\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_r1_strasse_ss",
+      "formula": "=IF(\"straße\"<\"strasse\",\"LT\",IF(\"straße\"=\"strasse\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_r1_strasse_sz",
+      "formula": "=IF(\"straße\"<\"strasze\",\"LT\",IF(\"straße\"=\"strasze\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_r2_halfwidth_voiced",
+      "formula": "=IF(\"ｶﾞ\"<\"ガ\",\"LT\",IF(\"ｶﾞ\"=\"ガ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_r2_halfwidth_voiced_vs_base",
+      "formula": "=IF(\"ｶﾞ\"<\"ｶ\",\"LT\",IF(\"ｶﾞ\"=\"ｶ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_r2_halfwidth_semivoiced",
+      "formula": "=IF(\"ﾊﾟ\"<\"パ\",\"LT\",IF(\"ﾊﾟ\"=\"パ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_r2_halfwidth_voiced_composed",
+      "formula": "=IF(\"ｶ\"&UNICHAR(65438)<\"ガ\",\"LT\",IF(\"ｶ\"&UNICHAR(65438)=\"ガ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_r3_choon_hira",
+      "formula": "=IF(\"かー\"<\"かあ\",\"LT\",IF(\"かー\"=\"かあ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_r3_choon_kata",
+      "formula": "=IF(\"カー\"<\"カア\",\"LT\",IF(\"カー\"=\"カア\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_r3_choon_after_n",
+      "formula": "=IF(\"んー\"<\"ん\",\"LT\",IF(\"んー\"=\"ん\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_r3_choon_after_latin",
+      "formula": "=IF(\"aー\"<\"a\",\"LT\",IF(\"aー\"=\"a\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_r3_choon_after_kanji",
+      "formula": "=IF(\"中ー\"<\"中\",\"LT\",IF(\"中ー\"=\"中\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_r3_iter_hira",
+      "formula": "=IF(\"かゝ\"<\"かか\",\"LT\",IF(\"かゝ\"=\"かか\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_r3_iter_voiced_base",
+      "formula": "=IF(\"がゝ\"<\"がか\",\"LT\",IF(\"がゝ\"=\"がか\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_r3_iter_voiced_mark",
+      "formula": "=IF(\"かゞ\"<\"かが\",\"LT\",IF(\"かゞ\"=\"かが\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_r3_iter_kata_after_hira",
+      "formula": "=IF(\"かヽ\"<\"かか\",\"LT\",IF(\"かヽ\"=\"かか\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_r3_iter_kata",
+      "formula": "=IF(\"カヽ\"<\"カカ\",\"LT\",IF(\"カヽ\"=\"カカ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_r4_thai_prefix_vowel",
+      "formula": "=IF(\"เก\"<\"กา\",\"LT\",IF(\"เก\"=\"กา\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_r4_thai_prefix_vs_base",
+      "formula": "=IF(\"เก\"<\"ก\",\"LT\",IF(\"เก\"=\"ก\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_r4_thai_prefix_non_consonant",
+      "formula": "=IF(\"เ\"&\"1\"<\"เ\"&\"a\",\"LT\",IF(\"เ\"&\"1\"=\"เ\"&\"a\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_r4_thai_prefix_alone",
+      "formula": "=IF(\"เ\"<\"ก\",\"LT\",IF(\"เ\"=\"ก\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_r5_control_mid",
+      "formula": "=IF(\"a\"&UNICHAR(1)&\"b\"<\"ab\",\"LT\",IF(\"a\"&UNICHAR(1)&\"b\"=\"ab\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_r5_zwsp_mid",
+      "formula": "=IF(\"a\"&UNICHAR(8203)&\"b\"<\"ab\",\"LT\",IF(\"a\"&UNICHAR(8203)&\"b\"=\"ab\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_r5_softhyphen_mid",
+      "formula": "=IF(\"a\"&UNICHAR(173)&\"b\"<\"ab\",\"LT\",IF(\"a\"&UNICHAR(173)&\"b\"=\"ab\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_r5_ideographic_space_mid",
+      "formula": "=IF(\"a　b\"<\"ab\",\"LT\",IF(\"a　b\"=\"ab\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_r5_space_mid",
+      "formula": "=IF(\"a b\"<\"ab\",\"LT\",IF(\"a b\"=\"ab\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_r6_hangul_decomp",
+      "formula": "=IF(\"각\"<\"가\"&UNICHAR(4520),\"LT\",IF(\"각\"=\"가\"&UNICHAR(4520),\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_r6_hangul_syl_vs_two",
+      "formula": "=IF(\"간\"<\"가나\",\"LT\",IF(\"간\"=\"가나\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_r6_hangul_z_vs_gaag",
+      "formula": "=IF(\"가z\"<\"갂a\",\"LT\",IF(\"가z\"=\"갂a\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_r6_hangul_vs_compat_jamo",
+      "formula": "=IF(\"각\"<\"가ㄱ\",\"LT\",IF(\"각\"=\"가ㄱ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_r6_hangul_syl_jamo_tail",
+      "formula": "=IF(\"각ㄱ\"<\"갂\",\"LT\",IF(\"각ㄱ\"=\"갂\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_r7_ko_hanja_reading",
+      "formula": "=IF(\"家\"<\"가\",\"LT\",IF(\"家\"=\"가\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_r7_ko_hanja_z",
+      "formula": "=IF(\"家z\"<\"가a\",\"LT\",IF(\"家z\"=\"가a\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_r7_ko_hanja_gag",
+      "formula": "=IF(\"刻z\"<\"각a\",\"LT\",IF(\"刻z\"=\"각a\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_d9_tail_control",
+      "formula": "=IF(\"a\"&UNICHAR(1)<\"a\",\"LT\",IF(\"a\"&UNICHAR(1)=\"a\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_d9_tail_zwsp",
+      "formula": "=IF(\"a\"&UNICHAR(8203)<\"a\",\"LT\",IF(\"a\"&UNICHAR(8203)=\"a\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_d9_tail_vs_next",
+      "formula": "=IF(\"a\"&UNICHAR(1)<\"b\",\"LT\",IF(\"a\"&UNICHAR(1)=\"b\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_d9_tail_longer",
+      "formula": "=IF(\"a\"&UNICHAR(1)<\"ab\",\"LT\",IF(\"a\"&UNICHAR(1)=\"ab\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_d9_tail_two_kinds",
+      "formula": "=IF(\"a\"&UNICHAR(1)<\"a\"&UNICHAR(173),\"LT\",IF(\"a\"&UNICHAR(1)=\"a\"&UNICHAR(173),\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_d9_tail_vs_empty",
+      "formula": "=IF(UNICHAR(1)<\"\",\"LT\",IF(UNICHAR(1)=\"\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_d9_tail_after_kana",
+      "formula": "=IF(\"あ\"&UNICHAR(8203)<\"あ\",\"LT\",IF(\"あ\"&UNICHAR(8203)=\"あ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_d16_hyphen_mid",
+      "formula": "=IF(\"a-b\"<\"ab\",\"LT\",IF(\"a-b\"=\"ab\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_d16_apostrophe_mid",
+      "formula": "=IF(\"a'b\"<\"ab\",\"LT\",IF(\"a'b\"=\"ab\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_d16_coop",
+      "formula": "=IF(\"co-op\"<\"coop\",\"LT\",IF(\"co-op\"=\"coop\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_d16_apostrophe_vs_longer",
+      "formula": "=IF(\"a'b\"<\"abc\",\"LT\",IF(\"a'b\"=\"abc\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_d16_hyphen_vs_longer",
+      "formula": "=IF(\"a-b\"<\"abc\",\"LT\",IF(\"a-b\"=\"abc\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_d16_hyphen_vs_apostrophe",
+      "formula": "=IF(\"a-b\"<\"a'b\",\"LT\",IF(\"a-b\"=\"a'b\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_comb_acute_decomposed",
+      "formula": "=IF(\"a\"&UNICHAR(769)<\"á\",\"LT\",IF(\"a\"&UNICHAR(769)=\"á\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_comb_acute_ctx",
+      "formula": "=IF(\"áb\"<\"a\"&UNICHAR(769)&\"b\",\"LT\",IF(\"áb\"=\"a\"&UNICHAR(769)&\"b\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_comb_acute_vs_plain",
+      "formula": "=IF(\"a\"&UNICHAR(769)<\"a\",\"LT\",IF(\"a\"&UNICHAR(769)=\"a\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_comb_thai_tone",
+      "formula": "=IF(\"ก่\"<\"ก\",\"LT\",IF(\"ก่\"=\"ก\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    }
+  ]
+}

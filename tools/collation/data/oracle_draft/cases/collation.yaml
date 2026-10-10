@@ -1,0 +1,421 @@
+suite: collation
+description: >
+  Mac Excel text collation through the comparison operators: one representative pair per
+  script, per context rule (R1-R7), the trailing-ignorable rule (D9) and the zh word-sort
+  symbols (D16). Each probe returns LT / EQ / GT. Control, combining and ignorable characters
+  are built with UNICHAR so the formula text stays ASCII-safe. Captured per locale target;
+  no spill, every probe resolves to a single scalar.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: col_latin_a_b
+    description: "Latin a vs b"
+    formula: "=IF(\"a\"<\"b\",\"LT\",IF(\"a\"=\"b\",\"EQ\",\"GT\"))"
+
+  - id: col_latin_case
+    description: "Latin a vs A (case is a tertiary difference)"
+    formula: "=IF(\"a\"<\"A\",\"LT\",IF(\"a\"=\"A\",\"EQ\",\"GT\"))"
+
+  - id: col_latin_case_vs_next
+    description: "Latin A vs b (case below next letter)"
+    formula: "=IF(\"A\"<\"b\",\"LT\",IF(\"A\"=\"b\",\"EQ\",\"GT\"))"
+
+  - id: col_digit_2_10
+    description: "digit strings 2 vs 10 compare as text"
+    formula: "=IF(\"2\"<\"10\",\"LT\",IF(\"2\"=\"10\",\"EQ\",\"GT\"))"
+
+  - id: col_digit_vs_latin
+    description: "digit 9 vs letter a"
+    formula: "=IF(\"9\"<\"a\",\"LT\",IF(\"9\"=\"a\",\"EQ\",\"GT\"))"
+
+  - id: col_accent_a_acute
+    description: "a vs a-acute"
+    formula: "=IF(\"a\"<\"á\",\"LT\",IF(\"a\"=\"á\",\"EQ\",\"GT\"))"
+
+  - id: col_accent_acute_vs_b
+    description: "a-acute vs b"
+    formula: "=IF(\"á\"<\"b\",\"LT\",IF(\"á\"=\"b\",\"EQ\",\"GT\"))"
+
+  - id: col_accent_diaeresis_vs_b
+    description: "a-diaeresis vs b"
+    formula: "=IF(\"ä\"<\"b\",\"LT\",IF(\"ä\"=\"b\",\"EQ\",\"GT\"))"
+
+  - id: col_accent_nz_enye
+    description: "enye vs nz (es independent letter)"
+    formula: "=IF(\"ñ\"<\"nz\",\"LT\",IF(\"ñ\"=\"nz\",\"EQ\",\"GT\"))"
+
+  - id: col_accent_fr_cote
+    description: "fr reversed-accent probe: cote-acute vs cote-circumflex"
+    formula: "=IF(\"coté\"<\"côte\",\"LT\",IF(\"coté\"=\"côte\",\"EQ\",\"GT\"))"
+
+  - id: col_accent_de_umlaut_exp
+    description: "de probe: a-diaeresis vs ae (second-level, not expansion)"
+    formula: "=IF(\"ä\"<\"ae\",\"LT\",IF(\"ä\"=\"ae\",\"EQ\",\"GT\"))"
+
+  - id: col_accent_de_umlaut_ctx
+    description: "de probe: a-diaeresis+z vs aea"
+    formula: "=IF(\"äz\"<\"aea\",\"LT\",IF(\"äz\"=\"aea\",\"EQ\",\"GT\"))"
+
+  - id: col_greek_alpha_beta
+    description: "Greek alpha vs beta"
+    formula: "=IF(\"α\"<\"β\",\"LT\",IF(\"α\"=\"β\",\"EQ\",\"GT\"))"
+
+  - id: col_greek_final_sigma
+    description: "Greek final sigma vs sigma"
+    formula: "=IF(\"ς\"<\"σ\",\"LT\",IF(\"ς\"=\"σ\",\"EQ\",\"GT\"))"
+
+  - id: col_greek_vs_latin
+    description: "Greek alpha vs Latin a"
+    formula: "=IF(\"α\"<\"a\",\"LT\",IF(\"α\"=\"a\",\"EQ\",\"GT\"))"
+
+  - id: col_cyrillic_a_b
+    description: "Cyrillic a vs be"
+    formula: "=IF(\"а\"<\"б\",\"LT\",IF(\"а\"=\"б\",\"EQ\",\"GT\"))"
+
+  - id: col_cyrillic_vs_latin
+    description: "Cyrillic a vs Latin a"
+    formula: "=IF(\"а\"<\"a\",\"LT\",IF(\"а\"=\"a\",\"EQ\",\"GT\"))"
+
+  - id: col_cyrillic_yo
+    description: "Cyrillic ie vs io"
+    formula: "=IF(\"е\"<\"ё\",\"LT\",IF(\"е\"=\"ё\",\"EQ\",\"GT\"))"
+
+  - id: col_cyrillic_yo_case
+    description: "Cyrillic io vs capital io"
+    formula: "=IF(\"ё\"<\"Ё\",\"LT\",IF(\"ё\"=\"Ё\",\"EQ\",\"GT\"))"
+
+  - id: col_thai_ko_kho
+    description: "Thai ko kai vs kho khai"
+    formula: "=IF(\"ก\"<\"ข\",\"LT\",IF(\"ก\"=\"ข\",\"EQ\",\"GT\"))"
+
+  - id: col_thai_vs_latin
+    description: "Thai ko kai vs Latin a"
+    formula: "=IF(\"ก\"<\"a\",\"LT\",IF(\"ก\"=\"a\",\"EQ\",\"GT\"))"
+
+  - id: col_hangul_ga_na
+    description: "Hangul ga vs na"
+    formula: "=IF(\"가\"<\"나\",\"LT\",IF(\"가\"=\"나\",\"EQ\",\"GT\"))"
+
+  - id: col_hangul_jamo_vs_syllable
+    description: "Hangul compatibility jamo giyeok vs syllable ga"
+    formula: "=IF(\"ㄱ\"<\"가\",\"LT\",IF(\"ㄱ\"=\"가\",\"EQ\",\"GT\"))"
+
+  - id: col_hangul_vs_latin
+    description: "Hangul ga vs Latin a"
+    formula: "=IF(\"가\"<\"a\",\"LT\",IF(\"가\"=\"a\",\"EQ\",\"GT\"))"
+
+  - id: col_kana_hira_kata
+    description: "hiragana a vs katakana a"
+    formula: "=IF(\"あ\"<\"ア\",\"LT\",IF(\"あ\"=\"ア\",\"EQ\",\"GT\"))"
+
+  - id: col_kana_hira_order
+    description: "hiragana a vs i"
+    formula: "=IF(\"あ\"<\"い\",\"LT\",IF(\"あ\"=\"い\",\"EQ\",\"GT\"))"
+
+  - id: col_kana_voiced
+    description: "ka vs ga (voiced is a tertiary difference)"
+    formula: "=IF(\"か\"<\"が\",\"LT\",IF(\"か\"=\"が\",\"EQ\",\"GT\"))"
+
+  - id: col_kana_voiced_vs_next
+    description: "ga vs ki"
+    formula: "=IF(\"が\"<\"き\",\"LT\",IF(\"が\"=\"き\",\"EQ\",\"GT\"))"
+
+  - id: col_kana_halfwidth_kata
+    description: "half-width ka vs full-width katakana ka"
+    formula: "=IF(\"ｶ\"<\"カ\",\"LT\",IF(\"ｶ\"=\"カ\",\"EQ\",\"GT\"))"
+
+  - id: col_kana_small
+    description: "small hiragana a vs a"
+    formula: "=IF(\"ぁ\"<\"あ\",\"LT\",IF(\"ぁ\"=\"あ\",\"EQ\",\"GT\"))"
+
+  - id: col_kana_vs_greek
+    description: "hiragana a vs Greek alpha"
+    formula: "=IF(\"あ\"<\"α\",\"LT\",IF(\"あ\"=\"α\",\"EQ\",\"GT\"))"
+
+  - id: col_kana_vs_kanji
+    description: "hiragana a vs kanji a"
+    formula: "=IF(\"あ\"<\"亜\",\"LT\",IF(\"あ\"=\"亜\",\"EQ\",\"GT\"))"
+
+  - id: col_kanji_a_ichi
+    description: "kanji a vs ichi"
+    formula: "=IF(\"亜\"<\"一\",\"LT\",IF(\"亜\"=\"一\",\"EQ\",\"GT\"))"
+
+  - id: col_kanji_chinese_order
+    description: "kanji a-wo vs ai (zh pinyin vs ja reading)"
+    formula: "=IF(\"阿\"<\"愛\",\"LT\",IF(\"阿\"=\"愛\",\"EQ\",\"GT\"))"
+
+  - id: col_kanji_vs_latin
+    description: "kanji naka vs Latin a"
+    formula: "=IF(\"中\"<\"a\",\"LT\",IF(\"中\"=\"a\",\"EQ\",\"GT\"))"
+
+  - id: col_fullwidth_latin_upper
+    description: "full-width A vs A"
+    formula: "=IF(\"Ａ\"<\"A\",\"LT\",IF(\"Ａ\"=\"A\",\"EQ\",\"GT\"))"
+
+  - id: col_fullwidth_latin_lower
+    description: "full-width a vs A"
+    formula: "=IF(\"ａ\"<\"A\",\"LT\",IF(\"ａ\"=\"A\",\"EQ\",\"GT\"))"
+
+  - id: col_fullwidth_digit
+    description: "full-width 1 vs 1"
+    formula: "=IF(\"１\"<\"1\",\"LT\",IF(\"１\"=\"1\",\"EQ\",\"GT\"))"
+
+  - id: col_fullwidth_space
+    description: "ideographic space vs space"
+    formula: "=IF(\"　\"<\" \",\"LT\",IF(\"　\"=\" \",\"EQ\",\"GT\"))"
+
+  - id: col_symbol_bang_hash
+    description: "exclamation vs number sign"
+    formula: "=IF(\"!\"<\"#\",\"LT\",IF(\"!\"=\"#\",\"EQ\",\"GT\"))"
+
+  - id: col_symbol_vs_digit
+    description: "exclamation vs 0"
+    formula: "=IF(\"!\"<\"0\",\"LT\",IF(\"!\"=\"0\",\"EQ\",\"GT\"))"
+
+  - id: col_symbol_space_vs_a
+    description: "space vs a"
+    formula: "=IF(\" \"<\"a\",\"LT\",IF(\" \"=\"a\",\"EQ\",\"GT\"))"
+
+  - id: col_symbol_euro_pound
+    description: "euro vs pound"
+    formula: "=IF(\"€\"<\"£\",\"LT\",IF(\"€\"=\"£\",\"EQ\",\"GT\"))"
+
+  - id: col_symbol_star_arrow
+    description: "black star vs rightwards arrow"
+    formula: "=IF(\"★\"<\"→\",\"LT\",IF(\"★\"=\"→\",\"EQ\",\"GT\"))"
+
+  - id: col_symbol_trademark
+    description: "trade mark sign vs T"
+    formula: "=IF(\"™\"<\"T\",\"LT\",IF(\"™\"=\"T\",\"EQ\",\"GT\"))"
+
+  - id: col_digit_circled
+    description: "circled 1 vs 1"
+    formula: "=IF(\"①\"<\"1\",\"LT\",IF(\"①\"=\"1\",\"EQ\",\"GT\"))"
+
+  - id: col_digit_superscript
+    description: "superscript 2 vs 2"
+    formula: "=IF(\"²\"<\"2\",\"LT\",IF(\"²\"=\"2\",\"EQ\",\"GT\"))"
+
+  - id: col_digit_roman
+    description: "roman numeral one vs i"
+    formula: "=IF(\"Ⅰ\"<\"i\",\"LT\",IF(\"Ⅰ\"=\"i\",\"EQ\",\"GT\"))"
+
+  - id: col_digit_half
+    description: "vulgar fraction one half vs 1"
+    formula: "=IF(\"½\"<\"1\",\"LT\",IF(\"½\"=\"1\",\"EQ\",\"GT\"))"
+
+  - id: col_r1_sharp_s
+    description: "R1 sharp s vs ss"
+    formula: "=IF(\"ß\"<\"ss\",\"LT\",IF(\"ß\"=\"ss\",\"EQ\",\"GT\"))"
+
+  - id: col_r1_ij_lig
+    description: "R1 ij ligature vs ij"
+    formula: "=IF(\"ĳ\"<\"ij\",\"LT\",IF(\"ĳ\"=\"ij\",\"EQ\",\"GT\"))"
+
+  - id: col_r1_ae_lig
+    description: "R1 ae ligature vs ae"
+    formula: "=IF(\"æ\"<\"ae\",\"LT\",IF(\"æ\"=\"ae\",\"EQ\",\"GT\"))"
+
+  - id: col_r1_oe_lig
+    description: "R1 oe ligature vs oe"
+    formula: "=IF(\"œ\"<\"oe\",\"LT\",IF(\"œ\"=\"oe\",\"EQ\",\"GT\"))"
+
+  - id: col_r1_strasse_ss
+    description: "R1 strasse with sharp s vs ss"
+    formula: "=IF(\"straße\"<\"strasse\",\"LT\",IF(\"straße\"=\"strasse\",\"EQ\",\"GT\"))"
+
+  - id: col_r1_strasse_sz
+    description: "R1 strasse with sharp s vs sz"
+    formula: "=IF(\"straße\"<\"strasze\",\"LT\",IF(\"straße\"=\"strasze\",\"EQ\",\"GT\"))"
+
+  - id: col_r2_halfwidth_voiced
+    description: "R2 half-width ka+voiced mark vs full-width ga"
+    formula: "=IF(\"ｶﾞ\"<\"ガ\",\"LT\",IF(\"ｶﾞ\"=\"ガ\",\"EQ\",\"GT\"))"
+
+  - id: col_r2_halfwidth_voiced_vs_base
+    description: "R2 half-width ka+voiced mark vs half-width ka"
+    formula: "=IF(\"ｶﾞ\"<\"ｶ\",\"LT\",IF(\"ｶﾞ\"=\"ｶ\",\"EQ\",\"GT\"))"
+
+  - id: col_r2_halfwidth_semivoiced
+    description: "R2 half-width ha+semi-voiced mark vs full-width pa"
+    formula: "=IF(\"ﾊﾟ\"<\"パ\",\"LT\",IF(\"ﾊﾟ\"=\"パ\",\"EQ\",\"GT\"))"
+
+  - id: col_r2_halfwidth_voiced_composed
+    description: "R2 half-width ka+U+FF9E (code points) vs full-width ga"
+    formula: "=IF(\"ｶ\"&UNICHAR(65438)<\"ガ\",\"LT\",IF(\"ｶ\"&UNICHAR(65438)=\"ガ\",\"EQ\",\"GT\"))"
+
+  - id: col_r3_choon_hira
+    description: "R3 ka+prolonged mark vs ka+a"
+    formula: "=IF(\"かー\"<\"かあ\",\"LT\",IF(\"かー\"=\"かあ\",\"EQ\",\"GT\"))"
+
+  - id: col_r3_choon_kata
+    description: "R3 katakana ka+prolonged mark vs ka+a"
+    formula: "=IF(\"カー\"<\"カア\",\"LT\",IF(\"カー\"=\"カア\",\"EQ\",\"GT\"))"
+
+  - id: col_r3_choon_after_n
+    description: "R3 n+prolonged mark vs n (standalone weight)"
+    formula: "=IF(\"んー\"<\"ん\",\"LT\",IF(\"んー\"=\"ん\",\"EQ\",\"GT\"))"
+
+  - id: col_r3_choon_after_latin
+    description: "R3 a+prolonged mark vs a"
+    formula: "=IF(\"aー\"<\"a\",\"LT\",IF(\"aー\"=\"a\",\"EQ\",\"GT\"))"
+
+  - id: col_r3_choon_after_kanji
+    description: "R3 kanji+prolonged mark vs kanji"
+    formula: "=IF(\"中ー\"<\"中\",\"LT\",IF(\"中ー\"=\"中\",\"EQ\",\"GT\"))"
+
+  - id: col_r3_iter_hira
+    description: "R3 ka+hiragana iteration mark vs ka+ka"
+    formula: "=IF(\"かゝ\"<\"かか\",\"LT\",IF(\"かゝ\"=\"かか\",\"EQ\",\"GT\"))"
+
+  - id: col_r3_iter_voiced_base
+    description: "R3 ga+iteration mark vs ga+ka"
+    formula: "=IF(\"がゝ\"<\"がか\",\"LT\",IF(\"がゝ\"=\"がか\",\"EQ\",\"GT\"))"
+
+  - id: col_r3_iter_voiced_mark
+    description: "R3 ka+voiced iteration mark vs ka+ga"
+    formula: "=IF(\"かゞ\"<\"かが\",\"LT\",IF(\"かゞ\"=\"かが\",\"EQ\",\"GT\"))"
+
+  - id: col_r3_iter_kata_after_hira
+    description: "R3 ka+katakana iteration mark vs ka+ka (hiragana prefix)"
+    formula: "=IF(\"かヽ\"<\"かか\",\"LT\",IF(\"かヽ\"=\"かか\",\"EQ\",\"GT\"))"
+
+  - id: col_r3_iter_kata
+    description: "R3 katakana ka+katakana iteration mark vs ka+ka"
+    formula: "=IF(\"カヽ\"<\"カカ\",\"LT\",IF(\"カヽ\"=\"カカ\",\"EQ\",\"GT\"))"
+
+  - id: col_r4_thai_prefix_vowel
+    description: "R4 Thai prefix vowel+ko vs ko+aa"
+    formula: "=IF(\"เก\"<\"กา\",\"LT\",IF(\"เก\"=\"กา\",\"EQ\",\"GT\"))"
+
+  - id: col_r4_thai_prefix_vs_base
+    description: "R4 Thai prefix vowel+ko vs ko"
+    formula: "=IF(\"เก\"<\"ก\",\"LT\",IF(\"เก\"=\"ก\",\"EQ\",\"GT\"))"
+
+  - id: col_r4_thai_prefix_non_consonant
+    description: "R4 Thai prefix vowel before non-consonant vs after"
+    formula: "=IF(\"เ\"&\"1\"<\"เ\"&\"a\",\"LT\",IF(\"เ\"&\"1\"=\"เ\"&\"a\",\"EQ\",\"GT\"))"
+
+  - id: col_r4_thai_prefix_alone
+    description: "R4 Thai prefix vowel alone vs ko"
+    formula: "=IF(\"เ\"<\"ก\",\"LT\",IF(\"เ\"=\"ก\",\"EQ\",\"GT\"))"
+
+  - id: col_r5_control_mid
+    description: "R5 control character inside a word vs plain"
+    formula: "=IF(\"a\"&UNICHAR(1)&\"b\"<\"ab\",\"LT\",IF(\"a\"&UNICHAR(1)&\"b\"=\"ab\",\"EQ\",\"GT\"))"
+
+  - id: col_r5_zwsp_mid
+    description: "R5 zero-width space inside a word vs plain"
+    formula: "=IF(\"a\"&UNICHAR(8203)&\"b\"<\"ab\",\"LT\",IF(\"a\"&UNICHAR(8203)&\"b\"=\"ab\",\"EQ\",\"GT\"))"
+
+  - id: col_r5_softhyphen_mid
+    description: "R5 soft hyphen inside a word vs plain"
+    formula: "=IF(\"a\"&UNICHAR(173)&\"b\"<\"ab\",\"LT\",IF(\"a\"&UNICHAR(173)&\"b\"=\"ab\",\"EQ\",\"GT\"))"
+
+  - id: col_r5_ideographic_space_mid
+    description: "R5 ideographic space inside a word vs plain"
+    formula: "=IF(\"a　b\"<\"ab\",\"LT\",IF(\"a　b\"=\"ab\",\"EQ\",\"GT\"))"
+
+  - id: col_r5_space_mid
+    description: "R5 space inside a word vs plain"
+    formula: "=IF(\"a b\"<\"ab\",\"LT\",IF(\"a b\"=\"ab\",\"EQ\",\"GT\"))"
+
+  - id: col_r6_hangul_decomp
+    description: "R6 Hangul syllable gag vs ga+final jamo U+11A8"
+    formula: "=IF(\"각\"<\"가\"&UNICHAR(4520),\"LT\",IF(\"각\"=\"가\"&UNICHAR(4520),\"EQ\",\"GT\"))"
+
+  - id: col_r6_hangul_syl_vs_two
+    description: "R6 Hangul gan vs ga+na"
+    formula: "=IF(\"간\"<\"가나\",\"LT\",IF(\"간\"=\"가나\",\"EQ\",\"GT\"))"
+
+  - id: col_r6_hangul_z_vs_gaag
+    description: "R6 Hangul ga+z vs gaag+a (ko Hangul before Latin)"
+    formula: "=IF(\"가z\"<\"갂a\",\"LT\",IF(\"가z\"=\"갂a\",\"EQ\",\"GT\"))"
+
+  - id: col_r6_hangul_vs_compat_jamo
+    description: "R6 Hangul gag vs ga+compatibility giyeok"
+    formula: "=IF(\"각\"<\"가ㄱ\",\"LT\",IF(\"각\"=\"가ㄱ\",\"EQ\",\"GT\"))"
+
+  - id: col_r6_hangul_syl_jamo_tail
+    description: "R6 Hangul gag+giyeok vs gaag"
+    formula: "=IF(\"각ㄱ\"<\"갂\",\"LT\",IF(\"각ㄱ\"=\"갂\",\"EQ\",\"GT\"))"
+
+  - id: col_r7_ko_hanja_reading
+    description: "R7 hanja ka vs its Hangul reading ga"
+    formula: "=IF(\"家\"<\"가\",\"LT\",IF(\"家\"=\"가\",\"EQ\",\"GT\"))"
+
+  - id: col_r7_ko_hanja_z
+    description: "R7 hanja ka+z vs ga+a"
+    formula: "=IF(\"家z\"<\"가a\",\"LT\",IF(\"家z\"=\"가a\",\"EQ\",\"GT\"))"
+
+  - id: col_r7_ko_hanja_gag
+    description: "R7 hanja kokku+z vs gag+a"
+    formula: "=IF(\"刻z\"<\"각a\",\"LT\",IF(\"刻z\"=\"각a\",\"EQ\",\"GT\"))"
+
+  - id: col_d9_tail_control
+    description: "D9 trailing control character vs plain"
+    formula: "=IF(\"a\"&UNICHAR(1)<\"a\",\"LT\",IF(\"a\"&UNICHAR(1)=\"a\",\"EQ\",\"GT\"))"
+
+  - id: col_d9_tail_zwsp
+    description: "D9 trailing zero-width space vs plain"
+    formula: "=IF(\"a\"&UNICHAR(8203)<\"a\",\"LT\",IF(\"a\"&UNICHAR(8203)=\"a\",\"EQ\",\"GT\"))"
+
+  - id: col_d9_tail_vs_next
+    description: "D9 trailing ignorable vs next letter"
+    formula: "=IF(\"a\"&UNICHAR(1)<\"b\",\"LT\",IF(\"a\"&UNICHAR(1)=\"b\",\"EQ\",\"GT\"))"
+
+  - id: col_d9_tail_longer
+    description: "D9 trailing ignorable vs longer word"
+    formula: "=IF(\"a\"&UNICHAR(1)<\"ab\",\"LT\",IF(\"a\"&UNICHAR(1)=\"ab\",\"EQ\",\"GT\"))"
+
+  - id: col_d9_tail_two_kinds
+    description: "D9 two different trailing ignorables"
+    formula: "=IF(\"a\"&UNICHAR(1)<\"a\"&UNICHAR(173),\"LT\",IF(\"a\"&UNICHAR(1)=\"a\"&UNICHAR(173),\"EQ\",\"GT\"))"
+
+  - id: col_d9_tail_vs_empty
+    description: "D9 lone control character vs empty string"
+    formula: "=IF(UNICHAR(1)<\"\",\"LT\",IF(UNICHAR(1)=\"\",\"EQ\",\"GT\"))"
+
+  - id: col_d9_tail_after_kana
+    description: "D9 trailing ignorable after kana vs plain"
+    formula: "=IF(\"あ\"&UNICHAR(8203)<\"あ\",\"LT\",IF(\"あ\"&UNICHAR(8203)=\"あ\",\"EQ\",\"GT\"))"
+
+  - id: col_d16_hyphen_mid
+    description: "D16 hyphen inside a word vs plain"
+    formula: "=IF(\"a-b\"<\"ab\",\"LT\",IF(\"a-b\"=\"ab\",\"EQ\",\"GT\"))"
+
+  - id: col_d16_apostrophe_mid
+    description: "D16 apostrophe inside a word vs plain"
+    formula: "=IF(\"a'b\"<\"ab\",\"LT\",IF(\"a'b\"=\"ab\",\"EQ\",\"GT\"))"
+
+  - id: col_d16_coop
+    description: "D16 co-op vs coop"
+    formula: "=IF(\"co-op\"<\"coop\",\"LT\",IF(\"co-op\"=\"coop\",\"EQ\",\"GT\"))"
+
+  - id: col_d16_apostrophe_vs_longer
+    description: "D16 a'b vs abc"
+    formula: "=IF(\"a'b\"<\"abc\",\"LT\",IF(\"a'b\"=\"abc\",\"EQ\",\"GT\"))"
+
+  - id: col_d16_hyphen_vs_longer
+    description: "D16 a-b vs abc"
+    formula: "=IF(\"a-b\"<\"abc\",\"LT\",IF(\"a-b\"=\"abc\",\"EQ\",\"GT\"))"
+
+  - id: col_d16_hyphen_vs_apostrophe
+    description: "D16 a-b vs a'b"
+    formula: "=IF(\"a-b\"<\"a'b\",\"LT\",IF(\"a-b\"=\"a'b\",\"EQ\",\"GT\"))"
+
+  - id: col_comb_acute_decomposed
+    description: "combining acute after a vs precomposed"
+    formula: "=IF(\"a\"&UNICHAR(769)<\"á\",\"LT\",IF(\"a\"&UNICHAR(769)=\"á\",\"EQ\",\"GT\"))"
+
+  - id: col_comb_acute_ctx
+    description: "precomposed a-acute+b vs a+combining acute+b"
+    formula: "=IF(\"áb\"<\"a\"&UNICHAR(769)&\"b\",\"LT\",IF(\"áb\"=\"a\"&UNICHAR(769)&\"b\",\"EQ\",\"GT\"))"
+
+  - id: col_comb_acute_vs_plain
+    description: "a+combining acute vs a"
+    formula: "=IF(\"a\"&UNICHAR(769)<\"a\",\"LT\",IF(\"a\"&UNICHAR(769)=\"a\",\"EQ\",\"GT\"))"
+
+  - id: col_comb_thai_tone
+    description: "Thai ko+tone mark vs ko"
+    formula: "=IF(\"ก่\"<\"ก\",\"LT\",IF(\"ก่\"=\"ก\",\"EQ\",\"GT\"))"

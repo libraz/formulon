@@ -1,0 +1,858 @@
+suite: collation_functions
+description: >
+  Mac Excel text collation through the worksheet functions: the 16 function columns
+  (SORT, SORTBY, UNIQUE, MATCH 0/1, VLOOKUP FALSE/TRUE, HLOOKUP FALSE, XLOOKUP, XMATCH,
+  COUNTIF, SUMIF, SWITCH, FILTER, GROUPBY, DCOUNTA) against 8 representative pairs, plus a
+  pairwise selection of further pairs, directions and data positions on one function per
+  strength and addition rule. Every probe resolves to a single scalar. Range-based
+  functions use setup cells; no setup cell is empty.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: colfn_sort_sharp_s
+    description: "SORT: ß vs ss"
+    formula: "=INDEX(SORT({\"ß\";\"ss\"}),1)"
+
+  - id: colfn_sort_hw_voiced
+    description: "SORT: ｶﾞ vs ガ"
+    formula: "=INDEX(SORT({\"ｶﾞ\";\"ガ\"}),1)"
+
+  - id: colfn_sort_kata_hira
+    description: "SORT: ア vs あ"
+    formula: "=INDEX(SORT({\"ア\";\"あ\"}),1)"
+
+  - id: colfn_sort_fw_latin
+    description: "SORT: Ａ vs A"
+    formula: "=INDEX(SORT({\"Ａ\";\"A\"}),1)"
+
+  - id: colfn_sort_circled_1
+    description: "SORT: ① vs 1"
+    formula: "=INDEX(SORT({\"①\";\"1\"}),1)"
+
+  - id: colfn_sort_umlaut
+    description: "SORT: ä vs a"
+    formula: "=INDEX(SORT({\"ä\";\"a\"}),1)"
+
+  - id: colfn_sort_choon
+    description: "SORT: かー vs かあ"
+    formula: "=INDEX(SORT({\"かー\";\"かあ\"}),1)"
+
+  - id: colfn_sort_thai_prefix
+    description: "SORT: เก vs กา"
+    formula: "=INDEX(SORT({\"เก\";\"กา\"}),1)"
+
+  - id: colfn_sortby_sharp_s
+    description: "SORTBY: ß vs ss"
+    formula: "=INDEX(SORTBY({1;2},{\"ß\";\"ss\"}),1)"
+
+  - id: colfn_sortby_hw_voiced
+    description: "SORTBY: ｶﾞ vs ガ"
+    formula: "=INDEX(SORTBY({1;2},{\"ｶﾞ\";\"ガ\"}),1)"
+
+  - id: colfn_sortby_kata_hira
+    description: "SORTBY: ア vs あ"
+    formula: "=INDEX(SORTBY({1;2},{\"ア\";\"あ\"}),1)"
+
+  - id: colfn_sortby_fw_latin
+    description: "SORTBY: Ａ vs A"
+    formula: "=INDEX(SORTBY({1;2},{\"Ａ\";\"A\"}),1)"
+
+  - id: colfn_sortby_circled_1
+    description: "SORTBY: ① vs 1"
+    formula: "=INDEX(SORTBY({1;2},{\"①\";\"1\"}),1)"
+
+  - id: colfn_sortby_umlaut
+    description: "SORTBY: ä vs a"
+    formula: "=INDEX(SORTBY({1;2},{\"ä\";\"a\"}),1)"
+
+  - id: colfn_sortby_choon
+    description: "SORTBY: かー vs かあ"
+    formula: "=INDEX(SORTBY({1;2},{\"かー\";\"かあ\"}),1)"
+
+  - id: colfn_sortby_thai_prefix
+    description: "SORTBY: เก vs กา"
+    formula: "=INDEX(SORTBY({1;2},{\"เก\";\"กา\"}),1)"
+
+  - id: colfn_unique_sharp_s
+    description: "UNIQUE: ß vs ss"
+    formula: "=ROWS(UNIQUE({\"ß\";\"ss\"}))"
+
+  - id: colfn_unique_hw_voiced
+    description: "UNIQUE: ｶﾞ vs ガ"
+    formula: "=ROWS(UNIQUE({\"ｶﾞ\";\"ガ\"}))"
+
+  - id: colfn_unique_kata_hira
+    description: "UNIQUE: ア vs あ"
+    formula: "=ROWS(UNIQUE({\"ア\";\"あ\"}))"
+
+  - id: colfn_unique_fw_latin
+    description: "UNIQUE: Ａ vs A"
+    formula: "=ROWS(UNIQUE({\"Ａ\";\"A\"}))"
+
+  - id: colfn_unique_circled_1
+    description: "UNIQUE: ① vs 1"
+    formula: "=ROWS(UNIQUE({\"①\";\"1\"}))"
+
+  - id: colfn_unique_umlaut
+    description: "UNIQUE: ä vs a"
+    formula: "=ROWS(UNIQUE({\"ä\";\"a\"}))"
+
+  - id: colfn_unique_choon
+    description: "UNIQUE: かー vs かあ"
+    formula: "=ROWS(UNIQUE({\"かー\";\"かあ\"}))"
+
+  - id: colfn_unique_thai_prefix
+    description: "UNIQUE: เก vs กา"
+    formula: "=ROWS(UNIQUE({\"เก\";\"กา\"}))"
+
+  - id: colfn_match0_sharp_s
+    description: "MATCH0: ß vs ss"
+    formula: "=IFERROR(MATCH(\"ß\",{\"ss\";\"zz\"},0),0)"
+
+  - id: colfn_match0_hw_voiced
+    description: "MATCH0: ｶﾞ vs ガ"
+    formula: "=IFERROR(MATCH(\"ｶﾞ\",{\"ガ\";\"zz\"},0),0)"
+
+  - id: colfn_match0_kata_hira
+    description: "MATCH0: ア vs あ"
+    formula: "=IFERROR(MATCH(\"ア\",{\"あ\";\"zz\"},0),0)"
+
+  - id: colfn_match0_fw_latin
+    description: "MATCH0: Ａ vs A"
+    formula: "=IFERROR(MATCH(\"Ａ\",{\"A\";\"zz\"},0),0)"
+
+  - id: colfn_match0_circled_1
+    description: "MATCH0: ① vs 1"
+    formula: "=IFERROR(MATCH(\"①\",{\"1\";\"zz\"},0),0)"
+
+  - id: colfn_match0_umlaut
+    description: "MATCH0: ä vs a"
+    formula: "=IFERROR(MATCH(\"ä\",{\"a\";\"zz\"},0),0)"
+
+  - id: colfn_match0_choon
+    description: "MATCH0: かー vs かあ"
+    formula: "=IFERROR(MATCH(\"かー\",{\"かあ\";\"zz\"},0),0)"
+
+  - id: colfn_match0_thai_prefix
+    description: "MATCH0: เก vs กา"
+    formula: "=IFERROR(MATCH(\"เก\",{\"กา\";\"zz\"},0),0)"
+
+  - id: colfn_match1_sharp_s
+    description: "MATCH1: ß vs ss"
+    formula: "=IFERROR(MATCH(\"ß\",{\"ss\"},1),0)"
+
+  - id: colfn_match1_hw_voiced
+    description: "MATCH1: ｶﾞ vs ガ"
+    formula: "=IFERROR(MATCH(\"ｶﾞ\",{\"ガ\"},1),0)"
+
+  - id: colfn_match1_kata_hira
+    description: "MATCH1: ア vs あ"
+    formula: "=IFERROR(MATCH(\"ア\",{\"あ\"},1),0)"
+
+  - id: colfn_match1_fw_latin
+    description: "MATCH1: Ａ vs A"
+    formula: "=IFERROR(MATCH(\"Ａ\",{\"A\"},1),0)"
+
+  - id: colfn_match1_circled_1
+    description: "MATCH1: ① vs 1"
+    formula: "=IFERROR(MATCH(\"①\",{\"1\"},1),0)"
+
+  - id: colfn_match1_umlaut
+    description: "MATCH1: ä vs a"
+    formula: "=IFERROR(MATCH(\"ä\",{\"a\"},1),0)"
+
+  - id: colfn_match1_choon
+    description: "MATCH1: かー vs かあ"
+    formula: "=IFERROR(MATCH(\"かー\",{\"かあ\"},1),0)"
+
+  - id: colfn_match1_thai_prefix
+    description: "MATCH1: เก vs กา"
+    formula: "=IFERROR(MATCH(\"เก\",{\"กา\"},1),0)"
+
+  - id: colfn_vlookup_f_sharp_s
+    description: "VLOOKUP_F: ß vs ss"
+    formula: "=IFERROR(VLOOKUP(\"ß\",{\"ss\",2;\"zz\",1},2,FALSE),0)"
+
+  - id: colfn_vlookup_f_hw_voiced
+    description: "VLOOKUP_F: ｶﾞ vs ガ"
+    formula: "=IFERROR(VLOOKUP(\"ｶﾞ\",{\"ガ\",2;\"zz\",1},2,FALSE),0)"
+
+  - id: colfn_vlookup_f_kata_hira
+    description: "VLOOKUP_F: ア vs あ"
+    formula: "=IFERROR(VLOOKUP(\"ア\",{\"あ\",2;\"zz\",1},2,FALSE),0)"
+
+  - id: colfn_vlookup_f_fw_latin
+    description: "VLOOKUP_F: Ａ vs A"
+    formula: "=IFERROR(VLOOKUP(\"Ａ\",{\"A\",2;\"zz\",1},2,FALSE),0)"
+
+  - id: colfn_vlookup_f_circled_1
+    description: "VLOOKUP_F: ① vs 1"
+    formula: "=IFERROR(VLOOKUP(\"①\",{\"1\",2;\"zz\",1},2,FALSE),0)"
+
+  - id: colfn_vlookup_f_umlaut
+    description: "VLOOKUP_F: ä vs a"
+    formula: "=IFERROR(VLOOKUP(\"ä\",{\"a\",2;\"zz\",1},2,FALSE),0)"
+
+  - id: colfn_vlookup_f_choon
+    description: "VLOOKUP_F: かー vs かあ"
+    formula: "=IFERROR(VLOOKUP(\"かー\",{\"かあ\",2;\"zz\",1},2,FALSE),0)"
+
+  - id: colfn_vlookup_f_thai_prefix
+    description: "VLOOKUP_F: เก vs กา"
+    formula: "=IFERROR(VLOOKUP(\"เก\",{\"กา\",2;\"zz\",1},2,FALSE),0)"
+
+  - id: colfn_vlookup_t_sharp_s
+    description: "VLOOKUP_T: ß vs ss"
+    formula: "=IFERROR(VLOOKUP(\"ß\",{\"ss\",2},2,TRUE),0)"
+
+  - id: colfn_vlookup_t_hw_voiced
+    description: "VLOOKUP_T: ｶﾞ vs ガ"
+    formula: "=IFERROR(VLOOKUP(\"ｶﾞ\",{\"ガ\",2},2,TRUE),0)"
+
+  - id: colfn_vlookup_t_kata_hira
+    description: "VLOOKUP_T: ア vs あ"
+    formula: "=IFERROR(VLOOKUP(\"ア\",{\"あ\",2},2,TRUE),0)"
+
+  - id: colfn_vlookup_t_fw_latin
+    description: "VLOOKUP_T: Ａ vs A"
+    formula: "=IFERROR(VLOOKUP(\"Ａ\",{\"A\",2},2,TRUE),0)"
+
+  - id: colfn_vlookup_t_circled_1
+    description: "VLOOKUP_T: ① vs 1"
+    formula: "=IFERROR(VLOOKUP(\"①\",{\"1\",2},2,TRUE),0)"
+
+  - id: colfn_vlookup_t_umlaut
+    description: "VLOOKUP_T: ä vs a"
+    formula: "=IFERROR(VLOOKUP(\"ä\",{\"a\",2},2,TRUE),0)"
+
+  - id: colfn_vlookup_t_choon
+    description: "VLOOKUP_T: かー vs かあ"
+    formula: "=IFERROR(VLOOKUP(\"かー\",{\"かあ\",2},2,TRUE),0)"
+
+  - id: colfn_vlookup_t_thai_prefix
+    description: "VLOOKUP_T: เก vs กา"
+    formula: "=IFERROR(VLOOKUP(\"เก\",{\"กา\",2},2,TRUE),0)"
+
+  - id: colfn_hlookup_f_sharp_s
+    description: "HLOOKUP_F: ß vs ss"
+    formula: "=IFERROR(HLOOKUP(\"ß\",{\"ss\",\"zz\";2,1},2,FALSE),0)"
+
+  - id: colfn_hlookup_f_hw_voiced
+    description: "HLOOKUP_F: ｶﾞ vs ガ"
+    formula: "=IFERROR(HLOOKUP(\"ｶﾞ\",{\"ガ\",\"zz\";2,1},2,FALSE),0)"
+
+  - id: colfn_hlookup_f_kata_hira
+    description: "HLOOKUP_F: ア vs あ"
+    formula: "=IFERROR(HLOOKUP(\"ア\",{\"あ\",\"zz\";2,1},2,FALSE),0)"
+
+  - id: colfn_hlookup_f_fw_latin
+    description: "HLOOKUP_F: Ａ vs A"
+    formula: "=IFERROR(HLOOKUP(\"Ａ\",{\"A\",\"zz\";2,1},2,FALSE),0)"
+
+  - id: colfn_hlookup_f_circled_1
+    description: "HLOOKUP_F: ① vs 1"
+    formula: "=IFERROR(HLOOKUP(\"①\",{\"1\",\"zz\";2,1},2,FALSE),0)"
+
+  - id: colfn_hlookup_f_umlaut
+    description: "HLOOKUP_F: ä vs a"
+    formula: "=IFERROR(HLOOKUP(\"ä\",{\"a\",\"zz\";2,1},2,FALSE),0)"
+
+  - id: colfn_hlookup_f_choon
+    description: "HLOOKUP_F: かー vs かあ"
+    formula: "=IFERROR(HLOOKUP(\"かー\",{\"かあ\",\"zz\";2,1},2,FALSE),0)"
+
+  - id: colfn_hlookup_f_thai_prefix
+    description: "HLOOKUP_F: เก vs กา"
+    formula: "=IFERROR(HLOOKUP(\"เก\",{\"กา\",\"zz\";2,1},2,FALSE),0)"
+
+  - id: colfn_xlookup_sharp_s
+    description: "XLOOKUP: ß vs ss"
+    formula: "=IFERROR(XLOOKUP(\"ß\",{\"ss\";\"zz\"},{2;1}),0)"
+
+  - id: colfn_xlookup_hw_voiced
+    description: "XLOOKUP: ｶﾞ vs ガ"
+    formula: "=IFERROR(XLOOKUP(\"ｶﾞ\",{\"ガ\";\"zz\"},{2;1}),0)"
+
+  - id: colfn_xlookup_kata_hira
+    description: "XLOOKUP: ア vs あ"
+    formula: "=IFERROR(XLOOKUP(\"ア\",{\"あ\";\"zz\"},{2;1}),0)"
+
+  - id: colfn_xlookup_fw_latin
+    description: "XLOOKUP: Ａ vs A"
+    formula: "=IFERROR(XLOOKUP(\"Ａ\",{\"A\";\"zz\"},{2;1}),0)"
+
+  - id: colfn_xlookup_circled_1
+    description: "XLOOKUP: ① vs 1"
+    formula: "=IFERROR(XLOOKUP(\"①\",{\"1\";\"zz\"},{2;1}),0)"
+
+  - id: colfn_xlookup_umlaut
+    description: "XLOOKUP: ä vs a"
+    formula: "=IFERROR(XLOOKUP(\"ä\",{\"a\";\"zz\"},{2;1}),0)"
+
+  - id: colfn_xlookup_choon
+    description: "XLOOKUP: かー vs かあ"
+    formula: "=IFERROR(XLOOKUP(\"かー\",{\"かあ\";\"zz\"},{2;1}),0)"
+
+  - id: colfn_xlookup_thai_prefix
+    description: "XLOOKUP: เก vs กา"
+    formula: "=IFERROR(XLOOKUP(\"เก\",{\"กา\";\"zz\"},{2;1}),0)"
+
+  - id: colfn_xmatch_sharp_s
+    description: "XMATCH: ß vs ss"
+    formula: "=IFERROR(XMATCH(\"ß\",{\"ss\";\"zz\"}),0)"
+
+  - id: colfn_xmatch_hw_voiced
+    description: "XMATCH: ｶﾞ vs ガ"
+    formula: "=IFERROR(XMATCH(\"ｶﾞ\",{\"ガ\";\"zz\"}),0)"
+
+  - id: colfn_xmatch_kata_hira
+    description: "XMATCH: ア vs あ"
+    formula: "=IFERROR(XMATCH(\"ア\",{\"あ\";\"zz\"}),0)"
+
+  - id: colfn_xmatch_fw_latin
+    description: "XMATCH: Ａ vs A"
+    formula: "=IFERROR(XMATCH(\"Ａ\",{\"A\";\"zz\"}),0)"
+
+  - id: colfn_xmatch_circled_1
+    description: "XMATCH: ① vs 1"
+    formula: "=IFERROR(XMATCH(\"①\",{\"1\";\"zz\"}),0)"
+
+  - id: colfn_xmatch_umlaut
+    description: "XMATCH: ä vs a"
+    formula: "=IFERROR(XMATCH(\"ä\",{\"a\";\"zz\"}),0)"
+
+  - id: colfn_xmatch_choon
+    description: "XMATCH: かー vs かあ"
+    formula: "=IFERROR(XMATCH(\"かー\",{\"かあ\";\"zz\"}),0)"
+
+  - id: colfn_xmatch_thai_prefix
+    description: "XMATCH: เก vs กา"
+    formula: "=IFERROR(XMATCH(\"เก\",{\"กา\";\"zz\"}),0)"
+
+  - id: colfn_countif_sharp_s
+    description: "COUNTIF: ß vs ss"
+    setup: { B1: "ss", B2: "zz" }
+    formula: "=COUNTIF(B1:B2,\"ß\")"
+
+  - id: colfn_countif_hw_voiced
+    description: "COUNTIF: ｶﾞ vs ガ"
+    setup: { B1: "ガ", B2: "zz" }
+    formula: "=COUNTIF(B1:B2,\"ｶﾞ\")"
+
+  - id: colfn_countif_kata_hira
+    description: "COUNTIF: ア vs あ"
+    setup: { B1: "あ", B2: "zz" }
+    formula: "=COUNTIF(B1:B2,\"ア\")"
+
+  - id: colfn_countif_fw_latin
+    description: "COUNTIF: Ａ vs A"
+    setup: { B1: "A", B2: "zz" }
+    formula: "=COUNTIF(B1:B2,\"Ａ\")"
+
+  - id: colfn_countif_circled_1
+    description: "COUNTIF: ① vs 1"
+    setup: { B1: "1", B2: "zz" }
+    formula: "=COUNTIF(B1:B2,\"①\")"
+
+  - id: colfn_countif_umlaut
+    description: "COUNTIF: ä vs a"
+    setup: { B1: "a", B2: "zz" }
+    formula: "=COUNTIF(B1:B2,\"ä\")"
+
+  - id: colfn_countif_choon
+    description: "COUNTIF: かー vs かあ"
+    setup: { B1: "かあ", B2: "zz" }
+    formula: "=COUNTIF(B1:B2,\"かー\")"
+
+  - id: colfn_countif_thai_prefix
+    description: "COUNTIF: เก vs กา"
+    setup: { B1: "กา", B2: "zz" }
+    formula: "=COUNTIF(B1:B2,\"เก\")"
+
+  - id: colfn_sumif_sharp_s
+    description: "SUMIF: ß vs ss"
+    setup: { B1: "ss", B2: "zz", C1: 2, C2: 1 }
+    formula: "=SUMIF(B1:B2,\"ß\",C1:C2)"
+
+  - id: colfn_sumif_hw_voiced
+    description: "SUMIF: ｶﾞ vs ガ"
+    setup: { B1: "ガ", B2: "zz", C1: 2, C2: 1 }
+    formula: "=SUMIF(B1:B2,\"ｶﾞ\",C1:C2)"
+
+  - id: colfn_sumif_kata_hira
+    description: "SUMIF: ア vs あ"
+    setup: { B1: "あ", B2: "zz", C1: 2, C2: 1 }
+    formula: "=SUMIF(B1:B2,\"ア\",C1:C2)"
+
+  - id: colfn_sumif_fw_latin
+    description: "SUMIF: Ａ vs A"
+    setup: { B1: "A", B2: "zz", C1: 2, C2: 1 }
+    formula: "=SUMIF(B1:B2,\"Ａ\",C1:C2)"
+
+  - id: colfn_sumif_circled_1
+    description: "SUMIF: ① vs 1"
+    setup: { B1: "1", B2: "zz", C1: 2, C2: 1 }
+    formula: "=SUMIF(B1:B2,\"①\",C1:C2)"
+
+  - id: colfn_sumif_umlaut
+    description: "SUMIF: ä vs a"
+    setup: { B1: "a", B2: "zz", C1: 2, C2: 1 }
+    formula: "=SUMIF(B1:B2,\"ä\",C1:C2)"
+
+  - id: colfn_sumif_choon
+    description: "SUMIF: かー vs かあ"
+    setup: { B1: "かあ", B2: "zz", C1: 2, C2: 1 }
+    formula: "=SUMIF(B1:B2,\"かー\",C1:C2)"
+
+  - id: colfn_sumif_thai_prefix
+    description: "SUMIF: เก vs กา"
+    setup: { B1: "กา", B2: "zz", C1: 2, C2: 1 }
+    formula: "=SUMIF(B1:B2,\"เก\",C1:C2)"
+
+  - id: colfn_switch_sharp_s
+    description: "SWITCH: ß vs ss"
+    formula: "=SWITCH(\"ß\",\"ss\",2,\"zz\",1,0)"
+
+  - id: colfn_switch_hw_voiced
+    description: "SWITCH: ｶﾞ vs ガ"
+    formula: "=SWITCH(\"ｶﾞ\",\"ガ\",2,\"zz\",1,0)"
+
+  - id: colfn_switch_kata_hira
+    description: "SWITCH: ア vs あ"
+    formula: "=SWITCH(\"ア\",\"あ\",2,\"zz\",1,0)"
+
+  - id: colfn_switch_fw_latin
+    description: "SWITCH: Ａ vs A"
+    formula: "=SWITCH(\"Ａ\",\"A\",2,\"zz\",1,0)"
+
+  - id: colfn_switch_circled_1
+    description: "SWITCH: ① vs 1"
+    formula: "=SWITCH(\"①\",\"1\",2,\"zz\",1,0)"
+
+  - id: colfn_switch_umlaut
+    description: "SWITCH: ä vs a"
+    formula: "=SWITCH(\"ä\",\"a\",2,\"zz\",1,0)"
+
+  - id: colfn_switch_choon
+    description: "SWITCH: かー vs かあ"
+    formula: "=SWITCH(\"かー\",\"かあ\",2,\"zz\",1,0)"
+
+  - id: colfn_switch_thai_prefix
+    description: "SWITCH: เก vs กา"
+    formula: "=SWITCH(\"เก\",\"กา\",2,\"zz\",1,0)"
+
+  - id: colfn_filter_sharp_s
+    description: "FILTER: ß vs ss"
+    formula: "=IFERROR(ROWS(FILTER({\"ss\"},{\"ss\"}=\"ß\")),0)"
+
+  - id: colfn_filter_hw_voiced
+    description: "FILTER: ｶﾞ vs ガ"
+    formula: "=IFERROR(ROWS(FILTER({\"ガ\"},{\"ガ\"}=\"ｶﾞ\")),0)"
+
+  - id: colfn_filter_kata_hira
+    description: "FILTER: ア vs あ"
+    formula: "=IFERROR(ROWS(FILTER({\"あ\"},{\"あ\"}=\"ア\")),0)"
+
+  - id: colfn_filter_fw_latin
+    description: "FILTER: Ａ vs A"
+    formula: "=IFERROR(ROWS(FILTER({\"A\"},{\"A\"}=\"Ａ\")),0)"
+
+  - id: colfn_filter_circled_1
+    description: "FILTER: ① vs 1"
+    formula: "=IFERROR(ROWS(FILTER({\"1\"},{\"1\"}=\"①\")),0)"
+
+  - id: colfn_filter_umlaut
+    description: "FILTER: ä vs a"
+    formula: "=IFERROR(ROWS(FILTER({\"a\"},{\"a\"}=\"ä\")),0)"
+
+  - id: colfn_filter_choon
+    description: "FILTER: かー vs かあ"
+    formula: "=IFERROR(ROWS(FILTER({\"かあ\"},{\"かあ\"}=\"かー\")),0)"
+
+  - id: colfn_filter_thai_prefix
+    description: "FILTER: เก vs กา"
+    formula: "=IFERROR(ROWS(FILTER({\"กา\"},{\"กา\"}=\"เก\")),0)"
+
+  - id: colfn_groupby_sharp_s
+    description: "GROUPBY: ß vs ss"
+    formula: "=ROWS(GROUPBY({\"ß\";\"ss\"},{1;2},SUM,0,0))"
+
+  - id: colfn_groupby_hw_voiced
+    description: "GROUPBY: ｶﾞ vs ガ"
+    formula: "=ROWS(GROUPBY({\"ｶﾞ\";\"ガ\"},{1;2},SUM,0,0))"
+
+  - id: colfn_groupby_kata_hira
+    description: "GROUPBY: ア vs あ"
+    formula: "=ROWS(GROUPBY({\"ア\";\"あ\"},{1;2},SUM,0,0))"
+
+  - id: colfn_groupby_fw_latin
+    description: "GROUPBY: Ａ vs A"
+    formula: "=ROWS(GROUPBY({\"Ａ\";\"A\"},{1;2},SUM,0,0))"
+
+  - id: colfn_groupby_circled_1
+    description: "GROUPBY: ① vs 1"
+    formula: "=ROWS(GROUPBY({\"①\";\"1\"},{1;2},SUM,0,0))"
+
+  - id: colfn_groupby_umlaut
+    description: "GROUPBY: ä vs a"
+    formula: "=ROWS(GROUPBY({\"ä\";\"a\"},{1;2},SUM,0,0))"
+
+  - id: colfn_groupby_choon
+    description: "GROUPBY: かー vs かあ"
+    formula: "=ROWS(GROUPBY({\"かー\";\"かあ\"},{1;2},SUM,0,0))"
+
+  - id: colfn_groupby_thai_prefix
+    description: "GROUPBY: เก vs กา"
+    formula: "=ROWS(GROUPBY({\"เก\";\"กา\"},{1;2},SUM,0,0))"
+
+  - id: colfn_dcounta_sharp_s
+    description: "DCOUNTA: ß vs ss"
+    setup: { B1: "h", B2: "ss", B3: "zz", E1: "h", E2: "ß" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_dcounta_hw_voiced
+    description: "DCOUNTA: ｶﾞ vs ガ"
+    setup: { B1: "h", B2: "ガ", B3: "zz", E1: "h", E2: "ｶﾞ" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_dcounta_kata_hira
+    description: "DCOUNTA: ア vs あ"
+    setup: { B1: "h", B2: "あ", B3: "zz", E1: "h", E2: "ア" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_dcounta_fw_latin
+    description: "DCOUNTA: Ａ vs A"
+    setup: { B1: "h", B2: "A", B3: "zz", E1: "h", E2: "Ａ" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_dcounta_circled_1
+    description: "DCOUNTA: ① vs 1"
+    setup: { B1: "h", B2: "1", B3: "zz", E1: "h", E2: "①" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_dcounta_umlaut
+    description: "DCOUNTA: ä vs a"
+    setup: { B1: "h", B2: "a", B3: "zz", E1: "h", E2: "ä" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_dcounta_choon
+    description: "DCOUNTA: かー vs かあ"
+    setup: { B1: "h", B2: "かあ", B3: "zz", E1: "h", E2: "かー" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_dcounta_thai_prefix
+    description: "DCOUNTA: เก vs กา"
+    setup: { B1: "h", B2: "กา", B3: "zz", E1: "h", E2: "เก" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_x_countif_ga_hw_fwd_row1
+    description: "COUNTIF: criterion/key ガ vs data ｶﾞ, matching cell in row 1"
+    setup: { B1: "ｶﾞ", B2: "zz" }
+    formula: "=COUNTIF(B1:B2,\"ガ\")"
+
+  - id: colfn_x_countif_roman_rev_row2
+    description: "COUNTIF: criterion/key i vs data Ⅰ, matching cell in row 2"
+    setup: { B1: "zz", B2: "Ⅰ" }
+    formula: "=COUNTIF(B1:B2,\"i\")"
+
+  - id: colfn_x_xlookup_roman_fwd_row1
+    description: "XLOOKUP: criterion/key Ⅰ vs data i, matching cell in row 1"
+    formula: "=IFERROR(XLOOKUP(\"Ⅰ\",{\"i\";\"zz\"},{2;1}),0)"
+
+  - id: colfn_x_match0_hw_a_fwd_row2
+    description: "MATCH0: criterion/key ｱ vs data ア, matching cell in row 2"
+    formula: "=IFERROR(MATCH(\"ｱ\",{\"zz\";\"ア\"},0),0)"
+
+  - id: colfn_x_dcounta_ij_fwd_row1
+    description: "DCOUNTA: criterion/key ĳ vs data ij, matching cell in row 1"
+    setup: { B1: "h", B2: "ij", B3: "zz", E1: "h", E2: "ĳ" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_x_dcounta_vu_rev_row2
+    description: "DCOUNTA: criterion/key ゔ vs data ヴ, matching cell in row 2"
+    setup: { B1: "h", B2: "zz", B3: "ヴ", E1: "h", E2: "ゔ" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_x_switch_ae_fwd_row1
+    description: "SWITCH: criterion/key æ vs data ae, matching cell in row 1"
+    formula: "=SWITCH(\"æ\",\"ae\",2,\"zz\",1,0)"
+
+  - id: colfn_x_countif_ij_rev_row2
+    description: "COUNTIF: criterion/key ij vs data ĳ, matching cell in row 2"
+    setup: { B1: "zz", B2: "ĳ" }
+    formula: "=COUNTIF(B1:B2,\"ij\")"
+
+  - id: colfn_x_match0_small_rev_row1
+    description: "MATCH0: criterion/key あ vs data ぁ, matching cell in row 1"
+    formula: "=IFERROR(MATCH(\"あ\",{\"ぁ\";\"zz\"},0),0)"
+
+  - id: colfn_x_xlookup_umlaut_case_rev_row1
+    description: "XLOOKUP: criterion/key ä vs data Ä, matching cell in row 1"
+    formula: "=IFERROR(XLOOKUP(\"ä\",{\"Ä\";\"zz\"},{2;1}),0)"
+
+  - id: colfn_x_xlookup_sigma_fwd_row2
+    description: "XLOOKUP: criterion/key ς vs data σ, matching cell in row 2"
+    formula: "=IFERROR(XLOOKUP(\"ς\",{\"zz\";\"σ\"},{1;2}),0)"
+
+  - id: colfn_x_dcounta_iter_rev_row2
+    description: "DCOUNTA: criterion/key かか vs data かゝ, matching cell in row 2"
+    setup: { B1: "h", B2: "zz", B3: "かゝ", E1: "h", E2: "かか" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_x_unique_yo_fwd_row2
+    description: "UNIQUE: criterion/key ё vs data Ё, matching cell in row 2"
+    formula: "=ROWS(UNIQUE({\"Ё\";\"ё\"}))"
+
+  - id: colfn_x_unique_iter_fwd_row1
+    description: "UNIQUE: criterion/key かゝ vs data かか, matching cell in row 1"
+    formula: "=ROWS(UNIQUE({\"かゝ\";\"かか\"}))"
+
+  - id: colfn_x_match0_vu_fwd_row1
+    description: "MATCH0: criterion/key ヴ vs data ゔ, matching cell in row 1"
+    formula: "=IFERROR(MATCH(\"ヴ\",{\"ゔ\";\"zz\"},0),0)"
+
+  - id: colfn_x_switch_umlaut_case_rev_row2
+    description: "SWITCH: criterion/key ä vs data Ä, matching cell in row 2"
+    formula: "=SWITCH(\"ä\",\"zz\",1,\"Ä\",2,0)"
+
+  - id: colfn_x_dcounta_sup2_fwd_row1
+    description: "DCOUNTA: criterion/key ² vs data 2, matching cell in row 1"
+    setup: { B1: "h", B2: "2", B3: "zz", E1: "h", E2: "²" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_x_switch_yo_rev_row1
+    description: "SWITCH: criterion/key Ё vs data ё, matching cell in row 1"
+    formula: "=SWITCH(\"Ё\",\"ё\",2,\"zz\",1,0)"
+
+  - id: colfn_x_match0_umlaut_case_fwd_row2
+    description: "MATCH0: criterion/key Ä vs data ä, matching cell in row 2"
+    formula: "=IFERROR(MATCH(\"Ä\",{\"zz\";\"ä\"},0),0)"
+
+  - id: colfn_x_dcounta_ga_hw_rev_row2
+    description: "DCOUNTA: criterion/key ｶﾞ vs data ガ, matching cell in row 2"
+    setup: { B1: "h", B2: "zz", B3: "ガ", E1: "h", E2: "ｶﾞ" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_x_unique_ij_rev_row2
+    description: "UNIQUE: criterion/key ij vs data ĳ, matching cell in row 2"
+    formula: "=ROWS(UNIQUE({\"ĳ\";\"ij\"}))"
+
+  - id: colfn_x_match0_roman_fwd_row1
+    description: "MATCH0: criterion/key Ⅰ vs data i, matching cell in row 1"
+    formula: "=IFERROR(MATCH(\"Ⅰ\",{\"i\";\"zz\"},0),0)"
+
+  - id: colfn_x_xlookup_sup2_rev_row2
+    description: "XLOOKUP: criterion/key 2 vs data ², matching cell in row 2"
+    formula: "=IFERROR(XLOOKUP(\"2\",{\"zz\";\"²\"},{1;2}),0)"
+
+  - id: colfn_x_countif_hw_a_rev_row1
+    description: "COUNTIF: criterion/key ア vs data ｱ, matching cell in row 1"
+    setup: { B1: "ｱ", B2: "zz" }
+    formula: "=COUNTIF(B1:B2,\"ア\")"
+
+  - id: colfn_x_xlookup_vu_fwd_row1
+    description: "XLOOKUP: criterion/key ヴ vs data ゔ, matching cell in row 1"
+    formula: "=IFERROR(XLOOKUP(\"ヴ\",{\"ゔ\";\"zz\"},{2;1}),0)"
+
+  - id: colfn_x_switch_small_fwd_row2
+    description: "SWITCH: criterion/key ぁ vs data あ, matching cell in row 2"
+    formula: "=SWITCH(\"ぁ\",\"zz\",1,\"あ\",2,0)"
+
+  - id: colfn_x_dcounta_ae_rev_row2
+    description: "DCOUNTA: criterion/key ae vs data æ, matching cell in row 2"
+    setup: { B1: "h", B2: "zz", B3: "æ", E1: "h", E2: "ae" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_x_countif_vu_fwd_row1
+    description: "COUNTIF: criterion/key ヴ vs data ゔ, matching cell in row 1"
+    setup: { B1: "ゔ", B2: "zz" }
+    formula: "=COUNTIF(B1:B2,\"ヴ\")"
+
+  - id: colfn_x_countif_ae_fwd_row2
+    description: "COUNTIF: criterion/key æ vs data ae, matching cell in row 2"
+    setup: { B1: "zz", B2: "ae" }
+    formula: "=COUNTIF(B1:B2,\"æ\")"
+
+  - id: colfn_x_switch_sigma_rev_row2
+    description: "SWITCH: criterion/key σ vs data ς, matching cell in row 2"
+    formula: "=SWITCH(\"σ\",\"zz\",1,\"ς\",2,0)"
+
+  - id: colfn_x_xlookup_ae_rev_row1
+    description: "XLOOKUP: criterion/key ae vs data æ, matching cell in row 1"
+    formula: "=IFERROR(XLOOKUP(\"ae\",{\"æ\";\"zz\"},{2;1}),0)"
+
+  - id: colfn_x_unique_vu_rev_row1
+    description: "UNIQUE: criterion/key ゔ vs data ヴ, matching cell in row 1"
+    formula: "=ROWS(UNIQUE({\"ゔ\";\"ヴ\"}))"
+
+  - id: colfn_x_countif_small_fwd_row1
+    description: "COUNTIF: criterion/key ぁ vs data あ, matching cell in row 1"
+    setup: { B1: "あ", B2: "zz" }
+    formula: "=COUNTIF(B1:B2,\"ぁ\")"
+
+  - id: colfn_x_countif_iter_rev_row1
+    description: "COUNTIF: criterion/key かか vs data かゝ, matching cell in row 1"
+    setup: { B1: "かゝ", B2: "zz" }
+    formula: "=COUNTIF(B1:B2,\"かか\")"
+
+  - id: colfn_x_match0_ae_rev_row2
+    description: "MATCH0: criterion/key ae vs data æ, matching cell in row 2"
+    formula: "=IFERROR(MATCH(\"ae\",{\"zz\";\"æ\"},0),0)"
+
+  - id: colfn_x_xlookup_yo_fwd_row1
+    description: "XLOOKUP: criterion/key ё vs data Ё, matching cell in row 1"
+    formula: "=IFERROR(XLOOKUP(\"ё\",{\"Ё\";\"zz\"},{2;1}),0)"
+
+  - id: colfn_x_switch_vu_fwd_row2
+    description: "SWITCH: criterion/key ヴ vs data ゔ, matching cell in row 2"
+    formula: "=SWITCH(\"ヴ\",\"zz\",1,\"ゔ\",2,0)"
+
+  - id: colfn_x_dcounta_roman_fwd_row2
+    description: "DCOUNTA: criterion/key Ⅰ vs data i, matching cell in row 2"
+    setup: { B1: "h", B2: "zz", B3: "i", E1: "h", E2: "Ⅰ" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_x_xlookup_hw_a_rev_row2
+    description: "XLOOKUP: criterion/key ア vs data ｱ, matching cell in row 2"
+    formula: "=IFERROR(XLOOKUP(\"ア\",{\"zz\";\"ｱ\"},{1;2}),0)"
+
+  - id: colfn_x_unique_ae_rev_row1
+    description: "UNIQUE: criterion/key ae vs data æ, matching cell in row 1"
+    formula: "=ROWS(UNIQUE({\"ae\";\"æ\"}))"
+
+  - id: colfn_x_match0_iter_rev_row2
+    description: "MATCH0: criterion/key かか vs data かゝ, matching cell in row 2"
+    formula: "=IFERROR(MATCH(\"かか\",{\"zz\";\"かゝ\"},0),0)"
+
+  - id: colfn_x_dcounta_hw_a_rev_row1
+    description: "DCOUNTA: criterion/key ア vs data ｱ, matching cell in row 1"
+    setup: { B1: "h", B2: "ｱ", B3: "zz", E1: "h", E2: "ア" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_x_switch_ij_rev_row1
+    description: "SWITCH: criterion/key ij vs data ĳ, matching cell in row 1"
+    formula: "=SWITCH(\"ij\",\"ĳ\",2,\"zz\",1,0)"
+
+  - id: colfn_x_countif_sup2_rev_row1
+    description: "COUNTIF: criterion/key 2 vs data ², matching cell in row 1"
+    setup: { B1: "²", B2: "zz" }
+    formula: "=COUNTIF(B1:B2,\"2\")"
+
+  - id: colfn_x_unique_sup2_fwd_row2
+    description: "UNIQUE: criterion/key ² vs data 2, matching cell in row 2"
+    formula: "=ROWS(UNIQUE({\"2\";\"²\"}))"
+
+  - id: colfn_x_dcounta_yo_rev_row2
+    description: "DCOUNTA: criterion/key Ё vs data ё, matching cell in row 2"
+    setup: { B1: "h", B2: "zz", B3: "ё", E1: "h", E2: "Ё" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_x_switch_hw_a_fwd_row2
+    description: "SWITCH: criterion/key ｱ vs data ア, matching cell in row 2"
+    formula: "=SWITCH(\"ｱ\",\"zz\",1,\"ア\",2,0)"
+
+  - id: colfn_x_xlookup_iter_rev_row2
+    description: "XLOOKUP: criterion/key かか vs data かゝ, matching cell in row 2"
+    formula: "=IFERROR(XLOOKUP(\"かか\",{\"zz\";\"かゝ\"},{1;2}),0)"
+
+  - id: colfn_x_xlookup_ij_fwd_row2
+    description: "XLOOKUP: criterion/key ĳ vs data ij, matching cell in row 2"
+    formula: "=IFERROR(XLOOKUP(\"ĳ\",{\"zz\";\"ij\"},{1;2}),0)"
+
+  - id: colfn_x_switch_roman_rev_row2
+    description: "SWITCH: criterion/key i vs data Ⅰ, matching cell in row 2"
+    formula: "=SWITCH(\"i\",\"zz\",1,\"Ⅰ\",2,0)"
+
+  - id: colfn_x_countif_sigma_fwd_row2
+    description: "COUNTIF: criterion/key ς vs data σ, matching cell in row 2"
+    setup: { B1: "zz", B2: "σ" }
+    formula: "=COUNTIF(B1:B2,\"ς\")"
+
+  - id: colfn_x_dcounta_umlaut_case_rev_row2
+    description: "DCOUNTA: criterion/key ä vs data Ä, matching cell in row 2"
+    setup: { B1: "h", B2: "zz", B3: "Ä", E1: "h", E2: "ä" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_x_switch_ga_hw_rev_row1
+    description: "SWITCH: criterion/key ｶﾞ vs data ガ, matching cell in row 1"
+    formula: "=SWITCH(\"ｶﾞ\",\"ガ\",2,\"zz\",1,0)"
+
+  - id: colfn_x_countif_yo_fwd_row2
+    description: "COUNTIF: criterion/key ё vs data Ё, matching cell in row 2"
+    setup: { B1: "zz", B2: "Ё" }
+    formula: "=COUNTIF(B1:B2,\"ё\")"
+
+  - id: colfn_x_dcounta_small_fwd_row1
+    description: "DCOUNTA: criterion/key ぁ vs data あ, matching cell in row 1"
+    setup: { B1: "h", B2: "あ", B3: "zz", E1: "h", E2: "ぁ" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_x_switch_iter_fwd_row1
+    description: "SWITCH: criterion/key かゝ vs data かか, matching cell in row 1"
+    formula: "=SWITCH(\"かゝ\",\"かか\",2,\"zz\",1,0)"
+
+  - id: colfn_x_unique_roman_rev_row2
+    description: "UNIQUE: criterion/key i vs data Ⅰ, matching cell in row 2"
+    formula: "=ROWS(UNIQUE({\"Ⅰ\";\"i\"}))"
+
+  - id: colfn_x_unique_small_fwd_row1
+    description: "UNIQUE: criterion/key ぁ vs data あ, matching cell in row 1"
+    formula: "=ROWS(UNIQUE({\"ぁ\";\"あ\"}))"
+
+  - id: colfn_x_match0_ga_hw_fwd_row2
+    description: "MATCH0: criterion/key ガ vs data ｶﾞ, matching cell in row 2"
+    formula: "=IFERROR(MATCH(\"ガ\",{\"zz\";\"ｶﾞ\"},0),0)"
+
+  - id: colfn_x_switch_sup2_rev_row2
+    description: "SWITCH: criterion/key 2 vs data ², matching cell in row 2"
+    formula: "=SWITCH(\"2\",\"zz\",1,\"²\",2,0)"
+
+  - id: colfn_x_countif_umlaut_case_fwd_row2
+    description: "COUNTIF: criterion/key Ä vs data ä, matching cell in row 2"
+    setup: { B1: "zz", B2: "ä" }
+    formula: "=COUNTIF(B1:B2,\"Ä\")"
+
+  - id: colfn_x_xlookup_small_rev_row1
+    description: "XLOOKUP: criterion/key あ vs data ぁ, matching cell in row 1"
+    formula: "=IFERROR(XLOOKUP(\"あ\",{\"ぁ\";\"zz\"},{2;1}),0)"
+
+  - id: colfn_x_match0_yo_fwd_row2
+    description: "MATCH0: criterion/key ё vs data Ё, matching cell in row 2"
+    formula: "=IFERROR(MATCH(\"ё\",{\"zz\";\"Ё\"},0),0)"
+
+  - id: colfn_x_xlookup_ga_hw_rev_row2
+    description: "XLOOKUP: criterion/key ｶﾞ vs data ガ, matching cell in row 2"
+    formula: "=IFERROR(XLOOKUP(\"ｶﾞ\",{\"zz\";\"ガ\"},{1;2}),0)"
+
+  - id: colfn_x_match0_sup2_fwd_row2
+    description: "MATCH0: criterion/key ² vs data 2, matching cell in row 2"
+    formula: "=IFERROR(MATCH(\"²\",{\"zz\";\"2\"},0),0)"
+
+  - id: colfn_x_match0_sigma_rev_row2
+    description: "MATCH0: criterion/key σ vs data ς, matching cell in row 2"
+    formula: "=IFERROR(MATCH(\"σ\",{\"zz\";\"ς\"},0),0)"
+
+  - id: colfn_x_unique_umlaut_case_rev_row2
+    description: "UNIQUE: criterion/key ä vs data Ä, matching cell in row 2"
+    formula: "=ROWS(UNIQUE({\"Ä\";\"ä\"}))"
+
+  - id: colfn_x_unique_hw_a_rev_row1
+    description: "UNIQUE: criterion/key ア vs data ｱ, matching cell in row 1"
+    formula: "=ROWS(UNIQUE({\"ア\";\"ｱ\"}))"
+
+  - id: colfn_x_match0_ij_fwd_row1
+    description: "MATCH0: criterion/key ĳ vs data ij, matching cell in row 1"
+    formula: "=IFERROR(MATCH(\"ĳ\",{\"ij\";\"zz\"},0),0)"
+
+  - id: colfn_x_unique_ga_hw_rev_row1
+    description: "UNIQUE: criterion/key ｶﾞ vs data ガ, matching cell in row 1"
+    formula: "=ROWS(UNIQUE({\"ｶﾞ\";\"ガ\"}))"
+
+  - id: colfn_x_dcounta_sigma_fwd_row2
+    description: "DCOUNTA: criterion/key ς vs data σ, matching cell in row 2"
+    setup: { B1: "h", B2: "zz", B3: "σ", E1: "h", E2: "ς" }
+    formula: "=DCOUNTA(B1:B3,1,E1:E2)"
+
+  - id: colfn_x_unique_sigma_rev_row1
+    description: "UNIQUE: criterion/key σ vs data ς, matching cell in row 1"
+    formula: "=ROWS(UNIQUE({\"σ\";\"ς\"}))"

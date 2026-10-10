@@ -1,0 +1,2553 @@
+{
+  "suite": "collation_functions",
+  "description": "Mac Excel text collation through the worksheet functions: the 16 function columns (SORT, SORTBY, UNIQUE, MATCH 0/1, VLOOKUP FALSE/TRUE, HLOOKUP FALSE, XLOOKUP, XMATCH, COUNTIF, SUMIF, SWITCH, FILTER, GROUPBY, DCOUNTA) against 8 representative pairs, plus a pairwise selection of further pairs, directions and data positions on one function per strength and addition rule. Every probe resolves to a single scalar. Range-based functions use setup cells; no setup cell is empty.\n",
+  "environment": {
+    "excel_version": "16.113.4",
+    "excel_locale": "nl-NL",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-10T22:10:30Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "colfn_sort_sharp_s",
+      "formula": "=INDEX(SORT({\"ß\";\"ss\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ß"
+      }
+    },
+    {
+      "id": "colfn_sort_hw_voiced",
+      "formula": "=INDEX(SORT({\"ｶﾞ\";\"ガ\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ｶﾞ"
+      }
+    },
+    {
+      "id": "colfn_sort_kata_hira",
+      "formula": "=INDEX(SORT({\"ア\";\"あ\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ア"
+      }
+    },
+    {
+      "id": "colfn_sort_fw_latin",
+      "formula": "=INDEX(SORT({\"Ａ\";\"A\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Ａ"
+      }
+    },
+    {
+      "id": "colfn_sort_circled_1",
+      "formula": "=INDEX(SORT({\"①\";\"1\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "①"
+      }
+    },
+    {
+      "id": "colfn_sort_umlaut",
+      "formula": "=INDEX(SORT({\"ä\";\"a\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "colfn_sort_choon",
+      "formula": "=INDEX(SORT({\"かー\";\"かあ\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "かー"
+      }
+    },
+    {
+      "id": "colfn_sort_thai_prefix",
+      "formula": "=INDEX(SORT({\"เก\";\"กา\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "กา"
+      }
+    },
+    {
+      "id": "colfn_sortby_sharp_s",
+      "formula": "=INDEX(SORTBY({1;2},{\"ß\";\"ss\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_sortby_hw_voiced",
+      "formula": "=INDEX(SORTBY({1;2},{\"ｶﾞ\";\"ガ\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_sortby_kata_hira",
+      "formula": "=INDEX(SORTBY({1;2},{\"ア\";\"あ\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_sortby_fw_latin",
+      "formula": "=INDEX(SORTBY({1;2},{\"Ａ\";\"A\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_sortby_circled_1",
+      "formula": "=INDEX(SORTBY({1;2},{\"①\";\"1\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_sortby_umlaut",
+      "formula": "=INDEX(SORTBY({1;2},{\"ä\";\"a\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_sortby_choon",
+      "formula": "=INDEX(SORTBY({1;2},{\"かー\";\"かあ\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_sortby_thai_prefix",
+      "formula": "=INDEX(SORTBY({1;2},{\"เก\";\"กา\"}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_unique_sharp_s",
+      "formula": "=ROWS(UNIQUE({\"ß\";\"ss\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_unique_hw_voiced",
+      "formula": "=ROWS(UNIQUE({\"ｶﾞ\";\"ガ\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_unique_kata_hira",
+      "formula": "=ROWS(UNIQUE({\"ア\";\"あ\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_unique_fw_latin",
+      "formula": "=ROWS(UNIQUE({\"Ａ\";\"A\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_unique_circled_1",
+      "formula": "=ROWS(UNIQUE({\"①\";\"1\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_unique_umlaut",
+      "formula": "=ROWS(UNIQUE({\"ä\";\"a\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_unique_choon",
+      "formula": "=ROWS(UNIQUE({\"かー\";\"かあ\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_unique_thai_prefix",
+      "formula": "=ROWS(UNIQUE({\"เก\";\"กา\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_match0_sharp_s",
+      "formula": "=IFERROR(MATCH(\"ß\",{\"ss\";\"zz\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_match0_hw_voiced",
+      "formula": "=IFERROR(MATCH(\"ｶﾞ\",{\"ガ\";\"zz\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_match0_kata_hira",
+      "formula": "=IFERROR(MATCH(\"ア\",{\"あ\";\"zz\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_match0_fw_latin",
+      "formula": "=IFERROR(MATCH(\"Ａ\",{\"A\";\"zz\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_match0_circled_1",
+      "formula": "=IFERROR(MATCH(\"①\",{\"1\";\"zz\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_match0_umlaut",
+      "formula": "=IFERROR(MATCH(\"ä\",{\"a\";\"zz\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_match0_choon",
+      "formula": "=IFERROR(MATCH(\"かー\",{\"かあ\";\"zz\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_match0_thai_prefix",
+      "formula": "=IFERROR(MATCH(\"เก\",{\"กา\";\"zz\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_match1_sharp_s",
+      "formula": "=IFERROR(MATCH(\"ß\",{\"ss\"},1),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_match1_hw_voiced",
+      "formula": "=IFERROR(MATCH(\"ｶﾞ\",{\"ガ\"},1),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_match1_kata_hira",
+      "formula": "=IFERROR(MATCH(\"ア\",{\"あ\"},1),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_match1_fw_latin",
+      "formula": "=IFERROR(MATCH(\"Ａ\",{\"A\"},1),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_match1_circled_1",
+      "formula": "=IFERROR(MATCH(\"①\",{\"1\"},1),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_match1_umlaut",
+      "formula": "=IFERROR(MATCH(\"ä\",{\"a\"},1),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_match1_choon",
+      "formula": "=IFERROR(MATCH(\"かー\",{\"かあ\"},1),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_match1_thai_prefix",
+      "formula": "=IFERROR(MATCH(\"เก\",{\"กา\"},1),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_f_sharp_s",
+      "formula": "=IFERROR(VLOOKUP(\"ß\",{\"ss\",2;\"zz\",1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_f_hw_voiced",
+      "formula": "=IFERROR(VLOOKUP(\"ｶﾞ\",{\"ガ\",2;\"zz\",1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_f_kata_hira",
+      "formula": "=IFERROR(VLOOKUP(\"ア\",{\"あ\",2;\"zz\",1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_f_fw_latin",
+      "formula": "=IFERROR(VLOOKUP(\"Ａ\",{\"A\",2;\"zz\",1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_f_circled_1",
+      "formula": "=IFERROR(VLOOKUP(\"①\",{\"1\",2;\"zz\",1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_f_umlaut",
+      "formula": "=IFERROR(VLOOKUP(\"ä\",{\"a\",2;\"zz\",1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_f_choon",
+      "formula": "=IFERROR(VLOOKUP(\"かー\",{\"かあ\",2;\"zz\",1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_f_thai_prefix",
+      "formula": "=IFERROR(VLOOKUP(\"เก\",{\"กา\",2;\"zz\",1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_t_sharp_s",
+      "formula": "=IFERROR(VLOOKUP(\"ß\",{\"ss\",2},2,TRUE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_t_hw_voiced",
+      "formula": "=IFERROR(VLOOKUP(\"ｶﾞ\",{\"ガ\",2},2,TRUE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_t_kata_hira",
+      "formula": "=IFERROR(VLOOKUP(\"ア\",{\"あ\",2},2,TRUE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_t_fw_latin",
+      "formula": "=IFERROR(VLOOKUP(\"Ａ\",{\"A\",2},2,TRUE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_t_circled_1",
+      "formula": "=IFERROR(VLOOKUP(\"①\",{\"1\",2},2,TRUE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_t_umlaut",
+      "formula": "=IFERROR(VLOOKUP(\"ä\",{\"a\",2},2,TRUE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_t_choon",
+      "formula": "=IFERROR(VLOOKUP(\"かー\",{\"かあ\",2},2,TRUE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_vlookup_t_thai_prefix",
+      "formula": "=IFERROR(VLOOKUP(\"เก\",{\"กา\",2},2,TRUE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_hlookup_f_sharp_s",
+      "formula": "=IFERROR(HLOOKUP(\"ß\",{\"ss\",\"zz\";2,1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_hlookup_f_hw_voiced",
+      "formula": "=IFERROR(HLOOKUP(\"ｶﾞ\",{\"ガ\",\"zz\";2,1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_hlookup_f_kata_hira",
+      "formula": "=IFERROR(HLOOKUP(\"ア\",{\"あ\",\"zz\";2,1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_hlookup_f_fw_latin",
+      "formula": "=IFERROR(HLOOKUP(\"Ａ\",{\"A\",\"zz\";2,1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_hlookup_f_circled_1",
+      "formula": "=IFERROR(HLOOKUP(\"①\",{\"1\",\"zz\";2,1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_hlookup_f_umlaut",
+      "formula": "=IFERROR(HLOOKUP(\"ä\",{\"a\",\"zz\";2,1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_hlookup_f_choon",
+      "formula": "=IFERROR(HLOOKUP(\"かー\",{\"かあ\",\"zz\";2,1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_hlookup_f_thai_prefix",
+      "formula": "=IFERROR(HLOOKUP(\"เก\",{\"กา\",\"zz\";2,1},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_xlookup_sharp_s",
+      "formula": "=IFERROR(XLOOKUP(\"ß\",{\"ss\";\"zz\"},{2;1}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_xlookup_hw_voiced",
+      "formula": "=IFERROR(XLOOKUP(\"ｶﾞ\",{\"ガ\";\"zz\"},{2;1}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_xlookup_kata_hira",
+      "formula": "=IFERROR(XLOOKUP(\"ア\",{\"あ\";\"zz\"},{2;1}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_xlookup_fw_latin",
+      "formula": "=IFERROR(XLOOKUP(\"Ａ\",{\"A\";\"zz\"},{2;1}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_xlookup_circled_1",
+      "formula": "=IFERROR(XLOOKUP(\"①\",{\"1\";\"zz\"},{2;1}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_xlookup_umlaut",
+      "formula": "=IFERROR(XLOOKUP(\"ä\",{\"a\";\"zz\"},{2;1}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_xlookup_choon",
+      "formula": "=IFERROR(XLOOKUP(\"かー\",{\"かあ\";\"zz\"},{2;1}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_xlookup_thai_prefix",
+      "formula": "=IFERROR(XLOOKUP(\"เก\",{\"กา\";\"zz\"},{2;1}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_xmatch_sharp_s",
+      "formula": "=IFERROR(XMATCH(\"ß\",{\"ss\";\"zz\"}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_xmatch_hw_voiced",
+      "formula": "=IFERROR(XMATCH(\"ｶﾞ\",{\"ガ\";\"zz\"}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_xmatch_kata_hira",
+      "formula": "=IFERROR(XMATCH(\"ア\",{\"あ\";\"zz\"}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_xmatch_fw_latin",
+      "formula": "=IFERROR(XMATCH(\"Ａ\",{\"A\";\"zz\"}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_xmatch_circled_1",
+      "formula": "=IFERROR(XMATCH(\"①\",{\"1\";\"zz\"}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_xmatch_umlaut",
+      "formula": "=IFERROR(XMATCH(\"ä\",{\"a\";\"zz\"}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_xmatch_choon",
+      "formula": "=IFERROR(XMATCH(\"かー\",{\"かあ\";\"zz\"}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_xmatch_thai_prefix",
+      "formula": "=IFERROR(XMATCH(\"เก\",{\"กา\";\"zz\"}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_countif_sharp_s",
+      "formula": "=COUNTIF(B1:B2,\"ß\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "ss"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_countif_hw_voiced",
+      "formula": "=COUNTIF(B1:B2,\"ｶﾞ\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "ガ"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_countif_kata_hira",
+      "formula": "=COUNTIF(B1:B2,\"ア\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "あ"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_countif_fw_latin",
+      "formula": "=COUNTIF(B1:B2,\"Ａ\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "A"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_countif_circled_1",
+      "formula": "=COUNTIF(B1:B2,\"①\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "1"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_countif_umlaut",
+      "formula": "=COUNTIF(B1:B2,\"ä\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_countif_choon",
+      "formula": "=COUNTIF(B1:B2,\"かー\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "かあ"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_countif_thai_prefix",
+      "formula": "=COUNTIF(B1:B2,\"เก\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "กา"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_sumif_sharp_s",
+      "formula": "=SUMIF(B1:B2,\"ß\",C1:C2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "ss"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_sumif_hw_voiced",
+      "formula": "=SUMIF(B1:B2,\"ｶﾞ\",C1:C2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "ガ"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_sumif_kata_hira",
+      "formula": "=SUMIF(B1:B2,\"ア\",C1:C2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "あ"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_sumif_fw_latin",
+      "formula": "=SUMIF(B1:B2,\"Ａ\",C1:C2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "A"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_sumif_circled_1",
+      "formula": "=SUMIF(B1:B2,\"①\",C1:C2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "1"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_sumif_umlaut",
+      "formula": "=SUMIF(B1:B2,\"ä\",C1:C2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_sumif_choon",
+      "formula": "=SUMIF(B1:B2,\"かー\",C1:C2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "かあ"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_sumif_thai_prefix",
+      "formula": "=SUMIF(B1:B2,\"เก\",C1:C2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "กา"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_switch_sharp_s",
+      "formula": "=SWITCH(\"ß\",\"ss\",2,\"zz\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_switch_hw_voiced",
+      "formula": "=SWITCH(\"ｶﾞ\",\"ガ\",2,\"zz\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_switch_kata_hira",
+      "formula": "=SWITCH(\"ア\",\"あ\",2,\"zz\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_switch_fw_latin",
+      "formula": "=SWITCH(\"Ａ\",\"A\",2,\"zz\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_switch_circled_1",
+      "formula": "=SWITCH(\"①\",\"1\",2,\"zz\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_switch_umlaut",
+      "formula": "=SWITCH(\"ä\",\"a\",2,\"zz\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_switch_choon",
+      "formula": "=SWITCH(\"かー\",\"かあ\",2,\"zz\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_switch_thai_prefix",
+      "formula": "=SWITCH(\"เก\",\"กา\",2,\"zz\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_filter_sharp_s",
+      "formula": "=IFERROR(ROWS(FILTER({\"ss\"},{\"ss\"}=\"ß\")),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_filter_hw_voiced",
+      "formula": "=IFERROR(ROWS(FILTER({\"ガ\"},{\"ガ\"}=\"ｶﾞ\")),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_filter_kata_hira",
+      "formula": "=IFERROR(ROWS(FILTER({\"あ\"},{\"あ\"}=\"ア\")),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_filter_fw_latin",
+      "formula": "=IFERROR(ROWS(FILTER({\"A\"},{\"A\"}=\"Ａ\")),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_filter_circled_1",
+      "formula": "=IFERROR(ROWS(FILTER({\"1\"},{\"1\"}=\"①\")),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_filter_umlaut",
+      "formula": "=IFERROR(ROWS(FILTER({\"a\"},{\"a\"}=\"ä\")),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_filter_choon",
+      "formula": "=IFERROR(ROWS(FILTER({\"かあ\"},{\"かあ\"}=\"かー\")),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_filter_thai_prefix",
+      "formula": "=IFERROR(ROWS(FILTER({\"กา\"},{\"กา\"}=\"เก\")),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_groupby_sharp_s",
+      "formula": "=ROWS(GROUPBY({\"ß\";\"ss\"},{1;2},SUM,0,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_groupby_hw_voiced",
+      "formula": "=ROWS(GROUPBY({\"ｶﾞ\";\"ガ\"},{1;2},SUM,0,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_groupby_kata_hira",
+      "formula": "=ROWS(GROUPBY({\"ア\";\"あ\"},{1;2},SUM,0,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_groupby_fw_latin",
+      "formula": "=ROWS(GROUPBY({\"Ａ\";\"A\"},{1;2},SUM,0,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_groupby_circled_1",
+      "formula": "=ROWS(GROUPBY({\"①\";\"1\"},{1;2},SUM,0,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_groupby_umlaut",
+      "formula": "=ROWS(GROUPBY({\"ä\";\"a\"},{1;2},SUM,0,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_groupby_choon",
+      "formula": "=ROWS(GROUPBY({\"かー\";\"かあ\"},{1;2},SUM,0,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_groupby_thai_prefix",
+      "formula": "=ROWS(GROUPBY({\"เก\";\"กา\"},{1;2},SUM,0,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_dcounta_sharp_s",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "ss"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ß"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_dcounta_hw_voiced",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "ガ"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ｶﾞ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_dcounta_kata_hira",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "あ"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ア"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_dcounta_fw_latin",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "A"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Ａ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_dcounta_circled_1",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "1"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "①"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_dcounta_umlaut",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ä"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_dcounta_choon",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "かあ"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "かー"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_dcounta_thai_prefix",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "กา"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "เก"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_x_countif_ga_hw_fwd_row1",
+      "formula": "=COUNTIF(B1:B2,\"ガ\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "ｶﾞ"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_countif_roman_rev_row2",
+      "formula": "=COUNTIF(B1:B2,\"i\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "Ⅰ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_xlookup_roman_fwd_row1",
+      "formula": "=IFERROR(XLOOKUP(\"Ⅰ\",{\"i\";\"zz\"},{2;1}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_match0_hw_a_fwd_row2",
+      "formula": "=IFERROR(MATCH(\"ｱ\",{\"zz\";\"ア\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_dcounta_ij_fwd_row1",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "ij"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ĳ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_x_dcounta_vu_rev_row2",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "ヴ"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ゔ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_switch_ae_fwd_row1",
+      "formula": "=SWITCH(\"æ\",\"ae\",2,\"zz\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_x_countif_ij_rev_row2",
+      "formula": "=COUNTIF(B1:B2,\"ij\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "ĳ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_match0_small_rev_row1",
+      "formula": "=IFERROR(MATCH(\"あ\",{\"ぁ\";\"zz\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_xlookup_umlaut_case_rev_row1",
+      "formula": "=IFERROR(XLOOKUP(\"ä\",{\"Ä\";\"zz\"},{2;1}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_xlookup_sigma_fwd_row2",
+      "formula": "=IFERROR(XLOOKUP(\"ς\",{\"zz\";\"σ\"},{1;2}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_dcounta_iter_rev_row2",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "かゝ"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "かか"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_x_unique_yo_fwd_row2",
+      "formula": "=ROWS(UNIQUE({\"Ё\";\"ё\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_unique_iter_fwd_row1",
+      "formula": "=ROWS(UNIQUE({\"かゝ\";\"かか\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_match0_vu_fwd_row1",
+      "formula": "=IFERROR(MATCH(\"ヴ\",{\"ゔ\";\"zz\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_switch_umlaut_case_rev_row2",
+      "formula": "=SWITCH(\"ä\",\"zz\",1,\"Ä\",2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_dcounta_sup2_fwd_row1",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "2"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "²"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_switch_yo_rev_row1",
+      "formula": "=SWITCH(\"Ё\",\"ё\",2,\"zz\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_match0_umlaut_case_fwd_row2",
+      "formula": "=IFERROR(MATCH(\"Ä\",{\"zz\";\"ä\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_dcounta_ga_hw_rev_row2",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "ガ"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ｶﾞ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_unique_ij_rev_row2",
+      "formula": "=ROWS(UNIQUE({\"ĳ\";\"ij\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_match0_roman_fwd_row1",
+      "formula": "=IFERROR(MATCH(\"Ⅰ\",{\"i\";\"zz\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_xlookup_sup2_rev_row2",
+      "formula": "=IFERROR(XLOOKUP(\"2\",{\"zz\";\"²\"},{1;2}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_countif_hw_a_rev_row1",
+      "formula": "=COUNTIF(B1:B2,\"ア\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "ｱ"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_xlookup_vu_fwd_row1",
+      "formula": "=IFERROR(XLOOKUP(\"ヴ\",{\"ゔ\";\"zz\"},{2;1}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_switch_small_fwd_row2",
+      "formula": "=SWITCH(\"ぁ\",\"zz\",1,\"あ\",2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_dcounta_ae_rev_row2",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "æ"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ae"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_x_countif_vu_fwd_row1",
+      "formula": "=COUNTIF(B1:B2,\"ヴ\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "ゔ"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_countif_ae_fwd_row2",
+      "formula": "=COUNTIF(B1:B2,\"æ\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "ae"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_x_switch_sigma_rev_row2",
+      "formula": "=SWITCH(\"σ\",\"zz\",1,\"ς\",2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_xlookup_ae_rev_row1",
+      "formula": "=IFERROR(XLOOKUP(\"ae\",{\"æ\";\"zz\"},{2;1}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_x_unique_vu_rev_row1",
+      "formula": "=ROWS(UNIQUE({\"ゔ\";\"ヴ\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_countif_small_fwd_row1",
+      "formula": "=COUNTIF(B1:B2,\"ぁ\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "あ"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_countif_iter_rev_row1",
+      "formula": "=COUNTIF(B1:B2,\"かか\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "かゝ"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_x_match0_ae_rev_row2",
+      "formula": "=IFERROR(MATCH(\"ae\",{\"zz\";\"æ\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_x_xlookup_yo_fwd_row1",
+      "formula": "=IFERROR(XLOOKUP(\"ё\",{\"Ё\";\"zz\"},{2;1}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_switch_vu_fwd_row2",
+      "formula": "=SWITCH(\"ヴ\",\"zz\",1,\"ゔ\",2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_dcounta_roman_fwd_row2",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "i"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Ⅰ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_xlookup_hw_a_rev_row2",
+      "formula": "=IFERROR(XLOOKUP(\"ア\",{\"zz\";\"ｱ\"},{1;2}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_unique_ae_rev_row1",
+      "formula": "=ROWS(UNIQUE({\"ae\";\"æ\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_match0_iter_rev_row2",
+      "formula": "=IFERROR(MATCH(\"かか\",{\"zz\";\"かゝ\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_x_dcounta_hw_a_rev_row1",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "ｱ"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ア"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_switch_ij_rev_row1",
+      "formula": "=SWITCH(\"ij\",\"ĳ\",2,\"zz\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_countif_sup2_rev_row1",
+      "formula": "=COUNTIF(B1:B2,\"2\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "²"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_x_unique_sup2_fwd_row2",
+      "formula": "=ROWS(UNIQUE({\"2\";\"²\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_dcounta_yo_rev_row2",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "ё"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Ё"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_switch_hw_a_fwd_row2",
+      "formula": "=SWITCH(\"ｱ\",\"zz\",1,\"ア\",2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_xlookup_iter_rev_row2",
+      "formula": "=IFERROR(XLOOKUP(\"かか\",{\"zz\";\"かゝ\"},{1;2}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_x_xlookup_ij_fwd_row2",
+      "formula": "=IFERROR(XLOOKUP(\"ĳ\",{\"zz\";\"ij\"},{1;2}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_switch_roman_rev_row2",
+      "formula": "=SWITCH(\"i\",\"zz\",1,\"Ⅰ\",2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_countif_sigma_fwd_row2",
+      "formula": "=COUNTIF(B1:B2,\"ς\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "σ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_dcounta_umlaut_case_rev_row2",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "Ä"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ä"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_switch_ga_hw_rev_row1",
+      "formula": "=SWITCH(\"ｶﾞ\",\"ガ\",2,\"zz\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_countif_yo_fwd_row2",
+      "formula": "=COUNTIF(B1:B2,\"ё\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "Ё"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_dcounta_small_fwd_row1",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "あ"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ぁ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_switch_iter_fwd_row1",
+      "formula": "=SWITCH(\"かゝ\",\"かか\",2,\"zz\",1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_x_unique_roman_rev_row2",
+      "formula": "=ROWS(UNIQUE({\"Ⅰ\";\"i\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_unique_small_fwd_row1",
+      "formula": "=ROWS(UNIQUE({\"ぁ\";\"あ\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_match0_ga_hw_fwd_row2",
+      "formula": "=IFERROR(MATCH(\"ガ\",{\"zz\";\"ｶﾞ\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_x_switch_sup2_rev_row2",
+      "formula": "=SWITCH(\"2\",\"zz\",1,\"²\",2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_countif_umlaut_case_fwd_row2",
+      "formula": "=COUNTIF(B1:B2,\"Ä\")",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "ä"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_xlookup_small_rev_row1",
+      "formula": "=IFERROR(XLOOKUP(\"あ\",{\"ぁ\";\"zz\"},{2;1}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_match0_yo_fwd_row2",
+      "formula": "=IFERROR(MATCH(\"ё\",{\"zz\";\"Ё\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_xlookup_ga_hw_rev_row2",
+      "formula": "=IFERROR(XLOOKUP(\"ｶﾞ\",{\"zz\";\"ガ\"},{1;2}),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_match0_sup2_fwd_row2",
+      "formula": "=IFERROR(MATCH(\"²\",{\"zz\";\"2\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_match0_sigma_rev_row2",
+      "formula": "=IFERROR(MATCH(\"σ\",{\"zz\";\"ς\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_x_unique_umlaut_case_rev_row2",
+      "formula": "=ROWS(UNIQUE({\"Ä\";\"ä\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_unique_hw_a_rev_row1",
+      "formula": "=ROWS(UNIQUE({\"ア\";\"ｱ\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_match0_ij_fwd_row1",
+      "formula": "=IFERROR(MATCH(\"ĳ\",{\"ij\";\"zz\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_x_unique_ga_hw_rev_row1",
+      "formula": "=ROWS(UNIQUE({\"ｶﾞ\";\"ガ\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_dcounta_sigma_fwd_row2",
+      "formula": "=DCOUNTA(B1:B3,1,E1:E2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "zz"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "σ"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "h"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "ς"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_x_unique_sigma_rev_row1",
+      "formula": "=ROWS(UNIQUE({\"σ\";\"ς\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    }
+  ]
+}
