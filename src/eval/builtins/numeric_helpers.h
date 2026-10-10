@@ -113,19 +113,15 @@ inline Expected<NumberPair, ErrorCode> read_number_pair(const Value* args, std::
 /// error.
 inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args, std::uint32_t first_index,
                                                             std::uint32_t second_index, std::uint32_t third_index) {
-  auto first = read_required_number(args, first_index);
-  if (!first) {
-    return std::move(first.error());
-  }
-  auto second = read_required_number(args, second_index);
-  if (!second) {
-    return std::move(second.error());
+  auto first_second = read_number_pair(args, first_index, second_index);
+  if (!first_second) {
+    return std::move(first_second.error());
   }
   auto third = read_required_number(args, third_index);
   if (!third) {
     return std::move(third.error());
   }
-  return NumberTriple{first.value(), second.value(), third.value()};
+  return NumberTriple{first_second.value().first, first_second.value().second, third.value()};
 }
 
 }  // namespace builtins_detail

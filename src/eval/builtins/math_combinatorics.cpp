@@ -578,14 +578,11 @@ Value Roman(const Value* args, std::uint32_t arity, Arena& arena) {
 // larger or negative num yields #NUM!. radix out of range -> #NUM!. min_len
 // must be in 0..255; out-of-range -> #VALUE!.
 Value Base(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto num_v = coerce_to_number(args[0]);
-  if (!num_v) {
-    return Value::error(num_v.error());
+  auto num_radix = builtins_detail::read_number_pair(args, 0, 1);
+  if (!num_radix) {
+    return Value::error(num_radix.error());
   }
-  auto radix_v = coerce_to_number(args[1]);
-  if (!radix_v) {
-    return Value::error(radix_v.error());
-  }
+  const auto& pair = num_radix.value();
   int min_len = 0;
   if (arity >= 3) {
     auto len_v = coerce_to_number(args[2]);
@@ -598,12 +595,12 @@ Value Base(const Value* args, std::uint32_t arity, Arena& arena) {
     }
     min_len = static_cast<int>(lf);
   }
-  const double rf = std::trunc(radix_v.value());
+  const double rf = std::trunc(pair.second);
   if (std::isnan(rf) || std::isinf(rf) || rf < 2.0 || rf > 36.0) {
     return Value::error(ErrorCode::Num);
   }
   const int radix = static_cast<int>(rf);
-  const double nf = std::trunc(num_v.value());
+  const double nf = std::trunc(pair.first);
   if (std::isnan(nf) || std::isinf(nf) || nf < 0.0) {
     return Value::error(ErrorCode::Num);
   }

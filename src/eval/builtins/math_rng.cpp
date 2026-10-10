@@ -13,12 +13,11 @@
 #include <cmath>
 #include <cstdint>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
-#include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "eval/rng.h"
 #include "utils/arena.h"
-#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
@@ -41,16 +40,13 @@ Value Rand_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
 /// Volatile: each call draws a fresh sample from the thread-local
 /// Mersenne Twister.
 Value RandBetween_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto bottom = coerce_to_number(args[0]);
-  if (!bottom) {
-    return Value::error(bottom.error());
+  auto bounds = builtins_detail::read_number_pair(args, 0, 1);
+  if (!bounds) {
+    return Value::error(bounds.error());
   }
-  auto top = coerce_to_number(args[1]);
-  if (!top) {
-    return Value::error(top.error());
-  }
-  const double lo_d = std::ceil(bottom.value());
-  const double hi_d = std::floor(top.value());
+  const auto& pair = bounds.value();
+  const double lo_d = std::ceil(pair.first);
+  const double hi_d = std::floor(pair.second);
   if (std::isnan(lo_d) || std::isinf(lo_d) || std::isnan(hi_d) || std::isinf(hi_d)) {
     return Value::error(ErrorCode::Num);
   }

@@ -25,6 +25,7 @@
 #include <string_view>
 #include <utility>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/eval_profile_scope.h"
@@ -397,14 +398,11 @@ bool reconcile_suffix(Complex a, Complex b, char* out) {
 // ---------------------------------------------------------------------------
 
 Value Complex_fn(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto re = coerce_to_number(args[0]);
-  if (!re) {
-    return Value::error(re.error());
+  auto real_imaginary = builtins_detail::read_number_pair(args, 0, 1);
+  if (!real_imaginary) {
+    return Value::error(real_imaginary.error());
   }
-  auto im = coerce_to_number(args[1]);
-  if (!im) {
-    return Value::error(im.error());
-  }
+  const auto& pair = real_imaginary.value();
   char suffix = 'i';
   if (arity >= 3) {
     // Suffix argument: must be Text "i" or "j"; Blank defaults to "i";
@@ -427,7 +425,7 @@ Value Complex_fn(const Value* args, std::uint32_t arity, Arena& arena) {
       return Value::error(ErrorCode::Value);
     }
   }
-  return Value::text(arena.intern(format_complex(re.value(), im.value(), suffix)));
+  return Value::text(arena.intern(format_complex(pair.first, pair.second, suffix)));
 }
 
 Value ImAbs(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {

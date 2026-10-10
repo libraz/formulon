@@ -183,18 +183,15 @@ Value Sqrt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // `MOD(7, -3) = -2`. `MOD(n, 0)` -> `#DIV/0!`. `std::fmod` is intentionally
 // avoided here because it inherits C semantics (sign of dividend).
 Value Mod(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto n = coerce_to_number(args[0]);
-  if (!n) {
-    return Value::error(n.error());
+  auto operands = builtins_detail::read_number_pair(args, 0, 1);
+  if (!operands) {
+    return Value::error(operands.error());
   }
-  auto d = coerce_to_number(args[1]);
-  if (!d) {
-    return Value::error(d.error());
-  }
-  if (d.value() == 0.0) {
+  const auto& pair = operands.value();
+  if (pair.second == 0.0) {
     return Value::error(ErrorCode::Div0);
   }
-  const double r = n.value() - d.value() * std::floor(n.value() / d.value());
+  const double r = pair.first - pair.second * std::floor(pair.first / pair.second);
   return to_finite_value(r);
 }
 
@@ -202,15 +199,12 @@ Value Mod(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // so the two paths cannot diverge on edge cases (negative-base with a
 // fractional exponent, overflow, `0^0`, etc.).
 Value Power(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto base = coerce_to_number(args[0]);
-  if (!base) {
-    return Value::error(base.error());
+  auto operands = builtins_detail::read_number_pair(args, 0, 1);
+  if (!operands) {
+    return Value::error(operands.error());
   }
-  auto exp = coerce_to_number(args[1]);
-  if (!exp) {
-    return Value::error(exp.error());
-  }
-  auto r = apply_pow(base.value(), exp.value());
+  const auto& pair = operands.value();
+  auto r = apply_pow(pair.first, pair.second);
   if (!r) {
     return Value::error(r.error());
   }
@@ -323,16 +317,13 @@ Value legacy_significance_round(const Value* args, const Value& zero_significanc
   if (is_empty_text(args[0]) || is_empty_text(args[1])) {
     return Value::error(ErrorCode::Value);
   }
-  auto number = coerce_to_number(args[0]);
-  if (!number) {
-    return Value::error(number.error());
+  auto operands = builtins_detail::read_number_pair(args, 0, 1);
+  if (!operands) {
+    return Value::error(operands.error());
   }
-  auto significance = coerce_to_number(args[1]);
-  if (!significance) {
-    return Value::error(significance.error());
-  }
-  const double n = number.value();
-  const double s = significance.value();
+  const auto& pair = operands.value();
+  const double n = pair.first;
+  const double s = pair.second;
   if (n == 0.0) {
     return Value::number(0.0);
   }
@@ -393,15 +384,7 @@ Expected<builtins_detail::NumberPair, ErrorCode> coerce_non_bool_pair(const Valu
   if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool) {
     return ErrorCode::Value;
   }
-  auto first = coerce_to_number(args[0]);
-  if (!first) {
-    return std::move(first.error());
-  }
-  auto second = coerce_to_number(args[1]);
-  if (!second) {
-    return std::move(second.error());
-  }
-  return builtins_detail::NumberPair{first.value(), second.value()};
+  return builtins_detail::read_number_pair(args, 0, 1);
 }
 
 // MROUND(number, multiple) - nearest multiple of `|multiple|` to `number`,

@@ -199,18 +199,15 @@ Value Atan(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Excel returns `#DIV/0!` even though `std::atan2(0, 0)` is defined as 0.
 // Result in (-pi, pi] radians.
 Value Atan2(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
+  auto coordinates = builtins_detail::read_number_pair(args, 0, 1);
+  if (!coordinates) {
+    return Value::error(coordinates.error());
   }
-  auto y = coerce_to_number(args[1]);
-  if (!y) {
-    return Value::error(y.error());
-  }
-  if (x.value() == 0.0 && y.value() == 0.0) {
+  const auto& pair = coordinates.value();
+  if (pair.first == 0.0 && pair.second == 0.0) {
     return Value::error(ErrorCode::Div0);
   }
-  const double r = std::atan2(y.value(), x.value());
+  const double r = std::atan2(pair.second, pair.first);
   return to_finite_value(r);
 }
 
