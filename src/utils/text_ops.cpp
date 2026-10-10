@@ -13,6 +13,8 @@
 #include <string>
 #include <string_view>
 
+#include "utils/strings.h"
+
 namespace formulon {
 namespace {
 
@@ -112,23 +114,11 @@ std::string utf16_substring(std::string_view text, std::uint32_t start_units, st
 }
 
 std::string to_lower_ascii(std::string_view text) {
-  std::string out(text);
-  for (char& c : out) {
-    if (c >= 'A' && c <= 'Z') {
-      c = static_cast<char>(c + 32);
-    }
-  }
-  return out;
+  return strings::to_ascii_lower(text);
 }
 
 std::string to_upper_ascii(std::string_view text) {
-  std::string out(text);
-  for (char& c : out) {
-    if (c >= 'a' && c <= 'z') {
-      c = static_cast<char>(c - 32);
-    }
-  }
-  return out;
+  return strings::to_ascii_upper(text);
 }
 
 std::string encode_utf8_codepoint(std::uint32_t codepoint) {

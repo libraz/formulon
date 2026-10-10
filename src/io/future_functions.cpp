@@ -22,6 +22,7 @@
 #include <string_view>
 
 #include "parser/ast_format.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace io {
@@ -92,16 +93,6 @@ constexpr FunctionNameAlias kFunctionNameAliases[] = {
 /// carry the doubled prefix in Excel-authored files.
 constexpr std::string_view kXlwsFunctions = "|FILTER|SORT|";
 
-/// ASCII upper-case fold. Excel function names are ASCII.
-std::string AsciiUpper(std::string_view name) {
-  std::string upper;
-  upper.reserve(name.size());
-  for (char c : name) {
-    upper.push_back((c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c);
-  }
-  return upper;
-}
-
 /// True when `blob` lists `upper` as a whole `|`-delimited entry.
 bool BlobContains(std::string_view blob, std::string_view upper) {
   std::string needle;
@@ -115,7 +106,7 @@ bool BlobContains(std::string_view blob, std::string_view upper) {
 }  // namespace
 
 parser::StoragePrefixKind classify_storage_prefix(std::string_view canonical_name) {
-  const std::string upper = AsciiUpper(canonical_name);
+  const std::string upper = strings::to_ascii_upper(canonical_name);
   if (BlobContains(kXlwsFunctions, upper)) {
     return parser::StoragePrefixKind::XlfnXlws;
   }
@@ -126,7 +117,7 @@ parser::StoragePrefixKind classify_storage_prefix(std::string_view canonical_nam
 }
 
 std::string storage_function_name(std::string_view canonical_name) {
-  const std::string upper = AsciiUpper(canonical_function_name(canonical_name));
+  const std::string upper = strings::to_ascii_upper(canonical_function_name(canonical_name));
   switch (classify_storage_prefix(upper)) {
     case parser::StoragePrefixKind::XlfnXlws:
       return std::string("_xlfn._xlws.") + upper;
@@ -139,7 +130,7 @@ std::string storage_function_name(std::string_view canonical_name) {
 }
 
 std::string_view canonical_function_name(std::string_view name) {
-  const std::string upper = AsciiUpper(name);
+  const std::string upper = strings::to_ascii_upper(name);
   for (const FunctionNameAlias& alias : kFunctionNameAliases) {
     if (upper == alias.localised) {
       return alias.stored;
@@ -162,7 +153,7 @@ std::string storage_call_name(std::string_view name) {
 }
 
 bool xlsb_uses_hidden_name(std::string_view canonical_name) {
-  return BlobContains(kXlsbHiddenNameFunctions, AsciiUpper(canonical_name));
+  return BlobContains(kXlsbHiddenNameFunctions, strings::to_ascii_upper(canonical_name));
 }
 
 bool has_storage_prefix(std::string_view canonical_name) {
@@ -171,11 +162,11 @@ bool has_storage_prefix(std::string_view canonical_name) {
 }
 
 std::string function_value_storage_name(std::string_view name) {
-  return "_xleta." + AsciiUpper(canonical_function_name(name));
+  return "_xleta." + strings::to_ascii_upper(canonical_function_name(name));
 }
 
 std::string xlsb_hidden_function_name(std::string_view canonical_name) {
-  const std::string upper = AsciiUpper(canonical_name);
+  const std::string upper = strings::to_ascii_upper(canonical_name);
   if (classify_storage_prefix(upper) != parser::StoragePrefixKind::None) {
     return storage_function_name(upper);
   }

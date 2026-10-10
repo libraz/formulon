@@ -69,11 +69,6 @@ constexpr ErrorLiteralEntry kErrorLiterals[] = {
     {"#N/A", ErrorCode::NA},                    //  4
 };
 
-// ASCII case-insensitive prefix match over a known-ASCII catalog entry.
-bool ieq_prefix(std::string_view haystack, std::string_view needle) noexcept {
-  return strings::case_insensitive_starts_with(haystack, needle);
-}
-
 // Converts a column-letter run (1..3 ASCII letters) to a 1-based column index.
 // Returns 0 on overflow past Excel's 16384 column cap.
 std::uint32_t column_letters_to_index(std::string_view letters) noexcept {
@@ -229,12 +224,12 @@ bool Tokenizer::is_formula_whitespace(char c) noexcept {
 
 bool Tokenizer::is_bool_word(std::string_view word, bool* out) noexcept {
   if (word.size() == 4) {
-    if (ieq_prefix(word, "TRUE")) {
+    if (strings::case_insensitive_starts_with(word, "TRUE")) {
       *out = true;
       return true;
     }
   } else if (word.size() == 5) {
-    if (ieq_prefix(word, "FALSE")) {
+    if (strings::case_insensitive_starts_with(word, "FALSE")) {
       *out = false;
       return true;
     }
@@ -250,11 +245,11 @@ bool Tokenizer::is_bool_name(std::string_view word, bool* out) const noexcept {
     return false;
   }
   const LocaleFacts& f = *opts_.locale;
-  if (word.size() == f.true_name.size() && ieq_prefix(word, f.true_name)) {
+  if (word.size() == f.true_name.size() && strings::case_insensitive_starts_with(word, f.true_name)) {
     *out = true;
     return true;
   }
-  if (word.size() == f.false_name.size() && ieq_prefix(word, f.false_name)) {
+  if (word.size() == f.false_name.size() && strings::case_insensitive_starts_with(word, f.false_name)) {
     *out = false;
     return true;
   }
@@ -267,7 +262,7 @@ bool Tokenizer::match_locale_error(std::string_view run, ErrorCode* out, std::si
   }
   for (std::size_t i = 0; i < opts_.locale->error_names.size(); ++i) {
     const std::string_view name = opts_.locale->error_names[i];
-    if (name != kErrorTable[i].display_name && ieq_prefix(run, name)) {
+    if (name != kErrorTable[i].display_name && strings::case_insensitive_starts_with(run, name)) {
       *out = static_cast<ErrorCode>(i);
       *match_len = name.size();
       return true;
@@ -307,7 +302,7 @@ bool Tokenizer::match_error_literal(std::string_view run, ErrorCode* out, std::s
   // `/`, so an exact-length scan would over-consume the run; longest-prefix
   // matching against the sorted catalog resolves both cases in one pass.
   for (const auto& e : kErrorLiterals) {
-    if (ieq_prefix(run, e.text)) {
+    if (strings::case_insensitive_starts_with(run, e.text)) {
       *out = e.code;
       *match_len = e.text.size();
       return true;

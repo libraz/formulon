@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "parser/reference.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace parser {
@@ -52,10 +53,6 @@ std::string WithBackslashes(std::string_view s) {
     }
   }
   return out;
-}
-
-bool StartsWith(std::string_view s, std::string_view prefix) noexcept {
-  return s.size() >= prefix.size() && s.compare(0, prefix.size(), prefix) == 0;
 }
 
 std::string DecimalText(std::uint32_t n) {
@@ -316,7 +313,7 @@ std::string spell_external_books(std::string_view stored, const ExternalBookReso
 }
 
 std::string display_path_for_link_target(std::string_view target) {
-  if (StartsWith(target, "file://")) {
+  if (strings::starts_with(target, "file://")) {
     const std::string_view rest = target.substr(7);
     if (!rest.empty() && rest.front() == '/') {
       // file:///<path>: a drive path or a POSIX absolute path.
@@ -337,7 +334,7 @@ std::string display_path_for_link_target(std::string_view target) {
     }
     return "\\\\" + WithBackslashes(dir.empty() ? std::string_view(path) : dir) + (dir.empty() ? "\\" : "");
   }
-  if (StartsWith(target, "http://") || StartsWith(target, "https://")) {
+  if (strings::starts_with(target, "http://") || strings::starts_with(target, "https://")) {
     const std::size_t host = target.find("//") + 2;
     const std::size_t last = target.find_last_of('/');
     return last >= host ? std::string(target.substr(0, last + 1)) : std::string();

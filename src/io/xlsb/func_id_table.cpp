@@ -15,11 +15,12 @@
 
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
+
+#include "utils/strings.h"
 
 namespace formulon {
 namespace io {
@@ -433,27 +434,6 @@ static_assert(TableIsSortedById(), "kEntries must be sorted by id");
 // there is exactly one place aliases are enumerated. This table stays a
 // pure id <-> stored-name mapping.
 
-/// ASCII upper-case fold for case-insensitive name lookup. Excel names
-/// are ASCII so a `std::toupper`-equivalent is sufficient.
-char AsciiUpper(char c) {
-  if (c >= 'a' && c <= 'z') {
-    return static_cast<char>(c - ('a' - 'A'));
-  }
-  return c;
-}
-
-bool NameEqualsIgnoreCase(std::string_view a, std::string_view b) {
-  if (a.size() != b.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < a.size(); ++i) {
-    if (AsciiUpper(a[i]) != AsciiUpper(b[i])) {
-      return false;
-    }
-  }
-  return true;
-}
-
 /// Per-parameter reference class of every built-in with a parameter that is
 /// not plain value (`V`), as `|NAME:LETTERS|`. Harvested from Excel 365 by
 /// `tools/dev/xlsb_func_id_harvest.py classes-emit` (four probes calling each
@@ -519,9 +499,7 @@ constexpr std::string_view kCalcExp =
 /// `|NAME` with `name` upper-cased: the start of its entry in the tables above.
 std::string EntryPrefix(std::string_view name) {
   std::string key = "|";
-  for (char c : name) {
-    key.push_back((c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c);
-  }
+  key.append(strings::to_ascii_upper(name));
   return key;
 }
 
@@ -544,7 +522,7 @@ const XlsbFuncEntry* lookup_func_by_id(std::uint16_t id) {
 
 const XlsbFuncEntry* lookup_func_by_name(std::string_view name) {
   for (std::size_t i = 0; i < kEntriesCount; ++i) {
-    if (NameEqualsIgnoreCase(name, kEntries[i].name)) {
+    if (strings::case_insensitive_eq(name, kEntries[i].name)) {
       return &kEntries[i];
     }
   }

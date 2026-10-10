@@ -9,6 +9,7 @@
 
 #include "eval/function_registry.h"
 #include "eval/tree_walker_lazy_table.h"
+#include "utils/strings.h"
 
 namespace formulon::eval {
 namespace {
@@ -16,23 +17,10 @@ namespace {
 using parser::AstNode;
 using parser::NodeKind;
 
-bool ascii_equal_ci(std::string_view lhs, std::string_view rhs) noexcept {
-  if (lhs.size() != rhs.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < lhs.size(); ++i) {
-    const auto upper = [](char c) noexcept { return (c >= 'a' && c <= 'z') ? static_cast<char>(c - ('a' - 'A')) : c; };
-    if (upper(lhs[i]) != upper(rhs[i])) {
-      return false;
-    }
-  }
-  return true;
-}
-
 template <std::size_t N>
 bool in_names(std::string_view name, const std::array<std::string_view, N>& names) noexcept {
   for (std::string_view candidate : names) {
-    if (ascii_equal_ci(name, candidate)) {
+    if (strings::case_insensitive_eq(name, candidate)) {
       return true;
     }
   }
@@ -72,7 +60,7 @@ SpillPotential lookup_let_shape(std::string_view name, const std::vector<LetShap
     return SpillPotential::kMaySpill;
   }
   for (auto it = env->rbegin(); it != env->rend(); ++it) {
-    if (ascii_equal_ci(name, it->name)) {
+    if (strings::case_insensitive_eq(name, it->name)) {
       return it->potential;
     }
   }
