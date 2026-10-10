@@ -119,24 +119,7 @@ std::string WriteSharedStrings(const SharedStrings& strings) {
     out.append("<si><t xml:space=\"preserve\">");
     AppendXmlEscaped(out, entry.text);
     out.append("</t>");
-    // One block per run, spans included, so a partially annotated string
-    // survives the round trip: merging them would move kana onto
-    // characters it does not read.
-    for (const PhoneticRun& run : entry.phonetic) {
-      out.append("<rPh sb=\"");
-      out.append(std::to_string(run.sb));
-      out.append("\" eb=\"");
-      out.append(std::to_string(run.eb));
-      out.append("\"><t xml:space=\"preserve\">");
-      AppendXmlEscaped(out, run.text);
-      out.append("</t></rPh>");
-    }
-    // Excel writes the block for every annotated item, spelling out even
-    // the values it would otherwise infer, so emitting it unconditionally
-    // beside a non-empty run list reproduces its output exactly.
-    if (!entry.phonetic.empty()) {
-      append_phonetic_pr(out, entry.phonetic_props);
-    }
+    append_phonetic_runs(out, entry.phonetic, entry.phonetic_props);
     out.append("</si>");
   }
   out.append("</sst>\n");

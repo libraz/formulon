@@ -34,7 +34,9 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
+#include "io/xml_escape.h"
 #include "phonetic.h"
 
 namespace formulon {
@@ -112,6 +114,24 @@ inline void append_phonetic_pr(std::string& out, const PhoneticProperties& props
   out.append("\" alignment=\"");
   out.append(phonetic_alignment_name(props.alignment));
   out.append("\"/>");
+}
+
+/// Appends every `<rPh>` run in order, followed by `<phoneticPr>` when runs
+/// are present. The run text is escaped as OOXML element content.
+inline void append_phonetic_runs(std::string& out, const std::vector<PhoneticRun>& runs,
+                                 const PhoneticProperties& props) {
+  for (const PhoneticRun& run : runs) {
+    out.append("<rPh sb=\"");
+    out.append(std::to_string(run.sb));
+    out.append("\" eb=\"");
+    out.append(std::to_string(run.eb));
+    out.append("\"><t xml:space=\"preserve\">");
+    AppendXmlEscaped(out, run.text);
+    out.append("</t></rPh>");
+  }
+  if (!runs.empty()) {
+    append_phonetic_pr(out, props);
+  }
 }
 
 }  // namespace io

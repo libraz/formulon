@@ -164,18 +164,7 @@ void AppendLiteralCellBody(std::string& out, const Value& value, const std::vect
     out.append(" t=\"inlineStr\"><is><t xml:space=\"preserve\">");
     AppendXmlEscaped(out, value.as_text());
     out.append("</t>");
-    for (const PhoneticRun& run : phonetic) {
-      out.append("<rPh sb=\"");
-      out.append(std::to_string(run.sb));
-      out.append("\" eb=\"");
-      out.append(std::to_string(run.eb));
-      out.append("\"><t xml:space=\"preserve\">");
-      AppendXmlEscaped(out, run.text);
-      out.append("</t></rPh>");
-    }
-    if (!phonetic.empty()) {
-      append_phonetic_pr(out, phonetic_props);
-    }
+    append_phonetic_runs(out, phonetic, phonetic_props);
     out.append("</is></c>");
     return;
   }
