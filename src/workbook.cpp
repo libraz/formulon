@@ -1019,14 +1019,6 @@ void mark_blocked_spill_anchors_released_by_cell(const eval::RecalcEngine::Locke
 using SpillAnchorQuery = std::vector<CellAddress> (Sheet::*)(std::uint32_t, std::uint32_t, std::uint32_t,
                                                              std::uint32_t) const;
 
-MergeRange normalize_merge_range(MergeRange merge) noexcept {
-  const std::uint32_t first_row = std::min(merge.first_row, merge.last_row);
-  const std::uint32_t first_col = std::min(merge.first_col, merge.last_col);
-  const std::uint32_t last_row = std::max(merge.first_row, merge.last_row);
-  const std::uint32_t last_col = std::max(merge.first_col, merge.last_col);
-  return MergeRange{first_row, first_col, last_row, last_col};
-}
-
 void mark_spill_anchors_intersecting_merge(const eval::RecalcEngine::LockedMutator& mutator, std::size_t sheet_index,
                                            const std::vector<Sheet>& sheets, const MergeRange& merge,
                                            SpillAnchorQuery query) {
@@ -1488,7 +1480,7 @@ void Workbook::mark_cell_dependents_dirty(std::size_t sheet_index, std::uint32_t
 
 Expected<void, Error> Workbook::add_merge(std::size_t sheet_index, MergeRange merge) {
   RETURN_IF_ERROR(check_sheet_index("add_merge", sheet_index, sheets_.size()));
-  merge = normalize_merge_range(merge);
+  merge = normalized(merge);
   if (!Sheet::rect_in_grid(merge.first_row, merge.first_col, merge.last_row, merge.last_col)) {
     return make_error(FormulonErrorCode::kInvalidArgument, "add_merge: range out of grid",
                       "first_row=" + std::to_string(merge.first_row) + " first_col=" + std::to_string(merge.first_col) +
@@ -1508,7 +1500,7 @@ Expected<void, Error> Workbook::add_merge(std::size_t sheet_index, MergeRange me
 
 Expected<void, Error> Workbook::remove_merges_intersecting(std::size_t sheet_index, MergeRange merge) {
   RETURN_IF_ERROR(check_sheet_index("remove_merges_intersecting", sheet_index, sheets_.size()));
-  merge = normalize_merge_range(merge);
+  merge = normalized(merge);
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   const std::vector<MergeRange> removed = sheets_[sheet_index].remove_merges_intersecting(merge);

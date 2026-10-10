@@ -5,6 +5,7 @@
 #ifndef FORMULON_MERGE_RANGE_H_
 #define FORMULON_MERGE_RANGE_H_
 
+#include <algorithm>
 #include <cstdint>
 
 namespace formulon {
@@ -26,6 +27,12 @@ struct MergeRange {
            a.last_col == b.last_col;
   }
 };
+
+/// Orders both corners without changing the rectangle they cover.
+inline constexpr MergeRange normalized(MergeRange range) noexcept {
+  return MergeRange{std::min(range.first_row, range.last_row), std::min(range.first_col, range.last_col),
+                    std::max(range.first_row, range.last_row), std::max(range.first_col, range.last_col)};
+}
 
 }  // namespace formulon
 

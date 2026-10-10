@@ -36,12 +36,7 @@ fm_status_t check_sheet_coord(std::uint32_t row, std::uint32_t col, const char* 
 // Orders the corners so first <= last componentwise; mirrors the reader's
 // behaviour and keeps downstream consumers simple.
 formulon::MergeRange normalized_merge(const fm_merge_range& r) {
-  formulon::MergeRange m;
-  m.first_row = (r.first_row < r.last_row) ? r.first_row : r.last_row;
-  m.first_col = (r.first_col < r.last_col) ? r.first_col : r.last_col;
-  m.last_row = (r.first_row < r.last_row) ? r.last_row : r.first_row;
-  m.last_col = (r.first_col < r.last_col) ? r.last_col : r.first_col;
-  return m;
+  return formulon::normalized(formulon::MergeRange{r.first_row, r.first_col, r.last_row, r.last_col});
 }
 
 using SheetItemSize = std::size_t (*)(const formulon::Sheet& sheet);
@@ -263,13 +258,11 @@ extern "C" fm_status_t fm_sheet_merges_in_range(fm_workbook_t* wb, std::uint32_t
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_merges_in_range"); rc != 0) {
     return rc;
   }
-  const std::uint32_t first_row = std::min(range.first_row, range.last_row);
-  const std::uint32_t last_row = std::max(range.first_row, range.last_row);
-  const std::uint32_t first_col = std::min(range.first_col, range.last_col);
-  const std::uint32_t last_col = std::max(range.first_col, range.last_col);
+  const formulon::MergeRange query = normalized_merge(range);
   std::uint32_t count = 0;
   for (const formulon::MergeRange& m : wb->workbook().sheet(sheet).merges()) {
-    if (m.last_row < first_row || m.first_row > last_row || m.last_col < first_col || m.first_col > last_col) {
+    if (m.last_row < query.first_row || m.first_row > query.last_row || m.last_col < query.first_col ||
+        m.first_col > query.last_col) {
       continue;
     }
     if (count < capacity) {
