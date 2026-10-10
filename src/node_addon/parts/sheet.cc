@@ -140,8 +140,8 @@ Napi::Value Workbook::DefinedNameAt(const Napi::CallbackInfo& info) {
     return out;
   }
   out.Set("status", MakeOkStatus(env));
-  out.Set("name", Napi::String::New(env, name != nullptr ? name : ""));
-  out.Set("formula", Napi::String::New(env, formula != nullptr ? formula : ""));
+  out.Set("name", JsString(env, name));
+  out.Set("formula", JsString(env, formula));
   out.Set("localSheetId", Napi::Number::New(env, local_sheet_id));
   return out;
 }
@@ -164,9 +164,9 @@ Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
     return out;
   }
   out.Set("status", MakeOkStatus(env));
-  out.Set("name", Napi::String::New(env, name != nullptr ? name : ""));
-  out.Set("displayName", Napi::String::New(env, display != nullptr ? display : ""));
-  out.Set("ref", Napi::String::New(env, ref != nullptr ? ref : ""));
+  out.Set("name", JsString(env, name));
+  out.Set("displayName", JsString(env, display));
+  out.Set("ref", JsString(env, ref));
   out.Set("sheetIndex", Napi::Number::New(env, static_cast<double>(sheet_index)));
   return out;
 }
@@ -186,7 +186,7 @@ Napi::Value Workbook::PassthroughAt(const Napi::CallbackInfo& info) {
     return out;
   }
   out.Set("status", MakeOkStatus(env));
-  out.Set("path", Napi::String::New(env, path != nullptr ? path : ""));
+  out.Set("path", JsString(env, path));
   return out;
 }
 

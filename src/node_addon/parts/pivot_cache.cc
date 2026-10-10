@@ -116,9 +116,9 @@ Napi::Value Workbook::PivotCacheGetWorksheetSource(const Napi::CallbackInfo& inf
   }
   out.Set("status", MakeStatus(env, rc));
   out.Set("present", Napi::Boolean::New(env, present != 0));
-  out.Set("ref", Napi::String::New(env, ref != nullptr ? ref : ""));
-  out.Set("sheet", Napi::String::New(env, sheet != nullptr ? sheet : ""));
-  out.Set("name", Napi::String::New(env, name != nullptr ? name : ""));
+  out.Set("ref", JsString(env, ref));
+  out.Set("sheet", JsString(env, sheet));
+  out.Set("name", JsString(env, name));
   return out;
 }
 

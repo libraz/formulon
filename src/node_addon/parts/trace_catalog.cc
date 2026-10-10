@@ -131,9 +131,9 @@ Napi::Value Workbook::GetExternalLinks(const Napi::CallbackInfo& info) {
     }
     Napi::Object item = Napi::Object::New(env);
     item.Set("index", Napi::Number::New(env, rec.index));
-    item.Set("relId", Napi::String::New(env, rec.rel_id != nullptr ? rec.rel_id : ""));
-    item.Set("partPath", Napi::String::New(env, rec.part_path != nullptr ? rec.part_path : ""));
-    item.Set("target", Napi::String::New(env, rec.target != nullptr ? rec.target : ""));
+    item.Set("relId", JsString(env, rec.rel_id));
+    item.Set("partPath", JsString(env, rec.part_path));
+    item.Set("target", JsString(env, rec.target));
     item.Set("targetExternal", Napi::Boolean::New(env, rec.target_external != 0));
     item.Set("kind", Napi::Number::New(env, rec.kind));
     arr.Set(static_cast<uint32_t>(emitted), item);
@@ -155,7 +155,7 @@ Napi::Value Workbook::FunctionMetadata(const Napi::CallbackInfo& info) {
     return out;
   }
   out.Set("ok", Napi::Boolean::New(env, true));
-  out.Set("name", Napi::String::New(env, md.canonical_name != nullptr ? md.canonical_name : ""));
+  out.Set("name", JsString(env, md.canonical_name));
   out.Set("minArity", Napi::Number::New(env, md.min_arity));
   // `0xFFFFFFFF` is the unbounded / unknown-arity sentinel; surface it as
   // `null` so JS callers do not mistake it for a concrete upper bound.
@@ -185,7 +185,7 @@ Napi::Value Workbook::FunctionNames(const Napi::CallbackInfo& info) {
     if (rc != 0) {
       break;
     }
-    arr.Set(static_cast<uint32_t>(i), Napi::String::New(env, name != nullptr ? name : ""));
+    arr.Set(static_cast<uint32_t>(i), JsString(env, name));
   }
   return FinishListResult(env, arr, rc);
 }
@@ -218,7 +218,7 @@ Napi::Value Workbook::LocaleFacts(const Napi::CallbackInfo& info) {
     return out;
   }
   static const char* const kDateOrders[] = {"mdy", "ymd", "dmy"};
-  const auto str = [&env](const char* s) { return Napi::String::New(env, s != nullptr ? s : ""); };
+  const auto str = [&env](const char* s) { return JsString(env, s); };
   Napi::Object facts = Napi::Object::New(env);
   facts.Set("decimalSeparator", str(f.decimal_separator));
   facts.Set("groupSeparator", str(f.group_separator));

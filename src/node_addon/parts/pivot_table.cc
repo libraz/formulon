@@ -450,13 +450,13 @@ Napi::Value Workbook::PivotFilterAt(const Napi::CallbackInfo& info) {
   }
   out.Set("status", MakeStatus(env, rc));
   out.Set("axis", Napi::Number::New(env, static_cast<int32_t>(spec.axis)));
-  out.Set("fieldName", Napi::String::New(env, spec.field_name != nullptr ? spec.field_name : ""));
+  out.Set("fieldName", JsString(env, spec.field_name));
   out.Set("type", Napi::Number::New(env, static_cast<int32_t>(spec.type)));
   out.Set("dataFieldIndex", Napi::Number::New(env, spec.data_field_index));
   out.Set("valueKind", Napi::Number::New(env, static_cast<int32_t>(spec.value_kind)));
   out.Set("valueInt", Napi::Number::New(env, spec.value_int));
   out.Set("valueDouble", Napi::Number::New(env, spec.value_double));
-  out.Set("valueText", Napi::String::New(env, spec.value_text != nullptr ? spec.value_text : ""));
+  out.Set("valueText", JsString(env, spec.value_text));
   out.Set("valueHighKind", Napi::Number::New(env, static_cast<int32_t>(spec.value_high_kind)));
   out.Set("valueHighInt", Napi::Number::New(env, spec.value_high_int));
   out.Set("valueHighDouble", Napi::Number::New(env, spec.value_high_double));

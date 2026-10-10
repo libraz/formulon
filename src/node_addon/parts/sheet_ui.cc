@@ -152,8 +152,8 @@ Napi::Value Workbook::GetComment(const Napi::CallbackInfo& info) {
     return env.Null();
   }
   Napi::Object o = Napi::Object::New(env);
-  o.Set("author", Napi::String::New(env, c.author != nullptr ? c.author : ""));
-  o.Set("text", Napi::String::New(env, c.text != nullptr ? c.text : ""));
+  o.Set("author", JsString(env, c.author));
+  o.Set("text", JsString(env, c.text));
   return o;
 }
 
@@ -171,8 +171,8 @@ Napi::Value Workbook::GetCommentResult(const Napi::CallbackInfo& info) {
     return MakeFieldResult(env, MakeErrorStatus(env, rc), "comment", env.Null());
   }
   Napi::Object comment = Napi::Object::New(env);
-  comment.Set("author", Napi::String::New(env, c.author != nullptr ? c.author : ""));
-  comment.Set("text", Napi::String::New(env, c.text != nullptr ? c.text : ""));
+  comment.Set("author", JsString(env, c.author));
+  comment.Set("text", JsString(env, c.text));
   return MakeFieldResult(env, MakeOkStatus(env), "comment", comment);
 }
 
@@ -182,8 +182,8 @@ Napi::Object CommentToJs(Napi::Env env, const fm_comment& c) {
   Napi::Object item = Napi::Object::New(env);
   item.Set("row", Napi::Number::New(env, c.row));
   item.Set("col", Napi::Number::New(env, c.col));
-  item.Set("author", Napi::String::New(env, c.author != nullptr ? c.author : ""));
-  item.Set("text", Napi::String::New(env, c.text != nullptr ? c.text : ""));
+  item.Set("author", JsString(env, c.author));
+  item.Set("text", JsString(env, c.text));
   return item;
 }
 
@@ -286,10 +286,10 @@ Napi::Object HyperlinkToJs(Napi::Env env, const fm_hyperlink& h) {
   item.Set("col", Napi::Number::New(env, h.col));
   item.Set("lastRow", Napi::Number::New(env, h.last_row));
   item.Set("lastCol", Napi::Number::New(env, h.last_col));
-  item.Set("target", Napi::String::New(env, h.target != nullptr ? h.target : ""));
-  item.Set("location", Napi::String::New(env, h.location != nullptr ? h.location : ""));
-  item.Set("display", Napi::String::New(env, h.display != nullptr ? h.display : ""));
-  item.Set("tooltip", Napi::String::New(env, h.tooltip != nullptr ? h.tooltip : ""));
+  item.Set("target", JsString(env, h.target));
+  item.Set("location", JsString(env, h.location));
+  item.Set("display", JsString(env, h.display));
+  item.Set("tooltip", JsString(env, h.tooltip));
   return item;
 }
 
@@ -337,12 +337,12 @@ Napi::Object ValidationToJs(Napi::Env env, const fm_data_validation& v) {
   item.Set("showInputMessage", Napi::Boolean::New(env, v.show_input_message != 0));
   item.Set("showErrorMessage", Napi::Boolean::New(env, v.show_error_message != 0));
   item.Set("showDropDown", Napi::Boolean::New(env, v.show_dropdown != 0));
-  item.Set("formula1", Napi::String::New(env, v.formula1 != nullptr ? v.formula1 : ""));
-  item.Set("formula2", Napi::String::New(env, v.formula2 != nullptr ? v.formula2 : ""));
-  item.Set("errorTitle", Napi::String::New(env, v.error_title != nullptr ? v.error_title : ""));
-  item.Set("errorMessage", Napi::String::New(env, v.error_message != nullptr ? v.error_message : ""));
-  item.Set("promptTitle", Napi::String::New(env, v.prompt_title != nullptr ? v.prompt_title : ""));
-  item.Set("promptMessage", Napi::String::New(env, v.prompt_message != nullptr ? v.prompt_message : ""));
+  item.Set("formula1", JsString(env, v.formula1));
+  item.Set("formula2", JsString(env, v.formula2));
+  item.Set("errorTitle", JsString(env, v.error_title));
+  item.Set("errorMessage", JsString(env, v.error_message));
+  item.Set("promptTitle", JsString(env, v.prompt_title));
+  item.Set("promptMessage", JsString(env, v.prompt_message));
   return item;
 }
 

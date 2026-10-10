@@ -85,7 +85,7 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
   view.Set("showZeros", Napi::Number::New(env, v.show_zeros));
   view.Set("rightToLeft", Napi::Number::New(env, v.right_to_left));
   view.Set("tabSelected", Napi::Number::New(env, v.tab_selected));
-  view.Set("viewMode", Napi::String::New(env, v.view_mode != nullptr ? v.view_mode : ""));
+  view.Set("viewMode", JsString(env, v.view_mode));
   return MakeFieldResult(env, MakeOkStatus(env), "view", view);
 }
 
@@ -103,11 +103,11 @@ Napi::Value Workbook::GetSheetProtection(const Napi::CallbackInfo& info) {
   }
   Napi::Object pr = Napi::Object::New(env);
   pr.Set("enabled", Napi::Number::New(env, p.enabled));
-  pr.Set("algorithmName", Napi::String::New(env, p.algorithm_name != nullptr ? p.algorithm_name : ""));
-  pr.Set("hashValue", Napi::String::New(env, p.hash_value != nullptr ? p.hash_value : ""));
-  pr.Set("saltValue", Napi::String::New(env, p.salt_value != nullptr ? p.salt_value : ""));
+  pr.Set("algorithmName", JsString(env, p.algorithm_name));
+  pr.Set("hashValue", JsString(env, p.hash_value));
+  pr.Set("saltValue", JsString(env, p.salt_value));
   pr.Set("spinCount", Napi::Number::New(env, p.spin_count));
-  pr.Set("legacyPassword", Napi::String::New(env, p.legacy_password != nullptr ? p.legacy_password : ""));
+  pr.Set("legacyPassword", JsString(env, p.legacy_password));
   pr.Set("sheet", Napi::Number::New(env, p.sheet));
   pr.Set("objects", Napi::Number::New(env, p.objects));
   pr.Set("scenarios", Napi::Number::New(env, p.scenarios));
@@ -511,8 +511,8 @@ Napi::Value Workbook::GetWidthModel(const Napi::CallbackInfo& info) {
   out.Set("paddingPt", Napi::Number::New(env, model.padding_pt));
   out.Set("normalFontSize", Napi::Number::New(env, model.normal_font_size));
   out.Set("calibrated", Napi::Boolean::New(env, model.calibrated != 0));
-  out.Set("normalFontName", Napi::String::New(env, model.normal_font_name != nullptr ? model.normal_font_name : ""));
-  out.Set("platform", Napi::String::New(env, model.platform != nullptr ? model.platform : ""));
+  out.Set("normalFontName", JsString(env, model.normal_font_name));
+  out.Set("platform", JsString(env, model.platform));
   return out;
 }
 

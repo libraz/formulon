@@ -158,8 +158,8 @@ Napi::Value Workbook::GetSheetPrintTitles(const Napi::CallbackInfo& info) {
     cols = nullptr;
   }
   result.Set("status", MakeStatus(env, rc));
-  result.Set("repeatRows", Napi::String::New(env, rows != nullptr ? rows : ""));
-  result.Set("repeatCols", Napi::String::New(env, cols != nullptr ? cols : ""));
+  result.Set("repeatRows", JsString(env, rows));
+  result.Set("repeatCols", JsString(env, cols));
   return result;
 }
 

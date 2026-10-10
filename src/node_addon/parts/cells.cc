@@ -254,7 +254,7 @@ Napi::Value Workbook::GetCellPhoneticRuns(const Napi::CallbackInfo& info) {
     entry.Set("eb", Napi::Number::New(env, run.eb));
     // Copied immediately: each read refreshes the handle's scratch, so the
     // previous run's pointer is dead by the time the next one lands.
-    entry.Set("text", Napi::String::New(env, run.text != nullptr ? run.text : ""));
+    entry.Set("text", JsString(env, run.text));
     out.Set(i, entry);
   }
   if (rc != 0) {
@@ -406,7 +406,7 @@ Napi::Object MakeDisplayResult(Napi::Env env, fm_status_t code, const char* text
   const bool ok = code == 0;
   Napi::Object out = Napi::Object::New(env);
   out.Set("status", MakeStatus(env, code));
-  out.Set("text", Napi::String::New(env, ok && text != nullptr ? text : ""));
+  out.Set("text", JsString(env, ok ? text : nullptr));
   out.Set("displayStatus", Napi::Number::New(env, ok ? display_status : 0));
   return out;
 }

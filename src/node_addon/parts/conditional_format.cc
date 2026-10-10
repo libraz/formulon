@@ -123,7 +123,7 @@ Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
       return FinishListResult(env, arr, rc);
     }
     Napi::Object item = Napi::Object::New(env);
-    item.Set("id", Napi::String::New(env, rule.id != nullptr ? rule.id : ""));
+    item.Set("id", JsString(env, rule.id));
     item.Set("type", Napi::Number::New(env, static_cast<uint32_t>(rule.type)));
     item.Set("priority", Napi::Number::New(env, rule.priority));
     item.Set("stopIfTrue", Napi::Boolean::New(env, rule.stop_if_true != 0));

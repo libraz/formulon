@@ -44,7 +44,7 @@ Napi::Object ColorSpecToJs(Napi::Env env, const fm_color_spec& spec) {
 /// `<dxf>` font projection so both surface the same field set.
 Napi::Object FontRecordToJs(Napi::Env env, const fm_font_record& f) {
   Napi::Object out = Napi::Object::New(env);
-  out.Set("name", Napi::String::New(env, f.name != nullptr ? f.name : ""));
+  out.Set("name", JsString(env, f.name));
   out.Set("size", Napi::Number::New(env, f.size));
   out.Set("colorArgb", Napi::Number::New(env, f.color_argb));
   out.Set("bold", Napi::Boolean::New(env, f.bold != 0));
@@ -334,7 +334,7 @@ Napi::Value Workbook::GetNumFmt(const Napi::CallbackInfo& info) {
                              : kBindingInvalidHandle;
   out.Set("status", MakeStatus(env, rc));
   out.Set("numFmtId", Napi::Number::New(env, rc == 0 ? num_fmt_id : 0U));
-  out.Set("formatCode", Napi::String::New(env, rc == 0 && s != nullptr ? s : ""));
+  out.Set("formatCode", JsString(env, rc == 0 ? s : nullptr));
   return out;
 }
 
@@ -365,7 +365,7 @@ Napi::Value Workbook::GetDxf(const Napi::CallbackInfo& info) {
   if (d.num_fmt_engaged != 0) {
     Napi::Object num_fmt = Napi::Object::New(env);
     num_fmt.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(d.num_fmt_id)));
-    num_fmt.Set("formatCode", Napi::String::New(env, d.num_fmt_code != nullptr ? d.num_fmt_code : ""));
+    num_fmt.Set("formatCode", JsString(env, d.num_fmt_code));
     out.Set("numFmt", num_fmt);
   }
   if (d.alignment_xml != nullptr && d.alignment_xml[0] != '\0') {
@@ -654,7 +654,7 @@ Napi::Value Workbook::GetCellStyle(const Napi::CallbackInfo& info) {
     cs = fm_cell_style_record_t{};
   }
   out.Set("status", MakeStatus(env, rc));
-  out.Set("name", Napi::String::New(env, cs.name != nullptr ? cs.name : ""));
+  out.Set("name", JsString(env, cs.name));
   out.Set("xfId", Napi::Number::New(env, cs.xf_id));
   out.Set("builtinId", Napi::Number::New(env, cs.builtin_id));
   out.Set("iLevel", Napi::Number::New(env, cs.i_level));
@@ -725,7 +725,7 @@ Napi::Value Workbook::GetTheme(const Napi::CallbackInfo& info) {
   for (uint32_t i = 0; i < 12; ++i) {
     arr.Set(i, Napi::Number::New(env, colors.argb[i]));
   }
-  const auto face = [&env](const char* s) { return Napi::String::New(env, s != nullptr ? s : ""); };
+  const auto face = [&env](const char* s) { return JsString(env, s); };
   Napi::Object fontsOut = Napi::Object::New(env);
   fontsOut.Set("majorLatin", face(fonts.major_latin));
   fontsOut.Set("majorEastAsian", face(fonts.major_east_asian));
@@ -855,7 +855,7 @@ Napi::Value Workbook::GetEffectiveStyle(const Napi::CallbackInfo& info) {
   out.Set("borders", borders);
   out.Set("locked", Napi::Boolean::New(env, es.locked != 0));
   out.Set("hidden", Napi::Boolean::New(env, es.hidden != 0));
-  out.Set("numFmtCode", Napi::String::New(env, es.num_fmt_code != nullptr ? es.num_fmt_code : ""));
+  out.Set("numFmtCode", JsString(env, es.num_fmt_code));
   return out;
 }
 

@@ -128,19 +128,19 @@ Napi::Value EvalFormula(const Napi::CallbackInfo& info) {
 Napi::Value Version(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const char* s = fm_version_string();
-  return Napi::String::New(env, s != nullptr ? s : "");
+  return JsString(env, s);
 }
 
 Napi::Value LastErrorMessage(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const char* s = fm_last_error_message();
-  return Napi::String::New(env, s != nullptr ? s : "");
+  return JsString(env, s);
 }
 
 Napi::Value LastErrorContext(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const char* s = fm_last_error_context();
-  return Napi::String::New(env, s != nullptr ? s : "");
+  return JsString(env, s);
 }
 
 Napi::Value StatusString(const Napi::CallbackInfo& info) {
@@ -150,7 +150,7 @@ Napi::Value StatusString(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const char* s = fm_status_string(static_cast<fm_status_t>(code));
-  return Napi::String::New(env, s != nullptr ? s : "");
+  return JsString(env, s);
 }
 
 Napi::Value ErrorDisplayName(const Napi::CallbackInfo& info) {
@@ -160,7 +160,7 @@ Napi::Value ErrorDisplayName(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const char* s = fm_error_display_name(static_cast<fm_error_code_t>(code));
-  return Napi::String::New(env, s != nullptr ? s : "");
+  return JsString(env, s);
 }
 
 Napi::Value SetLogMinLevel(const Napi::CallbackInfo& info) {
