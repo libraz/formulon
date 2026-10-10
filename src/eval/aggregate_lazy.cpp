@@ -215,70 +215,10 @@ bool is_nested_call_name(std::string_view name) noexcept {
 }
 
 bool ast_has_nested_call(const parser::AstNode& node) {
-  using parser::NodeKind;
-  switch (node.kind()) {
-    case NodeKind::SpillRef: {
-      const parser::AstNode* anchor = node.as_spill_ref_anchor_expr();
-      return anchor != nullptr && ast_has_nested_call(*anchor);
-    }
-    case NodeKind::UnaryOp:
-      return ast_has_nested_call(node.as_unary_operand());
-    case NodeKind::ImplicitIntersection:
-      return ast_has_nested_call(node.as_implicit_intersection_operand());
-    case NodeKind::BinaryOp:
-      return ast_has_nested_call(node.as_binary_lhs()) || ast_has_nested_call(node.as_binary_rhs());
-    case NodeKind::RangeOp:
-      return ast_has_nested_call(node.as_range_lhs()) || ast_has_nested_call(node.as_range_rhs());
-    case NodeKind::IntersectOp:
-      return ast_has_nested_call(node.as_intersect_lhs()) || ast_has_nested_call(node.as_intersect_rhs());
-    case NodeKind::UnionOp:
-      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
-        if (ast_has_nested_call(node.as_union_child(i))) {
-          return true;
-        }
-      }
-      return false;
-    case NodeKind::Call:
-      if (is_nested_call_name(node.as_call_name())) {
-        return true;
-      }
-      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
-        if (ast_has_nested_call(node.as_call_arg(i))) {
-          return true;
-        }
-      }
-      return false;
-    case NodeKind::ArrayLiteral:
-      for (std::uint32_t r = 0; r < node.as_array_rows(); ++r) {
-        for (std::uint32_t c = 0; c < node.as_array_cols(); ++c) {
-          if (ast_has_nested_call(node.as_array_element(r, c))) {
-            return true;
-          }
-        }
-      }
-      return false;
-    case NodeKind::Lambda:
-      return ast_has_nested_call(node.as_lambda_body());
-    case NodeKind::LetBinding:
-      for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
-        if (ast_has_nested_call(node.as_let_binding_expr(i))) {
-          return true;
-        }
-      }
-      return ast_has_nested_call(node.as_let_body());
-    case NodeKind::LambdaCall:
-      if (ast_has_nested_call(node.as_lambda_call_callee())) {
-        return true;
-      }
-      for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
-        if (ast_has_nested_call(node.as_lambda_call_arg(i))) {
-          return true;
-        }
-      }
-      return false;
-    default:
-      return false;  // Leaves: literals, references, names, errors.
+  if (node.kind() == parser::NodeKind::Call && is_nested_call_name(node.as_call_name())) {
+    return true;
   }
+  return parser::any_child_node(node, [](const parser::AstNode& child) { return ast_has_nested_call(child); });
 }
 
 bool text_may_hold_nested_call(std::string_view text) noexcept {
