@@ -35,10 +35,6 @@ namespace formulon::cf::helpers {
 // Literal-operand helpers.
 // ---------------------------------------------------------------------------
 
-bool icase_equal(std::string_view lhs, std::string_view rhs) {
-  return strings::case_insensitive_eq(lhs, rhs);
-}
-
 std::optional<LiteralOperand> parse_literal(const std::string& source) {
   if (source.empty()) {
     return std::nullopt;
@@ -62,13 +58,13 @@ std::optional<LiteralOperand> parse_literal(const std::string& source) {
   }
 
   // Boolean keywords (case-insensitive, matching Excel's tolerance).
-  if (icase_equal(source, "TRUE")) {
+  if (strings::case_insensitive_eq(source, "TRUE")) {
     LiteralOperand operand;
     operand.kind = LiteralOperand::Kind::Bool;
     operand.bool_value = true;
     return operand;
   }
-  if (icase_equal(source, "FALSE")) {
+  if (strings::case_insensitive_eq(source, "FALSE")) {
     LiteralOperand operand;
     operand.kind = LiteralOperand::Kind::Bool;
     operand.bool_value = false;
@@ -199,47 +195,6 @@ std::optional<LiteralOperand> cell_is_operand(const std::string& source, const C
   }
   const Value evaluated = parse_shift_evaluate(source, ctx);
   return value_to_operand(evaluated);
-}
-
-// ---------------------------------------------------------------------------
-// Substring / prefix / suffix helpers used by the text-rule family.
-// ---------------------------------------------------------------------------
-
-bool icase_contains(std::string_view haystack, std::string_view needle) {
-  if (needle.empty()) {
-    return true;
-  }
-  if (needle.size() > haystack.size()) {
-    return false;
-  }
-  const std::size_t span = haystack.size() - needle.size();
-  for (std::size_t i = 0; i <= span; ++i) {
-    bool matched = true;
-    for (std::size_t j = 0; j < needle.size(); ++j) {
-      if (strings::ascii_to_lower(haystack[i + j]) != strings::ascii_to_lower(needle[j])) {
-        matched = false;
-        break;
-      }
-    }
-    if (matched) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool icase_starts_with(std::string_view text, std::string_view prefix) {
-  if (prefix.size() > text.size()) {
-    return false;
-  }
-  return strings::case_insensitive_eq(text.substr(0, prefix.size()), prefix);
-}
-
-bool icase_ends_with(std::string_view text, std::string_view suffix) {
-  if (suffix.size() > text.size()) {
-    return false;
-  }
-  return strings::case_insensitive_eq(text.substr(text.size() - suffix.size()), suffix);
 }
 
 // ---------------------------------------------------------------------------

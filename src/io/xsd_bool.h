@@ -23,6 +23,7 @@
 #include <string_view>
 
 #include "pugixml.hpp"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace io {
@@ -39,25 +40,10 @@ inline bool parse_xsd_bool(std::string_view text, bool default_value) {
   if (text == "0") {
     return false;
   }
-  auto iequals = [](std::string_view a, std::string_view b) {
-    if (a.size() != b.size()) {
-      return false;
-    }
-    for (std::size_t i = 0; i < a.size(); ++i) {
-      char ca = a[i];
-      if (ca >= 'A' && ca <= 'Z') {
-        ca = static_cast<char>(ca - 'A' + 'a');
-      }
-      if (ca != b[i]) {
-        return false;
-      }
-    }
-    return true;
-  };
-  if (iequals(text, "true")) {
+  if (strings::case_insensitive_eq(text, "true")) {
     return true;
   }
-  if (iequals(text, "false")) {
+  if (strings::case_insensitive_eq(text, "false")) {
     return false;
   }
   return default_value;

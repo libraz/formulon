@@ -17,6 +17,7 @@
 #include "cf/scale_evaluator.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon::cf {
@@ -149,13 +150,13 @@ bool match_text_rule(const CFRule& rule, const Value& cell_value) {
   const std::string_view needle = *rule.text;
   switch (rule.type) {
     case RuleType::ContainsText:
-      return helpers::icase_contains(cell_text, needle);
+      return strings::case_insensitive_contains(cell_text, needle);
     case RuleType::NotContainsText:
-      return !helpers::icase_contains(cell_text, needle);
+      return !strings::case_insensitive_contains(cell_text, needle);
     case RuleType::BeginsWith:
-      return helpers::icase_starts_with(cell_text, needle);
+      return strings::case_insensitive_starts_with(cell_text, needle);
     case RuleType::EndsWith:
-      return helpers::icase_ends_with(cell_text, needle);
+      return strings::case_insensitive_ends_with(cell_text, needle);
     default:
       return false;
   }

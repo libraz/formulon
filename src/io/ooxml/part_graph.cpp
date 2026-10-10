@@ -10,6 +10,7 @@
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "unknown_relationship.h"
+#include "utils/strings.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -68,7 +69,7 @@ bool referenced(const Workbook& wb, const std::vector<PassthroughPart>& parts, c
     }
   }
   for (const PassthroughPart& part : parts) {
-    if (part.path.size() < 5 || part.path.compare(part.path.size() - 5, 5, ".rels") != 0) {
+    if (!strings::ends_with(part.path, ".rels")) {
       continue;
     }
     auto rels = parse_part_rels(part.bytes, dir_of(dir_of(part.path)));

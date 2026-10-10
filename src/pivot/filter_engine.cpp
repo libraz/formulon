@@ -145,7 +145,7 @@ bool label_filter_passes(const PivotFilter& f, std::string_view label) {
       if (needle.empty()) {
         return true;
       }
-      return label.size() >= needle.size() && label.compare(0, needle.size(), needle) == 0;
+      return strings::starts_with(label, needle);
     }
     case FilterType::ValueTop10:
     case FilterType::ValueGreaterThan:
@@ -178,14 +178,6 @@ int CaseInsensitiveCompare(std::string_view lhs, std::string_view rhs) {
   return lhs.size() < rhs.size() ? -1 : 1;
 }
 
-bool CaseInsensitiveBeginsWith(std::string_view label, std::string_view value) {
-  return label.size() >= value.size() && strings::case_insensitive_eq(label.substr(0, value.size()), value);
-}
-
-bool CaseInsensitiveEndsWith(std::string_view label, std::string_view value) {
-  return label.size() >= value.size() && strings::case_insensitive_eq(label.substr(label.size() - value.size()), value);
-}
-
 // Evaluates one decoded `<filters>` caption entry against `label`.
 //
 // The ordering comparisons treat the label as text even when it renders
@@ -202,13 +194,13 @@ bool caption_filter_passes(const AuthoredCaptionFilter& f, std::string_view labe
     case CaptionPredicate::NotEqual:
       return !strings::case_insensitive_eq(label, value);
     case CaptionPredicate::BeginsWith:
-      return CaseInsensitiveBeginsWith(label, value);
+      return strings::case_insensitive_starts_with(label, value);
     case CaptionPredicate::NotBeginsWith:
-      return !CaseInsensitiveBeginsWith(label, value);
+      return !strings::case_insensitive_starts_with(label, value);
     case CaptionPredicate::EndsWith:
-      return CaseInsensitiveEndsWith(label, value);
+      return strings::case_insensitive_ends_with(label, value);
     case CaptionPredicate::NotEndsWith:
-      return !CaseInsensitiveEndsWith(label, value);
+      return !strings::case_insensitive_ends_with(label, value);
     case CaptionPredicate::Contains:
       return strings::case_insensitive_contains(label, value);
     case CaptionPredicate::NotContains:

@@ -28,6 +28,7 @@
 #include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "table.h"
+#include "utils/strings.h"
 #include "utils/structured_log.h"
 #include "workbook.h"
 
@@ -178,10 +179,6 @@ bool HasRetainedPart(const Workbook& wb, std::string_view path) {
   return false;
 }
 
-bool EndsWith(std::string_view text, std::string_view suffix) {
-  return text.size() >= suffix.size() && text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
-}
-
 /// Plans every external link in index order. A loaded body the model still
 /// matches is kept; an OLE / DDE link without one cannot be rebuilt and is
 /// not written; every other link gets a generated body, at its own `.xml`
@@ -207,7 +204,7 @@ void PlanExternalLinks(const Workbook& wb, std::size_t first_rid, EmissionPlan& 
     if (!rec.body_stale && HasRetainedPart(wb, rec.part_path)) {
       entry.written = true;
     } else if (rec.kind != ExternalLinkRecord::Kind::kOleLink && rec.kind != ExternalLinkRecord::Kind::kDdeLink) {
-      if (!EndsWith(rec.part_path, ".xml")) {
+      if (!strings::ends_with(rec.part_path, ".xml")) {
         while (used_paths.count(NumberedPartPath("xl/externalLinks/externalLink", next_part_id, ".xml")) != 0U) {
           ++next_part_id;
         }

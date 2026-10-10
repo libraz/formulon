@@ -212,6 +212,15 @@ inline bool case_insensitive_starts_with(std::string_view haystack, std::string_
   return case_insensitive_eq(haystack.substr(0, prefix.size()), prefix);
 }
 
+/// Returns true iff `haystack` ends with `suffix`, comparing ASCII letters
+/// case-insensitively.
+inline bool case_insensitive_ends_with(std::string_view haystack, std::string_view suffix) noexcept {
+  if (suffix.size() > haystack.size()) {
+    return false;
+  }
+  return case_insensitive_eq(haystack.substr(haystack.size() - suffix.size()), suffix);
+}
+
 /// Returns true iff `haystack` ends with `suffix`.
 inline bool ends_with(std::string_view haystack, std::string_view suffix) noexcept {
   if (suffix.size() > haystack.size()) {

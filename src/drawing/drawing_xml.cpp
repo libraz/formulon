@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "io/xml_utils.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace {
@@ -33,10 +34,8 @@ DrawingObjectKind classify(const pugi::xml_node& content) {
   }
   if (name == "graphicFrame") {
     const std::string_view uri = child_local(child_local(content, "graphic"), "graphicData").attribute("uri").value();
-    const auto ends_with = [uri](std::string_view suffix) {
-      return uri.size() >= suffix.size() && uri.substr(uri.size() - suffix.size()) == suffix;
-    };
-    return ends_with("/chart") || ends_with("/chartex") ? DrawingObjectKind::kChart : DrawingObjectKind::kGraphicFrame;
+    return strings::ends_with(uri, "/chart") || strings::ends_with(uri, "/chartex") ? DrawingObjectKind::kChart
+                                                                                    : DrawingObjectKind::kGraphicFrame;
   }
   return DrawingObjectKind::kOther;
 }
