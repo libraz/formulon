@@ -11,12 +11,36 @@
 #define FORMULON_EVAL_COLLATED_WILDCARD_H_
 
 #include <cstddef>
+#include <memory>
 #include <string_view>
 
 #include "excel_profile.h"
 
 namespace formulon {
 namespace eval {
+
+/// A pattern parsed once, with the per-code-point collation classes kept
+/// across calls, for matching many texts against one pattern. Not
+/// thread-safe: the class cache and scratch buffers mutate under `const`.
+class CollatedWildcard {
+ public:
+  CollatedWildcard(std::string_view pattern, ExcelProfile profile);
+  ~CollatedWildcard();
+  CollatedWildcard(CollatedWildcard&&) noexcept;
+  CollatedWildcard& operator=(CollatedWildcard&&) noexcept;
+  CollatedWildcard(const CollatedWildcard&) = delete;
+  CollatedWildcard& operator=(const CollatedWildcard&) = delete;
+
+  /// Same contract as `collated_wildcard_match`.
+  bool match(std::string_view text) const;
+
+  /// Same contract as `collated_wildcard_find`.
+  std::size_t find(std::string_view text, std::size_t start_byte, bool sbcs_question) const;
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
+};
 
 /// Whether `pattern` matches the whole of `text` under `profile`.
 bool collated_wildcard_match(std::string_view pattern, std::string_view text, ExcelProfile profile);

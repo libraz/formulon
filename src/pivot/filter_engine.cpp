@@ -132,22 +132,28 @@ bool label_date_filter_passes(const PivotFilter& f, const Value& v, bool date190
 }
 
 // Whole-label wildcard match under the profile's `=` character equivalence.
-bool caption_wildcard_matches(std::string_view pattern, std::string_view label) {
+// The matcher is built on first use, keeping the pattern parse and the
+// collation classes across the labels of one filter.
+bool caption_wildcard_matches(std::optional<eval::CollatedWildcard>& matcher, std::string_view pattern,
+                              std::string_view label) {
   assert(eval::eval_profile_scope_active());
-  return eval::collated_wildcard_match(pattern, label, eval::current_eval_profile());
+  if (!matcher) {
+    matcher.emplace(pattern, eval::current_eval_profile());
+  }
+  return matcher->match(label);
 }
 
 // Evaluates a single label-flavoured filter against `label`.
 // Value-filter types short-circuit to true: those are applied
 // post-aggregation.
-bool label_filter_passes(const PivotFilter& f, std::string_view label) {
+bool label_filter_passes(const PivotFilter& f, std::optional<eval::CollatedWildcard>& matcher, std::string_view label) {
   switch (f.type) {
     case FilterType::LabelContains:
-      return caption_wildcard_matches(*caption_wildcard_pattern(CaptionPredicate::Contains, filter_string_value(f)),
-                                      label);
+      return caption_wildcard_matches(
+          matcher, *caption_wildcard_pattern(CaptionPredicate::Contains, filter_string_value(f)), label);
     case FilterType::LabelBeginsWith:
-      return caption_wildcard_matches(*caption_wildcard_pattern(CaptionPredicate::BeginsWith, filter_string_value(f)),
-                                      label);
+      return caption_wildcard_matches(
+          matcher, *caption_wildcard_pattern(CaptionPredicate::BeginsWith, filter_string_value(f)), label);
     case FilterType::ValueTop10:
     case FilterType::ValueGreaterThan:
     case FilterType::ValueBetween:
@@ -173,7 +179,8 @@ int caption_collate(std::string_view lhs, std::string_view rhs) {
 // The ordering comparisons treat the label as text even when it renders
 // as digits, which is what a caption filter means: it filters what the
 // grid draws, not the underlying cache value.
-bool caption_filter_passes(const AuthoredCaptionFilter& f, std::string_view label) {
+bool caption_filter_passes(const AuthoredCaptionFilter& f, std::optional<eval::CollatedWildcard>& matcher,
+                           std::string_view label) {
   const std::string_view value = f.value;
   const auto between = [&]() {
     return caption_collate(label, value) >= 0 && caption_collate(label, f.value_high) <= 0;
@@ -186,11 +193,11 @@ bool caption_filter_passes(const AuthoredCaptionFilter& f, std::string_view labe
     case CaptionPredicate::BeginsWith:
     case CaptionPredicate::EndsWith:
     case CaptionPredicate::Contains:
-      return caption_wildcard_matches(value, label);
+      return caption_wildcard_matches(matcher, value, label);
     case CaptionPredicate::NotBeginsWith:
     case CaptionPredicate::NotEndsWith:
     case CaptionPredicate::NotContains:
-      return !caption_wildcard_matches(value, label);
+      return !caption_wildcard_matches(matcher, value, label);
     case CaptionPredicate::GreaterThan:
       return caption_collate(label, value) > 0;
     case CaptionPredicate::GreaterThanOrEqual:
@@ -300,8 +307,9 @@ PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotC
     if (!fi_or) {
       continue;
     }
-    label_filters_.push_back(ResolvedFilter{*fi_or, &f});
+    label_filters_.push_back(ResolvedFilter{*fi_or, &f, std::nullopt});
   }
+  caption_matchers_.resize(table.authored_caption_filters().size());
   // A relative period resolves to an ordinary inclusive window once it has a
   // clock reading, and the reading is taken once: an evaluation spanning
   // midnight would otherwise filter its early records against one day and its
@@ -366,7 +374,8 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
       }
       continue;
     }
-    if (!with_display_string(v, [&](std::string_view label) { return label_filter_passes(f, label); })) {
+    if (!with_display_string(v,
+                             [&](std::string_view label) { return label_filter_passes(f, resolved.matcher, label); })) {
       return false;
     }
   }
@@ -375,12 +384,15 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
   // `<pivotFields>` parallel to the bound cache's fields, so it indexes
   // `table.fields()` directly instead of resolving through a name. An
   // index past the end is a malformed definition and filters nothing.
-  for (const AuthoredCaptionFilter& f : table.authored_caption_filters()) {
+  const auto& caption_filters = table.authored_caption_filters();
+  for (std::size_t ci = 0; ci < caption_filters.size(); ++ci) {
+    const AuthoredCaptionFilter& f = caption_filters[ci];
     if (f.field_index >= table.fields().size()) {
       continue;
     }
     const Value v = cell_value(cache, record, f.field_index);
-    if (!with_display_string(v, [&](std::string_view label) { return caption_filter_passes(f, label); })) {
+    if (!with_display_string(
+            v, [&](std::string_view label) { return caption_filter_passes(f, caption_matchers_[ci], label); })) {
       return false;
     }
   }

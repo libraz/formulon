@@ -25,6 +25,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "eval/collated_wildcard.h"
 #include "pivot/hierarchy_builder.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
@@ -134,6 +135,9 @@ class PreparedRecordFilter {
   struct ResolvedFilter {
     std::size_t field_index = 0;
     const PivotFilter* filter = nullptr;
+    /// Caption matcher, built on the first label; `passes` is const, so the
+    /// cache mutates under it and the filter is single-threaded.
+    mutable std::optional<eval::CollatedWildcard> matcher;
   };
 
   /// A relative-period entry with its window already resolved against the
@@ -164,6 +168,8 @@ class PreparedRecordFilter {
   std::deque<std::string> hidden_labels_;
   std::vector<HiddenItems> hidden_items_;
   std::vector<ResolvedFilter> label_filters_;
+  /// One lazily built matcher per authored caption entry, same index.
+  mutable std::vector<std::optional<eval::CollatedWildcard>> caption_matchers_;
   std::vector<ResolvedPeriod> period_windows_;
   std::vector<ResolvedRecurring> recurring_months_;
 };

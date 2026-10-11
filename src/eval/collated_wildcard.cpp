@@ -1,6 +1,7 @@
 #include "eval/collated_wildcard.h"
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -37,20 +38,19 @@ class CharClasses {
   explicit CharClasses(ExcelProfile profile) : profile_(profile) {}
 
   std::uint32_t id_of(std::uint32_t cp) {
-    std::string utf8 = encode_utf8_codepoint(cp);
-    const auto cached = by_char_.find(utf8);
+    const auto cached = by_char_.find(cp);
     if (cached != by_char_.end()) {
       return cached->second;
     }
-    const std::string key = collation_key(utf8, profile_, CollationStrength::kCompare);
+    const std::string key = collation_key(encode_utf8_codepoint(cp), profile_, CollationStrength::kCompare);
     const auto inserted = by_key_.emplace(key, static_cast<std::uint32_t>(by_key_.size()));
-    by_char_.emplace(std::move(utf8), inserted.first->second);
+    by_char_.emplace(cp, inserted.first->second);
     return inserted.first->second;
   }
 
  private:
   ExcelProfile profile_;
-  std::unordered_map<std::string, std::uint32_t> by_char_;
+  std::unordered_map<std::uint32_t, std::uint32_t> by_char_;
   std::unordered_map<std::string, std::uint32_t> by_key_;
 };
 
@@ -79,15 +79,14 @@ std::vector<PatternItem> parse_pattern(std::string_view pattern, CharClasses& cl
   return out;
 }
 
-std::vector<TextToken> tokenize(std::string_view text, std::size_t start_byte, CharClasses& classes) {
-  std::vector<TextToken> out;
+void tokenize(std::string_view text, std::size_t start_byte, CharClasses& classes, std::vector<TextToken>& out) {
+  out.clear();
   for (std::size_t i = start_byte; i < text.size();) {
     std::size_t step = 0;
     const std::uint32_t cp = decode_utf8_step(text, i, &step);
     out.push_back({classes.id_of(cp), cp, i});
     i += step;
   }
-  return out;
 }
 
 // Whether `pattern` matches `text` from `start`: a prefix of it, or under
@@ -128,23 +127,45 @@ bool match_at(const std::vector<PatternItem>& pattern, const std::vector<TextTok
 
 }  // namespace
 
+struct CollatedWildcard::Impl {
+  Impl(std::string_view pattern, ExcelProfile profile) : classes(profile), items(parse_pattern(pattern, classes)) {}
+
+  CharClasses classes;
+  std::vector<PatternItem> items;
+  std::vector<TextToken> tokens;  // scratch reused across calls
+};
+
+CollatedWildcard::CollatedWildcard(std::string_view pattern, ExcelProfile profile)
+    : impl_(std::make_unique<Impl>(pattern, profile)) {}
+
+CollatedWildcard::~CollatedWildcard() = default;
+CollatedWildcard::CollatedWildcard(CollatedWildcard&&) noexcept = default;
+CollatedWildcard& CollatedWildcard::operator=(CollatedWildcard&&) noexcept = default;
+
+bool CollatedWildcard::match(std::string_view text) const {
+  Impl& m = *impl_;
+  tokenize(text, 0, m.classes, m.tokens);
+  return match_at(m.items, m.tokens, 0, /*sbcs_question=*/false, /*whole=*/true);
+}
+
+std::size_t CollatedWildcard::find(std::string_view text, std::size_t start_byte, bool sbcs_question) const {
+  Impl& m = *impl_;
+  tokenize(text, start_byte, m.classes, m.tokens);
+  for (std::size_t start = 0; start <= m.tokens.size(); ++start) {
+    if (match_at(m.items, m.tokens, start, sbcs_question, /*whole=*/false)) {
+      return start < m.tokens.size() ? m.tokens[start].byte : text.size();
+    }
+  }
+  return std::string_view::npos;
+}
+
 bool collated_wildcard_match(std::string_view pattern, std::string_view text, ExcelProfile profile) {
-  CharClasses classes(profile);
-  const std::vector<PatternItem> items = parse_pattern(pattern, classes);
-  return match_at(items, tokenize(text, 0, classes), 0, /*sbcs_question=*/false, /*whole=*/true);
+  return CollatedWildcard(pattern, profile).match(text);
 }
 
 std::size_t collated_wildcard_find(std::string_view pattern, std::string_view text, std::size_t start_byte,
                                    ExcelProfile profile, bool sbcs_question) {
-  CharClasses classes(profile);
-  const std::vector<PatternItem> items = parse_pattern(pattern, classes);
-  const std::vector<TextToken> tokens = tokenize(text, start_byte, classes);
-  for (std::size_t start = 0; start <= tokens.size(); ++start) {
-    if (match_at(items, tokens, start, sbcs_question, /*whole=*/false)) {
-      return start < tokens.size() ? tokens[start].byte : text.size();
-    }
-  }
-  return std::string_view::npos;
+  return CollatedWildcard(pattern, profile).find(text, start_byte, sbcs_question);
 }
 
 }  // namespace eval
