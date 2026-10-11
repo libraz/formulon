@@ -6,6 +6,7 @@
 //     indices by key.
 //   * COUNTIF shape: build the criterion key once, then compare every row's
 //     compare-strength key against it.
+//   * Classify shape: dense dynamic-strength class ids for every row.
 // Rows mix kana, ideographs, full-width and ASCII text so both the ASCII fast
 // path and the general key path are exercised.
 
@@ -23,7 +24,9 @@
 #include <vector>
 
 #include "eval/collation.h"
+#include "eval/dynamic_array/common.h"
 #include "excel_profile.h"
+#include "value.h"
 
 namespace {
 
@@ -77,6 +80,21 @@ void CountifScenario(ankerl::nanobench::Bench& bench, const char* name, const st
   });
 }
 
+void ClassifyScenario(ankerl::nanobench::Bench& bench, const char* name, const std::vector<std::string>& rows,
+                      formulon::ExcelProfile profile) {
+  std::vector<formulon::Value> values;
+  values.reserve(rows.size());
+  for (const std::string& r : rows) {
+    values.push_back(formulon::Value::text(r));
+  }
+  std::vector<std::uint32_t> ids(values.size());
+  bench.run(name, [&]() {
+    const std::uint32_t classes = formulon::eval::dynamic_array::collation_classes(
+        values.data(), values.size(), profile, formulon::eval::CollationStrength::kDynamic, ids.data());
+    ankerl::nanobench::doNotOptimizeAway(classes);
+  });
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -103,6 +121,8 @@ int main(int argc, char* argv[]) {
   SortScenario(bench, "SORT 100k rows zh_CN", rows, zh);
   CountifScenario(bench, "COUNTIF 100k rows ja_JP", rows, ja);
   CountifScenario(bench, "COUNTIF 100k rows zh_CN", rows, zh);
+  ClassifyScenario(bench, "CLASSIFY 100k rows ja_JP", rows, ja);
+  ClassifyScenario(bench, "CLASSIFY 100k rows zh_CN", rows, zh);
 
   if (!json_path.empty()) {
     std::ofstream out(json_path);

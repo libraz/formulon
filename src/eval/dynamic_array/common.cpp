@@ -2,11 +2,13 @@
 #include "eval/dynamic_array/common.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "eval/coerce.h"
@@ -141,7 +143,7 @@ namespace {
 
 // Appends `v`'s UNIQUE identity to `out`: a kind tag, then a fixed-width or
 // length-prefixed payload, so concatenated cell keys stay unambiguous.
-bool append_unique_cell_key(const Value& v, ExcelProfile profile, std::string* out) {
+bool append_unique_cell_key(const Value& v, ExcelProfile profile, CollationStrength strength, std::string* out) {
   const auto append_bytes = [out](const void* data, std::size_t n) { out->append(static_cast<const char*>(data), n); };
   out->push_back(static_cast<char>(v.kind()));
   switch (v.kind()) {
@@ -161,7 +163,7 @@ bool append_unique_cell_key(const Value& v, ExcelProfile profile, std::string* o
       return true;
     }
     case ValueKind::Text: {
-      const std::string key = collation_key(v.as_text(), profile, CollationStrength::kDynamic);
+      const std::string key = collation_key(v.as_text(), profile, strength);
       const auto size = static_cast<std::uint64_t>(key.size());
       append_bytes(&size, sizeof(size));
       out->append(key);
@@ -183,7 +185,7 @@ bool unique_lane_key(const ArrayValue& arr, std::uint32_t lane, bool by_col, std
   for (std::uint32_t k = 0; k < n; ++k) {
     const std::size_t index =
         by_col ? static_cast<std::size_t>(k) * arr.cols + lane : static_cast<std::size_t>(lane) * arr.cols + k;
-    if (!append_unique_cell_key(arr.cells[index], profile, out)) {
+    if (!append_unique_cell_key(arr.cells[index], profile, CollationStrength::kDynamic, out)) {
       return false;
     }
   }
@@ -278,6 +280,48 @@ bool sort_lane_less_keyed(const Value& key_a, const std::string* text_key_a, con
 
 bool sort_lane_less(const Value& key_a, const Value& key_b, bool descending) {
   return sort_lane_less_keyed(key_a, nullptr, key_b, nullptr, descending);
+}
+
+std::uint32_t collation_classes(const Value* values, std::size_t count, ExcelProfile profile,
+                                CollationStrength strength, std::uint32_t* out_ids) {
+  if (count == 0) {
+    return 0;
+  }
+  // Text keys follow the kind tag and the 8-byte length in the typed key.
+  constexpr std::size_t kTextKeyOffset = 1 + sizeof(std::uint64_t);
+  std::unordered_map<std::string, std::uint32_t> provisional;
+  std::vector<std::uint32_t> value_class(count);
+  std::vector<const Value*> reps;
+  std::vector<std::string> text_keys;
+  std::string typed;
+  for (std::size_t i = 0; i < count; ++i) {
+    typed.clear();
+    const bool ok = append_unique_cell_key(values[i], profile, strength, &typed);
+    assert(ok);
+    (void)ok;
+    const auto inserted = provisional.emplace(typed, static_cast<std::uint32_t>(reps.size()));
+    if (inserted.second) {
+      reps.push_back(&values[i]);
+      text_keys.push_back(values[i].is_text() ? typed.substr(kTextKeyOffset) : std::string());
+    }
+    value_class[i] = inserted.first->second;
+  }
+
+  std::vector<std::uint32_t> order(reps.size());
+  for (std::uint32_t k = 0; k < order.size(); ++k) {
+    order[k] = k;
+  }
+  std::sort(order.begin(), order.end(), [&](std::uint32_t a, std::uint32_t b) {
+    return sort_cell_less_keyed(*reps[a], *reps[b], &text_keys[a], &text_keys[b]);
+  });
+  std::vector<std::uint32_t> final_id(reps.size());
+  for (std::uint32_t rank = 0; rank < order.size(); ++rank) {
+    final_id[order[rank]] = rank;
+  }
+  for (std::size_t i = 0; i < count; ++i) {
+    out_ids[i] = final_id[value_class[i]];
+  }
+  return static_cast<std::uint32_t>(reps.size());
 }
 
 bool resolve_sort_order_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,

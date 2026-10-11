@@ -19,12 +19,15 @@
 #ifndef FORMULON_EVAL_DYNAMIC_ARRAY_COMMON_H_
 #define FORMULON_EVAL_DYNAMIC_ARRAY_COMMON_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "eval/array_alloc.h"
+#include "eval/collation.h"
+#include "excel_profile.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -116,6 +119,16 @@ bool sort_lane_less_keyed(const Value& key_a, const std::string* text_key_a, con
 /// Dynamic-array text order of the current eval profile. Returns `true` iff
 /// `a` sorts strictly before `b`.
 bool ascii_ci_less(std::string_view a, std::string_view b);
+
+/// Classifies `count` values into equivalence classes and writes one id per
+/// value to `out_ids`. Ids are dense from 0 in ascending SORT order (number <
+/// text < bool < error by code < blank); two values share an id iff they have
+/// the same kind and equal value, text by the `strength` collation key of
+/// `profile` (`-0` equals `0`). Preconditions, asserted rather than checked:
+/// kinds are Blank / Number / Bool / Text / Error and numbers are finite.
+/// Returns the class count; `count == 0` returns 0 and leaves `out_ids` alone.
+std::uint32_t collation_classes(const Value* values, std::size_t count, ExcelProfile profile,
+                                CollationStrength strength, std::uint32_t* out_ids);
 
 /// Resolve a SORT / SORTBY order argument: `1` -> ascending,
 /// `-1` -> descending, anything else -> `#VALUE!`. Returns `true` and
