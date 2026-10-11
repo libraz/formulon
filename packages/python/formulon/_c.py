@@ -382,6 +382,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_clear_pinned_now",
     "fm_workbook_create",
     "fm_workbook_create_empty",
+    "fm_workbook_create_for_profile",
     "fm_workbook_defined_name_at",
     "fm_workbook_delete_cols",
     "fm_workbook_delete_rows",
@@ -508,12 +509,15 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_set_text",
     "fm_workbook_set_theme_colors",
     "fm_workbook_set_theme_fonts",
+    "fm_workbook_set_theme_script_font",
     "fm_workbook_sheet_name",
     "fm_workbook_spill_info",
     "fm_workbook_table_at",
     "fm_workbook_table_create",
     "fm_workbook_table_remove",
     "fm_workbook_table_update",
+    "fm_workbook_theme_script_font_at",
+    "fm_workbook_theme_script_font_count",
 )
 _STATUS_RETURNING_EXPORTS = frozenset(_STATUS_RETURNING_EXPORT_NAMES)
 

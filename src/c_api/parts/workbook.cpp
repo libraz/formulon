@@ -129,6 +129,23 @@ extern "C" fm_status_t fm_workbook_create(fm_workbook_t** out) {
   return create_handle(out, &formulon::Workbook::create, "fm_workbook_create: out is NULL");
 }
 
+extern "C" fm_status_t fm_workbook_create_for_profile(const char* profile_id, fm_workbook_t** out) {
+  clear_last_error();
+  if (profile_id == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_create_for_profile: NULL argument");
+  }
+  formulon::ExcelProfile profile;
+  if (!formulon::parse_excel_profile_id(profile_id, &profile)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_create_for_profile: unknown profile");
+  }
+  auto handle = std::unique_ptr<fm_workbook_t>(new fm_workbook_t{});
+  handle->wb.emplace(formulon::Workbook::create_for_profile(profile));
+  *out = handle.release();
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_create_empty(fm_workbook_t** out) {
   return create_handle(out, &formulon::Workbook::create_empty, "fm_workbook_create_empty: out is NULL");
 }

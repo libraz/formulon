@@ -14,6 +14,7 @@ from formulon import (
     FontRecord,
     FormulonError,
     ThemeFonts,
+    ThemeScriptFont,
     ThemeSource,
     Workbook,
 )
@@ -138,3 +139,55 @@ class NamedStyleTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CreateForProfileTests(unittest.TestCase):
+    def test_mac_ja_jp_defaults(self) -> None:
+        with Workbook.create_for_profile("mac-365-ja_JP") as wb:
+            self.assertEqual(wb.excel_profile_id(), "mac-365-ja_JP")
+            body = wb.get_font(0)
+            self.assertEqual(body.name, "游ゴシック")
+            self.assertEqual(body.size, 12.0)
+            self.assertTrue(body.has_charset)
+            self.assertEqual(body.charset, 128)
+            self.assertEqual(body.scheme, 2)
+            self.assertEqual(wb.get_font(1).size, 6.0)
+
+    def test_unknown_profile_raises(self) -> None:
+        with self.assertRaises(FormulonError):
+            Workbook.create_for_profile("mac-365-xx_XX")
+
+
+class ThemeScriptFontTests(unittest.TestCase):
+    def test_default_theme_reports_47_scripts(self) -> None:
+        with Workbook.create_for_profile("mac-365-ja_JP") as wb:
+            theme = wb.get_theme()
+        self.assertEqual(len(theme.major_scripts), 47)
+        self.assertIsInstance(theme.major_scripts[0], ThemeScriptFont)
+        self.assertEqual(len(theme.minor_scripts), 47)
+        minor = {s.script: s.typeface for s in theme.minor_scripts}
+        self.assertEqual(minor["Jpan"], "游ゴシック")
+        self.assertEqual(minor["Hang"], "맑은 고딕")
+
+    def test_set_script_font_roundtrip(self) -> None:
+        with Workbook.create_for_profile("mac-365-en_US") as wb:
+            before = {s.script: s.typeface for s in wb.get_theme().minor_scripts}
+            wb.set_theme_script_font(False, "Hang", "Test Face")
+            data = wb.save()
+        with Workbook.load(data) as wb2:
+            theme = wb2.get_theme()
+        self.assertEqual(len(theme.minor_scripts), 47)
+        after = {s.script: s.typeface for s in theme.minor_scripts}
+        self.assertEqual(after.pop("Hang"), "Test Face")
+        before.pop("Hang")
+        self.assertEqual(after, before)
+        self.assertEqual(
+            theme.major_scripts[0], ThemeScriptFont(theme.major_scripts[0].script, theme.major_scripts[0].typeface)
+        )
+
+    def test_invalid_script_raises(self) -> None:
+        with Workbook.create_default() as wb:
+            with self.assertRaises(FormulonError):
+                wb.set_theme_script_font(True, "Jp", "Face")
+            with self.assertRaises(FormulonError):
+                wb.set_theme_script_font(True, "Jpan", "")

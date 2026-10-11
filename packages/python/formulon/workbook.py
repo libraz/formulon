@@ -116,6 +116,7 @@ __all__ = [
     "Table",
     "Theme",
     "ThemeFonts",
+    "ThemeScriptFont",
     "ThemeSource",
     "Value",
     "ValueKind",
@@ -1933,12 +1934,30 @@ class ThemeFonts:
 
 
 @dataclass(frozen=True)
+class ThemeScriptFont:
+    """One ``a:font`` entry of a theme font set: an ISO 15924 ``script`` code (``Jpan``) and its ``typeface``."""
+
+    script: str
+    typeface: str
+
+
+@dataclass(frozen=True)
 class Theme:
-    """The theme read back: ``colors`` are 12 ``0xFFRRGGBB`` values in ``a:clrScheme`` order."""
+    """The theme read back: ``colors`` are 12 ``0xFFRRGGBB`` values in ``a:clrScheme`` order.
+
+    ``major_scripts`` / ``minor_scripts`` hold the per-script typefaces in the
+    theme part's file order (the default Office theme's 47 scripts when the
+    part is absent). To pick the face for a font whose ``scheme`` is major or
+    minor, choose the script from the font's ``charset``: 128 -> ``Jpan``,
+    129 -> ``Hang``, 134 -> ``Hans``, 136 -> ``Hant``, 222 -> ``Thai``,
+    anything else -> the latin face in ``fonts``.
+    """
 
     source: ThemeSource
     colors: List[int]
     fonts: ThemeFonts
+    major_scripts: Tuple[ThemeScriptFont, ...] = ()
+    minor_scripts: Tuple[ThemeScriptFont, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -2564,6 +2583,34 @@ class Workbook:
             _check(status, "fm_workbook_create")
             wb._handle = LIB.read_u32(out_ptr)
         finally:
+            LIB.free(out_ptr)
+        return wb
+
+    @classmethod
+    def create_for_profile(cls, profile_id: str) -> "Workbook":
+        """Build a new workbook with the defaults of an Excel profile.
+
+        ``profile_id`` has the form ``{mac,win}-365-<locale>`` (see
+        :meth:`set_excel_profile_id`). The workbook carries that profile as
+        its :meth:`excel_profile_id` and takes the profile's locale defaults:
+        body font (name, charset, minor theme scheme), phonetic font (font 1,
+        ja/ko/zh only), Normal style name, vertical alignment, first sheet
+        name, row height, margins and phonetic settings. ``mac-*`` values are
+        measured; ``win-*`` ids are estimates (body size 11, no row height or
+        base column width set). Unlike :meth:`create_default` no theme part is
+        written, so the workbook reads the default Office theme. Changing
+        font 0 later (:meth:`set_default_font`) leaves font 1 untouched.
+        Unknown ids raise ``FormulonError``.
+        """
+        wb = cls()
+        pid_ptr, _ = LIB.alloc_utf8(profile_id)
+        out_ptr = _alloc_out_ptr()
+        try:
+            status = LIB.fm_workbook_create_for_profile(pid_ptr, out_ptr)
+            _check(status, "fm_workbook_create_for_profile")
+            wb._handle = LIB.read_u32(out_ptr)
+        finally:
+            LIB.free(pid_ptr)
             LIB.free(out_ptr)
         return wb
 
@@ -6823,11 +6870,44 @@ class Workbook:
                 minor_latin=LIB.read_cstr(f["minor_latin"]),
                 minor_east_asian=LIB.read_cstr(f["minor_east_asian"]),
             )
-            return Theme(source=ThemeSource(source), colors=colors, fonts=fonts)
+            return Theme(
+                source=ThemeSource(source),
+                colors=colors,
+                fonts=fonts,
+                major_scripts=self._read_theme_script_fonts(h, True),
+                minor_scripts=self._read_theme_script_fonts(h, False),
+            )
         finally:
             LIB.free(colors_ptr)
             LIB.free(fonts_ptr)
             LIB.free(source_ptr)
+
+    @staticmethod
+    def _read_theme_script_fonts(h: int, major: bool) -> Tuple[ThemeScriptFont, ...]:
+        """Read one theme font set; each pair is decoded before the next call (read-scratch strings)."""
+        flag = 1 if major else 0
+        count = _read_count(LIB.fm_workbook_theme_script_font_count, h, _sint(flag, "major"))
+        script_out = _alloc_out_ptr()
+        face_out = _alloc_out_ptr()
+        try:
+            result: List[ThemeScriptFont] = []
+            for idx in range(count):
+                _check(
+                    LIB.fm_workbook_theme_script_font_at(
+                        h, _sint(flag, "major"), _uint(idx, "idx"), script_out, face_out
+                    ),
+                    "fm_workbook_theme_script_font_at",
+                )
+                result.append(
+                    ThemeScriptFont(
+                        script=LIB.read_cstr(LIB.read_u32(script_out)),
+                        typeface=LIB.read_cstr(LIB.read_u32(face_out)),
+                    )
+                )
+            return tuple(result)
+        finally:
+            LIB.free(script_out)
+            LIB.free(face_out)
 
     def set_theme_colors(self, colors: Sequence[int]) -> None:
         """Replace the theme's 12 scheme colours (``a:clrScheme`` order; alpha ignored)."""
@@ -6855,6 +6935,28 @@ class Workbook:
             LIB.free(ptr)
             for owned_ptr in owned:
                 LIB.free(owned_ptr)
+
+    def set_theme_script_font(self, major: bool, script: str, typeface: str) -> None:
+        """Set the typeface of one script in the major (heading) or minor (body) font set.
+
+        ``script`` is an ISO 15924 code of exactly four ASCII letters
+        (``Jpan``, ``Hang``); ``typeface`` must be non-empty. Other scripts are
+        unchanged and an unlisted script is appended. Setting ``Jpan`` also
+        changes ``ThemeFonts.*_east_asian``. A workbook without a theme part
+        first gets one carrying the full default set. Invalid arguments raise
+        ``FormulonError``.
+        """
+        h = self._require()
+        script_ptr, _ = LIB.alloc_utf8(script)
+        face_ptr, _ = LIB.alloc_utf8(typeface)
+        try:
+            _check(
+                LIB.fm_workbook_set_theme_script_font(h, 1 if major else 0, script_ptr, face_ptr),
+                "fm_workbook_set_theme_script_font",
+            )
+        finally:
+            LIB.free(script_ptr)
+            LIB.free(face_ptr)
 
     def reset_theme(self) -> None:
         """Remove the theme part so the workbook reports the default theme.

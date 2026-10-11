@@ -195,6 +195,35 @@ typedef struct {
 FM_API fm_status_t fm_workbook_create(fm_workbook_t** out);
 
 /**
+ * @brief Builds a workbook with the new-workbook defaults of an Excel profile.
+ *
+ * Like `fm_workbook_create` (one sheet), but the styles table, the first
+ * sheet and the workbook's Excel profile follow the profile's locale: font 0
+ * (name, charset, `scheme` = minor), the phonetic font (font 1, CJK locales
+ * only), the vertical alignment of cell xf 0, the `Normal` cell style name,
+ * the sheet name, `phoneticPr`, page margins and, on `mac-*`, the default
+ * row height and base column width. No theme part is written; Excel treats
+ * a workbook without one as the Office theme. `fm_workbook_create` is
+ * unchanged and still seeds `Calibri` 11.
+ *
+ * Only the `mac-*` values are measured. The `win-*` ids are estimates: the
+ * Mac locale table with an 11 pt body font, and no default row height or
+ * base column width (the engine defaults apply).
+ *
+ * Changing font 0 afterwards (`fm_workbook_set_default_font`) leaves the
+ * phonetic font (font 1) as it was.
+ *
+ * @param profile_id  An id from `fm_workbook_set_excel_profile_id`,
+ *                    e.g. `"mac-365-ja_JP"`.
+ * @param out         On success receives a freshly allocated handle owned by
+ *                    the caller (release with `fm_workbook_destroy`).
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `profile_id` or `out` is `NULL`;
+ *         `kInvalidArgument` for an unknown profile id.
+ */
+FM_API fm_status_t fm_workbook_create_for_profile(const char* profile_id, fm_workbook_t** out);
+
+/**
  * @brief Builds an empty workbook (no sheets).
  *
  * Designed for callers that intend to add sheets immediately via
@@ -6278,12 +6307,14 @@ FM_API fm_status_t fm_styles_set_font(fm_workbook_t* wb, uint32_t font_index, fm
  *
  * Reading the current default is `fm_styles_get_font(wb, 0, out)`.
  *
- * The record is a font, not a theme: Formulon writes no `xl/theme/theme1.xml`
- * for a workbook it created, so leave `record.scheme` at 0 and Excel resolves
- * the name literally. A workbook loaded from a package that brought its own
- * theme keeps that part, and there `scheme` is worth carrying: reading font 0,
- * changing the name and writing it back with `scheme` preserved keeps Excel
- * showing the font as the theme's body font.
+ * The record is a font, not a theme. A workbook without a theme part is
+ * treated by Excel as having the Office theme, and Excel's own new-workbook
+ * font 0 carries `scheme = 2` (minor), which `fm_workbook_create_for_profile`
+ * reproduces. Pass `scheme = 0` when the name must resolve literally rather
+ * than through the theme's body font. In a workbook loaded from a package
+ * that brought its own theme, reading font 0, changing the name and writing
+ * it back with `scheme` preserved keeps Excel showing the font as the
+ * theme's body font.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb` is `NULL`.
@@ -6568,6 +6599,61 @@ FM_API fm_status_t fm_workbook_get_theme_fonts(const fm_workbook_t* wb, fm_theme
  *         `kIoXmlParse` when the existing theme part cannot be parsed.
  */
 FM_API fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_theme_fonts* fonts);
+
+/**
+ * @brief Counts the `a:font script=... typeface=...` entries of the theme's
+ *        major (`major` nonzero) or minor (`major == 0`) font set.
+ *
+ * The default Office theme's 47 scripts are reported when the theme part is
+ * absent or unparseable (the same rule as `fm_workbook_get_theme_fonts`).
+ * The theme is parsed on every call.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_count` is `NULL`.
+ */
+FM_API fm_status_t fm_workbook_theme_script_font_count(const fm_workbook_t* wb, int32_t major, size_t* out_count);
+
+/**
+ * @brief Reads one script entry (in the theme part's file order) of the
+ *        major or minor font set.
+ *
+ * `*out_script` is an ISO 15924 code such as `Jpan`; both strings are
+ * read-scratch-backed views, valid until the next call that uses the
+ * workbook's read scratch.
+ *
+ * To pick the face for text whose font has `scheme` major or minor, choose
+ * the script from the font's `charset`: 128 -> `Jpan`, 129 -> `Hang`,
+ * 134 -> `Hans`, 136 -> `Hant`, 222 -> `Thai`, anything else -> the latin
+ * face (`fm_workbook_get_theme_fonts`; charsets such as 204 have no script
+ * entry). Use the same table when choosing by the script of the characters
+ * in the text.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `idx` is not below the count.
+ */
+FM_API fm_status_t fm_workbook_theme_script_font_at(const fm_workbook_t* wb, int32_t major, size_t idx,
+                                                    const char** out_script, const char** out_typeface);
+
+/**
+ * @brief Sets the typeface of one script in the major (`major` nonzero) or
+ *        minor font set. The strings are copied.
+ *
+ * Other scripts are unchanged; a script not yet in the set is appended.
+ * Setting `Jpan` also changes the east-Asian face reported by
+ * `fm_workbook_get_theme_fonts`. A workbook without a theme part first gets
+ * one carrying the full default set, so the other 46 scripts keep their
+ * default values. Part generation and failure rules match
+ * `fm_workbook_set_theme_colors`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `script` is not exactly four ASCII letters
+ *         or `typeface` is empty;
+ *         `kIoXmlParse` when the existing theme part cannot be parsed.
+ */
+FM_API fm_status_t fm_workbook_set_theme_script_font(fm_workbook_t* wb, int32_t major, const char* script,
+                                                     const char* typeface);
 
 /**
  * @brief Returns the workbook to the state of having no theme part, so

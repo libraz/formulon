@@ -183,3 +183,33 @@ TEST(FormulonCApiStyles, FontSchemeSurvivesAReadModifyWriteThroughTheAbi) {
   ASSERT_EQ(fm_styles_add_font(wb.handle, unlinked, &unlinked_index), 0);
   EXPECT_GT(unlinked_index, 0U);
 }
+
+TEST(FormulonCApiStyles, CreateForProfileSeedsTheLocaleDefaults) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
+
+  fm_font_record body{};
+  ASSERT_EQ(fm_styles_get_font(wb.handle, 0, &body), 0);
+  EXPECT_STREQ(body.name, "游ゴシック");
+  EXPECT_EQ(body.size, 12.0);
+  EXPECT_EQ(body.charset, 128U);
+  EXPECT_EQ(body.scheme, 2U);
+
+  fm_font_record phonetic{};
+  ASSERT_EQ(fm_styles_get_font(wb.handle, 1, &phonetic), 0);
+  EXPECT_EQ(phonetic.size, 6.0);
+
+  const char* profile = nullptr;
+  ASSERT_EQ(fm_workbook_excel_profile_id(wb.handle, &profile), 0);
+  EXPECT_STREQ(profile, "mac-365-ja_JP");
+}
+
+TEST(FormulonCApiStyles, CreateForProfileRejectsUnknownIdAndNulls) {
+  fm_workbook_t* out = nullptr;
+  constexpr auto kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  constexpr auto kNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_create_for_profile("nope-365-xx", &out), kInvalidArgument);
+  EXPECT_EQ(out, nullptr);
+  EXPECT_EQ(fm_workbook_create_for_profile(nullptr, &out), kNullPointer);
+  EXPECT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", nullptr), kNullPointer);
+}

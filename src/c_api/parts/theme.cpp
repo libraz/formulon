@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
@@ -113,6 +114,53 @@ extern "C" fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_t
   model.minor_latin = fonts->minor_latin;
   model.minor_ea = fonts->minor_east_asian;
   auto r = wb->workbook().set_theme_fonts(model);
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_theme_script_font_count(const fm_workbook_t* wb, int32_t major, size_t* out_count) {
+  clear_last_error();
+  if (wb == nullptr || out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_theme_script_font_count: NULL argument");
+  }
+  const formulon::Theme theme = wb->workbook().load_theme().theme;
+  *out_count = (major != 0 ? theme.major_scripts : theme.minor_scripts).size();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_theme_script_font_at(const fm_workbook_t* wb, int32_t major, size_t idx,
+                                                        const char** out_script, const char** out_typeface) {
+  clear_last_error();
+  if (wb == nullptr || out_script == nullptr || out_typeface == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_theme_script_font_at: NULL argument");
+  }
+  formulon::Theme theme = wb->workbook().load_theme().theme;
+  std::vector<formulon::ThemeScriptFont>& scripts = major != 0 ? theme.major_scripts : theme.minor_scripts;
+  if (idx >= scripts.size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_theme_script_font_at: index out of range", "idx=" + std::to_string(idx));
+  }
+  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
+  store.clear();
+  store.emplace_back(std::move(scripts[idx].script));
+  *out_script = store.back().c_str();
+  store.emplace_back(std::move(scripts[idx].typeface));
+  *out_typeface = store.back().c_str();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_set_theme_script_font(fm_workbook_t* wb, int32_t major, const char* script,
+                                                         const char* typeface) {
+  clear_last_error();
+  if (wb == nullptr || script == nullptr || typeface == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_set_theme_script_font: NULL argument");
+  }
+  auto r = wb->workbook().set_theme_script_font(major != 0, script, typeface);
   if (!r) {
     return set_last_error(r.error());
   }

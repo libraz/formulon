@@ -578,3 +578,98 @@ TEST(FormulonCApiEffectiveStyle, RejectsInvalidArguments) {
   EXPECT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 1048576U, 0, &style), kInvalidArgument);
   EXPECT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 0, 16384U, &style), kInvalidArgument);
 }
+
+namespace {
+
+struct ScriptFont {
+  std::string script;
+  std::string typeface;
+};
+
+std::vector<ScriptFont> ReadScriptFonts(const fm_workbook_t* wb, int32_t major) {
+  size_t count = 0;
+  EXPECT_EQ(fm_workbook_theme_script_font_count(wb, major, &count), 0);
+  std::vector<ScriptFont> out;
+  for (size_t i = 0; i < count; ++i) {
+    const char* script = nullptr;
+    const char* typeface = nullptr;
+    EXPECT_EQ(fm_workbook_theme_script_font_at(wb, major, i, &script, &typeface), 0);
+    if (script != nullptr && typeface != nullptr) {
+      out.push_back({script, typeface});
+    }
+  }
+  return out;
+}
+
+std::string Typeface(const std::vector<ScriptFont>& fonts, const std::string& script) {
+  for (const ScriptFont& font : fonts) {
+    if (font.script == script) {
+      return font.typeface;
+    }
+  }
+  return "<absent>";
+}
+
+}  // namespace
+
+TEST(FormulonCApiTheme, ScriptFontsOfAThemelessWorkbookAreTheOfficeDefaults) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  size_t count = 0;
+  ASSERT_EQ(fm_workbook_theme_script_font_count(wb.handle, 1, &count), 0);
+  EXPECT_EQ(count, 47U);
+  ASSERT_EQ(fm_workbook_theme_script_font_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 47U);
+
+  const std::vector<ScriptFont> major = ReadScriptFonts(wb.handle, 1);
+  const std::vector<ScriptFont> minor = ReadScriptFonts(wb.handle, 0);
+  EXPECT_EQ(Typeface(major, "Jpan"), kYuGothicLight);
+  EXPECT_EQ(Typeface(minor, "Jpan"), kYuGothic);
+  EXPECT_EQ(Typeface(major, "Khmr"), "MoolBoran");
+  EXPECT_EQ(Typeface(minor, "Khmr"), "DaunPenh");
+}
+
+TEST(FormulonCApiTheme, ScriptFontAtRejectsAnOutOfRangeIndexAndNulls) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  const char* script = nullptr;
+  const char* typeface = nullptr;
+  EXPECT_EQ(fm_workbook_theme_script_font_at(wb.handle, 1, 47U, &script, &typeface), kInvalidArgument);
+  size_t count = 0;
+  EXPECT_EQ(fm_workbook_theme_script_font_count(nullptr, 1, &count), kNullPointer);
+  EXPECT_EQ(fm_workbook_theme_script_font_count(wb.handle, 1, nullptr), kNullPointer);
+  EXPECT_EQ(fm_workbook_theme_script_font_at(nullptr, 1, 0, &script, &typeface), kNullPointer);
+  EXPECT_EQ(fm_workbook_theme_script_font_at(wb.handle, 1, 0, nullptr, &typeface), kNullPointer);
+  EXPECT_EQ(fm_workbook_theme_script_font_at(wb.handle, 1, 0, &script, nullptr), kNullPointer);
+  EXPECT_EQ(fm_workbook_set_theme_script_font(nullptr, 1, "Hang", "X"), kNullPointer);
+  EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, 1, nullptr, "X"), kNullPointer);
+  EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, 1, "Hang", nullptr), kNullPointer);
+}
+
+TEST(FormulonCApiTheme, SetScriptFontSurvivesSaveReloadAndLeavesTheRestAlone) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  const std::vector<ScriptFont> before = ReadScriptFonts(wb.handle, 1);
+  ASSERT_EQ(fm_workbook_set_theme_script_font(wb.handle, 1, "Hang", "Test Face"), 0);
+
+  WorkbookGuard reloaded;
+  Load(Save(wb.handle), &reloaded);
+  const std::vector<ScriptFont> after = ReadScriptFonts(reloaded.handle, 1);
+  ASSERT_EQ(after.size(), 47U);
+  EXPECT_EQ(Typeface(after, "Hang"), "Test Face");
+  for (const ScriptFont& font : before) {
+    if (font.script != "Hang") {
+      EXPECT_EQ(Typeface(after, font.script), font.typeface) << font.script;
+    }
+  }
+  // The minor set is untouched.
+  EXPECT_NE(Typeface(ReadScriptFonts(reloaded.handle, 0), "Hang"), "Test Face");
+}
+
+TEST(FormulonCApiTheme, SetScriptFontRejectsAMalformedScriptOrEmptyTypeface) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, 1, "Jp", "X"), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, 1, "Jpa1", "X"), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_set_theme_script_font(wb.handle, 1, "Jpan", ""), kInvalidArgument);
+}

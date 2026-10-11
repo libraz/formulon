@@ -14,6 +14,7 @@
 
 # -- Construction / lifecycle ----------------------------------------------------
 fm_workbook_create
+fm_workbook_create_for_profile
 fm_workbook_create_empty
 fm_workbook_load
 fm_workbook_destroy
@@ -253,6 +254,9 @@ fm_workbook_get_theme_colors
 fm_workbook_set_theme_colors
 fm_workbook_get_theme_fonts
 fm_workbook_set_theme_fonts
+fm_workbook_theme_script_font_count
+fm_workbook_theme_script_font_at
+fm_workbook_set_theme_script_font
 fm_workbook_reset_theme
 fm_workbook_resolve_color
 fm_sheet_get_effective_style
