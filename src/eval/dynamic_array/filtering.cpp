@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -141,30 +142,28 @@ Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const Function
     }
   }
 
-  // Walk lanes (rows or columns) once. `distinct` records first-occurrence
-  // lane indices in input order; `count[k]` totals how many input lanes
-  // matched `distinct[k]` (used by exactly_once filtering). O(n^2) in the
-  // lane count is intentional: UNIQUE inputs are typically small, and
-  // avoiding a value-keyed hash table sidesteps a cross-kind hashing
-  // contract we do not currently maintain.
+  // Walk lanes (rows or columns) once, keyed by each lane's identity.
+  // `distinct` records first-occurrence lane indices in input order;
+  // `count[k]` totals how many input lanes matched `distinct[k]` (used by
+  // exactly_once filtering).
   const std::uint32_t lanes = by_col ? array->cols : array->rows;
   std::vector<std::uint32_t> distinct;
   std::vector<std::uint32_t> count;
   distinct.reserve(lanes);
   count.reserve(lanes);
+  std::unordered_map<std::string, std::uint32_t> slot_of_key;
+  slot_of_key.reserve(lanes);
+  std::string key;
   for (std::uint32_t i = 0; i < lanes; ++i) {
-    bool matched = false;
-    for (std::uint32_t k = 0; k < distinct.size(); ++k) {
-      if (dynamic_array::unique_lane_equal(*array, i, distinct[k], by_col)) {
-        ++count[k];
-        matched = true;
-        break;
+    if (dynamic_array::unique_lane_key(*array, i, by_col, &key)) {
+      const auto inserted = slot_of_key.emplace(key, static_cast<std::uint32_t>(distinct.size()));
+      if (!inserted.second) {
+        ++count[inserted.first->second];
+        continue;
       }
     }
-    if (!matched) {
-      distinct.push_back(i);
-      count.push_back(1U);
-    }
+    distinct.push_back(i);
+    count.push_back(1U);
   }
 
   // Select output lanes. Default mode keeps all distinct lanes in

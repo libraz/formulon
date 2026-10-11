@@ -137,44 +137,53 @@ ArrayValue* materialise_vector(std::vector<Value>&& cells, bool as_column, Arena
   return out;
 }
 
-bool unique_cell_equal(const Value& a, const Value& b) {
-  if (a.kind() != b.kind()) {
-    return false;
-  }
-  switch (a.kind()) {
+namespace {
+
+// Appends `v`'s UNIQUE identity to `out`: a kind tag, then a fixed-width or
+// length-prefixed payload, so concatenated cell keys stay unambiguous.
+bool append_unique_cell_key(const Value& v, ExcelProfile profile, std::string* out) {
+  const auto append_bytes = [out](const void* data, std::size_t n) { out->append(static_cast<const char*>(data), n); };
+  out->push_back(static_cast<char>(v.kind()));
+  switch (v.kind()) {
     case ValueKind::Blank:
       return true;
-    case ValueKind::Number:
-      return a.as_number() == b.as_number();
+    case ValueKind::Number: {
+      const double d = v.as_number() == 0.0 ? 0.0 : v.as_number();
+      append_bytes(&d, sizeof(d));
+      return true;
+    }
     case ValueKind::Bool:
-      return a.as_boolean() == b.as_boolean();
-    case ValueKind::Error:
-      return a.as_error() == b.as_error();
-    case ValueKind::Text:
-      return collate(a.as_text(), b.as_text(), current_eval_profile(), CollationStrength::kDynamic) == 0;
+      out->push_back(v.as_boolean() ? '\1' : '\0');
+      return true;
+    case ValueKind::Error: {
+      const auto code = static_cast<std::uint32_t>(v.as_error());
+      append_bytes(&code, sizeof(code));
+      return true;
+    }
+    case ValueKind::Text: {
+      const std::string key = collation_key(v.as_text(), profile, CollationStrength::kDynamic);
+      const auto size = static_cast<std::uint64_t>(key.size());
+      append_bytes(&size, sizeof(size));
+      out->append(key);
+      return true;
+    }
     default:
-      // Array / Ref / Lambda are not produced by cell reads; treat any
-      // hypothetical match conservatively as "not equal" to avoid silent
-      // dedup of structurally complex values we have no canonical form for.
+      // Array / Ref / Lambda are not produced by cell reads and have no
+      // canonical form; the lane is kept as distinct.
       return false;
   }
 }
 
-bool unique_lane_equal(const ArrayValue& arr, std::uint32_t i, std::uint32_t j, bool by_col) {
-  if (by_col) {
-    for (std::uint32_t r = 0; r < arr.rows; ++r) {
-      const Value& av = arr.cells[static_cast<std::size_t>(r) * arr.cols + i];
-      const Value& bv = arr.cells[static_cast<std::size_t>(r) * arr.cols + j];
-      if (!unique_cell_equal(av, bv)) {
-        return false;
-      }
-    }
-    return true;
-  }
-  for (std::uint32_t c = 0; c < arr.cols; ++c) {
-    const Value& av = arr.cells[static_cast<std::size_t>(i) * arr.cols + c];
-    const Value& bv = arr.cells[static_cast<std::size_t>(j) * arr.cols + c];
-    if (!unique_cell_equal(av, bv)) {
+}  // namespace
+
+bool unique_lane_key(const ArrayValue& arr, std::uint32_t lane, bool by_col, std::string* out) {
+  out->clear();
+  const ExcelProfile profile = current_eval_profile();
+  const std::uint32_t n = by_col ? arr.rows : arr.cols;
+  for (std::uint32_t k = 0; k < n; ++k) {
+    const std::size_t index =
+        by_col ? static_cast<std::size_t>(k) * arr.cols + lane : static_cast<std::size_t>(lane) * arr.cols + k;
+    if (!append_unique_cell_key(arr.cells[index], profile, out)) {
       return false;
     }
   }

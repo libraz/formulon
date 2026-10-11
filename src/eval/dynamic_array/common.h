@@ -7,7 +7,7 @@
 // argument-resolution and array-materialisation primitives they share so
 // no single helper is duplicated across the split.
 //
-// Cell-comparison helpers (`unique_cell_equal`, `sort_cell_less_asc`,
+// Cell-comparison helpers (`unique_lane_key`, `sort_cell_less_asc`,
 // `sort_lane_less`, `ascii_ci_less`) intentionally implement the
 // Excel-canonical cross-kind ordering for the dynamic-array surface and
 // are NOT migrated to the eval::coerce / eval::jp helpers: the W3.5
@@ -85,15 +85,12 @@ ArrayValue* materialise_slice(const ArrayValue& src, std::uint32_t row_lo, std::
 /// `cells.empty()`.
 ArrayValue* materialise_vector(std::vector<Value>&& cells, bool as_column, Arena& arena);
 
-/// Excel-canonical cell equality for UNIQUE. Mirrors `Value::operator==`
-/// for Number / Bool / Error / Blank; Text compares with the dynamic-array
-/// collation of the current eval profile. Cross-kind pairs are never equal.
-bool unique_cell_equal(const Value& a, const Value& b);
-
-/// Returns `true` iff the `i`-th and `j`-th rows (`by_col == false`) or
-/// columns (`by_col == true`) of `arr` are cellwise equal under
-/// `unique_cell_equal`.
-bool unique_lane_equal(const ArrayValue& arr, std::uint32_t i, std::uint32_t j, bool by_col);
+/// Writes to `out` the UNIQUE identity of the `lane`-th row (`by_col == false`)
+/// or column (`by_col == true`) of `arr`: two lanes are equal exactly when
+/// their keys are. Cells compare by kind and value (`-0` equals `0`); Text uses
+/// the dynamic-array collation of the current eval profile. Returns `false`
+/// when the lane holds an Array / Ref / Lambda cell, which equals no lane.
+bool unique_lane_key(const ArrayValue& arr, std::uint32_t lane, bool by_col, std::string* out);
 
 /// Strict weak ordering for SORT keys, ascending. Cross-kind ordering
 /// follows Excel: `Number < Text < Bool < Error < Blank`. Text uses

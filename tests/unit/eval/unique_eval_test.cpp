@@ -446,7 +446,14 @@ TEST(BuiltinsUniqueCollation, RowCountFollowsMeasuredEquality) {
       const Value v = EvalPair("=ROWS(UNIQUE(" + PairArray(p) + "))", c.profile);
       ASSERT_TRUE(v.is_number());
       EXPECT_DOUBLE_EQ(v.as_number(), static_cast<double>(p.unique_rows));
-      EXPECT_EQ(dynamic_array::unique_cell_equal(Value::text(p.a), Value::text(p.b)), p.unique_rows == 1U);
+      Arena arena;
+      const ArrayValue* pair = dynamic_array::materialise_vector({Value::text(p.a), Value::text(p.b)}, true, arena);
+      ASSERT_NE(pair, nullptr);
+      std::string key_a;
+      std::string key_b;
+      ASSERT_TRUE(dynamic_array::unique_lane_key(*pair, 0U, false, &key_a));
+      ASSERT_TRUE(dynamic_array::unique_lane_key(*pair, 1U, false, &key_b));
+      EXPECT_EQ(key_a == key_b, p.unique_rows == 1U);
     }
   }
 }
