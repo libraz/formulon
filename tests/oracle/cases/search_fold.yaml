@@ -1,0 +1,92 @@
+suite: search_fold
+description: 'SEARCH / SEARCHB character equivalence beyond ASCII. Each character is compared under the
+  locale''s `=` collation one code point at a time: case, and where the locale folds them width and kana,
+  match; expansions (ß/ss), half-width voicing composition and accents do not. The `=` cases show the
+  whole-string contrast.'
+tolerance:
+  abs: 0
+  rel: 0
+locale: ja-JP
+cases:
+- id: umlaut_lower_in_upper
+  formula: =SEARCH("ä","Äpfel")
+- id: umlaut_upper_in_lower
+  formula: =SEARCH("Ä","äpfel")
+- id: accent_case
+  formula: =SEARCH("é","ÉTÉ")
+- id: accent_not_ignored
+  formula: =SEARCH("e","Été")
+- id: greek_case
+  formula: =SEARCH("σ","ΣΟΦΙΑ")
+- id: cyrillic_case
+  formula: =SEARCH("п","ПРИВЕТ")
+- id: katakana_in_hiragana
+  formula: =SEARCH("ア","あいう")
+- id: hiragana_in_katakana
+  formula: =SEARCH("あ","アイウ")
+- id: katakana_in_halfwidth
+  formula: =SEARCH("ア","ｱｲｳ")
+- id: fullwidth_in_ascii
+  formula: =SEARCH("ａ","ABC")
+- id: ascii_in_fullwidth
+  formula: =SEARCH("A","ａｂｃ")
+- id: voiced_not_split
+  formula: =SEARCH("ガ","ｶﾞ")
+- id: halfwidth_voiced_not_composed
+  formula: =SEARCH("ｶﾞ","ガ")
+- id: sharp_s_not_expanded
+  formula: =SEARCH("ss","ß")
+- id: sharp_s_upper_not_contracted
+  formula: =SEARCH("ß","SS")
+- id: ae_ligature_not_expanded
+  formula: =SEARCH("ae","æ")
+- id: hyphen_literal
+  formula: =SEARCH("-","a-b")
+- id: hyphen_not_ignored
+  formula: =SEARCH("ab","a-b")
+- id: dotted_capital_i
+  formula: =SEARCH("i","İ")
+- id: dotless_i
+  formula: =SEARCH("ı","I")
+- id: yo_not_ie
+  formula: =SEARCH("ё","Е")
+- id: eq_umlaut_case
+  formula: ="ä"="Ä"
+- id: eq_hiragana_katakana
+  formula: ="あ"="ア"
+- id: eq_katakana_halfwidth
+  formula: ="ア"="ｱ"
+- id: eq_fullwidth_ascii
+  formula: ="ａ"="A"
+- id: eq_voiced_halfwidth
+  formula: ="ガ"="ｶﾞ"
+- id: eq_sharp_s_ss
+  formula: ="ß"="ss"
+- id: eq_accent
+  formula: ="e"="é"
+- id: eq_hyphen
+  formula: ="ab"="a-b"
+- id: wild_star
+  formula: =SEARCH("a*c","abc")
+- id: wild_question
+  formula: =SEARCH("a?c","abc")
+- id: wild_escaped_match
+  formula: =SEARCH("a~*c","a*c")
+- id: wild_escaped_miss
+  formula: =SEARCH("a~*c","abc")
+- id: ideographic_space
+  formula: =SEARCH(" ","a　b")
+- id: final_sigma
+  formula: =SEARCH("σ","ς")
+- id: voicing_mark_width
+  formula: =SEARCH("ﾞ","゛")
+- id: searchb_kana
+  formula: =SEARCHB("ア","xあいう")
+- id: searchb_width
+  formula: =SEARCHB("ａ","xABC")
+- id: position_after_width_fold
+  formula: =SEARCH("c","ＡＢＣ")
+- id: start_after_fold
+  formula: =SEARCH("ä","ÄxÄ",2)
+- id: wild_fold
+  formula: =SEARCH("ä*ö","ÄxÖ")

@@ -67,8 +67,9 @@ struct SearchArgs {
 // search; `false` when the caller must return `*out_result` verbatim.
 bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, SearchArgs* out, Value* out_result);
 
-// ASCII-case-insensitive SEARCH / SEARCHB match of `needle` in `haystack`
-// from `start_byte`, honouring `?` / `*` / `~` wildcards; under `DbcsByte`
+// SEARCH / SEARCHB match of `needle` in `haystack` from `start_byte`, under
+// SEARCH's character equivalence (case, width and kana folded one code point
+// at a time) and honouring `?` / `*` / `~` wildcards; under `DbcsByte`
 // the active locale decides whether `?` spans any character or only an SBCS
 // one. Returns the absolute byte offset of the match, or `std::string::npos`.
 std::size_t find_folded(const std::string& haystack, const std::string& needle, std::size_t start_byte,

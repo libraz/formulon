@@ -14,6 +14,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -665,6 +666,48 @@ TEST(TextSearch, WithStartNum) {
   const Value v = EvalSource("=SEARCH(\"A\", \"abca\", 2)");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 4.0);
+}
+
+Value EvalMacEnUs(std::string_view formula) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(formula, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << formula;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate(*root, eval_arena, default_registry(), EvalContext().with_excel_profile(mac_365_en_us_profile()));
+}
+
+// Mac Excel 365 folds case, width and kana one code point at a time; nothing
+// composes, expands or ignores accents (measured, en-US).
+TEST(TextSearch, FoldsBeyondAscii) {
+  for (const char* formula : {"=SEARCH(\"ä\",\"Äpfel\")", "=SEARCH(\"σ\",\"ΣΟΦΙΑ\")", "=SEARCH(\"п\",\"ПРИВЕТ\")",
+                              "=SEARCH(\"ア\",\"あいう\")", "=SEARCH(\"ア\",\"ｱｲｳ\")", "=SEARCH(\"ａ\",\"ABC\")",
+                              "=SEARCH(\"A\",\"ａｂｃ\")"}) {
+    const Value v = EvalMacEnUs(formula);
+    ASSERT_TRUE(v.is_number()) << formula << " -> " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), 1.0) << formula;
+  }
+  for (const char* formula : {"=SEARCH(\"e\",\"Été\")", "=SEARCH(\"ガ\",\"ｶﾞ\")", "=SEARCH(\"ss\",\"ß\")",
+                              "=SEARCH(\"ab\",\"a-b\")", "=SEARCH(\"i\",\"İ\")"}) {
+    const Value v = EvalMacEnUs(formula);
+    ASSERT_TRUE(v.is_error()) << formula << " -> " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+}
+
+// A fold that changes the byte length must not shift the reported position.
+TEST(TextSearch, FoldedPositionCountsSourceUnits) {
+  const Value v = EvalMacEnUs("=SEARCH(\"c\",\"ＡＢＣ\")");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 3.0);
+  const Value from = EvalMacEnUs("=SEARCH(\"ä\",\"ÄxÄ\",2)");
+  ASSERT_TRUE(from.is_number()) << from.debug_to_string();
+  EXPECT_EQ(from.as_number(), 3.0);
 }
 
 TEST(TextSearch, NotFound) {

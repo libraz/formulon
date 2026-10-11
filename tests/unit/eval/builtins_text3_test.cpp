@@ -203,6 +203,29 @@ TEST(BuiltinsText3SearchB, QuestionMarkWildcard) {
   EXPECT_EQ(v.as_number(), 2.0);
 }
 
+// ja-JP SEARCHB `?` takes only a single-byte character (ASCII, half-width
+// katakana); a double-byte one is skipped or left to `*`.
+TEST(BuiltinsText3SearchB, QuestionTakesOnlySingleByteCharacters) {
+  const struct {
+    const char* formula;
+    double position;  // 0 = #VALUE!
+  } kCases[] = {
+      {"=SEARCHB(\"?\",\"漢ABC\")", 3.0},    {"=SEARCHB(\"?\",\"abc\")", 1.0},  {"=SEARCHB(\"?\",\"漢\")", 0.0},
+      {"=SEARCHB(\"?abc\",\"漢abc\")", 0.0}, {"=SEARCHB(\"*?\",\"漢A\")", 1.0}, {"=SEARCHB(\"~?\",\"x?y\")", 2.0},
+      {"=SEARCHB(\"?\",\"ｱABC\")", 1.0},
+  };
+  for (const auto& c : kCases) {
+    const Value v = EvalSource(c.formula);
+    if (c.position == 0.0) {
+      ASSERT_TRUE(v.is_error()) << c.formula << " -> " << v.debug_to_string();
+      EXPECT_EQ(v.as_error(), ErrorCode::Value) << c.formula;
+    } else {
+      ASSERT_TRUE(v.is_number()) << c.formula << " -> " << v.debug_to_string();
+      EXPECT_EQ(v.as_number(), c.position) << c.formula;
+    }
+  }
+}
+
 TEST(BuiltinsText3SearchB, NotFoundIsValueError) {
   const Value v = EvalSource("=SEARCHB(\"z\", \"abc\")");
   ASSERT_TRUE(v.is_error());

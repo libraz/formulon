@@ -1,0 +1,386 @@
+{
+  "suite": "search_fold",
+  "description": "SEARCH / SEARCHB character equivalence beyond ASCII. Each character is compared under the locale's `=` collation one code point at a time: case, and where the locale folds them width and kana, match; expansions (ß/ss), half-width voicing composition and accents do not. The `=` cases show the whole-string contrast.",
+  "environment": {
+    "excel_version": "16.113.4",
+    "excel_locale": "pt-BR",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-11T16:19:16Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "umlaut_lower_in_upper",
+      "formula": "=SEARCH(\"ä\",\"Äpfel\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "umlaut_upper_in_lower",
+      "formula": "=SEARCH(\"Ä\",\"äpfel\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "accent_case",
+      "formula": "=SEARCH(\"é\",\"ÉTÉ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "accent_not_ignored",
+      "formula": "=SEARCH(\"e\",\"Été\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "greek_case",
+      "formula": "=SEARCH(\"σ\",\"ΣΟΦΙΑ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "cyrillic_case",
+      "formula": "=SEARCH(\"п\",\"ПРИВЕТ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "katakana_in_hiragana",
+      "formula": "=SEARCH(\"ア\",\"あいう\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "hiragana_in_katakana",
+      "formula": "=SEARCH(\"あ\",\"アイウ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "katakana_in_halfwidth",
+      "formula": "=SEARCH(\"ア\",\"ｱｲｳ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "fullwidth_in_ascii",
+      "formula": "=SEARCH(\"ａ\",\"ABC\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "ascii_in_fullwidth",
+      "formula": "=SEARCH(\"A\",\"ａｂｃ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "voiced_not_split",
+      "formula": "=SEARCH(\"ガ\",\"ｶﾞ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "halfwidth_voiced_not_composed",
+      "formula": "=SEARCH(\"ｶﾞ\",\"ガ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sharp_s_not_expanded",
+      "formula": "=SEARCH(\"ss\",\"ß\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sharp_s_upper_not_contracted",
+      "formula": "=SEARCH(\"ß\",\"SS\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ae_ligature_not_expanded",
+      "formula": "=SEARCH(\"ae\",\"æ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "hyphen_literal",
+      "formula": "=SEARCH(\"-\",\"a-b\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "hyphen_not_ignored",
+      "formula": "=SEARCH(\"ab\",\"a-b\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dotted_capital_i",
+      "formula": "=SEARCH(\"i\",\"İ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dotless_i",
+      "formula": "=SEARCH(\"ı\",\"I\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "yo_not_ie",
+      "formula": "=SEARCH(\"ё\",\"Е\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "eq_umlaut_case",
+      "formula": "=\"ä\"=\"Ä\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "eq_hiragana_katakana",
+      "formula": "=\"あ\"=\"ア\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "eq_katakana_halfwidth",
+      "formula": "=\"ア\"=\"ｱ\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "eq_fullwidth_ascii",
+      "formula": "=\"ａ\"=\"A\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "eq_voiced_halfwidth",
+      "formula": "=\"ガ\"=\"ｶﾞ\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "eq_sharp_s_ss",
+      "formula": "=\"ß\"=\"ss\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "eq_accent",
+      "formula": "=\"e\"=\"é\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "eq_hyphen",
+      "formula": "=\"ab\"=\"a-b\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "wild_star",
+      "formula": "=SEARCH(\"a*c\",\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "wild_question",
+      "formula": "=SEARCH(\"a?c\",\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "wild_escaped_match",
+      "formula": "=SEARCH(\"a~*c\",\"a*c\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "wild_escaped_miss",
+      "formula": "=SEARCH(\"a~*c\",\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ideographic_space",
+      "formula": "=SEARCH(\" \",\"a　b\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "final_sigma",
+      "formula": "=SEARCH(\"σ\",\"ς\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "voicing_mark_width",
+      "formula": "=SEARCH(\"ﾞ\",\"゛\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "searchb_kana",
+      "formula": "=SEARCHB(\"ア\",\"xあいう\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "searchb_width",
+      "formula": "=SEARCHB(\"ａ\",\"xABC\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "position_after_width_fold",
+      "formula": "=SEARCH(\"c\",\"ＡＢＣ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "start_after_fold",
+      "formula": "=SEARCH(\"ä\",\"ÄxÄ\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "wild_fold",
+      "formula": "=SEARCH(\"ä*ö\",\"ÄxÖ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    }
+  ]
+}
