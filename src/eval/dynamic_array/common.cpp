@@ -22,6 +22,7 @@
 #include "utils/arena.h"
 #include "utils/checked_mul.h"
 #include "utils/error.h"
+#include "utils/index_sort.h"
 #include "utils/resource_budget.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -307,13 +308,11 @@ std::uint32_t collation_classes(const Value* values, std::size_t count, ExcelPro
     value_class[i] = inserted.first->second;
   }
 
-  std::vector<std::uint32_t> order(reps.size());
-  for (std::uint32_t k = 0; k < order.size(); ++k) {
-    order[k] = k;
-  }
-  std::sort(order.begin(), order.end(), [&](std::uint32_t a, std::uint32_t b) {
+  const auto rep_less = [&](std::uint32_t a, std::uint32_t b) {
     return sort_cell_less_keyed(*reps[a], *reps[b], &text_keys[a], &text_keys[b]);
-  });
+  };
+  std::vector<std::uint32_t> order;
+  sorted_index_order(order, static_cast<std::uint32_t>(reps.size()), make_index_less(rep_less));
   std::vector<std::uint32_t> final_id(reps.size());
   for (std::uint32_t rank = 0; rank < order.size(); ++rank) {
     final_id[order[rank]] = rank;
