@@ -36,6 +36,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Static factories.
   static Napi::Value CreateDefault(const Napi::CallbackInfo& info);
   static Napi::Value CreateEmpty(const Napi::CallbackInfo& info);
+  static Napi::Value CreateForProfile(const Napi::CallbackInfo& info);
   static Napi::Value LoadBytes(const Napi::CallbackInfo& info);
 
   // Cell mutation.
@@ -342,6 +343,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetTheme(const Napi::CallbackInfo& info);
   Napi::Value SetThemeColors(const Napi::CallbackInfo& info);
   Napi::Value SetThemeFonts(const Napi::CallbackInfo& info);
+  Napi::Value SetThemeScriptFont(const Napi::CallbackInfo& info);
   Napi::Value ResetTheme(const Napi::CallbackInfo& info);
   Napi::Value ResolveColor(const Napi::CallbackInfo& info);
   Napi::Value GetEffectiveStyle(const Napi::CallbackInfo& info);

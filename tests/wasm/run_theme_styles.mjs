@@ -223,4 +223,56 @@ export function registerThemeStyles(Module, test) {
       assert.equal(wb.removeCellStyle('Dated').ok, false);
     });
   });
+
+  test('createForProfile builds the locale defaults and reports a bad id as an invalid wrapper', () => {
+    const wb = Module.Workbook.createForProfile('mac-365-ja_JP');
+    try {
+      assert.ok(wb.isValid());
+      assert.equal(wb.excelProfileId().value, 'mac-365-ja_JP');
+      const font = wb.getFont(0);
+      assert.equal(font.name, '游ゴシック');
+      assert.equal(font.size, 12);
+    } finally {
+      wb.delete();
+    }
+    const bad = Module.Workbook.createForProfile('no-such-profile');
+    try {
+      assert.equal(bad.isValid(), false);
+    } finally {
+      bad.delete();
+    }
+  });
+
+  test('getTheme lists the 47 script faces and setThemeScriptFont round-trips', () => {
+    withWorkbook(Module, (wb) => {
+      const t = wb.getTheme();
+      assert.equal(t.majorScripts.length, 47);
+      assert.equal(t.minorScripts.length, 47);
+      const minor = Object.fromEntries(t.minorScripts.map((s) => [s.script, s.typeface]));
+      assert.equal(minor.Jpan, '游ゴシック');
+      assert.equal(minor.Hang, '맑은 고딕');
+
+      assert.ok(wb.setThemeScriptFont(false, 'Hang', 'Test Face').ok);
+      const saved = wb.save();
+      assert.ok(saved.status.ok);
+      const reloaded = Module.Workbook.loadBytes(saved.bytes);
+      try {
+        const r = reloaded.getTheme();
+        assert.equal(r.minorScripts.length, 47);
+        const after = Object.fromEntries(r.minorScripts.map((s) => [s.script, s.typeface]));
+        assert.equal(after.Hang, 'Test Face');
+        assert.equal(after.Jpan, minor.Jpan);
+        assert.deepEqual(r.majorScripts, t.majorScripts);
+      } finally {
+        reloaded.delete();
+      }
+    });
+  });
+
+  test('setThemeScriptFont rejects an invalid script or empty typeface', () => {
+    withWorkbook(Module, (wb) => {
+      assert.equal(wb.setThemeScriptFont(true, 'Jp', 'X').ok, false);
+      assert.equal(wb.setThemeScriptFont(true, 'Jpan', '').ok, false);
+    });
+  });
 }

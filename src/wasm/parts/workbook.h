@@ -46,6 +46,7 @@ class JsWorkbook {
 
   static JsWorkbook* createDefault();
   static JsWorkbook* createEmpty();
+  static JsWorkbook* createForProfile(const std::string& profileId);
   static JsWorkbook* loadBytes(emscripten::val bytes);
 
   bool isValid() const { return handle_ != nullptr; }
@@ -363,6 +364,7 @@ class JsWorkbook {
   emscripten::val getTheme() const;
   JsStatus setThemeColors(emscripten::val colors);
   JsStatus setThemeFonts(emscripten::val fonts);
+  JsStatus setThemeScriptFont(bool major, const std::string& script, const std::string& typeface);
   JsStatus resetTheme();
   /// `{ status, argb, resolution }` for a `ColorSpec` used in `context` (`ColorContext.*`).
   emscripten::val resolveColor(emscripten::val spec, int32_t context) const;

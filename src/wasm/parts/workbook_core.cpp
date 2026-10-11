@@ -151,6 +151,13 @@ JsWorkbook* JsWorkbook::createEmpty() {
   return wb.release();
 }
 
+JsWorkbook* JsWorkbook::createForProfile(const std::string& profileId) {
+  auto wb = std::unique_ptr<JsWorkbook>(new JsWorkbook());
+  // As createDefault: a failed create (unknown id) leaves the handle null.
+  (void)fm_workbook_create_for_profile(profileId.c_str(), &wb->handle_);
+  return wb.release();
+}
+
 JsWorkbook* JsWorkbook::loadBytes(emscripten::val bytes) {
   auto wb = std::unique_ptr<JsWorkbook>(new JsWorkbook());
   const JsBytesReadResult read = val_to_bytes_checked(bytes);

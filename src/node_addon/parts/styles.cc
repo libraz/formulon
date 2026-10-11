@@ -230,6 +230,28 @@ Napi::Value StyleCountResult(const Napi::CallbackInfo& info, fm_workbook_t* hand
   return MakeNumberResult(env, rc, n);
 }
 
+/// Reads the major or minor script-font list as `{script, typeface}` records.
+/// Each pair is copied before the next `_at` call reuses the read scratch.
+Napi::Array ThemeScriptFonts(Napi::Env env, const fm_workbook_t* handle, bool readable, bool major) {
+  Napi::Array list = Napi::Array::New(env);
+  size_t count = 0;
+  if (!readable || handle == nullptr || fm_workbook_theme_script_font_count(handle, major ? 1 : 0, &count) != 0) {
+    return list;
+  }
+  for (size_t i = 0; i < count; ++i) {
+    const char* script = nullptr;
+    const char* typeface = nullptr;
+    if (fm_workbook_theme_script_font_at(handle, major ? 1 : 0, i, &script, &typeface) != 0) {
+      break;
+    }
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("script", JsString(env, script));
+    item.Set("typeface", JsString(env, typeface));
+    list.Set(static_cast<uint32_t>(i), item);
+  }
+  return list;
+}
+
 }  // namespace
 
 // ---- Cell-XF index --------------------------------------------------
@@ -736,6 +758,8 @@ Napi::Value Workbook::GetTheme(const Napi::CallbackInfo& info) {
   out.Set("source", Napi::Number::New(env, source));
   out.Set("colors", arr);
   out.Set("fonts", fontsOut);
+  out.Set("majorScripts", ThemeScriptFonts(env, handle_, rc == 0, true));
+  out.Set("minorScripts", ThemeScriptFonts(env, handle_, rc == 0, false));
   return out;
 }
 
@@ -784,6 +808,17 @@ Napi::Value Workbook::SetThemeFonts(const Napi::CallbackInfo& info) {
   fonts.minor_latin = minor_latin.c_str();
   fonts.minor_east_asian = minor_ea.c_str();
   return MakeStatus(env, fm_workbook_set_theme_fonts(handle_, &fonts));
+}
+
+Napi::Value Workbook::SetThemeScriptFont(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::string script = ArgString(info, 1);
+  const std::string typeface = ArgString(info, 2);
+  return MakeStatus(
+      env, fm_workbook_set_theme_script_font(handle_, ArgBool(info, 0) ? 1 : 0, script.c_str(), typeface.c_str()));
 }
 
 Napi::Value Workbook::ResetTheme(const Napi::CallbackInfo& info) {

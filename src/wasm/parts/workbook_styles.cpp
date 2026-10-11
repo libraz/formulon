@@ -690,6 +690,27 @@ emscripten::val js_resolved_color(uint32_t argb, int32_t resolution) {
   return o;
 }
 
+/// Reads the major or minor script-font list as `{script, typeface}` records.
+/// Each pair is copied before the next `_at` call reuses the read scratch.
+emscripten::val theme_script_fonts(const fm_workbook_t* handle, bool major) {
+  emscripten::val list = emscripten::val::array();
+  size_t count = 0;
+  if (handle == nullptr || fm_workbook_theme_script_font_count(handle, major ? 1 : 0, &count) != 0) {
+    return list;
+  }
+  for (size_t i = 0; i < count; ++i) {
+    const char* script = nullptr;
+    const char* typeface = nullptr;
+    if (fm_workbook_theme_script_font_at(handle, major ? 1 : 0, i, &script, &typeface) != 0) {
+      break;
+    }
+    emscripten::val item = emscripten::val::object();
+    js_set_cstr_fields(item, {{"script", script}, {"typeface", typeface}});
+    list.set(static_cast<uint32_t>(i), item);
+  }
+  return list;
+}
+
 }  // namespace
 
 emscripten::val JsWorkbook::getTheme() const {
@@ -719,6 +740,8 @@ emscripten::val JsWorkbook::getTheme() const {
   o.set("source", source);
   o.set("colors", list);
   o.set("fonts", f);
+  o.set("majorScripts", theme_script_fonts(handle_, true));
+  o.set("minorScripts", theme_script_fonts(handle_, false));
   return o;
 }
 
@@ -759,6 +782,13 @@ JsStatus JsWorkbook::setThemeFonts(emscripten::val fonts) {
   tf.minor_latin = minor_latin.c_str();
   tf.minor_east_asian = minor_ea.c_str();
   return status_from_rc(fm_workbook_set_theme_fonts(handle_, &tf));
+}
+
+JsStatus JsWorkbook::setThemeScriptFont(bool major, const std::string& script, const std::string& typeface) {
+  if (handle_ == nullptr) {
+    return error_status(kBindingInvalidHandle);
+  }
+  return status_from_rc(fm_workbook_set_theme_script_font(handle_, major ? 1 : 0, script.c_str(), typeface.c_str()));
 }
 
 JsStatus JsWorkbook::resetTheme() {

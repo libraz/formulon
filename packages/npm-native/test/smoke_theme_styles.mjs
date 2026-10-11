@@ -185,3 +185,64 @@ test('theme and colour enums carry the C ABI ordinals', async () => {
   assert.deepEqual({ ...mod.ThemeSource }, { Part: 0, Default: 1, Unparseable: 2 });
   assert.deepEqual({ ...mod.EffectiveStyleSource }, { Cell: 0, Row: 1, Column: 2, Default: 3 });
 });
+
+test('createForProfile builds the locale defaults and reports a bad id as an invalid wrapper', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createForProfile('mac-365-ja_JP');
+  try {
+    assert.ok(wb.isValid());
+    assert.equal(wb.excelProfileId().value, 'mac-365-ja_JP');
+    const font = wb.getFont(0);
+    assert.equal(font.name, '游ゴシック');
+    assert.equal(font.size, 12);
+  } finally {
+    wb.dispose();
+  }
+  const bad = mod.Workbook.createForProfile('no-such-profile');
+  try {
+    assert.equal(bad.isValid(), false);
+  } finally {
+    bad.dispose();
+  }
+});
+
+test('getTheme lists the 47 script faces and setThemeScriptFont round-trips', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const t = wb.getTheme();
+    assert.equal(t.majorScripts.length, 47);
+    assert.equal(t.minorScripts.length, 47);
+    const minor = Object.fromEntries(t.minorScripts.map((s) => [s.script, s.typeface]));
+    assert.equal(minor.Jpan, '游ゴシック');
+    assert.equal(minor.Hang, '맑은 고딕');
+
+    assert.ok(wb.setThemeScriptFont(false, 'Hang', 'Test Face').ok);
+    const saved = wb.save();
+    assert.ok(saved.status.ok);
+    const reloaded = mod.Workbook.loadBytes(saved.bytes);
+    try {
+      const r = reloaded.getTheme();
+      assert.equal(r.minorScripts.length, 47);
+      const after = Object.fromEntries(r.minorScripts.map((s) => [s.script, s.typeface]));
+      assert.equal(after.Hang, 'Test Face');
+      assert.equal(after.Jpan, minor.Jpan);
+      assert.deepEqual(r.majorScripts, t.majorScripts);
+    } finally {
+      reloaded.dispose();
+    }
+  } finally {
+    wb.dispose();
+  }
+});
+
+test('setThemeScriptFont rejects an invalid script or empty typeface', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    assert.equal(wb.setThemeScriptFont(true, 'Jp', 'X').ok, false);
+    assert.equal(wb.setThemeScriptFont(true, 'Jpan', '').ok, false);
+  } finally {
+    wb.dispose();
+  }
+});

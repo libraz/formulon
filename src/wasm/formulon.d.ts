@@ -1915,6 +1915,21 @@ export interface ThemeFonts {
   minorEastAsian: string;
 }
 
+/**
+ * One `a:font script="..." typeface="..."` entry of the theme's major or minor
+ * font set. `script` is an ISO 15924 code such as `Jpan`.
+ *
+ * To pick the face for text whose font has `scheme` major or minor, choose the
+ * script from the font's `charset`: 128 -> `Jpan`, 129 -> `Hang`, 134 -> `Hans`,
+ * 136 -> `Hant`, 222 -> `Thai`, anything else -> the latin face
+ * (`ThemeFonts.majorLatin` / `minorLatin`; charsets such as 204 have no script
+ * entry). Use the same table when choosing by the script of the characters.
+ */
+export interface ThemeScriptFont {
+  script: string;
+  typeface: string;
+}
+
 /** Return type of `Workbook.getTheme()`. */
 export interface ThemeResult {
   status: Status;
@@ -1923,6 +1938,11 @@ export interface ThemeResult {
   /** 0xFFRRGGBB in `clrScheme` order: dk1, lt1, dk2, lt2, accent1..6, hlink, folHlink. */
   colors: number[];
   fonts: ThemeFonts;
+  /** The major font set's per-script faces in theme-part order (the 47 Office
+   *  scripts when the part is absent). Empty when `status` is not ok. */
+  majorScripts: ThemeScriptFont[];
+  /** The minor font set's per-script faces; see `majorScripts`. */
+  minorScripts: ThemeScriptFont[];
 }
 
 /** A resolved colour: 0xFFRRGGBB plus how it was obtained. */
@@ -3240,6 +3260,12 @@ export interface Workbook {
   setThemeColors(colors: number[]): Status;
   /** Rewrites the theme's major and minor typefaces. */
   setThemeFonts(fonts: ThemeFonts): Status;
+  /** Sets one script's typeface in the major (`major` true) or minor font set;
+   *  other scripts are unchanged and an unknown script is appended. `Jpan` also
+   *  changes `ThemeFonts.*EastAsian`. A workbook without a theme part first gets
+   *  one with the full default set. `script` must be four ASCII letters and
+   *  `typeface` non-empty, else the status is not ok. */
+  setThemeScriptFont(major: boolean, script: string, typeface: string): Status;
   /** Removes the theme part so the workbook reports the default theme (`source` is `Default`). Excel adds a theme part again when it saves the file. */
   resetTheme(): Status;
   /** Resolves a colour specification to ARGB against the theme and the
@@ -3437,6 +3463,18 @@ export interface WorkbookCtor {
   createDefault(): Workbook;
   /** Workbook with no sheets. */
   createEmpty(): Workbook;
+  /** Workbook with the new-workbook defaults of an Excel profile id such as
+   *  `"mac-365-ja_JP"`: font 0 (name, charset, theme-minor scheme), the
+   *  phonetic font (font 1, CJK locales), the Normal style name, the sheet
+   *  name, `phoneticPr`, page margins and, on `mac-*`, the row height and base
+   *  column width follow the locale. The workbook's Excel profile is set to
+   *  the id. No theme part is written (Excel treats that as the Office theme).
+   *  Only `mac-*` values are measured; `win-*` ids are estimates (the Mac
+   *  table with an 11 pt body font, no row height or base column width).
+   *  `setDefaultFont` afterwards leaves font 1 unchanged. `createDefault`
+   *  still seeds Calibri 11. An unknown id returns an invalid wrapper
+   *  (`!isValid()`), like a failed `createDefault`. */
+  createForProfile(profileId: string): Workbook;
   /** Loads from an in-memory workbook byte buffer, auto-detecting
    *  `.xlsx` vs `.xlsb` from the package contents (there is no filename
    *  to route on). The returned wrapper may be invalid (`!isValid()`) on

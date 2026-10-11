@@ -276,6 +276,20 @@ Napi::Value Workbook::CreateEmpty(const Napi::CallbackInfo& info) {
   return CreateWith(info, &fm_workbook_create_empty);
 }
 
+Napi::Value Workbook::CreateForProfile(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Function ctor = GetClass(env);
+  Napi::Object jsobj = ctor.New({});
+  Workbook* wb = Napi::ObjectWrap<Workbook>::Unwrap(jsobj);
+  const std::string profile_id = ArgString(info, 0);
+  // As CreateWith: a failed create (unknown id) returns a wrapper with a null handle.
+  if (fm_workbook_create_for_profile(profile_id.c_str(), &wb->handle_) != 0) {
+    wb->handle_ = nullptr;
+  }
+  wb->SyncExternalMemory(env);
+  return jsobj;
+}
+
 Napi::Value Workbook::LoadBytes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Function ctor = GetClass(env);
@@ -321,6 +335,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
       {
           StaticMethod<&Workbook::CreateDefault>("createDefault"),
           StaticMethod<&Workbook::CreateEmpty>("createEmpty"),
+          StaticMethod<&Workbook::CreateForProfile>("createForProfile"),
           StaticMethod<&Workbook::LoadBytes>("loadBytes"),
           GuardedInstanceMethod<&Workbook::AddBorder>("addBorder"),
           GuardedInstanceMethod<&Workbook::AddConditionalFormat, 0x1ULL>("addConditionalFormat"),
@@ -422,6 +437,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SetCellStyle>("setCellStyle"),
           GuardedInstanceMethod<&Workbook::SetThemeColors>("setThemeColors"),
           GuardedInstanceMethod<&Workbook::SetThemeFonts>("setThemeFonts"),
+          GuardedInstanceMethod<&Workbook::SetThemeScriptFont, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x6ULL>("setThemeScriptFont"),
           GuardedInstanceMethod<&Workbook::ResetTheme>("resetTheme"),
           GuardedInstanceMethod<&Workbook::GetCellXf, 0x1ULL>("getCellXf"),
           GuardedInstanceMethod<&Workbook::GetCellXfIndex, 0x7ULL>("getCellXfIndex"),
