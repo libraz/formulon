@@ -14,6 +14,9 @@
 
 namespace {
 
+constexpr bool kWasm32 = sizeof(void*) == 4U;
+static_assert(sizeof(fm_locale_facts_t) == (kWasm32 ? 56U : 96U), "fm_locale_facts_t ABI layout changed");
+
 constexpr const char* kAllProfiles[] = {
     "mac-365-ja_JP", "win-365-ja_JP", "mac-365-en_US", "win-365-en_US", "mac-365-de_DE",
     "win-365-de_DE", "mac-365-fr_FR", "win-365-fr_FR", "mac-365-zh_CN", "win-365-zh_CN",
@@ -209,6 +212,17 @@ TEST(FormulonCApiLocale, ErrorNames) {
   EXPECT_EQ(fm_locale_error_name("bogus", na, &canonical, &localized, &measured), kInvalid);
   EXPECT_EQ(fm_locale_error_name(nullptr, na, &canonical, &localized, &measured), kNullPtr);
   EXPECT_EQ(fm_locale_error_name("mac-365-de_DE", na, &canonical, &localized, nullptr), kNullPtr);
+}
+
+TEST(FormulonCApiLocale, CollationMeasuredFollowsTheHost) {
+  fm_locale_facts_t facts{};
+  ASSERT_EQ(fm_locale_facts("mac-365-ja_JP", &facts), 0);
+  EXPECT_EQ(facts.collation_measured, 1);
+  ASSERT_EQ(fm_locale_facts("win-365-ja_JP", &facts), 0);
+  EXPECT_EQ(facts.measured, 1);
+  EXPECT_EQ(facts.collation_measured, 0);
+  ASSERT_EQ(fm_locale_facts("win-365-en_US", &facts), 0);
+  EXPECT_EQ(facts.collation_measured, 0);
 }
 
 }  // namespace

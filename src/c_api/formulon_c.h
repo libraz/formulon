@@ -4567,7 +4567,9 @@ typedef enum { FM_DATE_ORDER_MDY = 0, FM_DATE_ORDER_YMD = 1, FM_DATE_ORDER_DMY =
  * Every string is a NUL-terminated UTF-8 view into process-static storage.
  * `measured` is `1` for the profiles captured from Excel (every `mac-*`
  * profile and `win-365-ja_JP`) and `0` for the estimated `win-*` ones; the
- * other facts are measured in every Mac locale.
+ * other facts are measured in every Mac locale. Collation measurement is
+ * separate: `collation_measured` is `1` only for `mac-*` profiles, so
+ * `win-365-ja_JP` is measured for facts but its collation order is estimated.
  */
 typedef struct {
   const char* decimal_separator;
@@ -4582,7 +4584,8 @@ typedef struct {
   int32_t currency_suffix; /* 1: the symbol follows the number */
   int32_t currency_space;  /* 1: one space between symbol and number */
   int32_t currency_default_decimals;
-  int32_t measured; /* 1: Excel-measured profile; 0: estimated */
+  int32_t measured;           /* 1: Excel-measured profile; 0: estimated */
+  int32_t collation_measured; /* 1: collation order measured (mac-*); 0: estimated (win-*) */
 } fm_locale_facts_t;
 
 /**
@@ -4594,6 +4597,62 @@ typedef struct {
  *           (context `profile_id=<id>`).
  */
 FM_API fm_status_t fm_locale_facts(const char* profile_id, fm_locale_facts_t* out);
+
+/**
+ * @brief Which Excel text fold a collation call applies.
+ *
+ * Selects the text fold only; type boundaries (number, text, boolean, error,
+ * blank) never depend on it.
+ */
+typedef enum {
+  FM_COLLATION_COMPARE = 0,      /* the fold of =, criteria, SEARCH and approximate lookup */
+  FM_COLLATION_DYNAMIC = 1,      /* the fold of SORT, UNIQUE, XLOOKUP, GROUPBY and pivots */
+  FM_COLLATION_CLASSIC_EXACT = 2 /* the fold of MATCH 0 and VLOOKUP FALSE */
+} fm_collation_strength_t;
+
+/**
+ * @brief Compares two texts under `profile_id`'s collation.
+ *
+ * `*out_order` is the sign (-1, 0, 1) of comparing `a` with `b`; it is a text
+ * order, not `=` on two cells. Both strings are NUL-terminated UTF-8.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `profile_id` is not a documented profile
+ *           (context `profile_id=<id>`) or `strength` is out of range.
+ */
+FM_API fm_status_t fm_text_compare(const char* a, const char* b, const char* profile_id,
+                                   fm_collation_strength_t strength, int32_t* out_order);
+
+/**
+ * @brief Classifies `count` values into equivalence classes.
+ *
+ * Writes one class id per value to `out_class_ids` (`count` entries) and the
+ * number of distinct classes to `*out_class_count`. Ids are dense from 0 in
+ * ascending SORT order (number < text < boolean < error by code < blank).
+ * Two values share an id only when they have the same kind and an equal
+ * value: text by the `strength` fold of `profile_id`, numbers by value
+ * (`-0` equals `0`), errors by code; blanks are always one class.
+ *
+ * Usage: deduplicate by keeping the first index per id; sort by a stable
+ * sort on the id, keeping blanks last when descending; re-apply a saved
+ * selection by classifying the saved values and the column values in ONE
+ * call and picking the matching ids. Ids are meaningful only within one
+ * call.
+ *
+ * When `count` is `0`, `values` and `out_class_ids` may be `NULL`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `profile_id` or `out_class_count` is
+ *           `NULL`, or `values` / `out_class_ids` is `NULL` with `count > 0`;
+ *         `kInvalidArgument` when `profile_id` is not a documented profile,
+ *           `strength` is out of range, `count` exceeds `UINT32_MAX`, or a
+ *           value is a non-finite number, text with a `NULL` pointer, an
+ *           out-of-range error code, or an array / reference / lambda kind.
+ */
+FM_API fm_status_t fm_collation_classes(const fm_value_t* values, size_t count, const char* profile_id,
+                                        fm_collation_strength_t strength, uint32_t* out_class_ids,
+                                        uint32_t* out_class_count);
 
 /**
  * @brief Returns the number of error values, the bound of `error_index` in

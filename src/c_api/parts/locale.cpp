@@ -93,6 +93,7 @@ extern "C" fm_status_t fm_locale_facts(const char* profile_id, fm_locale_facts_t
   out->currency_space = facts.currency.space ? 1 : 0;
   out->currency_default_decimals = static_cast<int32_t>(facts.currency.default_decimals);
   out->measured = formulon::is_measured_profile(profile) ? 1 : 0;
+  out->collation_measured = profile.host == formulon::ExcelHost::kMac365 ? 1 : 0;
   return 0;
 }
 

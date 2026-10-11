@@ -450,6 +450,7 @@ LOCALE_FACTS = Struct(
         ("currency_space", I32),
         ("currency_default_decimals", I32),
         ("measured", I32),
+        ("collation_measured", I32),
     ],
 )
 
