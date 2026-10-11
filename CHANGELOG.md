@@ -51,6 +51,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TEXTJOIN` over an operator applied to a whole column (`A:A&""`) counts the
   empty cells below the data, so a delimiter-joined result past 32,767
   characters is `#CALC!` as in Excel.
+- `formatValue` and `validateValue` on WASM and Node reject a value without
+  `kind` with an invalid-argument status instead of reading it as blank.
+- The declarations no longer type unrelated `kind` fields as `FilterKind`:
+  `ExternalLinkRecord.kind` is `ExternalLinkKind` and `ColorSpec.kind` a
+  number in both packages, and the Node package's `Value.kind`,
+  `PivotCell.kind` and `CfMatch.kind` use their own kind enums.
 
 ## [0.14.0] - 2026-10-11
 
