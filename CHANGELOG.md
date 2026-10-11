@@ -7,7 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-11
+
+### BREAKING
+
+- A new workbook evaluates with the `win-365-en_US` profile instead of
+  `win-365-ja_JP`, in the C ABI, Node, WASM, Python and the CLI. Results
+  that depend on the locale change with it: number, date and boolean text,
+  `TEXT` and `DOLLAR`, the `CHAR` / `CODE` code page, the byte-counting
+  `*B` functions, `ASC` / `DBCS`, kana and width folding, and PivotTable
+  labels. Select `win-365-ja_JP` by profile id to keep the previous
+  behaviour.
+- `fm_locale_t` and the `FM_LOCALE_*` codes are removed; the function-name
+  calls take a profile id instead of a numeric locale. `fm_function_metadata`,
+  `functionMetadata` and `function_metadata` lose their locale argument, as
+  the metadata is locale-invariant.
+- C ABI: `fm_sheet_format_defaults` grows from 32 to 48 bytes
+  (`effective_default_col_width`, `effective_default_row_height`). Callers
+  built against the old layout must rebuild.
+- Formula text that does not parse is rejected at entry:
+  `fm_workbook_set_formula`, `fm_workbook_set_defined_name(_scoped)`,
+  `fm_sheet_cf_add_rule` and `fm_sheet_add_validation` return
+  `kParserUnexpectedToken` and leave the workbook unchanged, and the Node,
+  WASM and Python setters over them do the same. A file that holds such a
+  formula still loads it verbatim; it evaluates to `#NAME?`.
+
 ### Added
+
+- `--profile <id>` on every CLI subcommand selects the Excel profile, from
+  the same 28 ids the bindings accept.
+- `fm_sheet_clear_column_width` (`clearColumnWidth`, `clear_column_width`)
+  drops only the width override of a column range, keeping hidden, outline
+  and style state, so the columns follow later default-width changes.
+  `fm_sheet_get_format_defaults` reports the effective default column width
+  and row height the sheet lays out with (`effectiveDefaultColWidth`,
+  `effectiveDefaultRowHeight`).
 
 - `de-DE`, `fr-FR`, `zh-CN`, `ko-KR`, `th-TH`, `es-ES`, `es-MX`, `pt-BR`,
   `ru-RU`, `zh-TW`, `it-IT` and `nl-NL` Excel profiles, each on a `mac` and a
@@ -103,10 +137,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in zh-CN where `MATCH(…, 1)` does not. `win-*` profiles keep the
   case-insensitive byte comparison, with unsigned bytes on every path, and
   `GROUPBY`, `PIVOTBY` and PivotTables on them no longer fold kana or width.
-- `fm_locale_t` and the `FM_LOCALE_*` codes are removed; the function-name
-  calls take a profile id instead of a numeric locale. `fm_function_metadata`,
-  `functionMetadata` and `function_metadata` lose their locale argument, as
-  the metadata is locale-invariant.
+- Text functions follow the profile's code page. `CHAR` / `CODE` use Mac
+  Roman or Windows-1252 on single-byte profiles, CP932 / JIS X 0208 on
+  ja-JP, and the EUC forms of GB 2312 and KS X 1001 on zh-CN and ko-KR.
+  Outside the double-byte profiles the `*B` functions count UTF-16 units,
+  `ASC` / `DBCS` return their text unchanged and `TRIM` keeps U+3000.
+  Half-width katakana is one byte only in ja-JP. Windows-1252's undefined
+  slots decode to the C1 control of the same number, and on ja-JP a lone
+  CP932 lead byte is a space.
+- Number, date and boolean text is read and written by the profile's locale:
+  `VALUE`, `NUMBERVALUE`, implicit coercion and criteria take the locale
+  separators, currency and boolean names; numeric dates follow the locale
+  date order, and kanji, wareki, full-width digits and yen markers are
+  accepted only on Japanese profiles. `DOLLAR`, `FIXED` and `USDOLLAR` use
+  the locale currency shape, number formats take weekday and month names
+  from the locale, and the `!` escape, `DBNum` and the Japanese General
+  spelling apply only on Japanese profiles.
+- Exact `MATCH` / `VLOOKUP` / `HLOOKUP` / `XLOOKUP` / `XMATCH` on `mac-*`
+  profiles fold full-width digits, and a D-function field argument folds
+  half-width katakana, as Mac Excel does. `PHONETIC` returns `#N/A` in
+  en-US.
 - PivotTable labels, data-field names and subtotal rows follow Mac Excel 365
   in each profile's locale. An en-US pivot renders Excel's compact layout
   (`Row Labels` / `Column Labels` headers, `North Total` subtotal rows) instead
@@ -279,12 +329,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   writes errors in each profile's spelling, including `#SPILL!` and `#CALC!`
   (`#スピル!` in ja-JP, `#ÜBERLAUF!` in de-DE, `#BEREKENEN!` in nl-NL).
 
+### Performance
+
+- The WASM module no longer links the 128-bit floating-point routines, and
+  several single-use template instantiations are folded into shared code.
+
 ### Fixed
 
 - `IFERROR` and `IFNA` replace the caught elements of an array or range
   value one by one, pairing an array fallback by position, instead of
   passing the array through unchanged.
 - `NUMBERVALUE` drops spaces anywhere in its text (`"1 234.5"` is 1234.5).
+- Date and time text accepts spaces around `-`, `/` and `:`
+  (`DATEVALUE("2026 - 01 - 01")`), and an hour of 24 or more rolls the date
+  forward.
+- A `"TRUE"` / `"FALSE"` `COUNTIF`-family criterion matches only boolean
+  cells, and `GCD` / `LCM` skip a scalar reference to a blank cell.
+- `SUM(INDIRECT("A2"))` and the other range-aware functions skip text in a
+  single-cell `INDIRECT` as they do for `SUM(A2)`.
+- A PivotTable with axis fields and no data field renders labels only,
+  without empty value columns or a grand-total row.
+- Fraction formats (`TEXT(0.015, "?/100")`) give the same result on WASM and
+  x86-64 Linux as on macOS.
 - `TEXT` returns `#VALUE!` for a text section holding an unquoted digit
   (`"@ 9"`), as Excel does.
 - `TEXT` returns `#VALUE!` for a number format with an unquoted colon before
@@ -297,8 +363,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Greek, Cyrillic, Thai, Hangul, kana and CJK after them in code-point order
   (the zh profiles ignore them), and orders zh-CN ideographs outside GB 2312
   level 1 by radical and stroke instead of pinyin. Wildcard criteria and
-  lookups keep the previous kana and width folding, and Windows text order is
-  unmeasured.
+  wildcard lookups keep the previous kana and width folding, and Windows text
+  order is unmeasured.
 
 ## [0.13.0] - 2026-10-06
 
@@ -2298,7 +2364,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/libraz/formulon/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/libraz/formulon/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/libraz/formulon/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/libraz/formulon/compare/v0.11.0...v0.11.1
