@@ -187,7 +187,7 @@ export function registerSheetPivot(Module, test) {
       assert.ok(rowLabels);
       assert.equal(rowLabels.kind, PIVOT.HEADER);
       assert.equal(rowLabels.value.kind, VAL.TEXT);
-      assert.equal(rowLabels.value.text, '行ラベル');
+      assert.equal(rowLabels.value.text, 'Row Labels');
 
       const northLabel = findPivotCell(layout, 1, 3);
       assert.ok(northLabel);

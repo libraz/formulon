@@ -49,7 +49,7 @@ function checkedPivotGrid(wb, pivot) {
   return [...rows.keys()].sort((a, b) => a - b).map((row) => rows.get(row).join('|'));
 }
 
-const CHECKED_PIVOT_GRID = ['行ラベル|Sum of Amount', 'East|10', 'West|30', '総計|40'];
+const CHECKED_PIVOT_GRID = ['Row Labels|Sum of Amount', 'East|10', 'West|30', 'Grand Total|40'];
 
 export function registerPivotRegressions(Module, test) {
   test('pivotFieldAddItemAt hides the blank item an empty label cannot name', () => {
