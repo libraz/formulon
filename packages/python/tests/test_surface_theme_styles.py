@@ -137,10 +137,6 @@ class NamedStyleTests(unittest.TestCase):
                 wb.set_cell_style(CellStyle("", xf_id))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class CreateForProfileTests(unittest.TestCase):
     def test_mac_ja_jp_defaults(self) -> None:
         with Workbook.create_for_profile("mac-365-ja_JP") as wb:
@@ -191,3 +187,7 @@ class ThemeScriptFontTests(unittest.TestCase):
                 wb.set_theme_script_font(True, "Jp", "Face")
             with self.assertRaises(FormulonError):
                 wb.set_theme_script_font(True, "Jpan", "")
+
+
+if __name__ == "__main__":
+    unittest.main()
