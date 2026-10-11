@@ -25,6 +25,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `localeFacts` / `locale_facts` report `collationMeasured`: true for `mac-*`
   profiles, false for the estimated `win-*` collation (including
   `win-365-ja_JP`, whose other facts are measured).
+- New workbooks shaped for a profile: `fm_workbook_create_for_profile` /
+  `Workbook.createForProfile` / `Workbook.create_for_profile` take a profile
+  id and return the workbook Excel creates in that locale: the body font
+  (name, charset, the theme's minor scheme, 12 pt on Mac and 11 pt on
+  Windows), the phonetic font and vertically centred Normal style of the
+  Japanese, Korean and Chinese locales, the localized Normal style and first
+  sheet names, page margins, and on Mac the default row height and base
+  column width. Mac values are measured in all fourteen UI locales; `win-*`
+  profiles are estimated from them. `createDefault` is unchanged.
+- The theme's per-script fonts: `fm_workbook_theme_script_font_count` /
+  `fm_workbook_theme_script_font_at` and `getTheme().majorScripts` /
+  `minorScripts` (`major_scripts` / `minor_scripts` in Python) list the
+  `<a:font script>` faces of the major and minor fonts, the Office theme's 47
+  when the workbook has no theme part, and `fm_workbook_set_theme_script_font`
+  / `setThemeScriptFont` / `set_theme_script_font` set one.
 
 ### Changed
 
@@ -72,6 +87,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as a number (`01`, `１`, `1e0` against `1`; a percentage against `50%`). The
   space after each comma in the list is dropped. Lists that refer to a range
   are unchanged.
+- Print column widths find the Normal style by its built-in id, so a
+  workbook whose Normal style has a localized name sizes columns from that
+  style's font.
 
 ## [0.14.0] - 2026-10-11
 
