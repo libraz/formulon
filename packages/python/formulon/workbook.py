@@ -368,6 +368,32 @@ class GeometryMode(IntEnum):
     PRINT = 1
 
 
+class CollationStrength(IntEnum):
+    """Text fold selected for a collation call (``fm_collation_strength_t``).
+
+    The strength selects the text fold only; type boundaries never depend on it.
+    """
+
+    #: The fold of ``=``, criteria, SEARCH and approximate lookup.
+    COMPARE = 0
+    #: The fold of SORT, UNIQUE, XLOOKUP, GROUPBY and pivots.
+    DYNAMIC = 1
+    #: The fold of MATCH 0 and VLOOKUP FALSE.
+    CLASSIC_EXACT = 2
+
+
+@dataclass(frozen=True)
+class CollationClasses:
+    """Result of :meth:`Workbook.collation_classes`.
+
+    ``class_ids`` holds one id per input value, dense from 0 in ascending
+    SORT order; ``class_count`` is the number of distinct classes.
+    """
+
+    class_ids: List[int]
+    class_count: int
+
+
 class DisplayStatus(IntEnum):
     """Outcome of a display-text rendering (``fm_display_status_t``)."""
 
@@ -1555,6 +1581,10 @@ class LocaleFacts:
     currency_space: bool
     currency_default_decimals: int
     measured: bool
+    #: ``True`` when the collation order of the profile was measured in Excel
+    #: (every ``mac-*`` id); ``False`` for the estimated ``win-*`` ids, even
+    #: ``win-365-ja_JP``, whose ``measured`` is ``True``.
+    collation_measured: bool
     error_names: Tuple[ErrorName, ...]
 
 
@@ -2126,6 +2156,17 @@ def _alloc_struct_array(layout: S.Struct, count: int, owned: List[int]) -> int:
     ptr = LIB.alloc(layout.size * count)
     owned.append(ptr)
     LIB.write_bytes(ptr, b"\x00" * (layout.size * count))
+    return ptr
+
+
+def _alloc_value_array(count: int, owned: List[int]) -> int:
+    """Allocate a zeroed contiguous array of ``count`` ``fm_value_t`` slots.
+
+    The pointer is appended to ``owned`` for later release.
+    """
+    ptr = LIB.alloc(fm_value_t_size * count)
+    owned.append(ptr)
+    LIB.write_bytes(ptr, b"\x00" * (fm_value_t_size * count))
     return ptr
 
 
@@ -8108,6 +8149,7 @@ class Workbook:
                 currency_space=d["currency_space"] != 0,
                 currency_default_decimals=d["currency_default_decimals"],
                 measured=d["measured"] != 0,
+                collation_measured=d["collation_measured"] != 0,
                 error_names=tuple(errors),
             )
         finally:
@@ -8116,6 +8158,80 @@ class Workbook:
             LIB.free(canonical_out)
             LIB.free(localized_out)
             LIB.free(measured_out)
+
+    @staticmethod
+    def compare_text(a: str, b: str, strength: CollationStrength, profile_id: ExcelProfileId) -> int:
+        """Compare two texts under the collation of ``profile_id``.
+
+        Returns -1, 0 or 1. This is the text fold only, not ``=`` on two
+        cells. ``strength`` selects which fold applies.
+
+        Raises:
+          FormulonError: on an unknown ``profile_id`` or an out-of-range ``strength``.
+        """
+        a_ptr, _ = LIB.alloc_utf8(a)
+        b_ptr, _ = LIB.alloc_utf8(b)
+        pid_ptr, _ = LIB.alloc_utf8(profile_id)
+        out = _alloc_out_ptr()
+        try:
+            _check(
+                LIB.fm_text_compare(a_ptr, b_ptr, pid_ptr, _sint(int(strength), "strength"), out),
+                "fm_text_compare",
+            )
+            return struct.unpack("<i", LIB.read_bytes(out, 4))[0]
+        finally:
+            for ptr in (a_ptr, b_ptr, pid_ptr, out):
+                LIB.free(ptr)
+
+    @staticmethod
+    def collation_classes(
+        values: Sequence[Value], strength: CollationStrength, profile_id: ExcelProfileId
+    ) -> CollationClasses:
+        """Classify ``values`` into collation-ordered equivalence classes.
+
+        Two values share an id only when they have the same kind and compare
+        equal under the ``strength`` text fold (``-0`` equals ``0``; blanks
+        are always equal). Ids are dense from 0 in ascending SORT order:
+        numbers < text < booleans < errors < blanks. ``strength`` selects the
+        text fold only; type boundaries never depend on it.
+
+        Ids are valid only within one call. Usage:
+
+        * Dedup or checklist order: take the first position of each id and
+          order by id.
+        * Sort: stable-sort by id; reverse for descending, keeping blanks last.
+        * Re-applying a saved selection: classify the saved values plus the
+          column values in one call and select the matching ids.
+
+        Raises:
+          FormulonError: on an unknown ``profile_id``, an out-of-range
+            ``strength``, a non-finite number or an out-of-range error code.
+        """
+        n = len(values)
+        owned: List[int] = []
+        pid_ptr, _ = LIB.alloc_utf8(profile_id)
+        owned.append(pid_ptr)
+        count_out = LIB.alloc(4)
+        owned.append(count_out)
+        try:
+            base = _alloc_value_array(n, owned)
+            for i, v in enumerate(values):
+                _write_value_input(v, base + i * fm_value_t_size, owned)
+            ids = 0
+            if n:
+                ids = LIB.alloc(4 * n)
+                owned.append(ids)
+            _check(
+                LIB.fm_collation_classes(
+                    base, _uint(n, "count"), pid_ptr, _sint(int(strength), "strength"), ids, count_out
+                ),
+                "fm_collation_classes",
+            )
+            class_ids = list(struct.unpack(f"<{n}I", LIB.read_bytes(ids, 4 * n))) if n else []
+            return CollationClasses(class_ids=class_ids, class_count=LIB.read_u32(count_out))
+        finally:
+            for ptr in owned:
+                LIB.free(ptr)
 
     # -- External links ----------------------------------------------------
     def external_link_count(self) -> int:

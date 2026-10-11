@@ -336,6 +336,8 @@ fm_function_canonicalize
 fm_formula_localize
 fm_formula_canonicalize
 fm_locale_facts
+fm_text_compare
+fm_collation_classes
 fm_locale_error_name_count
 fm_locale_error_name
 

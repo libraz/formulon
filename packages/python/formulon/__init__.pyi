@@ -261,6 +261,15 @@ class GeometryMode(IntEnum):
     DISPLAY = 0
     PRINT = 1
 
+class CollationStrength(IntEnum):
+    COMPARE = 0
+    DYNAMIC = 1
+    CLASSIC_EXACT = 2
+
+class CollationClasses:
+    class_ids: List[int]
+    class_count: int
+
 class DisplayStatus(IntEnum):
     OK = 0
     OVERFLOW = 1
@@ -1133,6 +1142,7 @@ class LocaleFacts:
     currency_space: bool
     currency_default_decimals: int
     measured: bool
+    collation_measured: bool
     error_names: Tuple[ErrorName, ...]
 
 class FunctionMetadataLocalized(TypedDict, total=False):
@@ -2074,6 +2084,12 @@ class Workbook:
     def canonicalize_formula(formula: str, profile_id: ExcelProfileId) -> str: ...
     @staticmethod
     def locale_facts(profile_id: ExcelProfileId) -> LocaleFacts: ...
+    @staticmethod
+    def compare_text(a: str, b: str, strength: CollationStrength, profile_id: ExcelProfileId) -> int: ...
+    @staticmethod
+    def collation_classes(
+        values: Sequence[Value], strength: CollationStrength, profile_id: ExcelProfileId
+    ) -> CollationClasses: ...
 
     # External links.
     def external_link_count(self) -> int: ...
