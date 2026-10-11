@@ -7,14 +7,10 @@
 // argument-resolution and array-materialisation primitives they share so
 // no single helper is duplicated across the split.
 //
-// Cell-comparison helpers (`unique_lane_key`, `sort_cell_less_asc`,
-// `sort_lane_less`, `ascii_ci_less`) intentionally implement the
-// Excel-canonical cross-kind ordering for the dynamic-array surface and
-// are NOT migrated to the eval::coerce / eval::jp helpers: the W3.5
-// matrix-strict / fold_jp_text APIs operate on numeric coercion or
-// criterion-equality folding, which is broader than what UNIQUE / SORT
-// need (ASCII case-insensitive Text compare plus Number / Bool / Error /
-// Blank kind ordering).
+// The cell-comparison helpers below (`unique_lane_key`, `sort_cell_less_asc`,
+// `sort_lane_less*`, `collation_classes`) own Excel's cross-kind order for
+// this surface: kinds never merge, and Text goes through the profile's
+// dynamic-array collation (`eval/collation.h`).
 
 #ifndef FORMULON_EVAL_DYNAMIC_ARRAY_COMMON_H_
 #define FORMULON_EVAL_DYNAMIC_ARRAY_COMMON_H_
