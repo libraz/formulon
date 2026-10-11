@@ -119,12 +119,23 @@ std::vector<ThemeScriptFont> script_fonts(const pugi::xml_node& font_node) {
   return out;
 }
 
+/// The default Office script faces, for a part that lacks the font block.
+std::vector<ThemeScriptFont> office_script_fonts(bool major) {
+  std::vector<ThemeScriptFont> out;
+  for (std::size_t i = 0; i < kOfficeScriptCount; ++i) {
+    out.push_back({office_script(i), office_script_face(i, major)});
+  }
+  return out;
+}
+
 std::optional<Theme> parse_theme(const pugi::xml_document& doc) {
   const pugi::xml_node clr = clr_scheme_of(doc);
   if (!clr) {
     return std::nullopt;
   }
   Theme out = default_theme();
+  out.major_scripts = office_script_fonts(true);
+  out.minor_scripts = office_script_fonts(false);
   for (std::size_t i = 0; i < kThemeColorCount; ++i) {
     const std::optional<std::uint32_t> argb = read_scheme_color(find_child(clr, kSchemeNames[i]));
     if (!argb) {
@@ -165,20 +176,21 @@ std::string build_default_theme_xml() {
                     "<a:theme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" name=\"Office Theme\">"
                     "<a:themeElements><a:clrScheme name=\"Office\">";
   for (std::size_t i = 0; i < kThemeColorCount; ++i) {
-    xml += "<a:" + std::string(kSchemeNames[i]) + "><a:srgbClr val=\"" + hex6(def.colors[i]) +
-           "\"/></a:" + kSchemeNames[i] + ">";
+    xml.append("<a:").append(kSchemeNames[i]).append("><a:srgbClr val=\"").append(hex6(def.colors[i]));
+    xml.append("\"/></a:").append(kSchemeNames[i]).append(">");
   }
   xml += "</a:clrScheme><a:fontScheme name=\"Office\">";
-  const auto font = [&xml](const char* tag, const std::string& latin, const std::vector<ThemeScriptFont>& scripts) {
-    xml +=
-        std::string("<a:") + tag + "><a:latin typeface=\"" + latin + "\"/><a:ea typeface=\"\"/><a:cs typeface=\"\"/>";
-    for (const ThemeScriptFont& entry : scripts) {
-      xml += "<a:font script=\"" + entry.script + "\" typeface=\"" + entry.typeface + "\"/>";
+  for (const bool major : {true, false}) {
+    const char* tag = major ? "majorFont" : "minorFont";
+    xml.append("<a:").append(tag).append("><a:latin typeface=\"");
+    xml.append(major ? def.fonts.major_latin : def.fonts.minor_latin);
+    xml.append("\"/><a:ea typeface=\"\"/><a:cs typeface=\"\"/>");
+    for (std::size_t i = 0; i < kOfficeScriptCount; ++i) {
+      xml.append("<a:font script=\"").append(office_script(i)).append("\" typeface=\"");
+      xml.append(office_script_face(i, major)).append("\"/>");
     }
-    xml += std::string("</a:") + tag + ">";
-  };
-  font("majorFont", def.fonts.major_latin, def.major_scripts);
-  font("minorFont", def.fonts.minor_latin, def.minor_scripts);
+    xml.append("</a:").append(tag).append(">");
+  }
   xml += "</a:fontScheme><a:fmtScheme name=\"Office\">";
   const std::string fill = "<a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill>";
   const auto list = [&xml](const char* tag, const std::string& item) {
@@ -209,12 +221,26 @@ Expected<std::string, Error> open_theme_for_edit(Workbook& wb, pugi::xml_documen
   return path;
 }
 
-void set_attr(pugi::xml_node node, const char* name, const std::string& value) {
+void set_attr(pugi::xml_node node, const char* name, std::string_view value) {
   pugi::xml_attribute attr = node.attribute(name);
   if (!attr) {
     attr = node.append_attribute(name);
   }
-  attr.set_value(value.c_str());
+  attr.set_value(value.data(), value.size());
+}
+
+/// Sets the face of the `a:font` entry for `script`, appending the entry when absent.
+void set_script_face(pugi::xml_node font_node, std::string_view script, std::string_view typeface) {
+  for (pugi::xml_node child : font_node.children()) {
+    if (child.type() == pugi::node_element && local_name(child.name()) == "font" &&
+        std::string_view(child.attribute("script").value()) == script) {
+      set_attr(child, "typeface", typeface);
+      return;
+    }
+  }
+  pugi::xml_node added = font_node.append_child((prefix_of(font_node.name()) + "font").c_str());
+  set_attr(added, "script", script);
+  set_attr(added, "typeface", typeface);
 }
 
 /// Writes the Latin and East Asian faces of one `a:majorFont` / `a:minorFont`.
@@ -230,16 +256,7 @@ void patch_font(pugi::xml_node font_node, const std::string& latin, const std::s
     set_attr(ea_node, "typeface", east_asian);
     return;
   }
-  for (pugi::xml_node child : font_node.children()) {
-    if (child.type() == pugi::node_element && local_name(child.name()) == "font" &&
-        std::string_view(child.attribute("script").value()) == "Jpan") {
-      set_attr(child, "typeface", east_asian);
-      return;
-    }
-  }
-  pugi::xml_node jpan = font_node.append_child((prefix + "font").c_str());
-  set_attr(jpan, "script", "Jpan");
-  set_attr(jpan, "typeface", east_asian);
+  set_script_face(font_node, "Jpan", east_asian);
 }
 
 }  // namespace
@@ -301,15 +318,13 @@ Expected<void, Error> set_theme_fonts(Workbook& wb, const ThemeFonts& fonts) {
 
 Expected<void, Error> set_theme_script_font(Workbook& wb, bool major, std::string_view script,
                                             std::string_view typeface) {
-  const bool four_letters = script.size() == 4U && std::all_of(script.begin(), script.end(), [](char c) {
-                              return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
-                            });
-  if (!four_letters) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "theme: script must be four ASCII letters",
-                      "script=" + std::string(script));
+  bool valid = script.size() == 4U;
+  for (const char c : script) {
+    valid = valid && ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'));
   }
-  if (typeface.empty()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "theme: typeface must not be empty",
+  if (!valid || typeface.empty()) {
+    return make_error(FormulonErrorCode::kInvalidArgument,
+                      valid ? "theme: typeface must not be empty" : "theme: script must be four ASCII letters",
                       "script=" + std::string(script));
   }
   pugi::xml_document doc;
@@ -317,22 +332,12 @@ Expected<void, Error> set_theme_script_font(Workbook& wb, bool major, std::strin
   if (!path_or) {
     return Expected<void, Error>(std::move(path_or.error()));
   }
-  pugi::xml_node font_node = find_child(font_scheme_of(doc), major ? "majorFont" : "minorFont");
+  const pugi::xml_node font_node = find_child(font_scheme_of(doc), major ? "majorFont" : "minorFont");
   if (!font_node) {
     return make_error(FormulonErrorCode::kIoXmlParse, "theme: font scheme has no major/minor font",
                       "part=" + path_or.value());
   }
-  const std::string face(typeface);
-  for (pugi::xml_node child : font_node.children()) {
-    if (child.type() == pugi::node_element && local_name(child.name()) == "font" &&
-        std::string_view(child.attribute("script").value()) == script) {
-      set_attr(child, "typeface", face);
-      return ooxml::store_part_dom(wb, path_or.value(), doc);
-    }
-  }
-  pugi::xml_node added = font_node.append_child((prefix_of(font_node.name()) + "font").c_str());
-  set_attr(added, "script", std::string(script));
-  set_attr(added, "typeface", face);
+  set_script_face(font_node, script, typeface);
   return ooxml::store_part_dom(wb, path_or.value(), doc);
 }
 

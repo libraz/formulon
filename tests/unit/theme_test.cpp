@@ -226,26 +226,37 @@ Workbook LoadExcelNewWorkbook() {
   return std::move(read.value().workbook);
 }
 
+/// The default Office script faces from the constexpr table, in table order.
+std::vector<ThemeScriptFont> OfficeScripts(bool major) {
+  std::vector<ThemeScriptFont> out;
+  for (std::size_t i = 0; i < kOfficeScriptCount; ++i) {
+    out.push_back({office_script(i), office_script_face(i, major)});
+  }
+  return out;
+}
+
 TEST(Theme, DefaultThemeCarriesOfficeScriptFonts) {
   const Theme& def = default_theme();
-  ASSERT_EQ(def.major_scripts.size(), 47U);
-  ASSERT_EQ(def.minor_scripts.size(), 47U);
+  const std::vector<ThemeScriptFont> major_scripts = OfficeScripts(true);
+  const std::vector<ThemeScriptFont> minor_scripts = OfficeScripts(false);
+  ASSERT_EQ(major_scripts.size(), 47U);
+  ASSERT_EQ(minor_scripts.size(), 47U);
   // Values and order from a Mac Excel 365 new workbook's theme part.
-  EXPECT_EQ(def.major_scripts.front().script, "Jpan");
-  EXPECT_EQ(def.major_scripts.front().typeface, "游ゴシック Light");
-  EXPECT_EQ(def.minor_scripts.front().typeface, "游ゴシック");
-  EXPECT_EQ(ScriptFace(def.major_scripts, "Khmr"), "MoolBoran");
-  EXPECT_EQ(ScriptFace(def.minor_scripts, "Khmr"), "DaunPenh");
-  EXPECT_EQ(ScriptFace(def.major_scripts, "Hans"), "等线 Light");
-  EXPECT_EQ(ScriptFace(def.minor_scripts, "Arab"), "Arial");
-  EXPECT_EQ(def.major_scripts.back().script, "Tfng");
-  EXPECT_EQ(def.minor_scripts.back().typeface, "Ebrima");
-  EXPECT_EQ(def.fonts.major_ea, ScriptFace(def.major_scripts, "Jpan"));
-  EXPECT_EQ(def.fonts.minor_ea, ScriptFace(def.minor_scripts, "Jpan"));
+  EXPECT_EQ(major_scripts.front().script, "Jpan");
+  EXPECT_EQ(major_scripts.front().typeface, "游ゴシック Light");
+  EXPECT_EQ(minor_scripts.front().typeface, "游ゴシック");
+  EXPECT_EQ(ScriptFace(major_scripts, "Khmr"), "MoolBoran");
+  EXPECT_EQ(ScriptFace(minor_scripts, "Khmr"), "DaunPenh");
+  EXPECT_EQ(ScriptFace(major_scripts, "Hans"), "等线 Light");
+  EXPECT_EQ(ScriptFace(minor_scripts, "Arab"), "Arial");
+  EXPECT_EQ(major_scripts.back().script, "Tfng");
+  EXPECT_EQ(minor_scripts.back().typeface, "Ebrima");
+  EXPECT_EQ(def.fonts.major_ea, ScriptFace(major_scripts, "Jpan"));
+  EXPECT_EQ(def.fonts.minor_ea, ScriptFace(minor_scripts, "Jpan"));
 
   const LoadedTheme loaded = Workbook::create().load_theme();
   EXPECT_EQ(loaded.source, ThemeSource::kDefault);
-  EXPECT_EQ(loaded.theme.minor_scripts.size(), 47U);
+  EXPECT_TRUE(loaded.theme.minor_scripts.empty());
 }
 
 TEST(Theme, ExcelSavedThemeScriptFontsMatchDefaultTable) {
@@ -256,11 +267,13 @@ TEST(Theme, ExcelSavedThemeScriptFontsMatchDefaultTable) {
   ASSERT_EQ(loaded.theme.minor_scripts.size(), 47U);
   EXPECT_EQ(ScriptFace(loaded.theme.minor_scripts, "Khmr"), "DaunPenh");
   EXPECT_EQ(loaded.theme.major_scripts[1].script, "Hang");
+  const std::vector<ThemeScriptFont> def_majors = OfficeScripts(true);
+  const std::vector<ThemeScriptFont> def_minors = OfficeScripts(false);
   for (std::size_t i = 0; i < 47U; ++i) {
-    EXPECT_EQ(loaded.theme.major_scripts[i].script, default_theme().major_scripts[i].script) << i;
-    EXPECT_EQ(loaded.theme.major_scripts[i].typeface, default_theme().major_scripts[i].typeface) << i;
-    EXPECT_EQ(loaded.theme.minor_scripts[i].script, default_theme().minor_scripts[i].script) << i;
-    EXPECT_EQ(loaded.theme.minor_scripts[i].typeface, default_theme().minor_scripts[i].typeface) << i;
+    EXPECT_EQ(loaded.theme.major_scripts[i].script, def_majors[i].script) << i;
+    EXPECT_EQ(loaded.theme.major_scripts[i].typeface, def_majors[i].typeface) << i;
+    EXPECT_EQ(loaded.theme.minor_scripts[i].script, def_minors[i].script) << i;
+    EXPECT_EQ(loaded.theme.minor_scripts[i].typeface, def_minors[i].typeface) << i;
   }
 }
 
@@ -281,11 +294,13 @@ TEST(Theme, SetScriptFontWithoutThemePartKeepsOtherDefaults) {
   ASSERT_EQ(loaded.source, ThemeSource::kPart);
   ASSERT_EQ(loaded.theme.minor_scripts.size(), 47U);
   ASSERT_EQ(loaded.theme.major_scripts.size(), 47U);
+  const std::vector<ThemeScriptFont> def_majors = OfficeScripts(true);
+  const std::vector<ThemeScriptFont> def_minors = OfficeScripts(false);
   for (std::size_t i = 0; i < 47U; ++i) {
-    const ThemeScriptFont& def_minor = default_theme().minor_scripts[i];
+    const ThemeScriptFont& def_minor = def_minors[i];
     EXPECT_EQ(loaded.theme.minor_scripts[i].script, def_minor.script);
     EXPECT_EQ(loaded.theme.minor_scripts[i].typeface, def_minor.script == "Hang" ? "Batang" : def_minor.typeface);
-    EXPECT_EQ(loaded.theme.major_scripts[i].typeface, default_theme().major_scripts[i].typeface);
+    EXPECT_EQ(loaded.theme.major_scripts[i].typeface, def_majors[i].typeface);
   }
 }
 

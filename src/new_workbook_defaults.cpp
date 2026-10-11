@@ -68,25 +68,16 @@ void apply_new_workbook_defaults(ExcelProfile profile, StylesTable& styles, Shee
   const NewWorkbookDefaults& row = new_workbook_defaults(profile.locale);
   const bool mac = profile.host == ExcelHost::kMac365;
 
+  styles.fonts.reserve(2U);
   FontRecord& body = styles.fonts[0];
   body.name = row.font_name;
-  body.size = mac ? kNewWorkbookMacFontSize : kNewWorkbookWinFontSize;
   body.has_charset = row.charset != 0U;
   body.charset = row.charset;
   body.scheme = kSchemeMinor;
-  body.color.kind = ColorSpec::Kind::kTheme;
-  body.color.theme = 1U;
 
   if (row.phonetic_size != 0U) {
-    FontRecord phonetic;
-    phonetic.name = row.font_name;
-    phonetic.size = row.phonetic_size;
-    phonetic.has_family = true;
-    phonetic.family = body.family;
-    phonetic.has_charset = body.has_charset;
-    phonetic.charset = row.charset;
-    phonetic.scheme = kSchemeMinor;
-    styles.fonts.push_back(std::move(phonetic));
+    // The phonetic font is the body face without a colour, at its own size.
+    styles.fonts.emplace_back(body).size = row.phonetic_size;
     center_vertically(styles.cell_style_xfs[0]);
     center_vertically(styles.cell_xfs[0]);
     sheet.mutable_raw_extensions().push_back(
@@ -94,6 +85,9 @@ void apply_new_workbook_defaults(ExcelProfile profile, StylesTable& styles, Shee
                           row.phonetic_no_conversion ? "<phoneticPr fontId=\"1\" type=\"noConversion\"/>"
                                                      : "<phoneticPr fontId=\"1\"/>"});
   }
+  body.size = mac ? kNewWorkbookMacFontSize : kNewWorkbookWinFontSize;
+  body.color.kind = ColorSpec::Kind::kTheme;
+  body.color.theme = 1U;
   styles.cell_styles[0].name = row.normal_style_name;
 
   if (mac) {

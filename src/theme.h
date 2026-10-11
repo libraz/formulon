@@ -60,6 +60,15 @@ struct LoadedTheme {
   ThemeSource source = ThemeSource::kDefault;
 };
 
+/// Number of per-script faces in the default Office theme.
+constexpr std::size_t kOfficeScriptCount = 47;
+
+/// ISO 15924 code of the `index`-th default script (`index < kOfficeScriptCount`).
+const char* office_script(std::size_t index);
+
+/// Major or minor face of the `index`-th default script, from the constexpr table.
+const char* office_script_face(std::size_t index, bool major);
+
 /// The current Excel Office theme (Aptos Display / Aptos Narrow, Yu Gothic for
 /// East Asian), with the 47 script faces of a Mac Excel 365 new workbook.
 const Theme& default_theme();

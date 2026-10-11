@@ -126,8 +126,10 @@ extern "C" fm_status_t fm_workbook_theme_script_font_count(const fm_workbook_t* 
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_theme_script_font_count: NULL argument");
   }
-  const formulon::Theme theme = wb->workbook().load_theme().theme;
-  *out_count = (major != 0 ? theme.major_scripts : theme.minor_scripts).size();
+  const formulon::LoadedTheme loaded = wb->workbook().load_theme();
+  *out_count = loaded.source != formulon::ThemeSource::kPart
+                   ? formulon::kOfficeScriptCount
+                   : (major != 0 ? loaded.theme.major_scripts : loaded.theme.minor_scripts).size();
   return 0;
 }
 
@@ -138,17 +140,19 @@ extern "C" fm_status_t fm_workbook_theme_script_font_at(const fm_workbook_t* wb,
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_theme_script_font_at: NULL argument");
   }
-  formulon::Theme theme = wb->workbook().load_theme().theme;
-  std::vector<formulon::ThemeScriptFont>& scripts = major != 0 ? theme.major_scripts : theme.minor_scripts;
-  if (idx >= scripts.size()) {
+  const formulon::LoadedTheme loaded = wb->workbook().load_theme();
+  const bool from_part = loaded.source == formulon::ThemeSource::kPart;
+  const std::vector<formulon::ThemeScriptFont>& scripts =
+      major != 0 ? loaded.theme.major_scripts : loaded.theme.minor_scripts;
+  if (idx >= (from_part ? scripts.size() : formulon::kOfficeScriptCount)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_theme_script_font_at: index out of range", "idx=" + std::to_string(idx));
   }
   TextStore& store = const_cast<TextStore&>(wb->read_scratch);
   store.clear();
-  store.emplace_back(std::move(scripts[idx].script));
+  store.emplace_back(from_part ? scripts[idx].script : formulon::office_script(idx));
   *out_script = store.back().c_str();
-  store.emplace_back(std::move(scripts[idx].typeface));
+  store.emplace_back(from_part ? scripts[idx].typeface : formulon::office_script_face(idx, major != 0));
   *out_typeface = store.back().c_str();
   return 0;
 }
