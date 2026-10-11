@@ -30,6 +30,7 @@ export const ValueKind: Readonly<{
   Ref: 6;
   Lambda: 7;
 }>;
+export type ValueKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /** Status carried by binding result envelopes. Argument validation may
  *  throw `TypeError` or `RangeError` before returning a result. */
@@ -52,7 +53,7 @@ export interface Status {
 /** Flattened mirror of `fm_value_t`. Only the field selected by `kind`
  *  is meaningful; the others carry default-zero values. */
 export interface Value {
-  kind: FilterKind;
+  kind: ValueKind;
   /** Active when `kind === ValueKind.Number`. */
   number: number;
   /** Active when `kind === ValueKind.Bool` (0 or 1). */
@@ -214,6 +215,7 @@ export const PivotCellKind: Readonly<{
   GrandTotal: 6;
   Blank: 7;
 }>;
+export type PivotCellKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /** One concrete cell in a projected PivotTable layout. */
 export interface PivotCell {
@@ -222,7 +224,7 @@ export interface PivotCell {
   /** Absolute 0-based sheet column. */
   col: number;
   value: Value;
-  kind: FilterKind;
+  kind: PivotCellKind;
   /** Header nesting depth; 0 for data cells. */
   depth: number;
   /** Source field name when known. */
@@ -448,6 +450,7 @@ export const CfMatchKind: Readonly<{
   DataBar: 2;
   IconSet: 3;
 }>;
+export type CfMatchKind = 0 | 1 | 2 | 3;
 
 /** `fm_error_code_t` ordinals (mirror of `formulon::ErrorCode`). */
 export const ErrorCode: Readonly<{
@@ -513,6 +516,7 @@ export const ExternalLinkKind: Readonly<{
   Ole: 2;
   Dde: 3;
 }>;
+export type ExternalLinkKind = 0 | 1 | 2 | 3;
 
 /**
  * Full formula-behaviour profile id: `mac` or `win` combined with one of
@@ -592,7 +596,7 @@ export interface CfValueObjectInput {
 /** Resolved CF match. Active fields depend on `kind`; the others carry
  *  default-zero values. */
 export interface CfMatch {
-  kind: FilterKind;
+  kind: CfMatchKind;
   priority: number;
   /** `1` when `dxfId` is meaningful; `0` otherwise. */
   dxfIdEngaged: number;
@@ -1719,7 +1723,7 @@ export interface CellXfResult {
  *  the writer emits the sibling `*Argb` as `rgb`. */
 export interface ColorSpec {
   /** 0=none, 1=rgb, 2=theme, 3=indexed, 4=auto. */
-  kind: FilterKind;
+  kind: number;
   /** AARRGGBB; meaningful when `kind` is 1. */
   rgb: number;
   /** Theme index; meaningful when `kind` is 2. */
@@ -2047,7 +2051,7 @@ export interface ExternalLinkRecord {
    *  `TargetMode="External"` (the common case). */
   targetExternal: boolean;
   /** External-link kind: 0 unknown, 1 externalBook, 2 ole, 3 dde. */
-  kind: FilterKind;
+  kind: ExternalLinkKind;
 }
 
 /** One inclusive cell-range entry inside a CF rule's `sqref` union. */

@@ -1465,7 +1465,7 @@ export interface CellXfResult {
  *  the writer emits the sibling `*Argb` as `rgb`. */
 export interface ColorSpec {
   /** 0=none, 1=rgb, 2=theme, 3=indexed, 4=auto. */
-  kind: FilterKind;
+  kind: number;
   /** AARRGGBB; meaningful when `kind` is 1. */
   rgb: number;
   /** Theme index; meaningful when `kind` is 2. */
@@ -1729,7 +1729,7 @@ export interface ExternalLinkRecord {
    *  `TargetMode="External"` (the common case). */
   targetExternal: boolean;
   /** One of `ExternalLinkKind.*`. */
-  kind: FilterKind;
+  kind: ExternalLinkKind;
 }
 
 /** Argument of `Workbook.setCellStyle`. Mirrors `CellStyleResult` without the status. */
