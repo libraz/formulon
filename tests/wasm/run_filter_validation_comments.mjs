@@ -416,6 +416,9 @@ export function registerFilterValidationComments(Module, test) {
       assert.equal(bad.errorStyle, ValidationErrorStyle.Warning);
       assert.equal(wb.validateValue(0, 0, 0, { kind: 3, text: 'x' }).valid, false);
       assert.equal(wb.validateValue(99, 0, 0, { kind: 1, number: 1 }).status.ok, false);
+      const noKind = wb.validateValue(0, 0, 0, { number: 50 });
+      assert.equal(noKind.status.ok, false, 'a value without `kind` is rejected, not read as blank');
+      assert.match(noKind.status.message, /requires a `kind`/);
 
       assert.ok(wb.setNumber(0, 0, 0, 5).ok);
       assert.ok(wb.setNumber(0, 1, 0, 50).ok);

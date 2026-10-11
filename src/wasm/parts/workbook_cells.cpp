@@ -743,6 +743,11 @@ emscripten::val JsWorkbook::validateValue(uint32_t sheet, uint32_t row, uint32_t
   std::string text;
   fm_value_t proposed{};
   JsNarrowNumericReader reader("validateValue");
+  if (!reader.has_own(value, "kind", "value.kind")) {
+    o.set("status", binding_error_status(kInvalidArgument, reader.ok() ? "validateValue: `value` requires a `kind`"
+                                                                       : reader.message().c_str()));
+    return o;
+  }
   if (!pull_value(reader, value, text, &proposed)) {
     o.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
     return o;
@@ -775,9 +780,12 @@ emscripten::val JsWorkbook::formatValue(emscripten::val value, const std::string
   std::string text;
   fm_value_t v{};
   JsNarrowNumericReader reader("formatValue");
-  if (!pull_value(reader, value, text, &v)) {
+  const bool has_kind = reader.has_own(value, "kind", "value.kind");
+  if (!has_kind || !pull_value(reader, value, text, &v)) {
     emscripten::val out = emscripten::val::object();
-    out.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
+    out.set("status", binding_error_status(kInvalidArgument, has_kind || !reader.ok()
+                                                                 ? reader.message().c_str()
+                                                                 : "formatValue: `value` requires a `kind`"));
     out.set("text", std::string());
     out.set("displayStatus", 0);
     return out;

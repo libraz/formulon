@@ -192,6 +192,9 @@ test('validateValue and listInvalidCells follow the rule covering a cell', async
     assert.equal(text.valid, false, 'text "5" is text, not a number');
     assert.equal(wb.validateValue(99, 0, 0, { kind: mod.ValueKind.Number, number: 1 }).status.ok, false);
     assert.equal(wb.validateValue(0, 0, 0, null).status.ok, false);
+    const noKind = wb.validateValue(0, 0, 0, { number: 50 });
+    assert.equal(noKind.status.ok, false, 'a value without `kind` is rejected, not read as blank');
+    assert.match(noKind.status.message, /requires a `kind`/);
 
     must(wb.setNumber(0, 0, 1, 5), 'setNumber');
     must(wb.setNumber(0, 1, 1, 50), 'setNumber');

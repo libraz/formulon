@@ -176,6 +176,9 @@ export function registerCellGeometryDisplay(Module, test) {
       const bad = wb.formatValue({ kind: 1, number: 1, boolean: 0, text: '', errorCode: 0 }, '[[');
       assert.ok(bad.status.ok);
       assert.equal(bad.displayStatus, 2);
+      const noKind = wb.formatValue({ number: 0.5 }, '0.0%');
+      assert.equal(noKind.status.ok, false, 'a value without `kind` is rejected, not read as blank');
+      assert.match(noKind.status.message, /requires a `kind`/);
       assert.equal(wb.getDisplayText(9, 0, 0).status.ok, false);
     });
   });

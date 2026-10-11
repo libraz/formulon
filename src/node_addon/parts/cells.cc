@@ -545,8 +545,13 @@ Napi::Value Workbook::ValidateValue(const Napi::CallbackInfo& info) {
   }
   std::string text;
   fm_value_t value{};
+  const Napi::Object spec = info[3].As<Napi::Object>();
+  if (!spec.Has("kind")) {
+    out.Set("status", MakeBindingError(env, kInvalidArgument, "validateValue: `value` requires a `kind`"));
+    return out;
+  }
   CheckedSpecReader reader(env);
-  if (!ReadValueSpec(reader, info[3].As<Napi::Object>(), text, value)) {
+  if (!ReadValueSpec(reader, spec, text, value)) {
     return env.Undefined();
   }
   const CellAddressArgs address = ReadCellAddress(info);
@@ -588,6 +593,11 @@ Napi::Value Workbook::FormatValue(const Napi::CallbackInfo& info) {
     return out;
   }
   const Napi::Object spec = info[0].As<Napi::Object>();
+  if (!spec.Has("kind")) {
+    Napi::Object out = MakeDisplayResult(env, kInvalidArgument, nullptr, 0);
+    out.Set("status", MakeBindingError(env, kInvalidArgument, "formatValue: `value` requires a `kind`"));
+    return out;
+  }
   const std::string format_code = ArgString(info, 1);
   std::string text;
   fm_value_t value{};

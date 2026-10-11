@@ -268,6 +268,9 @@ test('getDisplayText and formatValue render through the number format', async ()
   const text = wb.formatValue({ kind: mod.ValueKind.Text, number: 0, boolean: 0, text: 'abc', errorCode: 0 }, '@');
   assert.equal(text.text, 'abc');
   assert.equal(wb.formatValue({ kind: 99 }, '').status.ok, false);
+  const noKind = wb.formatValue({ number: 0.5 }, '0.0%');
+  assert.equal(noKind.status.ok, false, 'a value without `kind` is rejected, not read as blank');
+  assert.match(noKind.status.message, /requires a `kind`/);
 });
 
 test('paginate reports paper, margins, printable area, pages and break provenance', async () => {
