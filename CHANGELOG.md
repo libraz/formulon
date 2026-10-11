@@ -57,6 +57,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ExternalLinkRecord.kind` is `ExternalLinkKind` and `ColorSpec.kind` a
   number in both packages, and the Node package's `Value.kind`,
   `PivotCell.kind` and `CfMatch.kind` use their own kind enums.
+- An AutoFilter checklist entry ignores leading and trailing spaces on both
+  the entry and the cell's shown text, so `abc` also selects `abc ` and
+  ` abc`. Tabs, non-breaking and ideographic spaces still count.
+- PivotTable caption filters "begins with", "ends with" and "contains" (and
+  their negations) match like `SEARCH`: letter case, width and kana fold one
+  character at a time under the profile's comparison collation, `*` and `?`
+  are wildcards and `~` escapes them. On load the stored wildcard pattern is
+  what is matched, as Excel does on refresh. Label filters set through the
+  API use the same rule.
+- An in-cell data-validation list compares what the cell shows: leading and
+  trailing spaces are ignored, a spelling must match exactly (case and width
+  included), and a value that reads as a number matches an item equal to it
+  as a number (`01`, `１`, `1e0` against `1`; a percentage against `50%`). The
+  space after each comma in the list is dropped. Lists that refer to a range
+  are unchanged.
 
 ## [0.14.0] - 2026-10-11
 
