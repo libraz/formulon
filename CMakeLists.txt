@@ -126,6 +126,7 @@ set(FORMULON_CORE_SOURCES
   src/threaded_comment.cpp
   src/style_resolve.cpp
   src/theme.cpp
+  src/new_workbook_defaults.cpp
   src/color_resolve.cpp
   src/value.cpp
   src/sheet.cpp

@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace formulon {
 
@@ -31,9 +32,20 @@ struct ThemeFonts {
   std::string minor_ea;
 };
 
+/// One `a:font` entry of `a:majorFont` / `a:minorFont`: the face used for
+/// an ISO 15924 script code such as `Jpan` or `Hang`.
+struct ThemeScriptFont {
+  std::string script;
+  std::string typeface;
+};
+
+/// `major_scripts` / `minor_scripts` keep the part's file order. The Jpan
+/// entry is the same element `ThemeFonts::*_ea` falls back to.
 struct Theme {
   ThemeColors colors{};
   ThemeFonts fonts;
+  std::vector<ThemeScriptFont> major_scripts;
+  std::vector<ThemeScriptFont> minor_scripts;
 };
 
 /// Where a loaded theme came from.
@@ -48,7 +60,8 @@ struct LoadedTheme {
   ThemeSource source = ThemeSource::kDefault;
 };
 
-/// The current Excel Office theme (Aptos Display / Aptos Narrow, Yu Gothic for East Asian).
+/// The current Excel Office theme (Aptos Display / Aptos Narrow, Yu Gothic for
+/// East Asian), with the 47 script faces of a Mac Excel 365 new workbook.
 const Theme& default_theme();
 
 }  // namespace formulon

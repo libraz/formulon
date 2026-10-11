@@ -101,6 +101,18 @@ class Workbook {
   /// empty sheet lists, and so do we.
   static Workbook create_empty();
 
+  /// Factory for the workbook a new Excel book in `profile` starts as: one
+  /// sheet, `excel_profile()` set to `profile`, and the locale's Normal
+  /// font, phonetic font, Normal style name, sheet name, vertical alignment
+  /// and page margins (`new_workbook_defaults.h`). The body font is 12 pt
+  /// on Mac and 11 pt on Windows; the Mac default row height and base
+  /// column width are set, the Windows ones are left at the engine
+  /// defaults. Windows values other than the size are estimated from the
+  /// Mac measurements. No theme part is created; Excel reads its absence as
+  /// the Office theme. The phonetic font (font 1) keeps the locale face
+  /// when font 0 is changed later.
+  static Workbook create_for_profile(const ExcelProfile& profile);
+
   Workbook(const Workbook&) = delete;
   Workbook& operator=(const Workbook&) = delete;
   Workbook(Workbook&&) noexcept;
@@ -607,6 +619,14 @@ class Workbook {
   /// Sets the four theme fonts, patching only `a:fontScheme`; same generation
   /// and failure rules as `set_theme_colors`.
   Expected<void, Error> set_theme_fonts(const ThemeFonts& fonts);
+
+  /// Sets the face of one `a:font script` entry of `a:majorFont` (`major`)
+  /// or `a:minorFont`, appending the entry when the script has none. Same
+  /// generation and failure rules as `set_theme_colors`; a generated part
+  /// carries every default script face. Setting `Jpan` also moves `*_ea`
+  /// while `a:ea` is empty. `kInvalidArgument` unless `script` is four
+  /// ASCII letters and `typeface` is non-empty.
+  Expected<void, Error> set_theme_script_font(bool major, std::string_view script, std::string_view typeface);
 
   /// Returns the workbook to the default theme by removing the theme part, its
   /// own rels part, the parts only it referenced and the workbook relationship

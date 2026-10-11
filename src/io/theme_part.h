@@ -7,6 +7,8 @@
 #ifndef FORMULON_IO_THEME_PART_H_
 #define FORMULON_IO_THEME_PART_H_
 
+#include <string_view>
+
 #include "theme.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -25,6 +27,10 @@ Expected<void, Error> set_theme_colors(Workbook& wb, const ThemeColors& colors);
 
 /// Implements `Workbook::set_theme_fonts`.
 Expected<void, Error> set_theme_fonts(Workbook& wb, const ThemeFonts& fonts);
+
+/// Implements `Workbook::set_theme_script_font`.
+Expected<void, Error> set_theme_script_font(Workbook& wb, bool major, std::string_view script,
+                                            std::string_view typeface);
 
 /// Implements `Workbook::reset_theme`.
 Expected<void, Error> reset_theme(Workbook& wb);

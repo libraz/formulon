@@ -34,6 +34,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/auto_filter_model_test.cpp
   unit/validation_eval_test.cpp
   unit/theme_test.cpp
+  unit/new_workbook_defaults_test.cpp
   unit/color_resolve_test.cpp
   unit/style_resolve_test.cpp
   unit/utils/checked_mul_test.cpp

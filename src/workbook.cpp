@@ -34,6 +34,7 @@
 #include "io/workbook_kind_ooxml.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/writer.h"
+#include "new_workbook_defaults.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/external_book_spelling.h"
@@ -163,6 +164,10 @@ Expected<void, Error> Workbook::set_theme_fonts(const ThemeFonts& fonts) {
   return io::set_theme_fonts(*this, fonts);
 }
 
+Expected<void, Error> Workbook::set_theme_script_font(bool major, std::string_view script, std::string_view typeface) {
+  return io::set_theme_script_font(*this, major, script, typeface);
+}
+
 Expected<void, Error> Workbook::reset_theme() {
   return io::reset_theme(*this);
 }
@@ -219,6 +224,15 @@ Workbook Workbook::create() {
   Workbook wb;
   wb.sheets_.emplace_back(Sheet{std::string("Sheet1")});
   seed_default_styles(wb.styles_);
+  return wb;
+}
+
+Workbook Workbook::create_for_profile(const ExcelProfile& profile) {
+  Workbook wb;
+  wb.excel_profile_ = profile;
+  wb.sheets_.emplace_back(Sheet{std::string(new_workbook_defaults(profile.locale).sheet_name)});
+  seed_default_styles(wb.styles_);
+  apply_new_workbook_defaults(profile, wb.styles_, wb.sheets_.front());
   return wb;
 }
 
