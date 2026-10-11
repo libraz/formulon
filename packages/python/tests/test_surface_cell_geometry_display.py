@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 from formulon import CellXf, FormulonError, Value, ValueKind, Workbook
 from formulon.workbook import (
@@ -61,6 +62,29 @@ class GeometryTests(unittest.TestCase):
                 wb.clear_column_width(0, 5, 3)
             with self.assertRaises(FormulonError):
                 wb.clear_column_width(0, 0, 16384)
+
+    def test_axis_styles_reach_entered_cells(self) -> None:
+        with Workbook.create_default() as wb:
+            col_xf = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=1))
+            row_xf = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=2))
+            wb.set_column_width(0, 1, 1, 20.0)
+            wb.set_column_style(0, 1, 1, col_xf)
+            wb.set_row_style(0, 2, row_xf)
+            self.assertEqual(wb.get_effective_style(0, 4, 1).xf_index, col_xf)
+            wb.set_text(0, 4, 1, "column")
+            wb.set_text(0, 2, 1, "both")
+            self.assertEqual(wb.get_cell_xf_index(0, 4, 1), col_xf)
+            self.assertEqual(wb.get_cell_xf_index(0, 2, 1), row_xf)
+
+            wb.clear_column_style(0, 1, 1)
+            wb.clear_row_style(0, 2)
+            cols = wb.get_sheet_columns(0)
+            self.assertEqual([(c.first, c.last, c.has_width, c.has_style) for c in cols], [(1, 1, True, False)])
+            self.assertEqual(wb.get_sheet_row_overrides(0), [])
+            with self.assertRaises(FormulonError):
+                wb.set_column_style(0, 0, 0, 1000)
+            with self.assertRaises(FormulonError):
+                wb.set_row_style(0, 0, 1000)
 
     def test_effective_format_defaults(self) -> None:
         with Workbook.create_default() as wb:

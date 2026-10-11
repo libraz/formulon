@@ -334,6 +334,19 @@ Napi::Value Workbook::SetColumnOutline(const Napi::CallbackInfo& info) {
   return MakeStatus(env, rc);
 }
 
+Napi::Value Workbook::SetColumnStyle(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t first = ArgU32(info, 1);
+  const uint32_t last = ArgU32(info, 2);
+  const uint32_t xf_index = ArgU32(info, 3);
+  fm_status_t rc = fm_sheet_set_column_style(handle_, sheet, first, last, xf_index);
+  return MakeStatus(env, rc);
+}
+
 Napi::Value Workbook::GetSheetRowOverrides(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -395,6 +408,15 @@ Napi::Value Workbook::ClearColumnWidth(const Napi::CallbackInfo& info) {
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   return MakeStatus(env, fm_sheet_clear_column_width(handle_, sheet, ArgU32(info, 1), ArgU32(info, 2)));
+}
+
+Napi::Value Workbook::ClearColumnStyle(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  return MakeStatus(env, fm_sheet_clear_column_style(handle_, sheet, ArgU32(info, 1), ArgU32(info, 2)));
 }
 
 Napi::Value Workbook::GetSheetFormatDefaults(const Napi::CallbackInfo& info) {
@@ -549,6 +571,27 @@ Napi::Value Workbook::SetRowOutline(const Napi::CallbackInfo& info) {
   }
   fm_status_t rc = fm_sheet_set_row_outline(handle_, sheet, row, static_cast<uint8_t>(level));
   return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::SetRowStyle(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t xf_index = ArgU32(info, 2);
+  fm_status_t rc = fm_sheet_set_row_style(handle_, sheet, row, xf_index);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::ClearRowStyle(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  return MakeStatus(env, fm_sheet_clear_row_style(handle_, sheet, ArgU32(info, 1)));
 }
 
 }  // namespace formulon_node

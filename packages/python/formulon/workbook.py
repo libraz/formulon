@@ -5770,6 +5770,24 @@ class Workbook:
             "fm_sheet_set_column_outline",
         )
 
+    def set_column_style(self, sheet: int, first: int, last: int, xf_index: int) -> None:
+        """Set the cell-style XF on ``[first, last]``, keeping the other column attributes."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_column_style(
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), _uint(xf_index, "xf_index")
+            ),
+            "fm_sheet_set_column_style",
+        )
+
+    def clear_column_style(self, sheet: int, first: int, last: int) -> None:
+        """Remove the cell-style XF on ``[first, last]``, keeping the other column attributes."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_clear_column_style(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last")),
+            "fm_sheet_clear_column_style",
+        )
+
     def get_sheet_row_overrides(self, sheet: int) -> List[RowLayout]:
         """Return the row-layout overrides on ``sheet``."""
         h = self._require()
@@ -5823,6 +5841,22 @@ class Workbook:
         _check(
             LIB.fm_sheet_set_row_outline(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(level, "level", 8)),
             "fm_sheet_set_row_outline",
+        )
+
+    def set_row_style(self, sheet: int, row: int, xf_index: int) -> None:
+        """Set the cell-style XF at ``row``, keeping the other row attributes."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_row_style(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(xf_index, "xf_index")),
+            "fm_sheet_set_row_style",
+        )
+
+    def clear_row_style(self, sheet: int, row: int) -> None:
+        """Remove the cell-style XF at ``row``, keeping the other row attributes."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_clear_row_style(h, _uint(sheet, "sheet_index"), _uint(row, "row")),
+            "fm_sheet_clear_row_style",
         )
 
     # -- Conditional formatting --------------------------------------------

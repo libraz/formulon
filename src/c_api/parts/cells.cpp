@@ -22,6 +22,7 @@
 #include "parser/parser.h"
 #include "phonetic.h"
 #include "sheet.h"
+#include "style_resolve.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/index_sort.h"
@@ -46,6 +47,29 @@ using formulon::c_api::parts::value_to_fm;
 // Cell mutation
 // ---------------------------------------------------------------------------
 
+namespace {
+
+// Writes an entry into (`row`, `col`) the way Excel stores one: a cell that
+// did not own a style takes its row's style, else its column's.
+template <typename Write>
+fm_status_t enter_cell(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col, Write&& write) {
+  formulon::Workbook& book = wb->workbook();
+  const formulon::EffectiveXf inherited = formulon::select_effective_xf(book.sheet(sheet_index), row, col);
+  auto r = write(book);
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  if (inherited.source == formulon::StyleSource::kRow || inherited.source == formulon::StyleSource::kColumn) {
+    auto styled = book.set_cell_xf_index(sheet_index, row, col, inherited.xf_index);
+    if (!styled) {
+      return set_last_error(styled.error());
+    }
+  }
+  return 0;
+}
+
+}  // namespace
+
 extern "C" fm_status_t fm_workbook_set_number(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                               double value) {
   clear_last_error();
@@ -55,11 +79,9 @@ extern "C" fm_status_t fm_workbook_set_number(fm_workbook_t* wb, size_t sheet_in
   if (auto rc = check_finite(value, "fm_workbook_set_number", "value"); rc != 0) {
     return rc;
   }
-  auto r = wb->workbook().set_cell_value(sheet_index, row, col, formulon::Value::number(value));
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return enter_cell(wb, sheet_index, row, col, [&](formulon::Workbook& book) {
+    return book.set_cell_value(sheet_index, row, col, formulon::Value::number(value));
+  });
 }
 
 extern "C" fm_status_t fm_workbook_set_bool(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -68,11 +90,9 @@ extern "C" fm_status_t fm_workbook_set_bool(fm_workbook_t* wb, size_t sheet_inde
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_bool"); rc != 0) {
     return rc;
   }
-  auto r = wb->workbook().set_cell_value(sheet_index, row, col, formulon::Value::boolean(value != 0));
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return enter_cell(wb, sheet_index, row, col, [&](formulon::Workbook& book) {
+    return book.set_cell_value(sheet_index, row, col, formulon::Value::boolean(value != 0));
+  });
 }
 
 extern "C" fm_status_t fm_workbook_set_error(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -85,12 +105,9 @@ extern "C" fm_status_t fm_workbook_set_error(fm_workbook_t* wb, size_t sheet_ind
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_set_error: error code out of range", "error=" + std::to_string(error));
   }
-  auto r = wb->workbook().set_cell_value(sheet_index, row, col,
-                                         formulon::Value::error(static_cast<formulon::ErrorCode>(error)));
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return enter_cell(wb, sheet_index, row, col, [&](formulon::Workbook& book) {
+    return book.set_cell_value(sheet_index, row, col, formulon::Value::error(static_cast<formulon::ErrorCode>(error)));
+  });
 }
 
 extern "C" fm_status_t fm_workbook_set_text(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -104,11 +121,8 @@ extern "C" fm_status_t fm_workbook_set_text(fm_workbook_t* wb, size_t sheet_inde
   }
   // Copy directly into the destination cell. Keeping every overwritten
   // input in a handle-global deque leaked one string per C-ABI write.
-  auto r = wb->workbook().set_cell_text(sheet_index, row, col, utf8);
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return enter_cell(wb, sheet_index, row, col,
+                    [&](formulon::Workbook& book) { return book.set_cell_text(sheet_index, row, col, utf8); });
 }
 
 extern "C" fm_status_t fm_workbook_set_cell_phonetic(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -255,11 +269,9 @@ extern "C" fm_status_t fm_workbook_set_formula(fm_workbook_t* wb, size_t sheet_i
       rc != 0) {
     return rc;
   }
-  auto r = wb->workbook().set_cell_formula(sheet_index, row, col, std::string(formula));
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return enter_cell(wb, sheet_index, row, col, [&](formulon::Workbook& book) {
+    return book.set_cell_formula(sheet_index, row, col, std::string(formula));
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -155,6 +155,16 @@ fm_status_t check_sheet_column_span(const fm_workbook_t* wb, size_t sheet_index,
   return check_column_span(first, last, fn);
 }
 
+fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::uint32_t xf_index, const char* fn) {
+  const std::size_t count = wb->workbook().styles().cell_xfs.size();
+  if (static_cast<std::size_t>(xf_index) < count) {
+    return 0;
+  }
+  const std::string message = std::string(fn) + ": xf_index out of range";
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, message.c_str(),
+                           "xf_index=" + std::to_string(xf_index) + " cell_xfs_count=" + std::to_string(count));
+}
+
 // Returns a pointer to the row override whose `row` equals `row`,
 // creating one if none exists. The returned pointer is valid until
 // the next mutation of `layout.row_overrides`.
@@ -168,6 +178,22 @@ formulon::RowLayout* upsert_row_override(formulon::SheetLayout& layout, std::uin
   fresh.row = row;
   layout.row_overrides.push_back(fresh);
   return &layout.row_overrides.back();
+}
+
+// Drops column spans left with no state (including empty ones synthesised for
+// columns that had no entry); they carry nothing to save.
+void drop_stateless_columns(formulon::SheetLayout& layout) {
+  auto& columns = layout.columns;
+  columns.erase(std::remove_if(columns.begin(), columns.end(),
+                               [](const formulon::ColumnLayout& entry) {
+                                 return !formulon::HasExplicitColumnWidth(entry) && !entry.hidden &&
+                                        entry.outline_level == 0U && !entry.has_style;
+                               }),
+                columns.end());
+}
+
+bool row_override_is_empty(const formulon::RowLayout& entry) {
+  return !entry.has_height && !entry.custom_height && !entry.hidden && entry.outline_level == 0U && !entry.has_style;
 }
 
 }  // namespace
@@ -277,15 +303,7 @@ extern "C" fm_status_t fm_sheet_clear_column_width(fm_workbook_t* wb, size_t she
     entry.width = 0.0;
     entry.has_width = false;
   });
-  // Spans left with no state (including empty ones synthesised for columns
-  // that had no entry) carry nothing to save.
-  auto& columns = layout.columns;
-  columns.erase(std::remove_if(columns.begin(), columns.end(),
-                               [](const formulon::ColumnLayout& entry) {
-                                 return !formulon::HasExplicitColumnWidth(entry) && !entry.hidden &&
-                                        entry.outline_level == 0U && !entry.has_style;
-                               }),
-                columns.end());
+  drop_stateless_columns(layout);
   return 0;
 }
 
@@ -308,6 +326,40 @@ extern "C" fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t she
   }
   overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
                       [level](formulon::ColumnLayout& entry) { entry.outline_level = level; });
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_column_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                                 uint32_t xf_index) {
+  static constexpr const char* kFn = "fm_sheet_set_column_style";
+  clear_last_error();
+  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, kFn); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_xf_index(wb, xf_index, kFn); rc != 0) {
+    return rc;
+  }
+  overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
+                      [xf_index](formulon::ColumnLayout& entry) {
+                        entry.has_style = true;
+                        entry.style_xf = xf_index;
+                      });
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_clear_column_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
+                                                   uint32_t last) {
+  static constexpr const char* kFn = "fm_sheet_clear_column_style";
+  clear_last_error();
+  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, kFn); rc != 0) {
+    return rc;
+  }
+  formulon::SheetLayout& layout = wb->workbook().sheet(sheet_index).mutable_layout();
+  overlay_column_span(layout, first, last, [](formulon::ColumnLayout& entry) {
+    entry.has_style = false;
+    entry.style_xf = 0U;
+  });
+  drop_stateless_columns(layout);
   return 0;
 }
 
@@ -364,6 +416,48 @@ extern "C" fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_
   return 0;
 }
 
+extern "C" fm_status_t fm_sheet_set_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t xf_index) {
+  static constexpr const char* kFn = "fm_sheet_set_row_style";
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_row_index(row, kFn); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_xf_index(wb, xf_index, kFn); rc != 0) {
+    return rc;
+  }
+  formulon::RowLayout* entry = upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
+  entry->has_style = true;
+  entry->style_xf = xf_index;
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_clear_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t row) {
+  static constexpr const char* kFn = "fm_sheet_clear_row_style";
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_row_index(row, kFn); rc != 0) {
+    return rc;
+  }
+  auto& overrides = wb->workbook().sheet(sheet_index).mutable_layout().row_overrides;
+  for (auto it = overrides.begin(); it != overrides.end(); ++it) {
+    if (it->row != row) {
+      continue;
+    }
+    it->has_style = false;
+    it->style_xf = 0U;
+    if (row_override_is_empty(*it)) {
+      overrides.erase(it);
+    }
+    break;
+  }
+  return 0;
+}
+
 extern "C" fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_clear_row_height"); rc != 0) {
@@ -380,7 +474,7 @@ extern "C" fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet
     it->height = 0.0;
     it->has_height = false;
     it->custom_height = false;
-    if (!it->hidden && it->outline_level == 0U && !it->has_style) {
+    if (row_override_is_empty(*it)) {
       overrides.erase(it);
     }
     break;

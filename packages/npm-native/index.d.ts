@@ -2961,6 +2961,8 @@ export interface Workbook {
   setColumnHidden(sheet: number, first: number, last: number, hidden: boolean): Status;
   /** Sets / replaces the column outline level on `[first, last]` (clamped to 0..255). */
   setColumnOutline(sheet: number, first: number, last: number, level: number): Status;
+  /** Sets / replaces the cell-style XF on `[first, last]`; index 0 is the default XF. A value later entered into an unstyled cell of the span takes this XF, unless its row has a style. */
+  setColumnStyle(sheet: number, first: number, last: number, xfIndex: number): Status;
 
   /** Returns the row-layout overrides on `sheet`. */
   getSheetRowOverrides(sheet: number): RowsResult;
@@ -2970,6 +2972,8 @@ export interface Workbook {
   clearRowHeight(sheet: number, row: number): Status;
   /** Removes the width override on columns `first..last`, returning them to the sheet default width. Hidden state, outline level and column style are kept. */
   clearColumnWidth(sheet: number, first: number, last: number): Status;
+  /** Removes the cell-style XF on `[first, last]`, retaining other column attributes. */
+  clearColumnStyle(sheet: number, first: number, last: number): Status;
   /** Reads the sheet's default column / row metrics (`<sheetFormatPr>`). */
   getSheetFormatDefaults(sheet: number): SheetFormatDefaultsResult;
   /** Replaces the sheet's default column / row metrics. A `has*` flag left out is inferred from the matching value. */
@@ -2990,6 +2994,10 @@ export interface Workbook {
   setRowHidden(sheet: number, row: number, hidden: boolean): Status;
   /** Sets / replaces the row outline level at `row` (clamped to 0..255). */
   setRowOutline(sheet: number, row: number, level: number): Status;
+  /** Sets / replaces the cell-style XF at `row`; index 0 is the default XF. A value later entered into an unstyled cell of the row takes this XF. */
+  setRowStyle(sheet: number, row: number, xfIndex: number): Status;
+  /** Removes the cell-style XF at `row`, retaining other row attributes. */
+  clearRowStyle(sheet: number, row: number): Status;
 
   // Styles.
   /** Returns `{ status, xfIndex }` for the cell at `(sheet, row, col)`. */

@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "c_api/parts/common.h"
 #include "gtest/gtest.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -838,6 +839,161 @@ TEST(FormulonCApiSheetLayout, ClearColumnWidthKeepsColumnStyle) {
   EXPECT_EQ(columns[0].style_xf, 1U);
   EXPECT_EQ(columns[1].has_width, 1);
   EXPECT_DOUBLE_EQ(columns[1].width, 30.0);
+}
+
+TEST(FormulonCApiSheetLayout, ColumnStyleOverlayPreservesOtherAttributes) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  wb.handle->workbook().mutable_styles().cell_xfs.resize(3U);
+
+  ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 0U, 4U, 20.0), 0);
+  ASSERT_EQ(fm_sheet_set_column_hidden(wb.handle, 0, 2U, 2U, 1), 0);
+  ASSERT_EQ(fm_sheet_set_column_outline(wb.handle, 0, 2U, 2U, 3U), 0);
+  ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0U, 4U, 2U), 0);
+  ASSERT_EQ(fm_sheet_clear_column_style(wb.handle, 0, 1U, 3U), 0);
+
+  const auto columns = ReadColumns(wb.handle);
+  ASSERT_EQ(columns.size(), 5U);
+  EXPECT_EQ(columns[0].first, 0U);
+  EXPECT_EQ(columns[0].last, 0U);
+  EXPECT_EQ(columns[0].has_style, 1);
+  EXPECT_EQ(columns[0].style_xf, 2U);
+  EXPECT_EQ(columns[1].first, 1U);
+  EXPECT_EQ(columns[1].last, 1U);
+  EXPECT_EQ(columns[1].has_style, 0);
+  EXPECT_EQ(columns[1].has_width, 1);
+  EXPECT_EQ(columns[2].first, 2U);
+  EXPECT_EQ(columns[2].last, 2U);
+  EXPECT_EQ(columns[2].has_style, 0);
+  EXPECT_EQ(columns[2].hidden, 1);
+  EXPECT_EQ(columns[2].outline_level, 3U);
+  EXPECT_EQ(columns[3].first, 3U);
+  EXPECT_EQ(columns[3].last, 3U);
+  EXPECT_EQ(columns[3].has_style, 0);
+  EXPECT_EQ(columns[4].first, 4U);
+  EXPECT_EQ(columns[4].last, 4U);
+  EXPECT_EQ(columns[4].has_style, 1);
+  EXPECT_EQ(columns[4].style_xf, 2U);
+}
+
+TEST(FormulonCApiSheetLayout, RowStyleUpsertAndClearPreserveOtherAttributes) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  wb.handle->workbook().mutable_styles().cell_xfs.resize(2U);
+
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 4U, 22.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 4U, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 4U, 3U), 0);
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 4U, 1U), 0);
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 5U, 1U), 0);
+
+  size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 2U);
+
+  ASSERT_EQ(fm_sheet_clear_row_style(wb.handle, 0, 4U), 0);
+  ASSERT_EQ(fm_sheet_clear_row_style(wb.handle, 0, 5U), 0);
+  ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 1U);
+
+  fm_row_layout_t row{};
+  ASSERT_EQ(fm_sheet_get_row_override(wb.handle, 0, 0U, &row), 0);
+  EXPECT_EQ(row.row, 4U);
+  EXPECT_DOUBLE_EQ(row.height, 22.0);
+  EXPECT_EQ(row.has_height, 1);
+  EXPECT_EQ(row.custom_height, 1);
+  EXPECT_EQ(row.hidden, 1);
+  EXPECT_EQ(row.outline_level, 3U);
+  EXPECT_EQ(row.has_style, 0);
+  EXPECT_EQ(row.style_xf, 0U);
+}
+
+TEST(FormulonCApiSheetLayout, ColumnAndRowStyleRejectInvalidXfWithoutMutation) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  EXPECT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0U, 0U, 1U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_style(wb.handle, 0, 0U, 1U), kInvalidArgument);
+
+  size_t column_count = 0;
+  size_t row_count = 0;
+  ASSERT_EQ(fm_sheet_get_column_count(wb.handle, 0, &column_count), 0);
+  ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &row_count), 0);
+  EXPECT_EQ(column_count, 0U);
+  EXPECT_EQ(row_count, 0U);
+}
+
+TEST(FormulonCApiSheetLayout, StyleOverridesSurviveSaveLoad) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  wb.handle->workbook().mutable_styles().cell_xfs.resize(2U);
+  ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 0U, 2U, 18.0), 0);
+  ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0U, 2U, 1U), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 24.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 3U, 1U), 0);
+
+  for (const std::int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    BufferGuard saved;
+    ASSERT_EQ(fm_workbook_save_as(wb.handle, format, &saved.data, &saved.len), 0) << "format=" << format;
+    WorkbookGuard reloaded;
+    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << "format=" << format;
+
+    const auto columns = ReadColumns(reloaded.handle);
+    ASSERT_EQ(columns.size(), 1U) << "format=" << format;
+    EXPECT_EQ(columns[0].first, 0U);
+    EXPECT_EQ(columns[0].last, 2U);
+    EXPECT_EQ(columns[0].has_width, 1);
+    EXPECT_EQ(columns[0].has_style, 1);
+    EXPECT_EQ(columns[0].style_xf, 1U);
+
+    size_t row_count = 0;
+    ASSERT_EQ(fm_sheet_get_row_override_count(reloaded.handle, 0, &row_count), 0);
+    ASSERT_EQ(row_count, 1U) << "format=" << format;
+    fm_row_layout_t row{};
+    ASSERT_EQ(fm_sheet_get_row_override(reloaded.handle, 0, 0U, &row), 0);
+    EXPECT_EQ(row.row, 3U);
+    EXPECT_DOUBLE_EQ(row.height, 24.0);
+    EXPECT_EQ(row.has_height, 1);
+    EXPECT_EQ(row.has_style, 1);
+    EXPECT_EQ(row.style_xf, 1U);
+  }
+}
+
+// Mac Excel 365 stores an entry into an unstyled cell with its row's style,
+// else its column's; the row wins where a styled row and column cross.
+TEST(FormulonCApiSheetLayout, EnteredValuesTakeTheAxisStyle) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  wb.handle->workbook().mutable_styles().cell_xfs.resize(3U);
+  ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 1U, 1U, 1U), 0);
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 2U, 2U), 0);
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 2U, 5U, 0U), 0);
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 4U, 1U, "column"), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 5U, 1U, "=1+1"), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 2U, 3U, 1.0), 0);
+  ASSERT_EQ(fm_workbook_set_bool(wb.handle, 0, 2U, 1U, 1), 0);
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 6U, 4U, "plain"), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 2U, 5U, 2.0), 0);
+  ASSERT_EQ(fm_workbook_set_blank(wb.handle, 0, 7U, 1U), 0);
+
+  const auto xf_at = [&](uint32_t row, uint32_t col) {
+    uint32_t xf = 99U;
+    EXPECT_EQ(fm_cell_get_xf_index(wb.handle, 0, row, col, &xf), 0);
+    return xf;
+  };
+  EXPECT_EQ(xf_at(4U, 1U), 1U);
+  EXPECT_EQ(xf_at(5U, 1U), 1U);
+  EXPECT_EQ(xf_at(2U, 3U), 2U);
+  EXPECT_EQ(xf_at(2U, 1U), 2U);
+  EXPECT_EQ(xf_at(6U, 4U), 0U);
+  // An explicit XF 0 is the cell's own style.
+  EXPECT_EQ(xf_at(2U, 5U), 0U);
+  // Clearing the column style later leaves the entered cell's copy.
+  ASSERT_EQ(fm_sheet_clear_column_style(wb.handle, 0, 1U, 1U), 0);
+  EXPECT_EQ(xf_at(4U, 1U), 1U);
+  // A blank write is not an entry.
+  const formulon::Cell* blank = wb.handle->workbook().sheet(0).cell_at(7U, 1U);
+  EXPECT_TRUE(blank == nullptr || !blank->has_explicit_xf);
 }
 
 TEST(FormulonCApiSheetLayout, ClearColumnWidthDropsEmptySpansAndIgnoresUncoveredColumns) {

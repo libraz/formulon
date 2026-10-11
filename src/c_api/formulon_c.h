@@ -713,6 +713,13 @@ FM_API fm_status_t fm_workbook_delete_cols(fm_workbook_t* wb, uint32_t sheet, ui
 /* Cell mutation                                                              */
 /* -------------------------------------------------------------------------- */
 
+/*
+ * The number / bool / error / text / formula setters store an entry the way
+ * Excel does: a cell that has no style of its own takes its row's style
+ * (`fm_sheet_set_row_style`), else its column's, as its cell XF. A cell that
+ * already carries an XF, including an explicit XF 0, keeps it.
+ */
+
 /**
  * @brief Stores a numeric literal at `(row, col)` on the given sheet.
  *
@@ -5173,6 +5180,32 @@ FM_API fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t sheet_i
                                                uint8_t level);
 
 /**
+ * @brief Sets or replaces the cell-style XF for the inclusive column span
+ *        `[first, last]`.
+ *
+ * The style applies to cells in the span that do not carry a cell-level XF.
+ * Existing width, hidden and outline attributes are retained, and overlapping
+ * column spans are split at the requested boundaries. `xf_index` addresses
+ * the workbook's cell-XF table; index 0 is the default cell style.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index`, the span, or `xf_index` is
+ *         out of range.
+ */
+FM_API fm_status_t fm_sheet_set_column_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                             uint32_t xf_index);
+
+/**
+ * @brief Removes the cell-style XF from the inclusive column span
+ *        `[first, last]`.
+ *
+ * Width, hidden and outline attributes are retained. Empty spans left with no
+ * observable state are removed.
+ */
+FM_API fm_status_t fm_sheet_clear_column_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last);
+
+/**
  * @brief Sets or replaces the row height override for `row`.
  *
  * `height` is in points. A rejected call leaves the layout exactly as it
@@ -5205,6 +5238,24 @@ FM_API fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index
  *         is past the last row (1048575).
  */
 FM_API fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint8_t level);
+
+/**
+ * @brief Sets or replaces the cell-style XF for `row`.
+ *
+ * The row style is effective only when the row has custom-format state, which
+ * this function sets. Existing height, custom-height, hidden and outline
+ * attributes are retained. `xf_index` addresses the workbook's cell-XF table;
+ * index 0 is the default cell style.
+ */
+FM_API fm_status_t fm_sheet_set_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t xf_index);
+
+/**
+ * @brief Removes the cell-style XF from `row`.
+ *
+ * Existing height, custom-height, hidden and outline attributes are retained;
+ * an otherwise empty row override is removed.
+ */
+FM_API fm_status_t fm_sheet_clear_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t row);
 
 /**
  * @brief Removes the height override of `row`, returning it to the sheet

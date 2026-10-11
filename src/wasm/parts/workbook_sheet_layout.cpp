@@ -478,6 +478,20 @@ JsStatus JsWorkbook::setColumnOutline(uint32_t sheet, uint32_t first, uint32_t l
   return status_from_rc(rc);
 }
 
+JsStatus JsWorkbook::setColumnStyle(uint32_t sheet, uint32_t first, uint32_t last, uint32_t xfIndex) {
+  if (handle_ == nullptr) {
+    return error_status(kBindingInvalidHandle);
+  }
+  return status_from_rc(fm_sheet_set_column_style(handle_, sheet, first, last, xfIndex));
+}
+
+JsStatus JsWorkbook::clearColumnStyle(uint32_t sheet, uint32_t first, uint32_t last) {
+  if (handle_ == nullptr) {
+    return error_status(kBindingInvalidHandle);
+  }
+  return status_from_rc(fm_sheet_clear_column_style(handle_, sheet, first, last));
+}
+
 // ---- Row layout overrides ----------------------------------------------
 
 emscripten::val JsWorkbook::getSheetRowOverrides(uint32_t sheet) const {
@@ -506,6 +520,20 @@ JsStatus JsWorkbook::setRowOutline(uint32_t sheet, uint32_t row, uint32_t level)
   }
   fm_status_t rc = fm_sheet_set_row_outline(handle_, sheet, row, clamp_outline_level(level));
   return status_from_rc(rc);
+}
+
+JsStatus JsWorkbook::setRowStyle(uint32_t sheet, uint32_t row, uint32_t xfIndex) {
+  if (handle_ == nullptr) {
+    return error_status(kBindingInvalidHandle);
+  }
+  return status_from_rc(fm_sheet_set_row_style(handle_, sheet, row, xfIndex));
+}
+
+JsStatus JsWorkbook::clearRowStyle(uint32_t sheet, uint32_t row) {
+  if (handle_ == nullptr) {
+    return error_status(kBindingInvalidHandle);
+  }
+  return status_from_rc(fm_sheet_clear_row_style(handle_, sheet, row));
 }
 
 JsStatus JsWorkbook::clearRowHeight(uint32_t sheet, uint32_t row) {

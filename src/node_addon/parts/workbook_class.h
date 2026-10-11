@@ -281,10 +281,12 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetColumnWidth(const Napi::CallbackInfo& info);
   Napi::Value SetColumnHidden(const Napi::CallbackInfo& info);
   Napi::Value SetColumnOutline(const Napi::CallbackInfo& info);
+  Napi::Value SetColumnStyle(const Napi::CallbackInfo& info);
   Napi::Value GetSheetRowOverrides(const Napi::CallbackInfo& info);
   Napi::Value SetRowHeight(const Napi::CallbackInfo& info);
   Napi::Value ClearRowHeight(const Napi::CallbackInfo& info);
   Napi::Value ClearColumnWidth(const Napi::CallbackInfo& info);
+  Napi::Value ClearColumnStyle(const Napi::CallbackInfo& info);
   Napi::Value GetSheetFormatDefaults(const Napi::CallbackInfo& info);
   Napi::Value SetSheetFormatDefaults(const Napi::CallbackInfo& info);
   Napi::Value GetCellRectPt(const Napi::CallbackInfo& info);
@@ -295,6 +297,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value ColumnPtToChars(const Napi::CallbackInfo& info);
   Napi::Value SetRowHidden(const Napi::CallbackInfo& info);
   Napi::Value SetRowOutline(const Napi::CallbackInfo& info);
+  Napi::Value SetRowStyle(const Napi::CallbackInfo& info);
+  Napi::Value ClearRowStyle(const Napi::CallbackInfo& info);
 
   // Styles.
   Napi::Value GetCellXfIndex(const Napi::CallbackInfo& info);
