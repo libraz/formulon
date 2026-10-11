@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Row and column styles can be set and cleared (`fm_sheet_set_column_style`,
+  `fm_sheet_clear_column_style`, `fm_sheet_set_row_style`,
+  `fm_sheet_clear_row_style`; `setColumnStyle` / `clearColumnStyle` /
+  `setRowStyle` / `clearRowStyle` on WASM and Node, `set_column_style` and
+  siblings in Python). Width, height, hidden and outline state are kept.
+
+### Changed
+
+- `UNIQUE` hashes each row's (or column's) identity instead of comparing
+  every pair, so a 100,000-row text column takes milliseconds.
+- The WASM size report's Brotli soft ceiling moved to 1032 KiB; the hard
+  ceiling stays at 1056 KiB.
+
+### Fixed
+
+- A number, boolean, error, text or formula written into a cell without its
+  own style takes its row's style, else its column's, as Excel stores it.
+  A cell with an explicit style, including style 0, keeps it.
+- `SEARCH` and `SEARCHB` treat two characters as equal when the profile's
+  comparison collation does: letter case everywhere, and width and kana in
+  every locale except zh-CN and zh-TW.
+- Conditional-format text rules follow the formulas Excel stores for them:
+  "contains" behaves as `SEARCH` (wildcards included) and "begins with" /
+  "ends with" compare under the profile's collation. A "between" rule
+  accepts its bounds in either order.
+- `TEXTJOIN` over an operator applied to a whole column (`A:A&""`) counts the
+  empty cells below the data, so a delimiter-joined result past 32,767
+  characters is `#CALC!` as in Excel.
+
 ## [0.14.0] - 2026-10-11
 
 ### BREAKING
