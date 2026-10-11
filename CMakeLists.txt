@@ -356,6 +356,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/eval_state.cpp
   src/eval/criteria.cpp
   src/eval/wildcard.cpp
+  src/eval/collated_wildcard.cpp
   src/eval/collation.cpp
   src/eval/collation_table.cpp
   src/eval/jp_fold.cpp
