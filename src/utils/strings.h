@@ -48,6 +48,18 @@ inline std::string_view trim(std::string_view input) noexcept {
   return rtrim(ltrim(input));
 }
 
+/// Returns `input` with leading U+0020 removed; other whitespace is kept.
+inline std::string_view ltrim_spaces(std::string_view input) noexcept {
+  const std::size_t start = input.find_first_not_of(' ');
+  return start == std::string_view::npos ? std::string_view() : input.substr(start);
+}
+
+/// Returns `input` with trailing U+0020 removed; other whitespace is kept.
+inline std::string_view rtrim_spaces(std::string_view input) noexcept {
+  const std::size_t last = input.find_last_not_of(' ');
+  return last == std::string_view::npos ? std::string_view() : input.substr(0, last + 1);
+}
+
 /// Splits `input` on every occurrence of the single-byte `delimiter`.
 ///
 /// Empty fields are preserved. Examples:

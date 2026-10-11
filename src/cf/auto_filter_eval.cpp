@@ -124,8 +124,9 @@ bool match_values(const ValueFilters& f, const Run& run, std::uint32_t row, std:
   if (shown.text.empty()) {
     return f.blank;
   }
+  const std::string_view shown_text = strings::ltrim_spaces(strings::rtrim_spaces(shown.text));
   for (const std::string& want : f.values) {
-    if (collate(want, shown.text) == 0) {
+    if (collate(strings::ltrim_spaces(strings::rtrim_spaces(want)), shown_text) == 0) {
       return true;
     }
   }

@@ -332,6 +332,25 @@ TEST(AutoFilterEvalCollation, CustomEqualityFollowsProfile) {
   }
 }
 
+// Leading and trailing U+0020 are trimmed from the entry and the cell text before comparing.
+TEST(AutoFilterEvalCollation, ValueListTrimsAsciiSpaces) {
+  const ExcelProfile profile{ExcelHost::kMac365, ExcelLocale::kJaJP};
+  auto visible = [&](const char* cell, const char* entry) {
+    FilterColumn column;
+    column.kind = FilterKind::kValues;
+    column.values.values.push_back(entry);
+    return BodyRowVisible(profile, cell, column);
+  };
+  for (const char* cell : {"abc", "abc ", "abc  ", " abc"}) {
+    EXPECT_TRUE(visible(cell, "abc")) << cell;
+  }
+  for (const char* cell : {"a bc", "abc\xC2\xA0", "abc\xE3\x80\x80", "abc\t", "abc\xC2\xAD"}) {
+    EXPECT_FALSE(visible(cell, "abc")) << cell;
+  }
+  EXPECT_TRUE(visible("abc", " abc"));
+  EXPECT_TRUE(visible("abc", "abc "));
+}
+
 // A wildcard criterion keeps the engine's pattern matching on every profile.
 TEST(AutoFilterEvalCollation, WildcardCriterionIsUnchanged) {
   for (const FilterProfile& fp : kFilterProfiles) {
