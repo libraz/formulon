@@ -160,7 +160,8 @@ const FontRecord* resolve_normal_font(const StylesTable& styles) {
     return nullptr;
   }
   for (const CellStyleRecord& cell_style : styles.cell_styles) {
-    if (cell_style.name != "Normal") {
+    // By builtin id, not name: Excel localizes the Normal style's name.
+    if (cell_style.builtin_id != 0U) {
       continue;
     }
     if (cell_style.xf_id < styles.cell_style_xfs.size()) {

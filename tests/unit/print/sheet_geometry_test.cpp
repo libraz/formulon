@@ -111,6 +111,24 @@ TEST(SheetGeometry, UncalibratedFontReportsExtrapolated) {
   EXPECT_DOUBLE_EQ(model.points_per_char, kPrintMdw);
 }
 
+TEST(SheetGeometry, LocalizedNormalStyleIsFoundByBuiltinId) {
+  Workbook wb = Workbook::create();
+  StylesTable& styles = wb.mutable_styles();
+  FontRecord yu;
+  yu.name = "游ゴシック";
+  yu.size = 11.0;
+  styles.fonts.push_back(yu);
+  CellXf style_xf;
+  style_xf.font_index = 1U;
+  styles.cell_style_xfs.push_back(style_xf);
+  styles.cell_styles[0].name = "標準";
+  styles.cell_styles[0].xf_id = 1U;
+
+  const FontRecord* font = resolve_normal_font(styles);
+  ASSERT_NE(font, nullptr);
+  EXPECT_EQ(font->name, "游ゴシック");
+}
+
 TEST(SheetGeometry, DefaultsFallBackToExcelStandards) {
   Workbook wb = Workbook::create();
   const Sheet& sheet = wb.sheet(0);
