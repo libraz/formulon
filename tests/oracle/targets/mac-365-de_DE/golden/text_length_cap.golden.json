@@ -2,11 +2,11 @@
   "suite": "text_length_cap",
   "description": "Results that would pass Excel's 32,767 UTF-16-unit text limit. The functions do not agree on what happens there: REPT, SUBSTITUTE and REPLACE are #VALUE!, CONCAT and TEXTJOIN are #CALC!, and `&` and CONCATENATE cut the result to the limit. A cut that would split a surrogate pair leaves 32,766 units. Long results are read through LEN so no case stores text near the limit in a cell.\nThe whole-column TEXTJOIN cases show that the blank cells past the populated head take a delimiter each when empty cells are kept.\n",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.113.4",
     "excel_locale": "de-DE",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T10:54:49Z"
+    "generated_at": "2026-10-11T16:10:38Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -255,7 +255,10 @@
           "value": "k5"
         }
       },
-      "skipped": "TEXTJOIN(\",\",FALSE,Sheet2!A:A&\"\"): Excel joins all 1,048,576 rows of the derived column, so the kept empties carry the text past the cap and the answer is #CALC!. Formulon's array arguments to lazy functions still walk only the populated head of a derived whole column, so it returns k1,k2,k3,,k5. The bare-reference spelling Sheet2!A:A counts the blank rows and is a live golden."
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
     }
   ]
 }

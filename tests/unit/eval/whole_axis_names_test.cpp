@@ -205,6 +205,22 @@ TEST_F(WholeAxisNames, TextJoinCountsWholeColumnBlanks) {
   EXPECT_EQ(Adhoc("=CONCAT(L!A:A)").as_text(), "k1k2k3k5");
 }
 
+// An operator over a whole column keeps its declared size, so the derived
+// empties take a delimiter each too (Mac Excel 365: #CALC!). The repeated tail
+// is joined without being expanded.
+TEST_F(WholeAxisNames, TextJoinCountsDerivedWholeAxisBlanks) {
+  ExpectError("=TEXTJOIN(\",\",FALSE,L!A:A&\"\")", ErrorCode::Calc);
+  ExpectError("=TEXTJOIN(\",\",FALSE,L!A:B&\"\")", ErrorCode::Calc);
+  ExpectError("=TEXTJOIN(\",\",FALSE,-L!B:B)", ErrorCode::Calc);
+  ExpectNumber("=LEN(TEXTJOIN(\",\",FALSE,L!1:1&\"\"))", 16387.0);
+  ExpectNumber("=LEN(TEXTJOIN(\"\",FALSE,L!A:B&\"\"))", 18.0);
+  std::size_t bytes = 0;
+  const Value skipped = Adhoc("=TEXTJOIN(\",\",TRUE,L!A:B&\"\")", &bytes);
+  ASSERT_TRUE(skipped.is_text()) << skipped.debug_to_string();
+  EXPECT_EQ(skipped.as_text(), "k1,10,k2,20,k3,30,40,k5,50");
+  EXPECT_LT(bytes, 1024U * 1024U);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

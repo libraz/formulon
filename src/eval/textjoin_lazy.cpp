@@ -8,9 +8,12 @@
 #include <vector>
 
 #include "eval/coerce.h"
+#include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
+#include "eval/tail_array.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -63,11 +66,65 @@ class RunningUtf16Units {
   std::uint64_t committed_units_ = 0;
 };
 
-// One flattened text argument cell, or `repeat` identical cells in a row.
+// Flattened text argument cells: `texts`, in order, `repeat` times over.
 struct TextPiece {
-  std::string text;
+  std::vector<std::string> texts;
   std::uint64_t repeat;
 };
+
+// Appends `v`'s text projection as a single cell.
+bool push_cell(const Value& v, std::vector<TextPiece>* out, Value* out_err) {
+  auto t = coerce_to_text(v);
+  if (!t) {
+    *out_err = Value::error(t.error());
+    return false;
+  }
+  out->push_back(TextPiece{{std::move(t.value())}, 1U});
+  return true;
+}
+
+// Flattens a whole-axis array in row-major order: the repeated tail becomes
+// one run, so the declared size is honoured without being expanded.
+bool flatten_tail_array(const TailArray& ta, std::vector<TextPiece>* out, Value* out_err) {
+  if (ta.axis == TailAxis::kRows) {
+    for (std::uint32_t r = 0; r < ta.head; ++r) {
+      for (std::uint32_t c = 0; c < ta.cols; ++c) {
+        if (!push_cell(tail_array_at(ta, r, c), out, out_err)) {
+          return false;
+        }
+      }
+    }
+    TextPiece run{{}, ta.rows - ta.head};
+    for (std::uint32_t c = 0; c < ta.cols; ++c) {
+      auto t = coerce_to_text(ta.tail[c]);
+      if (!t) {
+        *out_err = Value::error(t.error());
+        return false;
+      }
+      run.texts.push_back(std::move(t.value()));
+    }
+    if (run.repeat > 0U) {
+      out->push_back(std::move(run));
+    }
+    return true;
+  }
+  for (std::uint32_t r = 0; r < ta.rows; ++r) {
+    for (std::uint32_t c = 0; c < ta.head; ++c) {
+      if (!push_cell(tail_array_at(ta, r, c), out, out_err)) {
+        return false;
+      }
+    }
+    if (ta.cols > ta.head) {
+      auto t = coerce_to_text(ta.tail[r]);
+      if (!t) {
+        *out_err = Value::error(t.error());
+        return false;
+      }
+      out->push_back(TextPiece{{std::move(t.value())}, ta.cols - ta.head});
+    }
+  }
+  return true;
+}
 
 // Flattens `node` (scalar, range, or array) into `out`, appending each
 // cell's text projection in row-major order. Mirrors the range-flattening
@@ -78,6 +135,32 @@ struct TextPiece {
 // `delimiter` — see the header comment).
 bool flatten_text_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx, std::vector<TextPiece>* out, Value* out_err) {
+  // An operator over a whole column / row is joined at its declared size, the
+  // way SUMPRODUCT reads it: `A:A&""` keeps every row past the used range.
+  const parser::AstNode& target = resolve_range_binding(node, ctx.name_env(), /*accept_ref=*/false);
+  const parser::NodeKind k = target.kind();
+  if (k == parser::NodeKind::BinaryOp || k == parser::NodeKind::UnaryOp || k == parser::NodeKind::NameRef ||
+      k == parser::NodeKind::ExternalRef) {
+    const Shaped shaped = eval_node_shaped(target, arena, registry, ctx);
+    if (shaped.tail_array != nullptr) {
+      return flatten_tail_array(*shaped.tail_array, out, out_err);
+    }
+    if (shaped.value.is_error()) {
+      *out_err = shaped.value;
+      return false;
+    }
+    if (!shaped.value.is_array()) {
+      return push_cell(shaped.value, out, out_err);
+    }
+    const ArrayValue* arr = shaped.value.as_array();
+    const std::size_t n = static_cast<std::size_t>(arr->rows) * static_cast<std::size_t>(arr->cols);
+    for (std::size_t i = 0; i < n; ++i) {
+      if (!push_cell(arr->cells[i], out, out_err)) {
+        return false;
+      }
+    }
+    return true;
+  }
   const Value v = eval_node_as_array(node, arena, registry, ctx);
   if (v.is_error()) {
     *out_err = v;
@@ -87,12 +170,9 @@ bool flatten_text_arg(const parser::AstNode& node, Arena& arena, const FunctionR
   const std::size_t n = static_cast<std::size_t>(arr->rows) * static_cast<std::size_t>(arr->cols);
   out->reserve(out->size() + n);
   for (std::size_t i = 0; i < n; ++i) {
-    auto t = coerce_to_text(arr->cells[i]);
-    if (!t) {
-      *out_err = Value::error(t.error());
+    if (!push_cell(arr->cells[i], out, out_err)) {
       return false;
     }
-    out->push_back(TextPiece{std::move(t.value()), 1U});
   }
   // A whole-axis reference walks only its populated head; the blank cells past
   // it still take a delimiter each.
@@ -101,7 +181,7 @@ bool flatten_text_arg(const parser::AstNode& node, Arena& arena, const FunctionR
   if (static_reference_shape(node, ctx, &rows, &cols)) {
     const std::uint64_t declared = static_cast<std::uint64_t>(rows) * cols;
     if (declared > n) {
-      out->push_back(TextPiece{std::string(), declared - n});
+      out->push_back(TextPiece{{std::string()}, declared - n});
     }
   }
   return true;
@@ -167,26 +247,39 @@ Value eval_textjoin_lazy(const parser::AstNode& call, Arena& arena, const Functi
     all_delimiters_empty = all_delimiters_empty && d.empty();
   }
   for (const TextPiece& piece : pieces) {
-    if (ignore_empty && piece.text.empty()) {
-      continue;
+    // A run of only empty cells that are skipped, or joined by empty
+    // delimiters, adds nothing however often it repeats. Any other run grows
+    // the result each round, so the cap below ends a long one early.
+    bool contributes = false;
+    for (const std::string& text : piece.texts) {
+      contributes = contributes || !text.empty();
     }
-    // A run of empty cells joined by empty delimiters adds nothing.
-    if (piece.text.empty() && all_delimiters_empty) {
-      first = false;
+    if (!contributes && (ignore_empty || all_delimiters_empty)) {
+      first = first && ignore_empty;
       continue;
     }
     for (std::uint64_t k = 0; k < piece.repeat; ++k) {
-      if (!first) {
-        out.append(delimiters[delim_index % delimiters.size()]);
-        ++delim_index;
-      }
-      out.append(piece.text);
-      first = false;
-      // Cap check after each appended piece, on the joined result rather than
-      // on the piece: the cap is a property of the whole string, and the
-      // first piece that carries it over is the one that fails the call.
-      if (counter.units_of(out) > kExcelTextCapUnits) {
-        return Value::error(ErrorCode::Calc);
+      for (const std::string& text : piece.texts) {
+        if (ignore_empty && text.empty()) {
+          continue;
+        }
+        // An empty cell joined by empty delimiters adds nothing.
+        if (text.empty() && all_delimiters_empty) {
+          first = false;
+          continue;
+        }
+        if (!first) {
+          out.append(delimiters[delim_index % delimiters.size()]);
+          ++delim_index;
+        }
+        out.append(text);
+        first = false;
+        // Cap check after each appended piece, on the joined result rather than
+        // on the piece: the cap is a property of the whole string, and the
+        // first piece that carries it over is the one that fails the call.
+        if (counter.units_of(out) > kExcelTextCapUnits) {
+          return Value::error(ErrorCode::Calc);
+        }
       }
     }
   }

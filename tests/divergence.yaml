@@ -1352,14 +1352,6 @@ entries:
     prefer: formulon
     first_noted: 2026-10-08
     last_verified_excel_version: "16.113.3"
-  - id: text_cap_textjoin_derived_whole_column
-    applies_to: all
-    cause: engine-gap
-    mode: skip-oracle
-    reason: "TEXTJOIN(\",\",FALSE,Sheet2!A:A&\"\"): Excel joins all 1,048,576 rows of the derived column, so the kept empties carry the text past the cap and the answer is #CALC!. Formulon's array arguments to lazy functions still walk only the populated head of a derived whole column, so it returns k1,k2,k3,,k5. The bare-reference spelling Sheet2!A:A counts the blank rows and is a live golden."
-    prefer: mac-excel-365
-    first_noted: 2026-10-08
-    last_verified_excel_version: "16.113.3"
 
   # Fullwidth numeric-text equality is pending in the classic lookup matcher.
   - id: match_exact_fullwidth_digits
