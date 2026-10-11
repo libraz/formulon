@@ -314,6 +314,7 @@ _DTS_ENUM_SOURCES = {
     "PivotReportLayout": (CAPI_HEADER, "fm_pivot_layout_t", _extract_c_typedef_enum),
     "PivotFilterValueKind": (CAPI_HEADER, "fm_pivot_filter_value_kind_t", _extract_c_typedef_enum),
     "SheetVisibility": (CAPI_HEADER, "fm_sheet_visibility_t", _extract_c_typedef_enum),
+    "CollationStrength": (CAPI_HEADER, "fm_collation_strength_t", _extract_c_typedef_enum),
     "CfMatchKind": (CF_MATCH_H, "CFMatchKind", _extract_cpp_enum_class),
     "CalcMode": (CALC_MODE_H, "CalcMode", _extract_cpp_enum_class),
     "ErrorCode": (VALUE_H, "ErrorCode", _extract_cpp_enum_class),

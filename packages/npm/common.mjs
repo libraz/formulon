@@ -94,6 +94,7 @@ export const ErrorCode = Object.freeze({
   Unknown: 16,
 });
 export const CalcMode = Object.freeze({ Auto: 0, Manual: 1, AutoNoTable: 2 });
+export const CollationStrength = Object.freeze({ Compare: 0, Dynamic: 1, ClassicExact: 2 });
 export const SheetVisibility = Object.freeze({ Visible: 0, Hidden: 1, VeryHidden: 2 });
 export const GeometryMode = Object.freeze({ Display: 0, Print: 1 });
 export const FilterKind = Object.freeze({ None: 0, Values: 1, Custom: 2, Top10: 3, Dynamic: 4, Color: 5, Icon: 6 });

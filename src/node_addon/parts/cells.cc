@@ -406,8 +406,6 @@ Napi::Value Workbook::GetFormulaR1C1(const Napi::CallbackInfo& info) {
   return FormulaTextResult(info, handle_, &fm_workbook_get_formula_r1c1);
 }
 
-namespace {
-
 // Reads a `Value`-shaped JS object into `value`; `text` backs a text payload
 // and must outlive the C call.
 bool ReadValueSpec(CheckedSpecReader& reader, const Napi::Object& spec, std::string& text, fm_value_t& value) {
@@ -431,6 +429,8 @@ bool ReadValueSpec(CheckedSpecReader& reader, const Napi::Object& spec, std::str
   }
   return reader.ok();
 }
+
+namespace {
 
 // Fills `out` ({status, cells, nextCursor}) from a cell-range page, which it
 // consumes. `rc` is the status of the call that produced `page`.

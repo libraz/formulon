@@ -456,6 +456,9 @@ class JsWorkbook {
   JsStringResult localizeFormula(const std::string& formula, const std::string& profile_id) const;
   JsStringResult canonicalizeFormula(const std::string& formula, const std::string& profile_id) const;
   emscripten::val localeFacts(const std::string& profile_id) const;
+  emscripten::val compareText(const std::string& a, const std::string& b, int32_t strength,
+                              const std::string& profile_id) const;
+  emscripten::val collationClasses(emscripten::val values, int32_t strength, const std::string& profile_id) const;
   emscripten::val spillInfo(uint32_t sheet, uint32_t row, uint32_t col) const;
 
   // ---- PivotCache mutation -----------------------------------------------

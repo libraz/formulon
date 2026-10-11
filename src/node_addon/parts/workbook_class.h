@@ -17,6 +17,10 @@
 
 namespace formulon_node {
 
+/// Reads a `Value`-shaped JS object into `value`; `text` backs a text payload
+/// and must outlive the C call. A missing `kind` reads as blank.
+bool ReadValueSpec(CheckedSpecReader& reader, const Napi::Object& spec, std::string& text, fm_value_t& value);
+
 class Workbook : public Napi::ObjectWrap<Workbook> {
  public:
   static Napi::Function GetClass(Napi::Env env);
@@ -112,6 +116,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value LocalizeFormula(const Napi::CallbackInfo& info);
   Napi::Value CanonicalizeFormula(const Napi::CallbackInfo& info);
   Napi::Value LocaleFacts(const Napi::CallbackInfo& info);
+  Napi::Value CompareText(const Napi::CallbackInfo& info);
+  Napi::Value CollationClasses(const Napi::CallbackInfo& info);
 
   // Sheet operations.
   Napi::Value AddSheet(const Napi::CallbackInfo& info);

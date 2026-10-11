@@ -117,6 +117,8 @@ function envelopeProbes(wb) {
     // A released handle is the only failure path, which is not usable here.
     ['PinnedNowResult', false, () => wb.pinnedNow()],
     ['LocaleFactsResult', true, () => wb.localeFacts('nope')],
+    ['CompareTextResult', true, () => wb.compareText('a', 'b', 0, 'nope')],
+    ['CollationClassesResult', true, () => wb.collationClasses([{ kind: 1, number: 1 }], 0, 'nope')],
     ['SpillInfo', true, () => wb.spillInfo(99, 0, 0)],
     ['SheetFormatDefaultsResult', true, () => wb.getSheetFormatDefaults(99)],
     ['CellRectResult', true, () => wb.getCellRectPt(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, 0)],

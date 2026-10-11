@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "node_addon/parts/workbook_class.h"
 
@@ -233,6 +234,7 @@ Napi::Value Workbook::LocaleFacts(const Napi::CallbackInfo& info) {
   facts.Set("currencySpace", Napi::Boolean::New(env, f.currency_space != 0));
   facts.Set("currencyDefaultDecimals", Napi::Number::New(env, f.currency_default_decimals));
   facts.Set("measured", Napi::Boolean::New(env, f.measured != 0));
+  facts.Set("collationMeasured", Napi::Boolean::New(env, f.collation_measured != 0));
   Napi::Array errors = Napi::Array::New(env);
   const std::size_t n = fm_locale_error_name_count();
   for (std::size_t i = 0; i < n && rc == 0; ++i) {
@@ -253,6 +255,70 @@ Napi::Value Workbook::LocaleFacts(const Napi::CallbackInfo& info) {
   out.Set("status", MakeStatus(env, rc));
   if (rc == 0) {
     out.Set("facts", facts);
+  }
+  return out;
+}
+
+Napi::Value Workbook::CompareText(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  const std::string a = ArgString(info, 0);
+  const std::string b = ArgString(info, 1);
+  const auto strength = static_cast<fm_collation_strength_t>(ArgU32(info, 2));
+  const std::string profile_id = ArgString(info, 3);
+  int32_t order = 0;
+  const fm_status_t rc = fm_text_compare(a.c_str(), b.c_str(), profile_id.c_str(), strength, &order);
+  out.Set("status", MakeStatus(env, rc));
+  out.Set("order", Napi::Number::New(env, rc == 0 ? order : 0));
+  return out;
+}
+
+Napi::Value Workbook::CollationClasses(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("classIds", Napi::Uint32Array::New(env, 0));
+  out.Set("classCount", Napi::Number::New(env, 0));
+  if (info.Length() < 1 || !info[0].IsArray()) {
+    out.Set("status", MakeBindingArgumentError(env, "collationClasses expects (values:Value[], strength, profileId)"));
+    return out;
+  }
+  const Napi::Array array = info[0].As<Napi::Array>();
+  const uint32_t n = array.Length();
+  const auto strength = static_cast<fm_collation_strength_t>(ArgU32(info, 1));
+  const std::string profile_id = ArgString(info, 2);
+
+  // Text payloads must keep their addresses until the C call returns.
+  std::vector<std::string> texts(n);
+  std::vector<fm_value_t> values(n);
+  CheckedSpecReader reader(env);
+  for (uint32_t i = 0; i < n; ++i) {
+    Napi::Value element;
+    if (!reader.ArrayElement(array, i, &element)) {
+      return env.Undefined();
+    }
+    if (!element.IsObject()) {
+      out.Set("status", MakeBindingError(env, kInvalidArgument, "collationClasses: each value must be an object"));
+      return out;
+    }
+    const Napi::Object spec = element.As<Napi::Object>();
+    if (!spec.Has("kind")) {
+      out.Set("status", MakeBindingError(env, kInvalidArgument, "collationClasses: each value requires a `kind`"));
+      return out;
+    }
+    values[i] = fm_value_t{};
+    if (!ReadValueSpec(reader, spec, texts[i], values[i])) {
+      return env.Undefined();
+    }
+  }
+
+  Napi::Uint32Array ids = Napi::Uint32Array::New(env, n);
+  uint32_t class_count = 0;
+  const fm_status_t rc =
+      fm_collation_classes(values.data(), n, profile_id.c_str(), strength, n == 0 ? nullptr : ids.Data(), &class_count);
+  out.Set("status", MakeStatus(env, rc));
+  if (rc == 0) {
+    out.Set("classIds", ids);
+    out.Set("classCount", Napi::Number::New(env, class_count));
   }
   return out;
 }

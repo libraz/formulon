@@ -622,31 +622,6 @@ bool js_optional_index(const emscripten::val& v, double dflt, double max, double
   return d >= 0.0 && d <= max;
 }
 
-/// Reads a `{kind, number, boolean, text, errorCode}` value record into
-/// `out`; `text` owns the storage a `FM_VAL_TEXT` payload points at. Returns
-/// false when any nested field fails validation.
-bool pull_value(JsNarrowNumericReader& reader, const emscripten::val& value, std::string& text, fm_value_t* out) {
-  out->kind = static_cast<fm_value_kind_t>(reader.i32(value, "kind", 0, "value.kind"));
-  text = reader.string(value, "text", "value.text");
-  switch (out->kind) {
-    case FM_VAL_NUMBER:
-      out->u.number = reader.number(value, "number", 0.0, "value.number");
-      break;
-    case FM_VAL_BOOL:
-      out->u.boolean = reader.i32(value, "boolean", 0, "value.boolean") != 0 ? 1 : 0;
-      break;
-    case FM_VAL_TEXT:
-      out->u.text = text.c_str();
-      break;
-    case FM_VAL_ERROR:
-      out->u.error_code = reader.i32(value, "errorCode", 0, "value.errorCode");
-      break;
-    default:
-      break;
-  }
-  return reader.ok();
-}
-
 /// Fills `o.cells` / `o.nextCursor` from a cell-range page and destroys it.
 void fill_cells_page(emscripten::val& o, fm_cell_range_t* page) {
   std::size_t count = 0;

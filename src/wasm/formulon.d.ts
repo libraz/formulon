@@ -521,6 +521,20 @@ export enum CalcMode {
 }
 
 /**
+ * Which fold of text comparison `compareText` and `collationClasses` apply.
+ * Mirrors `fm_collation_strength_t`.
+ *
+ * - `Compare` — the fold of `=`, criteria, SEARCH and approximate lookup.
+ * - `Dynamic` — the fold of SORT, UNIQUE, XLOOKUP, GROUPBY and pivots.
+ * - `ClassicExact` — the fold of MATCH 0 and VLOOKUP FALSE.
+ */
+export enum CollationStrength {
+  Compare = 0,
+  Dynamic = 1,
+  ClassicExact = 2,
+}
+
+/**
  * Full formula-behaviour profile id: `mac` or `win` combined with one of
  * `ja_JP`, `en_US`, `de_DE`, `fr_FR`, `zh_CN`, `ko_KR`, `th_TH`, `es_ES`,
  * `es_MX`, `pt_BR`, `ru_RU`, `zh_TW`, `it_IT`, `nl_NL`
@@ -1099,7 +1113,26 @@ export interface LocaleFacts {
   readonly currencySpace: boolean;
   readonly currencyDefaultDecimals: number;
   readonly measured: boolean;
+  /** `true` when the text collation of this profile was captured from Excel
+   *  (every `mac-*` id); `false` for the estimated `win-*` ids, including
+   *  `win-365-ja_JP`, whose `measured` is `true` for the other facts. */
+  readonly collationMeasured: boolean;
   readonly errorNames: readonly LocaleErrorName[];
+}
+
+/** Result of `Workbook.compareText`. */
+export interface CompareTextResult {
+  status: Status;
+  /** -1, 0 or 1; 0 when `status` is not ok. */
+  order: number;
+}
+
+/** Result of `Workbook.collationClasses`. */
+export interface CollationClassesResult {
+  status: Status;
+  /** One class id per input value; empty when `status` is not ok. */
+  classIds: Uint32Array;
+  classCount: number;
 }
 
 /** Return type of `Workbook.localeFacts(profileId)`. `facts` is `null` on
@@ -3361,6 +3394,33 @@ export interface Workbook {
   /** Returns the locale facts (separators, boolean names, date order,
    *  currency, error names) of `profileId`. */
   localeFacts(profileId: ExcelProfileId): LocaleFactsResult;
+  /** Compares two texts under `profileId` and returns the sign of the
+   *  result in `order`. `strength` picks the fold (see
+   *  {@link CollationStrength}); it is a text comparison, not Excel's `=`
+   *  on two cells. `status.ok` is `false` for an unknown `profileId`. */
+  compareText(a: string, b: string, strength: CollationStrength, profileId: ExcelProfileId): CompareTextResult;
+  /** Classifies `values` into collation-ordered equivalence classes under
+   *  `profileId`. `classIds[i]` is the class of `values[i]`: two values share
+   *  an id exactly when they have the same kind and compare equal (texts by
+   *  the `strength` fold, numbers by value with -0 equal to 0, booleans and
+   *  errors by value, blanks always equal), and ids ascend in SORT order
+   *  (numbers < texts < booleans < errors < blanks), dense from 0.
+   *  Ids are meaningful only within one call; never store or compare them
+   *  across calls. Every element must be an object carrying `kind`
+   *  (a missing `kind` yields a non-ok `status`, not a blank).
+   *
+   *  Typical use:
+   *  - Dedupe or checklist order: take the first position of each id and
+   *    order by id.
+   *  - Sort: stable-sort by id; reverse for descending, keeping blanks last.
+   *  - Re-applying a saved selection: keep it as typed `Value`s, classify
+   *    `[...saved, ...columnValues]` in one call and select the ids that match.
+   *  - Multi-column dedupe: call once per column and compare the per-row id
+   *    tuples.
+   *  - Feed it kind-preserving values (cell getters, paged range reads);
+   *    `evaluateFormulaArray` returns range blanks as 0, losing the
+   *    blank/zero distinction. */
+  collationClasses(values: Value[], strength: CollationStrength, profileId: ExcelProfileId): CollationClassesResult;
 
   /** Returns dynamic-array spill info for `(sheet, row, col)`.
    *  When the cell is part of a spill region (anchor or phantom),

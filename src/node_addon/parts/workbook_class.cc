@@ -450,6 +450,8 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::InsertCols, 0x7ULL>("insertCols"),
           GuardedInstanceMethod<&Workbook::InsertRows, 0x7ULL>("insertRows"),
           GuardedInstanceMethod<&Workbook::IsValid>("isValid"),
+          GuardedInstanceMethod<&Workbook::CollationClasses, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("collationClasses"),
+          GuardedInstanceMethod<&Workbook::CompareText, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xBULL>("compareText"),
           GuardedInstanceMethod<&Workbook::LocaleFacts, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("localeFacts"),
           GuardedInstanceMethod<&Workbook::LocalizeFormula, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>("localizeFormula"),
           GuardedInstanceMethod<&Workbook::LocalizeFunctionName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>("localizeFunctionName"),

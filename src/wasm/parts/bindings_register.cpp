@@ -202,6 +202,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("clearPinnedNow", &JsWorkbook::clearPinnedNow)
       .function("clearRowStyle", &JsWorkbook::clearRowStyle)
       .function("clearValidations", &JsWorkbook::clearValidations)
+      .function("collationClasses", &JsWorkbook::collationClasses)
+      .function("compareText", &JsWorkbook::compareText)
       .function("createTable", &JsWorkbook::createTable)
       .function("definedNameAt", &JsWorkbook::definedNameAt)
       .function("definedNameCount", &JsWorkbook::definedNameCount)

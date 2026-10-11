@@ -3,13 +3,14 @@
 // `precedents` / `dependents` and their shared `trace_to_val` bridge,
 // `functionMetadata` / `functionNames` / `localizeFunctionName` /
 // `canonicalizeFunctionName` / `localizeFormula` / `canonicalizeFormula` /
-// `localeFacts`, and `spillInfo`.
+// `localeFacts`, `compareText` / `collationClasses`, and `spillInfo`.
 
 #include <emscripten/val.h>
 
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "wasm/parts/embind_common.h"
@@ -163,6 +164,7 @@ emscripten::val JsWorkbook::localeFacts(const std::string& profile_id) const {
   facts.set("currencySpace", f.currency_space != 0);
   facts.set("currencyDefaultDecimals", f.currency_default_decimals);
   facts.set("measured", f.measured != 0);
+  facts.set("collationMeasured", f.collation_measured != 0);
   emscripten::val errors = emscripten::val::array();
   const std::size_t n = fm_locale_error_name_count();
   for (std::size_t i = 0; i < n && rc == 0; ++i) {
@@ -212,6 +214,69 @@ emscripten::val JsWorkbook::spillInfo(uint32_t sheet, uint32_t row, uint32_t col
   item.set("rows", info.rows);
   item.set("cols", info.cols);
   return item;
+}
+
+emscripten::val JsWorkbook::compareText(const std::string& a, const std::string& b, int32_t strength,
+                                        const std::string& profile_id) const {
+  emscripten::val o = emscripten::val::object();
+  int32_t order = 0;
+  const fm_status_t rc =
+      fm_text_compare(a.c_str(), b.c_str(), profile_id.c_str(), static_cast<fm_collation_strength_t>(strength), &order);
+  o.set("status", status_from_rc(rc));
+  o.set("order", rc == 0 ? order : 0);
+  return o;
+}
+
+emscripten::val JsWorkbook::collationClasses(emscripten::val values, int32_t strength,
+                                             const std::string& profile_id) const {
+  emscripten::val o = emscripten::val::object();
+  o.set("classIds", emscripten::val::global("Uint32Array").new_(0));
+  o.set("classCount", 0U);
+  JsNarrowNumericReader reader("collationClasses");
+  if (!reader.is_array(values, "values")) {
+    o.set("status", binding_error_status(kInvalidArgument, reader.ok() ? "collationClasses: values must be an array"
+                                                                       : reader.message().c_str()));
+    return o;
+  }
+  const uint32_t n = reader.length(values, "values");
+  // Text payloads must keep their addresses until the C call returns.
+  std::vector<std::string> texts(n);
+  std::vector<fm_value_t> items(n);
+  for (uint32_t i = 0; i < n && reader.ok(); ++i) {
+    const emscripten::val element = reader.array_element(values, i, "values[]");
+    if (!reader.ok()) {
+      break;
+    }
+    if (!reader.has_own(element, "kind", "value.kind")) {
+      if (!reader.ok()) {
+        break;
+      }
+      o.set("status", binding_error_status(kInvalidArgument, "collationClasses: each value requires a `kind`"));
+      return o;
+    }
+    items[i] = fm_value_t{};
+    pull_value(reader, element, texts[i], &items[i]);
+  }
+  if (!reader.ok()) {
+    o.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
+    return o;
+  }
+  std::vector<uint32_t> ids(n);
+  uint32_t class_count = 0;
+  const fm_status_t rc =
+      fm_collation_classes(items.data(), n, profile_id.c_str(), static_cast<fm_collation_strength_t>(strength),
+                           n == 0 ? nullptr : ids.data(), &class_count);
+  o.set("status", status_from_rc(rc));
+  if (rc == 0) {
+    emscripten::val u32 = emscripten::val::global("Uint32Array").new_(n);
+    if (n != 0) {
+      // The destination is a standalone JS buffer; `set` copies the transient WASM view.
+      u32.call<void>("set", emscripten::val(emscripten::typed_memory_view(n, ids.data())));
+    }
+    o.set("classIds", u32);
+    o.set("classCount", class_count);
+  }
+  return o;
 }
 
 }  // namespace parts

@@ -482,6 +482,18 @@ export const CalcMode: Readonly<{
 }>;
 export type CalcMode = 0 | 1 | 2;
 
+/** Which fold of text comparison `compareText` and `collationClasses` apply.
+ *  Mirrors `fm_collation_strength_t`: `Compare` is the fold of `=`, criteria,
+ *  SEARCH and approximate lookup; `Dynamic` the fold of SORT, UNIQUE, XLOOKUP,
+ *  GROUPBY and pivots; `ClassicExact` the fold of MATCH 0 and VLOOKUP FALSE.
+ *  Declared as both a value and a type, like {@link CalcMode}. */
+export const CollationStrength: Readonly<{
+  Compare: 0;
+  Dynamic: 1;
+  ClassicExact: 2;
+}>;
+export type CollationStrength = 0 | 1 | 2;
+
 /** Minimum severity for the engine's structured log stream. Mirrors
  *  `fm_log_level_t`. `Off` discards every record and is the default: an
  *  embedded library must not write to the host's stderr unless asked. */
@@ -2236,7 +2248,26 @@ export interface LocaleFacts {
   readonly currencySpace: boolean;
   readonly currencyDefaultDecimals: number;
   readonly measured: boolean;
+  /** `true` when the text collation of this profile was captured from Excel
+   *  (every `mac-*` id); `false` for the estimated `win-*` ids, including
+   *  `win-365-ja_JP`, whose `measured` is `true` for the other facts. */
+  readonly collationMeasured: boolean;
   readonly errorNames: readonly LocaleErrorName[];
+}
+
+/** Result of `Workbook.compareText`. */
+export interface CompareTextResult {
+  status: Status;
+  /** -1, 0 or 1; 0 when `status` is not ok. */
+  order: number;
+}
+
+/** Result of `Workbook.collationClasses`. */
+export interface CollationClassesResult {
+  status: Status;
+  /** One class id per input value; empty when `status` is not ok. */
+  classIds: Uint32Array;
+  classCount: number;
 }
 
 /** Return type of `Workbook.localeFacts(profileId)`. `facts` is `null` on
@@ -3297,6 +3328,33 @@ export interface Workbook {
   /** Returns the locale facts (separators, boolean names, date order,
    *  currency, error names) of `profileId`. */
   localeFacts(profileId: ExcelProfileId): LocaleFactsResult;
+  /** Compares two texts under `profileId` and returns the sign of the
+   *  result in `order`. `strength` picks the fold (see
+   *  {@link CollationStrength}); it is a text comparison, not Excel's `=`
+   *  on two cells. `status.ok` is `false` for an unknown `profileId`. */
+  compareText(a: string, b: string, strength: CollationStrength, profileId: ExcelProfileId): CompareTextResult;
+  /** Classifies `values` into collation-ordered equivalence classes under
+   *  `profileId`. `classIds[i]` is the class of `values[i]`: two values share
+   *  an id exactly when they have the same kind and compare equal (texts by
+   *  the `strength` fold, numbers by value with -0 equal to 0, booleans and
+   *  errors by value, blanks always equal), and ids ascend in SORT order
+   *  (numbers < texts < booleans < errors < blanks), dense from 0.
+   *  Ids are meaningful only within one call; never store or compare them
+   *  across calls. Every element must be an object carrying `kind`
+   *  (a missing `kind` yields a non-ok `status`, not a blank).
+   *
+   *  Typical use:
+   *  - Dedupe or checklist order: take the first position of each id and
+   *    order by id.
+   *  - Sort: stable-sort by id; reverse for descending, keeping blanks last.
+   *  - Re-applying a saved selection: keep it as typed `Value`s, classify
+   *    `[...saved, ...columnValues]` in one call and select the ids that match.
+   *  - Multi-column dedupe: call once per column and compare the per-row id
+   *    tuples.
+   *  - Feed it kind-preserving values (cell getters, paged range reads);
+   *    `evaluateFormulaArray` returns range blanks as 0, losing the
+   *    blank/zero distinction. */
+  collationClasses(values: Value[], strength: CollationStrength, profileId: ExcelProfileId): CollationClassesResult;
 
   // External links.
   /** Returns every external-link record carried by the workbook in
@@ -3428,6 +3486,7 @@ declare const _default: {
   PivotReportLayout: typeof PivotReportLayout;
   LogLevel: typeof LogLevel;
   CalcMode: typeof CalcMode;
+  CollationStrength: typeof CollationStrength;
   SheetVisibility: typeof SheetVisibility;
   GeometryMode: typeof GeometryMode;
   DisplayStatus: typeof DisplayStatus;

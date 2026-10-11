@@ -449,6 +449,11 @@ emscripten::val bytes_to_val(const uint8_t* data, std::size_t len);
 /// fields retain the all-zero defaults.
 fm_merge_range js_pull_range(const emscripten::val& v, JsNarrowNumericReader* reader);
 
+/// Reads a `{kind, number, boolean, text, errorCode}` value record into
+/// `out`; `text` owns the storage a `FM_VAL_TEXT` payload points at. Returns
+/// false when any nested field fails validation.
+bool pull_value(JsNarrowNumericReader& reader, const emscripten::val& value, std::string& text, fm_value_t* out);
+
 /// Reads a range list with the explicit numeric reader. Other WASM families
 /// must use the same per-call reader before invoking a C mutator.
 std::vector<fm_merge_range> js_pull_ranges(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader);

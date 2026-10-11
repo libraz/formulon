@@ -809,6 +809,28 @@ emscripten::val js_border_side(const fm_border_side& s) {
   return o;
 }
 
+bool pull_value(JsNarrowNumericReader& reader, const emscripten::val& value, std::string& text, fm_value_t* out) {
+  out->kind = static_cast<fm_value_kind_t>(reader.i32(value, "kind", 0, "value.kind"));
+  text = reader.string(value, "text", "value.text");
+  switch (out->kind) {
+    case FM_VAL_NUMBER:
+      out->u.number = reader.number(value, "number", 0.0, "value.number");
+      break;
+    case FM_VAL_BOOL:
+      out->u.boolean = reader.i32(value, "boolean", 0, "value.boolean") != 0 ? 1 : 0;
+      break;
+    case FM_VAL_TEXT:
+      out->u.text = text.c_str();
+      break;
+    case FM_VAL_ERROR:
+      out->u.error_code = reader.i32(value, "errorCode", 0, "value.errorCode");
+      break;
+    default:
+      break;
+  }
+  return reader.ok();
+}
+
 }  // namespace parts
 }  // namespace wasm
 }  // namespace formulon
