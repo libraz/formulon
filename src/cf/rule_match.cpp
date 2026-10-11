@@ -15,9 +15,14 @@
 #include "cf/cf_helpers.h"
 #include "cf/cf_types.h"
 #include "cf/scale_evaluator.h"
+#include "eval/builtins/text_detail.h"
 #include "eval/coerce.h"
+#include "eval/collation.h"
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "utils/strings.h"
+#include "utils/text_ops.h"
+#include "utils/utf8_length.h"
 #include "value.h"
 
 namespace formulon::cf {
@@ -55,7 +60,8 @@ bool match_cell_is_with(const CFRule& rule, const Value& cell_value, ResolveOper
     if (!lo_cmp.has_value() || !hi_cmp.has_value()) {
       return false;
     }
-    const bool inside = (*lo_cmp >= 0) && (*hi_cmp <= 0);
+    // The bounds are unordered: `between 10 and 1` is `between 1 and 10`.
+    const bool inside = (*lo_cmp >= 0 && *hi_cmp <= 0) || (*lo_cmp <= 0 && *hi_cmp >= 0);
     return cell_op == CellIsOperator::Between ? inside : !inside;
   }
 
@@ -124,8 +130,9 @@ bool is_cf_blank(const Value& cell_value) {
 
 // Excel's text-family rules are built on the displayed text of the cell,
 // not its raw kind. A number or blank cell is coerced to its General
-// rendering (`512`, ``) before the substring test, matching Excel's
-// generated SEARCH-based formula.
+// rendering (`512`, ``) before the test. Each rule means the formula Excel
+// stores with it: `SEARCH(text, cell)` for the contains forms (wildcards
+// included), `LEFT(cell, LEN(text)) = text` / `RIGHT(...)` for the others.
 //
 // The negative form (`NotContainsText`) is the predicate complement: a
 // cell that does not contain the needle matches. A non-text cell never
@@ -146,17 +153,28 @@ bool match_text_rule(const CFRule& rule, const Value& cell_value) {
     // Arrays / refs / lambdas have no scalar rendering; treat as inert.
     return false;
   }
-  const std::string_view cell_text = coerced.value();
-  const std::string_view needle = *rule.text;
+  const std::string& cell_text = coerced.value();
+  const std::string& needle = *rule.text;
+  const auto contains = [&]() {
+    return needle.empty() || eval::text_detail::find_folded(cell_text, needle, 0U,
+                                                            eval::text_detail::SearchUnit::Utf16) != std::string::npos;
+  };
+  const auto edge_equals = [&](bool from_end) {
+    const std::uint32_t width = utf16_units_in(needle);
+    const std::uint32_t total = utf16_units_in(cell_text);
+    const std::uint32_t start = from_end && total > width ? total - width : 0U;
+    return eval::collate(utf16_substring(cell_text, start, width), needle, eval::current_eval_profile(),
+                         eval::CollationStrength::kCompare) == 0;
+  };
   switch (rule.type) {
     case RuleType::ContainsText:
-      return strings::case_insensitive_contains(cell_text, needle);
+      return contains();
     case RuleType::NotContainsText:
-      return !strings::case_insensitive_contains(cell_text, needle);
+      return !contains();
     case RuleType::BeginsWith:
-      return strings::case_insensitive_starts_with(cell_text, needle);
+      return edge_equals(false);
     case RuleType::EndsWith:
-      return strings::case_insensitive_ends_with(cell_text, needle);
+      return edge_equals(true);
     default:
       return false;
   }

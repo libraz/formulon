@@ -14,6 +14,7 @@
 #include "cf/cf_types.h"
 #include "cf_evaluator_fixtures.h"
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
@@ -170,6 +171,23 @@ TEST(CFEvaluator, CellIsNotBetweenNumericIsExclusive) {
   EXPECT_TRUE(match_rule(r, Value::number(10.001)));
 }
 
+// Excel ignores the bound order (measured on Mac Excel 365).
+TEST(CFEvaluator, CellIsBetweenBoundsAreUnordered) {
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::Between;
+  r.formula1 = "10";
+  r.formula2 = "1";
+  EXPECT_FALSE(match_rule(r, Value::number(0.0)));
+  EXPECT_TRUE(match_rule(r, Value::number(1.0)));
+  EXPECT_TRUE(match_rule(r, Value::number(5.0)));
+  EXPECT_TRUE(match_rule(r, Value::number(10.0)));
+  EXPECT_FALSE(match_rule(r, Value::number(11.0)));
+  r.op = CellIsOperator::NotBetween;
+  EXPECT_TRUE(match_rule(r, Value::number(0.0)));
+  EXPECT_FALSE(match_rule(r, Value::number(5.0)));
+  EXPECT_TRUE(match_rule(r, Value::number(11.0)));
+}
+
 TEST(CFEvaluator, CellIsAcceptsSignedAndDecimalLiterals) {
   CFRule r = MakeRule(RuleType::CellIs);
   r.op = CellIsOperator::LessThan;
@@ -321,6 +339,37 @@ TEST(CFEvaluator, ContainsTextIsAsciiCaseInsensitive) {
   EXPECT_TRUE(match_rule(r, Value::text("foobar")));
   EXPECT_TRUE(match_rule(r, Value::text("FoObAr")));
   EXPECT_TRUE(match_rule(r, Value::text("XfOoY")));
+}
+
+// The text rules mean the formulas Excel stores with them: SEARCH for the
+// contains forms, LEFT / RIGHT with `=` for the others (Mac Excel 365, en-US).
+TEST(CFEvaluator, TextRulesFoldLikeTheirStoredFormulas) {
+  const eval::ScopedEvalProfile scope(mac_365_en_us_profile());
+  CFRule contains = MakeRule(RuleType::ContainsText);
+  contains.text = "ä";
+  EXPECT_TRUE(match_rule(contains, Value::text("ÄPFEL")));
+  EXPECT_FALSE(match_rule(contains, Value::text("Apfel")));
+  contains.text = "ａ";
+  EXPECT_TRUE(match_rule(contains, Value::text("Abc")));
+  contains.text = "ア";
+  EXPECT_TRUE(match_rule(contains, Value::text("あいう")));
+  EXPECT_TRUE(match_rule(contains, Value::text("ｱｲｳ")));
+  contains.text = "a*c";
+  EXPECT_TRUE(match_rule(contains, Value::text("abc")));
+  CFRule not_contains = MakeRule(RuleType::NotContainsText);
+  not_contains.text = "ä";
+  EXPECT_FALSE(match_rule(not_contains, Value::text("Äpfel")));
+  EXPECT_TRUE(match_rule(not_contains, Value::text("Apfel")));
+  CFRule begins = MakeRule(RuleType::BeginsWith);
+  begins.text = "ä";
+  EXPECT_TRUE(match_rule(begins, Value::text("Äpfel")));
+  EXPECT_FALSE(match_rule(begins, Value::text("Apfel")));
+  begins.text = "a";
+  EXPECT_TRUE(match_rule(begins, Value::text("ＡＢＣ")));
+  CFRule ends = MakeRule(RuleType::EndsWith);
+  ends.text = "é";
+  EXPECT_TRUE(match_rule(ends, Value::text("CAFÉ")));
+  EXPECT_FALSE(match_rule(ends, Value::text("cafe")));
 }
 
 TEST(CFEvaluator, ContainsTextEmptyNeedleMatchesAnyText) {
