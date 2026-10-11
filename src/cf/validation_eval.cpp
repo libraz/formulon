@@ -12,12 +12,18 @@
 #include "cf/cf_helpers.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/number_parse.h"
+#include "eval/text_format/display_text.h"
 #include "sheet.h"
+#include "style_resolve.h"
+#include "styles.h"
 #include "utils/arena.h"
 #include "utils/number_text.h"
 #include "utils/resource_budget.h"
+#include "utils/strings.h"
 #include "utils/utf8_length.h"
 #include "workbook.h"
 
@@ -189,27 +195,41 @@ bool is_inline_list(const std::string& f) {
   return f.size() >= 2U && f.front() == '"' && f.back() == '"';
 }
 
-std::optional<double> parse_item_number(const std::string& item) {
-  if (item.empty()) {
+/// VALUE's numeric phase; the active eval profile selects separators and full-width folding.
+std::optional<double> text_number(std::string_view text) {
+  double n = 0.0;
+  if (!eval::parse_excel_number(text, &n)) {
     return std::nullopt;
   }
-  char* end = nullptr;
-  const double d = std::strtod(item.c_str(), &end);
-  if (end != item.c_str() + item.size() || !std::isfinite(d)) {
-    return std::nullopt;
-  }
-  return d;
+  return n;
 }
 
-bool inline_list_matches(const std::vector<std::string>& items, const Value& proposed) {
-  for (const std::string& item : items) {
-    if (proposed.is_text()) {
-      if (proposed.as_text() == item) {
-        return true;
-      }
-    } else if (proposed.is_number()) {
-      const std::optional<double> n = parse_item_number(item);
-      if (n.has_value() && *n == proposed.as_number()) {
+/// Text Excel shows for `proposed` under the target cell's effective number format.
+std::string displayed_text(const Workbook& wb, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
+                           const Value& proposed) {
+  const std::vector<CellXf>& xfs = wb.styles().cell_xfs;
+  const CellXf* xf = nullptr;
+  if (!xfs.empty()) {
+    const std::uint32_t index = select_effective_xf(sheet, row, col).xf_index;
+    xf = &xfs[index < xfs.size() ? index : 0U];
+  }
+  return text_format::format_value_for_display(proposed, text_format::number_format_code_for_xf(wb.styles(), xf),
+                                               wb.date1904(), wb.excel_profile())
+      .text;
+}
+
+/// An inline item matches the displayed text exactly (after the space trim) or numerically.
+bool inline_list_matches(const std::vector<std::string>& items, const std::string& shown_raw) {
+  const std::string_view shown = strings::ltrim_spaces(strings::rtrim_spaces(shown_raw));
+  const std::optional<double> shown_number = text_number(shown);
+  for (const std::string& raw : items) {
+    const std::string_view item = strings::ltrim_spaces(raw);
+    if (shown == item) {
+      return true;
+    }
+    if (shown_number.has_value()) {
+      const std::optional<double> n = text_number(item);
+      if (n.has_value() && *n == *shown_number) {
         return true;
       }
     }
@@ -245,9 +265,13 @@ std::optional<std::string> literal_of(const Value& proposed) {
   return std::nullopt;
 }
 
-bool check_list(Evaluator& ev, const DataValidation& dv, const Value& proposed) {
+bool check_list(Evaluator& ev, const DataValidation& dv, const Value& proposed, std::uint32_t row, std::uint32_t col) {
   if (is_inline_list(dv.formula1)) {
-    return inline_list_matches(inline_items(dv.formula1), proposed);
+    if (proposed.is_blank()) {
+      return false;
+    }
+    eval::ScopedEvalProfile profile_scope(ev.wb.excel_profile());
+    return inline_list_matches(inline_items(dv.formula1), displayed_text(ev.wb, ev.sheet, row, col, proposed));
   }
   // A range source is tested with an exact MATCH: a spilled range read at the target cell
   // would be blocked by the cells below it, and MATCH gives Excel's case-insensitive,
@@ -304,7 +328,7 @@ Expected<ValidationOutcome, Error> validate_value(const Workbook& wb, const Shee
         out.valid = check_text_length(ev, dv, proposed);
         break;
       case kTypeList:
-        out.valid = check_list(ev, dv, proposed);
+        out.valid = check_list(ev, dv, proposed, row, col);
         break;
       case kTypeCustom:
         out.valid = check_custom(ev, dv);

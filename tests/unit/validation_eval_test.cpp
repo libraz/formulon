@@ -762,5 +762,83 @@ TEST(ValidationEval, FixtureMatrix) {
   EXPECT_EQ(row, 261U);
 }
 
+// Inline lists compare the displayed text of the proposed value (measured on Mac Excel).
+bool InlineValid(const char* list, const Value& v, const char* format = nullptr) {
+  Fixture f;
+  f.wb.set_excel_profile(ExcelProfile{ExcelHost::kMac365, ExcelLocale::kJaJP});
+  if (format != nullptr) {
+    StylesTable& st = f.wb.mutable_styles();
+    if (st.cell_xfs.empty()) {
+      st.cell_xfs.emplace_back();
+    }
+    st.num_fmt_strings.emplace_back(format);
+    st.num_fmts.push_back(NumFmtRecord{200, static_cast<std::uint32_t>(st.num_fmt_strings.size() - 1U)});
+    CellXf xf;
+    xf.num_fmt_id = 200;
+    xf.apply_number_format = true;
+    st.cell_xfs.push_back(xf);
+    f.Store(Value::number(0.0));
+    EXPECT_TRUE(static_cast<bool>(
+        f.wb.set_cell_xf_index(f.sheet_index, 0, 0, static_cast<std::uint32_t>(st.cell_xfs.size() - 1U))));
+  }
+  f.AddRule(Ty::kList, Op::kNone, false, std::string("\"") + list + "\"");
+  return f.Check(v).valid;
+}
+
+TEST(ValidationEvalInline, TextIsSpaceTrimmedAndOtherwiseExact) {
+  const char* kList =
+      "Yes,No,\xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3,\xEF\xBD\xB1\xEF\xBD\xB2\xEF\xBD\xB3,\xC3\x84"
+      "b";
+  EXPECT_TRUE(InlineValid(kList, Text("Yes")));
+  EXPECT_TRUE(InlineValid(kList, Text("Yes ")));
+  EXPECT_TRUE(InlineValid(kList, Text(" Yes")));
+  EXPECT_TRUE(InlineValid(kList, Text("Yes  ")));
+  EXPECT_FALSE(InlineValid(kList, Text("yes")));
+  EXPECT_FALSE(InlineValid(kList, Text("Yes\t")));
+  EXPECT_FALSE(InlineValid(kList, Text("Yes\xC2\xA0")));
+  EXPECT_FALSE(InlineValid(kList, Text("Yes\xE3\x80\x80")));
+  EXPECT_FALSE(InlineValid(kList, Text("Y es")));
+  EXPECT_TRUE(InlineValid(kList, Text("\xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3")));
+  EXPECT_FALSE(InlineValid(kList, Text("abc")));
+  EXPECT_TRUE(InlineValid(kList, Text("\xEF\xBD\xB1\xEF\xBD\xB2\xEF\xBD\xB3")));
+  EXPECT_FALSE(InlineValid(kList, Text("\xE3\x82\xA2\xE3\x82\xA4\xE3\x82\xA6")));
+  EXPECT_TRUE(InlineValid(kList, Text("\xC3\x84"
+                                      "b")));
+  EXPECT_FALSE(InlineValid(kList, Text("\xC3\xA4"
+                                       "b")));
+}
+
+TEST(ValidationEvalInline, ItemKeepsTrailingSpaceDropsLeading) {
+  EXPECT_TRUE(InlineValid("Yes, No", Text("No")));
+  EXPECT_TRUE(InlineValid("Yes, No", Text(" No")));
+  EXPECT_FALSE(InlineValid("Yes ,No", Text("Yes")));
+}
+
+TEST(ValidationEvalInline, NumericTextCoerces) {
+  for (const char* t : {"1", "\xEF\xBC\x91", "01", " 1", "1.0", "1e0"}) {
+    EXPECT_TRUE(InlineValid("1,2", Text(t))) << t;
+  }
+  EXPECT_FALSE(InlineValid("1,2", Text("3")));
+}
+
+TEST(ValidationEvalInline, NumbersCompareThroughDisplay) {
+  EXPECT_TRUE(InlineValid("1,2", Value::number(1.0)));
+  EXPECT_TRUE(InlineValid("1,2", Value::number(1.0000000001)));
+  EXPECT_FALSE(InlineValid("1,2", Value::number(1.0000000001), "0.0000000000"));
+  EXPECT_TRUE(InlineValid("2,3", Value::number(1.5), "0"));
+  EXPECT_FALSE(InlineValid("1.5,3", Value::number(1.5), "0"));
+  EXPECT_TRUE(InlineValid("50%,3", Value::number(0.5), "0%"));
+  EXPECT_TRUE(InlineValid("0.5,3", Value::number(0.5), "0%"));
+  EXPECT_TRUE(InlineValid("abc,3", Value::number(1.0), "\"abc\""));
+  EXPECT_FALSE(InlineValid("1,3", Value::number(1.0), "\"abc\""));
+  EXPECT_TRUE(InlineValid("1234,3", Value::number(1234.0), "#,##0"));
+}
+
+TEST(ValidationEvalInline, BooleanAndBlank) {
+  EXPECT_TRUE(InlineValid("TRUE,FALSE", Value::boolean(true)));
+  EXPECT_FALSE(InlineValid("TRUE,FALSE", Text("true")));
+  EXPECT_FALSE(InlineValid("Yes,No", Blank()));
+}
+
 }  // namespace
 }  // namespace formulon
