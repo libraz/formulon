@@ -3326,10 +3326,12 @@ export interface Workbook {
   functionNames(): ListResult<string>;
 
   /** Returns the localized display name for the canonical function
-   *  `canonicalName` under `profileId`. `de_DE` and `fr_FR` profiles return
-   *  Excel's function names for that locale; `ja_JP` renames only `DOLLAR`,
-   *  `USDOLLAR` and `DBCS`; the other locales return the canonical name
-   *  unchanged. `value` is the empty string, with `status.ok === false`,
+   *  `canonicalName` under `profileId`. `de_DE`, `fr_FR`, `es_ES`, `es_MX`,
+   *  `pt_BR`, `ru_RU`, `it_IT` and `nl_NL` profiles return Excel's function
+   *  names for that locale; `en_US`, `zh_CN`, `ko_KR` and `th_TH` return the
+   *  canonical name unchanged. `ja_JP` renames only `DOLLAR`, `USDOLLAR` and
+   *  `DBCS`; `zh_TW` renames only `DBCS`. `value` is the empty string, with
+   *  `status.ok === false`,
    *  when `profileId` is unknown or the name does not match a registered
    *  function. */
   localizeFunctionName(canonicalName: string, profileId: ExcelProfileId): StringResult;

@@ -1106,7 +1106,7 @@ class Workbook {
   // x15 + mc:Ignorable) captured for verbatim re-emission so namespaced
   // attributes in the raw captures above resolve. Empty by default.
   std::string workbook_root_extra_attrs_;
-  // Formula compatibility profile. Runtime default is Windows Excel 365 ja-JP.
+  // Formula compatibility profile. Runtime default is `win-365-en_US`.
   ExcelProfile excel_profile_ = default_excel_profile();
   // Workbook-scoped style records (fonts, fills, borders, num fmts,
   // and the cellXfs index that ties them together). The default table

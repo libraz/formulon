@@ -4508,10 +4508,9 @@ FM_API fm_status_t fm_function_localize(const char* canonical_name, const char* 
  *        localized function `localized_name` under the profile
  *        `profile_id`.
  *
- * For `de-DE` and `fr-FR` this inverts the name table of
- * `fm_function_localize`, accepting the canonical spelling as a fallback;
- * `ja-JP` inverts its three renames; for the other locales it is a
- * case-insensitive ASCII match against the canonical name list.
+ * Inverts the per-locale name table of `fm_function_localize`
+ * (ASCII case-insensitive), accepting the canonical spelling as a fallback; a
+ * locale without renames reduces to that canonical match.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when any pointer argument is `NULL`;
