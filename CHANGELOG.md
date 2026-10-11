@@ -14,9 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fm_sheet_clear_row_style`; `setColumnStyle` / `clearColumnStyle` /
   `setRowStyle` / `clearRowStyle` on WASM and Node, `set_column_style` and
   siblings in Python). Width, height, hidden and outline state are kept.
+- Text comparison and value classification under a profile's collation:
+  `fm_text_compare` / `compareText` / `compare_text` return the sign of
+  comparing two texts, and `fm_collation_classes` / `collationClasses` /
+  `collation_classes` give each value a class id, dense from 0 in ascending
+  `SORT` order (numbers, text, booleans, errors by code, blanks). The strength
+  (`Compare`, `Dynamic`, `ClassicExact`) selects the text fold of the
+  matching formula family; a number, its text form and a boolean never share
+  a class. Ids are valid within one call.
+- `localeFacts` / `locale_facts` report `collationMeasured`: true for `mac-*`
+  profiles, false for the estimated `win-*` collation (including
+  `win-365-ja_JP`, whose other facts are measured).
 
 ### Changed
 
+- `fm_locale_facts_t` gains a trailing `collation_measured` field, so the
+  struct grows by 4 bytes; code built against the previous header must be
+  rebuilt.
 - `UNIQUE` hashes each row's (or column's) identity instead of comparing
   every pair, so a 100,000-row text column takes milliseconds.
 - The WASM size report's Brotli soft ceiling moved to 1032 KiB; the hard
