@@ -151,6 +151,7 @@ LAYER_BASELINE: dict[tuple[str, str], str] = {
     ("pivot/value_order.h", "eval/collation.h"): "Pivot item ordering shares the eval text collation.",
     ("pivot/value_order.h", "eval/eval_profile_scope.h"): "Pivot collation reads the evaluating profile.",
     ("pivot/filter_engine.cpp", "eval/collation.h"): "Label filters collate like the items they filter.",
+    ("pivot/filter_engine.cpp", "eval/collated_wildcard.h"): "Caption begins/ends/contains match like SEARCH.",
     ("pivot/filter_engine.cpp", "eval/eval_profile_scope.h"): "Pivot collation reads the evaluating profile.",
     ("pivot/pivot_evaluator.cpp", "eval/eval_profile_scope.h"): "Pivot evaluation scopes the collation profile.",
 }

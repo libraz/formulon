@@ -92,11 +92,11 @@ TEST(PivotTableReader, AuthoredCaptionFilterVariantsDecodeAndNonCaptionTypesAreS
   ASSERT_EQ(decoded.size(), 4U);
   EXPECT_EQ(decoded[0].field_index, 1U);
   EXPECT_EQ(decoded[0].predicate, pivot::CaptionPredicate::BeginsWith);
-  EXPECT_EQ(decoded[0].value, "No");
+  EXPECT_EQ(decoded[0].value, "No*");
   EXPECT_EQ(decoded[1].predicate, pivot::CaptionPredicate::Contains);
-  EXPECT_EQ(decoded[1].value, "or");
+  EXPECT_EQ(decoded[1].value, "*or*");
   EXPECT_EQ(decoded[2].predicate, pivot::CaptionPredicate::EndsWith);
-  EXPECT_EQ(decoded[2].value, "th");
+  EXPECT_EQ(decoded[2].value, "*th");
   EXPECT_EQ(decoded[3].predicate, pivot::CaptionPredicate::Between);
   EXPECT_EQ(decoded[3].value, "B");
   EXPECT_EQ(decoded[3].value_high, "M");
@@ -119,6 +119,46 @@ TEST(PivotTableReader, AuthoredCaptionFilterAcceptsThePlainFilterListShape) {
   ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
   ASSERT_EQ(table_or.value().authored_caption_filters().size(), 1U);
   EXPECT_EQ(table_or.value().authored_caption_filters()[0].value, "South");
+}
+// Excel refreshes a begins / ends / contains filter from the nested pattern,
+// not from `stringValue1` (beginsWith, stringValue1 `xyz`, pattern `Hel*`
+// shows Hello). Without a nested criterion, `stringValue1` becomes the
+// pattern. The writer still re-emits `stringValue1` as read.
+TEST(PivotTableReader, CaptionWildcardFilterPrefersTheNestedPattern) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<filters count=\"4\">");
+  xml.append(
+      "<filter fld=\"0\" type=\"captionBeginsWith\" id=\"1\" stringValue1=\"xyz\"><autoFilter ref=\"A1\">"
+      "<filterColumn colId=\"0\"><customFilters><customFilter val=\"Hel*\"/></customFilters>"
+      "</filterColumn></autoFilter></filter>");
+  xml.append(
+      "<filter fld=\"0\" type=\"captionContains\" id=\"2\" stringValue1=\"*\"><autoFilter ref=\"A1\">"
+      "<filterColumn colId=\"0\"><customFilters><customFilter val=\"*~**\"/></customFilters>"
+      "</filterColumn></autoFilter></filter>");
+  xml.append(
+      "<filter fld=\"0\" type=\"captionEndsWith\" id=\"3\" stringValue1=\"?b\"><autoFilter ref=\"A1\"/></filter>");
+  xml.append(
+      "<filter fld=\"0\" type=\"captionEqual\" id=\"4\" stringValue1=\"abc\"><autoFilter ref=\"A1\">"
+      "<filterColumn colId=\"0\"><filters><filter val=\"zzz\"/></filters></filterColumn></autoFilter></filter>");
+  xml.append("</filters>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const auto& decoded = table_or.value().authored_caption_filters();
+  ASSERT_EQ(decoded.size(), 4U);
+  EXPECT_EQ(decoded[0].value, "Hel*");
+  EXPECT_EQ(decoded[1].value, "*~**");
+  EXPECT_EQ(decoded[2].value, "*?b");
+  // Equality keeps preferring the direct attribute.
+  EXPECT_EQ(decoded[3].value, "abc");
+
+  const std::string round = write_pivot_table_definition(table_or.value());
+  EXPECT_NE(round.find("stringValue1=\"xyz\""), std::string::npos) << round;
+  EXPECT_NE(round.find("val=\"Hel*\""), std::string::npos) << round;
+  EXPECT_NE(round.find("stringValue1=\"?b\""), std::string::npos) << round;
 }
 TEST(PivotTableReader, UnevaluableFilterFamiliesAreSkippedButStillRoundTrip) {
   std::string xml(kXmlDecl);

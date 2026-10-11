@@ -16,6 +16,7 @@
 #include "io/pivot_attr_names.h"
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
+#include "pivot/filter_engine.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pugixml.hpp"
@@ -278,30 +279,6 @@ std::optional<pivot::CaptionPredicate> ParseCaptionPredicate(std::string_view te
     }
   }
   return std::nullopt;
-}
-
-/// Strips the wildcards Excel bakes into a caption filter's criterion.
-///
-/// The `type` attribute already names the predicate, but the criterion
-/// Excel writes underneath repeats it as an `autoFilter` wildcard
-/// pattern: `captionBeginsWith` stores `"North*"`, `captionEndsWith`
-/// `"*North"`, and `captionContains` `"*North*"`. Matching those against
-/// a label verbatim would look for a literal asterisk, so the marker the
-/// predicate implies is removed here and nowhere else.
-std::string_view StripPredicateWildcards(std::string_view val, pivot::CaptionPredicate predicate) {
-  const bool leading =
-      predicate == pivot::CaptionPredicate::EndsWith || predicate == pivot::CaptionPredicate::NotEndsWith ||
-      predicate == pivot::CaptionPredicate::Contains || predicate == pivot::CaptionPredicate::NotContains;
-  const bool trailing =
-      predicate == pivot::CaptionPredicate::BeginsWith || predicate == pivot::CaptionPredicate::NotBeginsWith ||
-      predicate == pivot::CaptionPredicate::Contains || predicate == pivot::CaptionPredicate::NotContains;
-  if (leading && !val.empty() && val.front() == '*') {
-    val.remove_prefix(1);
-  }
-  if (trailing && !val.empty() && val.back() == '*') {
-    val.remove_suffix(1);
-  }
-  return val;
 }
 
 /// Collects the criterion strings a `<filter>`'s nested `<autoFilter>`
@@ -584,9 +561,12 @@ void ParseAuthoredValueFilters(const pugi::xml_node& parent, pivot::PivotTable* 
 ///
 /// Excel writes the criterion twice. `stringValue1` / `stringValue2` on
 /// the `<filter>` element carry it as entered, while the nested
-/// `<autoFilter>` repeats it as a wildcard pattern. The direct attributes
-/// win because they need no pattern interpretation; the nested criterion
-/// is the fallback for a producer that omits them.
+/// `<autoFilter>` repeats it as a wildcard pattern (`v*`, `*v`, `*v*`).
+/// For begins / ends / contains Excel evaluates that pattern on refresh,
+/// not `stringValue1`, so the pattern is the decoded value and
+/// `stringValue1` is the fallback, wrapped into the same pattern. The
+/// other predicates prefer the direct attributes, falling back to the
+/// nested criterion.
 void ParseAuthoredFilters(const pugi::xml_node& parent, pivot::PivotTable* out) {
   for (pugi::xml_node f = parent.child("filter"); f; f = f.next_sibling("filter")) {
     const auto predicate_or = ParseCaptionPredicate(attr_str(f, "type"));
@@ -598,10 +578,20 @@ void ParseAuthoredFilters(const pugi::xml_node& parent, pivot::PivotTable* out) 
     const pugi::xml_attribute direct_low = f.attribute("stringValue1");
     const pugi::xml_attribute direct_high = f.attribute("stringValue2");
     const bool direct = direct_low && (!ranged || direct_high);
+    std::optional<std::string> direct_pattern = pivot::caption_wildcard_pattern(*predicate_or, direct_low.value());
 
     std::string low;
     std::string high;
-    if (direct) {
+    if (direct_pattern) {
+      const std::vector<std::string_view> criteria = CollectFilterCriteria(f);
+      if (!criteria.empty()) {
+        low.assign(criteria[0]);
+      } else if (direct_low) {
+        low = std::move(*direct_pattern);
+      } else {
+        continue;
+      }
+    } else if (direct) {
       low.assign(direct_low.value());
       if (ranged) {
         high.assign(direct_high.value());
@@ -611,7 +601,7 @@ void ParseAuthoredFilters(const pugi::xml_node& parent, pivot::PivotTable* out) 
       if (criteria.size() < (ranged ? 2U : 1U)) {
         continue;
       }
-      low.assign(StripPredicateWildcards(criteria[0], *predicate_or));
+      low.assign(criteria[0]);
       if (ranged) {
         high.assign(criteria[1]);
       }

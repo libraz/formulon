@@ -64,6 +64,12 @@ struct DateWindow {
 /// instead of only through a filtered pivot.
 DateWindow resolve_relative_period(RelativePeriod period, const date_time::CivilTime& now, bool date1904);
 
+/// The wildcard pattern a begins / ends / contains caption predicate (or its
+/// negation) matches the whole label against: `v*`, `*v` or `*v*`. Any
+/// `*` / `?` / `~` in `value` stays live. Empty for the other predicates,
+/// which do not match by pattern.
+std::optional<std::string> caption_wildcard_pattern(CaptionPredicate predicate, std::string_view value);
+
 /// The pre-aggregation filter pass with everything that depends only on the
 /// table hoisted out of the per-record decision.
 ///

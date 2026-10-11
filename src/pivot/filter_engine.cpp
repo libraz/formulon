@@ -14,6 +14,7 @@
 #include <variant>
 #include <vector>
 
+#include "eval/collated_wildcard.h"
 #include "eval/collation.h"
 #include "eval/eval_profile_scope.h"
 #include "pivot/date_serial.h"
@@ -28,7 +29,6 @@
 #include "utils/checked_index.h"
 #include "utils/date_time.h"
 #include "utils/index_sort.h"
-#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -131,25 +131,23 @@ bool label_date_filter_passes(const PivotFilter& f, const Value& v, bool date190
   return serial >= *lo_or && serial <= *hi_or;
 }
 
+// Whole-label wildcard match under the profile's `=` character equivalence.
+bool caption_wildcard_matches(std::string_view pattern, std::string_view label) {
+  assert(eval::eval_profile_scope_active());
+  return eval::collated_wildcard_match(pattern, label, eval::current_eval_profile());
+}
+
 // Evaluates a single label-flavoured filter against `label`.
 // Value-filter types short-circuit to true: those are applied
 // post-aggregation.
 bool label_filter_passes(const PivotFilter& f, std::string_view label) {
   switch (f.type) {
-    case FilterType::LabelContains: {
-      const std::string_view needle = filter_string_value(f);
-      if (needle.empty()) {
-        return true;
-      }
-      return label.find(needle) != std::string::npos;
-    }
-    case FilterType::LabelBeginsWith: {
-      const std::string_view needle = filter_string_value(f);
-      if (needle.empty()) {
-        return true;
-      }
-      return strings::starts_with(label, needle);
-    }
+    case FilterType::LabelContains:
+      return caption_wildcard_matches(*caption_wildcard_pattern(CaptionPredicate::Contains, filter_string_value(f)),
+                                      label);
+    case FilterType::LabelBeginsWith:
+      return caption_wildcard_matches(*caption_wildcard_pattern(CaptionPredicate::BeginsWith, filter_string_value(f)),
+                                      label);
     case FilterType::ValueTop10:
     case FilterType::ValueGreaterThan:
     case FilterType::ValueBetween:
@@ -186,17 +184,13 @@ bool caption_filter_passes(const AuthoredCaptionFilter& f, std::string_view labe
     case CaptionPredicate::NotEqual:
       return caption_collate(label, value) != 0;
     case CaptionPredicate::BeginsWith:
-      return strings::case_insensitive_starts_with(label, value);
-    case CaptionPredicate::NotBeginsWith:
-      return !strings::case_insensitive_starts_with(label, value);
     case CaptionPredicate::EndsWith:
-      return strings::case_insensitive_ends_with(label, value);
-    case CaptionPredicate::NotEndsWith:
-      return !strings::case_insensitive_ends_with(label, value);
     case CaptionPredicate::Contains:
-      return strings::case_insensitive_contains(label, value);
+      return caption_wildcard_matches(value, label);
+    case CaptionPredicate::NotBeginsWith:
+    case CaptionPredicate::NotEndsWith:
     case CaptionPredicate::NotContains:
-      return !strings::case_insensitive_contains(label, value);
+      return !caption_wildcard_matches(value, label);
     case CaptionPredicate::GreaterThan:
       return caption_collate(label, value) > 0;
     case CaptionPredicate::GreaterThanOrEqual:
@@ -437,6 +431,26 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
     }
   }
   return true;
+}
+
+std::optional<std::string> caption_wildcard_pattern(CaptionPredicate predicate, std::string_view value) {
+  const bool leading = predicate == CaptionPredicate::EndsWith || predicate == CaptionPredicate::NotEndsWith ||
+                       predicate == CaptionPredicate::Contains || predicate == CaptionPredicate::NotContains;
+  const bool trailing = predicate == CaptionPredicate::BeginsWith || predicate == CaptionPredicate::NotBeginsWith ||
+                        predicate == CaptionPredicate::Contains || predicate == CaptionPredicate::NotContains;
+  if (!leading && !trailing) {
+    return std::nullopt;
+  }
+  std::string pattern;
+  pattern.reserve(value.size() + 2U);
+  if (leading) {
+    pattern.push_back('*');
+  }
+  pattern.append(value);
+  if (trailing) {
+    pattern.push_back('*');
+  }
+  return pattern;
 }
 
 DateWindow resolve_relative_period(RelativePeriod period, const date_time::CivilTime& now, bool date1904) {

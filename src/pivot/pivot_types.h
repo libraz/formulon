@@ -234,8 +234,11 @@ enum class CaptionPredicate : std::uint8_t {
 ///
 /// `field_index` is the source `fld` attribute: an index into
 /// `<pivotFields>`, which OOXML keeps parallel to the bound cache's
-/// fields. `value_high` carries the upper bound for `Between` /
-/// `NotBetween` and is unused otherwise.
+/// fields. For the begins / ends / contains family (and negations) `value`
+/// is the autoFilter wildcard pattern matched against the whole label
+/// (`North*`, `*North`, `*North*`), not the bare operand. `value_high`
+/// carries the upper bound for `Between` / `NotBetween` and is unused
+/// otherwise.
 struct AuthoredCaptionFilter {
   std::uint32_t field_index = 0;
   CaptionPredicate predicate = CaptionPredicate::Equal;

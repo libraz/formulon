@@ -1,17 +1,20 @@
 // Label, caption, and manual item filters for pivot fields.
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_index.h"
 #include "pivot/pivot_layout.h"
+#include "pivot/pivot_locale.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -195,13 +198,148 @@ TEST(PivotEvaluator, AuthoredCaptionNotContainsFilterDropsMatchingRecords) {
   AuthoredCaptionFilter f;
   f.field_index = 0;
   f.predicate = CaptionPredicate::NotContains;
-  f.value = "outh";
+  f.value = "*outh*";
   table.mutable_authored_caption_filters().push_back(f);
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
   ASSERT_EQ(r_or.value().rows.size(), 1U);
   EXPECT_EQ(r_or.value().rows[0].label, "North");
+}
+
+// The 13 source items of the Mac Excel 365 ja-JP caption-filter probe. Record
+// `i` carries the amount `2^i`, so the grand total is the bit mask of the
+// records that survive a filter.
+constexpr std::array<const char*, 13> kProbeBLabels = {{
+    "\xC3\x84pfel",  // 0 Äpfel
+    "Stra\xC3\x9F"
+    "e",                                                             // 1 Straße
+    "STRASSE",                                                       // 2 STRASSE
+    "Hello",                                                         // 3 Hello
+    "\xEF\xBC\xA4\xEF\xBC\xA5\xEF\xBC\xA6",                          // 4 ＤＥＦ
+    "Apfel",                                                         // 5 Apfel
+    "xyz\xC3\xA9w",                                                  // 6 xyzéw
+    "\xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3\xE5\x95\x86\xE4\xBA\x8B",  // 7 ＡＢＣ商事
+    "abc",                                                           // 8 abc
+    "\xEF\xBD\xB1\xEF\xBD\xB2\xEF\xBD\xB3\xE5\xA0\x82",              // 9 ｱｲｳ堂
+    "\xE3\x82\xAB\xE3\x82\xAD\xE3\x82\xAF",                          // 10 カキク
+    "\xE3\x82\xAC\xE3\x82\xAE",                                      // 11 ガギ
+    "\xCE\x91\xCE\x92\xCE\x93",                                      // 12 ΑΒΓ
+}};
+
+PivotCache build_probe_label_cache() {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Region", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Product", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+  for (std::size_t i = 0; i < kProbeBLabels.size(); ++i) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, kProbeBLabels[i]));
+    rec.cells.push_back(owned_text(cache, "P"));
+    rec.cells.push_back(Value::number(static_cast<double>(1U << i)));
+    cache.mutable_records().push_back(std::move(rec));
+  }
+  return cache;
+}
+
+// Bit mask of the probe records `table` keeps under mac-365-ja_JP.
+unsigned surviving_probe_mask(const PivotTable& table) {
+  const PivotCache cache = build_probe_label_cache();
+  auto r_or = evaluate(table, cache, pivot_layout_options_for(mac_365_ja_jp_profile()));
+  EXPECT_TRUE(static_cast<bool>(r_or));
+  if (!r_or || !r_or.value().grand_total.is_number()) {
+    return 0U;
+  }
+  return static_cast<unsigned>(r_or.value().grand_total.as_number());
+}
+
+// Probe B rows: begins / ends / contains match the autoFilter pattern against
+// the whole label one code point at a time under `=` (case, width and kana
+// type fold; diacritics count; no expansion or voicing composition).
+TEST(PivotEvaluatorCaptionFilter, MatchesTheMeasuredMacJaJpCaptionFilters) {
+  struct Case {
+    CaptionPredicate predicate;
+    const char* value;
+    unsigned mask;
+  };
+  const Case cases[] = {
+      {CaptionPredicate::Equal, "abc\xE5\x95\x86\xE4\xBA\x8B", 0x80U},                  // abc商事
+      {CaptionPredicate::Equal, "Strasse", 0x6U},                                       // Strasse
+      {CaptionPredicate::Equal, "\xC3\xA4pfel", 0x1U},                                  // äpfel
+      {CaptionPredicate::BeginsWith, "hEL*", 0x8U},                                     // hEL*
+      {CaptionPredicate::BeginsWith, "\xC3\xA4*", 0x1U},                                // ä*
+      {CaptionPredicate::BeginsWith, "\xC3\x84*", 0x1U},                                // Ä*
+      {CaptionPredicate::BeginsWith, "a*", 0x1A0U},                                     // a*
+      {CaptionPredicate::BeginsWith, "abc*", 0x180U},                                   // abc*
+      {CaptionPredicate::BeginsWith, "\xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3*", 0x180U},  // ＡＢＣ*
+      {CaptionPredicate::BeginsWith, "\xE3\x82\xA2\xE3\x82\xA4*", 0x200U},              // アイ*
+      {CaptionPredicate::BeginsWith, "\xE3\x81\x82\xE3\x81\x84*", 0x200U},              // あい*
+      {CaptionPredicate::BeginsWith, "\xE3\x81\x8B\xE3\x81\x8D*", 0x400U},              // かき*
+      {CaptionPredicate::BeginsWith, "\xEF\xBD\xB6\xEF\xBD\xB7*", 0x400U},              // ｶｷ*
+      {CaptionPredicate::BeginsWith, "\xEF\xBD\xB6\xEF\xBE\x9E*", 0x0U},                // ｶﾞ*
+      {CaptionPredicate::BeginsWith, "Strass*", 0x4U},                                  // Strass*
+      {CaptionPredicate::BeginsWith, "STRA\xC3\x9F*", 0x2U},                            // STRAß*
+      {CaptionPredicate::Contains, "*LL*", 0x8U},                                       // *LL*
+      {CaptionPredicate::Contains, "*\xC3\x89*", 0x40U},                                // *É*
+      {CaptionPredicate::Contains, "*e*", 0x3FU},                                       // *e*
+      {CaptionPredicate::Contains, "*\xCE\xB2*", 0x1000U},                              // *β*
+      {CaptionPredicate::Contains, "*ss*", 0x4U},                                       // *ss*
+      {CaptionPredicate::Contains, "*\xC3\x9F*", 0x2U},                                 // *ß*
+      {CaptionPredicate::Contains, "*\xE3\x81\x84\xE3\x81\x86*", 0x200U},               // *いう*
+      {CaptionPredicate::EndsWith, "*ef", 0x10U},                                       // *ef
+      {CaptionPredicate::EndsWith, "*SSE", 0x4U},                                       // *SSE
+      {CaptionPredicate::EndsWith,
+       "*\xC3\x9F"
+       "e",
+       0x2U},                                                             // *ße
+      {CaptionPredicate::EndsWith, "*\xE3\x81\x8D\xE3\x81\x8F", 0x400U},  // *きく
+      {CaptionPredicate::NotContains, "*\xC3\xA4*", 0x1FFEU},             // *ä*
+      {CaptionPredicate::NotBeginsWith, "abc*", 0x1E7FU},                 // abc*
+      {CaptionPredicate::Contains, "***", 0x1FFFU},                       // ***
+      {CaptionPredicate::BeginsWith, "?b*", 0x180U},                      // ?b*
+      {CaptionPredicate::BeginsWith, "Hel*", 0x8U},                       // Hel*
+      {CaptionPredicate::Contains, "*~**", 0x0U},                         // *~**
+      {CaptionPredicate::BeginsWith, "~?b*", 0x0U},                       // ~?b*
+  };
+  for (const Case& c : cases) {
+    PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+    AuthoredCaptionFilter f;
+    f.field_index = 0;
+    f.predicate = c.predicate;
+    f.value = c.value;
+    table.mutable_authored_caption_filters().push_back(std::move(f));
+    EXPECT_EQ(surviving_probe_mask(table), c.mask) << c.value;
+  }
+}
+
+// `PivotFilter` builds the same pattern from its value, whose own `*` / `?` /
+// `~` stay live.
+TEST(PivotEvaluatorCaptionFilter, LabelFilterUsesTheCaptionMatcher) {
+  struct Case {
+    FilterType type;
+    const char* value;
+    unsigned mask;
+  };
+  const Case cases[] = {
+      {FilterType::LabelBeginsWith, "\xC3\xA4", 0x1U},                    // ä
+      {FilterType::LabelBeginsWith, "\xE3\x81\x82\xE3\x81\x84", 0x200U},  // あい
+      {FilterType::LabelContains, "\xCE\xB2", 0x1000U},                   // β
+      {FilterType::LabelContains, "ss", 0x4U},
+      {FilterType::LabelBeginsWith, "?b", 0x180U},
+      {FilterType::LabelContains, "*", 0x1FFFU},
+      {FilterType::LabelContains, "~*", 0x0U},
+  };
+  for (const Case& c : cases) {
+    PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+    PivotFilter f;
+    f.axis = PivotAxis::Row;
+    f.field_name = "Region";
+    f.type = c.type;
+    f.value = std::string(c.value);
+    table.mutable_active_filters().push_back(std::move(f));
+    EXPECT_EQ(surviving_probe_mask(table), c.mask) << c.value;
+  }
 }
 
 TEST(PivotEvaluator, AuthoredCaptionBetweenFilterKeepsTheInclusiveRange) {
