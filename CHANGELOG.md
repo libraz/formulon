@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-12
+
+### BREAKING
+
+- C ABI: `fm_locale_facts_t` gains a trailing `collation_measured` field, so
+  the struct grows by 4 bytes. Callers built against the old layout must
+  rebuild.
+
 ### Added
 
 - Row and column styles can be set and cleared (`fm_sheet_set_column_style`,
@@ -59,16 +67,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The WASM size report's Brotli soft ceiling moved to 1040 KiB; the hard
+  ceiling stays at 1056 KiB.
+
+### Performance
+
 - Row entries are kept in row order, so effective-style lookups and `.xlsb`
   saves stay fast on sheets with many styled rows (100,000 rows: `.xlsb` save
   from 2.4 s to 83 ms).
-- `fm_locale_facts_t` gains a trailing `collation_measured` field, so the
-  struct grows by 4 bytes; code built against the previous header must be
-  rebuilt.
 - `UNIQUE` hashes each row's (or column's) identity instead of comparing
   every pair, so a 100,000-row text column takes milliseconds.
-- The WASM size report's Brotli soft ceiling moved to 1040 KiB; the hard
-  ceiling stays at 1056 KiB.
 
 ### Fixed
 
@@ -2467,7 +2475,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/libraz/formulon/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/libraz/formulon/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/libraz/formulon/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/libraz/formulon/compare/v0.11.1...v0.12.0
