@@ -319,6 +319,7 @@ class JsWorkbook {
 
   emscripten::val getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const;
   JsStatus setCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col, uint32_t xf_index);
+  JsStatus clearCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col);
   /// Applies one xf across an inclusive rectangle, materialising blank
   /// cells so an empty ruled box renders. Saves one ABI crossing per cell.
   JsStatus setRangeXfIndex(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow, uint32_t lastCol,

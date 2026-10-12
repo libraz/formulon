@@ -310,6 +310,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Styles.
   Napi::Value GetCellXfIndex(const Napi::CallbackInfo& info);
   Napi::Value SetCellXfIndex(const Napi::CallbackInfo& info);
+  Napi::Value ClearCellXfIndex(const Napi::CallbackInfo& info);
   Napi::Value SetRangeXfIndex(const Napi::CallbackInfo& info);
   Napi::Value GetCellXf(const Napi::CallbackInfo& info);
   Napi::Value GetFont(const Napi::CallbackInfo& info);

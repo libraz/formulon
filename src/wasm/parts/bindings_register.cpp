@@ -426,6 +426,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setBool", &JsWorkbook::setBool)
       .function("setCalcMode", &JsWorkbook::setCalcMode)
       .function("setCellXfIndex", &JsWorkbook::setCellXfIndex)
+      .function("clearCellXfIndex", &JsWorkbook::clearCellXfIndex)
       .function("setRangeXfIndex", &JsWorkbook::setRangeXfIndex)
       .function("clearSheetBreaks", &JsWorkbook::clearSheetBreaks)
       .function("setCellStyle", &JsWorkbook::setCellStyle)

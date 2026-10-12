@@ -282,6 +282,14 @@ Napi::Value Workbook::SetCellXfIndex(const Napi::CallbackInfo& info) {
   return MakeStatus(env, rc);
 }
 
+Napi::Value Workbook::ClearCellXfIndex(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  return MakeStatus(env, fm_cell_clear_xf_index(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2)));
+}
+
 Napi::Value Workbook::SetRangeXfIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

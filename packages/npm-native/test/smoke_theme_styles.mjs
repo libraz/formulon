@@ -131,6 +131,38 @@ test('getEffectiveStyle reports the cell xf with resolved colours', async () => 
   }
 });
 
+test('clearCellXfIndex restores row / column inheritance', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const xfCol = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
+    const xfCell = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
+    assert.ok(xfCol.status.ok && xfCell.status.ok);
+    assert.ok(wb.setColumnStyle(0, 0, 0, xfCol.index).ok);
+    assert.ok(wb.setCellXfIndex(0, 0, 0, xfCell.index).ok);
+    let e = wb.getEffectiveStyle(0, 0, 0);
+    assert.equal(e.source, 0);
+    assert.equal(e.xfIndex, xfCell.index);
+
+    assert.ok(wb.clearCellXfIndex(0, 0, 0).ok);
+    e = wb.getEffectiveStyle(0, 0, 0);
+    assert.equal(e.source, 2);
+    assert.equal(e.xfIndex, xfCol.index);
+
+    assert.ok(wb.setCellXfIndex(0, 0, 0, 0).ok);
+    e = wb.getEffectiveStyle(0, 0, 0);
+    assert.equal(e.source, 0);
+    assert.equal(e.xfIndex, 0);
+
+    const before = wb.cellCount(0).value;
+    assert.ok(wb.clearCellXfIndex(0, 7, 7).ok);
+    assert.equal(wb.cellCount(0).value, before);
+    assert.equal(wb.clearCellXfIndex(99, 0, 0).ok, false);
+  } finally {
+    wb.dispose();
+  }
+});
+
 test('setCellStyle round-trips a record and validates its fields', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();

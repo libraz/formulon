@@ -308,6 +308,13 @@ JsStatus JsWorkbook::setCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col, 
   return status_from_rc(rc);
 }
 
+JsStatus JsWorkbook::clearCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) {
+  if (handle_ == nullptr) {
+    return error_status(kBindingInvalidHandle);
+  }
+  return status_from_rc(fm_cell_clear_xf_index(handle_, sheet, row, col));
+}
+
 JsStatus JsWorkbook::setRangeXfIndex(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
                                      uint32_t lastCol, uint32_t xf_index) {
   if (handle_ == nullptr) {

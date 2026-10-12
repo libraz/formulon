@@ -586,6 +586,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SetCalcMode, 0x0ULL, 0x1ULL>("setCalcMode"),
           GuardedInstanceMethod<&Workbook::SetPinnedNow, 0x0ULL, 0x3FULL>("setPinnedNow"),
           GuardedInstanceMethod<&Workbook::SetCellXfIndex, 0xFULL>("setCellXfIndex"),
+          GuardedInstanceMethod<&Workbook::ClearCellXfIndex, 0x7ULL>("clearCellXfIndex"),
           GuardedInstanceMethod<&Workbook::SetCellPhonetic, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setCellPhonetic"),
           GuardedInstanceMethod<&Workbook::SetCellPhoneticRuns, 0x7ULL>("setCellPhoneticRuns"),
           GuardedInstanceMethod<&Workbook::SetCellPhoneticProperties, 0x7ULL>("setCellPhoneticProperties"),

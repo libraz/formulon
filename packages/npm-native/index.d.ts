@@ -3059,6 +3059,15 @@ export interface Workbook {
   getCellXfIndex(sheet: number, row: number, col: number): CellXfIndexResult;
   /** Persists `xfIndex` on the cell at `(sheet, row, col)`. */
   setCellXfIndex(sheet: number, row: number, col: number, xfIndex: number): Status;
+  /**
+   * Removes the direct style assignment from the cell at `(sheet, row, col)`
+   * so a blank cell inherits its row / column style again. Value, formula and
+   * comments are kept; an absent cell stays absent. A non-blank cell keeps
+   * owning the default xf. Use `getEffectiveStyle().source` to tell an
+   * unassigned cell (`Row` / `Column` / `Default`) from a direct Normal
+   * (`Cell`).
+   */
+  clearCellXfIndex(sheet: number, row: number, col: number): Status;
   /** Applies `xfIndex` across an inclusive rectangle, materialising blank
    *  cells so an empty ruled box renders. Saves one call per cell. */
   setRangeXfIndex(
