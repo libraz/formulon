@@ -55,7 +55,7 @@ extern "C" fm_status_t fm_text_compare(const char* a, const char* b, const char*
   if (auto rc = check_profile_id(profile_id, kApi, &profile); rc != 0) {
     return rc;
   }
-  formulon::eval::CollationStrength fold;
+  formulon::eval::CollationStrength fold{};
   if (auto rc = check_strength(strength, kApi, &fold); rc != 0) {
     return rc;
   }
@@ -77,7 +77,7 @@ extern "C" fm_status_t fm_collation_classes(const fm_value_t* values, size_t cou
   if (auto rc = check_profile_id(profile_id, kApi, &profile); rc != 0) {
     return rc;
   }
-  formulon::eval::CollationStrength fold;
+  formulon::eval::CollationStrength fold{};
   if (auto rc = check_strength(strength, kApi, &fold); rc != 0) {
     return rc;
   }
