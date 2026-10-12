@@ -67,6 +67,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/ooxml_reader_test.cpp
   unit/io/ooxml_unknown_kind_test.cpp
   unit/io/ooxml_writer_cell_test.cpp
+  unit/io/row_merge_writer_test.cpp
   unit/io/ooxml_xlsm_test.cpp
   unit/io/package_diagnostics_test.cpp
   unit/io/pivot_cache_reader_test.cpp
