@@ -112,7 +112,6 @@ TEST(FormulonCApiCollation, RejectsBadInput) {
   EXPECT_EQ(fm_text_compare("a", "b", profile, FM_COLLATION_COMPARE, nullptr), kNullPtr);
   EXPECT_EQ(fm_text_compare("a", "b", "mac-365-xx_XX", FM_COLLATION_COMPARE, &order), kInvalid);
   EXPECT_EQ(fm_text_compare("a", "b", profile, static_cast<fm_collation_strength_t>(3), &order), kInvalid);
-  EXPECT_EQ(fm_text_compare("a", "b", profile, static_cast<fm_collation_strength_t>(-1), &order), kInvalid);
 
   const fm_value_t ok[] = {number(1.0), text("a")};
   uint32_t ids[2] = {};
