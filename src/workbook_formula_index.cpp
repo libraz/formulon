@@ -73,8 +73,7 @@ void reindex_all_formulas(std::vector<Sheet>& sheets, const eval::RecalcEngine::
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     const Sheet& sheet = sheets[sheet_idx];
     for (const auto& [row, cells] : sheet.rows()) {
-      for (std::size_t col = 0; col < cells.size(); ++col) {
-        const Cell& cell = cells[col];
+      for (const auto& [col, cell] : cells) {
         if (cell.formula_text.empty()) {
           continue;
         }
@@ -252,8 +251,7 @@ void mark_row_visibility_dependents_dirty_locked(const std::vector<Sheet>& sheet
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     const Sheet& sheet = sheets[sheet_idx];
     for (const auto& [row, cells] : sheet.rows()) {
-      for (std::size_t col = 0; col < cells.size(); ++col) {
-        const Cell& cell = cells[col];
+      for (const auto& [col, cell] : cells) {
         if (cell.formula_text.empty()) {
           continue;
         }

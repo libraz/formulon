@@ -375,7 +375,7 @@ TEST(FormulonCApiDisplayText, MaterializedBlankGapDoesNotShadowColumnStyle) {
   EXPECT_EQ(status, FM_DISPLAY_OK);
   fm_effective_style style{};
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
-  EXPECT_EQ(style.source, 2);  // column, despite the materialized blank gap
+  EXPECT_EQ(style.source, 2);  // column, despite the unwritten gap
   EXPECT_STREQ(style.num_fmt_code, "0.00%");
 }
 

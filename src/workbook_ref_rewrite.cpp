@@ -302,13 +302,13 @@ void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<Defined
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     const Sheet& sheet = sheets[sheet_idx];
     for (const auto& [row, cells] : sheet.rows()) {
-      for (std::size_t col = 0; col < cells.size(); ++col) {
-        if (cells[col].formula_text.empty()) {
+      for (const auto& [col, cell] : cells) {
+        if (cell.formula_text.empty()) {
           continue;
         }
-        const FormulaRewriteResult result = rewrite_formula(cells[col].formula_text, transform);
+        const FormulaRewriteResult result = rewrite_formula(cell.formula_text, transform);
         if (result.changed) {
-          cell_updates.push_back(CellUpdate{sheet_idx, row, static_cast<std::uint32_t>(col), result.text});
+          cell_updates.push_back(CellUpdate{sheet_idx, row, col, result.text});
         }
       }
     }

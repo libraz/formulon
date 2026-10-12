@@ -139,8 +139,7 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
         continue;
       }
       const RowCells& cells = it->second;
-      for (std::size_t col = 0; col < cells.size(); ++col) {
-        const Cell& cell = cells[col];
+      for (const auto& [col, cell] : cells) {
         if (cell.formula_text.empty()) {
           continue;
         }

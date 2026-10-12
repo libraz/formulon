@@ -436,27 +436,23 @@ extern "C" fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t shee
 
 namespace {
 
-// Returns the `(row, col)` indices of every stored cell on `sheet`,
-// sorted by `(row, col)` ascending. Implicitly default-constructed cells
-// (those that exist only because a later column was touched in the same
-// row) are kept: the dump command may want to surface them as blank
-// slots, and dropping them here would make the count returned by
-// `fm_workbook_cell_count` mismatch the indexable range. The CLI
-// filters them out at render time. Columns before a row's first populated
-// one are never materialised, so they are neither counted nor enumerated —
-// this walks the row's stored run, matching `Sheet::cell_count`.
+// Returns the `(row, col)` indices of every written coordinate on `sheet`,
+// sorted by `(row, col)` ascending. Cleared cells keep their slot and stay
+// listed (the CLI filters blanks at render time); unwritten columns are not
+// enumerated. This matches `Sheet::cell_count`.
 std::vector<std::pair<std::uint32_t, std::uint32_t>> collect_cell_addresses(const formulon::Sheet& sheet) {
   std::vector<std::pair<std::uint32_t, std::uint32_t>> out;
   for (const auto& [row, cells] : sheet.rows()) {
-    for (std::size_t col = cells.first_col(); col < cells.size(); ++col) {
-      out.emplace_back(row, static_cast<std::uint32_t>(col));
+    for (const auto& [col, cell] : cells) {
+      (void)cell;
+      out.emplace_back(row, col);
     }
   }
   // Dynamic-array spill phantoms carry an effective value through
   // `resolve_cell_value` but live only in the spill table, absent from
   // `rows()`. Merge them so the flat enumeration surfaces spilled cells, then
-  // sort + unique: a phantom that coincides with an implicitly default-
-  // constructed slot must appear only once.
+  // sort + unique: a phantom that coincides with a stored slot must appear
+  // only once.
   //
   // Streamed rather than collected first: a phantom set is a spill
   // rectangle's whole area, so `=SEQUENCE(1048576)` would otherwise build an

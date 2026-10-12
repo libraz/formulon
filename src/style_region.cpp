@@ -95,11 +95,8 @@ std::vector<CapturedCell> stored_cells(const Sheet& sheet, const StyleRect& rect
     if (row < rect.first_row || row > rect.last_row || cells.empty()) {
       continue;
     }
-    const std::uint32_t begin = std::max(cells.first_col(), rect.first_col);
-    const std::uint64_t end = std::min<std::uint64_t>(cells.size(), static_cast<std::uint64_t>(rect.last_col) + 1U);
-    for (std::uint64_t col = begin; col < end; ++col) {
-      const Cell& cell = cells[static_cast<std::size_t>(col)];
-      out.push_back({row, static_cast<std::uint32_t>(col), cell.xf_index, cell_owns_style(cell)});
+    for (const auto& [col, cell] : cells.entries_in(rect.first_col, static_cast<std::uint64_t>(rect.last_col) + 1U)) {
+      out.push_back({row, col, cell.xf_index, cell_owns_style(cell)});
     }
   }
   return out;

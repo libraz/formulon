@@ -58,8 +58,7 @@ void reindex_formulas_if(std::vector<Sheet>& sheets, const eval::RecalcEngine::L
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     Sheet& sheet = sheets[sheet_idx];
     for (const auto& [row, cells] : sheet.rows()) {
-      for (std::size_t col = 0; col < cells.size(); ++col) {
-        const Cell& cell = cells[col];
+      for (const auto& [col, cell] : cells) {
         if (cell.formula_text.empty()) {
           continue;
         }

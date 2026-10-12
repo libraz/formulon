@@ -124,12 +124,10 @@ void collect_populated_cells(const Sheet& sheet, const CellRangeDependency& rang
       continue;
     }
     const RowCells& cells = it->second;
-    const std::size_t begin = std::max<std::size_t>(extent.first_col, cells.first_col());
-    const std::size_t end = std::min<std::size_t>(static_cast<std::size_t>(extent.last_col) + 1U, cells.size());
-    for (std::size_t col = begin; col < end; ++col) {
-      const Cell& cell = cells[col];
+    for (const auto& [col, cell] :
+         cells.entries_in(extent.first_col, static_cast<std::uint64_t>(extent.last_col) + 1U)) {
       if (!cell.formula_text.empty() || !cell.cached_value.is_blank()) {
-        out.push_back(CellNodeId{range.sheet_id, row, static_cast<std::uint32_t>(col)});
+        out.push_back(CellNodeId{range.sheet_id, row, col});
       }
     }
   }
