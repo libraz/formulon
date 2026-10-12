@@ -467,6 +467,12 @@ class RowCells {
                       const_iterator(cols_.data() + hi, cells_.data() + hi));
   }
 
+  /// Stored entries whose column is `>= first`.
+  EntryRange entries_from(std::uint32_t first) const noexcept {
+    const std::size_t lo = lower_index(first);
+    return EntryRange(const_iterator(cols_.data() + lo, cells_.data() + lo), end());
+  }
+
   /// Number of stored columns in `[first, end)`.
   std::size_t count_in(std::uint32_t first, std::uint64_t end) const noexcept {
     const std::size_t lo = lower_index(first);
@@ -505,7 +511,9 @@ class RowCells {
                : kNpos;
   }
 
-  /// Index of the first key `>= col`.
+  /// Index of the first key `>= col`. Keys are unique and ascending, so
+  /// `cols_[i] >= front + i` and the answer never exceeds `col - front`; a hit
+  /// there proves the prefix is dense.
   std::size_t lower_index(std::uint64_t col) const noexcept {
     if (cols_.empty() || col <= cols_.front()) {
       return 0U;
@@ -513,7 +521,12 @@ class RowCells {
     if (col > cols_.back()) {
       return cols_.size();
     }
-    return static_cast<std::size_t>(std::lower_bound(cols_.begin(), cols_.end(), col,
+    const std::size_t guess = static_cast<std::size_t>(col - cols_.front());
+    if (guess < cols_.size() && cols_[guess] == col) {
+      return guess;
+    }
+    const auto last = cols_.begin() + static_cast<std::ptrdiff_t>(std::min(guess, cols_.size()));
+    return static_cast<std::size_t>(std::lower_bound(cols_.begin(), last, col,
                                                      [](std::uint16_t key, std::uint64_t value) {
                                                        return static_cast<std::uint64_t>(key) < value;
                                                      }) -

@@ -858,18 +858,18 @@ void Sheet::read_range(std::uint32_t first_row, std::uint32_t last_row, std::uin
     return nullptr;
   };
 
-  const std::uint64_t col_end = static_cast<std::uint64_t>(last_col) + 1U;
   for (std::uint32_t row = first_row; row <= last_row; ++row) {
     const auto row_it = rows_.find(row);
     RowCells::const_iterator next;
     RowCells::const_iterator stop;
     if (row_it != rows_.end()) {
-      const RowCells::EntryRange entries = row_it->second.entries_in(first_col, col_end);
+      const RowCells::EntryRange entries = row_it->second.entries_from(first_col);
       next = entries.begin();
       stop = entries.end();
     }
     for (std::uint32_t col = first_col; col <= last_col; ++col) {
       // The stored entries are ascending, so one cursor per row follows `col`.
+      // It starts at `first_col` and never needs the range's end.
       const Cell* cell = nullptr;
       if (next != stop && (*next).col == col) {
         cell = &(*next).cell;
