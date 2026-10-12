@@ -429,8 +429,7 @@ bool values_equal(const Value& x, const Value& y) {
     const Sheet& sa = a.sheet(s);
     const Sheet& sb = b.sheet(s);
     for (const auto& [row, cells] : sa.rows()) {
-      for (std::uint32_t col = 0; col < cells.size(); ++col) {
-        const Cell& ca = cells[col];
+      for (const auto& [col, ca] : cells) {
         const bool a_has_data = !ca.formula_text.empty() || !ca.cached_value.is_blank();
         if (!a_has_data) {
           continue;
@@ -453,8 +452,7 @@ bool values_equal(const Value& x, const Value& y) {
     // Reverse direction: a cell present on B but absent on A also
     // counts as drift.
     for (const auto& [row, cells] : sb.rows()) {
-      for (std::uint32_t col = 0; col < cells.size(); ++col) {
-        const Cell& cb = cells[col];
+      for (const auto& [col, cb] : cells) {
         const bool b_has_data = !cb.formula_text.empty() || !cb.cached_value.is_blank();
         if (!b_has_data) {
           continue;

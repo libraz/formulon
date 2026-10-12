@@ -118,12 +118,6 @@ std::vector<std::pair<std::uint32_t, std::uint32_t>> Sheet::comment_anchor_set()
   return anchors;
 }
 
-const Cell& RowCells::blank() noexcept {
-  // Shared read-only stand-in that `operator[]` returns for an unstored column.
-  static const Cell kBlank;
-  return kBlank;
-}
-
 Cell& RowCells::ensure(std::uint32_t col) {
   assert(col < a1::kMaxCols);
   // Right-append fast path: rows are mostly written left to right.

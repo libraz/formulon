@@ -62,8 +62,7 @@ struct LoadResult {
 
 void SnapshotSheet(const Sheet& sheet, LoadResult* out) {
   for (const auto& [row, cells] : sheet.rows()) {
-    for (std::uint32_t col = 0; col < cells.size(); ++col) {
-      const Cell& cell = cells[col];
+    for (const auto& [col, cell] : cells) {
       if (cell.formula_text.empty() && cell.cached_value.is_blank() && cell.xf_index == 0U) {
         continue;
       }

@@ -136,8 +136,7 @@ inline bool formula_texts_equal_for_each_cell(const Workbook& a, const Workbook&
     const Sheet& sa = a.sheet(s);
     const Sheet& sb = b.sheet(s);
     for (const auto& [row, cells] : sa.rows()) {
-      for (std::uint32_t col = 0; col < cells.size(); ++col) {
-        const Cell& ca = cells[col];
+      for (const auto& [col, ca] : cells) {
         if (ca.formula_text.empty()) {
           continue;
         }

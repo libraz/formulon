@@ -163,8 +163,8 @@ inline void RecalcBothAndExpectEqual(WorkbookPair& wp, std::uint32_t threads = 4
     const Sheet& a = wp.serial.sheet(s);
     const Sheet& b = wp.parallel.sheet(s);
     for (const auto& [row, cells] : a.rows()) {
-      for (std::uint32_t col = 0; col < cells.size(); ++col) {
-        Value va = cells[col].cached_value;
+      for (const auto& [col, cell] : cells) {
+        Value va = cell.cached_value;
         Value vb = StoredValue(wp.parallel, s, row, col);
         EXPECT_EQ(va, vb) << "value mismatch at (" << row << ", " << col << ")";
       }

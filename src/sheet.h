@@ -487,21 +487,7 @@ class RowCells {
     return cols_.capacity() * sizeof(std::uint16_t) + cells_.capacity() * sizeof(Cell);
   }
 
-  /// One past the highest stored column; 0 when empty.
-  std::size_t size() const noexcept { return cols_.empty() ? 0U : static_cast<std::size_t>(cols_.back()) + 1U; }
-
-  /// Lowest stored column; 0 when empty.
-  std::uint32_t first_col() const noexcept { return cols_.empty() ? 0U : cols_.front(); }
-
-  /// The cell at `col`, or a shared blank cell when the column is not stored.
-  const Cell& operator[](std::size_t col) const noexcept {
-    const Cell* cell = col < size() ? find(static_cast<std::uint32_t>(col)) : nullptr;
-    return cell != nullptr ? *cell : blank();
-  }
-
  private:
-  static const Cell& blank() noexcept;
-
   static constexpr std::size_t kNpos = static_cast<std::size_t>(-1);
 
   /// Index of `col` in `cols_`, or `kNpos`. Tries the dense-prefix guess first.

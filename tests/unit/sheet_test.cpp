@@ -341,22 +341,32 @@ TEST(SheetTest, SparseRowsLeaveUnvisitedRowsAbsent) {
 // Leading-gap storage
 // ---------------------------------------------------------------------------
 
+// Lowest and highest stored column of a non-empty row.
+std::uint32_t FirstStoredCol(const RowCells& row) {
+  return (*row.begin()).col;
+}
+
+std::uint32_t LastStoredCol(const RowCells& row) {
+  std::uint32_t last = 0U;
+  for (const auto& [col, cell] : row) {
+    (void)cell;
+    last = col;
+  }
+  return last;
+}
+
 TEST(SheetTest, ColumnsBeforeTheFirstPopulatedOneAreNotMaterialised) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 5000U, Value::number(1.0));
 
   const RowCells& row = s.rows().at(0U);
-  EXPECT_EQ(row.first_col(), 5000U);
-  // One slot held, but the row still reports its full addressable width so
-  // index-based scans behave as they would against a dense vector.
-  EXPECT_EQ(row.stored_count(), 1U);
-  EXPECT_EQ(row.size(), 5001U);
+  ASSERT_EQ(row.stored_count(), 1U);
+  EXPECT_EQ(FirstStoredCol(row), 5000U);
+  EXPECT_EQ(LastStoredCol(row), 5000U);
   EXPECT_EQ(s.cell_count(), 1U);
 
-  // A column in the leading gap reads as a blank cell...
-  EXPECT_TRUE(row[0U].formula_text.empty());
-  EXPECT_TRUE(row[0U].cached_value.is_blank());
-  // ...but is reported as absent, because it was never written.
+  // A column in the leading gap is absent, because it was never written.
+  EXPECT_EQ(row.find(0U), nullptr);
   EXPECT_EQ(s.cell_at(0U, 0U), nullptr);
   EXPECT_FALSE(s.has_cell(0U, 0U));
 }
@@ -368,7 +378,7 @@ TEST(SheetTest, WritingLeftOfTheRunExtendsItWithoutLosingCells) {
   s.set_cell_value(0U, 4U, Value::number(2.0));
 
   const RowCells& row = s.rows().at(0U);
-  EXPECT_EQ(row.first_col(), 4U);
+  EXPECT_EQ(FirstStoredCol(row), 4U);
   EXPECT_EQ(row.stored_count(), 3U);  // columns 4, 10 and 12
   EXPECT_EQ(s.cell_at(0U, 4U)->cached_value.as_number(), 2.0);
   EXPECT_EQ(s.cell_at(0U, 10U)->cached_value.as_number(), 1.0);
@@ -382,7 +392,7 @@ TEST(SheetTest, InsertColsLeftOfTheRunOnlyMovesItsOrigin) {
   s.insert_cols(/*col=*/2U, /*count=*/3U);
 
   const RowCells& row = s.rows().at(0U);
-  EXPECT_EQ(row.first_col(), 13U);
+  EXPECT_EQ(FirstStoredCol(row), 13U);
   EXPECT_EQ(row.stored_count(), 1U);
   EXPECT_EQ(s.cell_at(0U, 13U)->cached_value.as_number(), 1.0);
   EXPECT_EQ(s.cell_at(0U, 10U), nullptr);
@@ -394,7 +404,7 @@ TEST(SheetTest, DeleteColsLeftOfTheRunOnlyMovesItsOrigin) {
   s.delete_cols(/*col=*/2U, /*count=*/3U);
 
   const RowCells& row = s.rows().at(0U);
-  EXPECT_EQ(row.first_col(), 7U);
+  EXPECT_EQ(FirstStoredCol(row), 7U);
   EXPECT_EQ(row.stored_count(), 1U);
   EXPECT_EQ(s.cell_at(0U, 7U)->cached_value.as_number(), 1.0);
 }
@@ -407,7 +417,7 @@ TEST(SheetTest, DeleteColsStraddlingTheRunStartDropsTheCoveredCells) {
   s.delete_cols(/*col=*/8U, /*count=*/3U);
 
   const RowCells& row = s.rows().at(0U);
-  EXPECT_EQ(row.first_col(), 9U);
+  EXPECT_EQ(FirstStoredCol(row), 9U);
   EXPECT_EQ(row.stored_count(), 1U);  // former column 12
   EXPECT_EQ(s.cell_at(0U, 8U), nullptr);
   ASSERT_NE(s.cell_at(0U, 9U), nullptr);
@@ -436,14 +446,17 @@ TEST(SheetTest, RowsIterationExposesAllPopulatedRows) {
 
 TEST(SheetTest, RowsIterationReportsExpectedColumnCounts) {
   Sheet s("Sheet1");
-  s.set_cell_value(0U, 0U, Value::number(1.0));  // row 0, vector size 1
-  s.set_cell_value(1U, 4U, Value::number(2.0));  // row 1, vector size 5
-  s.set_cell_formula(2U, 2U, "=A1");             // row 2, vector size 3
+  s.set_cell_value(0U, 0U, Value::number(1.0));  // row 0, col 0
+  s.set_cell_value(1U, 4U, Value::number(2.0));  // row 1, col 4
+  s.set_cell_formula(2U, 2U, "=A1");             // row 2, col 2
 
   ASSERT_EQ(s.rows().size(), 3U);
-  EXPECT_EQ(s.rows().at(0U).size(), 1U);
-  EXPECT_EQ(s.rows().at(1U).size(), 5U);
-  EXPECT_EQ(s.rows().at(2U).size(), 3U);
+  EXPECT_EQ(s.rows().at(0U).stored_count(), 1U);
+  EXPECT_EQ(LastStoredCol(s.rows().at(0U)), 0U);
+  EXPECT_EQ(s.rows().at(1U).stored_count(), 1U);
+  EXPECT_EQ(LastStoredCol(s.rows().at(1U)), 4U);
+  EXPECT_EQ(s.rows().at(2U).stored_count(), 1U);
+  EXPECT_EQ(LastStoredCol(s.rows().at(2U)), 2U);
 }
 
 // ---------------------------------------------------------------------------
@@ -537,15 +550,15 @@ TEST(RowCellsTest, FindAroundAHole) {
   EXPECT_EQ(row.find(16383U), nullptr);
 }
 
-TEST(RowCellsTest, GapIsAbsentAndReadsBlankThroughOperatorIndex) {
+TEST(RowCellsTest, GapIsAbsent) {
   RowCells row;
   Put(row, 0U);
   Put(row, 16383U);
   EXPECT_EQ(row.find(8000U), nullptr);
   EXPECT_EQ(row.stored_count(), 2U);
-  EXPECT_EQ(row.size(), 16384U);
-  EXPECT_TRUE(row[8000U].cached_value.is_blank());
-  EXPECT_EQ(row[16383U].cached_value.as_number(), 16383.0);
+  EXPECT_EQ(LastStoredCol(row), 16383U);
+  ASSERT_NE(row.find(16383U), nullptr);
+  EXPECT_EQ(row.find(16383U)->cached_value.as_number(), 16383.0);
 }
 
 TEST(RowCellsTest, ShiftColsFromDropsKeysPushedPastTheLastColumn) {
@@ -571,7 +584,7 @@ TEST(RowCellsTest, ShiftColsFromPastEveryKeyEmptiesTheRow) {
   Put(row, 100U);
   row.shift_cols_from(0U, 16384U);
   EXPECT_TRUE(row.empty());
-  EXPECT_EQ(row.size(), 0U);
+  EXPECT_EQ(row.stored_count(), 0U);
 }
 
 TEST(RowCellsTest, EraseColsDropsTheBandAndDecrementsLaterKeys) {
@@ -620,11 +633,9 @@ TEST(RowCellsTest, EntriesInAndCountInAreHalfOpen) {
   EXPECT_EQ(row.count_in(0U, 3U), 0U);
 }
 
-TEST(RowCellsTest, EmptyRowReportsZeroSizeAndOrigin) {
+TEST(RowCellsTest, EmptyRowHoldsNothing) {
   RowCells row;
   EXPECT_TRUE(row.empty());
-  EXPECT_EQ(row.size(), 0U);
-  EXPECT_EQ(row.first_col(), 0U);
   EXPECT_EQ(row.stored_count(), 0U);
   EXPECT_EQ(row.find(0U), nullptr);
   EXPECT_EQ(row.count_in(0U, 16384U), 0U);

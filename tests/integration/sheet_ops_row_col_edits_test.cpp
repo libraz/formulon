@@ -333,10 +333,9 @@ TEST(WorkbookRowColEdits, InsertColsShiftsCellsAcrossRow) {
 
   const Sheet& s = wb.sheet(0);
   EXPECT_EQ(s.cell_at(0, 0)->cached_value.as_number(), 1.0);
-  // Slot at (0, 3) exists in the row vector but is a default Cell — the
-  // value that used to live there migrated forward.
-  ASSERT_NE(s.cell_at(0, 3), nullptr);
-  EXPECT_TRUE(s.cell_at(0, 3)->cached_value.is_blank());
+  // The value that used to live at (0, 3) migrated forward, leaving no
+  // stored cell behind.
+  EXPECT_EQ(s.cell_at(0, 3), nullptr);
   ASSERT_NE(s.cell_at(0, 5), nullptr);
   EXPECT_EQ(s.cell_at(0, 5)->cached_value.as_number(), 4.0);
   // The formula cell sat at (1, 0), which is below the insert origin
