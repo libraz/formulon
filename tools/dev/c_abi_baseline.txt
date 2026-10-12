@@ -1,4 +1,4 @@
-# Released C ABI surface, as shipped in v0.15.0.
+# Released C ABI surface, as shipped in v0.15.1.
 #
 # This is the compatibility commitment a third-party C/C++ consumer built
 # against: every entry point below existed in the released header and in the
