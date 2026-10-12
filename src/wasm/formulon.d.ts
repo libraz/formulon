@@ -2704,7 +2704,11 @@ export interface Workbook {
   /** Deletes `count` columns starting at `col` on `sheet`. */
   deleteCols(sheet: number, col: number, count: number): Status;
 
+  /** Number of written coordinates on `sheet`: cells set by any value, formula or format setter,
+   *  `setBlank`, or a spill anchor commit or rejection (clearing keeps the slot),
+   *  plus spill phantoms that have no stored slot. Unwritten columns are not counted. */
   cellCount(sheet: number): NumberResult;
+  /** Reads the `idx`-th counted coordinate, `idx` in `[0, cellCount)`, ordered by `(row, col)` ascending. */
   cellAt(sheet: number, idx: number): CellEntry;
 
   definedNameCount(): NumberResult;

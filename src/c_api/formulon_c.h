@@ -1214,19 +1214,19 @@ FM_API fm_status_t fm_workbook_evaluate_formula_array_cell(const fm_workbook_t* 
 /* -------------------------------------------------------------------------- */
 
 /**
- * @brief Returns the number of stored cell slots on `sheet_index`.
+ * @brief Returns the number of written coordinates on `sheet_index`.
  *
- * Counts every populated `Cell` (literal, formula, or implicitly created
- * during row growth) on the sheet's row-sparse / column-dense storage,
- * plus every dynamic-array spill phantom that has no underlying stored
- * slot. Spill phantoms carry an effective value through
- * `fm_workbook_get_value` / `fm_workbook_cell_at` but live only in the
- * spill table; counting them keeps this total aligned with the
- * `fm_workbook_cell_at` index range.
+ * Counts every coordinate that a value, formula or format setter,
+ * `fm_workbook_set_blank`, or a spill anchor commit or rejection has
+ * written. Clearing a cell keeps its slot, so it stays counted. Columns that
+ * were never written are not counted. Also counts every dynamic-array spill
+ * phantom that has no stored slot: phantoms carry an effective value through
+ * `fm_workbook_get_value` / `fm_workbook_cell_at` but live only in the spill
+ * table.
  *
- * The count is suitable as the upper bound for `fm_workbook_cell_at`
- * iteration: indices in `[0, count)` enumerate every stored cell. The
- * iteration order is implementation-defined but stable for a given
+ * The count is the upper bound for `fm_workbook_cell_at` iteration: indices
+ * in `[0, count)` are dense and enumerate every counted coordinate in
+ * `(row, col)` ascending order. The enumeration is stable for a given
  * workbook state (no cell mutation has occurred between calls).
  *
  * @return `kOk` on success;
@@ -1238,8 +1238,8 @@ FM_API fm_status_t fm_workbook_cell_count(const fm_workbook_t* wb, size_t sheet_
 /**
  * @brief Reads the `idx`-th cell on `sheet_index`.
  *
- * Iteration order is implementation-defined but stable for a given
- * workbook state (sorted by `(row, col)` ascending).
+ * Enumerates the coordinates counted by `fm_workbook_cell_count`, sorted by
+ * `(row, col)` ascending; unwritten columns are not enumerated.
  *
  * On success the call writes `*out_row`, `*out_col`, `*out_value`, and
  * — if `out_formula != NULL` — points `*out_formula` at the cell's raw

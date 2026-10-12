@@ -2676,7 +2676,11 @@ export interface Workbook {
   deleteCols(sheet: number, col: number, count: number): Status;
 
   // Iteration / metadata.
+  /** Number of written coordinates on `sheet`: cells set by any value, formula or format setter,
+   *  `setBlank`, or a spill anchor commit or rejection (clearing keeps the slot),
+   *  plus spill phantoms that have no stored slot. Unwritten columns are not counted. */
   cellCount(sheet: number): NumberResult;
+  /** Reads the `idx`-th counted coordinate, `idx` in `[0, cellCount)`, ordered by `(row, col)` ascending. */
   cellAt(sheet: number, idx: number): CellEntry;
   /** Reads the cell's stored formula in A1 notation (leading `=` included); `formula` is `null` for a non-formula cell.
    *  The text is returned as entered; a formula loaded from a file shows book names, not `[N]` indexes. */

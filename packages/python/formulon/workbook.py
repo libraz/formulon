@@ -3258,12 +3258,12 @@ class Workbook:
 
     # -- Iteration ---------------------------------------------------------
     def iter_cells(self, sheet: int) -> Iterator[Cell]:
-        """Iterate over every stored cell on ``sheet``.
+        """Iterate over every written coordinate on ``sheet``.
 
-        Iteration order is implementation-defined but stable for an
-        unmutated workbook (sorted by ``(row, col)`` ascending per the C
-        ABI). Borrowed text pointers are decoded eagerly per yielded
-        item. Do not mutate the workbook while consuming this iterator: the
+        Yields each cell set by a value, formula or format setter (clearing
+        keeps the slot) and each spill phantom, sorted by ``(row, col)``
+        ascending; columns that were never written are skipped. Borrowed
+        text pointers are decoded eagerly per yielded item. Do not mutate the workbook while consuming this iterator: the
         C ABI invalidates a cell enumeration after a workbook mutation.
         """
         h = self._require()
