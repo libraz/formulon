@@ -13,7 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fm_sheet_clear_column_style`, `fm_sheet_set_row_style`,
   `fm_sheet_clear_row_style`; `setColumnStyle` / `clearColumnStyle` /
   `setRowStyle` / `clearRowStyle` on WASM and Node, `set_column_style` and
-  siblings in Python). Width, height, hidden and outline state are kept.
+  siblings in Python). Both take an inclusive span of columns or rows.
+  Width, height, hidden and outline state are kept.
+- Attribute-only formatting of a range, row, column or whole-sheet selection,
+  as Excel applies it: `fm_sheet_range_style_bases` / `rangeStyleBases` /
+  `range_style_bases` list the XFs the selection resolves to, and
+  `fm_sheet_remap_range_style` / `remapRangeStyle` / `remap_range_style` move
+  each to its patched XF. Styles of covered rows and columns are rewritten,
+  existing cells are remapped, and a cell is created only where a styled row
+  or column crossing the selection would otherwise win; blank cells of a
+  covered row or column are not enumerated.
+  `fm_sheet_snapshot_range_style` / `fm_sheet_restore_range_style` (and their
+  binding forms) capture and restore a selection's style state for undo.
 - A cell's direct style can be removed (`fm_cell_clear_xf_index` /
   `clearCellXfIndex` / `clear_cell_xf_index`), so a blank cell inherits its
   row or column style again, unlike assigning xf 0, which pins Normal. Value,
@@ -48,12 +59,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Row entries are kept in row order, so effective-style lookups and `.xlsb`
+  saves stay fast on sheets with many styled rows (100,000 rows: `.xlsb` save
+  from 2.4 s to 83 ms).
 - `fm_locale_facts_t` gains a trailing `collation_measured` field, so the
   struct grows by 4 bytes; code built against the previous header must be
   rebuilt.
 - `UNIQUE` hashes each row's (or column's) identity instead of comparing
   every pair, so a 100,000-row text column takes milliseconds.
-- The WASM size report's Brotli soft ceiling moved to 1032 KiB; the hard
+- The WASM size report's Brotli soft ceiling moved to 1040 KiB; the hard
   ceiling stays at 1056 KiB.
 
 ### Fixed
