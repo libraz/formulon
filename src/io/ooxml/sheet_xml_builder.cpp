@@ -617,12 +617,11 @@ std::string BuildDimensionXml(const Sheet& sheet) {
     max_col = std::max(max_col, col_index);
   };
   for (const auto& [row_index, cells] : sheet.rows()) {
-    for (std::size_t c = 0; c < cells.size(); ++c) {
-      const Cell& cell = cells[c];
+    for (const auto& [col, cell] : cells) {
       if (!CellIsEmitted(cell)) {
         continue;
       }
-      include(row_index, static_cast<std::uint32_t>(c));
+      include(row_index, col);
     }
   }
   for (const CellAddress& phantom : sheet.spill_phantom_addresses()) {

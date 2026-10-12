@@ -438,12 +438,12 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
 // Emits the <row> wrapper with all visible cells in the row. Returns true
 // when at least one <c> was emitted (i.e. the <row> was actually written),
 // false when the row collapsed to nothing (every cell was blank).
-// `phantom_cols` lists the row's spilled columns, ascending. When `override_attrs` is non-empty it is appended to the
-// `<row>` start-tag (between `r="N"` and the closing `>`), allowing the
-// caller to merge per-row layout overrides without reshaping the body.
-// When the row body collapses to nothing but `override_attrs` is
-// non-empty, an empty self-closing `<row r="N" .../>` is still emitted
-// so the override survives the round-trip.
+// `phantom_cols` lists the row's spill-covered columns other than anchors,
+// ascending; a phantom wins over a stored entry in the same column. When
+// `override_attrs` is non-empty it is appended to the `<row>` start-tag (between `r="N"` and the closing `>`), allowing
+// the caller to merge per-row layout overrides without reshaping the body. When the row body collapses to nothing but
+// `override_attrs` is non-empty, an empty self-closing `<row r="N" .../>` is still emitted so the override survives the
+// round-trip.
 bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const RowCells& row_cells,
                   const std::vector<std::uint32_t>& phantom_cols, std::string_view override_attrs,
                   const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
@@ -452,9 +452,8 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
   // Buffer the row body separately so we can tell whether anything ended
   // up inside the <row> wrapper before we commit to writing it.
   std::string body;
-  body.reserve(row_cells.size() * 24U);
-  const std::uint32_t stored = static_cast<std::uint32_t>(row_cells.size());
-  auto emit_phantom = [&](std::uint32_t col) {
+  body.reserve(row_cells.stored_count() * 24U);
+  auto emit_phantom = [&](std::uint32_t col, const Cell* stored) {
     const SpillRegion* region = sheet.spill_region_covering(row, col);
     if (region == nullptr) {
       return;
@@ -471,21 +470,26 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
         static_cast<std::size_t>(row - region->anchor_row) * region->cols + (col - region->anchor_col);
     const Value value = idx < region->cells.size() ? region->cells[idx] : Value::blank();
     const bool force_style =
-        col < stored && ForcesDefaultStyle(row_cells[col]) && InheritsNonDefaultStyle(sheet, row, col);
+        stored != nullptr && ForcesDefaultStyle(*stored) && InheritsNonDefaultStyle(sheet, row, col);
     AppendPhantomCellXml(body, row, col, select_effective_xf(sheet, row, col).xf_index, force_style, value, it->second);
   };
-  for (std::uint32_t col = 0; col < stored; ++col) {
-    if (sheet.spill_region_covering(row, col) != nullptr) {
-      emit_phantom(col);
+  auto entry = row_cells.begin();
+  const auto entries_end = row_cells.end();
+  auto phantom = phantom_cols.begin();
+  while (entry != entries_end || phantom != phantom_cols.end()) {
+    const std::uint32_t entry_col = entry != entries_end ? (*entry).col : UINT32_MAX;
+    const std::uint32_t phantom_col = phantom != phantom_cols.end() ? *phantom : UINT32_MAX;
+    if (phantom_col <= entry_col) {
+      emit_phantom(phantom_col, phantom_col == entry_col ? &(*entry).cell : nullptr);
+      if (phantom_col == entry_col) {
+        ++entry;
+      }
+      ++phantom;
       continue;
     }
-    (void)AppendCellXml(body, sheet, row, col, row_cells[col], shared_strings, dynamic_array_cm_index, name_shapes,
-                        indexer);
-  }
-  for (const std::uint32_t col : phantom_cols) {
-    if (col >= stored) {
-      emit_phantom(col);
-    }
+    const RowCells::Entry e = *entry;
+    (void)AppendCellXml(body, sheet, row, e.col, e.cell, shared_strings, dynamic_array_cm_index, name_shapes, indexer);
+    ++entry;
   }
   if (body.empty() && override_attrs.empty()) {
     return false;

@@ -43,8 +43,7 @@ namespace {
 
 /// Returns `true` when a `Cell` is "empty" in the sense that nothing
 /// useful would be carried by emitting a `BrtCellBlank` for it. Used
-/// to skip implicitly-default-constructed columns produced by sheet
-/// row growth (see `Sheet::set_cell_value` docs).
+/// to skip stored slots whose content was cleared.
 bool IsEmptySlot(const Cell& cell) {
   return cell.formula_text.empty() && cell.cached_value.is_blank() && cell.xf_index == 0U && !cell.has_explicit_xf;
 }
@@ -201,8 +200,8 @@ void EmitWorksheetDimensions(std::vector<std::uint8_t>& dst, const Sheet& sheet)
   };
 
   for (const auto& [row, cells] : sheet.rows()) {
-    for (std::uint32_t col = 0; col < cells.size(); ++col) {
-      if (!IsEmptySlot(cells[col])) {
+    for (const auto& [col, cell] : cells) {
+      if (!IsEmptySlot(cell)) {
         include(row, col);
       }
     }
@@ -389,8 +388,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
   };
   std::map<std::uint32_t, std::map<std::uint32_t, PhantomShell>> phantoms;
   for (const auto& [anchor_row, cells] : sheet.rows()) {
-    for (std::uint32_t col = 0; col < cells.size(); ++col) {
-      const Cell& cell = cells[col];
+    for (const auto& [col, cell] : cells) {
       if (cell.formula_text.empty()) {
         continue;
       }
@@ -443,24 +441,20 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
     const std::map<std::uint32_t, PhantomShell>* row_phantoms =
         phantom_it != phantoms.end() ? &phantom_it->second : nullptr;
 
-    // Highest column carrying anything in this row (stored non-empty cell
-    // or phantom). A row with nothing to emit is skipped so we do not emit
+    // A row with nothing to emit is skipped so we do not emit
     // a bare BrtRowHdr.
-    std::uint32_t max_col = 0;
     bool any = false;
     if (row_cells != nullptr) {
-      for (std::uint32_t col = 0; col < row_cells->size(); ++col) {
-        if (!IsEmptySlot((*row_cells)[col])) {
-          max_col = std::max(max_col, col);
+      for (const auto& [col, cell] : *row_cells) {
+        (void)col;
+        if (!IsEmptySlot(cell)) {
           any = true;
+          break;
         }
       }
     }
     if (row_phantoms != nullptr) {
-      for (const auto& kv : *row_phantoms) {
-        max_col = std::max(max_col, kv.first);
-        any = true;
-      }
+      any = any || !row_phantoms->empty();
     }
     if (!any && row_layout == nullptr) {
       continue;
@@ -479,8 +473,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
       }
     };
     if (row_cells != nullptr) {
-      for (std::uint32_t col = 0; col < row_cells->size(); ++col) {
-        if (!IsEmptySlot((*row_cells)[col])) {
+      for (const auto& [col, cell] : *row_cells) {
+        if (!IsEmptySlot(cell)) {
           add_to_span(col);
         }
       }
@@ -493,11 +487,26 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
     }
 
     EmitRowHeader(body, row, row_layout, spans);
-    for (std::uint32_t col = 0; col <= max_col; ++col) {
-      const Cell* cell = row_cells != nullptr && col < row_cells->size() ? &(*row_cells)[col] : nullptr;
-      const auto ph =
-          row_phantoms != nullptr ? row_phantoms->find(col) : std::map<std::uint32_t, PhantomShell>::const_iterator();
-      const bool phantom = row_phantoms != nullptr && ph != row_phantoms->end();
+    // Ascending merge of stored entries and phantoms; a column in both takes the entry path unless it is style-only.
+    RowCells::const_iterator entry_it = row_cells != nullptr ? row_cells->begin() : RowCells::const_iterator();
+    const RowCells::const_iterator entry_end = row_cells != nullptr ? row_cells->end() : RowCells::const_iterator();
+    auto ph = row_phantoms != nullptr ? row_phantoms->begin() : std::map<std::uint32_t, PhantomShell>::const_iterator();
+    const auto ph_end =
+        row_phantoms != nullptr ? row_phantoms->end() : std::map<std::uint32_t, PhantomShell>::const_iterator();
+    while (entry_it != entry_end || ph != ph_end) {
+      const std::uint32_t entry_col = entry_it != entry_end ? (*entry_it).col : UINT32_MAX;
+      const std::uint32_t phantom_col = ph != ph_end ? ph->first : UINT32_MAX;
+      const std::uint32_t col = std::min(entry_col, phantom_col);
+      const Cell* cell = nullptr;
+      if (entry_col == col) {
+        cell = &(*entry_it).cell;
+        ++entry_it;
+      }
+      const bool phantom = phantom_col == col;
+      const auto cur_ph = ph;
+      if (phantom) {
+        ++ph;
+      }
       // A spilled cell carrying only its own style is still the spill's.
       if (cell != nullptr && !IsEmptySlot(*cell) && !(phantom && cell->formula_text.empty())) {
         const bool always = formula_cell_always_calculates(sheet, row, col, *cell, name_shapes);
@@ -534,12 +543,12 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
         continue;
       }
       if (phantom) {
-        if (downgraded_array_anchors.count(anchor_key(ph->second.anchor_row, ph->second.anchor_col)) != 0U) {
+        if (downgraded_array_anchors.count(anchor_key(cur_ph->second.anchor_row, cur_ph->second.anchor_col)) != 0U) {
           continue;
         }
         const std::uint32_t xf_index = select_effective_xf(sheet, row, col).xf_index;
-        emit_array_phantom(body, col, xf_index, ph->second.value, ph->second.anchor_row, ph->second.anchor_col,
-                           ph->second.always_calculates);
+        emit_array_phantom(body, col, xf_index, cur_ph->second.value, cur_ph->second.anchor_row,
+                           cur_ph->second.anchor_col, cur_ph->second.always_calculates);
       }
     }
   }

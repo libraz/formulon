@@ -104,8 +104,9 @@ bool has_dynamic_array_formula(const Workbook& wb) {
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     for (const auto& [row, cells] : wb.sheet(i).rows()) {
       (void)row;
-      for (std::uint32_t col = 0; col < cells.size(); ++col) {
-        if (is_dynamic_array_formula(cells[col])) {
+      for (const auto& [col, cell] : cells) {
+        (void)col;
+        if (is_dynamic_array_formula(cell)) {
           return true;
         }
       }
