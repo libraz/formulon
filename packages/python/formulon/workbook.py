@@ -3264,7 +3264,8 @@ class Workbook:
         keeps the slot) and each spill phantom, sorted by ``(row, col)``
         ascending; columns that were never written are skipped. Borrowed
         text pointers are decoded eagerly per yielded item. Do not mutate
-        the workbook while consuming this iterator: the C ABI invalidates a cell enumeration after a workbook mutation.
+        the workbook while consuming this iterator: the C ABI invalidates
+        a cell enumeration after a workbook mutation.
         """
         h = self._require()
         n = _read_count(LIB.fm_workbook_cell_count, h, _uint(sheet, "sheet_index"))
