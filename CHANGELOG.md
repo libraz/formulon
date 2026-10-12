@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fm_sheet_clear_row_style`; `setColumnStyle` / `clearColumnStyle` /
   `setRowStyle` / `clearRowStyle` on WASM and Node, `set_column_style` and
   siblings in Python). Width, height, hidden and outline state are kept.
+- A cell's direct style can be removed (`fm_cell_clear_xf_index` /
+  `clearCellXfIndex` / `clear_cell_xf_index`), so a blank cell inherits its
+  row or column style again, unlike assigning xf 0, which pins Normal. Value,
+  formula and comments are kept; the effective style's `source` tells the two
+  states apart.
 - Text comparison and value classification under a profile's collation:
   `fm_text_compare` / `compareText` / `compare_text` return the sign of
   comparing two texts, and `fm_collation_classes` / `collationClasses` /
