@@ -734,6 +734,10 @@ class Sheet {
   /// column style again; an absent cell is not materialised.
   void clear_cell_xf_index(std::uint32_t row, std::uint32_t col);
 
+  /// Sets the cell's xf and explicit-assignment mark exactly, as captured
+  /// for undo. xf 0 without the mark does not materialise an absent cell.
+  void restore_cell_style(std::uint32_t row, std::uint32_t col, std::uint32_t xf_index, bool explicit_xf);
+
   /// Returns a non-owning pointer to the cell at `(row, col)`, or `nullptr`
   /// when the coordinate is not in storage.
   ///

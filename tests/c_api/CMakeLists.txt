@@ -32,6 +32,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_pivot_read_test.cpp
   formulon_c_print_settings_test.cpp
   formulon_c_protection_test.cpp
+  formulon_c_range_style_test.cpp
   formulon_c_read_scratch_test.cpp
   formulon_c_sheet_features_test.cpp
   formulon_c_sheet_layout_test.cpp

@@ -5931,21 +5931,173 @@ class Workbook:
             "fm_sheet_set_row_outline",
         )
 
-    def set_row_style(self, sheet: int, row: int, xf_index: int) -> None:
-        """Set the cell-style XF at ``row``, keeping the other row attributes."""
+    def set_row_style(self, sheet: int, first: int, last: int, xf_index: int) -> None:
+        """Set the cell-style XF on the inclusive row span ``first..last``, keeping the other row attributes.
+
+        Every row of the span gets an override. The span and ``xf_index`` are
+        validated before anything changes.
+        """
         h = self._require()
         _check(
-            LIB.fm_sheet_set_row_style(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(xf_index, "xf_index")),
+            LIB.fm_sheet_set_row_style(
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), _uint(xf_index, "xf_index")
+            ),
             "fm_sheet_set_row_style",
         )
 
-    def clear_row_style(self, sheet: int, row: int) -> None:
-        """Remove the cell-style XF at ``row``, keeping the other row attributes."""
+    def clear_row_style(self, sheet: int, first: int, last: int) -> None:
+        """Remove the cell-style XF on the inclusive row span ``first..last``, keeping the other row attributes."""
         h = self._require()
         _check(
-            LIB.fm_sheet_clear_row_style(h, _uint(sheet, "sheet_index"), _uint(row, "row")),
+            LIB.fm_sheet_clear_row_style(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last")),
             "fm_sheet_clear_row_style",
         )
+
+    def range_style_bases(self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int) -> List[int]:
+        """List, ascending, every cell XF a cell of the selection may resolve to.
+
+        The rectangle is a selection: full height is a column selection, full
+        width a row selection, both the whole sheet, neither a cell range. The
+        list may be a superset of what is actually used. It is the first step of
+        an attribute patch (for example a font size over a selection): read the
+        bases, build a patched XF for each with :meth:`add_font` /
+        :meth:`add_cell_xf`, then apply them with :meth:`remap_range_style`.
+        """
+        h = self._require()
+        len_ptr = _alloc_out_ptr()
+        buf = 0
+        try:
+            # Size the buffer first, then fetch.
+            _check(
+                LIB.fm_sheet_range_style_bases(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(first_row, "first_row"),
+                    _uint(first_col, "first_col"),
+                    _uint(last_row, "last_row"),
+                    _uint(last_col, "last_col"),
+                    0,
+                    0,
+                    len_ptr,
+                ),
+                "fm_sheet_range_style_bases",
+            )
+            total = LIB.read_u32(len_ptr)
+            if total == 0:
+                return []
+            buf = LIB.alloc(4 * total)
+            _check(
+                LIB.fm_sheet_range_style_bases(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(first_row, "first_row"),
+                    _uint(first_col, "first_col"),
+                    _uint(last_row, "last_row"),
+                    _uint(last_col, "last_col"),
+                    buf,
+                    _uint(total, "cap"),
+                    len_ptr,
+                ),
+                "fm_sheet_range_style_bases",
+            )
+            n = min(total, LIB.read_u32(len_ptr))
+            return list(struct.unpack("<%dI" % n, LIB.read_bytes(buf, 4 * n)))
+        finally:
+            LIB.free(len_ptr)
+            if buf:
+                LIB.free(buf)
+
+    def remap_range_style(
+        self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int, mapping: Dict[int, int]
+    ) -> None:
+        """Remap the XFs of a selection: a cell resolving to key ``k`` ends at ``mapping[k]``.
+
+        An XF absent from ``mapping`` is kept. Each target must be a valid cell
+        XF, else :class:`FormulonError` and nothing changes. Patch an attribute
+        by reading :meth:`range_style_bases`, adding a patched XF for each base
+        and passing ``{base: patched}``. Undo with :meth:`snapshot_range_style`
+        taken beforehand and :meth:`restore_range_style`.
+        """
+        h = self._require()
+        pairs = list(mapping.items())
+        count = len(pairs)
+        from_buf = to_buf = 0
+        try:
+            if count:
+                from_buf = LIB.alloc_bytes(b"".join(struct.pack("<I", _uint(k, "from_xf")) for k, _ in pairs))
+                to_buf = LIB.alloc_bytes(b"".join(struct.pack("<I", _uint(v, "to_xf")) for _, v in pairs))
+            _check(
+                LIB.fm_sheet_remap_range_style(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(first_row, "first_row"),
+                    _uint(first_col, "first_col"),
+                    _uint(last_row, "last_row"),
+                    _uint(last_col, "last_col"),
+                    from_buf,
+                    to_buf,
+                    _uint(count, "count"),
+                ),
+                "fm_sheet_remap_range_style",
+            )
+        finally:
+            if from_buf:
+                LIB.free(from_buf)
+            if to_buf:
+                LIB.free(to_buf)
+
+    def snapshot_range_style(self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int) -> bytes:
+        """Capture the style state of a selection as opaque bytes for :meth:`restore_range_style`.
+
+        The capture holds the covered column styles (column selection), row
+        styles (row selection) and every stored cell's XF and explicit mark.
+        Take it before :meth:`remap_range_style` to be able to undo the edit.
+        """
+        h = self._require()
+        bytes_ptr = _alloc_out_ptr()
+        len_ptr = _alloc_out_ptr()
+        data_ptr = 0
+        try:
+            _check(
+                LIB.fm_sheet_snapshot_range_style(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(first_row, "first_row"),
+                    _uint(first_col, "first_col"),
+                    _uint(last_row, "last_row"),
+                    _uint(last_col, "last_col"),
+                    bytes_ptr,
+                    len_ptr,
+                ),
+                "fm_sheet_snapshot_range_style",
+            )
+            data_ptr = LIB.read_u32(bytes_ptr)
+            return LIB.read_bytes(data_ptr, LIB.read_u32(len_ptr))
+        finally:
+            if data_ptr:
+                LIB.fm_buffer_free(data_ptr)
+            LIB.free(len_ptr)
+            LIB.free(bytes_ptr)
+
+    def restore_range_style(self, sheet: int, data: Union[bytes, bytearray, memoryview]) -> None:
+        """Put a :meth:`snapshot_range_style` capture back on ``sheet``.
+
+        Captured axis styles and cell XFs are restored exactly; a stored cell of
+        the captured rectangle that was not captured loses its style. Values and
+        formulas are untouched. An invalid capture raises :class:`FormulonError`
+        and changes nothing.
+        """
+        h = self._require()
+        raw = bytes(data)
+        buf = LIB.alloc_bytes(raw) if raw else 0
+        try:
+            _check(
+                LIB.fm_sheet_restore_range_style(h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len")),
+                "fm_sheet_restore_range_style",
+            )
+        finally:
+            if buf:
+                LIB.free(buf)
 
     # -- Conditional formatting --------------------------------------------
     @staticmethod

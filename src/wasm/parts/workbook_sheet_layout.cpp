@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "wasm/parts/embind_common.h"
@@ -522,18 +523,101 @@ JsStatus JsWorkbook::setRowOutline(uint32_t sheet, uint32_t row, uint32_t level)
   return status_from_rc(rc);
 }
 
-JsStatus JsWorkbook::setRowStyle(uint32_t sheet, uint32_t row, uint32_t xfIndex) {
+JsStatus JsWorkbook::setRowStyle(uint32_t sheet, uint32_t first, uint32_t last, uint32_t xfIndex) {
   if (handle_ == nullptr) {
     return error_status(kBindingInvalidHandle);
   }
-  return status_from_rc(fm_sheet_set_row_style(handle_, sheet, row, xfIndex));
+  return status_from_rc(fm_sheet_set_row_style(handle_, sheet, first, last, xfIndex));
 }
 
-JsStatus JsWorkbook::clearRowStyle(uint32_t sheet, uint32_t row) {
+JsStatus JsWorkbook::clearRowStyle(uint32_t sheet, uint32_t first, uint32_t last) {
   if (handle_ == nullptr) {
     return error_status(kBindingInvalidHandle);
   }
-  return status_from_rc(fm_sheet_clear_row_style(handle_, sheet, row));
+  return status_from_rc(fm_sheet_clear_row_style(handle_, sheet, first, last));
+}
+
+emscripten::val JsWorkbook::rangeStyleBases(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
+                                            uint32_t lastCol) const {
+  emscripten::val o = emscripten::val::object();
+  o.set("xfIndices", emscripten::val::array());
+  if (handle_ == nullptr) {
+    o.set("status", error_status(kBindingInvalidHandle));
+    return o;
+  }
+  size_t len = 0;
+  fm_status_t rc = fm_sheet_range_style_bases(handle_, sheet, firstRow, firstCol, lastRow, lastCol, nullptr, 0, &len);
+  std::vector<uint32_t> xfs(len);
+  if (rc == 0 && len > 0) {
+    rc = fm_sheet_range_style_bases(handle_, sheet, firstRow, firstCol, lastRow, lastCol, xfs.data(), xfs.size(), &len);
+  }
+  if (rc != 0) {
+    o.set("status", status_from_rc(rc));
+    return o;
+  }
+  emscripten::val list = emscripten::val::array();
+  for (size_t i = 0; i < xfs.size(); ++i) {
+    list.call<void>("push", xfs[i]);
+  }
+  o.set("status", ok_status());
+  o.set("xfIndices", list);
+  return o;
+}
+
+JsStatus JsWorkbook::remapRangeStyle(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
+                                     uint32_t lastCol, emscripten::val fromXfs, emscripten::val toXfs) {
+  if (handle_ == nullptr) {
+    return error_status(kBindingInvalidHandle);
+  }
+  JsNarrowNumericReader reader("remapRangeStyle");
+  if (!reader.is_array(fromXfs, "fromXfs") || !reader.is_array(toXfs, "toXfs")) {
+    return binding_error_status(kInvalidArgument, "remapRangeStyle: `fromXfs` and `toXfs` must be arrays of numbers");
+  }
+  const uint32_t count = reader.length(fromXfs, "fromXfs");
+  if (reader.ok() && count != reader.length(toXfs, "toXfs")) {
+    return binding_error_status(kInvalidArgument, "remapRangeStyle: `fromXfs` and `toXfs` must have the same length");
+  }
+  std::vector<uint32_t> from(count);
+  std::vector<uint32_t> to(count);
+  for (uint32_t i = 0; reader.ok() && i < count; ++i) {
+    from[i] = reader.u32_value(reader.array_element(fromXfs, i, "fromXfs[]"), 0U, "fromXfs[]");
+    to[i] = reader.u32_value(reader.array_element(toXfs, i, "toXfs[]"), 0U, "toXfs[]");
+  }
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+  return status_from_rc(
+      fm_sheet_remap_range_style(handle_, sheet, firstRow, firstCol, lastRow, lastCol, from.data(), to.data(), count));
+}
+
+emscripten::val JsWorkbook::snapshotRangeStyle(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
+                                               uint32_t lastCol) const {
+  emscripten::val o = emscripten::val::object();
+  if (handle_ == nullptr) {
+    o.set("status", error_status(kBindingInvalidHandle));
+    o.set("bytes", bytes_to_val(nullptr, 0));
+    return o;
+  }
+  uint8_t* data = nullptr;
+  size_t len = 0;
+  const fm_status_t rc =
+      fm_sheet_snapshot_range_style(handle_, sheet, firstRow, firstCol, lastRow, lastCol, &data, &len);
+  o.set("status", status_from_rc(rc));
+  o.set("bytes", bytes_to_val(rc == 0 ? data : nullptr, rc == 0 ? len : 0));
+  fm_buffer_free(data);
+  return o;
+}
+
+JsStatus JsWorkbook::restoreRangeStyle(uint32_t sheet, emscripten::val bytes) {
+  if (handle_ == nullptr) {
+    return error_status(kBindingInvalidHandle);
+  }
+  const JsBytesReadResult bytes_result = val_to_bytes_checked(bytes);
+  if (!bytes_result.ok) {
+    return binding_error_status(kInvalidArgument, bytes_result.message.c_str());
+  }
+  const std::vector<uint8_t>& data = bytes_result.bytes;
+  return status_from_rc(fm_sheet_restore_range_style(handle_, sheet, data.data(), data.size()));
 }
 
 JsStatus JsWorkbook::clearRowHeight(uint32_t sheet, uint32_t row) {

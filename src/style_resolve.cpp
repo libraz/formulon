@@ -6,17 +6,14 @@
 
 #include "cell.h"
 #include "sheet.h"
+#include "sheet_layout_edit.h"
 #include "styles.h"
 #include "workbook.h"
 
 namespace formulon {
-namespace {
-
 bool cell_owns_style(const Cell& cell) noexcept {
   return cell.has_explicit_xf || cell.xf_index != 0U || !cell.formula_text.empty() || !cell.cached_value.is_blank();
 }
-
-}  // namespace
 
 EffectiveXf select_effective_xf(const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
   if (const Cell* cell = sheet.cell_at(row, col)) {
@@ -25,10 +22,8 @@ EffectiveXf select_effective_xf(const Sheet& sheet, std::uint32_t row, std::uint
     }
   }
   const SheetLayout& layout = sheet.layout();
-  const auto row_it = std::find_if(layout.row_overrides.begin(), layout.row_overrides.end(),
-                                   [row](const RowLayout& r) { return r.row == row && r.has_style; });
-  if (row_it != layout.row_overrides.end()) {
-    return {row_it->style_xf, StyleSource::kRow};
+  if (const RowLayout* row_entry = find_row_override(layout, row); row_entry != nullptr && row_entry->has_style) {
+    return {row_entry->style_xf, StyleSource::kRow};
   }
   const auto col_it = std::find_if(layout.columns.begin(), layout.columns.end(), [col](const ColumnLayout& c) {
     return c.first <= col && col <= c.last && c.has_style;

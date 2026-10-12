@@ -29,6 +29,7 @@
 #include "io/xlsb/sheet_properties_records.h"
 #include "io/xlsb/sst_writer.h"
 #include "sheet.h"
+#include "sheet_layout_edit.h"
 #include "style_resolve.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -435,13 +436,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
   auto anchor_key = [](std::uint32_t row, std::uint32_t col) { return (static_cast<std::uint64_t>(row) << 32U) | col; };
 
   for (const std::uint32_t row : row_indices) {
-    const RowLayout* row_layout = nullptr;
-    for (const RowLayout& candidate : sheet.layout().row_overrides) {
-      if (candidate.row == row) {
-        row_layout = &candidate;
-        break;
-      }
-    }
+    const RowLayout* row_layout = find_row_override(sheet.layout(), row);
     const auto stored_it = sheet.rows().find(row);
     const RowCells* row_cells = stored_it != sheet.rows().end() ? &stored_it->second : nullptr;
     const auto phantom_it = phantoms.find(row);

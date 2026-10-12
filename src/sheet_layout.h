@@ -73,6 +73,8 @@ struct RowLayout {
 /// here are stable.
 struct SheetLayout {
   std::vector<ColumnLayout> columns;
+  /// Ascending by `row`, at most one entry per row; mutate through the
+  /// helpers in `sheet_layout_edit.h` so lookups can binary-search.
   std::vector<RowLayout> row_overrides;
 };
 

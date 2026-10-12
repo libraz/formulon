@@ -55,6 +55,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/index_sort.h"
+#include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "utils/utf8_length.h"
@@ -1694,6 +1695,53 @@ Expected<void, Error> Workbook::clear_cell_xf_index(std::size_t sheet_index, std
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   sheets_[sheet_index].clear_cell_xf_index(row, col);
   return Expected<void, Error>::Ok();
+}
+
+namespace {
+
+Expected<void, Error> check_style_rect(const char* op, std::size_t sheet_index, std::size_t sheet_count,
+                                       const StyleRect& rect) {
+  RETURN_IF_ERROR(check_cell_target(op, sheet_index, sheet_count, rect.last_row, rect.last_col));
+  if (rect.first_row > rect.last_row || rect.first_col > rect.last_col) {
+    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op) + ": inverted range");
+  }
+  return Expected<void, Error>::Ok();
+}
+
+}  // namespace
+
+Expected<std::vector<std::uint32_t>, Error> Workbook::range_style_bases(std::size_t sheet_index,
+                                                                        const StyleRect& rect) const {
+  RETURN_IF_ERROR(check_style_rect("range_style_bases", sheet_index, sheets_.size(), rect));
+  return formulon::range_style_bases(sheets_[sheet_index], rect);
+}
+
+Expected<void, Error> Workbook::remap_range_style(std::size_t sheet_index, const StyleRect& rect,
+                                                  std::vector<XfRemap> map) {
+  RETURN_IF_ERROR(check_style_rect("remap_range_style", sheet_index, sheets_.size(), rect));
+  sort_by_index(map, [](const XfRemap& lhs, const XfRemap& rhs) { return lhs.from < rhs.from; });
+  for (std::size_t i = 0; i < map.size(); ++i) {
+    if (map[i].to >= styles_.cell_xfs.size() || (i > 0U && map[i - 1U].from == map[i].from)) {
+      return make_error(FormulonErrorCode::kInvalidArgument, "remap_range_style: repeated or out-of-range xf");
+    }
+  }
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  return formulon::remap_range_style(sheets_[sheet_index], rect, map, kMaxStyledRangeCells);
+}
+
+Expected<std::vector<std::uint8_t>, Error> Workbook::snapshot_range_style(std::size_t sheet_index,
+                                                                          const StyleRect& rect) const {
+  RETURN_IF_ERROR(check_style_rect("snapshot_range_style", sheet_index, sheets_.size(), rect));
+  return formulon::snapshot_range_style(sheets_[sheet_index], rect);
+}
+
+Expected<void, Error> Workbook::restore_range_style(std::size_t sheet_index, const std::uint8_t* bytes,
+                                                    std::size_t len) {
+  if (sheet_index >= sheets_.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "restore_range_style: sheet_index out of range");
+  }
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  return formulon::restore_range_style(sheets_[sheet_index], bytes, len, styles_.cell_xfs.size());
 }
 
 }  // namespace formulon

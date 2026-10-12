@@ -423,7 +423,7 @@ TEST(FormulonCApiStyles, ClearXfIndexRestoresRowAndDefaultInheritance) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(3);
-  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 4, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 4, 4, 1), 0);
   fm_effective_style style{};
 
   ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 4, 3, 2), 0);

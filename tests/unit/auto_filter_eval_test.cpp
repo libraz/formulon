@@ -13,6 +13,7 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "sheet.h"
+#include "sheet_layout_edit.h"
 #include "util/test_eval_helpers.h"
 #include "utils/date_time.h"
 #include "value.h"
@@ -55,16 +56,7 @@ bool RowHidden(const Sheet& sheet, std::uint32_t row) {
 }
 
 void SetRowHidden(Sheet& sheet, std::uint32_t row, bool hidden) {
-  for (RowLayout& r : sheet.mutable_layout().row_overrides) {
-    if (r.row == row) {
-      r.hidden = hidden;
-      return;
-    }
-  }
-  RowLayout fresh;
-  fresh.row = row;
-  fresh.hidden = hidden;
-  sheet.mutable_layout().row_overrides.push_back(fresh);
+  upsert_row_override(sheet.mutable_layout(), row).hidden = hidden;
 }
 
 // Every sheet of this workbook was filtered and then saved by Excel, so its

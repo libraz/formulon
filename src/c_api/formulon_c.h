@@ -5328,22 +5328,119 @@ FM_API fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index
 FM_API fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint8_t level);
 
 /**
- * @brief Sets or replaces the cell-style XF for `row`.
+ * @brief Sets or replaces the cell-style XF for the inclusive row span
+ *        `[first, last]`.
  *
- * The row style is effective only when the row has custom-format state, which
+ * A row style is effective only when the row has custom-format state, which
  * this function sets. Existing height, custom-height, hidden and outline
  * attributes are retained. `xf_index` addresses the workbook's cell-XF table;
- * index 0 is the default cell style.
+ * index 0 is the default cell style. Nothing changes on failure.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index`, the span, or `xf_index` is
+ *         out of range.
  */
-FM_API fm_status_t fm_sheet_set_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t xf_index);
+FM_API fm_status_t fm_sheet_set_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                          uint32_t xf_index);
 
 /**
- * @brief Removes the cell-style XF from `row`.
+ * @brief Removes the cell-style XF from the inclusive row span
+ *        `[first, last]`.
  *
  * Existing height, custom-height, hidden and outline attributes are retained;
  * an otherwise empty row override is removed.
  */
-FM_API fm_status_t fm_sheet_clear_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t row);
+FM_API fm_status_t fm_sheet_clear_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last);
+
+/*
+ * Attribute-only formatting of a selection. The rect
+ * `[(first_row, first_col), (last_row, last_col)]` (corners in either order)
+ * is a selection: spanning every row makes it a column selection, every
+ * column a row selection, both the whole sheet. To change some attributes
+ * (say the font size) and keep the rest, read the XFs the selection resolves
+ * to with `fm_sheet_range_style_bases`, build each one's patched XF with
+ * `fm_styles_add_font` / `fm_styles_add_cell_xf`, and apply the pairs with
+ * `fm_sheet_remap_range_style`. Every cell then resolves to the patched form
+ * of the XF it resolved to before, as Excel applies such a change: covered
+ * column and row styles are rewritten, existing cells are remapped, and a
+ * cell is materialised only where the row-over-column precedence would
+ * otherwise resolve to something else (for a plain range, every cell). Blank
+ * cells of a covered row or column are not enumerated. Only style state is
+ * touched. `fm_sheet_snapshot_range_style` captures what such an edit can
+ * change, for undo.
+ */
+
+/**
+ * @brief Lists every cell-XF index a cell of the selection may resolve to,
+ *        ascending: 0, the covered row and column styles, and the XFs of
+ *        cells that carry their own.
+ *
+ * `*out_len` always receives the number of indices; at most `cap` are
+ * written. Call with `cap == 0` (`out_xfs` may then be `NULL`) to size the
+ * buffer first.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_len` is `NULL`, or `out_xfs`
+ *         is `NULL` while `cap > 0`;
+ *         `kInvalidArgument` when `sheet_index` or the rect is out of range.
+ */
+FM_API fm_status_t fm_sheet_range_style_bases(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
+                                              uint32_t first_col, uint32_t last_row, uint32_t last_col,
+                                              uint32_t* out_xfs, size_t cap, size_t* out_len);
+
+/**
+ * @brief Remaps the XFs of a selection: each cell ends at `to_xfs[i]` where
+ *        it resolved to `from_xfs[i]` before; an unlisted XF is kept.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`, or either array is `NULL`
+ *         while `count > 0`;
+ *         `kInvalidArgument` when `sheet_index` or the rect is out of range,
+ *         a `from_xfs` entry repeats, or a `to_xfs` entry is past the
+ *         cell-XF table;
+ *         `kPreconditionFailed` when more than 1,048,576 cells would be
+ *         written. Nothing changes on failure.
+ */
+FM_API fm_status_t fm_sheet_remap_range_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
+                                              uint32_t first_col, uint32_t last_row, uint32_t last_col,
+                                              const uint32_t* from_xfs, const uint32_t* to_xfs, size_t count);
+
+/**
+ * @brief Captures the style state of a selection as an opaque, versioned
+ *        byte string: the covered column styles (column selection), row
+ *        styles (row selection), and every stored cell's XF and
+ *        explicit-assignment mark.
+ *
+ * On success `*out_bytes` is a heap-allocated buffer of `*out_len` bytes
+ * that MUST be released with `fm_buffer_free`. Both are zeroed before
+ * validation and stay zero on failure.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or the rect is out of range.
+ */
+FM_API fm_status_t fm_sheet_snapshot_range_style(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
+                                                 uint32_t first_col, uint32_t last_row, uint32_t last_col,
+                                                 uint8_t** out_bytes, size_t* out_len);
+
+/**
+ * @brief Puts a `fm_sheet_snapshot_range_style` capture back on sheet
+ *        `sheet_index`.
+ *
+ * Captured axis styles and cell XFs are restored exactly; a stored cell of
+ * the captured rect that was not captured loses its style. Values, formulas,
+ * phonetic runs and comments are not touched.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`, or `bytes` is `NULL`
+ *         while `len > 0`;
+ *         `kInvalidArgument` when `sheet_index` is out of range, the bytes
+ *         are not a valid capture, or an XF is past the cell-XF table.
+ *         Nothing changes on failure.
+ */
+FM_API fm_status_t fm_sheet_restore_range_style(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes,
+                                                size_t len);
 
 /**
  * @brief Removes the height override of `row`, returning it to the sheet

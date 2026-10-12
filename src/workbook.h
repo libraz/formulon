@@ -27,6 +27,7 @@
 #include "external_link.h"
 #include "passthrough_part.h"
 #include "sheet.h"
+#include "style_region.h"
 #include "styles.h"
 #include "table.h"
 #include "theme.h"
@@ -1021,6 +1022,25 @@ class Workbook {
   /// its row / column style again. An absent cell stays absent. Returns
   /// `kInvalidArgument` for an out-of-range sheet or address.
   Expected<void, Error> clear_cell_xf_index(std::size_t sheet_index, std::uint32_t row, std::uint32_t col);
+
+  /// Every xf a cell of `rect` may resolve to, ascending (see
+  /// `formulon::range_style_bases`). `kInvalidArgument` for a bad sheet or
+  /// a rect outside the grid or with `first > last`.
+  Expected<std::vector<std::uint32_t>, Error> range_style_bases(std::size_t sheet_index, const StyleRect& rect) const;
+
+  /// Applies an xf remap to a selection the way Excel applies an
+  /// attribute-only format change (see `formulon::remap_range_style`).
+  /// `from` must not repeat and every `to` must address `cellXfs`, else
+  /// `kInvalidArgument`; more cells than `kMaxStyledRangeCells` to write is
+  /// `kPreconditionFailed`. Nothing changes on failure.
+  Expected<void, Error> remap_range_style(std::size_t sheet_index, const StyleRect& rect, std::vector<XfRemap> map);
+
+  /// Opaque capture of `rect`'s style state for `restore_range_style`.
+  Expected<std::vector<std::uint8_t>, Error> snapshot_range_style(std::size_t sheet_index, const StyleRect& rect) const;
+
+  /// Puts a `snapshot_range_style` capture back; malformed bytes or an xf
+  /// past `cellXfs` is `kInvalidArgument` with nothing changed.
+  Expected<void, Error> restore_range_style(std::size_t sheet_index, const std::uint8_t* bytes, std::size_t len);
 
   // ---------------------------------------------------------------------------
   // Row / column structural edits

@@ -36,6 +36,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/theme_test.cpp
   unit/new_workbook_defaults_test.cpp
   unit/color_resolve_test.cpp
+  unit/sheet_layout_edit_test.cpp
   unit/style_resolve_test.cpp
   unit/utils/checked_mul_test.cpp
   unit/utils/a1_column_test.cpp

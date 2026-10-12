@@ -216,6 +216,47 @@ export function registerThemeStyles(Module, test) {
     });
   });
 
+  test('attribute patch over a column keeps the row style (bases / remap / snapshot / restore)', () => {
+    withWorkbook(Module, (wb) => {
+      const rowXf = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
+      const xfA = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 9 });
+      const xfB = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
+      assert.ok(rowXf.status.ok && xfA.status.ok && xfB.status.ok);
+      assert.ok(wb.setRowStyle(0, 2, 2, rowXf.index).ok);
+      assert.equal(wb.getEffectiveStyle(0, 2, 1).source, 1);
+      assert.equal(wb.setRowStyle(0, 5, 4, rowXf.index).ok, false);
+
+      const bases = wb.rangeStyleBases(0, 0, 1, 1048575, 1);
+      assert.ok(bases.status.ok, JSON.stringify(bases.status));
+      assert.ok(bases.xfIndices.includes(0) && bases.xfIndices.includes(rowXf.index));
+
+      const snap = wb.snapshotRangeStyle(0, 0, 1, 1048575, 1);
+      assert.ok(snap.status.ok && snap.bytes.length > 0);
+      assert.equal(wb.remapRangeStyle(0, 0, 1, 1048575, 1, [0, rowXf.index], [xfA.index]).ok, false);
+      assert.ok(wb.remapRangeStyle(0, 0, 1, 1048575, 1, [0, rowXf.index], [xfA.index, xfB.index]).ok);
+
+      let e = wb.getEffectiveStyle(0, 2, 1);
+      assert.equal(e.source, 0);
+      assert.equal(e.xfIndex, xfB.index);
+      e = wb.getEffectiveStyle(0, 2, 2);
+      assert.equal(e.source, 1);
+      assert.equal(e.xfIndex, rowXf.index);
+      e = wb.getEffectiveStyle(0, 499, 1);
+      assert.equal(e.source, 2);
+      assert.equal(e.xfIndex, xfA.index);
+
+      assert.ok(wb.restoreRangeStyle(0, snap.bytes).ok);
+      e = wb.getEffectiveStyle(0, 2, 1);
+      assert.equal(e.source, 1);
+      assert.equal(e.xfIndex, rowXf.index);
+      assert.equal(wb.getEffectiveStyle(0, 499, 1).source, 3);
+      assert.equal(wb.restoreRangeStyle(0, new Uint8Array([1, 2, 3])).ok, false);
+
+      assert.ok(wb.clearRowStyle(0, 2, 2).ok);
+      assert.equal(wb.getEffectiveStyle(0, 2, 2).source, 3);
+    });
+  });
+
   test('setCellStyle takes a record and removeCellStyle repoints formats', () => {
     withWorkbook(Module, (wb) => {
       const before = wb.cellStyleCount().value;

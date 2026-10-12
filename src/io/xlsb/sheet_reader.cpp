@@ -24,6 +24,7 @@
 #include "parser/ast_format.h"
 #include "phonetic.h"
 #include "sheet.h"
+#include "sheet_layout_edit.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -585,7 +586,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
           layout.outline_level = static_cast<std::uint8_t>(flags & 0x07U);
           layout.has_style = has_style;
           layout.style_xf = has_style ? row_style_xf_or.value() : 0U;
-          wb.sheet(sheet_index).mutable_layout().row_overrides.push_back(std::move(layout));
+          insert_row_override(wb.sheet(sheet_index).mutable_layout(), layout);
         }
       }
       return RecordDisposition::kModelled;

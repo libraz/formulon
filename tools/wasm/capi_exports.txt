@@ -187,6 +187,10 @@ fm_sheet_set_row_hidden
 fm_sheet_set_row_outline
 fm_sheet_set_row_style
 fm_sheet_clear_row_style
+fm_sheet_range_style_bases
+fm_sheet_remap_range_style
+fm_sheet_snapshot_range_style
+fm_sheet_restore_range_style
 fm_sheet_clear_row_height
 fm_sheet_clear_column_width
 fm_sheet_get_format_defaults

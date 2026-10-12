@@ -124,6 +124,7 @@ set(FORMULON_CORE_SOURCES
   src/auto_filter.cpp
   src/styles.cpp
   src/threaded_comment.cpp
+  src/style_region.cpp
   src/style_resolve.cpp
   src/theme.cpp
   src/new_workbook_defaults.cpp

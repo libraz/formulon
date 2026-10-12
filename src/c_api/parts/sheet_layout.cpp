@@ -9,7 +9,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -21,18 +20,24 @@
 #include "io/auto_filter_xml.h"
 #include "print/sheet_geometry.h"
 #include "sheet.h"
+#include "sheet_layout_edit.h"
+#include "style_region.h"
 #include "utils/error.h"
-#include "utils/index_sort.h"
 #include "workbook.h"
 
+using formulon::drop_stateless_columns;
+using formulon::overlay_column_span;
+using formulon::row_override_is_empty;
 using formulon::c_api::parts::check_column_span;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_finite_non_negative;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_row_index;
+using formulon::c_api::parts::check_row_span;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::FragmentValidation;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -40,119 +45,20 @@ using formulon::c_api::parts::validate_single_element_fragment;
 
 namespace {
 
-bool SameColumnLayoutState(const formulon::ColumnLayout& lhs, const formulon::ColumnLayout& rhs) {
-  return lhs.width == rhs.width && lhs.hidden == rhs.hidden && lhs.outline_level == rhs.outline_level &&
-         lhs.has_width == rhs.has_width && lhs.has_style == rhs.has_style && lhs.style_xf == rhs.style_xf;
-}
-
-// Orders column spans by start, then by end. This lives at namespace scope
-// rather than inside `overlay_column_span` on purpose: a comparator declared
-// inside a template has a distinct closure type per instantiation, so every
-// setter would otherwise reach the shared sort through its own trampoline.
-struct ColumnSpanOrder {
-  bool operator()(const formulon::ColumnLayout& lhs, const formulon::ColumnLayout& rhs) const {
-    if (lhs.first != rhs.first) {
-      return lhs.first < rhs.first;
-    }
-    return lhs.last < rhs.last;
-  }
-};
-
-// Applies one column setter to every intersection with `[first, last]`.
-// Existing entries are split into left residual / updated intersection / right
-// residual, so fields not owned by this setter remain local to the source
-// span. Any uncovered part of the target gets a default layout carrying only
-// the requested field. The final sort + coalesce keeps the vector canonical
-// without merging spans whose presence/style/visibility state differs.
-template <typename Apply>
-void overlay_column_span(formulon::SheetLayout& layout, std::uint32_t first, std::uint32_t last, Apply&& apply) {
-  std::vector<formulon::ColumnLayout> next;
-  next.reserve(layout.columns.size() + 1U);
-  std::vector<std::pair<std::uint32_t, std::uint32_t>> covered;
-  covered.reserve(layout.columns.size());
-
-  for (const formulon::ColumnLayout& entry : layout.columns) {
-    if (entry.last < first || entry.first > last) {
-      next.push_back(entry);
-      continue;
-    }
-
-    if (entry.first < first) {
-      formulon::ColumnLayout left = entry;
-      left.last = first - 1U;
-      next.push_back(left);
-    }
-
-    const std::uint32_t intersection_first = std::max(entry.first, first);
-    const std::uint32_t intersection_last = std::min(entry.last, last);
-    formulon::ColumnLayout intersection = entry;
-    intersection.first = intersection_first;
-    intersection.last = intersection_last;
-    apply(intersection);
-    next.push_back(intersection);
-    covered.emplace_back(intersection_first, intersection_last);
-
-    if (entry.last > last) {
-      formulon::ColumnLayout right = entry;
-      right.first = last + 1U;
-      next.push_back(right);
-    }
-  }
-
-  // Merge covered intervals before synthesising gaps. Normal SheetLayout
-  // entries are disjoint, but this also avoids duplicating a default segment
-  // when a caller supplied overlapping aggregate entries directly.
-  formulon::sort_by_index(covered, [](const std::pair<std::uint32_t, std::uint32_t>& lhs,
-                                      const std::pair<std::uint32_t, std::uint32_t>& rhs) { return lhs < rhs; });
-  std::vector<std::pair<std::uint32_t, std::uint32_t>> covered_union;
-  for (const auto& interval : covered) {
-    if (covered_union.empty() ||
-        static_cast<std::uint64_t>(interval.first) > static_cast<std::uint64_t>(covered_union.back().second) + 1U) {
-      covered_union.push_back(interval);
-    } else if (interval.second > covered_union.back().second) {
-      covered_union.back().second = interval.second;
-    }
-  }
-
-  std::uint64_t cursor = first;
-  for (const auto& interval : covered_union) {
-    if (cursor < interval.first) {
-      formulon::ColumnLayout gap;
-      gap.first = static_cast<std::uint32_t>(cursor);
-      gap.last = interval.first - 1U;
-      apply(gap);
-      next.push_back(gap);
-    }
-    cursor = std::max(cursor, static_cast<std::uint64_t>(interval.second) + 1U);
-  }
-  if (cursor <= last) {
-    formulon::ColumnLayout gap;
-    gap.first = static_cast<std::uint32_t>(cursor);
-    gap.last = last;
-    apply(gap);
-    next.push_back(gap);
-  }
-
-  formulon::sort_by_index(next, ColumnSpanOrder{});
-  std::vector<formulon::ColumnLayout> merged;
-  merged.reserve(next.size());
-  for (const formulon::ColumnLayout& entry : next) {
-    if (!merged.empty() && merged.back().last != std::numeric_limits<std::uint32_t>::max() &&
-        merged.back().last + 1U == entry.first && SameColumnLayoutState(merged.back(), entry)) {
-      merged.back().last = entry.last;
-    } else {
-      merged.push_back(entry);
-    }
-  }
-  layout.columns = std::move(merged);
-}
-
 fm_status_t check_sheet_column_span(const fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                     const char* fn) {
   if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
     return rc;
   }
   return check_column_span(first, last, fn);
+}
+
+fm_status_t check_sheet_row_span(const fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                 const char* fn) {
+  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+    return rc;
+  }
+  return check_row_span(first, last, fn);
 }
 
 fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::uint32_t xf_index, const char* fn) {
@@ -163,37 +69,6 @@ fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::uint32_t xf_index,
   const std::string message = std::string(fn) + ": xf_index out of range";
   return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, message.c_str(),
                            "xf_index=" + std::to_string(xf_index) + " cell_xfs_count=" + std::to_string(count));
-}
-
-// Returns a pointer to the row override whose `row` equals `row`,
-// creating one if none exists. The returned pointer is valid until
-// the next mutation of `layout.row_overrides`.
-formulon::RowLayout* upsert_row_override(formulon::SheetLayout& layout, std::uint32_t row) {
-  for (formulon::RowLayout& entry : layout.row_overrides) {
-    if (entry.row == row) {
-      return &entry;
-    }
-  }
-  formulon::RowLayout fresh;
-  fresh.row = row;
-  layout.row_overrides.push_back(fresh);
-  return &layout.row_overrides.back();
-}
-
-// Drops column spans left with no state (including empty ones synthesised for
-// columns that had no entry); they carry nothing to save.
-void drop_stateless_columns(formulon::SheetLayout& layout) {
-  auto& columns = layout.columns;
-  columns.erase(std::remove_if(columns.begin(), columns.end(),
-                               [](const formulon::ColumnLayout& entry) {
-                                 return !formulon::HasExplicitColumnWidth(entry) && !entry.hidden &&
-                                        entry.outline_level == 0U && !entry.has_style;
-                               }),
-                columns.end());
-}
-
-bool row_override_is_empty(const formulon::RowLayout& entry) {
-  return !entry.has_height && !entry.custom_height && !entry.hidden && entry.outline_level == 0U && !entry.has_style;
 }
 
 }  // namespace
@@ -339,11 +214,7 @@ extern "C" fm_status_t fm_sheet_set_column_style(fm_workbook_t* wb, size_t sheet
   if (auto rc = check_cell_xf_index(wb, xf_index, kFn); rc != 0) {
     return rc;
   }
-  overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
-                      [xf_index](formulon::ColumnLayout& entry) {
-                        entry.has_style = true;
-                        entry.style_xf = xf_index;
-                      });
+  formulon::set_column_style_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last, true, xf_index);
   return 0;
 }
 
@@ -354,12 +225,7 @@ extern "C" fm_status_t fm_sheet_clear_column_style(fm_workbook_t* wb, size_t she
   if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, kFn); rc != 0) {
     return rc;
   }
-  formulon::SheetLayout& layout = wb->workbook().sheet(sheet_index).mutable_layout();
-  overlay_column_span(layout, first, last, [](formulon::ColumnLayout& entry) {
-    entry.has_style = false;
-    entry.style_xf = 0U;
-  });
-  drop_stateless_columns(layout);
+  formulon::set_column_style_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last, false, 0U);
   return 0;
 }
 
@@ -374,7 +240,7 @@ extern "C" fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_finite_non_negative(height, "fm_sheet_set_row_height", "height"); rc != 0) {
     return rc;
   }
-  formulon::RowLayout* entry = upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
+  formulon::RowLayout* entry = &formulon::upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
   entry->height = height;
   entry->has_height = true;
   entry->custom_height = true;
@@ -389,7 +255,7 @@ extern "C" fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_row_index(row, "fm_sheet_set_row_hidden"); rc != 0) {
     return rc;
   }
-  formulon::RowLayout* entry = upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
+  formulon::RowLayout* entry = &formulon::upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
   const bool next_hidden = (hidden != 0);
   if (entry->hidden == next_hidden) {
     return 0;
@@ -411,49 +277,140 @@ extern "C" fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_
   if (auto rc = check_row_index(row, "fm_sheet_set_row_outline"); rc != 0) {
     return rc;
   }
-  formulon::RowLayout* entry = upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
+  formulon::RowLayout* entry = &formulon::upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
   entry->outline_level = level;
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t xf_index) {
+extern "C" fm_status_t fm_sheet_set_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                              uint32_t xf_index) {
   static constexpr const char* kFn = "fm_sheet_set_row_style";
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_row_index(row, kFn); rc != 0) {
+  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last, kFn); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_xf_index(wb, xf_index, kFn); rc != 0) {
     return rc;
   }
-  formulon::RowLayout* entry = upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
-  entry->has_style = true;
-  entry->style_xf = xf_index;
+  formulon::set_row_style_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last, xf_index);
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_clear_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t row) {
+extern "C" fm_status_t fm_sheet_clear_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last) {
   static constexpr const char* kFn = "fm_sheet_clear_row_style";
   clear_last_error();
+  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last, kFn); rc != 0) {
+    return rc;
+  }
+  formulon::clear_row_style_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last);
+  return 0;
+}
+
+namespace {
+
+// Validates a selection rect, normalising its corners like
+// `fm_sheet_set_range_xf_index`.
+fm_status_t resolve_style_rect(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row, uint32_t first_col,
+                               uint32_t last_row, uint32_t last_col, formulon::StyleRect* out, const char* fn) {
+  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+    return rc;
+  }
+  out->first_row = std::min(first_row, last_row);
+  out->last_row = std::max(first_row, last_row);
+  out->first_col = std::min(first_col, last_col);
+  out->last_col = std::max(first_col, last_col);
+  if (out->last_row >= formulon::Sheet::kMaxRows || out->last_col >= formulon::Sheet::kMaxCols) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, fn);
+  }
+  return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_sheet_range_style_bases(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
+                                                  uint32_t first_col, uint32_t last_row, uint32_t last_col,
+                                                  uint32_t* out_xfs, size_t cap, size_t* out_len) {
+  static constexpr const char* kFn = "fm_sheet_range_style_bases";
+  clear_last_error();
+  if (out_len == nullptr || (out_xfs == nullptr && cap > 0U)) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn);
+  }
+  *out_len = 0U;
+  formulon::StyleRect rect;
+  if (auto rc = resolve_style_rect(wb, sheet_index, first_row, first_col, last_row, last_col, &rect, kFn); rc != 0) {
+    return rc;
+  }
+  auto bases = wb->workbook().range_style_bases(sheet_index, rect);
+  if (!bases) {
+    return set_last_error(bases.error());
+  }
+  *out_len = bases.value().size();
+  std::copy_n(bases.value().begin(), std::min(cap, bases.value().size()), out_xfs);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_remap_range_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
+                                                  uint32_t first_col, uint32_t last_row, uint32_t last_col,
+                                                  const uint32_t* from_xfs, const uint32_t* to_xfs, size_t count) {
+  static constexpr const char* kFn = "fm_sheet_remap_range_style";
+  clear_last_error();
+  if (count > 0U && (from_xfs == nullptr || to_xfs == nullptr)) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn);
+  }
+  formulon::StyleRect rect;
+  if (auto rc = resolve_style_rect(wb, sheet_index, first_row, first_col, last_row, last_col, &rect, kFn); rc != 0) {
+    return rc;
+  }
+  std::vector<formulon::XfRemap> map(count);
+  for (size_t i = 0; i < count; ++i) {
+    map[i] = {from_xfs[i], to_xfs[i]};
+  }
+  auto r = wb->workbook().remap_range_style(sheet_index, rect, std::move(map));
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_snapshot_range_style(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
+                                                     uint32_t first_col, uint32_t last_row, uint32_t last_col,
+                                                     uint8_t** out_bytes, size_t* out_len) {
+  static constexpr const char* kFn = "fm_sheet_snapshot_range_style";
+  clear_last_error();
+  if (out_bytes != nullptr) {
+    *out_bytes = nullptr;
+  }
+  if (out_len != nullptr) {
+    *out_len = 0U;
+  }
+  if (out_bytes == nullptr || out_len == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn);
+  }
+  formulon::StyleRect rect;
+  if (auto rc = resolve_style_rect(wb, sheet_index, first_row, first_col, last_row, last_col, &rect, kFn); rc != 0) {
+    return rc;
+  }
+  auto bytes = wb->workbook().snapshot_range_style(sheet_index, rect);
+  if (!bytes) {
+    return set_last_error(bytes.error());
+  }
+  copy_owned_bytes(bytes.value(), out_bytes, out_len);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_restore_range_style(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes,
+                                                    size_t len) {
+  static constexpr const char* kFn = "fm_sheet_restore_range_style";
+  clear_last_error();
+  if (bytes == nullptr && len > 0U) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn);
+  }
   if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
     return rc;
   }
-  if (auto rc = check_row_index(row, kFn); rc != 0) {
-    return rc;
-  }
-  auto& overrides = wb->workbook().sheet(sheet_index).mutable_layout().row_overrides;
-  for (auto it = overrides.begin(); it != overrides.end(); ++it) {
-    if (it->row != row) {
-      continue;
-    }
-    it->has_style = false;
-    it->style_xf = 0U;
-    if (row_override_is_empty(*it)) {
-      overrides.erase(it);
-    }
-    break;
+  auto r = wb->workbook().restore_range_style(sheet_index, bytes, len);
+  if (!r) {
+    return set_last_error(r.error());
   }
   return 0;
 }

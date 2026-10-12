@@ -144,6 +144,15 @@ fm_status_t check_column_span(std::uint32_t first, std::uint32_t last, const cha
                                " last_col=" + std::to_string(formulon::Sheet::kMaxCols - 1U));
 }
 
+fm_status_t check_row_span(std::uint32_t first, std::uint32_t last, const char* api) {
+  if (first <= last && last < formulon::Sheet::kMaxRows) {
+    return 0;
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "row span out of range",
+                           std::string(api) + ": first=" + std::to_string(first) + " last=" + std::to_string(last) +
+                               " last_row=" + std::to_string(formulon::Sheet::kMaxRows - 1U));
+}
+
 fm_status_t check_row_index(std::uint32_t row, const char* api) {
   if (row < formulon::Sheet::kMaxRows) {
     return 0;

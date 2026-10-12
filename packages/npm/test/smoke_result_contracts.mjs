@@ -139,6 +139,8 @@ function envelopeProbes(wb) {
     ['ImageResult', true, () => wb.getImage(99, 1)],
     ['InsertImageResult', true, () => wb.insertImage(99, new Uint8Array(4))],
     ['ImageSnapshotResult', true, () => wb.snapshotImage(99, 1)],
+    ['RangeStyleBasesResult', true, () => wb.rangeStyleBases(99, 0, 0, 0, 0)],
+    ['RangeStyleSnapshotResult', true, () => wb.snapshotRangeStyle(99, 0, 0, 0, 0)],
     ['DisplayTextResult', true, () => wb.getDisplayText(99, 0, 0)],
     // A released handle is the only failure path, which is not usable here.
     ['ThemeResult', false, () => wb.getTheme()],

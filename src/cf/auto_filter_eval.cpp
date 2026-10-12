@@ -21,6 +21,7 @@
 #include "eval/text_format/display_text.h"
 #include "eval/wildcard.h"
 #include "sheet.h"
+#include "sheet_layout_edit.h"
 #include "style_resolve.h"
 #include "styles.h"
 #include "utils/arena.h"
@@ -533,23 +534,17 @@ Expected<void, Error> apply_auto_filter(Workbook& wb, std::size_t sheet_index, c
     return std::move(visible.error());
   }
   const std::uint32_t first = filter.range.first_row + 1U;
-  std::vector<RowLayout>& overrides = sheet.mutable_layout().row_overrides;
+  SheetLayout& layout = sheet.mutable_layout();
   bool changed = false;
   for (std::uint32_t i = 0; i < visible.value().size(); ++i) {
     const std::uint32_t row = first + i;
     const bool hide = !visible.value()[i];
-    auto it = std::find_if(overrides.begin(), overrides.end(), [row](const RowLayout& r) { return r.row == row; });
-    if (it == overrides.end()) {
-      if (!hide) {
-        continue;
-      }
-      RowLayout fresh;
-      fresh.row = row;
-      overrides.push_back(fresh);
-      it = overrides.end() - 1;
+    if (find_row_override(layout, row) == nullptr && !hide) {
+      continue;
     }
-    if (it->hidden != hide) {
-      it->hidden = hide;
+    RowLayout& entry = upsert_row_override(layout, row);
+    if (entry.hidden != hide) {
+      entry.hidden = hide;
       changed = true;
     }
   }

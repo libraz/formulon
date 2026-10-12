@@ -371,6 +371,19 @@ void Sheet::clear_cell_xf_index(std::uint32_t row, std::uint32_t col) {
   cell_enumeration_revision_.bump();
 }
 
+void Sheet::restore_cell_style(std::uint32_t row, std::uint32_t col, std::uint32_t xf_index, bool explicit_xf) {
+  if (!explicit_xf && xf_index == 0U) {
+    clear_cell_xf_index(row, col);
+    return;
+  }
+  assert(row < kMaxRows && col < kMaxCols);
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  Cell& slot = rows_[row].ensure(col);
+  slot.xf_index = xf_index;
+  slot.has_explicit_xf = explicit_xf;
+  cell_enumeration_revision_.bump();
+}
+
 const Cell* Sheet::cell_at(std::uint32_t row, std::uint32_t col) const noexcept {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   return cell_at_locked(row, col);

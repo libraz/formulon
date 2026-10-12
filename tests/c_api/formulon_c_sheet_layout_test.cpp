@@ -884,15 +884,13 @@ TEST(FormulonCApiSheetLayout, RowStyleUpsertAndClearPreserveOtherAttributes) {
   ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 4U, 22.0), 0);
   ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 4U, 1), 0);
   ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 4U, 3U), 0);
-  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 4U, 1U), 0);
-  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 5U, 1U), 0);
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 4U, 5U, 1U), 0);
 
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 2U);
 
-  ASSERT_EQ(fm_sheet_clear_row_style(wb.handle, 0, 4U), 0);
-  ASSERT_EQ(fm_sheet_clear_row_style(wb.handle, 0, 5U), 0);
+  ASSERT_EQ(fm_sheet_clear_row_style(wb.handle, 0, 4U, 5U), 0);
   ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 1U);
 
@@ -913,7 +911,7 @@ TEST(FormulonCApiSheetLayout, ColumnAndRowStyleRejectInvalidXfWithoutMutation) {
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
   EXPECT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0U, 0U, 1U), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_row_style(wb.handle, 0, 0U, 1U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_style(wb.handle, 0, 0U, 0U, 1U), kInvalidArgument);
 
   size_t column_count = 0;
   size_t row_count = 0;
@@ -930,7 +928,7 @@ TEST(FormulonCApiSheetLayout, StyleOverridesSurviveSaveLoad) {
   ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 0U, 2U, 18.0), 0);
   ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0U, 2U, 1U), 0);
   ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 24.0), 0);
-  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 3U, 1U), 0);
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 3U, 3U, 1U), 0);
 
   for (const std::int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
     BufferGuard saved;
@@ -966,7 +964,7 @@ TEST(FormulonCApiSheetLayout, EnteredValuesTakeTheAxisStyle) {
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(3U);
   ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 1U, 1U, 1U), 0);
-  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 2U, 2U), 0);
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 2U, 2U, 2U), 0);
   ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 2U, 5U, 0U), 0);
   ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 4U, 1U, "column"), 0);
   ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 5U, 1U, "=1+1"), 0);

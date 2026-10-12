@@ -19,6 +19,7 @@ namespace formulon {
 
 class Workbook;
 class Sheet;
+struct Cell;
 
 /// Which level supplied the XF.
 enum class StyleSource : std::uint8_t {
@@ -61,6 +62,10 @@ struct EffectiveStyle {
 /// `customFormat`. The returned source uses the `StyleSource` values, and
 /// an absent override returns xf 0.
 EffectiveXf select_effective_xf(const Sheet& sheet, std::uint32_t row, std::uint32_t col);
+
+/// Whether `cell` supplies its own XF rather than inheriting one: an explicit
+/// assignment, a non-zero index, a formula or a non-blank value.
+bool cell_owns_style(const Cell& cell) noexcept;
 
 /// XF precedence: an owning cell, then its row (when it carries a style),
 /// then its column, then xf 0. An xf index beyond `cellXfs` falls back to 0.

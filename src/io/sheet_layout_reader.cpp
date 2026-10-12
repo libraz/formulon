@@ -17,6 +17,7 @@
 #include "io/xsd_int.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "sheet_layout_edit.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "workbook.h"
@@ -258,7 +259,7 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
       entry.has_style = true;
       entry.style_xf = style_attr ? attr_u32(row, "s", 0U) : 0U;
     }
-    layout.row_overrides.push_back(entry);
+    insert_row_override(layout, entry);
   }
 }
 

@@ -1471,6 +1471,19 @@ export interface ImagePlacement {
   heightEmu?: number;
 }
 
+/** Result of `Workbook.rangeStyleBases`; `xfIndices` is ascending and empty on failure. */
+export interface RangeStyleBasesResult {
+  status: Status;
+  xfIndices: number[];
+}
+
+/** Result of `Workbook.snapshotRangeStyle`. `bytes` is an opaque, versioned capture to hand
+ *  to `restoreRangeStyle`; it is empty on failure. */
+export interface RangeStyleSnapshotResult {
+  status: Status;
+  bytes: Uint8Array;
+}
+
 /** Result of `Workbook.snapshotImage`. `bytes` is an opaque, versioned capture to hand
  *  to `restoreImage`; it is empty on failure. */
 export interface ImageSnapshotResult {
@@ -3049,10 +3062,56 @@ export interface Workbook {
   setRowHidden(sheet: number, row: number, hidden: boolean): Status;
   /** Sets / replaces the row outline level at `row` (clamped to 0..255). */
   setRowOutline(sheet: number, row: number, level: number): Status;
-  /** Sets / replaces the cell-style XF at `row`; index 0 is the default XF. A value later entered into an unstyled cell of the row takes this XF. */
-  setRowStyle(sheet: number, row: number, xfIndex: number): Status;
-  /** Removes the cell-style XF at `row`, retaining other row attributes. */
-  clearRowStyle(sheet: number, row: number): Status;
+  /** Sets / replaces the cell-style XF of the inclusive row span `first..last`; index 0 is the default XF. A value later entered into an unstyled cell of a covered row takes this XF. Nothing changes on failure. */
+  setRowStyle(sheet: number, first: number, last: number, xfIndex: number): Status;
+  /** Removes the cell-style XF of the inclusive row span `first..last`, retaining other row attributes. */
+  clearRowStyle(sheet: number, first: number, last: number): Status;
+  /**
+   * Lists, ascending, every cell-XF index a cell of the selection may resolve to: 0, the
+   * covered row and column styles, and the XFs of cells that carry their own. The rect
+   * `(firstRow, firstCol)..(lastRow, lastCol)` is a selection: all rows make it a column
+   * selection, all columns a row selection, both the whole sheet.
+   *
+   * First step of an attribute-only change (say the font size) over a selection, the way
+   * Excel applies it to a row, column, range or the whole sheet: read the bases here, build
+   * each one's patched XF with `addFont` / `addCellXf`, then apply the pairs with
+   * `remapRangeStyle`.
+   */
+  rangeStyleBases(
+    sheet: number,
+    firstRow: number,
+    firstCol: number,
+    lastRow: number,
+    lastCol: number,
+  ): RangeStyleBasesResult;
+  /**
+   * Second step of the attribute patch: every cell of the selection ends at `toXfs[i]` where
+   * it resolved to `fromXfs[i]` before; an XF not listed is kept. Covered row and column
+   * styles are rewritten and existing cells remapped; a cell is materialised only where
+   * row-over-column precedence would otherwise resolve differently (for a plain range, every
+   * cell). Values and formulas are untouched. Fails, changing nothing, when the arrays differ
+   * in length, a `fromXfs` entry repeats, a `toXfs` entry is past the cell-XF table, or more
+   * than 1,048,576 cells would be written.
+   */
+  remapRangeStyle(
+    sheet: number,
+    firstRow: number,
+    firstCol: number,
+    lastRow: number,
+    lastCol: number,
+    fromXfs: number[],
+    toXfs: number[],
+  ): Status;
+  /** Captures the style state of a selection (covered column or row styles and every stored cell's XF) as opaque, versioned bytes for `restoreRangeStyle`; use it to undo a `remapRangeStyle`. */
+  snapshotRangeStyle(
+    sheet: number,
+    firstRow: number,
+    firstCol: number,
+    lastRow: number,
+    lastCol: number,
+  ): RangeStyleSnapshotResult;
+  /** Puts a `snapshotRangeStyle` capture back exactly. Values, formulas, phonetic runs and comments are not touched; nothing changes on failure. */
+  restoreRangeStyle(sheet: number, bytes: Uint8Array): Status;
 
   // Styles.
   /** Returns `{ status, xfIndex }` for the cell at `(sheet, row, col)`. */

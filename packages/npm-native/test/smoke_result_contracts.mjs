@@ -138,6 +138,8 @@ function envelopeProbes(wb) {
     ['ImageResult', true, () => wb.getImage(99, 1)],
     ['InsertImageResult', true, () => wb.insertImage(99, new Uint8Array(0), {})],
     ['ImageSnapshotResult', true, () => wb.snapshotImage(99, 1)],
+    ['RangeStyleBasesResult', true, () => wb.rangeStyleBases(99, 0, 0, 0, 0)],
+    ['RangeStyleSnapshotResult', true, () => wb.snapshotRangeStyle(99, 0, 0, 0, 0)],
     ['ValidationOutcomeResult', true, () => wb.validateValue(99, 0, 0, { kind: 1, number: 1 })],
   ];
 }

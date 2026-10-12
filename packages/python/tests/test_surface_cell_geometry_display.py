@@ -8,6 +8,7 @@ from dataclasses import replace
 from formulon import CellXf, FormulonError, Value, ValueKind, Workbook
 from formulon.workbook import (
     DisplayStatus,
+    EffectiveStyleSource,
     GeometryMode,
     MergeRange,
     SheetFormatDefaults,
@@ -69,7 +70,7 @@ class GeometryTests(unittest.TestCase):
             row_xf = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=2))
             wb.set_column_width(0, 1, 1, 20.0)
             wb.set_column_style(0, 1, 1, col_xf)
-            wb.set_row_style(0, 2, row_xf)
+            wb.set_row_style(0, 2, 2, row_xf)
             self.assertEqual(wb.get_effective_style(0, 4, 1).xf_index, col_xf)
             wb.set_text(0, 4, 1, "column")
             wb.set_text(0, 2, 1, "both")
@@ -77,14 +78,49 @@ class GeometryTests(unittest.TestCase):
             self.assertEqual(wb.get_cell_xf_index(0, 2, 1), row_xf)
 
             wb.clear_column_style(0, 1, 1)
-            wb.clear_row_style(0, 2)
+            wb.clear_row_style(0, 2, 2)
             cols = wb.get_sheet_columns(0)
             self.assertEqual([(c.first, c.last, c.has_width, c.has_style) for c in cols], [(1, 1, True, False)])
             self.assertEqual(wb.get_sheet_row_overrides(0), [])
             with self.assertRaises(FormulonError):
                 wb.set_column_style(0, 0, 0, 1000)
             with self.assertRaises(FormulonError):
-                wb.set_row_style(0, 0, 1000)
+                wb.set_row_style(0, 0, 0, 1000)
+
+    def test_row_style_span(self) -> None:
+        with Workbook.create_default() as wb:
+            xf = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=2))
+            wb.set_row_style(0, 0, 999, xf)
+            self.assertEqual(len(wb.get_sheet_row_overrides(0)), 1000)
+            wb.clear_row_style(0, 0, 999)
+            self.assertEqual(wb.get_sheet_row_overrides(0), [])
+            with self.assertRaises(FormulonError):
+                wb.set_row_style(0, 5, 3, xf)
+
+    def test_range_style_remap_and_restore(self) -> None:
+        last_row = 1048575
+        with Workbook.create_default() as wb:
+            r = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=1))
+            a = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=2))
+            b = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=3))
+            wb.set_row_style(0, 2, 2, r)
+            self.assertEqual(wb.range_style_bases(0, 0, 1, last_row, 1), [0, r])
+
+            snap = wb.snapshot_range_style(0, 0, 1, last_row, 1)
+            wb.remap_range_style(0, 0, 1, last_row, 1, {0: a, r: b})
+            e = wb.get_effective_style(0, 2, 1)
+            self.assertEqual((e.source, e.xf_index), (EffectiveStyleSource.CELL, b))
+            e = wb.get_effective_style(0, 2, 2)
+            self.assertEqual((e.source, e.xf_index), (EffectiveStyleSource.ROW, r))
+            e = wb.get_effective_style(0, 499, 1)
+            self.assertEqual((e.source, e.xf_index), (EffectiveStyleSource.COLUMN, a))
+
+            wb.restore_range_style(0, snap)
+            e = wb.get_effective_style(0, 2, 1)
+            self.assertEqual((e.source, e.xf_index), (EffectiveStyleSource.ROW, r))
+
+            with self.assertRaises(FormulonError):
+                wb.remap_range_style(0, 0, 1, last_row, 1, {0: 100000})
 
     def test_effective_format_defaults(self) -> None:
         with Workbook.create_default() as wb:

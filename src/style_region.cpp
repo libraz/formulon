@@ -1,0 +1,494 @@
+#include "style_region.h"
+
+#include <algorithm>
+#include <utility>
+
+#include "cell.h"
+#include "sheet.h"
+#include "sheet_layout_edit.h"
+#include "style_resolve.h"
+#include "utils/index_sort.h"
+
+namespace formulon {
+namespace {
+
+constexpr std::uint8_t kSnapshotMagic[4] = {'F', 'M', 'R', 'S'};
+constexpr std::uint8_t kSnapshotVersion = 1U;
+constexpr std::uint8_t kCapturesColumns = 1U;
+constexpr std::uint8_t kCapturesRows = 2U;
+
+// A run of columns sharing one column-style state.
+struct ColumnSegment {
+  std::uint32_t first = 0;
+  std::uint32_t last = 0;
+  bool styled = false;
+  std::uint32_t xf = 0;
+};
+
+// A styled row and its xf.
+struct RowStyle {
+  std::uint32_t row = 0;
+  std::uint32_t xf = 0;
+};
+
+struct CapturedCell {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  std::uint32_t xf = 0;
+  bool explicit_xf = false;
+};
+
+bool covers_all_rows(const StyleRect& rect) {
+  return rect.first_row == 0U && rect.last_row == Sheet::kMaxRows - 1U;
+}
+
+bool covers_all_cols(const StyleRect& rect) {
+  return rect.first_col == 0U && rect.last_col == Sheet::kMaxCols - 1U;
+}
+
+// Column-style segments tiling `[first, last]`, gaps included as unstyled.
+std::vector<ColumnSegment> column_segments(const SheetLayout& layout, std::uint32_t first, std::uint32_t last) {
+  std::vector<ColumnSegment> styled;
+  for (const ColumnLayout& entry : layout.columns) {
+    if (entry.has_style && entry.last >= first && entry.first <= last) {
+      styled.push_back({std::max(entry.first, first), std::min(entry.last, last), true, entry.style_xf});
+    }
+  }
+  sort_by_index(styled, [](const ColumnSegment& lhs, const ColumnSegment& rhs) { return lhs.first < rhs.first; });
+  std::vector<ColumnSegment> out;
+  std::uint64_t cursor = first;
+  for (const ColumnSegment& seg : styled) {
+    if (cursor < seg.first) {
+      out.push_back({static_cast<std::uint32_t>(cursor), seg.first - 1U, false, 0U});
+    }
+    out.push_back(seg);
+    cursor = static_cast<std::uint64_t>(seg.last) + 1U;
+  }
+  if (cursor <= last) {
+    out.push_back({static_cast<std::uint32_t>(cursor), last, false, 0U});
+  }
+  return out;
+}
+
+// Styled rows of `[first, last]`, ascending (the layout keeps rows ordered).
+std::vector<RowStyle> styled_rows(const SheetLayout& layout, std::uint32_t first, std::uint32_t last) {
+  std::vector<RowStyle> out;
+  for (auto it = row_override_lower_bound(layout, first); it != layout.row_overrides.end() && it->row <= last; ++it) {
+    if (it->has_style) {
+      out.push_back({it->row, it->style_xf});
+    }
+  }
+  return out;
+}
+
+std::uint32_t apply_map(const std::vector<XfRemap>& map, std::uint32_t xf) {
+  const auto it = std::lower_bound(map.begin(), map.end(), xf,
+                                   [](const XfRemap& pair, std::uint32_t key) { return pair.from < key; });
+  return (it != map.end() && it->from == xf) ? it->to : xf;
+}
+
+// Every stored cell of `rect` with its style state; `explicit_xf` here means
+// the cell owns its style.
+std::vector<CapturedCell> stored_cells(const Sheet& sheet, const StyleRect& rect) {
+  std::vector<CapturedCell> out;
+  for (const auto& [row, cells] : sheet.rows()) {
+    if (row < rect.first_row || row > rect.last_row || cells.empty()) {
+      continue;
+    }
+    const std::uint32_t begin = std::max(cells.first_col(), rect.first_col);
+    const std::uint64_t end = std::min<std::uint64_t>(cells.size(), static_cast<std::uint64_t>(rect.last_col) + 1U);
+    for (std::uint64_t col = begin; col < end; ++col) {
+      const Cell& cell = cells[static_cast<std::size_t>(col)];
+      out.push_back({row, static_cast<std::uint32_t>(col), cell.xf_index, cell_owns_style(cell)});
+    }
+  }
+  return out;
+}
+
+// Decides the style of one row of a rewrite from its current style; a result
+// with `styled == false` leaves the row unstyled.
+struct RowDecision {
+  bool styled = false;
+  std::uint32_t xf = 0;
+};
+using RowDecide = RowDecision (*)(void* ctx, std::uint32_t row, RowDecision current);
+
+// Rewrites the row styles of `[first, last]` in one ordered pass; `decide` is
+// called for every row in ascending order. Entries left empty are dropped.
+void rewrite_row_styles(SheetLayout& layout, std::uint32_t first, std::uint32_t last, RowDecide decide, void* ctx) {
+  std::vector<RowLayout>& rows = layout.row_overrides;
+  std::vector<RowLayout> out;
+  out.reserve(rows.size());
+  std::size_t next = static_cast<std::size_t>(row_override_lower_bound(layout, first) - rows.cbegin());
+  out.insert(out.end(), rows.begin(), rows.begin() + static_cast<std::ptrdiff_t>(next));
+  for (std::uint64_t row = first; row <= last; ++row) {
+    RowLayout entry;
+    entry.row = static_cast<std::uint32_t>(row);
+    if (next < rows.size() && rows[next].row == row) {
+      entry = rows[next++];
+    }
+    const RowDecision decision = decide(ctx, entry.row, {entry.has_style, entry.style_xf});
+    entry.has_style = decision.styled;
+    entry.style_xf = decision.styled ? decision.xf : 0U;
+    if (!row_override_is_empty(entry)) {
+      out.push_back(entry);
+    }
+  }
+  out.insert(out.end(), rows.begin() + static_cast<std::ptrdiff_t>(next), rows.end());
+  rows = std::move(out);
+}
+
+void append_u32(std::vector<std::uint8_t>& out, std::uint32_t value) {
+  for (int shift = 0; shift < 32; shift += 8) {
+    out.push_back(static_cast<std::uint8_t>((value >> shift) & 0xFFU));
+  }
+}
+
+class ByteReader {
+ public:
+  ByteReader(const std::uint8_t* bytes, std::size_t len) : bytes_(bytes), len_(len) {}
+  bool u8(std::uint8_t& out) {
+    if (pos_ + 1U > len_) {
+      return false;
+    }
+    out = bytes_[pos_++];
+    return true;
+  }
+  bool u32(std::uint32_t& out) {
+    if (pos_ + 4U > len_) {
+      return false;
+    }
+    out = 0U;
+    for (int shift = 0; shift < 32; shift += 8) {
+      out |= static_cast<std::uint32_t>(bytes_[pos_++]) << shift;
+    }
+    return true;
+  }
+  bool at_end() const { return pos_ == len_; }
+
+ private:
+  const std::uint8_t* bytes_;
+  std::size_t len_;
+  std::size_t pos_ = 0;
+};
+
+struct RemapRows {
+  const std::vector<XfRemap>* map;
+  bool style_bare;
+  std::uint32_t mapped_default;
+};
+
+struct RestoreRows {
+  const std::vector<RowStyle>* rows;
+  std::size_t next;
+};
+
+}  // namespace
+
+void set_column_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t last, bool styled,
+                           std::uint32_t xf_index) {
+  overlay_column_span(layout, first, last, [styled, xf_index](ColumnLayout& entry) {
+    entry.has_style = styled;
+    entry.style_xf = styled ? xf_index : 0U;
+  });
+  if (!styled) {
+    drop_stateless_columns(layout);
+  }
+}
+
+void set_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t last, std::uint32_t xf_index) {
+  rewrite_row_styles(
+      layout, first, last,
+      [](void* ctx, std::uint32_t, RowDecision) { return RowDecision{true, *static_cast<std::uint32_t*>(ctx)}; },
+      &xf_index);
+}
+
+void clear_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t last) {
+  rewrite_row_styles(layout, first, last, [](void*, std::uint32_t, RowDecision) { return RowDecision{}; }, nullptr);
+}
+
+std::vector<std::uint32_t> range_style_bases(const Sheet& sheet, const StyleRect& rect) {
+  std::vector<std::uint32_t> out{0U};
+  for (const RowStyle& row : styled_rows(sheet.layout(), rect.first_row, rect.last_row)) {
+    out.push_back(row.xf);
+  }
+  for (const ColumnSegment& seg : column_segments(sheet.layout(), rect.first_col, rect.last_col)) {
+    if (seg.styled) {
+      out.push_back(seg.xf);
+    }
+  }
+  for (const CapturedCell& cell : stored_cells(sheet, rect)) {
+    if (cell.explicit_xf) {
+      out.push_back(cell.xf);
+    }
+  }
+  sort_ascending(out);
+  out.erase(std::unique(out.begin(), out.end()), out.end());
+  return out;
+}
+
+Expected<void, Error> remap_range_style(Sheet& sheet, const StyleRect& rect, const std::vector<XfRemap>& map,
+                                        std::uint64_t cell_limit) {
+  const bool all_rows = covers_all_rows(rect);
+  const bool all_cols = covers_all_cols(rect);
+  const std::uint32_t mapped_default = apply_map(map, 0U);
+  const SheetLayout& layout = sheet.layout();
+  const std::vector<ColumnSegment> pre_cols = column_segments(layout, rect.first_col, rect.last_col);
+  const std::vector<RowStyle> pre_rows = styled_rows(layout, rect.first_row, rect.last_row);
+
+  std::vector<ColumnSegment> post_cols = pre_cols;
+  if (all_rows) {
+    for (ColumnSegment& seg : post_cols) {
+      seg.xf = apply_map(map, seg.styled ? seg.xf : 0U);
+      seg.styled = seg.styled || mapped_default != 0U;
+    }
+  }
+  const bool style_bare_rows = all_cols && !all_rows && mapped_default != 0U;
+
+  // Cell writes are runs `(row, first, last, xf)` of column segments. A plain
+  // range writes every segment; an axis selection only those where the
+  // surviving row-over-column precedence would resolve to the wrong xf.
+  struct CellRun {
+    std::uint32_t row;
+    std::uint32_t first;
+    std::uint32_t last;
+    std::uint32_t xf;
+  };
+  std::vector<CellRun> runs;
+  std::uint64_t written = 0;
+  const auto plan_row = [&](std::uint32_t row, const RowStyle* pre_row) {
+    std::uint32_t post_row_xf = 0U;
+    bool post_row_styled = pre_row != nullptr;
+    if (pre_row != nullptr) {
+      post_row_xf = all_cols ? apply_map(map, pre_row->xf) : pre_row->xf;
+    } else if (style_bare_rows) {
+      post_row_styled = true;
+      post_row_xf = mapped_default;
+    }
+    for (std::size_t i = 0; i < pre_cols.size(); ++i) {
+      const ColumnSegment& pre = pre_cols[i];
+      const ColumnSegment& post = post_cols[i];
+      const std::uint32_t target = apply_map(map, pre_row != nullptr ? pre_row->xf : (pre.styled ? pre.xf : 0U));
+      const std::uint32_t after = post_row_styled ? post_row_xf : (post.styled ? post.xf : 0U);
+      if ((all_rows || all_cols) && after == target) {
+        continue;
+      }
+      runs.push_back({row, pre.first, pre.last, target});
+      written += static_cast<std::uint64_t>(pre.last - pre.first) + 1U;
+    }
+  };
+  const std::uint64_t area = (static_cast<std::uint64_t>(rect.last_row - rect.first_row) + 1U) *
+                             (static_cast<std::uint64_t>(rect.last_col - rect.first_col) + 1U);
+  if (!all_rows && !all_cols && area > cell_limit) {
+    written = area;
+  } else if (all_rows && !all_cols) {
+    // Unstyled rows resolve through the remapped columns already.
+    for (std::size_t i = 0; i < pre_rows.size() && written <= cell_limit; ++i) {
+      plan_row(pre_rows[i].row, &pre_rows[i]);
+    }
+  } else {
+    std::size_t next = 0;
+    for (std::uint64_t row = rect.first_row; row <= rect.last_row && written <= cell_limit; ++row) {
+      const RowStyle* pre_row = nullptr;
+      if (next < pre_rows.size() && pre_rows[next].row == row) {
+        pre_row = &pre_rows[next++];
+      }
+      plan_row(static_cast<std::uint32_t>(row), pre_row);
+    }
+  }
+  if (written > cell_limit) {
+    return make_error(FormulonErrorCode::kPreconditionFailed, "remap_range_style: too many cells to restyle");
+  }
+
+  std::vector<CapturedCell> owned = stored_cells(sheet, rect);
+  SheetLayout& mutable_layout = sheet.mutable_layout();
+  if (all_rows) {
+    for (const ColumnSegment& seg : post_cols) {
+      if (seg.styled) {
+        set_column_style_span(mutable_layout, seg.first, seg.last, true, seg.xf);
+      }
+    }
+  }
+  if (all_cols) {
+    RemapRows ctx{&map, style_bare_rows, mapped_default};
+    rewrite_row_styles(
+        mutable_layout, rect.first_row, rect.last_row,
+        [](void* raw, std::uint32_t, RowDecision current) {
+          const auto* remap = static_cast<RemapRows*>(raw);
+          if (current.styled) {
+            return RowDecision{true, apply_map(*remap->map, current.xf)};
+          }
+          return RowDecision{remap->style_bare, remap->mapped_default};
+        },
+        &ctx);
+  }
+  for (const CellRun& run : runs) {
+    for (std::uint64_t col = run.first; col <= run.last; ++col) {
+      const Cell* cell = sheet.cell_at(run.row, static_cast<std::uint32_t>(col));
+      if (cell == nullptr || !cell_owns_style(*cell)) {
+        sheet.set_cell_xf_index(run.row, static_cast<std::uint32_t>(col), run.xf);
+      }
+    }
+  }
+  for (const CapturedCell& cell : owned) {
+    if (cell.explicit_xf) {
+      sheet.set_cell_xf_index(cell.row, cell.col, apply_map(map, cell.xf));
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
+std::vector<std::uint8_t> snapshot_range_style(const Sheet& sheet, const StyleRect& rect) {
+  std::vector<std::uint8_t> out(std::begin(kSnapshotMagic), std::end(kSnapshotMagic));
+  out.push_back(kSnapshotVersion);
+  append_u32(out, rect.first_row);
+  append_u32(out, rect.first_col);
+  append_u32(out, rect.last_row);
+  append_u32(out, rect.last_col);
+  const bool all_rows = covers_all_rows(rect);
+  const bool all_cols = covers_all_cols(rect);
+  out.push_back(static_cast<std::uint8_t>((all_rows ? kCapturesColumns : 0U) | (all_cols ? kCapturesRows : 0U)));
+  if (all_rows) {
+    std::vector<ColumnSegment> styled;
+    for (const ColumnSegment& seg : column_segments(sheet.layout(), rect.first_col, rect.last_col)) {
+      if (seg.styled) {
+        styled.push_back(seg);
+      }
+    }
+    append_u32(out, static_cast<std::uint32_t>(styled.size()));
+    for (const ColumnSegment& seg : styled) {
+      append_u32(out, seg.first);
+      append_u32(out, seg.last);
+      append_u32(out, seg.xf);
+    }
+  }
+  if (all_cols) {
+    const std::vector<RowStyle> rows = styled_rows(sheet.layout(), rect.first_row, rect.last_row);
+    append_u32(out, static_cast<std::uint32_t>(rows.size()));
+    for (const RowStyle& row : rows) {
+      append_u32(out, row.row);
+      append_u32(out, row.xf);
+    }
+  }
+  std::vector<CapturedCell> cells;
+  for (const CapturedCell& cell : stored_cells(sheet, rect)) {
+    const Cell* stored = sheet.cell_at(cell.row, cell.col);
+    if (stored != nullptr && (stored->has_explicit_xf || stored->xf_index != 0U)) {
+      cells.push_back({cell.row, cell.col, stored->xf_index, stored->has_explicit_xf});
+    }
+  }
+  append_u32(out, static_cast<std::uint32_t>(cells.size()));
+  for (const CapturedCell& cell : cells) {
+    append_u32(out, cell.row);
+    append_u32(out, cell.col);
+    append_u32(out, cell.xf);
+    out.push_back(cell.explicit_xf ? 1U : 0U);
+  }
+  return out;
+}
+
+namespace {
+
+// Decodes a `snapshot_range_style` capture; false on any malformed field.
+bool parse_capture(const std::uint8_t* bytes, std::size_t len, std::size_t xf_count, StyleRect& rect,
+                   std::uint8_t& flags, std::vector<ColumnSegment>& cols, std::vector<RowStyle>& rows,
+                   std::vector<CapturedCell>& cells) {
+  if (len < sizeof(kSnapshotMagic) || !std::equal(std::begin(kSnapshotMagic), std::end(kSnapshotMagic), bytes)) {
+    return false;
+  }
+  ByteReader in(bytes + sizeof(kSnapshotMagic), len - sizeof(kSnapshotMagic));
+  std::uint8_t version = 0;
+  if (!in.u8(version) || version != kSnapshotVersion || !in.u32(rect.first_row) || !in.u32(rect.first_col) ||
+      !in.u32(rect.last_row) || !in.u32(rect.last_col) || !in.u8(flags) || rect.first_row > rect.last_row ||
+      rect.first_col > rect.last_col || rect.last_row >= Sheet::kMaxRows || rect.last_col >= Sheet::kMaxCols ||
+      flags != ((covers_all_rows(rect) ? kCapturesColumns : 0U) | (covers_all_cols(rect) ? kCapturesRows : 0U))) {
+    return false;
+  }
+  std::uint32_t count = 0;
+  if ((flags & kCapturesColumns) != 0U) {
+    if (!in.u32(count)) {
+      return false;
+    }
+    for (std::uint32_t i = 0; i < count; ++i) {
+      ColumnSegment seg;
+      if (!in.u32(seg.first) || !in.u32(seg.last) || !in.u32(seg.xf) || seg.first > seg.last ||
+          seg.first < rect.first_col || seg.last > rect.last_col || seg.xf >= xf_count) {
+        return false;
+      }
+      cols.push_back(seg);
+    }
+  }
+  if ((flags & kCapturesRows) != 0U) {
+    if (!in.u32(count)) {
+      return false;
+    }
+    for (std::uint32_t i = 0; i < count; ++i) {
+      RowStyle row;
+      if (!in.u32(row.row) || !in.u32(row.xf) || row.row < rect.first_row || row.row > rect.last_row ||
+          (!rows.empty() && row.row <= rows.back().row) || row.xf >= xf_count) {
+        return false;
+      }
+      rows.push_back(row);
+    }
+  }
+  if (!in.u32(count)) {
+    return false;
+  }
+  for (std::uint32_t i = 0; i < count; ++i) {
+    CapturedCell cell;
+    std::uint8_t explicit_xf = 0;
+    if (!in.u32(cell.row) || !in.u32(cell.col) || !in.u32(cell.xf) || !in.u8(explicit_xf) || explicit_xf > 1U ||
+        cell.row < rect.first_row || cell.row > rect.last_row || cell.col < rect.first_col ||
+        cell.col > rect.last_col || cell.xf >= xf_count) {
+      return false;
+    }
+    cell.explicit_xf = explicit_xf != 0U;
+    cells.push_back(cell);
+  }
+  return in.at_end();
+}
+
+}  // namespace
+
+Expected<void, Error> restore_range_style(Sheet& sheet, const std::uint8_t* bytes, std::size_t len,
+                                          std::size_t xf_count) {
+  StyleRect rect;
+  std::uint8_t flags = 0;
+  std::vector<ColumnSegment> cols;
+  std::vector<RowStyle> rows;
+  std::vector<CapturedCell> cells;
+  if (!parse_capture(bytes, len, xf_count, rect, flags, cols, rows, cells)) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "restore_range_style: not a valid range style capture");
+  }
+
+  SheetLayout& layout = sheet.mutable_layout();
+  if ((flags & kCapturesColumns) != 0U) {
+    set_column_style_span(layout, rect.first_col, rect.last_col, false, 0U);
+    for (const ColumnSegment& seg : cols) {
+      set_column_style_span(layout, seg.first, seg.last, true, seg.xf);
+    }
+  }
+  if ((flags & kCapturesRows) != 0U) {
+    RestoreRows ctx{&rows, 0U};
+    rewrite_row_styles(
+        layout, rect.first_row, rect.last_row,
+        [](void* raw, std::uint32_t row, RowDecision) {
+          auto* restore = static_cast<RestoreRows*>(raw);
+          if (restore->next < restore->rows->size() && (*restore->rows)[restore->next].row == row) {
+            return RowDecision{true, (*restore->rows)[restore->next++].xf};
+          }
+          return RowDecision{};
+        },
+        &ctx);
+  }
+  // Clear every stored cell, then put the captured ones back.
+  for (const CapturedCell& cell : stored_cells(sheet, rect)) {
+    sheet.clear_cell_xf_index(cell.row, cell.col);
+  }
+  for (const CapturedCell& cell : cells) {
+    sheet.restore_cell_style(cell.row, cell.col, cell.xf, cell.explicit_xf);
+  }
+  return Expected<void, Error>::Ok();
+}
+
+}  // namespace formulon

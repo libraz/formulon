@@ -45,6 +45,7 @@
 #include "phonetic.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "sheet_layout_edit.h"
 #include "utils/arena.h"
 #include "utils/date_time.h"
 #include "utils/error.h"
@@ -665,7 +666,7 @@ Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& 
     }
     entry.style_xf = style_xf;
   }
-  st->workbook->sheet(st->sheet_index).mutable_layout().row_overrides.push_back(entry);
+  insert_row_override(st->workbook->sheet(st->sheet_index).mutable_layout(), entry);
   return Expected<void, Error>::Ok();
 }
 

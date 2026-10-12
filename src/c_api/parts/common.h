@@ -159,6 +159,9 @@ fm_status_t check_column_span(std::uint32_t first, std::uint32_t last, const cha
 // the grid is a repair prompt, not a discarded attribute.
 fm_status_t check_row_index(std::uint32_t row, const char* api);
 
+// Row counterpart of `check_column_span`: `first <= last` inside the grid.
+fm_status_t check_row_span(std::uint32_t first, std::uint32_t last, const char* api);
+
 // Rejects a measurement that is not a finite, non-negative double. Row
 // heights and column widths reach the file as `xsd:double` attributes,
 // and the number writer renders a NaN or an infinity as an empty
