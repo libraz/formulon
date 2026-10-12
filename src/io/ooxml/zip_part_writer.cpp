@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <ctime>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -37,6 +38,18 @@ Expected<void, Error> CheckAndRecordPath(std::string_view path, std::unordered_s
   return Expected<void, Error>::Ok();
 }
 
+/// The entry timestamp: 1980-01-01 00:00, the DOS epoch Excel writes, so
+/// saving an unchanged model twice yields identical bytes. miniz converts
+/// through `localtime`, so building the value with `mktime` round-trips in
+/// any time zone.
+MZ_TIME_T FixedEntryTime() {
+  std::tm epoch{};
+  epoch.tm_year = 80;
+  epoch.tm_mday = 1;
+  epoch.tm_isdst = -1;
+  return std::mktime(&epoch);
+}
+
 /// Adds `size` bytes at `data` as entry `path`; `failure` is the error
 /// message when miniz rejects the entry.
 Expected<void, Error> AddEntry(mz_zip_archive* archive, std::string_view path, const void* data, std::size_t size,
@@ -44,8 +57,10 @@ Expected<void, Error> AddEntry(mz_zip_archive* archive, std::string_view path, c
   if (auto dup_check = CheckAndRecordPath(path, seen_paths); !dup_check) {
     return std::move(dup_check.error());
   }
-  const mz_bool ok = mz_zip_writer_add_mem(archive, std::string(path).c_str(), data, size,
-                                           static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION));
+  MZ_TIME_T modified = FixedEntryTime();
+  const mz_bool ok = mz_zip_writer_add_mem_ex_v2(archive, std::string(path).c_str(), data, size, nullptr, 0,
+                                                 static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION), 0, 0, &modified, nullptr,
+                                                 0, nullptr, 0);
   if (ok == MZ_FALSE) {
     std::string context("part=");
     context.append(path);
@@ -58,13 +73,13 @@ Expected<void, Error> AddEntry(mz_zip_archive* archive, std::string_view path, c
 
 Expected<void, Error> AddPart(mz_zip_archive* archive, std::string_view path, const std::string& body,
                               std::unordered_set<std::string>* seen_paths) {
-  return AddEntry(archive, path, body.data(), body.size(), seen_paths, "miniz mz_zip_writer_add_mem failed");
+  return AddEntry(archive, path, body.data(), body.size(), seen_paths, "miniz mz_zip_writer_add_mem_ex_v2 failed");
 }
 
 Expected<void, Error> AddPartBytes(mz_zip_archive* archive, std::string_view path,
                                    const std::vector<std::uint8_t>& body, std::unordered_set<std::string>* seen_paths) {
   return AddEntry(archive, path, body.data(), body.size(), seen_paths,
-                  "miniz mz_zip_writer_add_mem failed (binary part)");
+                  "miniz mz_zip_writer_add_mem_ex_v2 failed (binary part)");
 }
 
 Expected<std::vector<std::uint8_t>, Error> FinalizeArchive(ZipWriterGuard& writer, const char* context) {

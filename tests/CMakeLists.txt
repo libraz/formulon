@@ -101,6 +101,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xsd_bool_test.cpp
   unit/io/xsd_double_test.cpp
   unit/io/zip_reader_test.cpp
+  unit/io/zip_entry_timestamp_test.cpp
   unit/io/format_detect_test.cpp
   unit/io/roundtrip_symmetry_test.cpp
   unit/io/saved_package_wellformed_test.cpp
