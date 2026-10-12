@@ -96,7 +96,8 @@ SharedStrings BuildSharedStrings(const Workbook& workbook) {
         continue;
       }
       const RowCells& cells = row_it->second;
-      for (const Cell& cell : cells) {
+      for (const auto& [col, cell] : cells) {
+        (void)col;
         if (cell.formula_text.empty() && cell.cached_value.is_text()) {
           strings.intern(cell.cached_value.as_text(), cell.phonetic_runs, cell.phonetic_props);
         }

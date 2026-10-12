@@ -1,5 +1,5 @@
 //
-// Out-of-line implementation of the row-sparse, column-dense cell store
+// Out-of-line implementation of the sparse cell store
 // owned by `Sheet` and the heap-owned spill-region table. See `sheet.h` for
 // the storage-layer and spill API contracts.
 
@@ -119,36 +119,51 @@ std::vector<std::pair<std::uint32_t, std::uint32_t>> Sheet::comment_anchor_set()
 }
 
 const Cell& RowCells::blank() noexcept {
-  // Shared read-only stand-in for a column the row never materialised.
-  // `operator[]` hands it out for the leading gap, so index-based scans see a
-  // default cell exactly where a dense vector would have held one.
+  // Shared read-only stand-in that `operator[]` returns for an unstored column.
   static const Cell kBlank;
   return kBlank;
 }
 
 Cell& RowCells::ensure(std::uint32_t col) {
-  if (run_.empty()) {
-    first_col_ = col;
-    run_.resize(1U);
-    return run_.front();
+  assert(col < a1::kMaxCols);
+  // Right-append fast path: rows are mostly written left to right.
+  if (cols_.empty() || col > cols_.back()) {
+    cols_.push_back(static_cast<std::uint16_t>(col));
+    cells_.emplace_back();
+    return cells_.back();
   }
-  if (col < first_col_) {
-    // Extending to the left re-seats the run. `Cell` is move-only, so build
-    // the wider run and move the existing slots into place; the heap-stable
-    // `cached_text_owned` payload each cell owns survives the move.
-    const std::size_t shift = static_cast<std::size_t>(first_col_) - col;
-    std::vector<Cell> grown;
-    grown.resize(shift + run_.size());
-    std::move(run_.begin(), run_.end(), grown.begin() + static_cast<std::ptrdiff_t>(shift));
-    run_ = std::move(grown);
-    first_col_ = col;
-    return run_.front();
+  if (Cell* existing = find(col); existing != nullptr) {
+    return *existing;
   }
-  const std::size_t index = static_cast<std::size_t>(col) - first_col_;
-  if (index >= run_.size()) {
-    run_.resize(index + 1U);
+  const std::size_t index = lower_index(col);
+  cols_.insert(cols_.begin() + static_cast<std::ptrdiff_t>(index), static_cast<std::uint16_t>(col));
+  return *cells_.emplace(cells_.begin() + static_cast<std::ptrdiff_t>(index));
+}
+
+void RowCells::shift_cols_from(std::uint32_t col, std::uint32_t count) {
+  const std::size_t first = lower_index(col);
+  std::size_t kept = cols_.size();
+  for (std::size_t i = first; i < cols_.size(); ++i) {
+    const std::uint64_t shifted = static_cast<std::uint64_t>(cols_[i]) + count;
+    if (shifted >= a1::kMaxCols) {
+      kept = i;
+      break;
+    }
+    cols_[i] = static_cast<std::uint16_t>(shifted);
   }
-  return run_[index];
+  cols_.resize(kept);
+  cells_.erase(cells_.begin() + static_cast<std::ptrdiff_t>(kept), cells_.end());
+}
+
+void RowCells::erase_cols(std::uint32_t col, std::uint32_t count) {
+  const std::uint64_t band_end = static_cast<std::uint64_t>(col) + count;
+  const std::size_t first = lower_index(col);
+  const std::size_t last = std::max(first, lower_index(band_end));
+  cols_.erase(cols_.begin() + static_cast<std::ptrdiff_t>(first), cols_.begin() + static_cast<std::ptrdiff_t>(last));
+  cells_.erase(cells_.begin() + static_cast<std::ptrdiff_t>(first), cells_.begin() + static_cast<std::ptrdiff_t>(last));
+  for (std::size_t i = first; i < cols_.size(); ++i) {
+    cols_[i] = static_cast<std::uint16_t>(cols_[i] - count);
+  }
 }
 
 void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
@@ -253,10 +268,9 @@ void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v)
     // buffer the caller used (typically the recalc engine's per-evaluation
     // `Arena`, which is about to be reset). Allocating a fresh
     // `unique_ptr<std::string>` per write keeps the bytes at a fixed heap
-    // address that survives the Cell being relocated by `Sheet`'s row-
-    // vector growth and row-map rehash paths — a bare `std::string` would
-    // relocate its inline (SSO) bytes on every Cell move and dangle the
-    // `string_view` we are about to store.
+    // address that survives the Cell being relocated by a row's insert or
+    // growth — a bare `std::string` would relocate its inline (SSO) bytes on
+    // every Cell move and dangle the `string_view` we are about to store.
     //
     // Construct from `v.as_text()` directly: even when the caller passes
     // the cell's own current cached text back through this API, the new
@@ -408,11 +422,10 @@ std::size_t Sheet::cell_count() const noexcept {
     total += kv.second.stored_count();
   }
   // Add dynamic-array spill phantoms that have no underlying stored slot. A
-  // phantom may coincide with an implicitly default-constructed slot (created
-  // when the row's run grew to cover a later column); such a coordinate is
-  // already counted above, so only phantoms absent from `rows_` add to the
-  // total. This keeps the count aligned with the flat enumeration exposed
-  // through the C ABI, which surfaces phantoms via `resolve_cell_value`.
+  // phantom that coincides with a stored cell is already counted above, so
+  // only phantoms absent from `rows_` add to the total. This keeps the count
+  // aligned with the flat enumeration exposed through the C ABI, which
+  // surfaces phantoms via `resolve_cell_value`.
   //
   // Derived from each region's area rather than walked cell by cell: a spill
   // is one rectangle, and a whole-column one is 1,048,576 coordinates whose
@@ -442,16 +455,8 @@ std::size_t Sheet::cell_count() const noexcept {
 
 std::size_t Sheet::materialised_cells_in_rect_locked(std::uint32_t row_begin, std::uint64_t row_end,
                                                      std::uint32_t col_begin, std::uint64_t col_end) const noexcept {
-  // A row's materialised slots are one contiguous run, so its contribution is
-  // the length of the run's overlap with the column span — no per-column
-  // probing.
   const auto overlap = [&](const RowCells& cells) noexcept -> std::size_t {
-    if (cells.empty()) {
-      return 0U;
-    }
-    const std::uint64_t first = std::max<std::uint64_t>(col_begin, cells.first_col());
-    const std::uint64_t last = std::min<std::uint64_t>(col_end, cells.size());
-    return first < last ? static_cast<std::size_t>(last - first) : 0U;
+    return cells.count_in(col_begin, col_end);
   };
 
   // Same choice `footprint_holds_occupied_cell_locked` makes: whichever of
@@ -498,19 +503,12 @@ std::optional<Sheet::PopulatedExtent> Sheet::populated_extent(std::uint32_t firs
     extent.last_col = std::max(extent.last_col, col);
   };
 
-  // RowCells stores an absolute-origin run. Restrict the scan to the run's
-  // materialised interval and inspect only non-blank/formula slots; leading
-  // gaps are not represented and default-constructed slots are not content.
+  // Only stored cells in the column span are visited; a stored cell with no
+  // formula and a blank value is not content.
   const auto scan_row = [&](std::uint32_t row, const RowCells& cells) {
-    if (cells.empty()) {
-      return;
-    }
-    const std::size_t begin = std::max<std::size_t>(first_col, cells.first_col());
-    const std::size_t end = std::min<std::size_t>(static_cast<std::size_t>(last_col) + 1U, cells.size());
-    for (std::size_t col = begin; col < end; ++col) {
-      const Cell& cell = cells[col];
+    for (const auto& [col, cell] : cells.entries_in(first_col, static_cast<std::uint64_t>(last_col) + 1U)) {
       if (!cell.formula_text.empty() || !cell.cached_value.is_blank()) {
-        include(row, static_cast<std::uint32_t>(col));
+        include(row, col);
       }
     }
   };
@@ -653,12 +651,10 @@ std::uint64_t Sheet::cells_in_range(std::uint32_t first_row, std::uint32_t first
     cols.clear();
     const auto row_it = rows_.find(row);
     const RowCells* cells = row_it == rows_.end() ? nullptr : &row_it->second;
-    if (cells != nullptr && !cells->empty()) {
-      const std::size_t end = std::min<std::size_t>(static_cast<std::size_t>(last_col) + 1U, cells->size());
-      for (std::size_t col = std::max<std::size_t>(col_begin, cells->first_col()); col < end; ++col) {
-        const Cell& cell = (*cells)[col];
+    if (cells != nullptr) {
+      for (const auto& [col, cell] : cells->entries_in(col_begin, static_cast<std::uint64_t>(last_col) + 1U)) {
         if (!cell.formula_text.empty() || !cell.cached_value.is_blank()) {
-          cols.push_back(static_cast<std::uint32_t>(col));
+          cols.push_back(col);
         }
       }
     }
@@ -732,9 +728,9 @@ void Sheet::index_formula_cell_locked(std::uint32_t row, std::uint32_t col, bool
 void Sheet::rebuild_formula_index_locked() {
   formula_cells_.clear();
   for (const auto& [row, cells] : rows_) {
-    for (std::size_t col = cells.first_col(); col < cells.size(); ++col) {
-      if (!cells[col].formula_text.empty()) {
-        formula_cells_.insert(formula_cell_key(row, static_cast<std::uint32_t>(col)));
+    for (const auto& [col, cell] : cells) {
+      if (!cell.formula_text.empty()) {
+        formula_cells_.insert(formula_cell_key(row, col));
       }
     }
   }
@@ -868,11 +864,23 @@ void Sheet::read_range(std::uint32_t first_row, std::uint32_t last_row, std::uin
     return nullptr;
   };
 
+  const std::uint64_t col_end = static_cast<std::uint64_t>(last_col) + 1U;
   for (std::uint32_t row = first_row; row <= last_row; ++row) {
     const auto row_it = rows_.find(row);
-    const RowCells* stored = row_it != rows_.end() ? &row_it->second : nullptr;
+    RowCells::const_iterator next;
+    RowCells::const_iterator stop;
+    if (row_it != rows_.end()) {
+      const RowCells::EntryRange entries = row_it->second.entries_in(first_col, col_end);
+      next = entries.begin();
+      stop = entries.end();
+    }
     for (std::uint32_t col = first_col; col <= last_col; ++col) {
-      const Cell* cell = stored != nullptr ? stored->find(col) : nullptr;
+      // The stored entries are ascending, so one cursor per row follows `col`.
+      const Cell* cell = nullptr;
+      if (next != stop && (*next).col == col) {
+        cell = &(*next).cell;
+        ++next;
+      }
       // Order matters and mirrors the scalar path: a stored formula wins over
       // a covering spill region, which in turn wins over a stored literal.
       if (cell != nullptr && !cell->formula_text.empty()) {

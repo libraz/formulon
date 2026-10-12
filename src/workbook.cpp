@@ -878,11 +878,12 @@ std::size_t Workbook::sheet_index_by_name(std::string_view name) const noexcept 
 }
 
 std::size_t Workbook::approximate_memory_bytes() const noexcept {
-  // Per-row cost of the cell store's hash map beyond the run itself: one
-  // node holding the key and the `RowCells` header, plus the bucket slot
-  // pointing at it. A constant is enough — the figure is a pressure
-  // signal, and no standard library exposes its real per-node overhead.
-  constexpr std::size_t kRowNodeOverheadBytes = sizeof(std::uint32_t) + 2U * sizeof(void*) + 32U;
+  // Per-row cost of the cell store's hash map beyond the row's arrays: one
+  // node holding the key and the `RowCells` header (two vectors, 48 B on
+  // 64-bit), plus the bucket slot pointing at it. A constant is enough — the
+  // figure is a pressure signal, and no standard library exposes its real
+  // per-node overhead.
+  constexpr std::size_t kRowNodeOverheadBytes = sizeof(std::uint32_t) + 2U * sizeof(void*) + sizeof(RowCells);
 
   std::size_t total = sizeof(Workbook);
 
@@ -890,8 +891,9 @@ std::size_t Workbook::approximate_memory_bytes() const noexcept {
     total += sizeof(Sheet) + sheet_ref.name().capacity();
     for (const auto& [row, cells] : sheet_ref.rows()) {
       (void)row;
-      total += kRowNodeOverheadBytes + (cells.run().capacity() * sizeof(Cell));
-      for (const Cell& cell : cells.run()) {
+      total += kRowNodeOverheadBytes + cells.capacity_bytes();
+      for (const auto& [col, cell] : cells) {
+        (void)col;
         total += cell.formula_text.capacity();
         total += cell.phonetic_runs.capacity() * sizeof(PhoneticRun);
         for (const PhoneticRun& run : cell.phonetic_runs) {
@@ -1566,12 +1568,11 @@ void mark_all_formulas_dirty_locked(const std::vector<Sheet>& sheets,
                                     const eval::RecalcEngine::LockedMutator& mutator) {
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     for (const auto& [row, cells] : sheets[sheet_idx].rows()) {
-      for (std::size_t col = 0; col < cells.size(); ++col) {
-        if (cells[col].formula_text.empty()) {
+      for (const auto& [col, cell] : cells) {
+        if (cell.formula_text.empty()) {
           continue;
         }
-        mutator.mark_dirty(
-            eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)});
+        mutator.mark_dirty(eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, col});
       }
     }
   }

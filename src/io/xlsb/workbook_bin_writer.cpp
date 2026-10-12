@@ -137,7 +137,8 @@ void ForEachSheetFormula(const Sheet& sheet, Visit&& visit) {
   }
   sort_ascending(rows);
   for (const std::uint32_t row : rows) {
-    for (const Cell& cell : sheet.rows().at(row)) {
+    for (const auto& [col, cell] : sheet.rows().at(row)) {
+      (void)col;
       std::string_view body(cell.formula_text);
       if (!body.empty() && body.front() == '=') {
         body.remove_prefix(1);

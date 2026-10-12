@@ -112,17 +112,20 @@ TEST(SheetSpillTest, CellCountDoesNotFollowTheSpillArea) {
 }
 TEST(SheetSpillTest, CellCountKeepsCountingPhantomsThatShareAMaterialisedSlot) {
   Sheet s("Sheet1");
-  // Writing A1 and then E1 materialises the whole run A1..E1, three of them
-  // implicitly blank. A spill over A1:C1 then covers slots that the stored
-  // count already includes.
+  // Writing A1 and then E1 stores exactly those two cells. A spill over A1:C1
+  // adds phantoms B1 and C1; a style-only write to B1 then gives one phantom
+  // a stored slot that the stored count already includes.
   s.set_cell_value(0U, 0U, Value::blank());
   s.set_cell_value(0U, 4U, Value::number(9.0));
-  ASSERT_EQ(s.cell_count(), 5U);
+  ASSERT_EQ(s.cell_count(), 2U);
   ASSERT_TRUE(s.commit_spill(0U, 0U, 1U, 3U, {Value::number(1.0), Value::number(2.0), Value::number(3.0)}));
-  EXPECT_EQ(s.cell_count(), 5U) << "phantoms that coincide with materialised slots must not be counted twice";
+  EXPECT_EQ(s.cell_count(), 4U);
+  s.set_cell_xf_index(0U, 1U, 7U);
+  ASSERT_NE(s.spill_region_at_anchor(0U, 0U), nullptr);
+  EXPECT_EQ(s.cell_count(), 4U) << "phantoms that coincide with materialised slots must not be counted twice";
 
-  // A spill running past the end of the row's materialised run adds only the
-  // coordinates that are not already slots.
+  // A spill over a row with no stored cells adds only the coordinates that
+  // are not already slots.
   Sheet t("Sheet1");
   ASSERT_TRUE(t.commit_spill(
       0U, 0U, 1U, 5U,

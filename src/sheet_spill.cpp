@@ -263,21 +263,15 @@ bool Sheet::footprint_holds_occupied_cell_locked(std::uint32_t anchor_row, std::
     }
   };
 
-  // Inspect one stored row's materialised run where it overlaps the column
-  // span. `RowCells` holds a dense run starting at `first_col()`, so the
-  // overlap is a contiguous slice and the leading gap costs nothing.
+  // Inspect one stored row's cells inside the column span; unstored columns
+  // cost nothing.
   const auto row_holds_blocker = [&](std::uint32_t row, const RowCells& cells) noexcept {
-    if (cells.empty()) {
-      return false;
-    }
-    const std::size_t first = std::max<std::size_t>(anchor_col, cells.first_col());
-    const std::size_t last = std::min<std::size_t>(static_cast<std::size_t>(col_end), cells.size());
-    for (std::size_t col = first; col < last; ++col) {
+    for (const auto& [col, cell] : cells.entries_in(anchor_col, col_end)) {
       if (row == anchor_row && col == anchor_col) {
         continue;
       }
       count_step();
-      if (IsCellOccupied(cells.find(static_cast<std::uint32_t>(col)))) {
+      if (IsCellOccupied(&cell)) {
         return true;
       }
     }

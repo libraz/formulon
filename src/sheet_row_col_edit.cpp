@@ -501,52 +501,7 @@ void Sheet::insert_cols(std::uint32_t col, std::uint32_t count) {
   }
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   for (auto& kv : rows_) {
-    RowCells& row = kv.second;
-    if (row.empty() || col >= row.size()) {
-      continue;
-    }
-    // Insertion entirely left of the run: the run keeps its contents and only
-    // its origin moves. A run pushed wholly past the last column is dropped.
-    if (col <= row.first_col()) {
-      const std::uint64_t shifted = static_cast<std::uint64_t>(row.first_col()) + count;
-      if (shifted >= kMaxCols) {
-        row.mutable_run().clear();
-        row.set_first_col(0U);
-        continue;
-      }
-      row.set_first_col(static_cast<std::uint32_t>(shifted));
-      // The tail may now overhang the sheet; drop what no longer fits.
-      const std::size_t capacity = static_cast<std::size_t>(kMaxCols) - row.first_col();
-      if (row.mutable_run().size() > capacity) {
-        row.mutable_run().resize(capacity);
-      }
-      continue;
-    }
-    // Insertion point sits inside this row's run. Pad with default Cells at
-    // the local index. Cells past `kMaxCols` are dropped wholesale.
-    std::vector<Cell>& cells = row.mutable_run();
-    const std::size_t local_col = static_cast<std::size_t>(col) - row.first_col();
-    const std::size_t old_size = cells.size();
-    const std::uint64_t new_size_unbounded = static_cast<std::uint64_t>(old_size) + count;
-    const std::size_t new_size =
-        static_cast<std::size_t>(std::min<std::uint64_t>(new_size_unbounded, kMaxCols - row.first_col()));
-    cells.resize(new_size);
-    // Move the tail to its new position. Walk from the back so source
-    // and destination never overlap during the swap.
-    const std::size_t tail_count = old_size - local_col;
-    for (std::size_t i = 0; i < tail_count; ++i) {
-      const std::size_t src = old_size - 1U - i;
-      const std::size_t dst = src + count;
-      if (dst >= new_size) {
-        continue;  // Cell pushed past sheet bound; drop it.
-      }
-      cells[dst] = std::move(cells[src]);
-    }
-    // Clear the inserted slots so they read as default-blank.
-    const std::size_t clear_end = std::min<std::size_t>(local_col + count, new_size);
-    for (std::size_t i = local_col; i < clear_end; ++i) {
-      cells[i] = Cell{};
-    }
+    kv.second.shift_cols_from(col, count);
   }
   const StructuralEdit edit{col, count, /*is_delete=*/false, /*row_axis=*/false};
   finalize_structural_edit_locked(edit);
@@ -558,27 +513,7 @@ void Sheet::delete_cols(std::uint32_t col, std::uint32_t count) {
   }
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   for (auto& kv : rows_) {
-    RowCells& row = kv.second;
-    if (row.empty() || col >= row.size()) {
-      continue;
-    }
-    std::vector<Cell>& cells = row.mutable_run();
-    const std::uint64_t band_end = static_cast<std::uint64_t>(col) + count;
-    if (band_end <= row.first_col()) {
-      // The deleted band lies entirely left of the run: only the origin moves.
-      row.set_first_col(row.first_col() - count);
-      continue;
-    }
-    // The band reaches into the run. Everything from the run's start up to the
-    // band's end goes; what remains starts at `col`.
-    const std::size_t local_first = col > row.first_col() ? static_cast<std::size_t>(col) - row.first_col() : 0U;
-    const std::size_t local_last =
-        static_cast<std::size_t>(std::min<std::uint64_t>(band_end - row.first_col(), cells.size()));
-    cells.erase(cells.begin() + static_cast<std::ptrdiff_t>(local_first),
-                cells.begin() + static_cast<std::ptrdiff_t>(local_last));
-    if (col < row.first_col()) {
-      row.set_first_col(col);
-    }
+    kv.second.erase_cols(col, count);
   }
   const StructuralEdit edit{col, count, /*is_delete=*/true, /*row_axis=*/false};
   finalize_structural_edit_locked(edit);

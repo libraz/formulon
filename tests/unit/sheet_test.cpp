@@ -297,7 +297,7 @@ TEST(SheetTest, FormulaCellsInTracksOverwritesAndStructuralEdits) {
 // Sparseness: columns and rows
 // ---------------------------------------------------------------------------
 
-TEST(SheetTest, SparseColumnsGrowVectorImplicitly) {
+TEST(SheetTest, SparseColumnsStoreOnlyWrittenCells) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::number(1.0));
   s.set_cell_value(0U, 100U, Value::number(2.0));
@@ -310,19 +310,16 @@ TEST(SheetTest, SparseColumnsGrowVectorImplicitly) {
   EXPECT_EQ(a->cached_value.as_number(), 1.0);
   EXPECT_EQ(z->cached_value.as_number(), 2.0);
 
-  // A column in the gap exists but is default-constructed (empty formula,
-  // blank cached value); the storage contract documents this behaviour.
-  const Cell* gap = s.cell_at(0U, 50U);
-  ASSERT_NE(gap, nullptr);
-  EXPECT_TRUE(gap->formula_text.empty());
-  EXPECT_TRUE(gap->cached_value.is_blank());
+  // A column between the written ones was never written, so it is absent.
+  EXPECT_EQ(s.cell_at(0U, 50U), nullptr);
+  EXPECT_FALSE(s.has_cell(0U, 50U));
 
-  // A column past the row vector's end is not in storage.
+  // A column past the last written one is not in storage either.
   EXPECT_EQ(s.cell_at(0U, 200U), nullptr);
   EXPECT_FALSE(s.has_cell(0U, 200U));
 
-  // cell_count counts every slot in the populated row, including implicit.
-  EXPECT_EQ(s.cell_count(), 101U);
+  // cell_count counts written coordinates only.
+  EXPECT_EQ(s.cell_count(), 2U);
 }
 
 TEST(SheetTest, SparseRowsLeaveUnvisitedRowsAbsent) {
@@ -372,7 +369,7 @@ TEST(SheetTest, WritingLeftOfTheRunExtendsItWithoutLosingCells) {
 
   const RowCells& row = s.rows().at(0U);
   EXPECT_EQ(row.first_col(), 4U);
-  EXPECT_EQ(row.stored_count(), 9U);  // columns 4..12
+  EXPECT_EQ(row.stored_count(), 3U);  // columns 4, 10 and 12
   EXPECT_EQ(s.cell_at(0U, 4U)->cached_value.as_number(), 2.0);
   EXPECT_EQ(s.cell_at(0U, 10U)->cached_value.as_number(), 1.0);
   // The heap-owned text payload survives the run being re-seated.
@@ -406,13 +403,14 @@ TEST(SheetTest, DeleteColsStraddlingTheRunStartDropsTheCoveredCells) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 10U, Value::number(1.0));
   s.set_cell_value(0U, 12U, Value::number(2.0));
-  // The band covers columns 8..10, i.e. the run's first stored column.
+  // The band covers columns 8..10, i.e. the row's first stored column.
   s.delete_cols(/*col=*/8U, /*count=*/3U);
 
   const RowCells& row = s.rows().at(0U);
-  EXPECT_EQ(row.first_col(), 8U);
-  EXPECT_EQ(row.stored_count(), 2U);  // former columns 11 and 12
-  EXPECT_TRUE(s.cell_at(0U, 8U)->cached_value.is_blank());
+  EXPECT_EQ(row.first_col(), 9U);
+  EXPECT_EQ(row.stored_count(), 1U);  // former column 12
+  EXPECT_EQ(s.cell_at(0U, 8U), nullptr);
+  ASSERT_NE(s.cell_at(0U, 9U), nullptr);
   EXPECT_EQ(s.cell_at(0U, 9U)->cached_value.as_number(), 2.0);
 }
 
@@ -480,6 +478,158 @@ TEST(SheetTest, NameAccessorsUnaffectedByCellStore) {
   s.set_name("Renamed");
   EXPECT_EQ(s.name(), "Renamed");
   EXPECT_EQ(s.cell_count(), 1U);
+}
+
+// ---------------------------------------------------------------------------
+// RowCells invariants
+// ---------------------------------------------------------------------------
+
+// Writes `col` as its own numeric value so a cell identifies its column.
+void Put(RowCells& row, std::uint32_t col) {
+  row.ensure(col).cached_value = Value::number(static_cast<double>(col));
+}
+
+std::vector<std::uint32_t> Keys(const RowCells& row) {
+  std::vector<std::uint32_t> keys;
+  for (const auto& [col, cell] : row) {
+    EXPECT_EQ(cell.cached_value.as_number(), static_cast<double>(col)) << "cell paired with the wrong key";
+    keys.push_back(col);
+  }
+  return keys;
+}
+
+TEST(RowCellsTest, RightToLeftWritesKeepKeysAscending) {
+  RowCells row;
+  for (std::uint32_t col = 10U; col-- > 0U;) {
+    Put(row, col * 3U);
+  }
+  EXPECT_EQ(Keys(row), (std::vector<std::uint32_t>{0U, 3U, 6U, 9U, 12U, 15U, 18U, 21U, 24U, 27U}));
+  EXPECT_EQ(row.stored_count(), 10U);
+}
+
+TEST(RowCellsTest, MiddleInsertKeepsNeighboursAndReturnsExisting) {
+  RowCells row;
+  Put(row, 1U);
+  Put(row, 9U);
+  Put(row, 5U);
+  EXPECT_EQ(Keys(row), (std::vector<std::uint32_t>{1U, 5U, 9U}));
+  // A second ensure of a held column returns the same cell without inserting.
+  EXPECT_EQ(&row.ensure(5U), row.find(5U));
+  EXPECT_EQ(row.stored_count(), 3U);
+}
+
+TEST(RowCellsTest, FindAroundAHole) {
+  RowCells row;
+  for (const std::uint32_t col : {4U, 5U, 6U, 20U, 21U}) {
+    Put(row, col);
+  }
+  EXPECT_EQ(row.find(3U), nullptr);  // before the first key
+  ASSERT_NE(row.find(4U), nullptr);
+  ASSERT_NE(row.find(6U), nullptr);  // left of the hole
+  EXPECT_EQ(row.find(6U)->cached_value.as_number(), 6.0);
+  EXPECT_EQ(row.find(7U), nullptr);  // in the hole
+  EXPECT_EQ(row.find(19U), nullptr);
+  ASSERT_NE(row.find(20U), nullptr);  // right of the hole
+  EXPECT_EQ(row.find(20U)->cached_value.as_number(), 20.0);
+  ASSERT_NE(row.find(21U), nullptr);
+  EXPECT_EQ(row.find(21U)->cached_value.as_number(), 21.0);
+  EXPECT_EQ(row.find(22U), nullptr);  // after the last key
+  EXPECT_EQ(row.find(16383U), nullptr);
+}
+
+TEST(RowCellsTest, GapIsAbsentAndReadsBlankThroughOperatorIndex) {
+  RowCells row;
+  Put(row, 0U);
+  Put(row, 16383U);
+  EXPECT_EQ(row.find(8000U), nullptr);
+  EXPECT_EQ(row.stored_count(), 2U);
+  EXPECT_EQ(row.size(), 16384U);
+  EXPECT_TRUE(row[8000U].cached_value.is_blank());
+  EXPECT_EQ(row[16383U].cached_value.as_number(), 16383.0);
+}
+
+TEST(RowCellsTest, ShiftColsFromDropsKeysPushedPastTheLastColumn) {
+  RowCells row;
+  for (const std::uint32_t col : {2U, 10U, 16380U, 16382U, 16383U}) {
+    Put(row, col);
+  }
+  row.shift_cols_from(10U, 2U);
+  // 2 stays; 10 -> 12; 16380 -> 16382; 16382 and 16383 fall off the sheet.
+  std::vector<std::uint32_t> keys;
+  for (const auto& [col, cell] : row) {
+    (void)cell;
+    keys.push_back(col);
+  }
+  EXPECT_EQ(keys, (std::vector<std::uint32_t>{2U, 12U, 16382U}));
+  ASSERT_NE(row.find(16382U), nullptr);
+  EXPECT_EQ(row.find(16382U)->cached_value.as_number(), 16380.0);
+}
+
+TEST(RowCellsTest, ShiftColsFromPastEveryKeyEmptiesTheRow) {
+  RowCells row;
+  Put(row, 0U);
+  Put(row, 100U);
+  row.shift_cols_from(0U, 16384U);
+  EXPECT_TRUE(row.empty());
+  EXPECT_EQ(row.size(), 0U);
+}
+
+TEST(RowCellsTest, EraseColsDropsTheBandAndDecrementsLaterKeys) {
+  RowCells row;
+  for (const std::uint32_t col : {1U, 4U, 5U, 7U, 8U, 20U}) {
+    Put(row, col);
+  }
+  row.erase_cols(4U, 4U);  // band [4, 8)
+  std::vector<std::uint32_t> keys;
+  std::vector<double> values;
+  for (const auto& [col, cell] : row) {
+    keys.push_back(col);
+    values.push_back(cell.cached_value.as_number());
+  }
+  EXPECT_EQ(keys, (std::vector<std::uint32_t>{1U, 4U, 16U}));
+  EXPECT_EQ(values, (std::vector<double>{1.0, 8.0, 20.0}));
+
+  // A band reaching past the last column removes the tail.
+  row.erase_cols(2U, 16383U);
+  EXPECT_EQ(row.stored_count(), 1U);
+  EXPECT_NE(row.find(1U), nullptr);
+}
+
+TEST(RowCellsTest, EntriesInAndCountInAreHalfOpen) {
+  RowCells row;
+  for (const std::uint32_t col : {3U, 5U, 9U, 16383U}) {
+    Put(row, col);
+  }
+  const auto cols_in = [&](std::uint32_t first, std::uint64_t end) {
+    std::vector<std::uint32_t> out;
+    for (const auto& [col, cell] : row.entries_in(first, end)) {
+      (void)cell;
+      out.push_back(col);
+    }
+    EXPECT_EQ(out.size(), row.count_in(first, end));
+    return out;
+  };
+  EXPECT_EQ(cols_in(3U, 9U), (std::vector<std::uint32_t>{3U, 5U}));
+  EXPECT_EQ(cols_in(4U, 10U), (std::vector<std::uint32_t>{5U, 9U}));
+  EXPECT_EQ(cols_in(5U, 5U), (std::vector<std::uint32_t>{}));
+  EXPECT_EQ(cols_in(6U, 9U), (std::vector<std::uint32_t>{}));
+  EXPECT_EQ(cols_in(9U, 2U), (std::vector<std::uint32_t>{}));
+  EXPECT_EQ(cols_in(0U, 16384U), (std::vector<std::uint32_t>{3U, 5U, 9U, 16383U}));
+  EXPECT_EQ(cols_in(16383U, 16384U), (std::vector<std::uint32_t>{16383U}));
+  EXPECT_EQ(cols_in(0U, std::uint64_t{1} << 40U), (std::vector<std::uint32_t>{3U, 5U, 9U, 16383U}));
+  EXPECT_EQ(row.count_in(0U, 3U), 0U);
+}
+
+TEST(RowCellsTest, EmptyRowReportsZeroSizeAndOrigin) {
+  RowCells row;
+  EXPECT_TRUE(row.empty());
+  EXPECT_EQ(row.size(), 0U);
+  EXPECT_EQ(row.first_col(), 0U);
+  EXPECT_EQ(row.stored_count(), 0U);
+  EXPECT_EQ(row.find(0U), nullptr);
+  EXPECT_EQ(row.count_in(0U, 16384U), 0U);
+  EXPECT_TRUE(row.entries_in(0U, 16384U).empty());
+  EXPECT_TRUE(row.begin() == row.end());
 }
 
 }  // namespace

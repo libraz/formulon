@@ -1,10 +1,10 @@
 //
-// Workbook sheet model. A `Sheet` owns a display name and a row-sparse,
-// column-dense cell store keyed by 0-based row index. Excel sheets reach
-// 1,048,576 rows by 16,384 columns but are overwhelmingly row-sparse, so
-// a hash map of rows keeps memory proportional to populated rows while
-// per-row dense vectors keep contiguous-range iteration (e.g. `SUM(A1:A100)`
-// or OOXML row serialisation) cheap and cache-friendly.
+// Workbook sheet model. A `Sheet` owns a display name and a sparse cell
+// store keyed by 0-based row index. Excel sheets reach 1,048,576 rows by
+// 16,384 columns but are overwhelmingly sparse, so a hash map of rows holds
+// only populated rows and each row holds only its written columns, in
+// sorted arrays that keep in-order row iteration (e.g. `SUM(A1:A100)` or
+// OOXML row serialisation) cheap and cache-friendly.
 //
 // Sheets also own dynamic-array spill regions: when a formula returns a
 // `Value::Array` it spills into adjacent cells (the formula owns the anchor;
@@ -16,9 +16,11 @@
 #ifndef FORMULON_SHEET_H_
 #define FORMULON_SHEET_H_
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -366,85 +368,175 @@ struct CellAddressHash {
   }
 };
 
-/// One populated row's cells, stored as a contiguous run that begins at
-/// `first_col()` instead of at column 0.
+/// One populated row's cells: a sorted array of column keys and a parallel
+/// array of cells, so a row's memory follows the number of columns written
+/// to it, not the distance between its extreme columns.
 ///
-/// A row's populated columns are usually clustered, but the cluster is not
-/// anchored at column A: a sheet with data in `A:H` and one cell in `CZ` is
-/// ordinary, and so is a row whose only content sits far to the right. A
-/// vector indexed by absolute column materialises every slot from 0, which
-/// makes a sheet's memory scale with its used *width* rather than with its
-/// content — at 88 bytes per `Cell` a single far-right cell costs kilobytes
-/// per row. Carrying the run's own origin removes the leading gap.
+/// Only written columns are stored; a column between two written ones is
+/// absent and `find()` reports it as `nullptr`. Iteration is const and yields
+/// `Entry{col, cell}` in ascending column order; mutation goes through
+/// `find`, `ensure` and the structural edits.
 ///
-/// Only the leading gap. A gap *inside* the run is materialised: `ensure()`
-/// resizes through every slot between the run's current end and the column
-/// being written, so a row holding A1 and XFD1 costs 16,384 `Cell`s. The
-/// worst case is `populated_rows * kMaxCols * sizeof(Cell)`, not
-/// `populated_cells * sizeof(Cell)`.
-///
-/// Reads stay in absolute coordinates. `size()` is one past the highest
-/// stored column and `operator[]` accepts any column below it, answering the
-/// leading gap with a shared blank cell, so a consumer that walks
-/// `0 .. size()` and skips blanks sees exactly what a dense vector gave it.
-/// `find()` (and through it `Sheet::cell_at`) instead reports the gap as
-/// absent, because those slots were never written.
+/// Every column range argument is half-open, `[first, end)`, with a 64-bit
+/// `end` so `last_col + 1` never wraps.
 class RowCells {
  public:
-  /// Absolute column of the first materialised slot. Meaningless when the
-  /// run is empty.
-  std::uint32_t first_col() const noexcept { return first_col_; }
+  /// One stored column and its cell.
+  struct Entry {
+    std::uint32_t col;
+    const Cell& cell;
+  };
 
-  /// One past the highest materialised column, in absolute coordinates.
-  std::size_t size() const noexcept { return run_.empty() ? 0U : static_cast<std::size_t>(first_col_) + run_.size(); }
+  /// Forward iterator over stored columns; dereferences to `Entry` by value.
+  class const_iterator {
+   public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = Entry;
+    using difference_type = std::ptrdiff_t;
+    using pointer = void;
+    using reference = Entry;
 
-  bool empty() const noexcept { return run_.empty(); }
-
-  /// Number of slots actually held in memory, i.e. `size()` minus the
-  /// unmaterialised leading gap.
-  std::size_t stored_count() const noexcept { return run_.size(); }
-
-  /// The cell at absolute column `col`. Columns in the leading gap, and
-  /// columns past the run, read as a shared blank cell.
-  const Cell& operator[](std::size_t col) const noexcept {
-    if (col < first_col_) {
-      return blank();
+    const_iterator() noexcept = default;
+    Entry operator*() const noexcept { return Entry{*col_, *cell_}; }
+    const_iterator& operator++() noexcept {
+      ++col_;
+      ++cell_;
+      return *this;
     }
-    const std::size_t index = col - first_col_;
-    return index < run_.size() ? run_[index] : blank();
-  }
+    const_iterator operator++(int) noexcept {
+      const_iterator prev = *this;
+      ++*this;
+      return prev;
+    }
+    bool operator==(const const_iterator& other) const noexcept { return col_ == other.col_; }
+    bool operator!=(const const_iterator& other) const noexcept { return col_ != other.col_; }
 
-  /// The materialised slot at `col`, or `nullptr` when that column was never
-  /// written.
+   private:
+    friend class RowCells;
+    const_iterator(const std::uint16_t* col, const Cell* cell) noexcept : col_(col), cell_(cell) {}
+
+    const std::uint16_t* col_ = nullptr;
+    const Cell* cell_ = nullptr;
+  };
+
+  /// Lightweight view over a contiguous slice of a row's entries.
+  class EntryRange {
+   public:
+    const_iterator begin() const noexcept { return begin_; }
+    const_iterator end() const noexcept { return end_; }
+    bool empty() const noexcept { return begin_ == end_; }
+
+   private:
+    friend class RowCells;
+    EntryRange(const_iterator b, const_iterator e) noexcept : begin_(b), end_(e) {}
+
+    const_iterator begin_;
+    const_iterator end_;
+  };
+
+  bool empty() const noexcept { return cols_.empty(); }
+
+  /// Number of columns held.
+  std::size_t stored_count() const noexcept { return cols_.size(); }
+
+  /// The cell stored at `col`, or `nullptr` when that column was never written.
   const Cell* find(std::uint32_t col) const noexcept {
-    if (run_.empty() || col < first_col_) {
-      return nullptr;
-    }
-    const std::size_t index = static_cast<std::size_t>(col) - first_col_;
-    return index < run_.size() ? &run_[index] : nullptr;
+    const std::size_t index = index_of(col);
+    return index == kNpos ? nullptr : &cells_[index];
   }
-  Cell* find(std::uint32_t col) noexcept { return const_cast<Cell*>(static_cast<const RowCells*>(this)->find(col)); }
+  Cell* find(std::uint32_t col) noexcept {
+    const std::size_t index = index_of(col);
+    return index == kNpos ? nullptr : &cells_[index];
+  }
 
-  /// Materialises `col` — extending the run in either direction — and returns
-  /// its slot. Existing slots keep their heap-stable `cached_text_owned`
-  /// payload across the move.
+  /// Returns the cell at `col`, inserting a default one when absent. Inserting
+  /// may move the cells to its right; their `cached_text_owned` payload is
+  /// heap-stable across the move.
   Cell& ensure(std::uint32_t col);
 
-  /// Iteration over materialised slots only, in ascending column order.
-  std::vector<Cell>::const_iterator begin() const noexcept { return run_.begin(); }
-  std::vector<Cell>::const_iterator end() const noexcept { return run_.end(); }
+  const_iterator begin() const noexcept { return const_iterator(cols_.data(), cells_.data()); }
+  const_iterator end() const noexcept {
+    return const_iterator(cols_.data() + cols_.size(), cells_.data() + cells_.size());
+  }
 
-  /// Direct access to the run for the structural-edit paths, which rewrite
-  /// both the storage and its origin together.
-  const std::vector<Cell>& run() const noexcept { return run_; }
-  std::vector<Cell>& mutable_run() noexcept { return run_; }
-  void set_first_col(std::uint32_t col) noexcept { first_col_ = col; }
+  /// Stored entries whose column lies in `[first, end)`.
+  EntryRange entries_in(std::uint32_t first, std::uint64_t end) const noexcept {
+    const std::size_t lo = lower_index(first);
+    const std::size_t hi = std::max(lo, lower_index(end));
+    return EntryRange(const_iterator(cols_.data() + lo, cells_.data() + lo),
+                      const_iterator(cols_.data() + hi, cells_.data() + hi));
+  }
+
+  /// Number of stored columns in `[first, end)`.
+  std::size_t count_in(std::uint32_t first, std::uint64_t end) const noexcept {
+    const std::size_t lo = lower_index(first);
+    const std::size_t hi = lower_index(end);
+    return hi > lo ? hi - lo : 0U;
+  }
+
+  /// Adds `count` to every key at or after `col`; keys pushed to `kMaxCols` or
+  /// beyond are dropped with their cells.
+  void shift_cols_from(std::uint32_t col, std::uint32_t count);
+
+  /// Drops the keys in `[col, col + count)` with their cells and subtracts
+  /// `count` from every key after the band.
+  void erase_cols(std::uint32_t col, std::uint32_t count);
+
+  /// Heap bytes reserved by the key and cell arrays.
+  std::size_t capacity_bytes() const noexcept {
+    return cols_.capacity() * sizeof(std::uint16_t) + cells_.capacity() * sizeof(Cell);
+  }
+
+  /// One past the highest stored column; 0 when empty.
+  std::size_t size() const noexcept { return cols_.empty() ? 0U : static_cast<std::size_t>(cols_.back()) + 1U; }
+
+  /// Lowest stored column; 0 when empty.
+  std::uint32_t first_col() const noexcept { return cols_.empty() ? 0U : cols_.front(); }
+
+  /// The cell at `col`, or a shared blank cell when the column is not stored.
+  const Cell& operator[](std::size_t col) const noexcept {
+    const Cell* cell = col < size() ? find(static_cast<std::uint32_t>(col)) : nullptr;
+    return cell != nullptr ? *cell : blank();
+  }
 
  private:
   static const Cell& blank() noexcept;
 
-  std::uint32_t first_col_ = 0;
-  std::vector<Cell> run_;
+  static constexpr std::size_t kNpos = static_cast<std::size_t>(-1);
+
+  /// Index of `col` in `cols_`, or `kNpos`. Tries the dense-prefix guess first.
+  std::size_t index_of(std::uint32_t col) const noexcept {
+    if (cols_.empty() || col < cols_.front()) {
+      return kNpos;
+    }
+    const std::size_t guess = std::min<std::size_t>(col - cols_.front(), cols_.size() - 1U);
+    if (cols_[guess] == col) {
+      return guess;
+    }
+    const auto it = std::lower_bound(cols_.begin(), cols_.begin() + static_cast<std::ptrdiff_t>(guess), col);
+    return (it != cols_.begin() + static_cast<std::ptrdiff_t>(guess) && *it == col)
+               ? static_cast<std::size_t>(it - cols_.begin())
+               : kNpos;
+  }
+
+  /// Index of the first key `>= col`.
+  std::size_t lower_index(std::uint64_t col) const noexcept {
+    if (cols_.empty() || col <= cols_.front()) {
+      return 0U;
+    }
+    if (col > cols_.back()) {
+      return cols_.size();
+    }
+    return static_cast<std::size_t>(std::lower_bound(cols_.begin(), cols_.end(), col,
+                                                     [](std::uint16_t key, std::uint64_t value) {
+                                                       return static_cast<std::uint64_t>(key) < value;
+                                                     }) -
+                                    cols_.begin());
+  }
+
+  std::vector<std::uint16_t> cols_;  // ascending, unique
+  static_assert(a1::kMaxCols - 1U <= std::numeric_limits<std::uint16_t>::max(), "column keys must fit uint16_t");
+  std::vector<Cell> cells_;  // cells_[i] is column cols_[i]
 };
 
 // Private spill-table type defined in sheet.cpp. Only the unique_ptr<>
@@ -477,13 +569,9 @@ class EnumerationRevision {
 /// A single worksheet inside a `Workbook`.
 ///
 /// Owns the worksheet's display name and its cell store. The cell store is
-/// an `unordered_map<row, RowCells>`; each `RowCells` is one contiguous run
-/// that begins at the row's lowest touched column. Rows that have never been
-/// touched are absent from the map, and columns before a row's first touched
-/// one are never materialised — but columns *between* the run's endpoints
-/// are, because growing the run to reach a later column materialises every
-/// slot it passes over. A row's memory therefore follows the distance
-/// between its extreme columns, not its number of populated cells.
+/// an `unordered_map<row, RowCells>`; each `RowCells` holds only the columns
+/// written in that row. Rows that have never been touched are absent from
+/// the map, so memory follows the number of written coordinates.
 class Sheet {
  public:
   /// Excel 365 maximum row count (rows are addressable as 0..kMaxRows-1).
@@ -741,13 +829,10 @@ class Sheet {
   /// Returns a non-owning pointer to the cell at `(row, col)`, or `nullptr`
   /// when the coordinate is not in storage.
   ///
-  /// "Not in storage" means either the row has never been touched (row
-  /// missing from the map) or the row's vector has not been grown to cover
-  /// `col`. A returned pointer may still reference a default-constructed
-  /// `Cell` (empty formula and blank cached value): this happens when the
-  /// column was implicitly created while growing the row vector to cover a
-  /// later column. Callers that need to distinguish "explicitly blank" from
-  /// "implicitly default" should check
+  /// "Not in storage" means the coordinate was never written. A returned
+  /// pointer may still reference a cell with no formula and a blank value:
+  /// a style-only write, `set_cell_value(blank)`, or a cleared cell all keep
+  /// their slot. Callers that need content should check
   /// `cell->formula_text.empty() && cell->cached_value.is_blank()`.
   ///
   /// `cell_at` is intentionally narrow: it does not consult the spill
@@ -756,11 +841,13 @@ class Sheet {
   /// Callers that need the spill-aware effective value should use
   /// `resolve_cell_value` instead.
   ///
-  /// The returned pointer is invalidated by reallocation of the row's `run_`
-  /// — `RowCells::ensure` growing it to reach a column outside the run, and
-  /// the resize / erase that `insert_cols` and `delete_cols` perform — and by
-  /// anything that drops the row itself (`delete_rows`, or an insert that
-  /// pushes it past `kMaxRows`). Every `set_cell_*` entry point can reach
+  /// The returned pointer is invalidated by `RowCells::ensure` of a column the
+  /// row does not hold yet (a middle insert moves later cells, an append may
+  /// reallocate), by `RowCells::shift_cols_from` and `RowCells::erase_cols`
+  /// (`insert_cols` / `delete_cols`), and by anything that drops the row
+  /// itself (`delete_rows`, or an insert that pushes it past `kMaxRows`). A
+  /// stale pointer after a middle insert points at a different live cell, so
+  /// sanitizers cannot catch it. Every `set_cell_*` entry point can reach
   /// `ensure`, so in practice a caller must not retain the pointer across any
   /// mutation of that row.
   ///
@@ -774,13 +861,13 @@ class Sheet {
   /// Convenience predicate equivalent to `cell_at(row, col) != nullptr`.
   bool has_cell(std::uint32_t row, std::uint32_t col) const noexcept;
 
-  /// Total number of materialised `Cell` slots across all populated rows.
+  /// Number of written coordinates plus spill phantoms without a stored slot.
   ///
-  /// Counts every slot a row actually holds, including the implicitly
-  /// default-constructed ones a write to a later column creates between the
-  /// row's first and last populated column. Columns before a row's first
-  /// populated one are not materialised and are not counted. Useful for tests
-  /// and as a coarse memory-footprint indicator.
+  /// A coordinate is written once any value, formula or style setter,
+  /// `set_cell_value(blank)`, or a spill anchor commit / rejection has
+  /// materialised it; clearing keeps the slot, so a cleared cell still
+  /// counts. Unwritten columns between written ones are not stored and are
+  /// not counted.
   std::size_t cell_count() const noexcept;
 
   /// Returns the inclusive bounding box of every populated coordinate that
@@ -905,7 +992,7 @@ class Sheet {
   /// The scan is proportional to what the sheet actually stores inside the
   /// rectangle, not to the rectangle's area: it walks the stored rows or
   /// probes the rectangle's rows, whichever set is smaller, and within a row
-  /// only the materialised run intersected with the column span. A blocker
+  /// only the stored cells inside the column span. A blocker
   /// far outside the populated data — the case that shows the footprint is
   /// the full declared rectangle rather than the used range — is found at
   /// the cost of the cells that exist, not the cells the rectangle spans.
@@ -1497,9 +1584,8 @@ class Sheet {
   /// `spill_region_covering` body; assumes `spill_mutex_` is held.
   const SpillRegion* spill_region_covering_locked(std::uint32_t row, std::uint32_t col) const noexcept;
 
-  /// Number of materialised `Cell` slots inside the half-open rectangle
-  /// `[row_begin, row_end) x [col_begin, col_end)`, counting the implicitly
-  /// default-constructed ones a row's run holds between its endpoints.
+  /// Number of stored `Cell` slots inside the half-open rectangle
+  /// `[row_begin, row_end) x [col_begin, col_end)`.
   /// Walks the stored rows or probes the rectangle's rows, whichever set is
   /// smaller, so a grid-axis-sized rectangle costs what the sheet stores
   /// rather than what the rectangle spans. Caller must hold `spill_mutex_`.

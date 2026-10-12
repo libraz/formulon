@@ -97,6 +97,31 @@ TEST(WorkbookTest, ApproximateMemoryGrowsWithTheCellStore) {
   EXPECT_GT(filled - empty, 500U * sizeof(Cell));
 }
 
+// Writes column 0 and column 16383 on each of `rows` rows, then checks that
+// the sheet stores exactly those cells and that memory follows their number.
+void ExpectFarApartColumnsStayProportional(std::uint32_t rows) {
+  Workbook wb = Workbook::create();
+  const std::size_t empty = wb.approximate_memory_bytes();
+  for (std::uint32_t row = 0; row < rows; ++row) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, row, 0U, Value::number(1.0))));
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, row, Sheet::kMaxCols - 1U, Value::number(2.0))));
+  }
+  const std::size_t cells = 2U * static_cast<std::size_t>(rows);
+  EXPECT_EQ(wb.sheet(0).cell_count(), cells);
+  const std::size_t filled = wb.approximate_memory_bytes();
+  // 64 B per row covers the hash node and the `RowCells` header.
+  const std::size_t bound = 2U * (cells * (sizeof(Cell) + sizeof(std::uint16_t)) + rows * 64U);
+  EXPECT_LE(filled - empty, bound);
+}
+
+TEST(WorkbookTest, FarApartColumnsStoreOnlyWrittenCells) {
+  ExpectFarApartColumnsStayProportional(100U);
+}
+
+TEST(WorkbookTest, FarApartColumnsScaleToFiftyThousandRows) {
+  ExpectFarApartColumnsStayProportional(50000U);
+}
+
 TEST(WorkbookTest, ApproximateMemoryCountsPassthroughPayloads) {
   // Passthrough carries the package's unmodelled binaries — embedded
   // images above all — so a workbook that opens a media-heavy file must
