@@ -22,6 +22,7 @@ import { registerMetadataLayout } from './run_metadata_layout.mjs';
 import { registerPivotRegressions } from './run_pivot_regressions.mjs';
 import { registerPositional } from './run_positional.mjs';
 import { registerSheetPivot } from './run_sheet_pivot.mjs';
+import { registerSparseRows } from './run_sparse_rows.mjs';
 import { registerStyles } from './run_styles.mjs';
 import { registerSurfaceRecalc } from './run_surface_recalc.mjs';
 import { registerThemeStyles } from './run_theme_styles.mjs';
@@ -115,6 +116,7 @@ async function run() {
   registerFilterValidationComments(Module, test);
   registerLayoutValidation(Module, test);
   registerDrawing(Module, test);
+  registerSparseRows(Module, test);
 
   // ---- Run --------------------------------------------------------------
   for (const c of cases) {
