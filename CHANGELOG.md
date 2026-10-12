@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `fm_workbook_cell_count` / `cellCount` and `fm_workbook_cell_at` / `cellAt`
+  / `iter_cells` count and enumerate only the coordinates that were written,
+  plus spill phantoms. A row holding cells far apart, such as A and XFD, no
+  longer stores or counts the empty columns between them, so 50,000 such rows
+  report 100,000 cells instead of aborting in WASM. `insertCols` no longer
+  adds blank cells to the count, and `cellAt` no longer returns a blank cell
+  for a gap. Indices stay dense in `[0, count)` and ordered by `(row, col)`.
+
 ### Fixed
 
 - Saving is deterministic: every zip entry of a saved `.xlsx` / `.xlsb` carries
