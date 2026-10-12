@@ -159,11 +159,9 @@ TEST(SaxSharedFormula, DataTableFormulaFallsBackToCachedValueAndIsCounted) {
   EXPECT_EQ(diagnostics.skipped_feature_count, 1U);
 }
 
-// Mirrors `SheetReader.WideSparseStyledRowRejectedOverCellBudget`: the
-// SAX path must enforce the same cell-materialisation budget as the DOM
-// path, since either can be chosen for the same bytes depending on
-// sheet size (see `read_sheet_data_sax`'s "identical" contract).
-TEST(SaxSharedFormula, WideSparseStyledRowRejectedOverCellBudget) {
+// Mirrors `SheetReader.WideSparseStyledRowStoresOnlyWrittenCells`: the SAX
+// path stores only the written coordinates, like the DOM path.
+TEST(SaxSharedFormula, WideSparseStyledRowStoresOnlyWrittenCells) {
   constexpr std::string_view kXml =
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"
       "<sheetData>\n"
@@ -174,6 +172,27 @@ TEST(SaxSharedFormula, WideSparseStyledRowRejectedOverCellBudget) {
   SheetReadContext ctx;
   ReadDiagnostics diagnostics;
   auto rs = read_sheet_data_sax(SpanOf(kXml), 0U, wb, ctx, text_storage, &diagnostics, /*max_cell_bytes=*/1000U);
+  ASSERT_TRUE(static_cast<bool>(rs)) << (rs ? "" : rs.error().message);
+  EXPECT_EQ(wb.sheet(0).cell_count(), 2U);
+}
+
+// Mirrors `SheetReader.ManyRealCellsRejectedOverCellBudget`: the SAX path
+// enforces the same real-cell budget as the DOM path.
+TEST(SaxSharedFormula, ManyRealCellsRejectedOverCellBudget) {
+  std::string xml =
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"
+      "<sheetData>\n<row r=\"1\">";
+  for (char col = 'A'; col < 'A' + 12; ++col) {
+    xml += "<c r=\"";
+    xml += col;
+    xml += "1\"><v>1</v></c>";
+  }
+  xml += "</row>\n</sheetData></worksheet>\n";
+  Workbook wb = Workbook::create();
+  std::deque<std::string>& text_storage = wb.mutable_text_storage();
+  SheetReadContext ctx;
+  ReadDiagnostics diagnostics;
+  auto rs = read_sheet_data_sax(SpanOf(xml), 0U, wb, ctx, text_storage, &diagnostics, /*max_cell_bytes=*/1000U);
   ASSERT_FALSE(static_cast<bool>(rs));
   EXPECT_EQ(rs.error().code, FormulonErrorCode::kIoFileTooLarge);
 }

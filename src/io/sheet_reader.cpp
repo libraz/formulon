@@ -21,7 +21,6 @@
 #include <cstring>
 #include <deque>
 #include <limits>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -71,43 +70,8 @@ struct SharedFormulaMaster {
   std::uint32_t col = 0;
 };
 
-/// Predicts how many new `Cell` slots a write to `(row, col)` will cost
-/// `RowCells::ensure()`, without reaching into `RowCells` itself -- the
-/// reader only sees `(row, col)` pairs in XML document order, so this
-/// mirrors the run's contiguous-growth rule from the outside: a write to
-/// a new row costs 1 slot, a write outside the row's already-seen
-/// `[min_col, max_col]` span costs the gap it bridges (matching a styled
-/// far-apart pair of cells materialising every slot between them), and a
-/// write inside that span costs nothing (already materialised). Shared
-/// by both the DOM and SAX read paths so each charges the same sheet-load
-/// budget for the same input.
-class RowGrowthTracker {
- public:
-  std::uint64_t charge_for(std::uint32_t row, std::uint32_t col) {
-    if (!row_.has_value() || *row_ != row) {
-      row_ = row;
-      min_col_ = col;
-      max_col_ = col;
-      return 1U;
-    }
-    if (col < min_col_) {
-      const std::uint64_t growth = static_cast<std::uint64_t>(min_col_) - col;
-      min_col_ = col;
-      return growth;
-    }
-    if (col > max_col_) {
-      const std::uint64_t growth = static_cast<std::uint64_t>(col) - max_col_;
-      max_col_ = col;
-      return growth;
-    }
-    return 0U;
-  }
-
- private:
-  std::optional<std::uint32_t> row_;
-  std::uint32_t min_col_ = 0;
-  std::uint32_t max_col_ = 0;
-};
+/// Budget charge for one newly stored coordinate: the cell plus its column key.
+constexpr std::uint64_t kCellChargeBytes = sizeof(Cell) + sizeof(std::uint16_t);
 
 /// Decodes a shared-formula `si` attribute under the shared XSD
 /// non-negative-integer lexer.
@@ -391,11 +355,10 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
   }
 
   std::unordered_map<std::uint32_t, SharedFormulaMaster> shared_formulas;
-  // Charged before every cell materialises, so a row whose two styled
-  // cells sit far apart cannot force `RowCells::ensure()` to allocate
-  // every slot between them unbounded — see `RowGrowthTracker`.
+  // Per-sheet ceiling on real cells: each new coordinate is charged before
+  // it materialises.
   ResourceBudget cell_budget(max_cell_bytes, FormulonErrorCode::kIoFileTooLarge);
-  RowGrowthTracker cell_growth;
+  const Sheet& target_sheet = workbook.sheet(sheet_index);
 
   for (pugi::xml_node row = sheet_data.child("row"); row; row = row.next_sibling("row")) {
     for (pugi::xml_node c = row.child("c"); c; c = c.next_sibling("c")) {
@@ -419,24 +382,18 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
         }
       }
 
-      // Charge before `ApplyParsedCell` materialises: a truly empty cell
-      // (matching its own no-op condition below) never calls
-      // `RowCells::ensure()`, so it must not advance `cell_growth` either
-      // -- otherwise a later real write in the same row would be charged
-      // as if the gap it bridges were smaller than it actually is.
+      // Charge a new coordinate before `ApplyParsedCell` materialises it; a
+      // truly empty cell (matching its no-op condition) is never stored.
       const bool materializes = !formula_text.empty() || !parsed.value.is_blank() || parsed.is_sst_index ||
                                 parsed.xf_index != 0U || parsed.has_explicit_xf;
-      if (materializes) {
-        const std::uint64_t growth = cell_growth.charge_for(parsed.row, parsed.col);
-        if (growth != 0U) {
-          std::string ctxs("context=sheet_reader row=");
-          ctxs.append(std::to_string(parsed.row));
-          ctxs.append(" col=");
-          ctxs.append(std::to_string(parsed.col));
-          auto charged = charge(cell_budget, growth * sizeof(Cell), std::move(ctxs));
-          if (!charged) {
-            return std::move(charged.error());
-          }
+      if (materializes && !target_sheet.has_cell(parsed.row, parsed.col)) {
+        std::string ctxs("context=sheet_reader row=");
+        ctxs.append(std::to_string(parsed.row));
+        ctxs.append(" col=");
+        ctxs.append(std::to_string(parsed.col));
+        auto charged = charge(cell_budget, kCellChargeBytes, std::move(ctxs));
+        if (!charged) {
+          return std::move(charged.error());
         }
       }
 
@@ -497,7 +454,6 @@ struct SaxApplyState {
   // Mirrors the DOM path's per-sheet cell-materialisation budget (see
   // `read_sheet_data`), so the two loaders enforce the same ceiling.
   ResourceBudget cell_budget;
-  RowGrowthTracker cell_growth;
 };
 
 /// Resolves a SAX `CellRecord`'s `<f>` into the effective formula text
@@ -549,8 +505,7 @@ Expected<std::string, Error> ResolveSharedFromRecord(const CellRecord& rec,
 Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_index, Workbook& workbook,
                                       SheetReadContext& ctx, std::deque<std::string>& text_storage,
                                       std::unordered_map<std::uint32_t, SharedFormulaMaster>& shared,
-                                      ReadDiagnostics* diagnostics, ResourceBudget& cell_budget,
-                                      RowGrowthTracker& cell_growth) {
+                                      ReadDiagnostics* diagnostics, ResourceBudget& cell_budget) {
   const bool value_present = rec.is_inline_string || !rec.value.empty();
   ASSIGN_OR_RETURN(auto payload,
                    decode_cell_payload(rec.t, rec.value, value_present, rec.is_inline_string, text_storage));
@@ -583,22 +538,17 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   ASSIGN_OR_RETURN(auto formula, ResolveSharedFromRecord(rec, shared));
   const std::string& formula_text = formula;
 
-  // Charge before `ApplyParsedCell` materialises -- mirrors the DOM
-  // path's placement and no-op guard exactly (see `read_sheet_data`), so
-  // a truly empty record never advances `cell_growth`.
+  // Mirrors the DOM path's placement and no-op guard (see `read_sheet_data`).
   const bool materializes =
       !formula_text.empty() || !parsed.value.is_blank() || parsed.is_sst_index || xf != 0U || cell.has_explicit_xf;
-  if (materializes) {
-    const std::uint64_t growth = cell_growth.charge_for(rec.row, rec.col);
-    if (growth != 0U) {
-      std::string ctxs("context=sheet_reader_sax row=");
-      ctxs.append(std::to_string(rec.row));
-      ctxs.append(" col=");
-      ctxs.append(std::to_string(rec.col));
-      auto charged = charge(cell_budget, growth * sizeof(Cell), std::move(ctxs));
-      if (!charged) {
-        return std::move(charged.error());
-      }
+  if (materializes && !workbook.sheet(sheet_index).has_cell(rec.row, rec.col)) {
+    std::string ctxs("context=sheet_reader_sax row=");
+    ctxs.append(std::to_string(rec.row));
+    ctxs.append(" col=");
+    ctxs.append(std::to_string(rec.col));
+    auto charged = charge(cell_budget, kCellChargeBytes, std::move(ctxs));
+    if (!charged) {
+      return std::move(charged.error());
     }
   }
   // Inline-string cells with <rPh> annotations carry their kana on the
@@ -627,7 +577,7 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
 Expected<void, Error> SaxOnCellTrampoline(void* user_data, const CellRecord& rec) {
   auto* st = static_cast<SaxApplyState*>(user_data);
   return ApplyCellRecord(rec, st->sheet_index, *st->workbook, *st->ctx, *st->text_storage, st->shared_formulas,
-                         st->diagnostics, st->cell_budget, st->cell_growth);
+                         st->diagnostics, st->cell_budget);
 }
 
 // Captures per-row overrides on the SAX path, mirroring the DOM
@@ -689,8 +639,7 @@ Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_
                       &text_storage,
                       {},
                       diagnostics,
-                      ResourceBudget(max_cell_bytes, FormulonErrorCode::kIoFileTooLarge),
-                      {}};
+                      ResourceBudget(max_cell_bytes, FormulonErrorCode::kIoFileTooLarge)};
   SheetSaxCallbacks cb;
   cb.user_data = &state;
   cb.on_row_start = &SaxOnRowStartTrampoline;

@@ -496,12 +496,9 @@ TEST(SheetReader, CellStyleIndexPastCellXfsFallsBackToDefault) {
   EXPECT_EQ(sheet.cell_at(0U, 1U)->xf_index, 0U);
 }
 
-// Two styled cells far apart force `RowCells::ensure()` to materialise
-// every slot between them (`sheet.h`'s documented worst case). A tiny
-// injected budget catches this without needing a real multi-hundred-MB
-// fixture -- mirrors the finding's own PoC shape (styled cells at the
-// row's two ends).
-TEST(SheetReader, WideSparseStyledRowRejectedOverCellBudget) {
+// A row holding only its two far-apart ends stores two cells, not the span
+// between them.
+TEST(SheetReader, WideSparseStyledRowStoresOnlyWrittenCells) {
   const char* xml =
       "<worksheet><sheetData>"
       "<row r=\"1\"><c r=\"A1\" s=\"1\"><v>1</v></c><c r=\"XFD1\" s=\"1\"><v>2</v></c></row>"
@@ -514,14 +511,34 @@ TEST(SheetReader, WideSparseStyledRowRejectedOverCellBudget) {
   std::deque<std::string> text_storage;
   ReadDiagnostics diagnostics;
   auto rs = read_sheet_data(doc, 0U, wb, ctx, text_storage, &diagnostics, /*max_cell_bytes=*/1000U);
+  ASSERT_TRUE(static_cast<bool>(rs)) << rs.error().message;
+  EXPECT_EQ(wb.sheet(0).cell_count(), 2U);
+}
+
+// The budget bounds real cells: 12 distinct coordinates exceed 1000 bytes.
+TEST(SheetReader, ManyRealCellsRejectedOverCellBudget) {
+  std::string xml = "<worksheet><sheetData><row r=\"1\">";
+  for (char col = 'A'; col < 'A' + 12; ++col) {
+    xml += "<c r=\"";
+    xml += col;
+    xml += "1\"><v>1</v></c>";
+  }
+  xml += "</row></sheetData></worksheet>";
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(xml.c_str()));
+
+  Workbook wb = Workbook::create();
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+  ReadDiagnostics diagnostics;
+  auto rs = read_sheet_data(doc, 0U, wb, ctx, text_storage, &diagnostics, /*max_cell_bytes=*/1000U);
   ASSERT_FALSE(static_cast<bool>(rs));
   EXPECT_EQ(rs.error().code, FormulonErrorCode::kIoFileTooLarge);
 }
 
 // Bare `<c>` elements with no value, style, or formula never call
 // `RowCells::ensure()` (`ApplyParsedCell`'s own no-op path), so charging
-// for the gap between them would reject a load that costs the sheet
-// nothing at all.
+// them would reject a load that costs the sheet nothing at all.
 TEST(SheetReader, TrulyEmptySparseCellsDoNotConsumeTheCellBudget) {
   const char* xml =
       "<worksheet><sheetData>"

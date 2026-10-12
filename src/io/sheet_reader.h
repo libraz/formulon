@@ -111,9 +111,8 @@ Expected<void, Error> RegisterArraySpills(Sheet& sheet, const std::vector<ArrayA
 /// must be `< workbook.sheet_count()`. Returns `kIoSheetCorrupt` on any
 /// malformed cell or on bookkeeping inconsistencies (a slave shared
 /// formula that references an unknown `si` is a hard error). Returns
-/// `kIoFileTooLarge` once the cumulative `Cell` storage the walk would
-/// materialise -- including the gap-filled slots a styled-but-sparse row
-/// forces between its written columns -- exceeds `max_cell_bytes`
+/// `kIoFileTooLarge` once the cumulative storage of the distinct
+/// coordinates the walk would materialise exceeds `max_cell_bytes`
 /// (default `kMaxSheetLoadCellBytes`; tests inject a smaller value, the
 /// same pattern `zip_reader.h`'s `open()` uses for its own budget).
 ///
@@ -185,7 +184,7 @@ constexpr std::size_t kSaxThresholdBytes = 256U * 1024U;
 ///
 /// `diagnostics` and `max_cell_bytes` mirror `read_sheet_data`'s
 /// parameters of the same name, including the `<f t="dataTable">` skip
-/// count and the cell-materialisation budget -- required for the two
+/// count and the real-cell budget -- required for the two
 /// paths' "identical" contract above to hold on diagnostics and on
 /// rejection, not just on the workbook mutations of a load that succeeds.
 Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_index, Workbook& workbook,
