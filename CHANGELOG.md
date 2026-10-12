@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-10-12
+
 ### Changed
 
 - `fm_workbook_cell_count` / `cellCount` and `fm_workbook_cell_at` / `cellAt`
@@ -26,6 +28,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   return only the XFs some cell of the selection resolves to. A selection
   wholly covered by cells with their own style no longer reports XF 0, and a
   column style shadowed by row styles everywhere is no longer listed.
+- A `.xlsx` sheet whose rows hold styled cells far apart no longer fails to
+  load as too large. The per-sheet load budget charges each stored cell, which
+  admits about 2.98 million cells per sheet.
+
+### Performance
+
+- Saving to `.xlsx` / `.xlsb`, recalculation indexing, reference rewriting and
+  row or column edits walk only a row's stored cells, so a row with cells far
+  apart no longer costs its full column width.
 
 ## [0.15.0] - 2026-10-12
 
@@ -2495,7 +2506,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.15.1...HEAD
+[0.15.1]: https://github.com/libraz/formulon/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/libraz/formulon/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/libraz/formulon/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/libraz/formulon/compare/v0.12.0...v0.13.0
