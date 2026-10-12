@@ -119,6 +119,49 @@ class EffectiveStyleTests(unittest.TestCase):
         self.assertEqual(style.font_index, font)
 
 
+class ClearCellXfIndexTests(unittest.TestCase):
+    def test_clear_restores_inheritance(self) -> None:
+        with Workbook.create_default() as wb:
+            font = wb.add_font(FontRecord(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
+            col_xf = wb.add_cell_xf(_xf(font))
+            cell_xf = wb.add_cell_xf(_xf(font))
+            wb.set_column_style(0, 0, 0, col_xf)
+
+            wb.set_cell_xf_index(0, 0, 0, cell_xf)
+            style = wb.get_effective_style(0, 0, 0)
+            self.assertEqual((style.source, style.xf_index), (EffectiveStyleSource.CELL, cell_xf))
+
+            wb.clear_cell_xf_index(0, 0, 0)
+            style = wb.get_effective_style(0, 0, 0)
+            self.assertEqual((style.source, style.xf_index), (EffectiveStyleSource.COLUMN, col_xf))
+
+            wb.set_cell_xf_index(0, 0, 0, 0)
+            style = wb.get_effective_style(0, 0, 0)
+            self.assertEqual((style.source, style.xf_index), (EffectiveStyleSource.CELL, 0))
+
+    def test_absent_cell_is_noop(self) -> None:
+        with Workbook.create_default() as wb:
+            font = wb.add_font(FontRecord(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
+            col_xf = wb.add_cell_xf(_xf(font))
+            wb.set_column_style(0, 0, 0, col_xf)
+            wb.clear_cell_xf_index(0, 5, 0)
+            wb.clear_cell_xf_index(0, 0, 0)
+            style = wb.get_effective_style(0, 0, 0)
+            self.assertEqual((style.source, style.xf_index), (EffectiveStyleSource.COLUMN, col_xf))
+            with self.assertRaises(FormulonError):
+                wb.clear_cell_xf_index(99, 0, 0)
+
+    def test_value_is_kept(self) -> None:
+        with Workbook.create_default() as wb:
+            font = wb.add_font(FontRecord(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
+            xf = wb.add_cell_xf(_xf(font))
+            wb.set_number(0, 0, 0, 7.0)
+            wb.set_cell_xf_index(0, 0, 0, xf)
+            wb.clear_cell_xf_index(0, 0, 0)
+            self.assertEqual(wb.get_value(0, 0, 0).number, 7.0)
+            self.assertEqual(wb.get_cell_xf_index(0, 0, 0), 0)
+
+
 class NamedStyleTests(unittest.TestCase):
     def test_set_and_remove_cell_style(self) -> None:
         with Workbook.create_default() as wb:

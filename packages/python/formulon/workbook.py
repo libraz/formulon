@@ -6364,6 +6364,20 @@ class Workbook:
             "fm_cell_set_xf_index",
         )
 
+    def clear_cell_xf_index(self, sheet: int, row: int, col: int) -> None:
+        """Remove the direct style assignment from the cell at ``(row, col)``.
+
+        A blank cell inherits the row / column style again; value, formula and
+        comments are kept. An absent cell is a no-op. A non-blank cell keeps
+        owning the default xf. Use the ``source`` of :meth:`get_effective_style`
+        to tell an unassigned cell from one directly assigned the Normal xf.
+        """
+        h = self._require()
+        _check(
+            LIB.fm_cell_clear_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col")),
+            "fm_cell_clear_xf_index",
+        )
+
     def set_range_xf_index(
         self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int, xf_index: int
     ) -> None:

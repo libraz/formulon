@@ -387,3 +387,114 @@ TEST(FormulonCApiStyles, XfProtectionDistinguishesDedup) {
   EXPECT_EQ(got.locked, 1);
   EXPECT_EQ(got.hidden, 0);
 }
+
+TEST(FormulonCApiStyles, ClearXfIndexRestoresColumnInheritance) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  wb.handle->workbook().mutable_styles().cell_xfs.resize(3);
+  ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0, 0, 1), 0);
+
+  fm_effective_style style{};
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0, 0, 2), 0);
+  ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 0, 0, &style), 0);
+  EXPECT_EQ(style.source, 0);
+  EXPECT_EQ(style.xf_index, 2U);
+
+  ASSERT_EQ(fm_cell_clear_xf_index(wb.handle, 0, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 0, 0, &style), 0);
+  EXPECT_EQ(style.source, 2);
+  EXPECT_EQ(style.xf_index, 1U);
+
+  // A direct Normal assignment is not the same state as a cleared one.
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 0, 0, &style), 0);
+  EXPECT_EQ(style.source, 0);
+  EXPECT_EQ(style.xf_index, 0U);
+
+  // The cleared cell follows a later column restyle.
+  ASSERT_EQ(fm_cell_clear_xf_index(wb.handle, 0, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0, 0, 2), 0);
+  ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 0, 0, &style), 0);
+  EXPECT_EQ(style.source, 2);
+  EXPECT_EQ(style.xf_index, 2U);
+}
+
+TEST(FormulonCApiStyles, ClearXfIndexRestoresRowAndDefaultInheritance) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  wb.handle->workbook().mutable_styles().cell_xfs.resize(3);
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 4, 1), 0);
+  fm_effective_style style{};
+
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 4, 3, 2), 0);
+  ASSERT_EQ(fm_cell_clear_xf_index(wb.handle, 0, 4, 3), 0);
+  ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 4, 3, &style), 0);
+  EXPECT_EQ(style.source, 1);
+  EXPECT_EQ(style.xf_index, 1U);
+
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 7, 3, 2), 0);
+  ASSERT_EQ(fm_cell_clear_xf_index(wb.handle, 0, 7, 3), 0);
+  ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 7, 3, &style), 0);
+  EXPECT_EQ(style.source, 3);
+  EXPECT_EQ(style.xf_index, 0U);
+}
+
+TEST(FormulonCApiStyles, ClearXfIndexKeepsValueAndFormula) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  wb.handle->workbook().mutable_styles().cell_xfs.resize(3);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 5.0), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 1, "=A1*2"), 0);
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0, 0, 2), 0);
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0, 1, 2), 0);
+  ASSERT_EQ(fm_cell_clear_xf_index(wb.handle, 0, 0, 0), 0);
+  ASSERT_EQ(fm_cell_clear_xf_index(wb.handle, 0, 0, 1), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  const formulon::Sheet& sheet = wb.handle->workbook().sheet(0);
+  ASSERT_NE(sheet.cell_at(0, 0), nullptr);
+  EXPECT_EQ(sheet.cell_at(0, 0)->cached_value.as_number(), 5.0);
+  ASSERT_NE(sheet.cell_at(0, 1), nullptr);
+  EXPECT_EQ(sheet.cell_at(0, 1)->formula_text, "=A1*2");
+  EXPECT_EQ(sheet.cell_at(0, 1)->cached_value.as_number(), 10.0);
+  // A value cell owns its style, so a cleared one is a cell-sourced Normal.
+  fm_effective_style style{};
+  ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 0, 0, &style), 0);
+  EXPECT_EQ(style.source, 0);
+  EXPECT_EQ(style.xf_index, 0U);
+}
+
+TEST(FormulonCApiStyles, ClearXfIndexOnAbsentCellIsNoOp) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_cell_clear_xf_index(wb.handle, 0, 9, 9), 0);
+  EXPECT_EQ(wb.handle->workbook().sheet(0).cell_at(9, 9), nullptr);
+}
+
+TEST(FormulonCApiStyles, ClearXfIndexRejectsBadArguments) {
+  EXPECT_EQ(fm_cell_clear_xf_index(nullptr, 0, 0, 0),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(fm_cell_clear_xf_index(wb.handle, 99, 0, 0), invalid);
+  EXPECT_EQ(fm_cell_clear_xf_index(wb.handle, 0, formulon::Sheet::kMaxRows, 0), invalid);
+}
+
+TEST(FormulonCApiStyles, ClearedCellKeepsInheritanceAcrossSaveLoad) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  wb.handle->workbook().mutable_styles().cell_xfs.resize(3);
+  ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0, 0, 1), 0);
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0, 0, 2), 0);
+  ASSERT_EQ(fm_cell_clear_xf_index(wb.handle, 0, 0, 0), 0);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  fm_effective_style style{};
+  ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 0, &style), 0);
+  EXPECT_EQ(style.source, 2);
+  EXPECT_EQ(style.xf_index, 1U);
+}

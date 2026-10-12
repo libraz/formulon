@@ -223,6 +223,7 @@ fm_workbook_spill_info
 # -- Styles ----------------------------------------------------------------------
 fm_cell_get_xf_index
 fm_cell_set_xf_index
+fm_cell_clear_xf_index
 fm_styles_get_cell_xf
 fm_styles_get_font
 fm_styles_get_fill

@@ -1689,4 +1689,11 @@ Expected<void, Error> Workbook::set_cell_xf_index(std::size_t sheet_index, std::
   return Expected<void, Error>::Ok();
 }
 
+Expected<void, Error> Workbook::clear_cell_xf_index(std::size_t sheet_index, std::uint32_t row, std::uint32_t col) {
+  RETURN_IF_ERROR(check_cell_target("clear_cell_xf_index", sheet_index, sheets_.size(), row, col));
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  sheets_[sheet_index].clear_cell_xf_index(row, col);
+  return Expected<void, Error>::Ok();
+}
+
 }  // namespace formulon

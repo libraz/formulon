@@ -20,6 +20,7 @@
 # `static_assert(sizeof(...))` tripwires in the C ABI tests.
 
 void fm_buffer_free(uint8_t*)
+fm_status_t fm_cell_clear_xf_index(fm_workbook_t*, uint32_t, uint32_t, uint32_t)
 fm_status_t fm_cell_get_xf_index(fm_workbook_t*, uint32_t, uint32_t, uint32_t, uint32_t*)
 fm_status_t fm_cell_nodes_at(const fm_cell_nodes_t*, size_t, fm_cell_node_t*)
 size_t fm_cell_nodes_count(const fm_cell_nodes_t*)

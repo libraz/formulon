@@ -88,6 +88,7 @@ class SurfaceParityTests(unittest.TestCase):
         "clear_conditional_formats",
         "get_cell_xf_index",
         "set_cell_xf_index",
+        "clear_cell_xf_index",
         "get_cell_xf",
         "get_font",
         "get_fill",

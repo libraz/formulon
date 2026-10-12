@@ -67,6 +67,18 @@ extern "C" fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, u
   return 0;
 }
 
+extern "C" fm_status_t fm_cell_clear_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cell_clear_xf_index: wb is NULL");
+  }
+  auto r = wb->workbook().clear_cell_xf_index(sheet, row, col);
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
 extern "C" fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t first_row,
                                                    uint32_t first_col, uint32_t last_row, uint32_t last_col,
                                                    uint32_t xf_index) {

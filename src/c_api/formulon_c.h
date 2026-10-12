@@ -6045,6 +6045,24 @@ FM_API fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, uint3
                                         uint32_t xf_index);
 
 /**
+ * @brief Removes the direct style assignment from the cell at `(row, col)`
+ *        on `sheet`, so a blank cell inherits its row / column style again.
+ *
+ * Resets the cell's `xf_index` to `0` and drops the explicit-assignment
+ * mark; the value, formula, phonetic runs and comments are kept. An
+ * absent cell is left absent (no-op). A cell holding a value or formula
+ * still owns its style, which becomes the default xf; only a blank cell
+ * falls back to row / column / default inheritance. Tell an unassigned
+ * cell from one assigned the default xf through the `source` of
+ * `fm_sheet_get_effective_style`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` or the address is out of range.
+ */
+FM_API fm_status_t fm_cell_clear_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col);
+
+/**
  * @brief Stores `xf_index` on every cell in the inclusive rectangle
  *        `[(first_row, first_col), (last_row, last_col)]`.
  *

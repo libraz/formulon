@@ -187,6 +187,7 @@ class FormulonError(Exception):
 # {tools/wasm/capi_exports.txt}. Keep this literal so the drift checker can
 # validate the binding without importing this module (or wasmtime).
 _STATUS_RETURNING_EXPORT_NAMES = (
+    "fm_cell_clear_xf_index",
     "fm_cell_get_xf_index",
     "fm_cell_nodes_at",
     "fm_cell_range_at",

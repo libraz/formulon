@@ -729,6 +729,11 @@ class Sheet {
   /// inheritance while an unrelated row-vector gap continues to inherit.
   void set_cell_xf_index(std::uint32_t row, std::uint32_t col, std::uint32_t xf_index);
 
+  /// Resets the cell at `(row, col)` to xf 0 with no explicit assignment,
+  /// leaving every other field intact. A blank cell then inherits row /
+  /// column style again; an absent cell is not materialised.
+  void clear_cell_xf_index(std::uint32_t row, std::uint32_t col);
+
   /// Returns a non-owning pointer to the cell at `(row, col)`, or `nullptr`
   /// when the coordinate is not in storage.
   ///

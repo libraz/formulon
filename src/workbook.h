@@ -1016,6 +1016,12 @@ class Workbook {
   Expected<void, Error> set_cell_xf_index(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                           std::uint32_t xf_index);
 
+  /// Drops the cell-level style assignment at `(row, col)` without touching
+  /// value, formula, phonetic or comment state, so a blank cell inherits
+  /// its row / column style again. An absent cell stays absent. Returns
+  /// `kInvalidArgument` for an out-of-range sheet or address.
+  Expected<void, Error> clear_cell_xf_index(std::size_t sheet_index, std::uint32_t row, std::uint32_t col);
+
   // ---------------------------------------------------------------------------
   // Row / column structural edits
   // ---------------------------------------------------------------------------
