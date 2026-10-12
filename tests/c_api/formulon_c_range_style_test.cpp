@@ -189,6 +189,36 @@ TEST(FormulonCApiRangeStyle, BasesListEveryXfTheSelectionResolvesTo) {
   EXPECT_EQ(xfs, (std::vector<std::uint32_t>{0U, 1U, 4U}));
 }
 
+std::vector<std::uint32_t> Bases(const WorkbookGuard& wb, std::uint32_t first_row, std::uint32_t first_col,
+                                 std::uint32_t last_row, std::uint32_t last_col) {
+  std::vector<std::uint32_t> xfs(16U);
+  size_t len = 0;
+  EXPECT_EQ(
+      fm_sheet_range_style_bases(wb.handle, 0, first_row, first_col, last_row, last_col, xfs.data(), xfs.size(), &len),
+      0);
+  xfs.resize(len);
+  return xfs;
+}
+
+TEST(FormulonCApiRangeStyle, BasesOmitStylesNoCellResolvesTo) {
+  WorkbookGuard wb;
+  MakeWorkbook(wb);
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 2U, 2U, 1U), 0);
+  EXPECT_EQ(Bases(wb, 2U, 2U, 2U, 2U), (std::vector<std::uint32_t>{1U}));
+  EXPECT_EQ(Bases(wb, 2U, 2U, 2U, 3U), (std::vector<std::uint32_t>{0U, 1U}));
+
+  // A row style shadows the column style wherever both cover a cell.
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 5U, 6U, 3U), 0);
+  ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 4U, 4U, 2U), 0);
+  EXPECT_EQ(Bases(wb, 5U, 4U, 6U, 4U), (std::vector<std::uint32_t>{3U}));
+  EXPECT_EQ(Bases(wb, 5U, 4U, 7U, 4U), (std::vector<std::uint32_t>{2U, 3U}));
+
+  // Owning cells covering a whole styled row leave the row style unused.
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 5U, 4U, 4U), 0);
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 6U, 4U, 4U), 0);
+  EXPECT_EQ(Bases(wb, 5U, 4U, 6U, 4U), (std::vector<std::uint32_t>{4U}));
+}
+
 TEST(FormulonCApiRangeStyle, SnapshotRestoresPriorInheritance) {
   WorkbookGuard wb;
   MakeWorkbook(wb);

@@ -5954,12 +5954,11 @@ class Workbook:
         )
 
     def range_style_bases(self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int) -> List[int]:
-        """List, ascending, every cell XF a cell of the selection may resolve to.
+        """List, ascending, every cell XF some cell of the selection resolves to.
 
         The rectangle is a selection: full height is a column selection, full
-        width a row selection, both the whole sheet, neither a cell range. The
-        list may be a superset of what is actually used. It is the first step of
-        an attribute patch (for example a font size over a selection): read the
+        width a row selection, both the whole sheet, neither a cell range. It
+        is the first step of an attribute patch (for example a font size over a selection): read the
         bases, build a patched XF for each with :meth:`add_font` /
         :meth:`add_cell_xf`, then apply them with :meth:`remap_range_style`.
         """

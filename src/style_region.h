@@ -56,8 +56,8 @@ void set_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t 
 /// with no other state is dropped.
 void clear_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t last);
 
-/// Every xf a cell of `rect` may resolve to, ascending: xf 0, the styles of
-/// the rows and columns the rect covers, and the xfs of its owning cells.
+/// Every xf some cell of `rect` resolves to, ascending: the xfs of its owning
+/// cells, then the row, column or default (0) style of any cell left over.
 std::vector<std::uint32_t> range_style_bases(const Sheet& sheet, const StyleRect& rect);
 
 /// Rewrites the selection so each cell resolves to `map(its xf before)`;

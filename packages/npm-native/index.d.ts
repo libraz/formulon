@@ -3067,8 +3067,8 @@ export interface Workbook {
   /** Removes the cell-style XF of the inclusive row span `first..last`, retaining other row attributes. */
   clearRowStyle(sheet: number, first: number, last: number): Status;
   /**
-   * Lists, ascending, every cell-XF index a cell of the selection may resolve to: 0, the
-   * covered row and column styles, and the XFs of cells that carry their own. The rect
+   * Lists, ascending, every cell-XF index some cell of the selection resolves to: the XFs of
+   * cells that carry their own, then the row, column or default (0) style of the rest. The rect
    * `(firstRow, firstCol)..(lastRow, lastCol)` is a selection: all rows make it a column
    * selection, all columns a row selection, both the whole sheet.
    *

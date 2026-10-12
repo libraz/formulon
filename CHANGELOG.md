@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Saving is deterministic: every zip entry of a saved `.xlsx` / `.xlsb` carries
+  the fixed timestamp 1980-01-01 00:00 instead of the save time, so an
+  unchanged workbook saves to identical bytes.
+- `fm_sheet_range_style_bases` / `rangeStyleBases` / `range_style_bases`
+  return only the XFs some cell of the selection resolves to. A selection
+  wholly covered by cells with their own style no longer reports XF 0, and a
+  column style shadowed by row styles everywhere is no longer listed.
+
 ## [0.15.0] - 2026-10-12
 
 ### BREAKING

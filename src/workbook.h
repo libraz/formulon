@@ -1023,7 +1023,7 @@ class Workbook {
   /// `kInvalidArgument` for an out-of-range sheet or address.
   Expected<void, Error> clear_cell_xf_index(std::size_t sheet_index, std::uint32_t row, std::uint32_t col);
 
-  /// Every xf a cell of `rect` may resolve to, ascending (see
+  /// Every xf some cell of `rect` resolves to, ascending (see
   /// `formulon::range_style_bases`). `kInvalidArgument` for a bad sheet or
   /// a rect outside the grid or with `first > last`.
   Expected<std::vector<std::uint32_t>, Error> range_style_bases(std::size_t sheet_index, const StyleRect& rect) const;

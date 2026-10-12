@@ -208,18 +208,38 @@ void clear_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_
 }
 
 std::vector<std::uint32_t> range_style_bases(const Sheet& sheet, const StyleRect& rect) {
-  std::vector<std::uint32_t> out{0U};
-  for (const RowStyle& row : styled_rows(sheet.layout(), rect.first_row, rect.last_row)) {
-    out.push_back(row.xf);
+  const std::vector<RowStyle> rows = styled_rows(sheet.layout(), rect.first_row, rect.last_row);
+  const std::vector<ColumnSegment> cols = column_segments(sheet.layout(), rect.first_col, rect.last_col);
+  // Owning cells per styled row, and per column segment across the unstyled rows.
+  std::vector<std::uint64_t> owned_in_row(rows.size(), 0U);
+  std::vector<std::uint64_t> owned_in_col(cols.size(), 0U);
+  std::vector<std::uint32_t> out;
+  for (const CapturedCell& cell : stored_cells(sheet, rect)) {
+    if (!cell.explicit_xf) {
+      continue;
+    }
+    out.push_back(cell.xf);
+    const auto row_it = std::lower_bound(rows.begin(), rows.end(), cell.row,
+                                         [](const RowStyle& row, std::uint32_t key) { return row.row < key; });
+    if (row_it != rows.end() && row_it->row == cell.row) {
+      ++owned_in_row[static_cast<std::size_t>(row_it - rows.begin())];
+      continue;
+    }
+    const auto col_it = std::upper_bound(cols.begin(), cols.end(), cell.col,
+                                         [](std::uint32_t key, const ColumnSegment& seg) { return key < seg.first; });
+    ++owned_in_col[static_cast<std::size_t>(col_it - cols.begin()) - 1U];
   }
-  for (const ColumnSegment& seg : column_segments(sheet.layout(), rect.first_col, rect.last_col)) {
-    if (seg.styled) {
-      out.push_back(seg.xf);
+  const std::uint64_t width = static_cast<std::uint64_t>(rect.last_col - rect.first_col) + 1U;
+  for (std::size_t i = 0; i < rows.size(); ++i) {
+    if (owned_in_row[i] < width) {
+      out.push_back(rows[i].xf);
     }
   }
-  for (const CapturedCell& cell : stored_cells(sheet, rect)) {
-    if (cell.explicit_xf) {
-      out.push_back(cell.xf);
+  const std::uint64_t bare_rows = static_cast<std::uint64_t>(rect.last_row - rect.first_row) + 1U - rows.size();
+  for (std::size_t i = 0; i < cols.size(); ++i) {
+    const std::uint64_t area = bare_rows * (static_cast<std::uint64_t>(cols[i].last - cols[i].first) + 1U);
+    if (owned_in_col[i] < area) {
+      out.push_back(cols[i].styled ? cols[i].xf : 0U);
     }
   }
   sort_ascending(out);

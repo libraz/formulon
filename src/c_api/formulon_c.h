@@ -5372,9 +5372,9 @@ FM_API fm_status_t fm_sheet_clear_row_style(fm_workbook_t* wb, size_t sheet_inde
  */
 
 /**
- * @brief Lists every cell-XF index a cell of the selection may resolve to,
- *        ascending: 0, the covered row and column styles, and the XFs of
- *        cells that carry their own.
+ * @brief Lists every cell-XF index some cell of the selection resolves to,
+ *        ascending: the XFs of cells that carry their own, then the row,
+ *        column or default (0) style of the rest.
  *
  * `*out_len` always receives the number of indices; at most `cap` are
  * written. Call with `cap == 0` (`out_xfs` may then be `NULL`) to size the
