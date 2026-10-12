@@ -81,6 +81,8 @@ with formulon.Workbook.create_default() as wb:
 
 The ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. Every `mac-*` profile and `win-365-ja_JP` is measured against Excel; the other `win-*` profiles are estimated from the Mac measurements. On a `mac-*` profile, text comparison, sorting, lookups and grouping follow that locale's measured Mac Excel collation; `win-*` profiles compare text case-insensitively by bytes, because Windows ordering is not measured. The profile is not saved into the file, so store the id your application targets and apply it again after loading.
 
+For a new workbook that matches what Excel creates in a locale, use `Workbook.create_for_profile(id)` instead of `create_default`: it selects the profile and also sets the body and phonetic fonts, the localized Normal style and first sheet names, and the page margins Excel uses there.
+
 ## Non-goals
 
 VBA execution, legacy `.xls`, chart rendering, Power Query / DAX, pivot cache refresh from source data, live external connections, and a spreadsheet UI are permanently out of scope. See [Non-goals](https://formulon.libraz.net/compatibility/non-goals).

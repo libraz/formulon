@@ -85,7 +85,8 @@ method list; the categories below summarise what is registered on the
 
 ```
 Static factories
-  Workbook.createDefault(), createEmpty(), loadBytes(bytes)
+  Workbook.createDefault(), createEmpty(), createForProfile(profileId),
+  loadBytes(bytes)
 
 Cells & recalc
   dispose, memoryUsage
@@ -114,9 +115,11 @@ Sheet view / layout / protection
   getSheetProtection, setSheetProtection
   getSheetColumns, setColumnWidth, setColumnHidden, setColumnOutline
   getSheetRowOverrides, setRowHeight, setRowHidden, setRowOutline
+  setColumnStyle, clearColumnStyle, setRowStyle, clearRowStyle
+  rangeStyleBases, remapRangeStyle, snapshotRangeStyle, restoreRangeStyle
 
 Styles
-  getCellXfIndex, setCellXfIndex, getCellXf,
+  getCellXfIndex, setCellXfIndex, clearCellXfIndex, getCellXf,
   getFont, getFill, getBorder, getNumFmt
   addFont, addFill, addBorder, addNumFmt, addXf
   fontCount, fillCount, borderCount, xfCount
