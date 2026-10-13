@@ -60,6 +60,8 @@ fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, std::ostream& out
     if (auto rc = fm_workbook_sheet_name(wb, s, &sheet_name); rc != 0) {
       return rc;
     }
+    const std::string escaped_sheet_name =
+        escape_single_line(sheet_name != nullptr ? std::string_view(sheet_name) : std::string_view{});
     std::size_t cell_count = 0;
     if (auto rc = fm_workbook_cell_count(wb, s, &cell_count); rc != 0) {
       return rc;
@@ -75,8 +77,7 @@ fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, std::ostream& out
       if (formulas ? formula == nullptr : v.kind == FM_VAL_BLANK) {
         continue;
       }
-      out << escape_single_line(sheet_name != nullptr ? std::string_view(sheet_name) : std::string_view{}) << '!'
-          << format_a1(row, col) << ' '
+      out << escaped_sheet_name << '!' << format_a1(row, col) << ' '
           << (formulas ? escape_single_line(formula) : escape_single_line(render_value(v))) << '\n';
     }
   }
