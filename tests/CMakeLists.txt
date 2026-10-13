@@ -164,6 +164,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/local_sheet_qualifier_eval_test.cpp
   unit/eval/eval_sweep_batch_test.cpp
   unit/eval/scalar_ops_test.cpp
+  unit/eval/x87_arith_test.cpp
   unit/eval/eval_context_test.cpp
   unit/eval/formula_profile_test.cpp
   unit/eval/excel_locale_test.cpp

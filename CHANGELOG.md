@@ -49,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On Windows profiles, the arithmetic operators (`+ - * / ^ %`), `EXP` and
+  `LN` round as Windows Excel does (x87 extended precision, then double), so
+  results that land on a rounding tie match it to the last bit. Aggregate
+  functions and other builtins still compute in double.
 - XLSB loading now decodes differential formats (`BrtDXF`), so
   conditional-format rules keep a resolvable `dxf_id`, `.xlsb` to `.xlsx`
   conversion keeps their formatting, and `add_dxf` after loading no longer

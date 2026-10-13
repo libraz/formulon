@@ -378,6 +378,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/number_parse.cpp
   src/eval/range_args.cpp
   src/eval/scalar_ops.cpp
+  src/eval/x87_arith.cpp
   src/eval/spill_committer.cpp
   src/eval/special_forms_lazy.cpp
   src/eval/structured_ref.cpp

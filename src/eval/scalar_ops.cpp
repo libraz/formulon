@@ -20,6 +20,7 @@
 #include "eval/coerce.h"
 #include "eval/collation.h"
 #include "eval/eval_profile_scope.h"
+#include "eval/x87_arith.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/expected.h"  // FM_CHECK
@@ -202,7 +203,7 @@ Value apply_unary(parser::UnaryOp op, const Value& operand) {
     case parser::UnaryOp::Minus:
       return finalize_arithmetic(-x);
     case parser::UnaryOp::Percent:
-      return finalize_arithmetic(x / 100.0);
+      return finalize_arithmetic(current_eval_profile().host == ExcelHost::kWin365 ? x87_div(x, 100.0) : x / 100.0);
     case parser::UnaryOp::Plus:
       // Unreachable — handled by the early return above. Kept here so
       // the compiler's exhaustiveness check still covers every enum.
@@ -212,20 +213,21 @@ Value apply_unary(parser::UnaryOp op, const Value& operand) {
 }
 
 Value apply_arithmetic(parser::BinOp op, double lhs, double rhs) {
+  const bool win = current_eval_profile().host == ExcelHost::kWin365;
   switch (op) {
     case parser::BinOp::Add:
-      return finalize_arithmetic(lhs + rhs);
+      return finalize_arithmetic(win ? x87_add(lhs, rhs) : lhs + rhs);
     case parser::BinOp::Sub:
-      return finalize_arithmetic(lhs - rhs);
+      return finalize_arithmetic(win ? x87_sub(lhs, rhs) : lhs - rhs);
     case parser::BinOp::Mul:
-      return finalize_arithmetic(lhs * rhs);
+      return finalize_arithmetic(win ? x87_mul(lhs, rhs) : lhs * rhs);
     case parser::BinOp::Div:
       // Excel reports #DIV/0! for any division whose divisor is exactly
       // zero, including 0/0 (no #NUM! tie-break).
       if (rhs == 0.0) {
         return Value::error(ErrorCode::Div0);
       }
-      return finalize_arithmetic(lhs / rhs);
+      return finalize_arithmetic(win ? x87_div(lhs, rhs) : lhs / rhs);
     case parser::BinOp::Pow: {
       // Delegates to the shared `apply_pow` helper so the `^` operator and
       // the `POWER()` builtin cannot drift apart on edge cases.

@@ -11,6 +11,7 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
+#include "test_eval_helpers.h"
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -360,8 +361,9 @@ TEST(MathPower, NegativeBaseOddRootValues) {
       {"=(-0.5)^(1/3)", -0.7937005259840998},
       {"=(-1E300)^(1/3)", -9.999999999999825e+99},
   };
+  const Workbook wb = test::mac_workbook();
   for (const Case& c : cases) {
-    const Value v = EvalSource(c.source);
+    const Value v = EvalSourceIn(c.source, wb, wb.sheet(0));
     ASSERT_TRUE(v.is_number()) << c.source;
     EXPECT_EQ(v.as_number(), c.expected) << c.source;
   }

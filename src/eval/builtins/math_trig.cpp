@@ -17,7 +17,9 @@
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
+#include "eval/x87_arith.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -89,11 +91,17 @@ bool outside_closed_unit_domain(double x) {
 // EXP(x) - e raised to x. Overflow (e.g. EXP(1000)) produces +Inf, which is
 // caught by the finite-check and surfaces as `#NUM!`. EXP(0) == 1.
 Value Exp(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  if (current_eval_profile().host == ExcelHost::kWin365) {
+    return apply_unary_math(&x87_exp, args);
+  }
   return apply_unary_math(&std::exp, args);
 }
 
 // LN(x) - natural logarithm. Excel rejects `x <= 0` with `#NUM!`.
 Value Ln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  if (current_eval_profile().host == ExcelHost::kWin365) {
+    return apply_guarded_unary_math(&x87_ln, &positive_domain, args);
+  }
   return apply_guarded_unary_math(&std::log, &positive_domain, args);
 }
 

@@ -12,6 +12,7 @@
 #include "eval/eval_profile_scope.h"
 #include "eval/locale_text.h"
 #include "eval/number_parse.h"
+#include "eval/x87_arith.h"
 #include "excel_locale.h"
 #include "utils/double_parse.h"
 #include "utils/expected.h"
@@ -28,27 +29,32 @@ namespace {
 // Excel's power for a non-negative base, measured bit-exact on Mac Excel 365:
 // a negative exponent is the reciprocal of the positive power, an integer
 // exponent is right-to-left square-and-multiply, 0.5 is sqrt, and any other
-// exponent is exp(log(x) * y) rather than a correctly rounded pow.
-double excel_magnitude_pow(double base, double exp) {
+// exponent is exp(log(x) * y) rather than a correctly rounded pow. `x87`
+// selects the Windows evaluation, where each step rounds through a 64-bit
+// significand first.
+double excel_magnitude_pow(double base, double exp, bool x87) {
   if (exp < 0.0) {
-    const double positive = excel_magnitude_pow(base, -exp);
-    return std::isinf(positive) ? std::exp(std::log(base) * exp) : 1.0 / positive;
+    const double positive = excel_magnitude_pow(base, -exp, x87);
+    if (std::isinf(positive)) {
+      return x87 ? x87_exp(x87_mul(x87_ln(base), exp)) : std::exp(std::log(base) * exp);
+    }
+    return x87 ? x87_div(1.0, positive) : 1.0 / positive;
   }
   if (exp == std::floor(exp) && exp <= 9007199254740992.0) {
     double result = 1.0;
     double square = base;
     for (auto n = static_cast<std::uint64_t>(exp); n != 0U; n >>= 1U) {
       if ((n & 1U) != 0U) {
-        result *= square;
+        result = x87 ? x87_mul(result, square) : result * square;
       }
-      square *= square;
+      square = x87 ? x87_mul(square, square) : square * square;
     }
     return result;
   }
   if (exp == 0.5) {
     return std::sqrt(base);
   }
-  return std::exp(std::log(base) * exp);
+  return x87 ? x87_exp(x87_mul(x87_ln(base), exp)) : std::exp(std::log(base) * exp);
 }
 
 }  // namespace
@@ -218,6 +224,7 @@ Expected<std::string, ErrorCode> coerce_to_text(const Value& v) {
 }
 
 Expected<double, ErrorCode> apply_pow(double base, double exp) {
+  const bool x87 = current_eval_profile().host == ExcelHost::kWin365;
   // Excel treats 0^0 as indeterminate and reports #NUM!, diverging from the
   // IEEE-754 pow convention of 1. Guarded explicitly before the std::pow
   // call so both the POWER() builtin and the `^` binary operator share the
@@ -243,14 +250,14 @@ Expected<double, ErrorCode> apply_pow(double base, double exp) {
         std::fabs(root - k) > 0.5 * std::pow(10.0, std::floor(std::log10(std::fabs(k))) - 14.0)) {
       return ErrorCode::Num;
     }
-    const double odd_root = -excel_magnitude_pow(-base, exp);
+    const double odd_root = -excel_magnitude_pow(-base, exp, x87);
     if (std::isnan(odd_root) || std::isinf(odd_root)) {
       return ErrorCode::Num;
     }
     return odd_root;
   }
   // Overflow / underflow to Inf is #NUM!.
-  const double r = excel_magnitude_pow(base, exp);
+  const double r = excel_magnitude_pow(base, exp, x87);
   if (std::isnan(r) || std::isinf(r)) {
     return ErrorCode::Num;
   }
