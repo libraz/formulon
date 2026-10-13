@@ -18,9 +18,9 @@
 // Welford's online recurrence. Both SUBTOTAL and AGGREGATE were already
 // two-pass before the consolidation, so keeping that algorithm gives
 // bit-identical results to the pre-refactor implementations across the
-// oracle corpus; `run_average` is the plain sum / count likewise. The same
-// applies to PERCENTILE.INC / .EXC, which match the position formulas Mac
-// Excel 365 reports.
+// oracle corpus; `run_average` uses the same source-order snapped sum / count
+// accumulation as those callers. The same applies to PERCENTILE.INC / .EXC,
+// which match the position formulas Mac Excel 365 reports.
 
 #ifndef FORMULON_NUMERIC_AGGREGATE_KERNELS_H_
 #define FORMULON_NUMERIC_AGGREGATE_KERNELS_H_

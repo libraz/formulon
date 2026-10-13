@@ -76,7 +76,27 @@ Expected<double, ErrorCode> run_product(const std::vector<double>& xs) {
 }
 
 Expected<double, ErrorCode> run_average(const NumericInputView& values) {
-  return run_average(materialize(values));
+  if (values.get == nullptr) {
+    return ErrorCode::Div0;
+  }
+  std::size_t count = 0;
+  double total = 0.0;
+  for (std::size_t i = 0; i < values.size; ++i) {
+    const std::optional<double> value = values.get(values.context, i);
+    if (!value.has_value()) {
+      continue;
+    }
+    total = snapped_add(total, *value);
+    ++count;
+  }
+  if (count == 0U) {
+    return ErrorCode::Div0;
+  }
+  const double avg = total / static_cast<double>(count);
+  if (!std::isfinite(avg)) {
+    return ErrorCode::Num;
+  }
+  return avg;
 }
 
 Expected<double, ErrorCode> run_average(const std::vector<double>& xs) {
@@ -126,6 +146,8 @@ Expected<double, ErrorCode> run_min(const std::vector<double>& xs) {
 }
 
 Expected<double, ErrorCode> run_variance(const NumericInputView& values, bool sample) {
+  // Keep the contiguous-slice kernel: getter-shaped loops change compiler FP
+  // contraction decisions and can shift variance/stddev by one bit.
   return run_variance(materialize(values), sample);
 }
 
