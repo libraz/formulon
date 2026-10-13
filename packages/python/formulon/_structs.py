@@ -80,12 +80,12 @@ class Struct:
         self.size = (off + max_align - 1) // max_align * max_align
 
     def pack(self, lib, ptr: int, values: Dict[str, object]) -> None:
-        """Zero ``[ptr, ptr+size)`` then write each supplied field."""
-        lib.write_bytes(ptr, b"\x00" * self.size)
+        """Pack supplied fields into a zeroed block and write it once."""
+        raw = bytearray(self.size)
         for fname, value in values.items():
             kind, off = self.offsets[fname]
-            buf = struct.pack(_FMT[kind], value)
-            lib.write_bytes(ptr + off, buf)
+            struct.pack_into(_FMT[kind], raw, off, value)
+        lib.write_bytes(ptr, raw)
 
     def unpack(self, lib, ptr: int) -> Dict[str, int]:
         """Read every scalar field from ``[ptr, ptr+size)`` into a dict.

@@ -46,7 +46,7 @@ import struct
 import threading
 from enum import IntEnum
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import wasmtime
 
@@ -780,7 +780,7 @@ class _WasmInstance:
         with self._call_lock:
             return bytes(self._memory.read(self._store, ptr, ptr + length))
 
-    def write_bytes(self, ptr: int, data: bytes) -> None:
+    def write_bytes(self, ptr: int, data: Union[bytes, bytearray]) -> None:
         """Write ``data`` into WASM memory starting at ``ptr``.
 
         Takes ``_call_lock`` for the same reason as :meth:`read_bytes`.
