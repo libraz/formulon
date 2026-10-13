@@ -260,5 +260,39 @@ TEST(DepExtractor, NameRefCaseInsensitive) {
   EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));
 }
 
+TEST(DepExtractor, LetBindingShadowingIsCaseInsensitive) {
+  Workbook wb = Workbook::create();
+  // The lexical binding must shadow the workbook name even when the formula
+  // uses a different ASCII casing at the read site.
+  wb.set_defined_names({DefinedName{"Foo", "C1", -1, false, ""}});
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("LET(FOO,A1,fOo+B1)", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+
+  const std::vector<CellNodeId> expected = {
+      CellNodeId{0U, 0U, 0U},  // A1, the LET initializer used by fOo
+      CellNodeId{0U, 0U, 1U},  // B1, the independent body reference
+  };
+  EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
+}
+
+TEST(DepExtractor, LambdaParameterShadowingIsCaseInsensitive) {
+  Workbook wb = Workbook::create();
+  wb.set_defined_names({
+      DefinedName{"x", "B1", -1, false, ""},
+      DefinedName{"F", "LAMBDA(X,x+A1)", -1, false, ""},
+  });
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("F(5)", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+
+  ASSERT_EQ(deps.cell_deps.size(), 1U);
+  EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));  // A1, not x -> B1
+}
+
 }  // namespace
 }  // namespace formulon::eval

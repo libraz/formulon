@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <iterator>
 #include <optional>
-#include <string>
 #include <string_view>
 #include <unordered_set>
 #include <vector>
@@ -59,7 +58,10 @@ struct Footprint {
 // `extract_deps()` invocation and never escapes.
 struct WalkState {
   struct LexicalBinding {
-    std::string name;
+    // AST names are interned in the arena that owns the formula (or the
+    // extractor-local arena for a defined-name body), so the binding can
+    // borrow the view for the duration of this walk.
+    std::string_view name;
     const parser::AstNode* lambda = nullptr;
     /// The reference a LET initialiser can name; empty for LAMBDA parameters
     /// and for initialisers that are not references.
@@ -87,9 +89,8 @@ struct WalkState {
 };
 
 const WalkState::LexicalBinding* lookup_lexical(std::string_view name, const WalkState& state) {
-  const std::string lowered = strings::to_ascii_lower(name);
   for (auto it = state.lexical_stack.rbegin(); it != state.lexical_stack.rend(); ++it) {
-    if (it->name == lowered) {
+    if (strings::case_insensitive_eq(it->name, name)) {
       return &*it;
     }
   }
@@ -266,8 +267,7 @@ void walk_invoked_lambda_body(const parser::AstNode& lambda, WalkState& state, c
   const std::uint32_t param_count = lambda.as_lambda_param_count();
   for (std::uint32_t i = 0; i < param_count; ++i) {
     const parser::AstNode* deferred = (args != nullptr && i < args->size()) ? (*args)[i] : nullptr;
-    state.lexical_stack.push_back(
-        {strings::to_ascii_lower(lambda.as_lambda_param(i)), nullptr, std::nullopt, deferred});
+    state.lexical_stack.push_back({lambda.as_lambda_param(i), nullptr, std::nullopt, deferred});
   }
   walk(lambda.as_lambda_body(), state);
   for (std::uint32_t i = 0; i < param_count; ++i) {
@@ -1078,8 +1078,7 @@ void walk(const parser::AstNode& node, WalkState& state) {
             lambda = prior->lambda;
           }
         }
-        state.lexical_stack.push_back(
-            {strings::to_ascii_lower(node.as_let_binding_name(i)), lambda, footprint, deferred});
+        state.lexical_stack.push_back({node.as_let_binding_name(i), lambda, footprint, deferred});
       }
       walk(node.as_let_body(), state);
       state.lexical_stack.resize(saved_lexical_depth);
