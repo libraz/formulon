@@ -29,10 +29,8 @@ class ConditionalFormatTests(unittest.TestCase):
                 ConditionalFormatInput(
                     sqref=[MergeRange(0, 0, 2, 0)],
                     type=1,  # cellIs
-                    op_engaged=True,
                     op=4,  # greaterThan
                     formula1="4",
-                    dxf_id_engaged=True,
                     dxf_id=dxf_index,
                 ),
             )
@@ -51,6 +49,65 @@ class ConditionalFormatTests(unittest.TestCase):
 
             wb.clear_conditional_formats(0)
             self.assertEqual(wb.get_conditional_formats(0), [])
+
+    def test_cell_is_op_alone_is_engaged(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.add_conditional_format(
+                0,
+                ConditionalFormatInput(sqref=[MergeRange(0, 0, 2, 0)], type=1, op=3, formula1="5"),
+            )
+            rule = wb.get_conditional_formats(0)[0]
+            self.assertEqual(rule.op, 3)
+            self.assertIsNone(rule.rank)
+            self.assertIsNone(rule.std_dev)
+            self.assertIsNone(rule.time_period)
+            self.assertIsNone(rule.dxf_id)
+
+    def test_unset_rank_reads_back_none(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.add_conditional_format(0, ConditionalFormatInput(sqref=[MergeRange(0, 0, 2, 0)], type=5))
+            rule = wb.get_conditional_formats(0)[0]
+            self.assertIsNone(rule.rank)
+            self.assertIsNone(rule.op)
+
+    def test_get_then_add_reproduces_engaged_fields(self) -> None:
+        with Workbook.create_default() as wb:
+            dxf_index = wb.add_dxf(DifferentialFormat())
+            sqref = [MergeRange(0, 0, 2, 0)]
+            wb.add_conditional_format(
+                0, ConditionalFormatInput(sqref=sqref, type=1, op=0, formula1="1", dxf_id=dxf_index)
+            )
+            wb.add_conditional_format(0, ConditionalFormatInput(sqref=sqref, type=5, rank=0, dxf_id=dxf_index))
+            wb.add_conditional_format(0, ConditionalFormatInput(sqref=sqref, type=6, std_dev=0.0))
+            wb.add_conditional_format(0, ConditionalFormatInput(sqref=sqref, type=15, time_period=0))
+            first = wb.get_conditional_formats(0)
+            wb.clear_conditional_formats(0)
+            for r in first:
+                wb.add_conditional_format(
+                    0,
+                    ConditionalFormatInput(
+                        sqref=r.sqref,
+                        type=r.type,
+                        priority=r.priority,
+                        stop_if_true=r.stop_if_true,
+                        dxf_id=r.dxf_id,
+                        formula1=r.formula1,
+                        formula2=r.formula2,
+                        op=r.op,
+                        rank=r.rank,
+                        percent=r.percent,
+                        bottom=r.bottom,
+                        above_average=r.above_average,
+                        equal_average=r.equal_average,
+                        std_dev=r.std_dev,
+                        text=r.text,
+                        time_period=r.time_period,
+                    ),
+                )
+            again = wb.get_conditional_formats(0)
+            for x, y in zip(first, again):
+                for f in ("op", "rank", "std_dev", "time_period", "dxf_id"):
+                    self.assertEqual(getattr(x, f), getattr(y, f), f)
 
     def test_visual_rules_roundtrip(self) -> None:
         with Workbook.create_default() as wb:

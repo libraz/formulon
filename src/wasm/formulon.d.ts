@@ -368,6 +368,13 @@ export enum PivotCalendar {
   Japanese = 1,
 }
 
+/** Sibling item order of a pivot field. Mirrors `fm_pivot_sort_order_t`. */
+export enum PivotSortOrder {
+  Descending = 0,
+  Ascending = 1,
+  Manual = 2,
+}
+
 /** Pivot report layout form. Mirrors `fm_pivot_layout_t`. */
 export enum PivotReportLayout {
   Compact = 0,
@@ -2901,13 +2908,15 @@ export interface Workbook {
   pivotFieldClear(sheet: number, pivotIdx: number): Status;
   /** Sets the axis of pivot field `fieldIdx`. */
   pivotFieldSetAxis(sheet: number, pivotIdx: number, fieldIdx: number, axis: PivotAxis): Status;
-  /** Sets the sort directive on pivot field `fieldIdx`. Pass an empty
-   *  `byField` to clear the by-field key. */
-  pivotFieldSetSort(sheet: number, pivotIdx: number, fieldIdx: number, ascending: boolean, byField: string): Status;
+  /** Sets the sibling order of pivot field `fieldIdx`. `PivotSortOrder.Manual`
+   *  keeps items in `pivotFieldAddItem` order and takes no `byField`; for the
+   *  other orders an empty `byField` sorts by label. */
+  pivotFieldSetSort(sheet: number, pivotIdx: number, fieldIdx: number, order: PivotSortOrder, byField: string): Status;
   /** Sets the `subtotal_top` flag on pivot field `fieldIdx`. */
   pivotFieldSetSubtotalTop(sheet: number, pivotIdx: number, fieldIdx: number, top: boolean): Status;
   /** Appends a manual-filter item to pivot field `fieldIdx`, addressed by
-   *  its label. The item carries no cache binding, so the filter engine
+   *  its label. The item binds to the first shared item of the cache field
+   *  that renders as `name` (unbound when none does), and the filter engine
    *  matches source records by comparing their rendered label against
    *  `name`. An empty `name` therefore cannot express the blank item,
    *  which has no label of its own; use `pivotFieldAddItemAt`. */

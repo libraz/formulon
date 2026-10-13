@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Python `ConditionalFormatInput` drops `dxf_id_engaged`, `op_engaged`,
+  `rank_engaged`, `std_dev_engaged` and `time_period_engaged`: `dxf_id`, `op`,
+  `rank`, `std_dev` and `time_period` are `Optional` and a value that is not
+  `None` is engaged, as in the WASM binding. `ConditionalFormat.op`, `rank`,
+  `std_dev` and `time_period` are `None` when the rule does not state them, so
+  a rule read back can be passed to `add_conditional_format` unchanged.
+- `fm_workbook_pivot_field_set_sort` / `pivotFieldSetSort` /
+  `pivot_field_set_sort` take a sort order, `fm_pivot_sort_order_t` /
+  `PivotSortOrder` (descending, ascending, manual), in place of the
+  `ascending` flag. Manual keeps a field's items in the order they were added
+  with `pivot_field_add_item` and saves as `sortType="manual"`; it takes no
+  by-field key. An order outside the three values is rejected. A field item
+  added by label now binds to the cache's shared item of that label, so its
+  saved `<item x>` matches. Pass `1` / `true` for the former ascending and
+  `0` / `false` for descending.
+
 ## [0.15.1] - 2026-10-12
 
 ### Changed

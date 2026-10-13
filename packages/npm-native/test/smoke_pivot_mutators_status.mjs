@@ -394,7 +394,7 @@ const PIVOT_MUTATORS = [
       // East now outsums West, so sorting ascending by the data field
       // differs from both label orders.
       setup: (b) => b.wb.pivotCacheRecordSetNumber(b.cacheId, 0, 2, 40),
-      act: (b) => b.wb.pivotFieldSetSort(0, b.pivot, b.region, true, 'Sum of Amount'),
+      act: (b) => b.wb.pivotFieldSetSort(0, b.pivot, b.region, 1, 'Sum of Amount'),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'West|37', 'East|45', '総計|82']),
     },
   ],
@@ -647,6 +647,25 @@ test('pivot mutators forward their arguments to the C ABI', async () => {
     } finally {
       b.wb.dispose();
     }
+  }
+});
+
+test('manual pivot sort order keeps item order and rejects bad arguments', async () => {
+  const mod = await getModule();
+  const b = buildPivot(mod);
+  try {
+    b.wb.pivotFieldClearItems(0, b.pivot, b.region);
+    b.wb.pivotFieldAddItem(0, b.pivot, b.region, 'West', true);
+    b.wb.pivotFieldAddItem(0, b.pivot, b.region, 'East', true);
+    const manual = b.wb.pivotFieldSetSort(0, b.pivot, b.region, mod.PivotSortOrder.Manual, '');
+    assert.ok(manual.ok, JSON.stringify(manual));
+    assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'West|37', 'East|15', '総計|52']);
+    assert.equal(b.wb.pivotFieldSetSort(0, b.pivot, b.region, 3, '').ok, false);
+    assert.equal(b.wb.pivotFieldSetSort(0, b.pivot, b.region, mod.PivotSortOrder.Manual, 'Sum of Amount').ok, false);
+    assert.ok(b.wb.pivotFieldSetSort(0, b.pivot, b.region, mod.PivotSortOrder.Ascending, '').ok);
+    assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
+  } finally {
+    b.wb.dispose();
   }
 });
 

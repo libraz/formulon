@@ -100,6 +100,7 @@ __all__ = [
     "PivotLayout",
     "PivotReportLayout",
     "PivotShowValuesAs",
+    "PivotSortOrder",
     "PivotWorksheetSource",
     "PrintTitles",
     "ReadDiagnostics",
@@ -768,6 +769,18 @@ class PivotReportLayout(IntEnum):
     COMPACT = 0
     TABULAR = 1
     OUTLINE = 2
+
+
+class PivotSortOrder(IntEnum):
+    """Sibling item order of a pivot field (``fm_pivot_sort_order_t``).
+
+    ``MANUAL`` keeps items in the order added with
+    :meth:`Workbook.pivot_field_add_item` and takes no ``by_field`` key.
+    """
+
+    DESCENDING = 0
+    ASCENDING = 1
+    MANUAL = 2
 
 
 # Sentinel value for ``PivotDataFieldSpec.show_as_base_item`` meaning
@@ -1458,15 +1471,15 @@ class ConditionalFormat:
     dxf_id: Optional[int]
     formula1: str
     formula2: str
-    op: int
-    rank: int
+    op: Optional[int]
+    rank: Optional[int]
     percent: bool
     bottom: bool
     above_average: bool
     equal_average: bool
-    std_dev: float
+    std_dev: Optional[float]
     text: str
-    time_period: int
+    time_period: Optional[int]
     color_scale: Optional[ColorScale]
     data_bar: Optional[DataBar]
     icon_set: Optional[IconSet]
@@ -1485,23 +1498,18 @@ class ConditionalFormatInput:
     priority: int = 0
     stop_if_true: bool = False
     id: str = ""
-    dxf_id_engaged: bool = False
-    dxf_id: int = 0
+    dxf_id: Optional[int] = None
     formula1: str = ""
     formula2: str = ""
-    op_engaged: bool = False
-    op: int = 0
-    rank_engaged: bool = False
-    rank: int = 0
+    op: Optional[int] = None
+    rank: Optional[int] = None
     percent: bool = False
     bottom: bool = False
     above_average: bool = False
     equal_average: bool = False
-    std_dev_engaged: bool = False
-    std_dev: float = 0.0
+    std_dev: Optional[float] = None
     text: str = ""
-    time_period_engaged: bool = False
-    time_period: int = 0
+    time_period: Optional[int] = None
     color_scale: Optional[ColorScale] = None
     data_bar: Optional[DataBar] = None
     icon_set: Optional[IconSet] = None
@@ -6334,15 +6342,15 @@ class Workbook:
                 dxf_id=d["dxf_id"] if d["dxf_id_engaged"] else None,
                 formula1=LIB.read_cstr(d["formula1"]),
                 formula2=LIB.read_cstr(d["formula2"]),
-                op=d["op"],
-                rank=d["rank"],
+                op=d["op"] if d["op_engaged"] else None,
+                rank=d["rank"] if d["rank_engaged"] else None,
                 percent=bool(d["percent"]),
                 bottom=bool(d["bottom"]),
                 above_average=bool(d["above_average"]),
                 equal_average=bool(d["equal_average"]),
-                std_dev=d["std_dev"],
+                std_dev=d["std_dev"] if d["std_dev_engaged"] else None,
                 text=LIB.read_cstr(d["text"]),
-                time_period=d["time_period"],
+                time_period=d["time_period"] if d["time_period_engaged"] else None,
                 color_scale=color_scale,
                 data_bar=data_bar,
                 icon_set=icon_set,
@@ -6367,22 +6375,22 @@ class Workbook:
                 ptr,
                 {
                     "type": _uint(rule.type, "type", 8),
-                    "op": _uint(rule.op, "op", 8),
-                    "time_period": _uint(rule.time_period, "time_period", 8),
+                    "op": _uint(rule.op or 0, "op", 8),
+                    "time_period": _uint(rule.time_period or 0, "time_period", 8),
                     "priority": _sint(rule.priority, "priority"),
                     "stop_if_true": 1 if rule.stop_if_true else 0,
-                    "dxf_id_engaged": 1 if rule.dxf_id_engaged else 0,
-                    "dxf_id": _uint(rule.dxf_id, "dxf_id"),
-                    "op_engaged": 1 if rule.op_engaged else 0,
-                    "rank_engaged": 1 if rule.rank_engaged else 0,
-                    "rank": _sint(rule.rank, "rank"),
+                    "dxf_id_engaged": 1 if rule.dxf_id is not None else 0,
+                    "dxf_id": _uint(rule.dxf_id or 0, "dxf_id"),
+                    "op_engaged": 1 if rule.op is not None else 0,
+                    "rank_engaged": 1 if rule.rank is not None else 0,
+                    "rank": _sint(rule.rank or 0, "rank"),
                     "percent": 1 if rule.percent else 0,
                     "bottom": 1 if rule.bottom else 0,
                     "above_average": 1 if rule.above_average else 0,
                     "equal_average": 1 if rule.equal_average else 0,
-                    "std_dev_engaged": 1 if rule.std_dev_engaged else 0,
-                    "std_dev": float(rule.std_dev),
-                    "time_period_engaged": 1 if rule.time_period_engaged else 0,
+                    "std_dev_engaged": 1 if rule.std_dev is not None else 0,
+                    "std_dev": float(rule.std_dev or 0.0),
+                    "time_period_engaged": 1 if rule.time_period is not None else 0,
                 },
             )
             sqref_ptr = 0
@@ -7764,10 +7772,13 @@ class Workbook:
         sheet: int,
         pivot_index: int,
         field_idx: int,
-        ascending: bool,
+        order: "PivotSortOrder | int",
         by_field: str = "",
     ) -> None:
-        """Set the sort directive on pivot field ``field_idx``."""
+        """Set the sibling order of pivot field ``field_idx``.
+
+        ``PivotSortOrder.MANUAL`` rejects a non-empty ``by_field``.
+        """
         h = self._require()
         owned: List[int] = []
         by_ptr = _opt_str_ptr(by_field, owned)
@@ -7778,7 +7789,7 @@ class Workbook:
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
                     _uint(field_idx, "field_idx"),
-                    1 if ascending else 0,
+                    _sint(order, "order"),
                     by_ptr,
                 ),
                 "fm_workbook_pivot_field_set_sort",

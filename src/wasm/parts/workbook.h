@@ -518,7 +518,7 @@ class JsWorkbook {
   JsAddStyleResult pivotFieldAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec);
   JsStatus pivotFieldClear(uint32_t sheet, uint32_t pivotIdx);
   JsStatus pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t axis);
-  JsStatus pivotFieldSetSort(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool ascending,
+  JsStatus pivotFieldSetSort(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t order,
                              const std::string& byField);
   JsStatus pivotFieldSetSubtotalTop(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool top);
   JsStatus pivotFieldAddItem(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& name,

@@ -71,6 +71,7 @@ export const PivotDateGrouping = Object.freeze({
   Second: 7,
 });
 export const PivotCalendar = Object.freeze({ Gregorian: 0, Japanese: 1 });
+export const PivotSortOrder = Object.freeze({ Descending: 0, Ascending: 1, Manual: 2 });
 export const PivotReportLayout = Object.freeze({ Compact: 0, Tabular: 1, Outline: 2 });
 export const PivotFilterValueKind = Object.freeze({ None: -1, Int: 0, Double: 1, Text: 2 });
 export const CfMatchKind = Object.freeze({ DifferentialFormat: 0, ColorScale: 1, DataBar: 2, IconSet: 3 });

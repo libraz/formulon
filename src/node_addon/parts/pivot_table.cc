@@ -224,11 +224,10 @@ Napi::Value Workbook::PivotFieldSetSort(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   const PivotFieldArgs field = ReadPivotField(info);
-  const bool ascending = ArgBool(info, 3);
+  const std::int32_t order = ArgI32(info, 3);
   const std::string by_field = ArgString(info, 4);
   const char* by = by_field.empty() ? nullptr : by_field.c_str();
-  fm_status_t rc =
-      fm_workbook_pivot_field_set_sort(handle_, field.sheet, field.pivot_idx, field.field_idx, ascending ? 1 : 0, by);
+  fm_status_t rc = fm_workbook_pivot_field_set_sort(handle_, field.sheet, field.pivot_idx, field.field_idx, order, by);
   return MakeStatus(env, rc);
 }
 

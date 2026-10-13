@@ -86,7 +86,6 @@ class PackageDiagnosticsTests(unittest.TestCase):
                 ConditionalFormatInput(
                     sqref=[MergeRange(0, 0, 0, 0)],
                     type=1,
-                    op_engaged=True,
                     op=5,
                     formula1="10",
                 ),

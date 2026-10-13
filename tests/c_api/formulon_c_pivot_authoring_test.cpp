@@ -417,6 +417,7 @@ TEST(FormulonCApiPivot, ScalarEnumMutatorsRejectRawValuesWithoutMutation) {
   for (const std::int32_t raw : invalid) {
     EXPECT_EQ(fm_workbook_pivot_field_set_axis(wb.handle, 0, pivot_idx, 0, raw), expected) << raw;
     EXPECT_EQ(fm_workbook_pivot_field_add_subtotal_fn(wb.handle, 0, pivot_idx, 0, raw), expected) << raw;
+    EXPECT_EQ(fm_workbook_pivot_field_set_sort(wb.handle, 0, pivot_idx, 0, raw, nullptr), expected) << raw;
     EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 0, raw, 0, -1, -1, 1, -1.0, -1.0),
               expected)
         << raw;
@@ -426,6 +427,83 @@ TEST(FormulonCApiPivot, ScalarEnumMutatorsRejectRawValuesWithoutMutation) {
   }
 
   BufferGuard after;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &after.data, &after.len), 0) << fm_last_error_message();
+  EXPECT_EQ(std::vector<std::uint8_t>(after.data, after.data + after.len), snapshot);
+}
+
+namespace {
+
+// Row-label texts of the projected layout, in row order.
+std::vector<std::string> RowLabels(fm_workbook_t* wb, std::size_t pivot_idx) {
+  PivotCellsGuard projected;
+  EXPECT_EQ(fm_workbook_pivot_layout(wb, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+  std::vector<std::string> labels;
+  for (const fm_pivot_cell_t& cell : CollectCells(projected.handle)) {
+    if (cell.kind == FM_PIVOT_CELL_ROW_LABEL && cell.value.kind == FM_VAL_TEXT) {
+      labels.emplace_back(cell.value.u.text);
+    }
+  }
+  return labels;
+}
+
+}  // namespace
+
+TEST(FormulonCApiPivot, ManualSortKeepsItemOrderThroughSaveAndReload) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  // Shared items are North, South; the items are added in the opposite order.
+  ASSERT_EQ(fm_workbook_pivot_field_clear_items(wb.handle, 0, pivot_idx, 0), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_add_item(wb.handle, 0, pivot_idx, 0, "South", 1), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_add_item(wb.handle, 0, pivot_idx, 0, "North", 1), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_set_sort(wb.handle, 0, pivot_idx, 0, FM_PIVOT_SORT_ASCENDING, nullptr), 0);
+  EXPECT_EQ(RowLabels(wb.handle, pivot_idx), (std::vector<std::string>{"North", "South"}));
+
+  ASSERT_EQ(fm_workbook_pivot_field_set_sort(wb.handle, 0, pivot_idx, 0, FM_PIVOT_SORT_MANUAL, nullptr), 0)
+      << fm_last_error_message();
+  EXPECT_EQ(RowLabels(wb.handle, pivot_idx), (std::vector<std::string>{"South", "North"}));
+
+  const std::string xml = SavedPivotXml(wb.handle);
+  EXPECT_NE(xml.find("sortType=\"manual\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<item x=\"1\"/><item x=\"0\"/>"), std::string::npos) << xml;
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_last_error_message();
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(loaded.handle, "win-365-ja_JP"), 0);
+  EXPECT_EQ(RowLabels(loaded.handle, 0), (std::vector<std::string>{"South", "North"}));
+
+  // Leaving manual order returns to label order and drops the attribute.
+  ASSERT_EQ(fm_workbook_pivot_field_set_sort(wb.handle, 0, pivot_idx, 0, FM_PIVOT_SORT_ASCENDING, nullptr), 0);
+  EXPECT_EQ(RowLabels(wb.handle, pivot_idx), (std::vector<std::string>{"North", "South"}));
+  EXPECT_EQ(SavedPivotXml(wb.handle).find("sortType"), std::string::npos);
+}
+
+TEST(FormulonCApiPivot, ManualSortRejectsAByFieldKeyWithoutMutation) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  BufferGuard before;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &before.data, &before.len), 0) << fm_last_error_message();
+  const std::vector<std::uint8_t> snapshot(before.data, before.data + before.len);
+  const fm_status_t expected = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(fm_workbook_pivot_field_set_sort(wb.handle, 0, pivot_idx, 0, FM_PIVOT_SORT_MANUAL, "Sum of Amount"),
+            expected);
+  EXPECT_EQ(fm_workbook_pivot_field_set_sort(wb.handle, 0, pivot_idx, 0, 3, nullptr), expected);
+  EXPECT_EQ(fm_workbook_pivot_field_set_sort(wb.handle, 0, pivot_idx, 0, -1, nullptr), expected);
+  // An empty key is the same as no key.
+  EXPECT_EQ(fm_workbook_pivot_field_set_sort(wb.handle, 0, pivot_idx, 0, FM_PIVOT_SORT_MANUAL, ""), 0);
+
+  BufferGuard after;
+  ASSERT_EQ(fm_workbook_pivot_field_set_sort(wb.handle, 0, pivot_idx, 0, FM_PIVOT_SORT_ASCENDING, nullptr), 0);
   ASSERT_EQ(fm_workbook_save(wb.handle, &after.data, &after.len), 0) << fm_last_error_message();
   EXPECT_EQ(std::vector<std::uint8_t>(after.data, after.data + after.len), snapshot);
 }

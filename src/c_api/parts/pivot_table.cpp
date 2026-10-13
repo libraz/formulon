@@ -19,6 +19,7 @@
 #include "c_api/parts/pivot_internal.h"
 #include "pivot/date_serial.h"
 #include "pivot/field_lookup.h"
+#include "pivot/pivot_index.h"
 #include "pivot/pivot_layout.h"
 #include "pivot/pivot_locale.h"
 #include "sheet.h"
@@ -399,11 +400,26 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_axis(fm_workbook_t* wb, std::
 
 extern "C" fm_status_t fm_workbook_pivot_field_set_sort(fm_workbook_t* wb, std::size_t sheet_index,
                                                         std::size_t pivot_index, std::size_t field_idx,
-                                                        std::int32_t ascending, const char* by_field) {
+                                                        std::int32_t order, const char* by_field) {
   clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_field_set_sort: wb is NULL");
+  }
+  fm_status_t enum_status = check_enum_domain(order, FM_PIVOT_SORT_MANUAL, "fm_workbook_pivot_field_set_sort", "order");
+  if (enum_status != 0) {
+    return enum_status;
+  }
+  const bool manual = order == FM_PIVOT_SORT_MANUAL;
+  if (manual && by_field != nullptr && by_field[0] != '\0') {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_pivot_field_set_sort: manual order takes no by_field key");
+  }
   return mutate_pivot_field(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_set_sort",
-                            [ascending, by_field](formulon::pivot::PivotField& field) {
-                              field.sort.ascending = ascending != 0;
+                            [order, manual, by_field](formulon::pivot::PivotField& field) {
+                              field.sort.manual = manual;
+                              // Manual keeps the ascending form the OOXML reader yields for it.
+                              field.sort.ascending = order != FM_PIVOT_SORT_DESCENDING;
                               field.sort.by_field = by_field != nullptr ? by_field : "";
                             });
 }
@@ -424,13 +440,36 @@ extern "C" fm_status_t fm_workbook_pivot_field_add_item(fm_workbook_t* wb, std::
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_field_add_item: utf8_name is NULL");
   }
-  return mutate_pivot_field(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_add_item",
-                            [utf8_name, visible](formulon::pivot::PivotField& field) {
-                              formulon::pivot::PivotItem item;
-                              item.name = utf8_name;
-                              item.visible = visible != 0;
-                              field.items.push_back(std::move(item));
-                            });
+  formulon::pivot::PivotTable* table = nullptr;
+  formulon::pivot::PivotField* field = nullptr;
+  if (fm_status_t rc = resolve_pivot_field(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_add_item",
+                                           &table, &field);
+      rc != 0) {
+    return rc;
+  }
+  formulon::pivot::PivotItem item;
+  item.name = utf8_name;
+  item.visible = visible != 0;
+  // Bind to the shared item carrying this label so the writer emits the matching `x` and the item
+  // keeps its place in a manual order across a save. A label with no match stays unbound.
+  if (!item.name.empty()) {
+    if (const auto* cache = find_cache(wb->workbook(), table->pivot_cache_id());
+        cache != nullptr && field_idx < cache->fields().size()) {
+      formulon::pivot::PivotItem probe;
+      const std::size_t shared_count = cache->fields()[field_idx].shared_items.size();
+      for (std::size_t i = 0; i < shared_count; ++i) {
+        probe.cache_index = static_cast<std::uint32_t>(i);
+        if (formulon::pivot::pivot_item_label(*cache, field_idx, probe) == item.name) {
+          item.has_cache_index = true;
+          item.cache_index = probe.cache_index;
+          break;
+        }
+      }
+    }
+  }
+  field->items.push_back(std::move(item));
+  invalidate_pivot_result(wb->workbook(), *table);
+  return 0;
 }
 
 extern "C" fm_status_t fm_workbook_pivot_field_add_item_at(fm_workbook_t* wb, std::size_t sheet_index,

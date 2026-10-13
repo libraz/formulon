@@ -1035,15 +1035,15 @@ class ConditionalFormat:
     dxf_id: Optional[int]
     formula1: str
     formula2: str
-    op: int
-    rank: int
+    op: Optional[int]
+    rank: Optional[int]
     percent: bool
     bottom: bool
     above_average: bool
     equal_average: bool
-    std_dev: float
+    std_dev: Optional[float]
     text: str
-    time_period: int
+    time_period: Optional[int]
     color_scale: Optional[ColorScale]
     data_bar: Optional[DataBar]
     icon_set: Optional[IconSet]
@@ -1054,23 +1054,18 @@ class ConditionalFormatInput:
     priority: int
     stop_if_true: bool
     id: str
-    dxf_id_engaged: bool
-    dxf_id: int
+    dxf_id: Optional[int]
     formula1: str
     formula2: str
-    op_engaged: bool
-    op: int
-    rank_engaged: bool
-    rank: int
+    op: Optional[int]
+    rank: Optional[int]
     percent: bool
     bottom: bool
     above_average: bool
     equal_average: bool
-    std_dev_engaged: bool
-    std_dev: float
+    std_dev: Optional[float]
     text: str
-    time_period_engaged: bool
-    time_period: int
+    time_period: Optional[int]
     color_scale: Optional[ColorScale]
     data_bar: Optional[DataBar]
     icon_set: Optional[IconSet]
@@ -1081,23 +1076,18 @@ class ConditionalFormatInput:
         priority: int = ...,
         stop_if_true: bool = ...,
         id: str = ...,
-        dxf_id_engaged: bool = ...,
-        dxf_id: int = ...,
+        dxf_id: Optional[int] = ...,
         formula1: str = ...,
         formula2: str = ...,
-        op_engaged: bool = ...,
-        op: int = ...,
-        rank_engaged: bool = ...,
-        rank: int = ...,
+        op: Optional[int] = ...,
+        rank: Optional[int] = ...,
         percent: bool = ...,
         bottom: bool = ...,
         above_average: bool = ...,
         equal_average: bool = ...,
-        std_dev_engaged: bool = ...,
-        std_dev: float = ...,
+        std_dev: Optional[float] = ...,
         text: str = ...,
-        time_period_engaged: bool = ...,
-        time_period: int = ...,
+        time_period: Optional[int] = ...,
         color_scale: Optional[ColorScale] = ...,
         data_bar: Optional[DataBar] = ...,
         icon_set: Optional[IconSet] = ...,
@@ -1454,6 +1444,11 @@ class PivotReportLayout(IntEnum):
     COMPACT: int
     TABULAR: int
     OUTLINE: int
+
+class PivotSortOrder(IntEnum):
+    DESCENDING = 0
+    ASCENDING = 1
+    MANUAL = 2
 
 class PivotWorksheetSource:
     ref: Optional[str]
@@ -2026,7 +2021,7 @@ class Workbook:
         sheet: int,
         pivot_index: int,
         field_idx: int,
-        ascending: bool,
+        order: Union[PivotSortOrder, int],
         by_field: str = ...,
     ) -> None: ...
     def pivot_field_set_subtotal_top(self, sheet: int, pivot_index: int, field_idx: int, top: bool) -> None: ...

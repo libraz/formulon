@@ -19,6 +19,7 @@ from formulon import (
     PivotFilterSpec,
     PivotFilterType,
     PivotReportLayout,
+    PivotSortOrder,
     PivotWorksheetSource,
     ValueKind,
     Workbook,
@@ -439,7 +440,7 @@ class PivotMutatorTableTests(unittest.TestCase):
                 # East now outsums West, so sorting ascending by the data
                 # field differs from both label orders.
                 lambda f: f.wb.pivot_cache_record_set_number(f.cache, 0, 2, 40),
-                lambda f: f.wb.pivot_field_set_sort(0, f.pivot, f.region, True, "Sum of Amount"),
+                lambda f: f.wb.pivot_field_set_sort(0, f.pivot, f.region, PivotSortOrder.ASCENDING, "Sum of Amount"),
                 None,
                 grid_is(["行ラベル|Sum of Amount", "West|37", "East|45", "総計|82"]),
             ),
@@ -603,6 +604,21 @@ class PivotMutatorTableTests(unittest.TestCase):
         self.assertGreater(len(declared), 40)
         self.assertEqual(sorted(declared - set(self._rows())), [], "pivot mutators without a row")
         self.assertEqual(sorted(set(self._rows()) - declared), [], "rows for undeclared pivot mutators")
+
+    def test_manual_sort_order_keeps_item_order(self) -> None:
+        with Workbook.create_default() as wb:
+            f = _PivotFixture(wb)
+            wb.pivot_field_clear_items(0, f.pivot, f.region)
+            wb.pivot_field_add_item(0, f.pivot, f.region, "West", True)
+            wb.pivot_field_add_item(0, f.pivot, f.region, "East", True)
+            wb.pivot_field_set_sort(0, f.pivot, f.region, PivotSortOrder.MANUAL)
+            self.assertEqual(f.grid(), ["行ラベル|Sum of Amount", "West|37", "East|15", "総計|52"])
+            wb.pivot_field_set_sort(0, f.pivot, f.region, PivotSortOrder.ASCENDING)
+            self.assertEqual(f.grid(), _BASE_GRID)
+            with self.assertRaises(FormulonError):
+                wb.pivot_field_set_sort(0, f.pivot, f.region, 3)
+            with self.assertRaises(FormulonError):
+                wb.pivot_field_set_sort(0, f.pivot, f.region, PivotSortOrder.MANUAL, "Sum of Amount")
 
     def test_pivot_mutators_forward_their_arguments(self) -> None:
         with Workbook.create_default() as wb:

@@ -433,13 +433,14 @@ JsStatus JsWorkbook::pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIdx, uint32
   return status_from_rc(rc);
 }
 
-JsStatus JsWorkbook::pivotFieldSetSort(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool ascending,
+JsStatus JsWorkbook::pivotFieldSetSort(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t order,
                                        const std::string& byField) {
   if (handle_ == nullptr) {
     return error_status(kBindingInvalidHandle);
   }
   const char* by = byField.empty() ? nullptr : byField.c_str();
-  fm_status_t rc = fm_workbook_pivot_field_set_sort(handle_, sheet, pivotIdx, fieldIdx, ascending ? 1 : 0, by);
+  fm_status_t rc =
+      fm_workbook_pivot_field_set_sort(handle_, sheet, pivotIdx, fieldIdx, static_cast<std::int32_t>(order), by);
   return status_from_rc(rc);
 }
 

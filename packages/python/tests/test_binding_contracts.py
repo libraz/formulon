@@ -838,10 +838,8 @@ class CollectionReaderAllocationTests(unittest.TestCase):
                 ConditionalFormatInput(
                     sqref=[MergeRange(0, 0, n - 1, 0)],
                     type=1,
-                    op_engaged=True,
                     op=4,
                     formula1="10",
-                    dxf_id_engaged=True,
                     dxf_id=dxf_index,
                 ),
             )
@@ -956,9 +954,7 @@ class EvaluateCfRangeDefaultTests(unittest.TestCase):
                 ConditionalFormatInput(
                     sqref=[MergeRange(0, 0, 0, 0)],
                     type=15,
-                    time_period_engaged=True,
                     time_period=0,
-                    dxf_id_engaged=True,
                     dxf_id=dxf_index,
                 ),
             )

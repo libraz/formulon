@@ -3726,6 +3726,17 @@ typedef enum {
 } fm_pivot_axis_t;
 
 /**
+ * @brief Sibling item order of a pivot field.
+ *
+ * Mirrors OOXML `sortType` (`descending` / `ascending` / `manual`).
+ */
+typedef enum {
+  FM_PIVOT_SORT_DESCENDING = 0,
+  FM_PIVOT_SORT_ASCENDING = 1,
+  FM_PIVOT_SORT_MANUAL = 2
+} fm_pivot_sort_order_t;
+
+/**
  * @brief Aggregation function for a value-axis field. Numbering mirrors
  *        `formulon::pivot::Aggregation` and `SubtotalFn` (the two enums are
  *        currently 1-to-1).
@@ -4148,11 +4159,17 @@ FM_API fm_status_t fm_workbook_pivot_field_set_axis(fm_workbook_t* wb, size_t sh
                                                     size_t field_idx, int32_t axis);
 
 /**
- * @brief Sets the sort directive on pivot field `field_idx`. Pass
- *        `by_field == NULL` to clear the by-field key.
+ * @brief Sets the sort directive on pivot field `field_idx`.
+ *
+ * `order` is a raw signed 32-bit `fm_pivot_sort_order_t` ordinal; unknown
+ * values return `kInvalidArgument`. `FM_PIVOT_SORT_MANUAL` keeps sibling
+ * items in the field's item document order (`fm_workbook_pivot_field_add_item`
+ * order) and takes no `by_field` key: a non-NULL, non-empty `by_field` with it
+ * returns `kInvalidArgument`. For the other orders, `by_field == NULL` (or
+ * empty) sorts by label and clears the by-field key.
  */
 FM_API fm_status_t fm_workbook_pivot_field_set_sort(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                    size_t field_idx, int32_t ascending, const char* by_field);
+                                                    size_t field_idx, int32_t order, const char* by_field);
 
 /** @brief Sets the `subtotal_top` flag on pivot field `field_idx`. */
 FM_API fm_status_t fm_workbook_pivot_field_set_subtotal_top(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -4163,8 +4180,10 @@ FM_API fm_status_t fm_workbook_pivot_field_set_subtotal_top(fm_workbook_t* wb, s
  *        by its label.
  *        `utf8_name` must be non-NULL. `visible` is a 32-bit boolean.
  *
- * The item carries no cache binding, so the writer emits its document-order
- * position as `<item x="N">` and the filter engine matches source records by
+ * When a shared item of the bound cache field renders as `utf8_name`, the
+ * item binds to the first such shared item and the writer emits that index as
+ * `<item x="N">`; otherwise it stays unbound and the writer emits its
+ * document-order position. The filter engine matches source records by
  * comparing their rendered label against `utf8_name`. That makes an empty
  * `utf8_name` unusable as the blank item: the blank has no label of its own
  * and is identified by what it binds to. Build one with
