@@ -57,7 +57,9 @@ class CellAdapter:
 
     @property
     def value(self) -> Any:
-        return self.api.Value
+        # Value2 keeps the raw serial: Value converts a date-formatted cell to an OLE date,
+        # which is one day off below serial 61 (OLE has no 1900-02-29), and rounds Currency.
+        return self.api.Value2
 
 
 def format_com_error(exc: BaseException) -> str:

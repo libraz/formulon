@@ -79,53 +79,55 @@ entries:
     prefer: formulon
     first_noted: 2026-09-30
     last_verified_excel_version: "16.0.20228"
-  # Windows results measured on 16.0.20430 whose governing rule is not
-  # identified from the available cases; no host-specific rule is inferred.
+  # The COM bridge read this date-formatted result through Range.Value, which
+  # converts serial 1 to the OLE date 1899-12-31 and back to 0. The driver now
+  # reads Value2; Excel answers 1, as Formulon does.
   - id: date_year_snap_1900
     applies_to: [win-365-ja_JP]
     mode: skip-oracle
-    cause: engine-gap
-    reason: "DATE(1899.9999999,1,1): Win Excel 365 returns 0 where Formulon (and Mac Excel 365) returns 1. A fractional year that snaps up to 1900 is otherwise handled like any other snapped year (DATE(2025.9999999,6,15) agrees), and no rule explaining the 0 is identified from the measurements."
-    prefer: win-excel-365
+    cause: harness-cannot-capture
+    reason: "DATE(1899.9999999,1,1): the golden records 0 because the Windows driver read the date-formatted cell through Range.Value, whose OLE date has no 1900-02-29 and lands one day early below serial 61. Read through Value2 on the same host, Excel returns 1, as Formulon does; the next capture with the Value2 driver replaces the golden."
+    prefer: formulon
     first_noted: 2026-10-13
     last_verified_excel_version: "16.0.20430"
+  # Undocumented WEEKNUM return types have no stable answer on Windows.
   - id: weeknum_neg2
     applies_to: [win-365-ja_JP]
     mode: skip-oracle
-    cause: engine-gap
-    reason: "WEEKNUM(DATE(2025,3,1),-2): Win Excel 365 returns 9 where Formulon returns #NUM!. The same host returns #NUM! for WEEKNUM(10,-2), so the return_type -2 rule is not identified from the measurements."
-    prefer: win-excel-365
+    cause: non-identifiable
+    reason: "WEEKNUM(DATE(2025,3,1),-2): the golden records 9, but the same formula on the same Excel build returned #NUM! in a later session. Over 10 dates x 16 return types, the undocumented types (negative ones and 22) return either the Sunday-start or the Monday-start week number for some cells and #NUM! for others, with no rule in the type, the date or its weekday, which is consistent with an out-of-range table read in Excel. Documented and fractional types are stable and match Formulon. Formulon keeps the documented contract: only 1, 2, 11-17 and 21 (after truncation) are accepted, anything else is #NUM!."
+    prefer: formulon
     first_noted: 2026-10-13
     last_verified_excel_version: "16.0.20430"
   - id: fn_02
     applies_to: [win-365-ja_JP]
     mode: skip-oracle
-    cause: engine-gap
-    reason: "POWER(-8,-1/3): Win Excel 365 returns -0.5 where Formulon (and Mac Excel 365) returns -0.5000000000000001, one unit in the last place apart. The odd-root evaluation (exp/log) rounds differently on Windows; no formulation reproducing every power_negative_base golden bit-exactly is identified from the measurements."
-    prefer: win-excel-365
+    cause: accepted-divergence
+    reason: "POWER(-8,-1/3): Win Excel 365 returns -0.5 where Formulon (and Mac Excel 365) returns -0.5000000000000001, one unit in the last place apart. Both hosts compute a fractional power as exp(log(x)*y) (a negative exponent as the reciprocal of the positive power), which Formulon reproduces bit-exactly against Mac Excel. Windows Excel links an exp/log that rounds a few near-tie results the other way: measured on the same host against ucrtbase, the needed exp error is 0.50-0.67 ulp, so the remaining last-bit differences are not reproducible without that library."
+    prefer: formulon
     first_noted: 2026-10-13
     last_verified_excel_version: "16.0.20430"
   - id: op_02
     applies_to: [win-365-ja_JP]
     mode: skip-oracle
-    cause: engine-gap
-    reason: "(-8)^(-1/3): Win Excel 365 returns -0.5 where Formulon (and Mac Excel 365) returns -0.5000000000000001, one unit in the last place apart. The odd-root evaluation (exp/log) rounds differently on Windows; no formulation reproducing every power_negative_base golden bit-exactly is identified from the measurements."
-    prefer: win-excel-365
+    cause: accepted-divergence
+    reason: "(-8)^(-1/3): Win Excel 365 returns -0.5 where Formulon (and Mac Excel 365) returns -0.5000000000000001, one unit in the last place apart. Both hosts compute a fractional power as exp(log(x)*y) (a negative exponent as the reciprocal of the positive power), which Formulon reproduces bit-exactly against Mac Excel. Windows Excel links an exp/log that rounds a few near-tie results the other way: measured on the same host against ucrtbase, the needed exp error is 0.50-0.67 ulp, so the remaining last-bit differences are not reproducible without that library."
+    prefer: formulon
     first_noted: 2026-10-13
     last_verified_excel_version: "16.0.20430"
   - id: fn_29
     applies_to: [win-365-ja_JP]
     mode: skip-oracle
-    cause: engine-gap
-    reason: "POWER(-1E300,1/3): Win Excel 365 returns -9.999999999999827e+99 where Formulon (and Mac Excel 365) returns -9.999999999999825e+99, one unit in the last place apart. The odd-root evaluation (exp/log) rounds differently on Windows; no formulation reproducing every power_negative_base golden bit-exactly is identified from the measurements."
-    prefer: win-excel-365
+    cause: accepted-divergence
+    reason: "POWER(-1E300,1/3): Win Excel 365 returns -9.999999999999827e+99 where Formulon (and Mac Excel 365) returns -9.999999999999825e+99, one unit in the last place apart. Both hosts compute a fractional power as exp(log(x)*y) (a negative exponent as the reciprocal of the positive power), which Formulon reproduces bit-exactly against Mac Excel. Windows Excel links an exp/log that rounds a few near-tie results the other way: measured on the same host against ucrtbase, the needed exp error is 0.50-0.67 ulp, so the remaining last-bit differences are not reproducible without that library."
+    prefer: formulon
     first_noted: 2026-10-13
     last_verified_excel_version: "16.0.20430"
   - id: op_29
     applies_to: [win-365-ja_JP]
     mode: skip-oracle
-    cause: engine-gap
-    reason: "(-1E300)^(1/3): Win Excel 365 returns -9.999999999999827e+99 where Formulon (and Mac Excel 365) returns -9.999999999999825e+99, one unit in the last place apart. The odd-root evaluation (exp/log) rounds differently on Windows; no formulation reproducing every power_negative_base golden bit-exactly is identified from the measurements."
-    prefer: win-excel-365
+    cause: accepted-divergence
+    reason: "(-1E300)^(1/3): Win Excel 365 returns -9.999999999999827e+99 where Formulon (and Mac Excel 365) returns -9.999999999999825e+99, one unit in the last place apart. Both hosts compute a fractional power as exp(log(x)*y) (a negative exponent as the reciprocal of the positive power), which Formulon reproduces bit-exactly against Mac Excel. Windows Excel links an exp/log that rounds a few near-tie results the other way: measured on the same host against ucrtbase, the needed exp error is 0.50-0.67 ulp, so the remaining last-bit differences are not reproducible without that library."
+    prefer: formulon
     first_noted: 2026-10-13
     last_verified_excel_version: "16.0.20430"
