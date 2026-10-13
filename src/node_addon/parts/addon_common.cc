@@ -4,9 +4,24 @@
 #include "node_addon/parts/addon_common.h"
 
 #include <cmath>
+#include <cstring>
 #include <limits>
 
 namespace formulon_node {
+
+Napi::Uint8Array CopyBytes(Napi::Env env, const uint8_t* bytes, std::size_t len) {
+  Napi::Uint8Array copy = Napi::Uint8Array::New(env, len);
+  if (len != 0 && bytes != nullptr) {
+    std::memcpy(copy.Data(), bytes, len);
+  }
+  return copy;
+}
+
+Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* bytes, std::size_t len) {
+  Napi::Uint8Array copy = CopyBytes(env, bytes, len);
+  fm_buffer_free(bytes);
+  return copy;
+}
 
 namespace {
 

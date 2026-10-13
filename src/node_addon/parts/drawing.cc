@@ -3,7 +3,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <string>
 
 #include "node_addon/parts/workbook_class.h"
@@ -110,10 +109,10 @@ Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
   out.Set("format", JsNumber(env, 0));
-  out.Set("bytes", Napi::Uint8Array::New(env, 0));
   out.Set("pxWidth", JsNumber(env, 0));
   out.Set("pxHeight", JsNumber(env, 0));
   if (handle_ == nullptr) {
+    out.Set("bytes", Napi::Uint8Array::New(env, 0));
     out.Set("status", NullHandleError(env));
     return out;
   }
@@ -123,14 +122,12 @@ Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {
   const fm_status_t rc = fm_sheet_get_image(handle_, ArgU32(info, 0), ArgU32(info, 1), &bytes, &len, &img);
   if (rc == 0) {
     // The C pointer dies on the next mutation, so the bytes are copied out.
-    Napi::Uint8Array copy = Napi::Uint8Array::New(env, len);
-    if (len != 0) {
-      std::memcpy(copy.Data(), bytes, len);
-    }
     out.Set("format", JsNumber(env, img.format));
-    out.Set("bytes", copy);
+    out.Set("bytes", CopyBytes(env, bytes, len));
     out.Set("pxWidth", JsNumber(env, img.px_width));
     out.Set("pxHeight", JsNumber(env, img.px_height));
+  } else {
+    out.Set("bytes", Napi::Uint8Array::New(env, 0));
   }
   out.Set("status", MakeStatus(env, rc));
   return out;
@@ -209,8 +206,8 @@ Napi::Value Workbook::SetImageZOrder(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::SnapshotImage(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
-  out.Set("bytes", Napi::Uint8Array::New(env, 0));
   if (handle_ == nullptr) {
+    out.Set("bytes", Napi::Uint8Array::New(env, 0));
     out.Set("status", NullHandleError(env));
     return out;
   }
@@ -218,13 +215,11 @@ Napi::Value Workbook::SnapshotImage(const Napi::CallbackInfo& info) {
   size_t len = 0;
   const fm_status_t rc = fm_sheet_snapshot_image(handle_, ArgU32(info, 0), ArgU32(info, 1), &bytes, &len);
   if (rc == 0) {
-    Napi::Uint8Array copy = Napi::Uint8Array::New(env, len);
-    if (len != 0) {
-      std::memcpy(copy.Data(), bytes, len);
-    }
-    out.Set("bytes", copy);
+    out.Set("bytes", TakeSavedBytes(env, bytes, len));
+  } else {
+    fm_buffer_free(bytes);
+    out.Set("bytes", Napi::Uint8Array::New(env, 0));
   }
-  fm_buffer_free(bytes);
   out.Set("status", MakeStatus(env, rc));
   return out;
 }

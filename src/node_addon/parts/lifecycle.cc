@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <string>
 
 #include "node_addon/parts/workbook_class.h"
@@ -30,16 +29,6 @@ Napi::Object MakeParallelRecalcResult(Napi::Env env, Napi::Object status, const 
   result.Set("status", status);
   result.Set("stats", stats_obj);
   return result;
-}
-
-// Copies an engine-owned save buffer onto the JS heap and releases it.
-Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* buf, std::size_t len) {
-  Napi::Uint8Array dst = Napi::Uint8Array::New(env, len);
-  if (len != 0 && buf != nullptr) {
-    std::memcpy(dst.Data(), buf, len);
-  }
-  fm_buffer_free(buf);
-  return dst;
 }
 
 // Builds `{ status, bytes }` for a save call; `bytes` is null on failure.

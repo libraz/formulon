@@ -45,6 +45,12 @@
 
 namespace formulon_node {
 
+/// Copies borrowed bytes onto the JS heap; the source remains owned by the caller.
+Napi::Uint8Array CopyBytes(Napi::Env env, const uint8_t* bytes, std::size_t len);
+
+/// Copies an engine-owned buffer onto the JS heap and releases the source.
+Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* bytes, std::size_t len);
+
 /// `kBindingInvalidHandle` ordinal mirrors `formulon::FormulonErrorCode`
 /// in the 7000-7999 range allocated to bindings (see CLAUDE.md error
 /// code table). The C ABI itself uses 7001 for a NULL pointer; 7000

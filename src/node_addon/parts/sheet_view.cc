@@ -3,7 +3,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <string>
 #include <vector>
 
@@ -661,8 +660,8 @@ Napi::Value Workbook::RemapRangeStyle(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::SnapshotRangeStyle(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
-  out.Set("bytes", Napi::Uint8Array::New(env, 0));
   if (handle_ == nullptr) {
+    out.Set("bytes", Napi::Uint8Array::New(env, 0));
     out.Set("status", NullHandleError(env));
     return out;
   }
@@ -672,13 +671,11 @@ Napi::Value Workbook::SnapshotRangeStyle(const Napi::CallbackInfo& info) {
       fm_sheet_snapshot_range_style(handle_, static_cast<std::size_t>(ArgU32(info, 0)), ArgU32(info, 1),
                                     ArgU32(info, 2), ArgU32(info, 3), ArgU32(info, 4), &bytes, &len);
   if (rc == 0) {
-    Napi::Uint8Array copy = Napi::Uint8Array::New(env, len);
-    if (len != 0) {
-      std::memcpy(copy.Data(), bytes, len);
-    }
-    out.Set("bytes", copy);
+    out.Set("bytes", TakeSavedBytes(env, bytes, len));
+  } else {
+    fm_buffer_free(bytes);
+    out.Set("bytes", Napi::Uint8Array::New(env, 0));
   }
-  fm_buffer_free(bytes);
   out.Set("status", MakeStatus(env, rc));
   return out;
 }
