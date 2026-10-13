@@ -54,9 +54,10 @@ Step next_step(std::string_view text, std::size_t i) noexcept {
   return {need + 1, need == 3 ? 2u : 1u};
 }
 
-}  // namespace
+enum class MidpointRounding { kDown, kUp };
 
-std::size_t utf16_to_byte_offset(std::string_view text, std::uint32_t units_offset) noexcept {
+std::size_t utf16_to_byte_offset_impl(std::string_view text, std::uint32_t units_offset,
+                                      MidpointRounding rounding) noexcept {
   if (units_offset == 0) {
     return 0;
   }
@@ -64,38 +65,25 @@ std::size_t utf16_to_byte_offset(std::string_view text, std::uint32_t units_offs
   std::size_t i = 0;
   while (i < text.size()) {
     const Step step = next_step(text, i);
-    units += step.unit_len;
-    i += step.byte_len;
-    // Rounding-up rule: if we just crossed (or hit) the target, return the
-    // byte position AFTER the codepoint. For a surrogate-pair midpoint this
-    // yields the byte position past the entire supplementary codepoint.
-    if (units >= units_offset) {
-      return i;
+    const std::uint32_t next_units = units + step.unit_len;
+    if (next_units >= units_offset) {
+      // Only a surrogate-pair midpoint distinguishes the two policies.
+      return rounding == MidpointRounding::kDown && next_units > units_offset ? i : i + step.byte_len;
     }
+    units = next_units;
+    i += step.byte_len;
   }
   return text.size();
 }
 
+}  // namespace
+
+std::size_t utf16_to_byte_offset(std::string_view text, std::uint32_t units_offset) noexcept {
+  return utf16_to_byte_offset_impl(text, units_offset, MidpointRounding::kUp);
+}
+
 std::size_t utf16_to_byte_offset_floor(std::string_view text, std::uint32_t units_offset) noexcept {
-  if (units_offset == 0) {
-    return 0;
-  }
-  std::uint32_t units = 0;
-  std::size_t i = 0;
-  while (i < text.size()) {
-    const Step step = next_step(text, i);
-    if (units + step.unit_len > units_offset) {
-      // The target sits inside this codepoint (a surrogate-pair midpoint).
-      // Rounding down keeps the whole codepoint inside the slice.
-      return i;
-    }
-    units += step.unit_len;
-    i += step.byte_len;
-    if (units == units_offset) {
-      return i;
-    }
-  }
-  return text.size();
+  return utf16_to_byte_offset_impl(text, units_offset, MidpointRounding::kDown);
 }
 
 std::string utf16_substring(std::string_view text, std::uint32_t start_units, std::uint32_t length_units) {

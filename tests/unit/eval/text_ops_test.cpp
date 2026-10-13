@@ -54,6 +54,31 @@ TEST(TextOpsUtf16ToByteOffset, SupplementaryOffsetsRoundUpAtMidpoint) {
   EXPECT_EQ(utf16_to_byte_offset(kEmojiPopper, 2u), 4u);
 }
 
+TEST(TextOpsUtf16ToByteOffset, MalformedAndTruncatedBytesKeepSingleByteSteps) {
+  const std::string text(
+      "\x80"
+      "A"
+      "\xF0\x9F",
+      4);
+  for (std::uint32_t offset = 0; offset <= 4; ++offset) {
+    EXPECT_EQ(utf16_to_byte_offset(text, offset), offset);
+    EXPECT_EQ(utf16_to_byte_offset_floor(text, offset), offset);
+  }
+  EXPECT_EQ(utf16_to_byte_offset(text, UINT32_MAX), text.size());
+  EXPECT_EQ(utf16_to_byte_offset_floor(text, UINT32_MAX), text.size());
+}
+
+TEST(TextOpsUtf16ToByteOffset, PermissiveContinuationRulesRemainUnchanged) {
+  const std::string overlong("\xC0\xAF", 2);
+  EXPECT_EQ(utf16_to_byte_offset(overlong, 1), 2U);
+  EXPECT_EQ(utf16_to_byte_offset_floor(overlong, 1), 2U);
+  const std::string out_of_unicode_range("\xF4\x90\x80\x80", 4);
+  EXPECT_EQ(utf16_to_byte_offset(out_of_unicode_range, 1), 4U);
+  EXPECT_EQ(utf16_to_byte_offset_floor(out_of_unicode_range, 1), 0U);
+  EXPECT_EQ(utf16_to_byte_offset(out_of_unicode_range, 2), 4U);
+  EXPECT_EQ(utf16_to_byte_offset_floor(out_of_unicode_range, 2), 4U);
+}
+
 TEST(TextOpsUtf16ToByteOffsetFloor, AgreesOnCodepointBoundaries) {
   const std::string_view s = "hello";
   EXPECT_EQ(utf16_to_byte_offset_floor(s, 0u), 0u);
