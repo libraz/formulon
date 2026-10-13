@@ -30,6 +30,7 @@ export const ValueKind: Readonly<{
   Ref: 6;
   Lambda: 7;
 }>;
+/** Union of the {@link ValueKind} ordinals. */
 export type ValueKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /** Status carried by binding result envelopes. Argument validation may
@@ -215,6 +216,7 @@ export const PivotCellKind: Readonly<{
   GrandTotal: 6;
   Blank: 7;
 }>;
+/** Union of the {@link PivotCellKind} ordinals. */
 export type PivotCellKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /** One concrete cell in a projected PivotTable layout. */
@@ -460,6 +462,7 @@ export const CfMatchKind: Readonly<{
   DataBar: 2;
   IconSet: 3;
 }>;
+/** Union of the {@link CfMatchKind} ordinals. */
 export type CfMatchKind = 0 | 1 | 2 | 3;
 
 /** `fm_error_code_t` ordinals (mirror of `formulon::ErrorCode`). */
@@ -493,6 +496,7 @@ export const CalcMode: Readonly<{
   Manual: 1;
   AutoNoTable: 2;
 }>;
+/** Union of the {@link CalcMode} ordinals. */
 export type CalcMode = 0 | 1 | 2;
 
 /** Which fold of text comparison `compareText` and `collationClasses` apply.
@@ -505,6 +509,7 @@ export const CollationStrength: Readonly<{
   Dynamic: 1;
   ClassicExact: 2;
 }>;
+/** Union of the {@link CollationStrength} ordinals. */
 export type CollationStrength = 0 | 1 | 2;
 
 /** Minimum severity for the engine's structured log stream. Mirrors
@@ -526,6 +531,7 @@ export const ExternalLinkKind: Readonly<{
   Ole: 2;
   Dde: 3;
 }>;
+/** Union of the {@link ExternalLinkKind} ordinals. */
 export type ExternalLinkKind = 0 | 1 | 2 | 3;
 
 /**
@@ -775,6 +781,7 @@ export interface SheetPageBreaksResult {
  * Declared as a union rather than an `enum` so it stays a compile-time-only
  * type: there is no runtime table to keep in step across the two packages,
  * and the three values are the whole domain. */
+/** Union of the {@link Orientation} ordinals. */
 export type Orientation = 0 | 1 | 2;
 
 /** Partial `<pageSetup>` update. Only the keys present are applied; every
@@ -882,6 +889,7 @@ export const SheetVisibility: Readonly<{
   Hidden: 1;
   VeryHidden: 2;
 }>;
+/** Union of the {@link SheetVisibility} ordinals. */
 export type SheetVisibility = 0 | 1 | 2;
 
 /** Which Windows column-width figure a geometry call uses. Mirrors
@@ -890,6 +898,7 @@ export const GeometryMode: Readonly<{
   Display: 0;
   Print: 1;
 }>;
+/** Union of the {@link GeometryMode} ordinals. */
 export type GeometryMode = 0 | 1;
 
 /** Outcome of a display-text rendering. Mirrors `fm_display_status_t`:
@@ -900,6 +909,7 @@ export const DisplayStatus: Readonly<{
   Overflow: 1;
   InvalidFormat: 2;
 }>;
+/** Union of the {@link DisplayStatus} ordinals. */
 export type DisplayStatus = 0 | 1 | 2;
 
 /** Criterion of an AutoFilter column. Mirrors `fm_filter_kind_t`. */
@@ -912,6 +922,7 @@ export const FilterKind: Readonly<{
   Color: 5;
   Icon: 6;
 }>;
+/** Union of the {@link FilterKind} ordinals. */
 export type FilterKind = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 /** Comparison operator of a custom AutoFilter condition. Mirrors `fm_filter_operator_t`. */
@@ -923,6 +934,7 @@ export const FilterOperator: Readonly<{
   GreaterThanOrEqual: 4;
   GreaterThan: 5;
 }>;
+/** Union of the {@link FilterOperator} ordinals. */
 export type FilterOperator = 0 | 1 | 2 | 3 | 4 | 5;
 
 /** Dynamic AutoFilter type, in `ST_DynamicFilterType` schema order. Mirrors `fm_dynamic_filter_type_t`. */
@@ -963,6 +975,7 @@ export const DynamicFilterType: Readonly<{
   M11: 33;
   M12: 34;
 }>;
+/** Union of the {@link DynamicFilterType} ordinals. */
 export type DynamicFilterType =
   | 0
   | 1
@@ -1007,6 +1020,7 @@ export const SortBy: Readonly<{
   FontColor: 2;
   Icon: 3;
 }>;
+/** Union of the {@link SortBy} ordinals. */
 export type SortBy = 0 | 1 | 2 | 3;
 
 /** Sort method of an AutoFilter sort state. Mirrors `fm_sort_method_t`. */
@@ -1015,6 +1029,7 @@ export const SortMethod: Readonly<{
   PinYin: 1;
   Stroke: 2;
 }>;
+/** Union of the {@link SortMethod} ordinals. */
 export type SortMethod = 0 | 1 | 2;
 
 /** Granularity of an AutoFilter date-group item. Mirrors `fm_date_time_grouping_t`. */
@@ -1026,6 +1041,7 @@ export const DateTimeGrouping: Readonly<{
   Minute: 4;
   Second: 5;
 }>;
+/** Union of the {@link DateTimeGrouping} ordinals. */
 export type DateTimeGrouping = 0 | 1 | 2 | 3 | 4 | 5;
 
 /** Data-validation error style. Mirrors `fm_validation_error_style_t`. */
@@ -1034,6 +1050,7 @@ export const ValidationErrorStyle: Readonly<{
   Warning: 1;
   Information: 2;
 }>;
+/** Union of the {@link ValidationErrorStyle} ordinals. */
 export type ValidationErrorStyle = 0 | 1 | 2;
 
 /** Raster format of an image. Mirrors `fm_image_format_t`; `Unknown` marks "no image bytes found". */
@@ -1044,6 +1061,7 @@ export const ImageFormat: Readonly<{
   Gif: 3;
   Bmp: 4;
 }>;
+/** Union of the {@link ImageFormat} ordinals. */
 export type ImageFormat = 0 | 1 | 2 | 3 | 4;
 
 /** What a drawing anchor holds. Mirrors `fm_drawing_object_kind_t`. */
@@ -1056,6 +1074,7 @@ export const DrawingObjectKind: Readonly<{
   GraphicFrame: 5;
   Other: 6;
 }>;
+/** Union of the {@link DrawingObjectKind} ordinals. */
 export type DrawingObjectKind = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 /** The anchor element type of a drawing object. Mirrors `fm_anchor_kind_t`. */
@@ -1064,6 +1083,7 @@ export const AnchorKind: Readonly<{
   TwoCell: 1;
   Absolute: 2;
 }>;
+/** Union of the {@link AnchorKind} ordinals. */
 export type AnchorKind = 0 | 1 | 2;
 
 /** How a drawing object follows row and column edits. Mirrors `fm_anchor_edit_as_t`. */
@@ -1072,6 +1092,7 @@ export const AnchorEditAs: Readonly<{
   OneCell: 1;
   Absolute: 2;
 }>;
+/** Union of the {@link AnchorEditAs} ordinals. */
 export type AnchorEditAs = 0 | 1 | 2;
 
 /** Where a colour is used; decides what an automatic colour means. Mirrors
@@ -1082,6 +1103,7 @@ export const ColorContext: Readonly<{
   FillBackground: 2;
   Border: 3;
 }>;
+/** Union of the {@link ColorContext} ordinals. */
 export type ColorContext = 0 | 1 | 2 | 3;
 
 /** How a colour was resolved. Mirrors `fm_color_resolution_t`: `Exact` is a
@@ -1096,6 +1118,7 @@ export const ColorResolution: Readonly<{
   ThemeUnparseable: 3;
   AutoContext: 4;
 }>;
+/** Union of the {@link ColorResolution} ordinals. */
 export type ColorResolution = 0 | 1 | 2 | 3 | 4;
 
 /** Where `getTheme` read the theme from. Mirrors the C `out_source` values. */
@@ -1104,6 +1127,7 @@ export const ThemeSource: Readonly<{
   Default: 1;
   Unparseable: 2;
 }>;
+/** Union of the {@link ThemeSource} ordinals. */
 export type ThemeSource = 0 | 1 | 2;
 
 /** Where `getEffectiveStyle` took its xf from. */
@@ -1113,6 +1137,7 @@ export const EffectiveStyleSource: Readonly<{
   Column: 2;
   Default: 3;
 }>;
+/** Union of the {@link EffectiveStyleSource} ordinals. */
 export type EffectiveStyleSource = 0 | 1 | 2 | 3;
 
 /** Per-sheet view: zoom (10..400, default 100), frozen-pane row/col
@@ -2176,6 +2201,7 @@ export interface ConditionalFormatEntry {
   /** Engaged for `iconSet` rules. */
   readonly iconSet?: {
     readonly name: number;
+    /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold). A formula-typed value carries no leading `=`. */
     readonly thresholds: ReadonlyArray<CfValueObjectInput>;
     readonly reverse: boolean;
     readonly showValue: boolean;
@@ -2243,6 +2269,7 @@ export interface ConditionalFormatInput {
   /** Payload for type 4 (`iconSet`). `name` is `formulon::cf::IconSetName` ordinal. */
   iconSet?: {
     name: number;
+    /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold); any other count is rejected with `kInvalidArgument`. A formula-typed value is stored without its leading `=`. */
     thresholds: ReadonlyArray<CfValueObjectInput>;
     reverse?: boolean;
     showValue?: boolean;
@@ -2507,10 +2534,13 @@ export interface Workbook {
   memoryUsage(): number;
 
   // Cell mutation.
+  /** Stores a numeric literal. NaN and infinity are rejected with `kInvalidArgument`; so is an out-of-range `sheet`. */
   setNumber(sheet: number, row: number, col: number, value: number): Status;
+  /** Stores a boolean literal. */
   setBool(sheet: number, row: number, col: number, value: boolean): Status;
   /** Stores a static Excel error literal; `errorCode` is an ErrorCode ordinal. */
   setError(sheet: number, row: number, col: number, errorCode: number): Status;
+  /** Stores a text literal. */
   setText(sheet: number, row: number, col: number, text: string): Status;
   /** Stores (or, when empty, clears) the cell's OOXML phonetic guide (`<rPh>`). */
   setCellPhonetic(sheet: number, row: number, col: number, phonetic: string): Status;
@@ -2525,12 +2555,15 @@ export interface Workbook {
    *  that has runs; every value setter clears both, so call it after the
    *  cell's text. */
   setCellPhoneticProperties(sheet: number, row: number, col: number, properties: PhoneticProperties): Status;
+  /** Stores a blank literal at the cell; equivalent to clearing it. */
   setBlank(sheet: number, row: number, col: number): Status;
   /** Stores a formula. Returns `kParserUnexpectedToken` and changes nothing when the text
    *  does not parse: a syntax error, or a built-in called through a sheet / workbook qualifier. */
   setFormula(sheet: number, row: number, col: number, formula: string): Status;
 
   // Cell read.
+  /** Reads the cell's cached value, as of the most recent recalc; call `recalc` first after mutating cells.
+   *  Fails with `kInvalidArgument` when `sheet`, `row` or `col` is out of range. */
   getValue(sheet: number, row: number, col: number): CellResult;
   /** Returns the cell's OOXML phonetic guide (`<rPh>`), or an empty string. */
   getCellPhonetic(sheet: number, row: number, col: number): StringResult;
@@ -2596,6 +2629,9 @@ export interface Workbook {
    *  status 7003 with `recomputed` at zero when a throwing
    *  `IterativeProgressCallback` cut the pass short. */
   partialRecalc(viewport: RecalcViewport): PartialRecalcResult;
+  /** Sets iterative calculation. When disabled (the default) cyclic references surface `#REF!`.
+   *  `maxIterations` is clamped to `[1, 32767]` (Excel's own limit) and `getIterative` reports the
+   *  clamped value; `maxChange` is the absolute convergence threshold. */
   setIterative(enabled: boolean, maxIterations: number, maxChange: number): Status;
   /** Reads back the stored iterative-calculation settings. The cap and
    *  threshold are the stored values even while `enabled` is false, so a
@@ -2605,6 +2641,8 @@ export interface Workbook {
   /** Installs (or, when passed `null`, clears) this workbook's JS callback
    *  invoked after each Gauss-Seidel sweep. */
   setIterativeProgress(callback: IterativeProgressCallback | null): Status;
+  /** Serialises the workbook to an in-memory `.xlsx` byte stream. `bytes` is `null` and
+   *  `status` a `kIo*` code on archive / writer failure. */
   save(): SaveResult;
   /** Serialises using an explicit container `format` (see `WorkbookFormat`). */
   saveAs(format: number): SaveResult;
@@ -2620,6 +2658,7 @@ export interface Workbook {
    *  metadata and surfaced here so the UI can mirror Excel's state.
    *  `value` is one of the `CalcMode` codes. */
   calcMode(): NumberResult<CalcMode>;
+  /** Sets the calc mode metadata; it does not change evaluation. Returns `kInvalidArgument` for a value outside `CalcMode`. */
   setCalcMode(mode: CalcMode): Status;
   /** The workbook's pinned wall-clock reading as `now`, or `now: null`
    *  when it follows the host clock (the default).
@@ -2648,15 +2687,29 @@ export interface Workbook {
    * Pick another locale or host with any {@link ExcelProfileId}.
    */
   excelProfileId(): StringResult<ExcelProfileId>;
+  /** Selects the formula-behaviour profile; `kInvalidArgument` for an id that is not an {@link ExcelProfileId}.
+   *  Cached formula values are not recomputed until the next `recalc()`. */
   setExcelProfileId(profileId: ExcelProfileId): Status;
 
   // Sheet operations.
+  /** Appends a sheet. Fails with `kInvalidSheetName` when the name is empty, longer than 31 UTF-16 units,
+   *  contains one of `: \ / ? * [ ]`, or collides case-insensitively (Unicode simple case folding) with an
+   *  existing sheet, and with `kSheetCountLimitExceeded` at the maximum sheet count. */
   addSheet(name: string): Status;
+  /** Removes the sheet at `index`. References to it are rewritten to `#REF!` at the affected subexpression
+   *  (cell formulas, defined names, conditional-format, validation and table formulas); sheet-scoped names and
+   *  tables owned by the sheet are dropped, as are pivot caches sourced from it and their pivot tables.
+   *  Fails with `kSheetIndexOutOfRange`, or `kCannotRemoveLastSheet` when only one sheet remains. */
   removeSheet(index: number): Status;
+  /** Renames the sheet at `index` and rewrites the references that name it (formulas, defined names,
+   *  conditional-format and validation formulas, hyperlinks, table formulas, pivot sources). Fails with
+   *  `kSheetIndexOutOfRange`, or `kInvalidSheetName` under the same rules as `addSheet`. */
   renameSheet(index: number, name: string): Status;
   /** Moves the sheet from `fromIdx` to `toIdx` (post-removal index). */
   moveSheet(fromIdx: number, toIdx: number): Status;
+  /** Number of sheets. */
   sheetCount(): NumberResult;
+  /** Display name of the sheet at `index`; `kInvalidArgument` when `index` is out of range. */
   sheetName(index: number): StringResult;
 
   // Row / column structural edits.
@@ -2709,11 +2762,17 @@ export interface Workbook {
   getDisplayText(sheet: number, row: number, col: number): DisplayTextResult;
   /** Renders `value` under the stored-form number format `formatCode` (empty means General). */
   formatValue(value: Value, formatCode: string): DisplayTextResult;
+  /** Number of defined names, workbook- and sheet-scoped alike. */
   definedNameCount(): NumberResult;
+  /** Reads the `idx`-th defined name with its scope; `kInvalidArgument` when `idx` is out of range. */
   definedNameAt(idx: number): DefinedNameEntry;
+  /** Number of worksheet tables in the workbook. */
   tableCount(): NumberResult;
+  /** Reads the `idx`-th table's identifying metadata; `kInvalidArgument` when `idx` is out of range. */
   tableAt(idx: number): TableEntry;
+  /** Number of OOXML parts the reader carried through unchanged. */
   passthroughCount(): NumberResult;
+  /** Reads the path of the `idx`-th passthrough part; `kInvalidArgument` when `idx` is out of range. */
   passthroughAt(idx: number): PassthroughEntry;
   /** Returns the number of PivotTables anchored on `sheet`. */
   pivotCount(sheet: number): NumberResult;
@@ -2912,6 +2971,9 @@ export interface Workbook {
 
   // Defined names. A non-empty `formula` that does not parse is rejected
   // with `kParserUnexpectedToken`.
+  /** Adds, replaces, or (when `formula` is empty) removes a workbook-scoped defined name. One leading `=` is
+   *  dropped. Fails with `kInvalidArgument` for an empty `name`, and `kParserUnexpectedToken` when a non-empty
+   *  `formula` does not parse. */
   setDefinedName(name: string, formula: string): Status;
   /** Adds, replaces, or removes a defined name in workbook scope (-1)
    *  or a sheet-local scope (0-based sheet index). A non-empty `formula`
@@ -3341,10 +3403,15 @@ export interface Workbook {
   evaluateAutoFilter(sheet: number): AutoFilterEvalResult;
   /** Table counterpart of `getAutoFilter`; `tableIdx` is the `tableAt` index. */
   getTableAutoFilter(table: number): AutoFilterResult;
+  /** Replaces the table's AutoFilter. Row visibility is unchanged. */
   setTableAutoFilter(table: number, autoFilter: AutoFilter): Status;
+  /** Removes the table's AutoFilter. Row visibility is unchanged. */
   removeTableAutoFilter(table: number): Status;
+  /** Hides every body row the table's criteria exclude and shows the rest. */
   applyTableAutoFilter(table: number): Status;
+  /** Drops every column criterion and shows all body rows. */
   clearTableAutoFilter(table: number): Status;
+  /** Evaluates the table's AutoFilter without changing the sheet. */
   evaluateTableAutoFilter(table: number): AutoFilterEvalResult;
 
   /** Returns every threaded comment on `sheet` in file order: each thread's opening comment followed by its replies. */
@@ -3359,6 +3426,8 @@ export interface Workbook {
   removeThreadedComment(sheet: number, id: string): Status;
   /** Returns the workbook's person list in file order. */
   getPersons(): PersonsResult;
+  /** Appends a person to the workbook's person list. Fails with `kThreadedCommentInvalid` when the id is
+   *  malformed or already listed, or the display name is empty. */
   addPerson(person: Person): Status;
   /** Removes the person with `id`; rejected while a comment or mention still names them. */
   removePerson(id: string): Status;
@@ -3522,6 +3591,7 @@ export interface WorkbookCtor {
   loadBytes(bytes: Uint8Array): Workbook;
 }
 
+/** Factory object for native `Workbook` handles (`createDefault`, `createEmpty`, `loadBytes`, ...). */
 export const Workbook: WorkbookCtor;
 
 /** Convenience: evaluates `formula` read-only against a fresh

@@ -390,6 +390,8 @@ export interface PivotWorksheetSource {
   name?: string;
 }
 
+/** Return type of `Workbook.pivotCacheGetWorksheetSource(cacheId)`: the source metadata plus `status`;
+ *  `ref`, `sheet` and `name` are empty strings when absent. */
 export interface PivotWorksheetSourceResult extends PivotWorksheetSource {
   status: Status;
   ref: string;
@@ -397,6 +399,7 @@ export interface PivotWorksheetSourceResult extends PivotWorksheetSource {
   name: string;
 }
 
+/** Return type of `Workbook.pivotGetLayout(sheet, pivotIdx)`: `status` plus the report `layout`. */
 export interface PivotReportLayoutResult {
   status: Status;
   layout: PivotReportLayout;
@@ -1326,6 +1329,7 @@ export interface ConditionalFormatEntry {
   /** Engaged for `iconSet` rules. */
   readonly iconSet?: {
     readonly name: number;
+    /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold). A formula-typed value carries no leading `=`. */
     readonly thresholds: ReadonlyArray<CfValueObjectInput>;
     readonly reverse: boolean;
     readonly showValue: boolean;
@@ -1393,6 +1397,7 @@ export interface ConditionalFormatInput {
   /** Payload for type 4 (`iconSet`). `name` is `formulon::cf::IconSetName` ordinal. */
   iconSet?: {
     name: number;
+    /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold); any other count is rejected with `kInvalidArgument`. A formula-typed value is stored without its leading `=`. */
     thresholds: ReadonlyArray<CfValueObjectInput>;
     reverse?: boolean;
     showValue?: boolean;
@@ -1685,6 +1690,7 @@ export interface DxfRecord {
   protectionXml?: string;
 }
 
+/** Return type of `Workbook.getDxf(dxfIndex)`: `status` plus the `DxfRecord` fields. */
 export interface DxfResult extends DxfRecord {
   status: Status;
 }
@@ -2494,6 +2500,8 @@ export interface Workbook {
    *  running a `recalc`/`recalcParallel` against the handle. */
   delete(): void;
 
+  /** Serialises the workbook to an in-memory `.xlsx` byte stream. `bytes` is `null` and
+   *  `status` a `kIo*` code on archive / writer failure. */
   save(): SaveResult;
   /** Serialises using an explicit container `format` (see `WorkbookFormat`). */
   saveAs(format: WorkbookFormat | number): SaveResult;
@@ -2501,6 +2509,9 @@ export interface Workbook {
   saveWithDiagnostics(format: WorkbookFormat | number): SaveDiagnosticsResult;
   /** Returns the loss counters captured when this handle was loaded. */
   readDiagnostics(): ReadDiagnosticsResult;
+  /** Appends a sheet. Fails with `kInvalidSheetName` when the name is empty, longer than 31 UTF-16 units,
+   *  contains one of `: \ / ? * [ ]`, or collides case-insensitively (Unicode simple case folding) with an
+   *  existing sheet, and with `kSheetCountLimitExceeded` at the maximum sheet count. */
   addSheet(name: string): Status;
   /** Removes the sheet at `index`. */
   removeSheet(index: number): Status;
@@ -2508,16 +2519,21 @@ export interface Workbook {
   renameSheet(index: number, newName: string): Status;
   /** Moves the sheet from `fromIdx` to `toIdx` (post-removal index). */
   moveSheet(fromIdx: number, toIdx: number): Status;
+  /** Number of sheets. */
   sheetCount(): NumberResult;
+  /** Display name of the sheet at `idx`; `kInvalidArgument` when `idx` is out of range. */
   sheetName(idx: number): StringResult;
 
+  /** Stores a numeric literal. NaN and infinity are rejected with `kInvalidArgument`; so is an out-of-range `sheet`. */
   setNumber(sheet: number, row: number, col: number, value: number): Status;
+  /** Stores a boolean literal. */
   setBool(sheet: number, row: number, col: number, value: boolean): Status;
   /** Stores a static Excel error literal; `errorCode` is an ErrorCode
    *  ordinal. Unlike `setNumber`/`setBool`/`setText`, an omitted
    *  `errorCode` has no sane zero-value default, so it is rejected
    *  rather than silently writing error code 0 (`#NULL!`). */
   setError(sheet: number, row: number, col: number, errorCode: number): Status;
+  /** Stores a text literal. */
   setText(sheet: number, row: number, col: number, text: string): Status;
   /** Stores (or, when empty, clears) the cell's OOXML phonetic guide (`<rPh>`). */
   setCellPhonetic(sheet: number, row: number, col: number, phonetic: string): Status;
@@ -2532,11 +2548,14 @@ export interface Workbook {
    *  that has runs; every value setter clears both, so call it after the
    *  cell's text. */
   setCellPhoneticProperties(sheet: number, row: number, col: number, properties: PhoneticProperties): Status;
+  /** Stores a blank literal at the cell; equivalent to clearing it. */
   setBlank(sheet: number, row: number, col: number): Status;
   /** Stores a formula. Returns `kParserUnexpectedToken` and changes nothing when the text
    *  does not parse: a syntax error, or a built-in called through a sheet / workbook qualifier. */
   setFormula(sheet: number, row: number, col: number, formula: string): Status;
 
+  /** Reads the cell's cached value, as of the most recent recalc; call `recalc` first after mutating cells.
+   *  Fails with `kInvalidArgument` when `sheet`, `row` or `col` is out of range. */
   getValue(sheet: number, row: number, col: number): CellResult;
 
   /** The stored A1 formula (leading `=` included), or `formula: null` for a cell that holds none.
@@ -2629,6 +2648,9 @@ export interface Workbook {
    *  `IterativeProgressCallback` cut the pass short. */
   partialRecalc(viewport: RecalcViewport): PartialRecalcResult;
 
+  /** Sets iterative calculation. When disabled (the default) cyclic references surface `#REF!`.
+   *  `maxIterations` is clamped to `[1, 32767]` (Excel's own limit) and `getIterative` reports the
+   *  clamped value; `maxChange` is the absolute convergence threshold. */
   setIterative(enabled: boolean, maxIterations: number, maxChange: number): Status;
   /** Reads back the stored iterative-calculation settings. The cap and
    *  threshold are the stored values even while `enabled` is false, so a
@@ -2653,6 +2675,7 @@ export interface Workbook {
    * here so the UI can mirror Excel's user-visible state.
    */
   calcMode(): NumberResult<CalcMode>;
+  /** Sets the calc mode metadata; it does not change evaluation. Returns `kInvalidArgument` for a value outside `CalcMode`. */
   setCalcMode(mode: CalcMode): Status;
 
   /**
@@ -2680,13 +2703,17 @@ export interface Workbook {
    * is rejected rather than rolled into the next year.
    */
   pinnedNow(): PinnedNowResult;
+  /** Pins the workbook clock to a local civil instant; see `pinnedNow` for the accepted ranges. */
   setPinnedNow(year: number, month: number, day: number, hour: number, minute: number, second: number): Status;
+  /** Releases the pin so the clock follows the host again. Clearing an unpinned workbook succeeds and does nothing. */
   clearPinnedNow(): Status;
 
   /** Full formula-behaviour profile id. Defaults to `win-365-en_US`.
    * Pick another locale or host with any {@link ExcelProfileId}.
    */
   excelProfileId(): StringResult<ExcelProfileId>;
+  /** Selects the formula-behaviour profile; `kInvalidArgument` for an id that is not an {@link ExcelProfileId}.
+   *  Cached formula values are not recomputed until the next `recalc()`. */
   setExcelProfileId(profileId: ExcelProfileId): Status;
 
   /**
@@ -2724,7 +2751,9 @@ export interface Workbook {
   /** Reads the `idx`-th counted coordinate, `idx` in `[0, cellCount)`, ordered by `(row, col)` ascending. */
   cellAt(sheet: number, idx: number): CellEntry;
 
+  /** Number of defined names, workbook- and sheet-scoped alike. */
   definedNameCount(): NumberResult;
+  /** Reads the `idx`-th defined name with its scope; `kInvalidArgument` when `idx` is out of range. */
   definedNameAt(idx: number): DefinedNameEntry;
   /** Adds, replaces, or (when `formula` is empty) removes a workbook-
    *  scoped defined name. A non-empty `formula` that does not parse is
@@ -2735,13 +2764,18 @@ export interface Workbook {
    *  that does not parse is rejected with `kParserUnexpectedToken`. */
   setDefinedNameScoped(name: string, formula: string, localSheetId: number): Status;
 
+  /** Number of worksheet tables in the workbook. */
   tableCount(): NumberResult;
+  /** Reads the `idx`-th table's identifying metadata; `kInvalidArgument` when `idx` is out of range. */
   tableAt(idx: number): TableEntry;
+  /** Creates a worksheet table; `index` of the result is its workbook-wide table index (see `tableAt`).
+   *  `input.columns` must hold one unique, non-empty header per column of `input.ref`. */
   createTable(input: TableInput): AddStyleResult;
   /** Partially updates a table. Omitted fields preserve their current
    *  values. A supplied `ref` must keep the table's existing column count;
    *  an empty `styleName` clears the style. */
   updateTable(idx: number, input: TableUpdateInput): Status;
+  /** Removes the table at `idx`. */
   removeTable(idx: number): Status;
 
   /** Reads the complete worksheet-level `<autoFilter>` XML fragment. */
@@ -2767,10 +2801,15 @@ export interface Workbook {
   /** Table counterparts, addressed by the workbook-wide table index
    *  (`tableAt`). */
   getTableAutoFilter(table: number): AutoFilterResult;
+  /** Replaces the table's AutoFilter. Row visibility is unchanged. */
   setTableAutoFilter(table: number, filter: AutoFilter): Status;
+  /** Removes the table's AutoFilter. Row visibility is unchanged. */
   removeTableAutoFilter(table: number): Status;
+  /** Hides every body row the table's criteria exclude and shows the rest. */
   applyTableAutoFilter(table: number): Status;
+  /** Drops every column criterion and shows all body rows. */
   clearTableAutoFilter(table: number): Status;
+  /** Evaluates the table's AutoFilter without changing the sheet. */
   evaluateTableAutoFilter(table: number): AutoFilterEvalResult;
 
   /** Checks `value` against the validation rule covering `(row, col)` without
@@ -2793,6 +2832,8 @@ export interface Workbook {
   removeThreadedComment(sheet: number, id: string): Status;
   /** Lists the workbook's persons. */
   getPersons(): PersonsResult;
+  /** Appends a person to the workbook's person list. Fails with `kThreadedCommentInvalid` when the id is
+   *  malformed or already listed, or the display name is empty. */
   addPerson(person: Person): Status;
   /** Fails while a threaded comment or mention still names the person. */
   removePerson(id: string): Status;
@@ -2816,7 +2857,9 @@ export interface Workbook {
   /** Puts a `snapshotImage` capture back and returns the picture's id: in place of a picture with the same id at its recorded position, or as a copy on top with `newId`. */
   restoreImage(sheet: number, bytes: Uint8Array, opts?: RestoreImageOptions): InsertImageResult;
 
+  /** Number of OOXML parts the reader carried through unchanged. */
   passthroughCount(): NumberResult;
+  /** Reads the path of the `idx`-th passthrough part; `kInvalidArgument` when `idx` is out of range. */
   passthroughAt(idx: number): PassthroughEntry;
 
   /** Returns the number of PivotTables anchored on `sheet`. */
