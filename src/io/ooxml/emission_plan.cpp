@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -28,6 +29,7 @@
 #include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "table.h"
+#include "utils/index_sort.h"
 #include "utils/strings.h"
 #include "utils/structured_log.h"
 #include "workbook.h"
@@ -45,16 +47,86 @@ std::string NumberedPartPath(std::string_view prefix, std::uint32_t id, std::str
 }
 
 bool HasPassthroughPart(const EmissionPlan& plan, std::string_view path) {
-  return HasPassthroughPart(plan.passthrough_kept, path);
+  return plan.passthrough_path_index.contains(plan.passthrough_kept, path);
+}
+
+namespace {
+
+const PassthroughPart* FindPassthroughPartLinear(const std::vector<const PassthroughPart*>& passthrough_kept,
+                                                 std::string_view path) {
+  for (const PassthroughPart* part : passthrough_kept) {
+    if (part != nullptr && part->path == path) {
+      return part;
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+void PassthroughPathIndex::reset(const std::vector<const PassthroughPart*>& parts) {
+  order_.clear();
+  source_data_ = parts.data();
+  source_size_ = parts.size();
+  prepared_ = false;
+  if (parts.size() > std::numeric_limits<std::uint32_t>::max()) {
+    return;
+  }
+  const auto less = [&parts](std::uint32_t lhs, std::uint32_t rhs) {
+    const PassthroughPart* const left = parts[lhs];
+    const PassthroughPart* const right = parts[rhs];
+    if (left == nullptr) {
+      return false;
+    }
+    if (right == nullptr) {
+      return true;
+    }
+    return left->path < right->path;
+  };
+  order_.resize(parts.size());
+  bool ordered = true;
+  for (std::uint32_t i = 0; i < parts.size(); ++i) {
+    order_[i] = i;
+    if (i != 0 && less(i, i - 1U)) {
+      ordered = false;
+    }
+  }
+  if (!ordered) {
+    sort_index_order(order_, make_index_less(less));
+  }
+  prepared_ = true;
+}
+
+const PassthroughPart* PassthroughPathIndex::find(const std::vector<const PassthroughPart*>& parts,
+                                                  std::string_view path) const {
+  if (!prepared_ || parts.data() != source_data_ || parts.size() != source_size_) {
+    return FindPassthroughPartLinear(parts, path);
+  }
+
+  std::size_t first = 0;
+  std::size_t last = order_.size();
+  while (first < last) {
+    const std::size_t middle = first + (last - first) / 2U;
+    const PassthroughPart* const part = parts[order_[middle]];
+    if (part == nullptr || part->path.compare(path) >= 0) {
+      last = middle;
+    } else {
+      first = middle + 1U;
+    }
+  }
+  if (first == order_.size()) {
+    return nullptr;
+  }
+  const PassthroughPart* const match = parts[order_[first]];
+  return match != nullptr && match->path == path ? match : nullptr;
+}
+
+bool PassthroughPathIndex::contains(const std::vector<const PassthroughPart*>& parts, std::string_view path) const {
+  return find(parts, path) != nullptr;
 }
 
 bool HasPassthroughPart(const std::vector<const PassthroughPart*>& passthrough_kept, std::string_view path) {
-  for (const PassthroughPart* part : passthrough_kept) {
-    if (part != nullptr && part->path == path) {
-      return true;
-    }
-  }
-  return false;
+  return FindPassthroughPartLinear(passthrough_kept, path) != nullptr;
 }
 
 bool IsXlsbBinaryContentType(std::string_view content_type) {
@@ -170,13 +242,10 @@ std::string_view EffectiveContentType(const Workbook& wb, const PassthroughPart&
 }
 
 /// True when `path` names a loaded part this package can carry verbatim.
-bool HasRetainedPart(const Workbook& wb, std::string_view path) {
-  for (const PassthroughPart& part : wb.passthrough_parts()) {
-    if (part.path == path) {
-      return !IsXlsbBinaryContentType(EffectiveContentType(wb, part));
-    }
-  }
-  return false;
+bool HasRetainedPart(const Workbook& wb, const std::vector<const PassthroughPart*>& source_parts,
+                     const PassthroughPathIndex& source_index, std::string_view path) {
+  const PassthroughPart* const part = source_index.find(source_parts, path);
+  return part != nullptr && !IsXlsbBinaryContentType(EffectiveContentType(wb, *part));
 }
 
 /// Plans every external link in index order. A loaded body the model still
@@ -184,7 +253,8 @@ bool HasRetainedPart(const Workbook& wb, std::string_view path) {
 /// not written; every other link gets a generated body, at its own `.xml`
 /// path or else at the smallest `externalLink<k>.xml` no record or loaded
 /// part uses.
-void PlanExternalLinks(const Workbook& wb, std::size_t first_rid, EmissionPlan& plan) {
+void PlanExternalLinks(const Workbook& wb, const std::vector<const PassthroughPart*>& source_parts,
+                       const PassthroughPathIndex& source_index, std::size_t first_rid, EmissionPlan& plan) {
   const std::vector<const ExternalLinkRecord*> records = wb.external_links_by_index(/*skip_ole_dde=*/false);
   std::unordered_set<std::string> used_paths;
   for (const ExternalLinkRecord& rec : wb.external_links()) {
@@ -201,7 +271,7 @@ void PlanExternalLinks(const Workbook& wb, std::size_t first_rid, EmissionPlan& 
     entry.record = &rec;
     entry.workbook_rid = static_cast<std::uint32_t>(first_rid + i);
     entry.part_path = rec.part_path;
-    if (!rec.body_stale && HasRetainedPart(wb, rec.part_path)) {
+    if (!rec.body_stale && HasRetainedPart(wb, source_parts, source_index, rec.part_path)) {
       entry.written = true;
     } else if (rec.kind != ExternalLinkRecord::Kind::kOleLink && rec.kind != ExternalLinkRecord::Kind::kDdeLink) {
       if (!strings::ends_with(rec.part_path, ".xml")) {
@@ -229,6 +299,23 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   plan.generated_shared_strings = generated_shared_strings;
   plan.generated_persons = !wb.persons().empty();
   plan.tables_by_sheet.assign(wb.sheet_count(), {});
+
+  // The source workbook list is stable for the lifetime of this plan. Keep a
+  // pointer view so external-link and comment-VML lookups share one sorted
+  // path index without copying part payloads.
+  std::vector<const PassthroughPart*> source_passthrough;
+  bool needs_source_index = !wb.external_links().empty();
+  for (std::size_t i = 0; i < wb.sheet_count() && !needs_source_index; ++i) {
+    needs_source_index = !wb.sheet(i).comment_vml_path().empty();
+  }
+  PassthroughPathIndex source_passthrough_index;
+  if (needs_source_index) {
+    source_passthrough.reserve(wb.passthrough_parts().size());
+    for (const PassthroughPart& part : wb.passthrough_parts()) {
+      source_passthrough.push_back(&part);
+    }
+    source_passthrough_index.reset(source_passthrough);
+  }
 
   // Distribute tables to their owning sheets, assigning fallback
   // numeric ids when the source `id` is 0 (which would collide with
@@ -387,12 +474,7 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     // the surviving sheet's shape geometry. Bytes whose shapes no longer
     // match the comment anchors are regenerated instead.
     if (!sheet.comment_vml_path().empty() && sheet.comment_vml_anchors() == sheet.comment_anchor_set()) {
-      for (const PassthroughPart& part : wb.passthrough_parts()) {
-        if (part.path == sheet.comment_vml_path()) {
-          entry.vml_source = &part;
-          break;
-        }
-      }
+      entry.vml_source = source_passthrough_index.find(source_passthrough, sheet.comment_vml_path());
     }
     plan.comments_by_sheet[s] = std::move(entry);
   }
@@ -401,7 +483,7 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   // in the workbook-rels numbering scheme, mirroring how Excel emits
   // them when multiple optional sections coexist.
   PlanExternalLinks(
-      wb,
+      wb, source_passthrough, source_passthrough_index,
       static_cast<std::size_t>(wb.sheet_count()) + 2U + (generated_shared_strings ? 1U : 0U) + plan.pivot_caches.size(),
       plan);
   std::unordered_set<std::string> regenerated_link_bodies;
@@ -454,6 +536,7 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     }
     plan.passthrough_kept.push_back(&part);
   }
+  plan.passthrough_path_index.reset(plan.passthrough_kept);
 
   // Build each sheet's rels file once, after passthrough collision handling,
   // so unknown internal relationships can be retained only when their

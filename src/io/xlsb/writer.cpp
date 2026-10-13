@@ -93,6 +93,9 @@ constexpr std::string_view kCtExternalLinkXlsb = "application/vnd.ms-excel.exter
 
 struct EmissionPlan {
   std::vector<const PassthroughPart*> passthrough_kept;
+  // Shared membership index over the finalized kept list. The list and its
+  // pointed-to parts remain immutable for the rest of the write.
+  PassthroughPathIndex passthrough_path_index;
   /// Source Default registrations, lower-case by extension and unique. They
   /// remain available even when a source archive contains no current part of
   /// a given extension: keeping the registry avoids changing the meaning of
@@ -455,6 +458,7 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
   sort_by_index(plan.default_content_types, [](const DefaultContentType& lhs, const DefaultContentType& rhs) {
     return lhs.extension < rhs.extension;
   });
+  plan.passthrough_path_index.reset(plan.passthrough_kept);
   return plan;
 }
 
@@ -522,8 +526,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
           has_emitted_sheet_rels = true;
           break;
         }
-        if (std::any_of(plan.passthrough_kept.begin(), plan.passthrough_kept.end(),
-                        [&rel](const PassthroughPart* part) { return part->path == rel.target; })) {
+        if (plan.passthrough_path_index.contains(plan.passthrough_kept, rel.target)) {
           has_emitted_sheet_rels = true;
           break;
         }
@@ -573,7 +576,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
 std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, WriteDiagnostics* diagnostics) {
   std::string entries;
   for (const UnknownRelationship& rel : sheet.unknown_relationships()) {
-    if (!rel.target_external && !HasPassthroughPart(plan.passthrough_kept, rel.target)) {
+    if (!rel.target_external && !plan.passthrough_path_index.contains(plan.passthrough_kept, rel.target)) {
       StructuredLog("xlsb.writer.sheet_rel_skipped")
           .field("reason", std::string_view("target_part_absent"))
           .field("type", rel.type)
@@ -643,14 +646,15 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
   // Without them a styled cell's iStyleRef dangles against an empty style
   // table, and the theme / metadata parts are treated as orphans. Emit a rel
   // for each part that is actually present in the package.
-  if (plan.has_generated_styles || HasPassthroughPart(plan.passthrough_kept, "xl/styles.bin")) {
+  if (plan.has_generated_styles || plan.passthrough_path_index.contains(plan.passthrough_kept, "xl/styles.bin")) {
     AppendRelationship(out, next_rid++, kRelStyles, "styles.bin", /*target_external=*/false, /*escape_target=*/true);
   }
-  if (HasPassthroughPart(plan.passthrough_kept, "xl/theme/theme1.xml")) {
+  if (plan.passthrough_path_index.contains(plan.passthrough_kept, "xl/theme/theme1.xml")) {
     AppendRelationship(out, next_rid++, kRelTheme, "theme/theme1.xml", /*target_external=*/false,
                        /*escape_target=*/true);
   }
-  if (plan.has_generated_dynamic_metadata || HasPassthroughPart(plan.passthrough_kept, "xl/metadata.bin")) {
+  if (plan.has_generated_dynamic_metadata ||
+      plan.passthrough_path_index.contains(plan.passthrough_kept, "xl/metadata.bin")) {
     AppendRelationship(out, next_rid++, kRelSheetMetadata, "metadata.bin", /*target_external=*/false,
                        /*escape_target=*/true);
   }
@@ -664,7 +668,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
     if (rel.type == kRelExternalLink) {
       continue;
     }
-    if (!rel.target_external && !HasPassthroughPart(plan.passthrough_kept, rel.target)) {
+    if (!rel.target_external && !plan.passthrough_path_index.contains(plan.passthrough_kept, rel.target)) {
       StructuredLog("xlsb.writer.workbook_rel_skipped")
           .field("reason", std::string_view("target_part_absent"))
           .field("type", rel.type)
@@ -770,7 +774,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
   // 2. _rels/.rels
   if (auto r = AddPart(writer.get(), "_rels/.rels",
-                       BuildPackageRels(workbook, "xl/workbook.bin", plan.passthrough_kept,
+                       BuildPackageRels(workbook, "xl/workbook.bin", plan.passthrough_kept, plan.passthrough_path_index,
                                         "xlsb.writer.package_rel_skipped", &diagnostics));
       !r) {
     return std::move(r.error());

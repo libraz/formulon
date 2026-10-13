@@ -56,6 +56,50 @@ pugi::xml_document ParseWorksheet(const std::string& xml) {
   return doc;
 }
 
+TEST(PassthroughPathIndex, KeepsFirstDuplicateAndFallsBackForUnpreparedOrResizedLists) {
+  PassthroughPart zulu;
+  zulu.path = "xl/zulu.xml";
+  zulu.bytes = {0x01};
+  PassthroughPart first_alpha;
+  first_alpha.path = "xl/alpha.xml";
+  first_alpha.bytes = {0x11};
+  PassthroughPart second_alpha = first_alpha;
+  second_alpha.bytes = {0x22};
+  PassthroughPart late;
+  late.path = "xl/late.xml";
+  late.bytes = {0x33};
+  std::vector<const PassthroughPart*> parts = {&zulu, &first_alpha, nullptr, &second_alpha};
+
+  PassthroughPathIndex index;
+  // A hand-built, not-yet-indexed list retains the old linear behavior.
+  EXPECT_EQ(index.find(parts, "xl/alpha.xml"), &first_alpha);
+  EXPECT_TRUE(index.contains(parts, "xl/zulu.xml"));
+  EXPECT_FALSE(index.contains(parts, "xl/missing.xml"));
+
+  index.reset(parts);
+  // Sorting by path must not change which duplicate is returned.
+  EXPECT_EQ(index.find(parts, "xl/alpha.xml"), &first_alpha);
+  EXPECT_EQ(index.find(parts, "xl/zulu.xml"), &zulu);
+  EXPECT_EQ(index.find(parts, "xl/null.xml"), nullptr);
+
+  const std::vector<const PassthroughPart*> other = {&first_alpha, &zulu, &second_alpha, nullptr};
+  EXPECT_EQ(index.find(other, "xl/zulu.xml"), &zulu);
+  EXPECT_EQ(index.find(other, "xl/alpha.xml"), &first_alpha);
+
+  // Appending after preparation invalidates the size check and uses the
+  // null-safe linear fallback, so callers may still use arbitrary vectors.
+  parts.push_back(&late);
+  EXPECT_EQ(index.find(parts, "xl/late.xml"), &late);
+
+  std::vector<const PassthroughPart*> sorted = {&first_alpha, &second_alpha, &zulu, nullptr};
+  index.reset(sorted);
+  EXPECT_EQ(index.find(sorted, "xl/alpha.xml"), &first_alpha);
+  EXPECT_EQ(index.find(sorted, "xl/zulu.xml"), &zulu);
+  EXPECT_EQ(index.find(sorted, "xl/missing.xml"), nullptr);
+  auto moved = std::move(sorted);
+  EXPECT_EQ(index.find(moved, "xl/zulu.xml"), &zulu);
+}
+
 // ---------------------------------------------------------------------------
 // Save counters
 // ---------------------------------------------------------------------------

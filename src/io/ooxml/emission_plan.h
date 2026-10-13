@@ -67,6 +67,33 @@ struct SheetRelsResult {
   std::string legacy_drawing_rid;
 };
 
+/// Path membership index over a caller-owned list of passthrough pointers.
+///
+/// The index owns only sorted positions, never the parts themselves. The
+/// source list is part of the emission plan's immutable input, so the index
+/// records its data pointer and size and uses a binary search while both match.
+/// A hand-built plan, a list that was appended to after indexing, or an index
+/// that was never prepared falls back to the old null-safe linear lookup.
+/// In-place, same-size mutation cannot be detected here; callers keep the
+/// list and its pointed-to parts immutable while emitting a plan.
+struct PassthroughPathIndex {
+  /// Builds the path order over `parts`. Equal paths retain source order and
+  /// null entries sort after every non-null part.
+  void reset(const std::vector<const PassthroughPart*>& parts);
+
+  /// Returns the first source-order part whose path equals `path`, or null.
+  const PassthroughPart* find(const std::vector<const PassthroughPart*>& parts, std::string_view path) const;
+
+  /// True when `find` locates a part.
+  bool contains(const std::vector<const PassthroughPart*>& parts, std::string_view path) const;
+
+ private:
+  std::vector<std::uint32_t> order_;
+  const PassthroughPart* const* source_data_ = nullptr;
+  std::size_t source_size_ = 0;
+  bool prepared_ = false;
+};
+
 /// Plan we build up before any miniz call: which sheets own which
 /// table parts, what filename each table uses, what passthrough parts
 /// we'll emit. Centralising this here keeps `BuildContentTypes` /
@@ -163,6 +190,10 @@ struct EmissionPlan {
   // generated path are dropped here (with a warning) so downstream
   // emission can blindly write everything in the list.
   std::vector<const PassthroughPart*> passthrough_kept;
+  // One membership index shared by all relationship and part builders. It
+  // points into `passthrough_kept`; the vector and pointed-to parts stay
+  // immutable after this plan is built.
+  PassthroughPathIndex passthrough_path_index;
   // Per-sheet rels build, indexed by sheet index (opaque sheets carry a
   // default-constructed, unused entry). Built once after passthrough
   // collision filtering so internal unknown relationships only survive when

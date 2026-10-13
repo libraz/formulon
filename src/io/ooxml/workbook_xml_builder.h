@@ -43,6 +43,14 @@ std::string BuildPackageRels(const Workbook& wb, std::string_view workbook_targe
                              const std::vector<const PassthroughPart*>& passthrough_kept,
                              std::string_view skipped_event, WriteDiagnostics* diagnostics);
 
+/// Indexed form shared by the OOXML and XLSB writers. The index must refer to
+/// `passthrough_kept`; an unprepared or stale-size index falls back to the
+/// null-safe linear lookup used by the overload above.
+std::string BuildPackageRels(const Workbook& wb, std::string_view workbook_target,
+                             const std::vector<const PassthroughPart*>& passthrough_kept,
+                             const PassthroughPathIndex& passthrough_path_index, std::string_view skipped_event,
+                             WriteDiagnostics* diagnostics);
+
 /// Builds the `xl/workbook.xml` part: `<sheets>`, optional
 /// `<externalReferences>`, `<definedNames>`, `<calcPr>`, and
 /// `<pivotCaches>` in ECMA-376 element order.

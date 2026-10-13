@@ -14,6 +14,8 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/ooxml/emission_plan.h"
+#include "io/ooxml/workbook_xml_builder.h"
 #include "io/ooxml_defs.h"
 #include "io/ooxml_reader.h"
 #include "io/zip_reader.h"
@@ -872,6 +874,34 @@ TEST(OoxmlSheetRelsIntegrity, InternalOnlyHyperlinksProduceNoRelsPart) {
   ASSERT_EQ(reload_or.value().workbook.sheet(0).hyperlinks().size(), 1U);
   EXPECT_EQ(reload_or.value().workbook.sheet(0).hyperlinks()[0].location, "Sheet1!B2");
   EXPECT_TRUE(reload_or.value().workbook.sheet(0).hyperlinks()[0].target.empty());
+}
+
+TEST(OoxmlPackageRels, IndexedPassthroughLookupMatchesLegacyVectorOverload) {
+  Workbook wb = Workbook::create();
+  UnknownRelationship package_rel;
+  package_rel.id = "rId9";
+  package_rel.type = "urn:example:relationships/retained";
+  package_rel.target = "xl/custom/retained.bin";
+  wb.set_unknown_package_rels({package_rel});
+
+  PassthroughPart retained;
+  retained.path = package_rel.target;
+  retained.bytes = {0x01, 0x02};
+  std::vector<const PassthroughPart*> parts = {nullptr, &retained};
+  io::PassthroughPathIndex index;
+  index.reset(parts);
+
+  const std::string indexed = io::BuildPackageRels(wb, "xl/workbook.xml", parts, index, "test", nullptr);
+  const std::string vector_overload = io::BuildPackageRels(wb, "xl/workbook.xml", parts, "test", nullptr);
+  EXPECT_EQ(indexed, vector_overload);
+  EXPECT_NE(indexed.find("xl/custom/retained.bin"), std::string::npos);
+
+  // The prepared index deliberately becomes stale after an append; the
+  // indexed overload must retain the old null-safe lookup behavior.
+  PassthroughPart extra;
+  extra.path = "xl/custom/extra.bin";
+  parts.push_back(&extra);
+  EXPECT_EQ(io::BuildPackageRels(wb, "xl/workbook.xml", parts, index, "test", nullptr), indexed);
 }
 
 }  // namespace

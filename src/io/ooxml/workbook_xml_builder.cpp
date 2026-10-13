@@ -324,13 +324,22 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
 }
 
 std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan, WriteDiagnostics* diagnostics) {
-  return BuildPackageRels(wb, "xl/workbook.xml", plan.passthrough_kept, "ooxml_writer.package_rel_skipped",
-                          diagnostics);
+  return BuildPackageRels(wb, "xl/workbook.xml", plan.passthrough_kept, plan.passthrough_path_index,
+                          "ooxml_writer.package_rel_skipped", diagnostics);
 }
 
 std::string BuildPackageRels(const Workbook& wb, std::string_view workbook_target,
                              const std::vector<const PassthroughPart*>& passthrough_kept,
                              std::string_view skipped_event, WriteDiagnostics* diagnostics) {
+  PassthroughPathIndex passthrough_path_index;
+  passthrough_path_index.reset(passthrough_kept);
+  return BuildPackageRels(wb, workbook_target, passthrough_kept, passthrough_path_index, skipped_event, diagnostics);
+}
+
+std::string BuildPackageRels(const Workbook& wb, std::string_view workbook_target,
+                             const std::vector<const PassthroughPart*>& passthrough_kept,
+                             const PassthroughPathIndex& passthrough_path_index, std::string_view skipped_event,
+                             WriteDiagnostics* diagnostics) {
   std::string out;
   out.reserve(384);
   out.append(kXmlDecl);
@@ -339,17 +348,17 @@ std::string BuildPackageRels(const Workbook& wb, std::string_view workbook_targe
   std::uint32_t next_rid = 2;
   // docProps parts ride the passthrough path but need package-level rels or
   // Excel treats them as orphaned (and drops the document properties).
-  if (HasPassthroughPart(passthrough_kept, "docProps/core.xml")) {
+  if (passthrough_path_index.contains(passthrough_kept, "docProps/core.xml")) {
     AppendRelationship(out, next_rid++, kRelCoreProperties, "docProps/core.xml");
   }
-  if (HasPassthroughPart(passthrough_kept, "docProps/app.xml")) {
+  if (passthrough_path_index.contains(passthrough_kept, "docProps/app.xml")) {
     AppendRelationship(out, next_rid++, kRelExtendedProperties, "docProps/app.xml");
   }
-  if (HasPassthroughPart(passthrough_kept, "docProps/custom.xml")) {
+  if (passthrough_path_index.contains(passthrough_kept, "docProps/custom.xml")) {
     AppendRelationship(out, next_rid++, kRelCustomProperties, "docProps/custom.xml");
   }
   for (const UnknownRelationship& r : wb.unknown_package_rels()) {
-    if (!r.target_external && !HasPassthroughPart(passthrough_kept, r.target)) {
+    if (!r.target_external && !passthrough_path_index.contains(passthrough_kept, r.target)) {
       StructuredLog(skipped_event)
           .field("reason", std::string_view("target_part_absent"))
           .field("type", r.type)
