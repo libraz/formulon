@@ -2,11 +2,11 @@
   "suite": "dfunc_kana_folding_probes",
   "description": "Mac Excel ja-JP D-functions (DSUM/DCOUNT/DGET/DAVERAGE/DMAX/DMIN) flow criterion text-equality through the same matcher that COUNTIF uses, so the kana fold from criteria.cpp should already cover the criterion-cell side. What is unverified is whether Mac also folds on the two header paths: (1) the `field` text argument resolved against database headers in resolve_field_column, and (2) the criteria-block header row resolved against database headers in find_db_column. These probes pin Mac's behaviour empirically before deciding whether database_lazy.cpp needs the same fold.\n",
   "environment": {
-    "excel_version": "16.0.20228",
+    "excel_version": "16.0.20326",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-09-30T05:45:37Z"
+    "generated_at": "2026-10-13T02:27:11Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -208,6 +208,48 @@
         "B1": {
           "kind": "text",
           "value": "売上"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "フルーツ"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "アップル"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dsum_field_arg_halfwidth_kana_vs_fullwidth_kana_header",
+      "formula": "=DSUM(A1:B3, \"ｳﾘｱｹﾞ\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "フルーツ"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ウリアゲ"
         },
         "A2": {
           "kind": "text",
