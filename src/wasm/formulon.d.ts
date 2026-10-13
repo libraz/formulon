@@ -1513,6 +1513,9 @@ export interface FontRecord {
   hasCharset: boolean;
   /** OOXML charset codepage id (e.g. 128 = Shift_JIS). */
   charset: number;
+  /** Whether the font carries a `<sz>` element. A differential font without
+   *  one leaves the size unchanged; on input it defaults to whether `size` is given. */
+  hasSize: boolean;
   /** `<scheme>` theme link: 0=absent, 1=major, 2=minor. Meaningful only on
    *  a workbook that carries a theme part. */
   scheme: number;

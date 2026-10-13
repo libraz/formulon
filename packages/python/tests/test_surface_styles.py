@@ -127,6 +127,15 @@ class StyleTests(unittest.TestCase):
             self.assertEqual(wb.add_dxf(got), index)
             self.assertEqual(wb.dxf_count(), before)
 
+    def test_dxf_font_without_size_reads_back_without_size(self) -> None:
+        with Workbook.create_default() as wb:
+            bare = wb.add_dxf(DifferentialFormat(font=FontRecord(has_bold=True, bold=True, has_size=False)))
+            sized = wb.add_dxf(DifferentialFormat(font=FontRecord(has_bold=True, bold=True, size=13.0)))
+            self.assertNotEqual(bare, sized)
+            self.assertFalse(wb.get_dxf(bare).font.has_size)
+            self.assertTrue(wb.get_dxf(sized).font.has_size)
+            self.assertTrue(wb.get_font(wb.add_font(FontRecord(name="Arial", size=14.0))).has_size)
+
     def test_dxf_roundtrip_and_dedup(self) -> None:
         with Workbook.create_default() as wb:
             record = DifferentialFormat(

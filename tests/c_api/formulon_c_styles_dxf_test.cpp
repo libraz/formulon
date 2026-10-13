@@ -208,3 +208,54 @@ TEST(FormulonCApiStyles, DxfFontDistinguishesAnExplicitBoldOffFromAnAbsentToggle
   const std::string xml = formulon::io::write_styles(wb.handle->workbook().styles());
   EXPECT_NE(xml.find("<b val=\"0\"/>"), std::string::npos);
 }
+
+TEST(FormulonCApiStyles, DxfFontWithoutSizeRoundTripsAndCellFontKeepsSize) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_dxf_record dxf{};
+  dxf.font_engaged = 1;
+  dxf.font.name = "";
+  dxf.font.size = 11.0;
+  dxf.font.has_bold = 1;
+  dxf.font.bold = 1;
+  dxf.font.color_argb = 0xFF000000U;
+  ASSERT_EQ(dxf.font.has_size, 0);
+  uint32_t index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_dxf(wb.handle, dxf, &index), 0);
+
+  fm_dxf_record loaded{};
+  ASSERT_EQ(fm_styles_get_dxf(wb.handle, index, &loaded), 0);
+  EXPECT_EQ(loaded.font.has_size, 0);
+
+  // The dxf is the only font-bearing entry that may omit the size.
+  const std::string dxf_xml = formulon::io::write_styles(wb.handle->workbook().styles());
+  const std::size_t dxfs_pos = dxf_xml.find("<dxfs");
+  ASSERT_NE(dxfs_pos, std::string::npos);
+  EXPECT_EQ(dxf_xml.find("<sz", dxfs_pos), std::string::npos);
+
+  // With the flag set the dxf writes its size.
+  dxf.font.has_size = 1;
+  dxf.font.size = 13.0;
+  uint32_t sized = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_dxf(wb.handle, dxf, &sized), 0);
+  EXPECT_NE(sized, index);
+  ASSERT_EQ(fm_styles_get_dxf(wb.handle, sized, &loaded), 0);
+  EXPECT_EQ(loaded.font.has_size, 1);
+
+  // A cell font always keeps its size, whatever the flag says.
+  fm_font_record cell{};
+  cell.name = "Arial";
+  cell.size = 14.0;
+  cell.color_argb = 0xFF000000U;
+  uint32_t font_index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, cell, &font_index), 0);
+  fm_font_record font_out{};
+  ASSERT_EQ(fm_styles_get_font(wb.handle, font_index, &font_out), 0);
+  EXPECT_EQ(font_out.has_size, 1);
+  EXPECT_DOUBLE_EQ(font_out.size, 14.0);
+  const std::string xml = formulon::io::write_styles(wb.handle->workbook().styles());
+  const std::size_t fonts_end = xml.find("</fonts>");
+  ASSERT_NE(fonts_end, std::string::npos);
+  EXPECT_NE(xml.rfind("<sz val=\"14\"/>", fonts_end), std::string::npos);
+}

@@ -651,6 +651,7 @@ FONT_RECORD = Struct(
         ("has_strike", I32),
         ("has_family", I32),
         ("has_charset", I32),
+        ("has_size", I32),
         ("underline", U8),
         ("vert_align", U8),
         ("family", U8),

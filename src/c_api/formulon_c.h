@@ -5988,6 +5988,10 @@ typedef struct {
  * means "switch bold off"; on a cell font a `has_*` flag without its
  * value emits the explicit-off form.
  *
+ * `has_size` is honoured by `fm_styles_add_dxf` alone: a differential font
+ * with `has_size == 0` leaves the size unchanged, while every cell-font
+ * entry point writes `size` regardless.
+ *
  * `scheme` is the `<scheme>` link to the workbook theme's major (heading)
  * or minor (body) typeface. It needs no presence flag because OOXML has no
  * "absent value" spelling for it: `0` is exactly "no `<scheme>` element".
@@ -6008,6 +6012,7 @@ typedef struct {
   int32_t has_strike;  /* 0= no `<strike>` element, 1= element present */
   int32_t has_family;  /* 0= no `<family>` element, 1= element present */
   int32_t has_charset; /* 0= no `<charset>` element, 1= element present */
+  int32_t has_size;    /* 0= no `<sz>` element, 1= element present */
   uint8_t underline;   /* 0=none, 1=single, 2=double, 3/4=accounting variants */
   uint8_t vert_align;  /* 0=baseline, 1=superscript, 2=subscript */
   uint8_t family;      /* `<family>` font-family class (0..5) */

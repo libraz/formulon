@@ -430,6 +430,10 @@ test('selector colours survive get/add identity and save/load', async () => {
   assert.equal(gotDxf.fill.fg.kind, 3);
   assert.equal(gotDxf.border.left.color.kind, 2);
   const dxfAgain = wb.addDxf(gotDxf);
+  assert.equal(gotDxf.font.hasSize, true);
+  const bareDxf = wb.addDxf({ font: { bold: true, hasBold: true } });
+  assert.ok(bareDxf.status.ok);
+  assert.equal(wb.getDxf(bareDxf.index).font.hasSize, false);
   assert.ok(dxfAgain.status.ok);
   assert.equal(dxfAgain.index, dxf.index);
 

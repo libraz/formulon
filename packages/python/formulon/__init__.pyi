@@ -1268,6 +1268,7 @@ class FontRecord:
     family: int
     has_charset: bool
     charset: int
+    has_size: bool
     scheme: int
     color: ColorSpec
     def __init__(
@@ -1287,6 +1288,7 @@ class FontRecord:
         family: int = ...,
         has_charset: bool = ...,
         charset: int = ...,
+        has_size: bool = ...,
         scheme: int = ...,
         color: ColorSpec = ...,
     ) -> None: ...

@@ -198,6 +198,7 @@ void font_to_c(const formulon::FontRecord& f, fm_font_record* out) noexcept {
   out->has_strike = f.has_strike ? 1 : 0;
   out->has_family = f.has_family ? 1 : 0;
   out->has_charset = f.has_charset ? 1 : 0;
+  out->has_size = f.has_size ? 1 : 0;
   out->underline = f.underline;
   out->vert_align = f.vert_align;
   out->family = f.family;

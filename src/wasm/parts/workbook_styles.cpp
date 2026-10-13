@@ -150,6 +150,7 @@ emscripten::val js_font_record(const fm_font_record& f) {
   o.set("family", static_cast<std::uint32_t>(f.family));
   o.set("hasCharset", f.has_charset != 0);
   o.set("charset", static_cast<std::uint32_t>(f.charset));
+  o.set("hasSize", f.has_size != 0);
   o.set("scheme", static_cast<std::uint32_t>(f.scheme));
   o.set("color", js_color_spec(f.color));
   return o;
@@ -174,6 +175,9 @@ void js_pull_font_record(const emscripten::val& record, std::string* name_storag
   out->family = reader.u8(record, "family", 0U, "font.family");
   out->has_charset = reader.boolean(record, "hasCharset", false, "font.hasCharset") ? 1 : 0;
   out->charset = reader.u8(record, "charset", 0U, "font.charset");
+  // An omitted size means "leave the size unchanged" unless hasSize says otherwise.
+  out->has_size =
+      reader.boolean(record, "hasSize", reader.has_own(record, "size", "font.size"), "font.hasSize") ? 1 : 0;
   out->scheme = reader.u8(record, "scheme", 0U, "font.scheme");
   out->color_argb = reader.u32(record, "colorArgb", 0xFF000000U, "font.colorArgb");
   out->color = js_pull_color_spec(record, "color", &reader);

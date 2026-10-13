@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fm_workbook_pivot_set_row_field_order` / `_col_field_order` set the axis's
   whole membership (unlisted former members leave the axis) and reject
   duplicate indices. `fm_workbook_pivot_field_clear` also empties both orders.
+- `fm_font_record` gains `has_size` (`hasSize` / `has_size` in the bindings),
+  so a differential-format font can omit `<sz>` and leave the size unchanged;
+  cell fonts always keep their size. In JavaScript an omitted `size` implies
+  `hasSize: false`; in Python pass `has_size=False`.
 
 ### Fixed
 

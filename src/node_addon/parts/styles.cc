@@ -59,6 +59,7 @@ Napi::Object FontRecordToJs(Napi::Env env, const fm_font_record& f) {
   out.Set("family", Napi::Number::New(env, static_cast<uint32_t>(f.family)));
   out.Set("hasCharset", Napi::Boolean::New(env, f.has_charset != 0));
   out.Set("charset", Napi::Number::New(env, static_cast<uint32_t>(f.charset)));
+  out.Set("hasSize", Napi::Boolean::New(env, f.has_size != 0));
   out.Set("scheme", Napi::Number::New(env, static_cast<uint32_t>(f.scheme)));
   out.Set("color", ColorSpecToJs(env, f.color));
   return out;
@@ -70,7 +71,8 @@ void PullFontRecord(CheckedSpecReader& reader, const Napi::Object& record, std::
                     fm_font_record* out) {
   reader.String(record, "name", name_storage);
   out->name = name_storage->c_str();
-  out->size = reader.Double(record, "size", 11.0);
+  bool size_present = false;
+  out->size = reader.Double(record, "size", 11.0, &size_present);
   out->bold = reader.Bool(record, "bold", false) ? 1 : 0;
   out->italic = reader.Bool(record, "italic", false) ? 1 : 0;
   out->strike = reader.Bool(record, "strike", false) ? 1 : 0;
@@ -83,6 +85,8 @@ void PullFontRecord(CheckedSpecReader& reader, const Napi::Object& record, std::
   out->family = reader.U8(record, "family", 0U);
   out->has_charset = reader.Bool(record, "hasCharset", false) ? 1 : 0;
   out->charset = reader.U8(record, "charset", 0U);
+  // An omitted size means "leave the size unchanged" unless hasSize says otherwise.
+  out->has_size = reader.Bool(record, "hasSize", size_present) ? 1 : 0;
   out->scheme = reader.U8(record, "scheme", 0U);
   out->color_argb = reader.U32(record, "colorArgb", 0xFF000000U);
   out->color = PullColorSpec(reader, record, "color");
