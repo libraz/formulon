@@ -53,6 +53,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   conditional-format rules keep a resolvable `dxf_id`, `.xlsb` to `.xlsx`
   conversion keeps their formatting, and `add_dxf` after loading no longer
   collides with Excel's first dxf.
+- Saving a loaded `.xlsb` as XLSB after editing its styles (for example
+  adding a differential format) regenerates `styles.bin` from the model
+  instead of failing with `kIoXlsbRetainedPartStale`; an unedited styles
+  table is still written byte for byte.
 - Text, blanks, errors and timePeriod conditional-format rules added without a
   formula now carry the formula Excel stores (e.g.
   `NOT(ISERROR(SEARCH("ab",B1)))`, `FLOOR(B2,1)=TODAY()-1`), anchored at the

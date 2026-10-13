@@ -97,15 +97,23 @@ TEST(XlsbRetainedPartStaleness, MutatingThePivotCacheFailsTheSave) {
   EXPECT_EQ(result.error().code, FormulonErrorCode::kIoXlsbRetainedPartStale);
 }
 
-TEST(XlsbRetainedPartStaleness, MutatingAStyleFailsTheSave) {
+// A stale styles.bin is regenerated from the model rather than failing the
+// save, and the pivot parts still ride along as passthrough.
+TEST(XlsbRetainedPartStaleness, MutatingAStyleRegeneratesStylesBin) {
   Workbook wb = LoadFixture();
   StylesTable& styles = wb.mutable_styles();
   ASSERT_FALSE(styles.fonts.empty());
-  styles.fonts[0].size += 1.0;
+  const double new_size = styles.fonts[0].size + 1.0;
+  styles.fonts[0].size = new_size;
 
   auto result = io::xlsb::write_xlsb_with_result(wb);
-  ASSERT_FALSE(static_cast<bool>(result));
-  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoXlsbRetainedPartStale);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  auto reread = io::xlsb::read_xlsb(io::ByteSpan{result.value().bytes.data(), result.value().bytes.size()});
+  ASSERT_TRUE(static_cast<bool>(reread)) << reread.error().message;
+  const Workbook& back = reread.value().workbook;
+  ASSERT_FALSE(back.styles().fonts.empty());
+  EXPECT_EQ(back.styles().fonts[0].size, new_size);
+  EXPECT_EQ(back.sheet(0).pivot_tables().size(), 1U);
 }
 
 // Cell values are not embedded in the retained pivot cache parts -- the

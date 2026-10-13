@@ -140,7 +140,8 @@ bool IsRepresentableDefaultRowHeight(double value) {
 
 /// Fails a retained part (pivot table, pivot cache, styles) whose model
 /// state changed since load, including the model object having gone.
-/// Untracked passthrough parts always pass.
+/// Untracked passthrough parts always pass.  A stale styles part is not
+/// written through this check: the plan regenerates it from the model.
 Expected<void, Error> CheckRetainedPartFreshness(const Workbook& workbook, const PassthroughPart& part) {
   if (part.retained_origin == PassthroughPart::RetainedOrigin::kNone) {
     return Expected<void, Error>::Ok();
@@ -258,12 +259,13 @@ std::string ExternalLinkRelsPath(std::size_t position) {
   return "xl/externalLinks/_rels/externalLink" + std::to_string(position) + ".bin.rels";
 }
 
-bool HasRawStylesPart(const Workbook& wb) {
+/// The retained source `xl/styles.bin`, or null when the workbook has none.
+const PassthroughPart* FindRawStylesPart(const Workbook& wb) {
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (part.path == "xl/styles.bin")
-      return true;
+      return &part;
   }
-  return false;
+  return nullptr;
 }
 
 bool HasModelledStyles(const Workbook& wb) {
@@ -353,11 +355,14 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
                                                 std::size_t external_link_count, WriteDiagnostics* diagnostics) {
   EmissionPlan plan;
   plan.has_text_cells = sst_present;
-  // Existing XLSB packages retain their original styles bytes verbatim.  This
-  // protects style features which are not represented by StylesTable yet
-  // (notably differential formats).  XLSX/native workbooks have no raw part,
-  // so their modelled style table becomes a fresh styles.bin instead.
-  plan.has_generated_styles = !HasRawStylesPart(wb) && HasModelledStyles(wb);
+  // A retained styles.bin that still matches the model is emitted verbatim,
+  // which keeps BrtXF fMergeCell/fSxButton and dxf properties the table does
+  // not represent.  Without a raw part (XLSX/native source) or once the model
+  // styles changed since load, styles.bin is generated from the model and the
+  // stale raw part is dropped as a generated-path collision.
+  const PassthroughPart* raw_styles = FindRawStylesPart(wb);
+  const bool raw_styles_fresh = raw_styles != nullptr && static_cast<bool>(CheckRetainedPartFreshness(wb, *raw_styles));
+  plan.has_generated_styles = !raw_styles_fresh && (raw_styles != nullptr || HasModelledStyles(wb));
   // Decided by `BuildDynamicArrayMetadataPlan`, which the sheet bodies were
   // already emitted against.
   plan.has_generated_dynamic_metadata = generate_dynamic_metadata;

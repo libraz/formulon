@@ -629,6 +629,59 @@ TEST(XlsbFeatureRecords, DxfsSurviveXlsbSaveAndLoad) {
   }
 }
 
+/// Bytes of `part` inside an XLSB package; empty when absent.
+std::vector<std::uint8_t> PartBytes(const std::vector<std::uint8_t>& xlsb, const std::string& part) {
+  io::ZipReader zip;
+  if (!zip.open(SpanOf(xlsb))) {
+    return {};
+  }
+  auto body = zip.read_entry(part);
+  return body ? body.value() : std::vector<std::uint8_t>{};
+}
+
+// An unedited load -> save keeps Excel's styles.bin byte for byte.
+TEST(XlsbFeatureRecords, UneditedSaveKeepsStylesBinVerbatim) {
+  const std::vector<std::uint8_t> source = ReadFileBytes(FixturePath("dxf", "xlsb"));
+  auto written = io::xlsb::write_xlsb(ReadXlsbBytes(source));
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  const std::vector<std::uint8_t> original = PartBytes(source, "xl/styles.bin");
+  ASSERT_FALSE(original.empty());
+  EXPECT_EQ(PartBytes(written.value(), "xl/styles.bin"), original);
+}
+
+// Adding a dxf to a loaded .xlsb regenerates styles.bin; Excel's dxfs and the
+// dxf ids CF rules name survive.
+TEST(XlsbFeatureRecords, AddingADxfAfterLoadRegeneratesStylesBin) {
+  const Workbook source = ReadXlsbBytes(ReadFileBytes(FixturePath("dxf", "xlsb")));
+  Workbook wb = ReadXlsbBytes(ReadFileBytes(FixturePath("dxf", "xlsb")));
+  const std::size_t original_count = wb.styles().dxfs.size();
+  ASSERT_GT(original_count, 0U);
+  DifferentialFormat added;
+  added.has_font = true;
+  added.font.has_bold = true;
+  added.font.bold = true;
+  wb.mutable_styles().dxfs.push_back(added);
+
+  auto written = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  const Workbook back = ReadXlsbBytes(written.value());
+  ASSERT_EQ(back.styles().dxfs.size(), original_count + 1U);
+  EXPECT_TRUE(back.styles().dxfs.back().has_font);
+  EXPECT_TRUE(back.styles().dxfs.back().font.bold);
+
+  StylesTable expected = source.styles();
+  expected.dxfs.push_back(added);
+  EXPECT_EQ(DescribeDxfs(back.styles()), DescribeDxfs(expected));
+  EXPECT_EQ(DescribeCf(back.sheet(0)), DescribeCf(source.sheet(0)));
+  for (const cf::ConditionalFormat& f : back.sheet(0).conditional_formats()) {
+    for (const cf::CFRule& r : f.rules) {
+      if (r.dxf_id) {
+        EXPECT_LT(*r.dxf_id, back.styles().dxfs.size());
+      }
+    }
+  }
+}
+
 // CF rules loaded from an .xlsb keep the dxf they name, and it resolves.
 TEST(XlsbFeatureRecords, CfRulesFromXlsbReportTheirDxf) {
   const Workbook from_xlsx = ReadXlsx("dxf");
