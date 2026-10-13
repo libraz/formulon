@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <string>
 #include <utility>
@@ -15,6 +16,7 @@
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
+#include "pivot/record_access.h"
 #include "pivot_evaluator_fixtures.h"
 #include "utils/error.h"
 #include "value.h"
@@ -718,6 +720,125 @@ TEST(PivotEvaluator, SumOverTheSameFixtureStillPropagatesTheError) {
   ASSERT_EQ(r.values.size(), 3U);
   ASSERT_TRUE(r.values[0][0][0].is_error());
   EXPECT_EQ(r.values[0][0][0].as_error(), ErrorCode::NA);
+}
+
+void expect_bitwise_value_equal(const Value& expected, const Value& actual) {
+  ASSERT_EQ(expected.kind(), actual.kind());
+  if (expected.is_number()) {
+    std::uint64_t expected_bits = 0;
+    std::uint64_t actual_bits = 0;
+    const double expected_number = expected.as_number();
+    const double actual_number = actual.as_number();
+    std::memcpy(&expected_bits, &expected_number, sizeof(expected_bits));
+    std::memcpy(&actual_bits, &actual_number, sizeof(actual_bits));
+    EXPECT_EQ(expected_bits, actual_bits);
+    return;
+  }
+  EXPECT_EQ(expected, actual);
+}
+
+TEST(PivotAggregator, BorrowedRecordViewsMatchMaterializedValuesForEveryAggregation) {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(
+      PivotCacheField{"Value", {Value::number(1.0e16), Value::number(1.0), Value::number(-1.0e16)}});
+  auto add = [&](Value value, bool is_index) {
+    PivotCacheRecord record;
+    record.cells.push_back(value);
+    record.cell_is_index.push_back(is_index);
+    cache.mutable_records().push_back(std::move(record));
+  };
+  add(Value::number(0.0), true);   // 1e16 from shared items.
+  add(Value::number(1.0), false);  // Inline 1, despite the shared field.
+  add(Value::number(2.0), true);   // -1e16 from shared items.
+  add(Value::boolean(true), false);
+  add(Value::text("text"), false);
+  add(Value::blank(), false);
+
+  const std::vector<std::size_t> direct_indices{0, 1, 2, 3, 4, 5};
+  const std::vector<Value> materialized = {
+      cell_value(cache, cache.records()[0], 0), cell_value(cache, cache.records()[1], 0),
+      cell_value(cache, cache.records()[2], 0), cell_value(cache, cache.records()[3], 0),
+      cell_value(cache, cache.records()[4], 0), cell_value(cache, cache.records()[5], 0)};
+  RecordBuckets buckets(2, std::vector<std::vector<std::size_t>>(2));
+  buckets[0][0] = {0, 1};
+  buckets[0][1] = {2, 3};
+  buckets[1][0] = {4, 5};
+  const std::vector<std::size_t> rows{0, 1};
+  const std::vector<std::size_t> cols{0, 1};
+  std::vector<RecordIndexSpan> spans;
+  const RecordIndexView multi = make_leaf_set_record_view(buckets, rows, cols, spans);
+
+  const Aggregation aggregations[] = {Aggregation::Sum,          Aggregation::Count,  Aggregation::Average,
+                                      Aggregation::Max,          Aggregation::Min,    Aggregation::Product,
+                                      Aggregation::CountNumbers, Aggregation::StdDev, Aggregation::StdDevP,
+                                      Aggregation::Var,          Aggregation::VarP};
+  for (const Aggregation aggregation : aggregations) {
+    const Value expected = apply_aggregation(aggregation, materialized);
+    const Value direct = apply_record_aggregation(aggregation, cache, direct_indices, 0);
+    const Value borrowed = apply_record_aggregation(aggregation, cache, multi, 0);
+    expect_bitwise_value_equal(expected, direct);
+    expect_bitwise_value_equal(expected, borrowed);
+  }
+
+  // Pinned source-order results: 1e16 + 1 rounds back to 1e16 before -1e16 cancels it.
+  expect_bitwise_value_equal(apply_record_aggregation(Aggregation::Sum, cache, multi, 0), Value::number(1.0));
+  expect_bitwise_value_equal(apply_record_aggregation(Aggregation::Average, cache, multi, 0), Value::number(0.25));
+  expect_bitwise_value_equal(apply_record_aggregation(Aggregation::Count, cache, multi, 0), Value::number(5.0));
+  expect_bitwise_value_equal(apply_record_aggregation(Aggregation::CountNumbers, cache, multi, 0), Value::number(4.0));
+  expect_bitwise_value_equal(apply_record_aggregation(Aggregation::Max, cache, multi, 0), Value::number(1.0e16));
+  expect_bitwise_value_equal(apply_record_aggregation(Aggregation::Min, cache, multi, 0), Value::number(-1.0e16));
+}
+
+TEST(PivotAggregator, BorrowedRecordViewsPreserveFirstErrorsAndSparseBlankSemantics) {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Value", {Value::number(7.0)}});
+  auto add = [&](Value value, bool is_index) {
+    PivotCacheRecord record;
+    record.cells.push_back(value);
+    record.cell_is_index.push_back(is_index);
+    cache.mutable_records().push_back(std::move(record));
+  };
+  add(Value::number(0.0), true);  // shared numeric
+  add(Value::boolean(false), false);
+  add(Value::text("inline"), false);
+  add(Value::blank(), false);
+  add(Value::error(ErrorCode::NA), false);
+
+  const std::vector<std::size_t> direct_indices{0, 1, 2, 3, 4};
+  RecordBuckets buckets(2, std::vector<std::vector<std::size_t>>(1));
+  buckets[0][0] = {0, 1, 2};
+  buckets[1][0] = {3, 4};
+  const std::vector<std::size_t> rows{0, 1};
+  const std::vector<std::size_t> cols{0};
+  std::vector<RecordIndexSpan> spans;
+  const RecordIndexView multi = make_leaf_set_record_view(buckets, rows, cols, spans);
+  const std::vector<Value> materialized = {
+      cell_value(cache, cache.records()[0], 0), cell_value(cache, cache.records()[1], 0),
+      cell_value(cache, cache.records()[2], 0), cell_value(cache, cache.records()[3], 0),
+      cell_value(cache, cache.records()[4], 0)};
+
+  for (const Aggregation aggregation :
+       {Aggregation::Sum, Aggregation::Average, Aggregation::Var, Aggregation::StdDev, Aggregation::Product}) {
+    const Value expected = apply_aggregation(aggregation, materialized);
+    expect_bitwise_value_equal(expected, apply_record_aggregation(aggregation, cache, direct_indices, 0));
+    expect_bitwise_value_equal(expected, apply_record_aggregation(aggregation, cache, multi, 0));
+  }
+  for (const Aggregation aggregation : {Aggregation::Count, Aggregation::CountNumbers}) {
+    const Value expected = apply_aggregation(aggregation, materialized);
+    expect_bitwise_value_equal(expected, apply_record_aggregation(aggregation, cache, direct_indices, 0));
+    expect_bitwise_value_equal(expected, apply_record_aggregation(aggregation, cache, multi, 0));
+  }
+
+  PivotResult result;
+  const std::vector<std::size_t> empty_indices;
+  const Value sparse_blank = aggregate_records_or_blank(Aggregation::Sum, cache, empty_indices, 0, result);
+  EXPECT_TRUE(sparse_blank.is_blank());
+  const std::vector<std::size_t> one_blank{3};
+  const Value one_blank_result = aggregate_records_or_blank(Aggregation::Sum, cache, one_blank, 0, result);
+  ASSERT_TRUE(one_blank_result.is_number());
+  EXPECT_DOUBLE_EQ(one_blank_result.as_number(), 0.0);
 }
 
 }  // namespace

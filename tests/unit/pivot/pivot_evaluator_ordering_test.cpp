@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -13,6 +14,7 @@
 #include "eval/groupby_pivotby/common.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "pivot/hierarchy_builder.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_locale.h"
@@ -126,6 +128,124 @@ TEST(PivotEvaluator, FieldSortByValueFieldReordersAxisAndValues) {
   EXPECT_DOUBLE_EQ(r.values[0][1][0].as_number(), 300.0);  // South/Gadget
   EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 125.0);  // North/Widget
   EXPECT_DOUBLE_EQ(r.values[1][1][0].as_number(), 50.0);   // North/Gadget
+}
+
+TEST(HierarchyBuilder, StoresRecordIndicesOnlyForValueSortedLevels) {
+  PivotCache cache = build_basic_cache();
+  const std::vector<HierLevel> levels = {
+      HierLevel{0U, nullptr, true, std::nullopt, std::nullopt, nullptr},
+      HierLevel{1U, nullptr, true, std::optional<std::uint32_t>(2U), std::optional<Aggregation>(Aggregation::Sum),
+                nullptr},
+  };
+  HierNode tree;
+  for (std::size_t i = 0; i < cache.records().size(); ++i) {
+    insert_path(cache, levels, cache.records()[i], i, tree, "(blank)");
+  }
+
+  ASSERT_EQ(tree.children.size(), 2U);
+  for (const auto& [region_key, region] : tree.children) {
+    ASSERT_TRUE(region_key.value.is_text());
+    EXPECT_TRUE(region.record_indices.empty());
+    ASSERT_EQ(region.children.size(), 2U);
+    for (const auto& [product_key, product] : region.children) {
+      ASSERT_TRUE(product_key.value.is_text());
+      EXPECT_FALSE(product.record_indices.empty());
+    }
+  }
+}
+
+TEST(PivotEvaluator, NestedValueSortUsesEachParentGroupRecords) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0, 1}, /*col=*/{});
+  table.mutable_fields()[1].sort.by_field = "Amount";
+  table.mutable_fields()[1].sort.ascending = true;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 2U);
+  ASSERT_EQ(r.rows[0].children.size(), 2U);
+  ASSERT_EQ(r.rows[1].children.size(), 2U);
+
+  // The Product sort is recomputed within each Region. North/Gadget=50 is
+  // before North/Widget=125, while South/Widget=200 is before South/Gadget=300.
+  EXPECT_EQ(r.rows[0].label, "North");
+  EXPECT_EQ(r.rows[0].children[0].label, "Gadget");
+  EXPECT_EQ(r.rows[0].children[1].label, "Widget");
+  EXPECT_EQ(r.rows[1].label, "South");
+  EXPECT_EQ(r.rows[1].children[0].label, "Widget");
+  EXPECT_EQ(r.rows[1].children[1].label, "Gadget");
+  ASSERT_EQ(r.values.size(), 4U);
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 50.0);
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 125.0);
+  EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 200.0);
+  EXPECT_DOUBLE_EQ(r.values[3][0][0].as_number(), 300.0);
+}
+
+TEST(PivotEvaluator, NestedAscendingDescendingAndManualSortsPreserveHierarchy) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0, 1}, /*col=*/{});
+  table.mutable_fields()[0].sort.ascending = false;
+  table.mutable_fields()[1].sort.ascending = false;
+
+  auto descending_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(descending_or)) << descending_or.error().message;
+  const PivotResult& descending = descending_or.value();
+  ASSERT_EQ(descending.rows.size(), 2U);
+  EXPECT_EQ(descending.rows[0].label, "South");
+  EXPECT_EQ(descending.rows[1].label, "North");
+  EXPECT_EQ(descending.rows[0].children[0].label, "Widget");
+  EXPECT_EQ(descending.rows[0].children[1].label, "Gadget");
+  EXPECT_EQ(descending.rows[1].children[0].label, "Widget");
+  EXPECT_EQ(descending.rows[1].children[1].label, "Gadget");
+
+  PivotCache manual_cache;
+  manual_cache.set_cache_id(23);
+  PivotCacheField region;
+  region.name = "Region";
+  region.shared_items.push_back(owned_text(manual_cache, "South"));
+  region.shared_items.push_back(owned_text(manual_cache, "North"));
+  manual_cache.mutable_fields().push_back(std::move(region));
+  PivotCacheField product;
+  product.name = "Product";
+  product.shared_items.push_back(owned_text(manual_cache, "Widget"));
+  product.shared_items.push_back(owned_text(manual_cache, "Gadget"));
+  manual_cache.mutable_fields().push_back(std::move(product));
+  manual_cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+  auto add = [&](std::uint32_t region_index, std::uint32_t product_index, double amount) {
+    PivotCacheRecord record;
+    record.cells = {Value::number(region_index), Value::number(product_index), Value::number(amount)};
+    record.cell_is_index = {true, true, false};
+    manual_cache.mutable_records().push_back(std::move(record));
+  };
+  add(0U, 0U, 200.0);  // South / Widget.
+  add(0U, 1U, 300.0);  // South / Gadget.
+  add(1U, 0U, 100.0);  // North / Widget.
+  add(1U, 1U, 50.0);   // North / Gadget.
+
+  PivotTable manual_table = build_sum_amount_table(/*row=*/{0, 1}, /*col=*/{});
+  manual_table.set_pivot_cache_id(23);
+  manual_table.mutable_fields()[0].sort.manual = true;
+  manual_table.mutable_fields()[0].items = {
+      PivotItem{"North", true, true, 1U},
+      PivotItem{"South", true, true, 0U},
+  };
+  manual_table.mutable_fields()[1].sort.manual = true;
+  manual_table.mutable_fields()[1].items = {
+      PivotItem{"Gadget", true, true, 1U},
+      PivotItem{"Widget", true, true, 0U},
+  };
+
+  auto manual_or = evaluate(manual_table, manual_cache);
+  ASSERT_TRUE(static_cast<bool>(manual_or)) << manual_or.error().message;
+  const PivotResult& manual = manual_or.value();
+  ASSERT_EQ(manual.rows.size(), 2U);
+  EXPECT_EQ(manual.rows[0].label, "North");
+  EXPECT_EQ(manual.rows[1].label, "South");
+  EXPECT_EQ(manual.rows[0].children[0].label, "Gadget");
+  EXPECT_EQ(manual.rows[0].children[1].label, "Widget");
+  EXPECT_EQ(manual.rows[1].children[0].label, "Gadget");
+  EXPECT_EQ(manual.rows[1].children[1].label, "Widget");
 }
 
 TEST(PivotEvaluator, ManualSortOrdersByItemDocumentPosition) {

@@ -10,10 +10,6 @@
 // Booleans coerce numerically (TRUE=1, FALSE=0) for arithmetic
 // aggregations; for `Count`, booleans are non-blank so they count, which
 // also matches Excel's COUNTA on a boolean column.
-//
-// The header also exposes the "gather record values for a leaf or
-// leaf-set" helpers used by both the leaf-cell aggregation in the main
-// `evaluate()` driver and the subtotal walk.
 
 #ifndef FORMULON_PIVOT_AGGREGATOR_H_
 #define FORMULON_PIVOT_AGGREGATOR_H_
@@ -35,38 +31,97 @@ using RecordBuckets = std::vector<std::vector<std::vector<std::size_t>>>;
 
 struct PivotResult;
 
+/// One borrowed run of record indices. `cumulative_end` is the exclusive
+/// end position of this run in the concatenated view. Spans point into the
+/// cache's bucket / surviving-index storage and never own their data.
+struct RecordIndexSpan {
+  const std::size_t* data = nullptr;
+  std::size_t count = 0;
+  std::size_t cumulative_end = 0;
+};
+
+/// Borrowed record-index sequence used by record aggregations. A direct
+/// vector is kept as a pointer/count pair so single-bucket, value-sort, and
+/// grand-total paths do not allocate a one-span array. Multi-bucket callers
+/// provide an already-built span array; the view only borrows it for the
+/// duration of the synchronous aggregation call.
+class RecordIndexView {
+ public:
+  RecordIndexView() = default;
+  explicit RecordIndexView(const std::vector<std::size_t>& records)
+      : direct_data_(records.data()), direct_count_(records.size()), total_count_(records.size()) {}
+  explicit RecordIndexView(std::vector<std::size_t>&&) = delete;
+
+  static RecordIndexView from_spans(const RecordIndexSpan* spans, std::size_t span_count, std::size_t total_count) {
+    RecordIndexView view;
+    view.spans_ = spans;
+    view.span_count_ = span_count;
+    view.total_count_ = total_count;
+    return view;
+  }
+
+  std::size_t size() const { return total_count_; }
+  bool empty() const { return total_count_ == 0; }
+
+  /// Returns the source record index at the view position. Sequential reads
+  /// stay in the cached span; a non-sequential read searches the cumulative
+  /// ends and resets that cache. Callers only pass positions below `size()`.
+  std::size_t record_at(std::size_t position) const;
+
+ private:
+  const std::size_t* direct_data_ = nullptr;
+  std::size_t direct_count_ = 0;
+  const RecordIndexSpan* spans_ = nullptr;
+  std::size_t span_count_ = 0;
+  std::size_t total_count_ = 0;
+
+  mutable std::size_t cached_span_ = 0;
+  mutable std::size_t cached_begin_ = 0;
+  mutable std::size_t cached_end_ = 0;
+};
+
 /// Applies the named aggregation to `values`. The dispatch handles
 /// blank-skip, error-propagation (arithmetic aggregations only, see
 /// above), and the Excel-specific empty-set semantics (e.g. MAX over an
 /// all-text group returns 0).
 Value apply_aggregation(Aggregation agg, const std::vector<Value>& values);
 
+/// Applies an aggregation directly to cache records addressed by `records`.
+/// The view is borrowed and the returned value is fully materialized.
+Value apply_record_aggregation(Aggregation agg, const PivotCache& cache, const RecordIndexView& records,
+                               std::uint32_t field_index);
+Value apply_record_aggregation(Aggregation agg, const PivotCache& cache, const std::vector<std::size_t>& records,
+                               std::uint32_t field_index);
+
 /// Numeric coercion of a single aggregate cell. Returns the underlying
 /// double when `v` is a `Number` or `Bool`; `nullopt` otherwise.
 std::optional<double> numeric_aggregate_value(const Value& v);
 
-/// Appends `cell_value(cache, cache.records()[i], field_index)` for
-/// every `i` in `records` to `out`.
-void append_record_field_values(const PivotCache& cache, const std::vector<std::size_t>& records,
-                                std::uint32_t field_index, std::vector<Value>& out);
+/// Builds a borrowed concatenation of `buckets[row][col]` in row-major
+/// order (row leaves outer, column leaves inner). `spans` owns only the
+/// span descriptors and must outlive the returned view and every aggregation
+/// using it. Out-of-range leaves and empty buckets are skipped.
+RecordIndexView make_leaf_set_record_view(const RecordBuckets& buckets, const std::vector<std::size_t>& row_leaves,
+                                          const std::vector<std::size_t>& col_leaves,
+                                          std::vector<RecordIndexSpan>& spans);
 
-/// Appends the per-record field values that live in `buckets[row_leaf][col_leaf]`.
-/// Out-of-range `row_leaf` / `col_leaf` indices are silently ignored.
-void append_bucket_field_values(const PivotCache& cache, const RecordBuckets& buckets, std::size_t row_leaf,
-                                std::size_t col_leaf, std::uint32_t field_index, std::vector<Value>& out);
+/// Single-axis variants avoid constructing a temporary one-element vector
+/// for row-leaf and column-leaf subtotal paths.
+RecordIndexView make_leaf_set_record_view(const RecordBuckets& buckets, std::size_t row_leaf,
+                                          const std::vector<std::size_t>& col_leaves,
+                                          std::vector<RecordIndexSpan>& spans);
+RecordIndexView make_leaf_set_record_view(const RecordBuckets& buckets, const std::vector<std::size_t>& row_leaves,
+                                          std::size_t col_leaf, std::vector<RecordIndexSpan>& spans);
 
-/// Appends per-record field values across a Cartesian set of row leaves
-/// and column leaves; used by the row x col subtotal intersection pass.
-void append_leaf_set_field_values(const PivotCache& cache, const RecordBuckets& buckets,
-                                  const std::vector<std::size_t>& row_leaves,
-                                  const std::vector<std::size_t>& col_leaves, std::uint32_t field_index,
-                                  std::vector<Value>& out);
-
-/// An empty row/column intersection is not the same as aggregating an empty
-/// value sequence. Excel leaves a sparse pivot cell blank; aggregation
-/// identities such as SUM's zero and AVERAGE's #DIV/0! only apply when a
-/// group exists and its values themselves are empty/non-numeric.
-Value aggregate_or_blank(Aggregation aggregation, const std::vector<Value>& values, PivotResult& result);
+/// Aggregates cache records while preserving the sparse-intersection rule:
+/// no record positions means a blank result, whereas one or more positions
+/// (including a position whose field is Blank) use normal aggregation
+/// identities and error semantics.
+Value aggregate_records_or_blank(Aggregation aggregation, const PivotCache& cache, const RecordIndexView& records,
+                                 std::uint32_t field_index, PivotResult& result);
+Value aggregate_records_or_blank(Aggregation aggregation, const PivotCache& cache,
+                                 const std::vector<std::size_t>& records, std::uint32_t field_index,
+                                 PivotResult& result);
 
 }  // namespace formulon::pivot
 

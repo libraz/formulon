@@ -87,65 +87,76 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
     return;
   }
 
+  std::vector<RecordIndexSpan> grand_total_spans;
+  const RecordIndexView grand_total_records =
+      make_leaf_set_record_view(buckets, surviving_row_leaves, surviving_col_leaves, grand_total_spans);
   for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < result.grand_totals.size(); ++df_idx) {
     const PivotDataField& df = table.data_fields()[df_idx];
-    std::vector<Value> column;
-    append_leaf_set_field_values(cache, buckets, surviving_row_leaves, surviving_col_leaves, df.field_index, column);
-    result.grand_totals[df_idx] = aggregate_or_blank(df.aggregation, column, result);
+    result.grand_totals[df_idx] =
+        aggregate_records_or_blank(df.aggregation, cache, grand_total_records, df.field_index, result);
   }
   if (!result.grand_totals.empty()) {
     result.grand_total = result.grand_totals[0];
   }
 
   for (std::size_t r = 0; r < result.row_leaf_totals.size() && r < surviving_row_leaves.size(); ++r) {
+    std::vector<RecordIndexSpan> spans;
+    const RecordIndexView records =
+        make_leaf_set_record_view(buckets, surviving_row_leaves[r], surviving_col_leaves, spans);
     for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < result.row_leaf_totals[r].size(); ++df_idx) {
       const PivotDataField& df = table.data_fields()[df_idx];
-      std::vector<Value> column;
-      append_leaf_set_field_values(cache, buckets, {surviving_row_leaves[r]}, surviving_col_leaves, df.field_index,
-                                   column);
-      result.row_leaf_totals[r][df_idx] = aggregate_or_blank(df.aggregation, column, result);
+      result.row_leaf_totals[r][df_idx] =
+          aggregate_records_or_blank(df.aggregation, cache, records, df.field_index, result);
     }
   }
 
   for (std::size_t c = 0; c < result.col_leaf_totals.size() && c < surviving_col_leaves.size(); ++c) {
+    std::vector<RecordIndexSpan> spans;
+    const RecordIndexView records =
+        make_leaf_set_record_view(buckets, surviving_row_leaves, surviving_col_leaves[c], spans);
     for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < result.col_leaf_totals[c].size(); ++df_idx) {
       const PivotDataField& df = table.data_fields()[df_idx];
-      std::vector<Value> column;
-      append_leaf_set_field_values(cache, buckets, surviving_row_leaves, {surviving_col_leaves[c]}, df.field_index,
-                                   column);
-      result.col_leaf_totals[c][df_idx] = aggregate_or_blank(df.aggregation, column, result);
+      result.col_leaf_totals[c][df_idx] =
+          aggregate_records_or_blank(df.aggregation, cache, records, df.field_index, result);
     }
   }
 
   for (std::size_t rs = 0; rs < result.row_subtotals.size() && rs < row_subtotal_leaf_sets.size(); ++rs) {
     RowSubtotal& subtotal = result.row_subtotals[rs];
     const std::vector<std::size_t> rows = ToOriginalLeaves(row_subtotal_leaf_sets[rs], surviving_row_leaves);
+    std::vector<RecordIndexSpan> subtotal_spans;
+    const RecordIndexView subtotal_records =
+        make_leaf_set_record_view(buckets, rows, surviving_col_leaves, subtotal_spans);
+    std::vector<std::vector<RecordIndexSpan>> col_spans(surviving_col_leaves.size());
+    std::vector<RecordIndexView> col_records;
+    col_records.reserve(surviving_col_leaves.size());
+    for (std::size_t c = 0; c < surviving_col_leaves.size(); ++c) {
+      col_records.push_back(make_leaf_set_record_view(buckets, rows, surviving_col_leaves[c], col_spans[c]));
+    }
     for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.values.size(); ++df_idx) {
       const PivotDataField& df = table.data_fields()[df_idx];
-      std::vector<Value> column;
-      append_leaf_set_field_values(cache, buckets, rows, surviving_col_leaves, df.field_index, column);
-      subtotal.values[df_idx] = aggregate_or_blank(subtotal.aggregation.value_or(df.aggregation), column, result);
+      subtotal.values[df_idx] = aggregate_records_or_blank(subtotal.aggregation.value_or(df.aggregation), cache,
+                                                           subtotal_records, df.field_index, result);
     }
     for (std::size_t c = 0; c < subtotal.col_values.size() && c < surviving_col_leaves.size(); ++c) {
       for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.col_values[c].size(); ++df_idx) {
         const PivotDataField& df = table.data_fields()[df_idx];
-        std::vector<Value> column;
-        append_leaf_set_field_values(cache, buckets, rows, {surviving_col_leaves[c]}, df.field_index, column);
-        subtotal.col_values[c][df_idx] =
-            aggregate_or_blank(subtotal.aggregation.value_or(df.aggregation), column, result);
+        subtotal.col_values[c][df_idx] = aggregate_records_or_blank(subtotal.aggregation.value_or(df.aggregation),
+                                                                    cache, col_records[c], df.field_index, result);
       }
     }
     for (std::size_t cs = 0; cs < subtotal.col_subtotal_values.size() && cs < col_subtotal_leaf_sets.size(); ++cs) {
       const std::vector<std::size_t> cols = ToOriginalLeaves(col_subtotal_leaf_sets[cs], surviving_col_leaves);
       const ColSubtotal& col_subtotal = result.col_subtotals[cs];
+      std::vector<RecordIndexSpan> spans;
+      const RecordIndexView records = make_leaf_set_record_view(buckets, rows, cols, spans);
       for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.col_subtotal_values[cs].size();
            ++df_idx) {
         const PivotDataField& df = table.data_fields()[df_idx];
         const Aggregation aggregation =
             col_subtotal.aggregation.has_value() ? *col_subtotal.aggregation : df.aggregation;
-        std::vector<Value> column;
-        append_leaf_set_field_values(cache, buckets, rows, cols, df.field_index, column);
-        subtotal.col_subtotal_values[cs][df_idx] = aggregate_or_blank(aggregation, column, result);
+        subtotal.col_subtotal_values[cs][df_idx] =
+            aggregate_records_or_blank(aggregation, cache, records, df.field_index, result);
       }
     }
   }
@@ -153,21 +164,26 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
   for (std::size_t cs = 0; cs < result.col_subtotals.size() && cs < col_subtotal_leaf_sets.size(); ++cs) {
     ColSubtotal& subtotal = result.col_subtotals[cs];
     const std::vector<std::size_t> cols = ToOriginalLeaves(col_subtotal_leaf_sets[cs], surviving_col_leaves);
+    std::vector<std::vector<RecordIndexSpan>> row_spans(surviving_row_leaves.size());
+    std::vector<RecordIndexView> row_records;
+    row_records.reserve(surviving_row_leaves.size());
+    for (std::size_t r = 0; r < surviving_row_leaves.size(); ++r) {
+      row_records.push_back(make_leaf_set_record_view(buckets, surviving_row_leaves[r], cols, row_spans[r]));
+    }
+    std::vector<RecordIndexSpan> total_spans;
+    const RecordIndexView total_records = make_leaf_set_record_view(buckets, surviving_row_leaves, cols, total_spans);
     for (std::size_t r = 0; r < subtotal.values.size() && r < surviving_row_leaves.size(); ++r) {
       for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.values[r].size(); ++df_idx) {
         const PivotDataField& df = table.data_fields()[df_idx];
         const Aggregation aggregation = subtotal.aggregation.has_value() ? *subtotal.aggregation : df.aggregation;
-        std::vector<Value> column;
-        append_leaf_set_field_values(cache, buckets, {surviving_row_leaves[r]}, cols, df.field_index, column);
-        subtotal.values[r][df_idx] = aggregate_or_blank(aggregation, column, result);
+        subtotal.values[r][df_idx] =
+            aggregate_records_or_blank(aggregation, cache, row_records[r], df.field_index, result);
       }
     }
     for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.total.size(); ++df_idx) {
       const PivotDataField& df = table.data_fields()[df_idx];
       const Aggregation aggregation = subtotal.aggregation.has_value() ? *subtotal.aggregation : df.aggregation;
-      std::vector<Value> column;
-      append_leaf_set_field_values(cache, buckets, surviving_row_leaves, cols, df.field_index, column);
-      subtotal.total[df_idx] = aggregate_or_blank(aggregation, column, result);
+      subtotal.total[df_idx] = aggregate_records_or_blank(aggregation, cache, total_records, df.field_index, result);
     }
   }
 }
@@ -262,13 +278,14 @@ void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, std::option
     for (std::size_t i = groups[g].first_leaf; i < groups[g].first_leaf + groups[g].leaf_count && i < leaf_count; ++i) {
       group_leaves.push_back(axis_leaves[i]);
     }
-    std::vector<Value> column;
-    append_leaf_set_field_values(cache, buckets, row_axis ? group_leaves : cross_leaves,
-                                 row_axis ? cross_leaves : group_leaves, df.field_index, column);
-    if (column.empty()) {
+    std::vector<RecordIndexSpan> spans;
+    const RecordIndexView records = make_leaf_set_record_view(buckets, row_axis ? group_leaves : cross_leaves,
+                                                              row_axis ? cross_leaves : group_leaves, spans);
+    if (records.empty()) {
       continue;
     }
-    if (const auto n = numeric_aggregate_value(apply_aggregation(df.aggregation, column))) {
+    if (const auto n =
+            numeric_aggregate_value(apply_record_aggregation(df.aggregation, cache, records, df.field_index))) {
       scores.scores[g] = *n;
       scores.all_blank[g] = false;
     }

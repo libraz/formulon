@@ -65,8 +65,9 @@ struct HierarchyKeyLess {
 
 struct HierNode {
   std::map<HierarchyKey, HierNode, HierarchyKeyLess> children;
-  /// Cache-record indices below this node. They permit value-based sorting
-  /// without reconstructing a hierarchy path after aggregation.
+  /// Cache-record indices below this node when its level sorts by a value
+  /// field. Ordinary label, descending, and manual-sorted levels leave this
+  /// empty because no consumer needs to reconstruct their record set.
   std::vector<std::size_t> record_indices;
   /// Aggregate used when the owning field has SortSpec::by_field. Absent
   /// means normal label ordering remains in effect.
@@ -114,6 +115,15 @@ inline std::vector<OrderedHierarchyChild> ordered_children(HierNode& tree, const
   const bool sort_by_value = depth < levels.size() && levels[depth].value_sort_field.has_value();
   const std::map<Value, std::size_t, ValueLess>* manual_order =
       depth < levels.size() ? levels[depth].manual_order : nullptr;
+
+  // Map order is HierarchyKeyLess with unique keys, so descending is its reverse.
+  if (manual_order == nullptr && !sort_by_value) {
+    if (!ascending) {
+      std::reverse(entries.begin(), entries.end());
+    }
+    return entries;
+  }
+
   sort_by_index(entries, [&](const OrderedHierarchyChild& lhs, const OrderedHierarchyChild& rhs) {
     if (manual_order != nullptr) {
       const auto lit =
