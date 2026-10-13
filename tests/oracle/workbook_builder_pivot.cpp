@@ -38,6 +38,7 @@ using ::formulon::pivot::PivotField;
 using ::formulon::pivot::PivotItem;
 using ::formulon::pivot::PivotLayout;
 using ::formulon::pivot::PivotTable;
+using ::formulon::pivot::SubtotalFn;
 
 /// Cache id stamped on the single cache the builder constructs. The
 /// workbook-oracle harness never assembles more than one pivot per case,
@@ -112,6 +113,30 @@ Expected<Aggregation, Error> aggregation_from_string(const std::string& name) {
     return Aggregation::VarP;
   }
   return invalid("unknown aggregation '" + name + "'");
+}
+
+/// Maps a `subtotal_functions` entry onto the `SubtotalFn` enum. The names
+/// are the same spellings `aggregation_from_string` accepts.
+Expected<SubtotalFn, Error> subtotal_fn_from_string(const std::string& name) {
+  static const std::pair<const char*, SubtotalFn> kNames[] = {
+      {"Sum", SubtotalFn::Sum},
+      {"Count", SubtotalFn::Count},
+      {"Average", SubtotalFn::Average},
+      {"Max", SubtotalFn::Max},
+      {"Min", SubtotalFn::Min},
+      {"Product", SubtotalFn::Product},
+      {"CountNumbers", SubtotalFn::CountNumbers},
+      {"StdDev", SubtotalFn::StdDev},
+      {"StdDevP", SubtotalFn::StdDevP},
+      {"Var", SubtotalFn::Var},
+      {"VarP", SubtotalFn::VarP},
+  };
+  for (const auto& [text, fn] : kNames) {
+    if (name == text) {
+      return fn;
+    }
+  }
+  return invalid("unknown subtotal function '" + name + "'");
 }
 
 /// Maps a `layout` string onto the `PivotLayout` enum. Defaults to Compact
@@ -362,6 +387,21 @@ Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec, ExcelPr
         return invalid("pivot 'field_options' entries must be objects");
       }
       for (const auto& [key, flag] : option.as_object()) {
+        if (key == "subtotal_functions") {
+          if (!flag.is_array() || flag.as_array().empty()) {
+            return invalid("pivot field option 'subtotal_functions' must be a non-empty array");
+          }
+          std::vector<SubtotalFn> fns;
+          for (const JsonValue& item : flag.as_array()) {
+            if (!item.is_string()) {
+              return invalid("pivot field option 'subtotal_functions' entries must be strings");
+            }
+            ASSIGN_OR_RETURN(SubtotalFn fn, subtotal_fn_from_string(item.as_string()));
+            fns.push_back(fn);
+          }
+          table.mutable_fields()[idx].subtotal_fns = std::move(fns);
+          continue;
+        }
         if (!flag.is_bool()) {
           return invalid("pivot field option '" + key + "' must be a boolean");
         }

@@ -39,6 +39,32 @@ class WorkbookCaseSchemaNegativeTest(unittest.TestCase):
                 )
             )
 
+    def _subtotal_case(self, functions):
+        return _case(
+            {
+                "source": "Data!A1:A1",
+                "anchor": "Report!A1",
+                "row_fields": ["Region"],
+                "field_options": {"Region": {"subtotal_functions": functions}},
+            }
+        )
+
+    def test_subtotal_functions_accepts_known_names(self):
+        schema.validate_case_json(self._subtotal_case(["Sum", "Max"]))
+
+    def test_subtotal_functions_rejects_unknown_name(self):
+        with self.assertRaisesRegex(schema.ValidationError, "unknown subtotal function"):
+            schema.validate_case_json(self._subtotal_case(["Median"]))
+
+    def test_subtotal_functions_rejects_duplicate(self):
+        with self.assertRaisesRegex(schema.ValidationError, "duplicate subtotal function"):
+            schema.validate_case_json(self._subtotal_case(["Max", "Max"]))
+
+    def test_subtotal_functions_rejects_empty_or_non_list(self):
+        for bad in ([], "Max", True):
+            with self.assertRaisesRegex(schema.ValidationError, "non-empty list"):
+                schema.validate_case_json(self._subtotal_case(bad))
+
     def test_formula_probe_requires_sheet_qualified_a1(self):
         with self.assertRaisesRegex(schema.ValidationError, "sheet-qualified A1"):
             schema.validate_case_json(

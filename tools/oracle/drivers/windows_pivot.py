@@ -27,6 +27,23 @@ _XL_CONSOLIDATION = {
     "VarP": -4165,
 }
 
+# `PivotField.Subtotals` is a 12-element array: slot 1 is Automatic, then the
+# custom functions in this fixed order (Sum .. VarP), regardless of how a
+# case lists them.
+_SUBTOTAL_SLOTS = (
+    "Sum",
+    "Count",
+    "Average",
+    "Max",
+    "Min",
+    "Product",
+    "CountNumbers",
+    "StdDev",
+    "StdDevP",
+    "Var",
+    "VarP",
+)
+
 # Excel `XlPivotFieldOrientation` constants.
 _XL_ORIENT_ROW = 1
 _XL_ORIENT_COLUMN = 2
@@ -156,6 +173,13 @@ def build_pivot_table(wb, pivot_spec: Dict[str, Any]):
         if "default_subtotal" in options:
             # `Subtotals(1)` is Automatic; the other eleven stay off.
             field.Subtotals = (bool(options["default_subtotal"]),) + (False,) * 11
+        if "subtotal_functions" in options:
+            # Selecting any custom function clears Automatic (slot 1).
+            wanted = set(options["subtotal_functions"])
+            unknown = wanted.difference(_SUBTOTAL_SLOTS)
+            if unknown:
+                raise RuntimeError(f"unknown subtotal function(s) {sorted(unknown)}")
+            field.Subtotals = (False,) + tuple(name in wanted for name in _SUBTOTAL_SLOTS)
         if "subtotal_top" in options:
             field.LayoutSubtotalLocation = _XL_AT_TOP if options["subtotal_top"] else _XL_AT_BOTTOM
 

@@ -44,6 +44,7 @@
 // `data_fields` are optional; `row_fields` / `col_fields` / `filters`
 // default to empty, `layout` to Compact, `grand_totals` to {true,true}.
 // `field_options` keys default to Excel's: subtotal shown, at the top.
+// `subtotal_functions` (a list of `agg` names) sets custom subtotals.
 //
 // Declarative `print` block shape
 // -------------------------------

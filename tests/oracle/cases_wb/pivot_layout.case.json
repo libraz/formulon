@@ -1275,6 +1275,650 @@
           }
         }
       }
+    },
+    {
+      "id": "custom_subtotal_compact_max_bottom",
+      "description": "Compact layout with the outer row field's only subtotal being Max, at the bottom of its group.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Product"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C3": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C4": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C5": {
+            "kind": "number",
+            "value": 300.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:C5",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region",
+          "Product"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "layout": "Compact",
+        "field_options": {
+          "Region": {
+            "subtotal_functions": [
+              "Max"
+            ],
+            "subtotal_top": false
+          }
+        }
+      }
+    },
+    {
+      "id": "custom_subtotal_compact_max_top",
+      "description": "Compact layout with the outer row field's only subtotal being Max, on the group's heading row.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Product"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C3": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C4": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C5": {
+            "kind": "number",
+            "value": 300.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:C5",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region",
+          "Product"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "layout": "Compact",
+        "field_options": {
+          "Region": {
+            "subtotal_functions": [
+              "Max"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "custom_subtotal_compact_sum_max",
+      "description": "Compact layout with Sum and Max subtotals on the outer row field, on the heading row.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Product"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C3": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C4": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C5": {
+            "kind": "number",
+            "value": 300.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:C5",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region",
+          "Product"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "layout": "Compact",
+        "field_options": {
+          "Region": {
+            "subtotal_functions": [
+              "Sum",
+              "Max"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "custom_subtotal_outline_sum_max",
+      "description": "Outline layout with Sum and Max subtotals on the outer row field, on the heading row.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Product"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C3": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C4": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C5": {
+            "kind": "number",
+            "value": 300.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:C5",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region",
+          "Product"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "layout": "Outline",
+        "field_options": {
+          "Region": {
+            "subtotal_functions": [
+              "Sum",
+              "Max"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "custom_subtotal_tabular_max",
+      "description": "Tabular layout with the outer row field's only subtotal being Max.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Product"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C3": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C4": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C5": {
+            "kind": "number",
+            "value": 300.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:C5",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region",
+          "Product"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "layout": "Tabular",
+        "field_options": {
+          "Region": {
+            "subtotal_functions": [
+              "Max"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "custom_subtotal_compact_max_min_average",
+      "description": "Compact layout listing Max, Min, Average to pin Excel's fixed subtotal function order.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Product"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C3": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C4": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C5": {
+            "kind": "number",
+            "value": 300.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:C5",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region",
+          "Product"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "layout": "Compact",
+        "field_options": {
+          "Region": {
+            "subtotal_functions": [
+              "Max",
+              "Min",
+              "Average"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "custom_subtotal_outline_count_average_bottom",
+      "description": "Outline layout with Count and Average subtotals on the outer row field, at the bottom of its group.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Product"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C3": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C4": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C5": {
+            "kind": "number",
+            "value": 300.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:C5",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region",
+          "Product"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "layout": "Outline",
+        "field_options": {
+          "Region": {
+            "subtotal_functions": [
+              "Count",
+              "Average"
+            ],
+            "subtotal_top": false
+          }
+        }
+      }
     }
   ]
 }

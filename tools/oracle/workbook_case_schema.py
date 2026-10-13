@@ -177,7 +177,26 @@ def _validate_hidden_list(raw: Any, where: str, *, label: str) -> None:
 
 
 # Per-field keys the pivot block's `field_options` accepts.
-_PIVOT_FIELD_OPTIONS = frozenset({"subtotal_top", "default_subtotal"})
+_PIVOT_FIELD_OPTIONS = frozenset({"subtotal_top", "default_subtotal", "subtotal_functions"})
+
+# Function names `subtotal_functions` accepts; the same spellings as a data field's `agg`.
+_PIVOT_SUBTOTAL_FUNCTIONS = frozenset(
+    {"Sum", "Count", "Average", "Max", "Min", "Product", "CountNumbers", "StdDev", "StdDevP", "Var", "VarP"}
+)
+
+
+def _validate_subtotal_functions(raw: Any, where: str) -> None:
+    """Validates a field's `subtotal_functions` list of unique function names."""
+
+    if not isinstance(raw, list) or not raw:
+        raise ValidationError(f"{where}: expected a non-empty list of function names")
+    seen: Set[str] = set()
+    for i, name in enumerate(raw):
+        if name not in _PIVOT_SUBTOTAL_FUNCTIONS:
+            raise ValidationError(f"{where}/{i}: unknown subtotal function {name!r}")
+        if name in seen:
+            raise ValidationError(f"{where}/{i}: duplicate subtotal function {name!r}")
+        seen.add(name)
 
 
 def _validate_pivot_block(raw: Any, where: str) -> None:
@@ -221,7 +240,9 @@ def _validate_pivot_block(raw: Any, where: str) -> None:
             for key, flag in option.items():
                 if key not in _PIVOT_FIELD_OPTIONS:
                     raise ValidationError(f"{option_where}/{key}: unknown field option")
-                if not isinstance(flag, bool):
+                if key == "subtotal_functions":
+                    _validate_subtotal_functions(flag, _at(option_where, key))
+                elif not isinstance(flag, bool):
                     raise ValidationError(f"{option_where}/{key}: expected a boolean")
     data_fields = raw.get("data_fields")
     if isinstance(data_fields, list):

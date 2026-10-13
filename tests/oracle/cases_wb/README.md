@@ -154,6 +154,10 @@ pivot:
 
 `field_options` keys default to Excel's own: `subtotal_top: true` (the
 subtotal sits on the group's heading row) and `default_subtotal: true`.
+`subtotal_functions` is a list of custom subtotal functions (the `agg` names)
+that replace the automatic subtotal; Excel renders them in its fixed order
+(Sum, Count, Average, Max, Min, Product, CountNumbers, StdDev, StdDevP, Var,
+VarP), not the listed one.
 
 `page_fields` places source fields on Excel's report-filter/page axis. The
 optional `formula_probes` list contains `{id, cell, formula}` records. The
