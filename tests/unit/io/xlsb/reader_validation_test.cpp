@@ -1,6 +1,7 @@
 // In-memory XLSB reader tests grouped by cells, formulas, validation, and passthrough.
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -159,6 +160,60 @@ TEST(XlsbReader, MissingContentTypesIsContentTypeInvalid) {
   auto result = read_xlsb(SpanOf(archive));
   ASSERT_FALSE(static_cast<bool>(result));
   EXPECT_EQ(result.error().code, FormulonErrorCode::kIoContentTypeInvalid);
+}
+TEST(XlsbReader, IdenticalContentTypeDuplicatesPreserveFirstEntries) {
+  std::string content_types = ContentTypesXml();
+  const std::size_t close = content_types.rfind("</Types>");
+  ASSERT_NE(close, std::string::npos);
+  content_types.insert(
+      close,
+      "<Default Extension=\"BIN\" ContentType=\"application/vnd.ms-excel.sheet.binary.macroEnabled.main\"/>"
+      "<Override PartName=\"xl/workbook.bin\" "
+      "ContentType=\"application/vnd.ms-excel.sheet.binary.macroEnabled.main\"/>");
+
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(content_types)});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinReal(1.0)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
+  ASSERT_EQ(result.value().workbook.default_content_types().size(), 2U);
+  EXPECT_EQ(result.value().workbook.default_content_types()[0].extension, "rels");
+  EXPECT_EQ(result.value().workbook.default_content_types()[1].extension, "bin");
+}
+TEST(XlsbReader, ConflictingDefaultContentTypeDuplicatesAreRejected) {
+  std::string content_types = ContentTypesXml();
+  const std::size_t close = content_types.rfind("</Types>");
+  ASSERT_NE(close, std::string::npos);
+  content_types.insert(close, "<Default Extension=\"BIN\" ContentType=\"application/x-conflict\"/>");
+
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(content_types)});
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoContentTypeInvalid);
+  EXPECT_NE(result.error().message.find("conflicting Default content types for extension bin"), std::string::npos);
+}
+TEST(XlsbReader, ConflictingOverrideContentTypeDuplicatesAreRejected) {
+  std::string content_types = ContentTypesXml();
+  const std::size_t close = content_types.rfind("</Types>");
+  ASSERT_NE(close, std::string::npos);
+  content_types.insert(close, "<Override PartName=\"xl/workbook.bin\" ContentType=\"application/x-conflict\"/>");
+
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(content_types)});
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoContentTypeInvalid);
+  EXPECT_NE(result.error().message.find("conflicting Override content types for part xl/workbook.bin"),
+            std::string::npos);
 }
 
 }  // namespace

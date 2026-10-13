@@ -129,6 +129,8 @@ Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_
                       "context=xlsb_reader part=[Content_Types].xml");
   }
   ContentTypesView view;
+  std::unordered_map<std::string, std::size_t> default_indices;
+  std::unordered_map<std::string, std::size_t> override_indices;
   bool saw_workbook = false;
   for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
     const std::string_view node_name(node.name());
@@ -148,11 +150,9 @@ Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_
         continue;
       }
       const std::string normalized_ext = ooxml::lowercase_extension(ext);
-      auto existing = std::find_if(
-          view.defaults.begin(), view.defaults.end(),
-          [&normalized_ext](const DefaultContentType& value) { return value.extension == normalized_ext; });
-      if (existing != view.defaults.end()) {
-        if (existing->content_type != ct) {
+      const auto [index_it, inserted] = default_indices.try_emplace(normalized_ext, view.defaults.size());
+      if (!inserted) {
+        if (view.defaults[index_it->second].content_type != ct) {
           return make_error(FormulonErrorCode::kIoContentTypeInvalid,
                             "[Content_Types].xml: conflicting Default content types for extension " + normalized_ext,
                             "context=xlsb_reader part=[Content_Types].xml extension=" + normalized_ext);
@@ -173,11 +173,9 @@ Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_
     if (ct == kCtWorkbookXlsb || ct == kCtWorkbookXlsbAlt) {
       saw_workbook = true;
     }
-    auto existing = std::find_if(
-        view.overrides.begin(), view.overrides.end(),
-        [&part_name](const std::pair<std::string, std::string>& value) { return value.first == part_name; });
-    if (existing != view.overrides.end()) {
-      if (existing->second != ct) {
+    const auto [index_it, inserted] = override_indices.try_emplace(part_name, view.overrides.size());
+    if (!inserted) {
+      if (view.overrides[index_it->second].second != ct) {
         return make_error(FormulonErrorCode::kIoContentTypeInvalid,
                           "[Content_Types].xml: conflicting Override content types for part " + part_name,
                           "context=xlsb_reader part=[Content_Types].xml override=" + part_name);
