@@ -170,21 +170,14 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     return std::move(ct_bytes_or.error());
   }
   const std::vector<std::uint8_t>& ct_bytes = ct_bytes_or.value();
-  auto kind_or = ooxml::verify_content_types(ct_bytes, &diagnostics);
-  if (!kind_or) {
-    return std::move(kind_or.error());
+  auto content_types_or = ooxml::parse_content_types(ct_bytes, &diagnostics);
+  if (!content_types_or) {
+    return std::move(content_types_or.error());
   }
-  const WorkbookKind workbook_kind = kind_or.value();
-  auto override_part_entries_or = ooxml::list_override_part_entries(ct_bytes);
-  if (!override_part_entries_or) {
-    return std::move(override_part_entries_or.error());
-  }
-  const std::vector<ooxml::OverrideEntry> override_part_entries = std::move(override_part_entries_or.value());
-  auto default_content_types_or = ooxml::list_default_content_types(ct_bytes);
-  if (!default_content_types_or) {
-    return std::move(default_content_types_or.error());
-  }
-  std::vector<DefaultContentType> default_content_types = std::move(default_content_types_or.value());
+  ooxml::ContentTypesInfo content_types = std::move(content_types_or.value());
+  const WorkbookKind workbook_kind = content_types.workbook_kind;
+  std::vector<ooxml::OverrideEntry> override_part_entries = std::move(content_types.overrides);
+  std::vector<DefaultContentType> default_content_types = std::move(content_types.defaults);
 
   // 2. _rels/.rels — locate the workbook part path.
   if (!zip.has_entry("_rels/.rels")) {

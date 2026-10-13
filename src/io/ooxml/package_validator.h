@@ -41,6 +41,23 @@ struct OverrideEntry {
   std::string content_type;  ///< verbatim ContentType= attribute value
 };
 
+/// The complete declaration table from `[Content_Types].xml`.
+///
+/// A reader normally needs all three pieces at once. Keeping them in one
+/// result lets it parse the XML document once while retaining the standalone
+/// validators below for callers that only need one view of the table.
+struct ContentTypesInfo {
+  WorkbookKind workbook_kind = WorkbookKind::kXlsx;
+  std::vector<OverrideEntry> overrides;
+  std::vector<DefaultContentType> defaults;
+};
+
+/// Parses `[Content_Types].xml` once and returns its workbook kind, Override
+/// entries, and Default entries. The same workbook-kind fallback and
+/// diagnostics contract as `verify_content_types` applies.
+Expected<ContentTypesInfo, Error> parse_content_types(const std::vector<std::uint8_t>& ct_bytes,
+                                                      ReadDiagnostics* diagnostics = nullptr);
+
 /// Verifies that `[Content_Types].xml` references a workbook content
 /// type at least once and returns the corresponding `WorkbookKind`.
 ///

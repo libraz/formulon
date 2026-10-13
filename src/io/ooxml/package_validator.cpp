@@ -79,6 +79,86 @@ Expected<pugi::xml_node, Error> LoadTypesRoot(pugi::xml_document& doc, const std
   return root;
 }
 
+/// Verifies a parsed `<Types>` root. Keeping this separate from the byte
+/// entry point lets a combined parse share its DOM with both declaration
+/// lists without changing the standalone API contracts.
+Expected<WorkbookKind, Error> VerifyContentTypesRoot(const pugi::xml_node& root, ReadDiagnostics* diagnostics) {
+  // A known workbook type wins regardless of where an unknown workbook-like
+  // override appeared in document order. If no known type exists, retain the
+  // first canonical workbook path's unknown type for the compatibility
+  // warning and kXlsx fallback.
+  bool saw_unknown_workbook = false;
+  std::string first_unknown_ct;
+  for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
+    if (std::string_view(node.name()) != "Override") {
+      continue;
+    }
+    const std::string_view ct = attr_str(node, "ContentType");
+    if (IsKnownWorkbookContentType(ct)) {
+      return DetectWorkbookKind(ct).kind;
+    }
+    // Preserve the legacy empty-content-type behavior: an empty first
+    // candidate leaves the content-type string empty, so a later non-empty
+    // candidate supplies the warning payload. The boolean still records that
+    // the fallback should happen even when every candidate is empty.
+    if (first_unknown_ct.empty()) {
+      const std::string_view part_name = attr_str(node, "PartName");
+      if (part_name == "/xl/workbook.xml" || part_name == "xl/workbook.xml") {
+        first_unknown_ct.assign(ct);
+        saw_unknown_workbook = true;
+      }
+    }
+  }
+  if (saw_unknown_workbook) {
+    StructuredLog("ooxml.reader.unknown_workbook_content_type")
+        .field("content_type", first_unknown_ct)
+        .field("fallback_kind", std::string_view("kXlsx"))
+        .warn();
+    if (diagnostics != nullptr) {
+      ++diagnostics->unknown_content_type_count;
+    }
+    return WorkbookKind::kXlsx;
+  }
+  return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: no workbook content-type override",
+                    "context=ooxml_reader part=[Content_Types].xml");
+}
+
+std::vector<OverrideEntry> ListOverridePartEntriesFromRoot(const pugi::xml_node& root) {
+  std::vector<OverrideEntry> out;
+  for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
+    if (std::string_view(node.name()) != "Override") {
+      continue;
+    }
+    std::string part_name(attr_str(node, "PartName"));
+    if (!part_name.empty() && part_name.front() == '/') {
+      part_name.erase(0, 1);
+    }
+    if (part_name.empty()) {
+      continue;
+    }
+    std::string content_type(attr_str(node, "ContentType"));
+    out.push_back(OverrideEntry{std::move(part_name), std::move(content_type)});
+  }
+  return out;
+}
+
+std::vector<DefaultContentType> ListDefaultContentTypesFromRoot(const pugi::xml_node& root) {
+  std::vector<DefaultContentType> out;
+  for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
+    if (std::string_view(node.name()) != "Default") {
+      continue;
+    }
+    std::string extension(attr_str(node, "Extension"));
+    if (extension.empty()) {
+      continue;
+    }
+    // Lower case so lookups against archive entry suffixes stay
+    // case-insensitive (OPC treats extensions case-insensitively).
+    out.push_back(DefaultContentType{lowercase_extension(extension), std::string(attr_str(node, "ContentType"))});
+  }
+  return out;
+}
+
 }  // namespace
 
 Expected<std::string, Error> resolve_office_document_path(const std::vector<std::uint8_t>& rels_bytes) {
@@ -120,97 +200,34 @@ Expected<std::string, Error> resolve_office_document_path(const std::vector<std:
                     "context=ooxml_reader part=_rels/.rels");
 }
 
+Expected<ContentTypesInfo, Error> parse_content_types(const std::vector<std::uint8_t>& ct_bytes,
+                                                      ReadDiagnostics* diagnostics) {
+  pugi::xml_document doc;
+  ASSIGN_OR_RETURN(auto root, LoadTypesRoot(doc, ct_bytes));
+  ContentTypesInfo out;
+  ASSIGN_OR_RETURN(out.workbook_kind, VerifyContentTypesRoot(root, diagnostics));
+  out.overrides = ListOverridePartEntriesFromRoot(root);
+  out.defaults = ListDefaultContentTypesFromRoot(root);
+  return out;
+}
+
 Expected<WorkbookKind, Error> verify_content_types(const std::vector<std::uint8_t>& ct_bytes,
                                                    ReadDiagnostics* diagnostics) {
   pugi::xml_document doc;
   ASSIGN_OR_RETURN(auto root, LoadTypesRoot(doc, ct_bytes));
-  // We need to recognise one of two situations:
-  //   (a) An Override carries one of the four canonical workbook
-  //       content types — we accept the package and pin the kind.
-  //   (b) An Override exists for `/xl/workbook.xml` (or whatever the
-  //       package-level rels file points at) but with an unfamiliar
-  //       content type. We still accept the package for round-trip
-  //       reads but log a warning and fall back to `kXlsx`.
-  // The package-level rels file is parsed later in the pipeline; at
-  // this point we walk every Override looking for a recognised kind
-  // first, and only if we find none do we record the first
-  // workbook-shaped override (heuristic: ContentType ends in
-  // `+xml` and the part name is a candidate workbook). Keeping the
-  // logic simple here matches the original "saw_workbook" heuristic
-  // while extending it to four kinds.
-  bool any_workbook_like = false;
-  std::string first_unknown_ct;
-  for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
-    if (std::string_view(node.name()) != "Override") {
-      continue;
-    }
-    const std::string_view ct = attr_str(node, "ContentType");
-    if (IsKnownWorkbookContentType(ct)) {
-      return DetectWorkbookKind(ct).kind;
-    }
-    // Heuristic for case (b): part name targets `xl/workbook.xml`
-    // (the canonical Excel placement) but with a content type we do
-    // not recognise. Surface the first such occurrence so the warning
-    // names the actual offender.
-    if (first_unknown_ct.empty()) {
-      const std::string_view part_name = attr_str(node, "PartName");
-      if (part_name == "/xl/workbook.xml" || part_name == "xl/workbook.xml") {
-        first_unknown_ct.assign(ct);
-        any_workbook_like = true;
-      }
-    }
-  }
-  if (any_workbook_like) {
-    StructuredLog("ooxml.reader.unknown_workbook_content_type")
-        .field("content_type", first_unknown_ct)
-        .field("fallback_kind", std::string_view("kXlsx"))
-        .warn();
-    if (diagnostics != nullptr) {
-      ++diagnostics->unknown_content_type_count;
-    }
-    return WorkbookKind::kXlsx;
-  }
-  return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: no workbook content-type override",
-                    "context=ooxml_reader part=[Content_Types].xml");
+  return VerifyContentTypesRoot(root, diagnostics);
 }
 
 Expected<std::vector<OverrideEntry>, Error> list_override_part_entries(const std::vector<std::uint8_t>& ct_bytes) {
-  std::vector<OverrideEntry> out;
   pugi::xml_document doc;
   ASSIGN_OR_RETURN(auto root, LoadTypesRoot(doc, ct_bytes));
-  for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
-    if (std::string_view(node.name()) == "Override") {
-      std::string part_name(attr_str(node, "PartName"));
-      if (!part_name.empty() && part_name.front() == '/') {
-        part_name.erase(0, 1);
-      }
-      if (part_name.empty()) {
-        continue;
-      }
-      std::string content_type(attr_str(node, "ContentType"));
-      out.push_back(OverrideEntry{std::move(part_name), std::move(content_type)});
-    }
-  }
-  return out;
+  return ListOverridePartEntriesFromRoot(root);
 }
 
 Expected<std::vector<DefaultContentType>, Error> list_default_content_types(const std::vector<std::uint8_t>& ct_bytes) {
-  std::vector<DefaultContentType> out;
   pugi::xml_document doc;
   ASSIGN_OR_RETURN(auto root, LoadTypesRoot(doc, ct_bytes));
-  for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
-    if (std::string_view(node.name()) != "Default") {
-      continue;
-    }
-    std::string extension(attr_str(node, "Extension"));
-    if (extension.empty()) {
-      continue;
-    }
-    // Lower case so lookups against archive entry suffixes stay
-    // case-insensitive (OPC treats extensions case-insensitively).
-    out.push_back(DefaultContentType{lowercase_extension(extension), std::string(attr_str(node, "ContentType"))});
-  }
-  return out;
+  return ListDefaultContentTypesFromRoot(root);
 }
 
 Expected<std::string, Error> resolve_relative_path(std::string_view base_dir, std::string_view target) {

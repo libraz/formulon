@@ -68,6 +68,152 @@ std::vector<std::uint8_t> SaveOrDie(const Workbook& wb) {
   return save_or.value();
 }
 
+std::vector<std::uint8_t> ContentTypesBytes(std::string_view xml) {
+  return std::vector<std::uint8_t>(xml.begin(), xml.end());
+}
+
+TEST(OoxmlContentTypes, CombinedParseMatchesStandaloneViewsForEveryWorkbookKind) {
+  struct Case {
+    const char* content_type;
+    WorkbookKind kind;
+  };
+  const Case cases[] = {
+      {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml", WorkbookKind::kXlsx},
+      {"application/vnd.ms-excel.sheet.macroEnabled.main+xml", WorkbookKind::kXlsm},
+      {"application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml", WorkbookKind::kXltx},
+      {"application/vnd.ms-excel.template.macroEnabled.main+xml", WorkbookKind::kXltm},
+  };
+
+  for (const Case& c : cases) {
+    const std::string xml =
+        std::string(
+            "<Types><Default Extension=\"ReLs\" ContentType=\"application/rels\"/>"
+            "<Override PartName=\"/xl/workbook.xml\" ContentType=\"")
+            .append(c.content_type)
+            .append("\"/><Override PartName=\"/xl/extra.bin\" ContentType=\"application/extra\"/></Types>");
+    const std::vector<std::uint8_t> bytes = ContentTypesBytes(xml);
+
+    auto combined = ooxml::parse_content_types(bytes);
+    ASSERT_TRUE(static_cast<bool>(combined)) << c.content_type;
+    auto kind = ooxml::verify_content_types(bytes);
+    auto overrides = ooxml::list_override_part_entries(bytes);
+    auto defaults = ooxml::list_default_content_types(bytes);
+    ASSERT_TRUE(static_cast<bool>(kind));
+    ASSERT_TRUE(static_cast<bool>(overrides));
+    ASSERT_TRUE(static_cast<bool>(defaults));
+
+    EXPECT_EQ(combined.value().workbook_kind, c.kind);
+    EXPECT_EQ(combined.value().workbook_kind, kind.value());
+    ASSERT_EQ(combined.value().overrides.size(), overrides.value().size());
+    ASSERT_EQ(combined.value().defaults.size(), defaults.value().size());
+    for (std::size_t i = 0; i < overrides.value().size(); ++i) {
+      EXPECT_EQ(combined.value().overrides[i].part_name, overrides.value()[i].part_name);
+      EXPECT_EQ(combined.value().overrides[i].content_type, overrides.value()[i].content_type);
+    }
+    for (std::size_t i = 0; i < defaults.value().size(); ++i) {
+      EXPECT_EQ(combined.value().defaults[i].extension, defaults.value()[i].extension);
+      EXPECT_EQ(combined.value().defaults[i].content_type, defaults.value()[i].content_type);
+    }
+  }
+}
+
+TEST(OoxmlContentTypes, KnownKindWinsOverEarlierUnknownWorkbookOverride) {
+  constexpr std::string_view kXml =
+      "<Types>"
+      "<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.example.unknown+xml\"/>"
+      "<Override PartName=\"xl/other.xml\" "
+      "ContentType=\"application/vnd.ms-excel.sheet.macroEnabled.main+xml\"/>"
+      "</Types>";
+  ReadDiagnostics diagnostics;
+  auto result = ooxml::parse_content_types(ContentTypesBytes(kXml), &diagnostics);
+  ASSERT_TRUE(static_cast<bool>(result));
+  EXPECT_EQ(result.value().workbook_kind, WorkbookKind::kXlsm);
+  EXPECT_EQ(diagnostics.unknown_content_type_count, 0U);
+  ASSERT_EQ(result.value().overrides.size(), 2U);
+  EXPECT_EQ(result.value().overrides[0].part_name, "xl/workbook.xml");
+  EXPECT_EQ(result.value().overrides[1].part_name, "xl/other.xml");
+}
+
+TEST(OoxmlContentTypes, UnknownWorkbookOverrideWarnsAndCountsOnce) {
+  constexpr std::string_view kXml =
+      "<Types>"
+      "<Override PartName=\"/xl/workbook.xml\" ContentType=\"\"/>"
+      "<Override PartName=\"xl/workbook.xml\" ContentType=\"application/vnd.example.second+xml\"/>"
+      "</Types>";
+  StructuredLogCapture log;
+  ReadDiagnostics diagnostics;
+  auto result = ooxml::parse_content_types(ContentTypesBytes(kXml), &diagnostics);
+  ASSERT_TRUE(static_cast<bool>(result));
+  EXPECT_EQ(result.value().workbook_kind, WorkbookKind::kXlsx);
+  EXPECT_EQ(diagnostics.unknown_content_type_count, 1U);
+  const std::string_view records = log.records();
+  const std::size_t first = records.find("ooxml.reader.unknown_workbook_content_type");
+  ASSERT_NE(first, std::string_view::npos);
+  EXPECT_EQ(records.find("ooxml.reader.unknown_workbook_content_type", first + 1U), std::string_view::npos);
+  EXPECT_NE(records.find("application/vnd.example.second+xml"), std::string_view::npos);
+}
+
+TEST(OoxmlContentTypes, CombinedParsePreservesOrderDuplicatesAndSkipsEmptyEntries) {
+  constexpr std::string_view kXml =
+      "<Types>"
+      "<Default Extension=\"PNG\" ContentType=\"image/png\"/>"
+      "<Default Extension=\"\" ContentType=\"application/empty\"/>"
+      "<Default Extension=\"png\" ContentType=\"image/png-second\"/>"
+      "<Default ContentType=\"application/no-extension\"/>"
+      "<Override PartName=\"/xl/workbook.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"
+      "<Override PartName=\"\" ContentType=\"application/empty\"/>"
+      "<Override PartName=\"//xl/two-leading-slashes.xml\" ContentType=\"application/two\"/>"
+      "<Override PartName=\"/xl/two-leading-slashes.xml\" ContentType=\"application/duplicate\"/>"
+      "</Types>";
+  auto result = ooxml::parse_content_types(ContentTypesBytes(kXml));
+  ASSERT_TRUE(static_cast<bool>(result));
+
+  ASSERT_EQ(result.value().defaults.size(), 2U);
+  EXPECT_EQ(result.value().defaults[0].extension, "png");
+  EXPECT_EQ(result.value().defaults[0].content_type, "image/png");
+  EXPECT_EQ(result.value().defaults[1].extension, "png");
+  EXPECT_EQ(result.value().defaults[1].content_type, "image/png-second");
+
+  ASSERT_EQ(result.value().overrides.size(), 3U);
+  EXPECT_EQ(result.value().overrides[0].part_name, "xl/workbook.xml");
+  EXPECT_EQ(result.value().overrides[1].part_name, "/xl/two-leading-slashes.xml");
+  EXPECT_EQ(result.value().overrides[1].content_type, "application/two");
+  EXPECT_EQ(result.value().overrides[2].part_name, "xl/two-leading-slashes.xml");
+  EXPECT_EQ(result.value().overrides[2].content_type, "application/duplicate");
+}
+
+TEST(OoxmlContentTypes, CombinedParsePreservesMalformedAndMissingRootErrors) {
+  auto malformed = ooxml::parse_content_types(ContentTypesBytes("<Types>"));
+  ASSERT_FALSE(static_cast<bool>(malformed));
+  EXPECT_EQ(malformed.error().code, FormulonErrorCode::kIoXmlParse);
+
+  auto missing_root = ooxml::parse_content_types(ContentTypesBytes("<NotTypes/>"));
+  ASSERT_FALSE(static_cast<bool>(missing_root));
+  EXPECT_EQ(missing_root.error().code, FormulonErrorCode::kIoContentTypeInvalid);
+
+  constexpr std::string_view kNoWorkbook =
+      "<Types><Default Extension=\"xml\" ContentType=\"application/xml\"/></Types>";
+  auto result = ooxml::parse_content_types(ContentTypesBytes(kNoWorkbook));
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoContentTypeInvalid);
+  EXPECT_NE(result.error().message.find("no workbook content-type override"), std::string::npos);
+}
+
+TEST(OoxmlContentTypes, StandaloneListsAcceptDeclarationsWithoutWorkbookOverride) {
+  const auto bytes = ContentTypesBytes(
+      "<Types><Default Extension=\"XML\" ContentType=\"application/xml\"/>"
+      "<Override PartName=\"/xl/extra.xml\" ContentType=\"application/extra\"/></Types>");
+  auto overrides = ooxml::list_override_part_entries(bytes);
+  auto defaults = ooxml::list_default_content_types(bytes);
+  ASSERT_TRUE(overrides);
+  ASSERT_TRUE(defaults);
+  ASSERT_EQ(overrides.value().size(), 1U);
+  EXPECT_EQ(overrides.value()[0].part_name, "xl/extra.xml");
+  ASSERT_EQ(defaults.value().size(), 1U);
+  EXPECT_EQ(defaults.value()[0].extension, "xml");
+}
+
 TEST(OoxmlReader, RoundTripsSingleSheetName) {
   Workbook wb = Workbook::create();
   const std::vector<std::uint8_t> bytes = SaveOrDie(wb);
