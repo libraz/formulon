@@ -476,5 +476,37 @@ TEST(CFEvaluator, TimePeriodValueOnlyOverloadStillReturnsFalse) {
 // DuplicateValues / UniqueValues
 // ---------------------------------------------------------------------------
 
+// Relative formulas anchor at the top-left of the sqref bounding box, which
+// need not lie in the first range (or in any range).
+TEST(CFEvaluator, ExpressionRuleAnchorsAtSqrefBoundingBox) {
+  CFEvalHarness harness;
+  ConditionalFormat block;
+  block.sqref.push_back(MakeRange(4U, 3U, 5U, 3U));  // D5:D6
+  block.sqref.push_back(MakeRange(1U, 1U, 2U, 1U));  // B2:B3
+  CFRule rule = MakeRule(RuleType::Expression);
+  rule.formula1 = "B2=\"x\"";  // anchor B2: each cell tests itself
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+  harness.sheet.set_cell_value(1, 1, Value::text("x"));  // B2
+  harness.sheet.set_cell_value(4, 3, Value::text("x"));  // D5
+
+  CFHost host;
+  host.arena = &harness.arena;
+  host.registry = &eval::default_registry();
+  host.eval_ctx = &harness.eval_ctx;
+  EXPECT_FALSE(evaluate_cf_at(harness.sheet, At(1U, 1U), host).empty());  // B2
+  EXPECT_TRUE(evaluate_cf_at(harness.sheet, At(2U, 1U), host).empty());   // B3
+  EXPECT_FALSE(evaluate_cf_at(harness.sheet, At(4U, 3U), host).empty());  // D5
+  EXPECT_TRUE(evaluate_cf_at(harness.sheet, At(5U, 3U), host).empty());   // D6
+}
+
+TEST(CFEvaluator, SqrefAnchorIsBoundingBoxTopLeft) {
+  EXPECT_EQ(sqref_anchor({}), (CellAddress{0U, 0U}));
+  EXPECT_EQ(sqref_anchor({MakeRange(4U, 3U, 5U, 3U), MakeRange(1U, 1U, 2U, 1U)}), (CellAddress{1U, 1U}));
+  EXPECT_EQ(sqref_anchor({MakeRange(4U, 1U, 5U, 1U), MakeRange(1U, 3U, 2U, 3U)}), (CellAddress{1U, 1U}));
+  EXPECT_EQ(sqref_anchor({MakeRange(2U, 5U, 3U, 5U), MakeRange(5U, 1U, 6U, 1U), MakeRange(1U, 3U, 2U, 3U)}),
+            (CellAddress{1U, 1U}));
+}
+
 }  // namespace
 }  // namespace formulon::cf

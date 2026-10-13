@@ -408,11 +408,11 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsIconThresholdCountsOtherThanIconsMinusO
 }
 
 // Text, blanks, errors and timePeriod rules authored without a formula carry
-// the one Excel stores, anchored at the top-left cell of the first range.
+// the one Excel stores, anchored at the top-left corner of the sqref bounding box.
 TEST(FormulonCApiCfMutate, AddRuleDerivesExcelsFormulaForSideFieldRules) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  // B2:B10 and D5; the anchor is B2, the top-left of the first range.
+  // B2:B10 and D5; the anchor is B2, the bounding box's top-left.
   fm_cf_cell_range_t ranges[2]{{1, 1, 9, 1}, {4, 3, 4, 3}};
   struct Case {
     std::uint8_t type;
@@ -471,5 +471,26 @@ TEST(FormulonCApiCfMutate, AddRuleDerivesExcelsFormulaForSideFieldRules) {
       ASSERT_NE(out.formula1, nullptr) << "format=" << format << " rule=" << i;
       EXPECT_STREQ(out.formula1, cases[i].expected) << "format=" << format << " rule=" << i;
     }
+  }
+}
+
+// The anchor is the bounding box's top-left, not the first range's.
+TEST(FormulonCApiCfMutate, DerivedFormulaAnchorsAtSqrefBoundingBox) {
+  const fm_cf_cell_range_t d5_then_b2[2]{{4, 3, 5, 3}, {1, 1, 2, 1}};
+  const fm_cf_cell_range_t b5_then_d2[2]{{4, 1, 5, 1}, {1, 3, 2, 3}};
+  for (const fm_cf_cell_range_t* ranges : {d5_then_b2, b5_then_d2}) {
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+    fm_cf_rule_t rule{};
+    rule.type = 7;
+    rule.text = "x";
+    rule.sqref = ranges;
+    rule.sqref_count = 2;
+    std::size_t index = 0;
+    ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &index), 0) << fm_last_error_message();
+    fm_cf_rule_t out{};
+    ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, index, &out), 0);
+    ASSERT_NE(out.formula1, nullptr);
+    EXPECT_STREQ(out.formula1, "NOT(ISERROR(SEARCH(\"x\",B2)))");
   }
 }

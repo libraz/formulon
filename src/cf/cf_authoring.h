@@ -15,9 +15,9 @@
 
 namespace formulon::cf {
 
-/// Excel's stored formula for `rule`, relative to `anchor` (the top-left cell
-/// of the rule's first sqref range), with `rule.text` quoted as a string
-/// literal. `nullopt` for a type Excel stores no derived formula for, or when
+/// Excel's stored formula for `rule`, relative to `anchor` (the top-left corner
+/// of the bounding box of the rule's sqref ranges), with `rule.text` quoted
+/// as a string literal. `nullopt` for a type Excel stores no derived formula for, or when
 /// the side field it needs (`text` / `time_period`) is absent.
 std::optional<std::string> derived_rule_formula(const CFRule& rule, CellAddress anchor);
 

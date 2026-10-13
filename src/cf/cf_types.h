@@ -193,6 +193,25 @@ struct CFCellRange {
   friend bool operator!=(CFCellRange a, CFCellRange b) noexcept { return !(a == b); }
 };
 
+/// Top-left corner of the bounding box of `sqref` (min row, min column over
+/// every range) -- the cell Excel anchors a rule's relative formulas at. It
+/// need not lie inside any range. An empty `sqref` yields A1.
+inline CellAddress sqref_anchor(const std::vector<CFCellRange>& sqref) noexcept {
+  if (sqref.empty()) {
+    return CellAddress{0, 0};
+  }
+  CellAddress anchor = sqref.front().first;
+  for (const CFCellRange& range : sqref) {
+    if (range.first.row < anchor.row) {
+      anchor.row = range.first.row;
+    }
+    if (range.first.col < anchor.col) {
+      anchor.col = range.first.col;
+    }
+  }
+  return anchor;
+}
+
 /// One `<cfvo>` entry — a threshold either as a literal number / percent
 /// / percentile, or as a formula evaluated with the rule's sqref top-left
 /// as the reference cell.

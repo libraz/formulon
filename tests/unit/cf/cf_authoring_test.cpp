@@ -113,7 +113,7 @@ TEST(CfAuthoring, DerivedFormulasMatchExcelsSavedFormulas) {
             continue;
           }
           ASSERT_TRUE(rule.formula1.has_value()) << name;
-          const std::optional<std::string> derived = derived_rule_formula(rule, block.sqref.front().first);
+          const std::optional<std::string> derived = derived_rule_formula(rule, sqref_anchor(block.sqref));
           ASSERT_TRUE(derived.has_value()) << name << " " << *rule.formula1;
           EXPECT_EQ(*derived, *rule.formula1) << name;
           ++checked;

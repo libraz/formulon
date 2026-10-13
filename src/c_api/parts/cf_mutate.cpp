@@ -497,7 +497,7 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
   }
   if (!out_rule.formula1.has_value() || out_rule.formula1->empty()) {
     // Excel stores a derived formula for these types and readers surface it.
-    if (auto derived = formulon::cf::derived_rule_formula(out_rule, new_block.sqref.front().first)) {
+    if (auto derived = formulon::cf::derived_rule_formula(out_rule, formulon::cf::sqref_anchor(new_block.sqref))) {
       out_rule.formula1 = std::move(*derived);
     }
   }

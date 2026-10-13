@@ -3504,7 +3504,7 @@ FM_API fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, size_t sheet_inde
  * files carry them. For the text (7-10), blanks / errors (11-14) and
  * `TimePeriod` (15) types, a `NULL` or empty `rule.formula1` is filled
  * with the formula Excel stores for the rule, relative to the top-left
- * cell of `rule.sqref[0]` (e.g. `NOT(ISERROR(SEARCH("ab",B1)))`).
+ * corner of the bounding box of `rule.sqref` (e.g. `NOT(ISERROR(SEARCH("ab",B1)))`).
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when `wb` or `out_index` is `NULL`, or

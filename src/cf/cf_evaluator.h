@@ -165,8 +165,8 @@ CFMatch make_match(const CFRule& rule);
 /// evaluation: `Expression` rules and `CellIs` rules with non-literal
 /// `formula1` / `formula2`.
 ///
-/// `anchor` is the top-left of the rule's owning sqref block — the
-/// cell at which the formula source was authored. `target` is the
+/// `anchor` is the top-left of the bounding box of the rule's owning sqref
+/// block (`sqref_anchor`) — the cell at which the formula source was authored. `target` is the
 /// cell that the rule is currently being applied to. The shifter
 /// rewrites every relative reference in the formula by
 /// `(target.row - anchor.row, target.col - anchor.col)` so each cell

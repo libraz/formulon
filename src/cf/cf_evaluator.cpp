@@ -57,12 +57,6 @@ bool sqref_contains(const std::vector<CFCellRange>& sqref, CellAddress target) {
   return false;
 }
 
-CellAddress sqref_anchor(const std::vector<CFCellRange>& sqref) {
-  // Excel authors CF formulas at the first cell of the first sqref
-  // range; the shifter rebases relative refs from there.
-  return sqref.empty() ? CellAddress{} : sqref.front().first;
-}
-
 }  // namespace
 
 CFMatch make_match(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
