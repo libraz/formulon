@@ -147,6 +147,61 @@ TEST(BuiltinsTextSplit, LongerDelimiterTakesPrecedence) {
   EXPECT_EQ(v.as_array_cells()[1].as_text(), "xc");
 }
 
+TEST(BuiltinsTextSplit, SingleDelimiterPreservesUtf8Spans) {
+  const Value v = EvalSrc("=TEXTSPLIT(\"左🙂右🙂終\", \"🙂\")");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_cols(), 3U);
+  EXPECT_EQ(v.as_array_cells()[0].as_text(), "左");
+  EXPECT_EQ(v.as_array_cells()[1].as_text(), "右");
+  EXPECT_EQ(v.as_array_cells()[2].as_text(), "終");
+}
+
+TEST(BuiltinsTextSplit, SingleDelimiterPreservesLeadingTrailingAndAdjacentEmpties) {
+  const Value v = EvalSrc("=TEXTSPLIT(\",a,,\", \",\")");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_cols(), 4U);
+  EXPECT_EQ(v.as_array_cells()[0].as_text(), "");
+  EXPECT_EQ(v.as_array_cells()[1].as_text(), "a");
+  EXPECT_EQ(v.as_array_cells()[2].as_text(), "");
+  EXPECT_EQ(v.as_array_cells()[3].as_text(), "");
+}
+
+TEST(BuiltinsTextSplit, CaseInsensitiveDelimiterArrayAcrossRows) {
+  const Value v = EvalSrc("=TEXTSPLIT(\"AXb;cXD;e|F\", {\"x\",\"|\"}, {\";\"}, FALSE, 1)");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 2U);
+  EXPECT_EQ(v.as_array_cells()[0].as_text(), "A");
+  EXPECT_EQ(v.as_array_cells()[1].as_text(), "b");
+  EXPECT_EQ(v.as_array_cells()[2].as_text(), "c");
+  EXPECT_EQ(v.as_array_cells()[3].as_text(), "D");
+  EXPECT_EQ(v.as_array_cells()[4].as_text(), "e");
+  EXPECT_EQ(v.as_array_cells()[5].as_text(), "F");
+}
+
+TEST(BuiltinsTextSplit, CaseInsensitiveOverlappingDelimitersKeepLongestMatch) {
+  const Value v = EvalSrc("=TEXTSPLIT(\"abXABY\", {\"a\",\"AB\"}, , FALSE, 1)");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_cols(), 3U);
+  EXPECT_EQ(v.as_array_cells()[0].as_text(), "");
+  EXPECT_EQ(v.as_array_cells()[1].as_text(), "X");
+  EXPECT_EQ(v.as_array_cells()[2].as_text(), "Y");
+}
+
+TEST(BuiltinsTextSplit, AllEmptyDelimiterListsRemainNoOps) {
+  const Value v = EvalSrc("=TEXTSPLIT(\"a;b\", {\"\",\"\"}, {\"\",\"\"})");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 1U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  EXPECT_EQ(v.as_array_cells()[0].as_text(), "a;b");
+}
+
+TEST(BuiltinsTextSplit, IgnoreEmptyAllEmptyTwoDimensionalGridReturnsCalc) {
+  const Value v = EvalSrc("=TEXTSPLIT(\";;\", \",\", \";\", TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+}
+
 // ---------------------------------------------------------------------------
 // Row-only and 2D split
 // ---------------------------------------------------------------------------

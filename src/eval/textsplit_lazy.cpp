@@ -14,7 +14,7 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
-#include "utils/text_ops.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -81,34 +81,61 @@ std::vector<std::string> extract_delimiters(const parser::AstNode& node, Arena& 
 // needles are assumed already filtered out by the caller. When `needles`
 // is empty the function returns a single token containing all of `text`
 // (matches Excel: an effective-empty delimiter list at a level is a
-// no-op). Match precedence at a tied position is longest-needle-first;
-// case folding is ASCII-only via `to_lower_ascii` (matches the
-// TEXTBEFORE / TEXTAFTER MVP policy).
+// no-op). Match precedence at a tied position is longest-needle-first. The
+// caller folds the needles once when match_mode=1; this helper only folds
+// each haystack when requested, and always slices the original text so the
+// output keeps its original casing and UTF-8 bytes.
 std::vector<std::string> split_by_any(std::string_view text, const std::vector<std::string>& needles,
-                                      bool case_insensitive) {
+                                      bool fold_haystack) {
   std::vector<std::string> tokens;
   if (needles.empty()) {
     tokens.emplace_back(text);
     return tokens;
   }
-  std::string lowered;
-  std::vector<std::string> lowered_needles;
-  std::string_view hay = text;
-  if (case_insensitive) {
-    lowered = to_lower_ascii(text);
-    hay = lowered;
-    lowered_needles.reserve(needles.size());
-    for (const auto& n : needles) {
-      lowered_needles.push_back(to_lower_ascii(n));
-    }
-  }
-  const auto& effective_needles = case_insensitive ? lowered_needles : needles;
 
-  std::string current;
+  // The common scalar-delimiter path can use the string library's find loop;
+  // unlike the general path it does not inspect every byte against every
+  // delimiter. ASCII folding is byte-preserving, so offsets in `hay` are
+  // also valid offsets in the original `text`.
+  if (needles.size() == 1U) {
+    const std::string& needle = needles.front();
+    if (needle.empty()) {
+      tokens.emplace_back(text);
+      return tokens;
+    }
+    std::string folded;
+    std::string_view hay = text;
+    if (fold_haystack) {
+      folded = strings::to_ascii_lower_owned(std::string(text));
+      hay = folded;
+    }
+    std::size_t token_start = 0;
+    std::size_t search_start = 0;
+    while (true) {
+      const std::size_t match = hay.find(needle, search_start);
+      if (match == std::string_view::npos) {
+        break;
+      }
+      tokens.emplace_back(text.substr(token_start, match - token_start));
+      token_start = match + needle.size();
+      search_start = token_start;
+    }
+    tokens.emplace_back(text.substr(token_start));
+    return tokens;
+  }
+
+  std::string lowered;
+  std::string_view hay = text;
+  if (fold_haystack) {
+    lowered = strings::to_ascii_lower_owned(std::string(text));
+    hay = lowered;
+  }
+
+  std::size_t token_start = 0;
   std::size_t i = 0;
   while (i < text.size()) {
     std::size_t best_match_len = 0;
-    for (const auto& needle : effective_needles) {
+    for (const auto& needle : needles) {
       if (needle.empty()) {
         continue;
       }
@@ -122,15 +149,14 @@ std::vector<std::string> split_by_any(std::string_view text, const std::vector<s
       }
     }
     if (best_match_len > 0) {
-      tokens.push_back(std::move(current));
-      current.clear();
+      tokens.emplace_back(text.substr(token_start, i - token_start));
       i += best_match_len;
+      token_start = i;
       continue;
     }
-    current.push_back(text[i]);
     ++i;
   }
-  tokens.push_back(std::move(current));
+  tokens.emplace_back(text.substr(token_start));
   return tokens;
 }
 
@@ -239,6 +265,19 @@ Value eval_textsplit_lazy(const parser::AstNode& call, Arena& arena, const Funct
     }
   }
 
+  // Fold effective delimiters once after every argument has been evaluated.
+  // The folded strings keep their existing allocations; split_by_any can then
+  // reuse them for every row instead of rebuilding a folded needle list per
+  // invocation.
+  if (case_insensitive) {
+    for (auto& delimiter : col_delims) {
+      delimiter = strings::to_ascii_lower_owned(std::move(delimiter));
+    }
+    for (auto& delimiter : row_delims) {
+      delimiter = strings::to_ascii_lower_owned(std::move(delimiter));
+    }
+  }
+
   // Split into rows first. When `row_delims` is empty (omitted or all
   // empty entries), we have a single row containing the whole text.
   const std::vector<std::string> raw_rows = split_by_any(text, row_delims, case_insensitive);
@@ -250,14 +289,16 @@ Value eval_textsplit_lazy(const parser::AstNode& call, Arena& arena, const Funct
   for (const auto& row : raw_rows) {
     std::vector<std::string> cols = split_by_any(row, col_delims, case_insensitive);
     if (ignore_empty) {
-      std::vector<std::string> kept;
-      kept.reserve(cols.size());
-      for (auto& c : cols) {
-        if (!c.empty()) {
-          kept.push_back(std::move(c));
+      auto write = cols.begin();
+      for (auto read = cols.begin(); read != cols.end(); ++read) {
+        if (!read->empty()) {
+          if (write != read) {
+            *write = std::move(*read);
+          }
+          ++write;
         }
       }
-      cols = std::move(kept);
+      cols.erase(write, cols.end());
     }
     grid.push_back(std::move(cols));
   }
@@ -265,14 +306,16 @@ Value eval_textsplit_lazy(const parser::AstNode& call, Arena& arena, const Funct
   if (ignore_empty) {
     // Drop rows whose every column is empty (ie. nothing left after the
     // per-row filter).
-    std::vector<std::vector<std::string>> kept_rows;
-    kept_rows.reserve(grid.size());
-    for (auto& row : grid) {
-      if (!row.empty()) {
-        kept_rows.push_back(std::move(row));
+    auto write = grid.begin();
+    for (auto read = grid.begin(); read != grid.end(); ++read) {
+      if (!read->empty()) {
+        if (write != read) {
+          *write = std::move(*read);
+        }
+        ++write;
       }
     }
-    grid = std::move(kept_rows);
+    grid.erase(write, grid.end());
   }
 
   // Mac Excel surfaces #CALC! when ignore_empty wipes the grid clean.
