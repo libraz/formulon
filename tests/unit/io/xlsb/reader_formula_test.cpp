@@ -129,6 +129,27 @@ TEST(XlsbReader, DecodableDefinedNameRegistersAndCountsNothing) {
   EXPECT_EQ(names[0].local_sheet_id, -1);
   EXPECT_EQ(result.value().undecoded_defined_name_count, 0U);
 }
+TEST(XlsbReader, StoragePlaceholderPrefixesAreCaseInsensitive) {
+  const std::vector<std::uint8_t> rgce = {0x1E, 0x05, 0x00};
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back(
+      {"xl/workbook.bin", WorkbookBin({NameRecord("_XlFn.Future", rgce), NameRecord("_XlPm.Parameter", rgce),
+                                       NameRecord("_XlEtA.Function", rgce), NameRecord("Visible", rgce)})});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinReal(1.0)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
+
+  const std::vector<DefinedName>& names = result.value().workbook.defined_names();
+  ASSERT_EQ(names.size(), 1U);
+  EXPECT_EQ(names[0].name, "Visible");
+  EXPECT_EQ(result.value().undecoded_defined_name_count, 0U);
+}
 TEST(XlsbReader, DefinedNameCommentSurvivesDecode) {
   // The Name Manager comment is the trailing `BrtName` string after
   // `rgce`/`rgcb`; a reader that stops at the formula body (or

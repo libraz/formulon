@@ -5,7 +5,6 @@
 #include "io/xlsb/workbook_bin_reader.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -25,6 +24,7 @@
 #include "utils/expected.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "utils/structured_log.h"
 #include "workbook.h"
 
@@ -178,18 +178,7 @@ bool ReadFixedWideString(ByteSpan& cursor, std::uint32_t units, std::string& out
 bool IsStoragePlaceholderName(std::string_view name) {
   constexpr std::string_view kPrefixes[] = {"_xlfn.", "_xlpm.", "_xleta."};
   for (const std::string_view prefix : kPrefixes) {
-    if (name.size() < prefix.size()) {
-      continue;
-    }
-    bool match = true;
-    for (std::size_t i = 0; i < prefix.size(); ++i) {
-      const char lhs = static_cast<char>(std::tolower(static_cast<unsigned char>(name[i])));
-      if (lhs != prefix[i]) {
-        match = false;
-        break;
-      }
-    }
-    if (match) {
+    if (strings::case_insensitive_starts_with(name, prefix)) {
       return true;
     }
   }
