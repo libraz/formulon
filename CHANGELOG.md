@@ -103,6 +103,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Windows ja-JP.
 - `CODE` and `LENB` on Windows ja-JP treat Hangul as the single CP932 byte `?`
   (`CODE("한")` is 63, `LENB("한글")` is 2).
+- Text collation composes a base letter with following combining marks
+  (U+0300–U+036F) before comparing, so `"a"&UNICHAR(769)` equals `"á"` in
+  comparisons, sorting and lookups, as on Mac and Windows Excel.
+- `^` and `POWER` reproduce Excel's last bits: a fractional exponent is
+  computed as `exp(log(x)*y)` (so `8^(1/3)` is 1.9999999999999998, as in
+  Excel, not 2), 0.5 is a square root, a negative exponent is the reciprocal
+  of the positive power, and an integer exponent is square-and-multiply
+  (`1.0001^1000` is 1.105165392603197).
+- `FILTERXML` returns `#VALUE!` for XML with text outside the root element or
+  more than one root element, instead of reading past it.
+- `BETA.INV` above the median solves on the upper tail, where `1 - p` is
+  exact, so it lands on the true inverse instead of the edge of a flat CDF
+  region (`BETA.INV(BETA.DIST(0.9,0.1,10,TRUE),0.1,10)` now agrees with Excel
+  to within 1e-6, where it was off by 1.15e-6).
 
 ## [0.15.1] - 2026-10-12
 

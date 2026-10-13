@@ -4,6 +4,7 @@
 #include "eval/coerce.h"
 
 #include <cmath>
+#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -21,6 +22,36 @@
 
 namespace formulon {
 namespace eval {
+
+namespace {
+
+// Excel's power for a non-negative base, measured bit-exact on Mac Excel 365:
+// a negative exponent is the reciprocal of the positive power, an integer
+// exponent is right-to-left square-and-multiply, 0.5 is sqrt, and any other
+// exponent is exp(log(x) * y) rather than a correctly rounded pow.
+double excel_magnitude_pow(double base, double exp) {
+  if (exp < 0.0) {
+    const double positive = excel_magnitude_pow(base, -exp);
+    return std::isinf(positive) ? std::exp(std::log(base) * exp) : 1.0 / positive;
+  }
+  if (exp == std::floor(exp) && exp <= 9007199254740992.0) {
+    double result = 1.0;
+    double square = base;
+    for (auto n = static_cast<std::uint64_t>(exp); n != 0U; n >>= 1U) {
+      if ((n & 1U) != 0U) {
+        result *= square;
+      }
+      square *= square;
+    }
+    return result;
+  }
+  if (exp == 0.5) {
+    return std::sqrt(base);
+  }
+  return std::exp(std::log(base) * exp);
+}
+
+}  // namespace
 
 Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* from_date_text) {
   if (from_date_text != nullptr) {
@@ -212,14 +243,14 @@ Expected<double, ErrorCode> apply_pow(double base, double exp) {
         std::fabs(root - k) > 0.5 * std::pow(10.0, std::floor(std::log10(std::fabs(k))) - 14.0)) {
       return ErrorCode::Num;
     }
-    const double odd_root = -std::exp(std::log(-base) * exp);
+    const double odd_root = -excel_magnitude_pow(-base, exp);
     if (std::isnan(odd_root) || std::isinf(odd_root)) {
       return ErrorCode::Num;
     }
     return odd_root;
   }
   // Overflow / underflow to Inf is #NUM!.
-  const double r = std::pow(base, exp);
+  const double r = excel_magnitude_pow(base, exp);
   if (std::isnan(r) || std::isinf(r)) {
     return ErrorCode::Num;
   }
