@@ -2,11 +2,11 @@
   "suite": "references",
   "description": "ADDRESS / INDIRECT / OFFSET reference-manipulation builtins. ADDRESS is a pure scalar text builder; INDIRECT resolves runtime-constructed A1 text to a single cell; OFFSET synthesises a reference (scalar or range) that aggregator-family callers consume through the shared `resolve_range_arg` seam. Range-producing INDIRECT and R1C1 INDIRECT are deferred until `Value::Array` lands; those cases are deliberately absent here.",
   "environment": {
-    "excel_version": "16.0.20228",
+    "excel_version": "16.0.20430",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-09-30T05:45:37Z"
+    "generated_at": "2026-10-13T04:30:53Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -693,6 +693,54 @@
           2,
           1
         ]
+      }
+    },
+    {
+      "id": "pf_address",
+      "formula": "=ADDRESS(1.9999999,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "$A$2"
+      }
+    },
+    {
+      "id": "snap_address_col",
+      "formula": "=ADDRESS(1,1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "$B$1"
+      }
+    },
+    {
+      "id": "snap_offset_rows",
+      "formula": "=OFFSET(A1,0.9999999,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
       }
     }
   ]

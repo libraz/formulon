@@ -2,11 +2,11 @@
   "suite": "math",
   "description": "ABS / SIGN / INT / TRUNC / MOD / ROUND* / POWER / SQRT / EXP / LN / LOG / LOG10 / PI / VALUE",
   "environment": {
-    "excel_version": "16.0.20228",
+    "excel_version": "16.0.20430",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-09-30T05:45:37Z"
+    "generated_at": "2026-10-13T04:30:53Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -3021,6 +3021,219 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pf_round_d",
+      "formula": "=ROUND(1.23456,1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.23
+      }
+    },
+    {
+      "id": "pf_int",
+      "formula": "=INT(1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "pf_trunc",
+      "formula": "=TRUNC(1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "atp_mround_bool",
+      "formula": "=MROUND(TRUE,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_mround_omit",
+      "formula": "=MROUND(,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_mround_boolcell",
+      "formula": "=MROUND(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_randbetween_bool",
+      "formula": "=RANDBETWEEN(TRUE,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_randbetween_omit",
+      "formula": "=RANDBETWEEN(,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_randbetween_boolcell",
+      "formula": "=RANDBETWEEN(A1,TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_seriessum_bool",
+      "formula": "=SERIESSUM(TRUE,1,1,{1})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "atp_seriessum_omit",
+      "formula": "=SERIESSUM(,1,1,{1})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "atp_seriessum_boolcell",
+      "formula": "=SERIESSUM(A1,1,1,{1})",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "snap_roundup",
+      "formula": "=ROUNDUP(1.23456,1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.3
+      }
+    },
+    {
+      "id": "snap_rounddown",
+      "formula": "=ROUNDDOWN(1.23456,1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.2
+      }
+    },
+    {
+      "id": "snap_trunc_d",
+      "formula": "=TRUNC(1.23456,1.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.2
+      }
+    },
+    {
+      "id": "snap_ceiling_math",
+      "formula": "=CEILING.MATH(1.5,1,0.9999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "near_mod",
+      "formula": "=MOD(7.9999999,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.9999998999999997
+      }
+    },
+    {
+      "id": "da_sumsq_omit",
+      "formula": "=SUMSQ(3,4,,6,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 110.0
+      }
+    },
+    {
+      "id": "da_sumsq_bool",
+      "formula": "=SUMSQ(10,20,TRUE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 501.0
+      }
+    },
+    {
+      "id": "da_sumsq_numtext",
+      "formula": "=SUMSQ(1,2,\"10\",\"20\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 505.0
+      }
+    },
+    {
+      "id": "da_sumsq_badtext",
+      "formula": "=SUMSQ(1,2,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumsq_omit",
+      "formula": "=SUMSQ(3,,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 25.0
       }
     }
   ]

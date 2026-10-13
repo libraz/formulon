@@ -9,4 +9,4 @@ version-driven divergences early.
 - **Excel locale**: `ja-JP`
 - **date1904**: `False`
 - **iterative**: `False`
-- **generated_at**: `2026-09-30T05:45:37Z`
+- **generated_at**: `2026-10-13T04:30:53Z`

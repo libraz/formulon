@@ -2,11 +2,11 @@
   "suite": "usdollar",
   "description": "USDOLLAR formats as US-dollar text whatever the locale: `$`, two default decimals and parenthesised negatives, where ja-JP DOLLAR uses `¥`, zero decimals and a leading minus. A value that display-rounds to zero keeps its sign; one rounded left of the decimal point first does not.\n",
   "environment": {
-    "excel_version": "16.0.20228",
+    "excel_version": "16.0.20430",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-09-30T05:45:37Z"
+    "generated_at": "2026-10-13T04:30:53Z"
   },
   "tolerance": {
     "abs": 0.0,

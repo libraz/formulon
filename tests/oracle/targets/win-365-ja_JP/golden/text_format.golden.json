@@ -2,11 +2,11 @@
   "suite": "text_format",
   "description": "TEXT format-string engine (number + date/time formatting)",
   "environment": {
-    "excel_version": "16.0.20228",
+    "excel_version": "16.0.20430",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-09-30T06:23:20Z"
+    "generated_at": "2026-10-13T04:30:53Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -803,6 +803,15 @@
       "expect": {
         "kind": "text",
         "value": "2024¥1¥1"
+      }
+    },
+    {
+      "id": "text_eur_bracket",
+      "formula": "=TEXT(3.14,\"[€EUR]0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
       }
     }
   ]

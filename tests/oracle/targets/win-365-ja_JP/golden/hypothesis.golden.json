@@ -2,11 +2,11 @@
   "suite": "hypothesis",
   "description": "T.TEST / TTEST / F.TEST / FTEST / CHISQ.TEST / CHITEST / Z.TEST / ZTEST / PROB — Excel hypothesis-test / probability builtins",
   "environment": {
-    "excel_version": "16.0.20228",
+    "excel_version": "16.0.20430",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-09-30T05:45:37Z"
+    "generated_at": "2026-10-13T04:30:53Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -2712,6 +2712,212 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_test_bool_pair_dropped",
+      "formula": "=CHISQ.TEST({TRUE,2},{3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.317310507862914
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 1e-12
+      }
+    },
+    {
+      "id": "chisq_test_bool_pair_dropped_2d",
+      "formula": "=CHISQ.TEST({TRUE,2;3,4},{1,2;3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "chisq_test_negative_values_allowed",
+      "formula": "=CHISQ.TEST({-1,-2},{3,-4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.03737298834065147
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 1e-12
+      }
+    },
+    {
+      "id": "chisq_test_negative_statistic_is_num",
+      "formula": "=CHISQ.TEST({-1,-2},{-3,-4})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_test_negative_expected_is_num",
+      "formula": "=CHISQ.TEST({1,2},{-3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_test_inline_zero_expected_is_div0",
+      "formula": "=CHISQ.TEST({1,2},{0,4})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "chisqtest_blank_obs",
+      "formula": "=CHISQ.TEST(A1:B1,C1:D1)",
+      "setup": {
+        "A1": {
+          "kind": "blank"
+        },
+        "B1": {
+          "kind": "blank"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "chisqtest_blank_exp",
+      "formula": "=CHISQ.TEST(C1:D1,A1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "blank"
+        },
+        "B1": {
+          "kind": "blank"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "chisqtest_bool_cell",
+      "formula": "=CHISQ.TEST(A1:B1,C1:D1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.317310507862914
+      }
+    },
+    {
+      "id": "chisqtest_text_cells",
+      "formula": "=CHISQ.TEST(A1:B1,C1:D1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "b"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "chisqtest_mixed_text",
+      "formula": "=CHISQ.TEST(A1:B1,C1:D1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.317310507862914
+      }
+    },
+    {
+      "id": "chisqtest_neg_tiny",
+      "formula": "=CHISQ.TEST({-1E-5,-1E-5},{1,2})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.08326246094552045
+      }
+    },
+    {
+      "id": "chitest_bool_lit",
+      "formula": "=CHITEST({TRUE,2},{3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.317310507862914
       }
     }
   ]

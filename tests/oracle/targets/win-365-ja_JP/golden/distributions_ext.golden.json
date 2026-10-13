@@ -2,11 +2,11 @@
   "suite": "distributions_ext",
   "description": "BETA / GAMMA / WEIBULL / LOGNORM / HYPGEOM extended distribution family",
   "environment": {
-    "excel_version": "16.0.20228",
+    "excel_version": "16.0.20430",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-09-30T05:45:37Z"
+    "generated_at": "2026-10-13T04:30:53Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -650,6 +650,145 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gamma_dist_pdf_zero_alpha_half",
+      "formula": "=GAMMA.DIST(0,0.5,2,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gamma_dist_pdf_zero_alpha_one",
+      "formula": "=GAMMA.DIST(0,1,2,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gammadist_pdf_zero_alpha_one",
+      "formula": "=GAMMADIST(0,1,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gamma_dist_pdf_zero_alpha_above_one",
+      "formula": "=GAMMA.DIST(0,1.5,2,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gamma_inv_small_p_round_trip",
+      "formula": "=GAMMA.INV(GAMMA.DIST(1E-5,9,2,TRUE),9,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.999999999999992e-06
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 1e-12
+      }
+    },
+    {
+      "id": "binom_inv_probability_zero_is_num",
+      "formula": "=BINOM.INV(10,0,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "binom_inv_probability_one_is_num",
+      "formula": "=BINOM.INV(10,1,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "binom_inv_probability_omitted_is_num",
+      "formula": "=BINOM.INV(10,,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gammadist_zero_a1",
+      "formula": "=GAMMA.DIST(0,1,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gammadist_zero_a2",
+      "formula": "=GAMMA.DIST(0,2,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gammadist_zero_a05",
+      "formula": "=GAMMA.DIST(0,0.5,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "betainv_roundtrip",
+      "formula": "=BETA.INV(BETA.DIST(0.9,0.1,10,TRUE),0.1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9000004941424153
+      }
+    },
+    {
+      "id": "gd_0_15",
+      "formula": "=GAMMA.DIST(0,1.5,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gd_0_1_cdf",
+      "formula": "=GAMMA.DIST(0,1,1,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gd_0_05_cdf",
+      "formula": "=GAMMA.DIST(0,0.5,1,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
       }
     }
   ]
