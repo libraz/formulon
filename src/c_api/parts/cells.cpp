@@ -472,13 +472,33 @@ const std::vector<std::pair<std::uint32_t, std::uint32_t>>& cached_cell_addresse
                                                                                   std::size_t sheet_index) {
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   const std::uint64_t revision = sheet.cell_enumeration_revision();
-  auto& cache = wb->cell_enumeration_cache;
-  if (cache.sheet_index != sheet_index || cache.revision != revision) {
-    cache.addresses = collect_cell_addresses(sheet);
-    cache.sheet_index = sheet_index;
-    cache.revision = revision;
+  auto& caches = wb->cell_enumeration_cache;
+
+  // Reuse an entry for this sheet even when its revision changed: rebuilding
+  // in place preserves the other sheet's warm entry. Promote a slot-1 hit so
+  // the next lookup follows the hot path.
+  for (std::size_t i = 0; i < caches.size(); ++i) {
+    auto& cache = caches[i];
+    if (cache.sheet_index != sheet_index) {
+      continue;
+    }
+    if (cache.revision != revision) {
+      cache.addresses = collect_cell_addresses(sheet);
+      cache.revision = revision;
+    }
+    if (i != 0U) {
+      std::swap(caches[0], cache);
+    }
+    return caches[0].addresses;
   }
-  return cache.addresses;
+
+  // Collect before evicting the least-recently-used entry.
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> addresses = collect_cell_addresses(sheet);
+  caches[1] = std::move(caches[0]);
+  caches[0].addresses = std::move(addresses);
+  caches[0].sheet_index = sheet_index;
+  caches[0].revision = revision;
+  return caches[0].addresses;
 }
 
 }  // namespace

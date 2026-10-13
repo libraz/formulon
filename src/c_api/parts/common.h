@@ -11,6 +11,7 @@
 #ifndef FORMULON_C_API_PARTS_COMMON_H_
 #define FORMULON_C_API_PARTS_COMMON_H_
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -309,15 +310,19 @@ struct fm_workbook {
   // standard C-ABI scratch contract documented in `formulon_c.h`.
   formulon::c_api::parts::TextStore read_scratch;
 
-  // Sorted coordinate cache for the `cell_count` / `cell_at` iteration
-  // pair. The associated Sheet revision invalidates it after any cell,
-  // spill, or structural mutation.
+  // Sorted coordinate caches for the `cell_count` / `cell_at` iteration
+  // pair. Slot zero is the most recently used entry; keeping two entries
+  // avoids rebuilding when callers alternate between two sheets. The
+  // associated Sheet revision invalidates an entry after any cell, spill,
+  // or structural mutation.
   struct CellEnumerationCache {
     std::size_t sheet_index = std::numeric_limits<std::size_t>::max();
     std::uint64_t revision = std::numeric_limits<std::uint64_t>::max();
     std::vector<std::pair<std::uint32_t, std::uint32_t>> addresses;
   };
-  mutable CellEnumerationCache cell_enumeration_cache;
+  mutable std::array<CellEnumerationCache, 2> cell_enumeration_cache{};
+
+  void clear_cell_enumeration_cache() noexcept { cell_enumeration_cache = {}; }
 
   // Storage behind every borrowed field `fm_sheet_cf_get_at` fills. They are
   // separate from `read_scratch` on purpose: only a successful

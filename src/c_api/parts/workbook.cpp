@@ -300,7 +300,7 @@ extern "C" fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, uint32_t from_i
   }
   // The enumeration cache is keyed by sheet index. Moving sheets can put a
   // different Sheet at a cached index with the same cell revision.
-  wb->cell_enumeration_cache = {};
+  wb->clear_cell_enumeration_cache();
   return 0;
 }
 
@@ -316,7 +316,7 @@ extern "C" fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, uint32_t inde
   // Removing a sheet shifts later sheet indices, so invalidate the
   // index-keyed coordinate cache even though the remaining Sheet objects
   // themselves were not mutated.
-  wb->cell_enumeration_cache = {};
+  wb->clear_cell_enumeration_cache();
   return 0;
 }
 

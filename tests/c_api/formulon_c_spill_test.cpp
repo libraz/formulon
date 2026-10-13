@@ -1,7 +1,10 @@
 //
 // Stable C ABI dynamic-array spill payload regression tests.
 
+#include <limits>
+
 #include "c_api/formulon_c.h"
+#include "c_api/parts/common.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -183,6 +186,116 @@ TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterMutation) {
   EXPECT_DOUBLE_EQ(value.u.number, 2.0);
 }
 
+TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSpillMutation) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+
+  // Warm the one-cell coordinate list before the spill exists.
+  uint32_t row = 0;
+  uint32_t col = 0;
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
+
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 3, "=SEQUENCE(2,1)"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  size_t count = 0;
+  ASSERT_EQ(fm_workbook_cell_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 3U);
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, count - 1U, &row, &col, nullptr, &value), 0);
+  EXPECT_EQ(row, 1U);
+  EXPECT_EQ(col, 3U);
+  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 2.0);
+}
+
+TEST(FormulonCApiSpill, CellEnumerationCacheKeepsTwoAlternatingSheetsWarm) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second"), 0);
+
+  // Both sheets reach the same revision, but their coordinate lists differ.
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 2, 2, 2.0), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 1, 1, 1, 3.0), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 1, 3, 3, 4.0), 0);
+
+  uint32_t row = 0;
+  uint32_t col = 0;
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
+  ASSERT_EQ(row, 0U);
+  ASSERT_EQ(col, 0U);
+  const auto first_sheet_data = wb.handle->cell_enumeration_cache[0].addresses.data();
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[0].sheet_index, 0U);
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[0].addresses.size(), 2U);
+
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 1, 0, &row, &col, nullptr, &value), 0);
+  ASSERT_EQ(row, 1U);
+  ASSERT_EQ(col, 1U);
+  const auto second_sheet_data = wb.handle->cell_enumeration_cache[0].addresses.data();
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[0].sheet_index, 1U);
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[1].sheet_index, 0U);
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[1].addresses.data(), first_sheet_data);
+
+  // Alternating hits promote the existing entries. Their buffers stay put,
+  // proving that a two-sheet pass does not repeatedly rebuild either list.
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, 1, &row, &col, nullptr, &value), 0);
+  ASSERT_EQ(row, 2U);
+  ASSERT_EQ(col, 2U);
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[0].addresses.data(), first_sheet_data);
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[1].addresses.data(), second_sheet_data);
+
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 1, 1, &row, &col, nullptr, &value), 0);
+  ASSERT_EQ(row, 3U);
+  ASSERT_EQ(col, 3U);
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[0].addresses.data(), second_sheet_data);
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[1].addresses.data(), first_sheet_data);
+}
+
+TEST(FormulonCApiSpill, CellEnumerationCacheSurvivesSheetAddition) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+
+  uint32_t row = 0;
+  uint32_t col = 0;
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[0].sheet_index, 0U);
+  const auto* addresses = wb.handle->cell_enumeration_cache[0].addresses.data();
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second"), 0);
+
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
+  EXPECT_EQ(wb.handle->cell_enumeration_cache[0].sheet_index, 0U);
+  EXPECT_EQ(wb.handle->cell_enumeration_cache[0].addresses.data(), addresses);
+  EXPECT_EQ(row, 0U);
+  EXPECT_EQ(col, 0U);
+}
+
+TEST(FormulonCApiSpill, CellEnumerationCacheSurvivesFailedSheetMutation) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second"), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+
+  uint32_t row = 0;
+  uint32_t col = 0;
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
+  const auto data = wb.handle->cell_enumeration_cache[0].addresses.data();
+  const auto revision = wb.handle->cell_enumeration_cache[0].revision;
+
+  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "SHEET1"), 0);
+  EXPECT_NE(fm_workbook_move_sheet(wb.handle, 99U, 0U), 0);
+  EXPECT_NE(fm_workbook_remove_sheet(wb.handle, 99U), 0);
+  EXPECT_EQ(wb.handle->cell_enumeration_cache[0].sheet_index, 0U);
+  EXPECT_EQ(wb.handle->cell_enumeration_cache[0].revision, revision);
+  EXPECT_EQ(wb.handle->cell_enumeration_cache[0].addresses.data(), data);
+}
+
 TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSheetRemoval) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
@@ -233,6 +346,29 @@ TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSheetMove) {
   EXPECT_EQ(col, 1U);
   ASSERT_EQ(value.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 2.0);
+}
+
+TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesBothSlotsAfterSheetMove) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second"), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 1, 1, 1, 2.0), 0);
+
+  // Warm sheet 1 first so it sits in the second slot after sheet 0 is read.
+  uint32_t row = 0;
+  uint32_t col = 0;
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 1, 0, &row, &col, nullptr, &value), 0);
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
+
+  ASSERT_EQ(fm_workbook_move_sheet(wb.handle, 1, 0), 0);
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 1, 0, &row, &col, nullptr, &value), 0);
+  EXPECT_EQ(row, 0U);
+  EXPECT_EQ(col, 0U);
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
+  EXPECT_EQ(row, 1U);
+  EXPECT_EQ(col, 1U);
 }
 
 TEST(FormulonCApiSpill, OutOfRangeSheetReturnsInvalidArgument) {
