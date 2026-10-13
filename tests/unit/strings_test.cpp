@@ -5,6 +5,7 @@
 
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -142,6 +143,17 @@ TEST(StringsAsciiCase, ConstexprHelpersFoldOnlyAsciiLetters) {
   static_assert(ascii_to_upper('Z') == 'Z', "Z -> Z");
   static_assert(ascii_to_upper('!') == '!', "punct unchanged");
   SUCCEED();
+}
+
+TEST(StringsAsciiCase, OwnedLowerReusesTheNormalizationBuffer) {
+  std::string input(128, 'A');
+  input += "日本語";
+  const std::string expected = to_ascii_lower(input);
+  const char* buffer = input.data();
+  const std::string lowered = to_ascii_lower_owned(std::move(input));
+  EXPECT_EQ(lowered, expected);
+  EXPECT_EQ(lowered.data(), buffer);
+  EXPECT_TRUE(to_ascii_lower_owned({}).empty());
 }
 
 TEST(StringsAsciiCase, ToAsciiLowerAndUpperPassThroughNonAscii) {

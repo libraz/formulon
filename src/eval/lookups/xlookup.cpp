@@ -145,11 +145,11 @@ std::string xlookup_exact_key(std::string_view text, ExcelProfile profile) {
     case WidthFolding::kMac:
       return fold_and_lower(text, /*fold_fullwidth_digits=*/true);
     case WidthFolding::kNone:
-      return strings::to_ascii_lower(fold_width_keep_hiragana(text));
+      return strings::to_ascii_lower_owned(fold_width_keep_hiragana(text));
     case WidthFolding::kWin:
       break;
   }
-  return strings::to_ascii_lower(compose_jp_halfwidth_voicing(text));
+  return strings::to_ascii_lower_owned(compose_jp_halfwidth_voicing(text));
 }
 
 // Exact-equality test with optional DOS-style wildcard expansion on Text vs

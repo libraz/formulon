@@ -196,6 +196,14 @@ inline std::string to_ascii_lower(std::string_view input) {
   return out;
 }
 
+/// Lowercases an owned string in place, reusing a normalization result's buffer.
+inline std::string to_ascii_lower_owned(std::string input) {
+  for (char& byte : input) {
+    byte = ascii_to_lower(byte);
+  }
+  return input;
+}
+
 /// Returns an uppercase copy of `input` using `ascii_to_upper` byte by byte.
 /// Non-ASCII bytes are preserved exactly.
 inline std::string to_ascii_upper(std::string_view input) {

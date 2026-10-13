@@ -47,7 +47,7 @@ std::string lookup_text_key(std::string_view s, ExcelProfile profile) {
   if (width_folding(profile) == WidthFolding::kMac) {
     return fold_and_lower(s, /*fold_fullwidth_digits=*/true);
   }
-  return strings::to_ascii_lower(compose_jp_halfwidth_voicing(s));
+  return strings::to_ascii_lower_owned(compose_jp_halfwidth_voicing(s));
 }
 
 // ---------------------------------------------------------------------------

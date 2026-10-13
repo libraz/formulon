@@ -196,14 +196,7 @@ std::string compose_jp_halfwidth_voicing(std::string_view input) {
 }
 
 std::string fold_and_lower(std::string_view input, bool fold_fullwidth_digits) {
-  // Two-pass: kana fold first (so ｶﾞ -> ガ, Ａ -> a, etc.), then
-  // ASCII lowercase. The fold pass already yields half-width ASCII
-  // letters where applicable, so the lowercase pass is purely a byte-
-  // wise A..Z -> a..z rewrite. Composing the two helpers in one
-  // function lets every lookup-family caller share a single allocation
-  // path and keeps the kana-fold + lowercase invariant trivially in
-  // sync across `lookups/classic.cpp` and `lookups/xlookup.cpp`.
-  return strings::to_ascii_lower(fold_jp_text(input, fold_fullwidth_digits, /*fold_halfwidth_kana=*/true));
+  return strings::to_ascii_lower_owned(fold_jp_text(input, fold_fullwidth_digits, /*fold_halfwidth_kana=*/true));
 }
 
 }  // namespace eval
