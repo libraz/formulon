@@ -17,6 +17,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
+#include "eval/value_identity.h"
 #include "parser/ast.h"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -140,45 +141,6 @@ ArrayValue* materialise_vector(std::vector<Value>&& cells, bool as_column, Arena
   return out;
 }
 
-namespace {
-
-// Appends `v`'s UNIQUE identity to `out`: a kind tag, then a fixed-width or
-// length-prefixed payload, so concatenated cell keys stay unambiguous.
-bool append_unique_cell_key(const Value& v, ExcelProfile profile, CollationStrength strength, std::string* out) {
-  const auto append_bytes = [out](const void* data, std::size_t n) { out->append(static_cast<const char*>(data), n); };
-  out->push_back(static_cast<char>(v.kind()));
-  switch (v.kind()) {
-    case ValueKind::Blank:
-      return true;
-    case ValueKind::Number: {
-      const double d = v.as_number() == 0.0 ? 0.0 : v.as_number();
-      append_bytes(&d, sizeof(d));
-      return true;
-    }
-    case ValueKind::Bool:
-      out->push_back(v.as_boolean() ? '\1' : '\0');
-      return true;
-    case ValueKind::Error: {
-      const auto code = static_cast<std::uint32_t>(v.as_error());
-      append_bytes(&code, sizeof(code));
-      return true;
-    }
-    case ValueKind::Text: {
-      const std::string key = collation_key(v.as_text(), profile, strength);
-      const auto size = static_cast<std::uint64_t>(key.size());
-      append_bytes(&size, sizeof(size));
-      out->append(key);
-      return true;
-    }
-    default:
-      // Array / Ref / Lambda are not produced by cell reads and have no
-      // canonical form; the lane is kept as distinct.
-      return false;
-  }
-}
-
-}  // namespace
-
 bool unique_lane_key(const ArrayValue& arr, std::uint32_t lane, bool by_col, std::string* out) {
   out->clear();
   const ExcelProfile profile = current_eval_profile();
@@ -186,7 +148,7 @@ bool unique_lane_key(const ArrayValue& arr, std::uint32_t lane, bool by_col, std
   for (std::uint32_t k = 0; k < n; ++k) {
     const std::size_t index =
         by_col ? static_cast<std::size_t>(k) * arr.cols + lane : static_cast<std::size_t>(lane) * arr.cols + k;
-    if (!append_unique_cell_key(arr.cells[index], profile, CollationStrength::kDynamic, out)) {
+    if (!append_value_identity_key(arr.cells[index], profile, CollationStrength::kDynamic, out)) {
       return false;
     }
   }
@@ -297,7 +259,7 @@ std::uint32_t collation_classes(const Value* values, std::size_t count, ExcelPro
   std::string typed;
   for (std::size_t i = 0; i < count; ++i) {
     typed.clear();
-    const bool ok = append_unique_cell_key(values[i], profile, strength, &typed);
+    const bool ok = append_value_identity_key(values[i], profile, strength, &typed);
     assert(ok);
     (void)ok;
     const auto inserted = provisional.emplace(typed, static_cast<std::uint32_t>(reps.size()));
