@@ -738,15 +738,19 @@ void Sheet::add_merge(MergeRange merge) {
 std::vector<MergeRange> Sheet::remove_merges_intersecting(MergeRange range) {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   std::vector<MergeRange> removed;
-  for (auto it = merges_.begin(); it != merges_.end();) {
-    if (it->last_row < range.first_row || range.last_row < it->first_row || it->last_col < range.first_col ||
-        range.last_col < it->first_col) {
-      ++it;
+  auto write = merges_.begin();
+  for (auto read = merges_.begin(); read != merges_.end(); ++read) {
+    if (read->last_row < range.first_row || range.last_row < read->first_row || read->last_col < range.first_col ||
+        range.last_col < read->first_col) {
+      if (write != read) {
+        *write = std::move(*read);
+      }
+      ++write;
       continue;
     }
-    removed.push_back(*it);
-    it = merges_.erase(it);
+    removed.push_back(*read);
   }
+  merges_.erase(write, merges_.end());
   return removed;
 }
 

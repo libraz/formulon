@@ -204,6 +204,24 @@ TEST(SheetTest, StructuralEditsKeepPivotSpansInsideGridAtEdges) {
   }
 }
 
+TEST(SheetTest, RemoveMergesIntersectingCompactsAndPreservesOrder) {
+  Sheet s("Sheet1");
+  const MergeRange retained_before{0U, 0U, 0U, 0U};
+  const MergeRange removed_at_corner{1U, 1U, 2U, 2U};
+  const MergeRange retained_between{4U, 4U, 5U, 5U};
+  const MergeRange removed_on_boundary{3U, 0U, 3U, 3U};
+  const MergeRange retained_after{8U, 8U, 9U, 9U};
+  s.add_merge(retained_before);
+  s.add_merge(removed_at_corner);
+  s.add_merge(retained_between);
+  s.add_merge(removed_on_boundary);
+  s.add_merge(retained_after);
+
+  const std::vector<MergeRange> removed = s.remove_merges_intersecting({2U, 2U, 3U, 3U});
+  ASSERT_EQ(removed, (std::vector<MergeRange>{removed_at_corner, removed_on_boundary}));
+  ASSERT_EQ(s.merges(), (std::vector<MergeRange>{retained_before, retained_between, retained_after}));
+}
+
 // ---------------------------------------------------------------------------
 // Overwrite semantics
 // ---------------------------------------------------------------------------
