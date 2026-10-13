@@ -285,15 +285,17 @@ def behavior_probe_match_count(behavior: Dict, cases: List[Dict]) -> int:
     return n
 
 
-def check_condition_1_behaviors(fn: str, all_behaviors: List[Dict], min_required: int) -> ConditionResult:
-    matched = behaviors_for_function(fn, all_behaviors)
+def _check_condition_1_behaviors_prefiltered(matched: List[Dict], min_required: int) -> ConditionResult:
     ok = len(matched) >= min_required
     detail = f"{len(matched)} declared (need >= {min_required})"
     return ConditionResult("behaviors_declared", ok, detail)
 
 
-def check_condition_2_cases(fn: str, fn_behaviors: List[Dict], cases: List[Dict]) -> ConditionResult:
-    fn_cases = cases_for_function(fn, cases)
+def check_condition_1_behaviors(fn: str, all_behaviors: List[Dict], min_required: int) -> ConditionResult:
+    return _check_condition_1_behaviors_prefiltered(behaviors_for_function(fn, all_behaviors), min_required)
+
+
+def _check_condition_2_cases_prefiltered(fn_behaviors: List[Dict], fn_cases: List[Dict]) -> ConditionResult:
     if not fn_cases:
         return ConditionResult("cases_present", False, "no oracle case calls this function")
     if not fn_behaviors:
@@ -314,8 +316,11 @@ def check_condition_2_cases(fn: str, fn_behaviors: List[Dict], cases: List[Dict]
     return ConditionResult("cases_cover_behaviors", ok, detail)
 
 
-def check_condition_3_golden(fn: str, cases: List[Dict], golden_ids: Set[str]) -> ConditionResult:
-    fn_cases = cases_for_function(fn, cases)
+def check_condition_2_cases(fn: str, fn_behaviors: List[Dict], cases: List[Dict]) -> ConditionResult:
+    return _check_condition_2_cases_prefiltered(fn_behaviors, cases_for_function(fn, cases))
+
+
+def _check_condition_3_golden_prefiltered(fn_cases: List[Dict], golden_ids: Set[str]) -> ConditionResult:
     if not fn_cases:
         return ConditionResult("golden_present", False, "no cases to verify against golden")
     missing = [c["id"] for c in fn_cases if c.get("id") not in golden_ids]
@@ -331,8 +336,12 @@ def check_condition_3_golden(fn: str, cases: List[Dict], golden_ids: Set[str]) -
     return ConditionResult("golden_present", ok, detail)
 
 
-def check_condition_4_divergence(fn: str, cases: List[Dict], divergence_entries: List[Dict]) -> ConditionResult:
-    fn_case_ids = {c.get("id") for c in cases_for_function(fn, cases)}
+def check_condition_3_golden(fn: str, cases: List[Dict], golden_ids: Set[str]) -> ConditionResult:
+    return _check_condition_3_golden_prefiltered(cases_for_function(fn, cases), golden_ids)
+
+
+def _check_condition_4_divergence_prefiltered(fn_cases: List[Dict], divergence_entries: List[Dict]) -> ConditionResult:
+    fn_case_ids = {c.get("id") for c in fn_cases}
     div_for_fn = [e for e in divergence_entries if e.get("id") in fn_case_ids]
     if not div_for_fn:
         return ConditionResult("divergence_documented", True, "no divergences")
@@ -354,6 +363,10 @@ def check_condition_4_divergence(fn: str, cases: List[Dict], divergence_entries:
     else:
         detail = f"{len(incomplete)}/{len(div_for_fn)} divergences incomplete: " + ", ".join(incomplete[:3])
     return ConditionResult("divergence_documented", ok, detail)
+
+
+def check_condition_4_divergence(fn: str, cases: List[Dict], divergence_entries: List[Dict]) -> ConditionResult:
+    return _check_condition_4_divergence_prefiltered(cases_for_function(fn, cases), divergence_entries)
 
 
 def check_condition_5_coverage_gap(fn: str, ctx: CoverageContext) -> ConditionResult:
@@ -405,13 +418,27 @@ def build_coverage_context() -> CoverageContext:
     )
 
 
-def evaluate_function(
+def _function_inputs(fn: str, family: Family, cases: List[Dict], ctx: CoverageContext) -> Tuple[List[Dict], List[Dict]]:
+    # Aliases borrow the canonical member's closure and do not own behavior
+    # or oracle cases. Avoid scanning for the alias before resolving it.
+    if fn in family.aliases:
+        return [], []
+    return behaviors_for_function(fn, ctx.behaviors), cases_for_function(fn, cases)
+
+
+def _evaluate_function(
     fn: str,
     family: Family,
     cases: List[Dict],
     golden_ids: Set[str],
     ctx: CoverageContext,
+    closure_cache: Dict[str, FunctionClosure],
 ) -> FunctionClosure:
+    cached = closure_cache.get(fn)
+    if cached is not None:
+        return cached
+
+    fn_behaviors, fn_cases = _function_inputs(fn, family, cases, ctx)
     alias_target = family.aliases.get(fn)
     if alias_target is not None:
         # The canonical member is evaluated here rather than its declaration
@@ -425,18 +452,31 @@ def evaluate_function(
                 conditions=[ConditionResult("alias_resolves", False, detail)],
                 alias_of=alias_target,
             )
-        target = evaluate_function(alias_target, family, cases, golden_ids, ctx)
-        return FunctionClosure(fn=fn, family=family, conditions=target.conditions, alias_of=alias_target)
+        target = _evaluate_function(alias_target, family, cases, golden_ids, ctx, closure_cache)
+        fc = FunctionClosure(fn=fn, family=family, conditions=target.conditions, alias_of=alias_target)
+        closure_cache[fn] = fc
+        return fc
 
-    fn_behaviors = behaviors_for_function(fn, ctx.behaviors)
     fc = FunctionClosure(fn=fn, family=family)
-    fc.conditions.append(check_condition_1_behaviors(fn, ctx.behaviors, family.min_perspectives_per_member))
-    fc.conditions.append(check_condition_2_cases(fn, fn_behaviors, cases))
-    fc.conditions.append(check_condition_3_golden(fn, cases, golden_ids))
-    fc.conditions.append(check_condition_4_divergence(fn, cases, ctx.divergence_entries))
+    fc.conditions.append(_check_condition_1_behaviors_prefiltered(fn_behaviors, family.min_perspectives_per_member))
+    fc.conditions.append(_check_condition_2_cases_prefiltered(fn_behaviors, fn_cases))
+    fc.conditions.append(_check_condition_3_golden_prefiltered(fn_cases, golden_ids))
+    fc.conditions.append(_check_condition_4_divergence_prefiltered(fn_cases, ctx.divergence_entries))
     fc.conditions.append(check_condition_5_coverage_gap(fn, ctx))
     fc.conditions.append(ctx.drift_result)
+    closure_cache[fn] = fc
     return fc
+
+
+def evaluate_function(
+    fn: str,
+    family: Family,
+    cases: List[Dict],
+    golden_ids: Set[str],
+    ctx: CoverageContext,
+) -> FunctionClosure:
+    """Evaluate one function while retaining the public helper contract."""
+    return _evaluate_function(fn, family, cases, golden_ids, ctx, {})
 
 
 def audit_family(family: Family, all_behaviors: List[Dict]) -> List[Tuple[str, str, str]]:
@@ -531,6 +571,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     closures: List[FunctionClosure] = []
     family_cache: Dict[str, Tuple[List[Dict], Set[str]]] = {}
+    family_closure_cache: Dict[str, Dict[str, FunctionClosure]] = {}
     for fn in targets:
         family = resolve_family(fn, by_name, by_member)
         if family.name not in family_cache:
@@ -539,7 +580,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 load_golden_ids_for_family(family),
             )
         cases, golden_ids = family_cache[family.name]
-        fc = evaluate_function(fn, family, cases, golden_ids, ctx)
+        fc = _evaluate_function(fn, family, cases, golden_ids, ctx, family_closure_cache.setdefault(family.name, {}))
         closures.append(fc)
 
     if args.json:
