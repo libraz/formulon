@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "eval/spill_potential.h"
 #include "gtest/gtest.h"
@@ -68,6 +69,23 @@ TEST(FunctionRegistry, LookupIsCaseInsensitiveMixedCase) {
   EXPECT_NE(r.lookup("FoO"), nullptr);
 }
 
+TEST(FunctionRegistry, LookupPreservesFunctionDefCanonicalName) {
+  FunctionRegistry r;
+  const std::string supplied_name = "fOo";
+  ASSERT_TRUE(r.register_function(FunctionDef{supplied_name, 0u, kVariadic, &StubImpl}));
+
+  const FunctionDef* def = r.lookup("FOO");
+  ASSERT_NE(def, nullptr);
+  EXPECT_EQ(def->canonical_name, supplied_name);
+
+  std::vector<std::string> names;
+  r.for_each_name(
+      [](std::string_view name, void* ctx) { static_cast<std::vector<std::string>*>(ctx)->emplace_back(name); },
+      &names);
+  ASSERT_EQ(names.size(), 1u);
+  EXPECT_EQ(names[0], "FOO");
+}
+
 TEST(FunctionRegistry, LookupNonExistentReturnsNullptr) {
   FunctionRegistry r;
   ASSERT_TRUE(r.register_function(FunctionDef{"FOO", 0u, kVariadic, &StubImpl}));
@@ -91,7 +109,7 @@ TEST(FunctionRegistry, LookupStillSupportsARegisteredLongName) {
 TEST(FunctionRegistry, DuplicateRegistrationReturnsFalseAndPreservesFirst) {
   FunctionRegistry r;
   ASSERT_TRUE(r.register_function(FunctionDef{"FOO", 0u, kVariadic, &StubImpl}));
-  EXPECT_FALSE(r.register_function(FunctionDef{"FOO", 1u, 1u, &SecondImpl}));
+  EXPECT_FALSE(r.register_function(FunctionDef{"fOo", 1u, 1u, &SecondImpl}));
   const FunctionDef* def = r.lookup("FOO");
   ASSERT_NE(def, nullptr);
   Arena a;
@@ -120,6 +138,29 @@ TEST(FunctionRegistry, MoveConstructionPreservesContents) {
   FunctionRegistry dst(std::move(src));
   EXPECT_NE(dst.lookup("FOO"), nullptr);
   EXPECT_EQ(dst.size(), 1u);
+}
+
+TEST(FunctionRegistry, LookupPointerSurvivesRehashAndMove) {
+  FunctionRegistry src;
+  const std::string stable_name = "STABLE";
+  ASSERT_TRUE(src.register_function(FunctionDef{stable_name, 0u, kVariadic, &StubImpl}));
+  const FunctionDef* stable = src.lookup("stable");
+  ASSERT_NE(stable, nullptr);
+
+  std::vector<std::string> names;
+  names.reserve(1024);
+  for (std::size_t i = 0; i < 1024; ++i) {
+    names.emplace_back("FN" + std::to_string(i));
+    ASSERT_TRUE(src.register_function(FunctionDef{names.back(), 0u, kVariadic, &StubImpl}));
+  }
+  EXPECT_EQ(src.lookup("StAbLe"), stable);
+
+  FunctionRegistry moved(std::move(src));
+  EXPECT_EQ(moved.lookup("stable"), stable);
+
+  FunctionRegistry assigned;
+  assigned = std::move(moved);
+  EXPECT_EQ(assigned.lookup("stable"), stable);
 }
 
 TEST(FunctionRegistry, DefaultRegistryContainsExpectedBuiltins) {

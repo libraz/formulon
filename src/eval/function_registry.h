@@ -147,9 +147,10 @@ struct FunctionDef {
   bool last_arg_scalar = false;
 };
 
-/// Case-insensitive function lookup table. Names are stored UPPERCASE
-/// internally; lookup uppercases ASCII input bytes before comparing. Insertion
-/// order is not preserved.
+/// Case-insensitive function lookup table. Registry keys are stored in an
+/// owned UPPERCASE form internally; lookup folds ASCII bytes while hashing and
+/// comparing without allocating. FunctionDef::canonical_name remains the
+/// caller-supplied view. Insertion order is not preserved.
 class FunctionRegistry {
  public:
   FunctionRegistry();
@@ -165,8 +166,8 @@ class FunctionRegistry {
   bool register_function(const FunctionDef& def);
 
   /// Returns a pointer to the registered definition for `name`, or nullptr if
-  /// no such function exists. `name` is normalized to uppercase ASCII before
-  /// lookup; non-ASCII bytes are compared verbatim.
+  /// no such function exists. ASCII letters in `name` are folded for lookup;
+  /// non-ASCII bytes are compared verbatim.
   const FunctionDef* lookup(std::string_view name) const noexcept;
 
   /// Returns the number of registered functions.
@@ -180,7 +181,7 @@ class FunctionRegistry {
   void for_each_name(void (*cb)(std::string_view name, void* ctx), void* ctx) const;
 
  private:
-  // PIMPL via unique_ptr<unordered_map<...>> to keep the header dep-light.
+  // PIMPL keeps the hash table and owned keys out of this public header.
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };
