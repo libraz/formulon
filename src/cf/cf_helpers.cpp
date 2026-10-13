@@ -22,6 +22,7 @@
 #include "eval/eval_profile_scope.h"
 #include "eval/scalar_ops.h"
 #include "eval/tree_walker.h"
+#include "eval/value_identity.h"
 #include "parser/ast.h"
 #include "parser/ast_shift.h"
 #include "sheet.h"
@@ -173,7 +174,17 @@ Value parse_shift_evaluate(const std::string& source, const CFEvalContext& ctx) 
 
   // The model holds CF formulas in canonical formula-bar spelling (the
   // readers strip Excel's storage prefixes on load), without a leading `=`.
-  const parser::AstNode* root = eval::parse_formula_entry(source, *ctx.arena);
+  // Prepared walkers cache only the parse; shifting and evaluation stay per cell.
+  const parser::AstNode* root = nullptr;
+  if (ctx.formula_cache != nullptr) {
+    auto [it, inserted] = ctx.formula_cache->indices.try_emplace(source, ctx.formula_cache->roots.size());
+    if (inserted) {
+      ctx.formula_cache->roots.push_back(eval::parse_formula_entry(source, *ctx.arena));
+    }
+    root = ctx.formula_cache->roots[it->second];
+  } else {
+    root = eval::parse_formula_entry(source, *ctx.arena);
+  }
   if (root == nullptr) {
     return Value::error(ErrorCode::Name);
   }
@@ -326,6 +337,36 @@ ColorScalePopulation gather_population(const std::vector<CFCellRange>& sqref, co
   }
   pop.sorted = std::move(values);
   return pop;
+}
+
+DuplicateValuePopulation gather_duplicate_population(const std::vector<CFCellRange>& sqref, const Sheet& sheet,
+                                                     ExcelProfile profile) {
+  DuplicateValuePopulation population;
+  population.profile = profile;
+  for_each_sqref_value(sqref, sheet, [&](const Value& cell) {
+    if ((!cell.is_number() && !cell.is_boolean() && !cell.is_text()) ||
+        (cell.is_number() && std::isnan(cell.as_number()))) {
+      return;
+    }
+    std::string key;
+    if (eval::append_value_identity_key(cell, profile, eval::CollationStrength::kCompare, &key)) {
+      ++population.keys[key];
+    }
+  });
+  return population;
+}
+
+std::size_t count_matches_in_population(const Value& target, const DuplicateValuePopulation& population) {
+  if ((!target.is_number() && !target.is_boolean() && !target.is_text()) ||
+      (target.is_number() && std::isnan(target.as_number()))) {
+    return 0;
+  }
+  std::string key;
+  if (!eval::append_value_identity_key(target, population.profile, eval::CollationStrength::kCompare, &key)) {
+    return 0;
+  }
+  const auto it = population.keys.find(key);
+  return it == population.keys.end() ? 0U : it->second;
 }
 
 const ColorScalePopulation& ensure_population(const CFEvalContext& ctx, ColorScalePopulation& fallback) {

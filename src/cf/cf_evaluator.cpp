@@ -86,13 +86,6 @@ CFMatch make_match(const CFRule& rule, const Value& cell_value, const CFEvalCont
 }
 
 namespace {
-
-// Per-block lazy population cache used by `evaluate_cf_for_range`.
-// Indexed by block index inside `Sheet::conditional_formats()`. Slots
-// stay empty until a rule that consumes the population first runs,
-// then the slot is populated and reused across every cell in the range.
-using PopulationCache = std::vector<std::optional<ColorScalePopulation>>;
-
 // Whether `type` is a range-aware rule kind that benefits from a
 // cached population. CellIs / Expression / TimePeriod / text-family /
 // blanks-family / errors-family rules don't need it.
@@ -109,81 +102,8 @@ bool rule_uses_population(RuleType type) {
   }
 }
 
-// Shared body for `evaluate_cf_at` and the viewport walker. When
-// `cache` is non-null, the function lazily populates per-block slots
-// the first time a rule needs the population and reuses them on
-// subsequent calls. When null, every range-aware rule re-walks the
-// sheet (the public single-cell behaviour).
-std::vector<CFMatch> evaluate_cf_at_impl(const Sheet& sheet, CellAddress target, const CFHost& host,
-                                         PopulationCache* cache) {
-  std::vector<CFMatch> matches;
-  if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
-    return matches;
-  }
-  const eval::ScopedEvalProfile profile_scope(host.eval_ctx->excel_profile());
-
-  // Collect (block_index, rule_index, priority) for every rule whose
-  // sqref contains `target`. Indices instead of pointers keeps the
-  // collection trivially copyable; sorting by priority is stable.
-  struct Candidate {
-    std::size_t block_index;
-    std::size_t rule_index;
-    std::int32_t priority;
-  };
-  std::vector<Candidate> candidates;
-
-  const std::vector<ConditionalFormat>& blocks = sheet.conditional_formats();
-  for (std::size_t block_idx = 0; block_idx < blocks.size(); ++block_idx) {
-    if (!sqref_contains(blocks[block_idx].sqref, target)) {
-      continue;
-    }
-    for (std::size_t rule_idx = 0; rule_idx < blocks[block_idx].rules.size(); ++rule_idx) {
-      candidates.push_back({block_idx, rule_idx, blocks[block_idx].rules[rule_idx].priority});
-    }
-  }
-  std::vector<std::uint32_t> ranked;
-  sorted_index_order(ranked, static_cast<std::uint32_t>(candidates.size()),
-                     IndexLess{&candidates, [](const void* context, std::uint32_t lhs, std::uint32_t rhs) {
-                                 const auto& items = *static_cast<const std::vector<Candidate>*>(context);
-                                 return items[lhs].priority < items[rhs].priority;
-                               }});
-
-  const Value cell_value = sheet.resolve_cell_value(target.row, target.col);
-  for (const std::uint32_t rank : ranked) {
-    const Candidate& candidate = candidates[rank];
-    const ConditionalFormat& block = blocks[candidate.block_index];
-    const CFRule& rule = block.rules[candidate.rule_index];
-
-    CFEvalContext ctx;
-    ctx.anchor = sqref_anchor(block.sqref);
-    ctx.target = target;
-    ctx.arena = host.arena;
-    ctx.registry = host.registry;
-    ctx.eval_ctx = host.eval_ctx;
-    ctx.today_serial = host.today_serial;
-    ctx.sqref = &block.sqref;
-
-    // Lazy-populate the cache slot for this block when the rule needs
-    // a numeric population. Non-cache callers (`cache == nullptr`)
-    // keep `ctx.cached_population` null and the helpers gather on
-    // demand.
-    if (cache != nullptr && rule_uses_population(rule.type)) {
-      std::optional<ColorScalePopulation>& slot = (*cache)[candidate.block_index];
-      if (!slot.has_value()) {
-        slot = helpers::gather_population(block.sqref, sheet);
-      }
-      ctx.cached_population = &*slot;
-    }
-
-    if (!match_rule(rule, cell_value, ctx)) {
-      continue;
-    }
-    matches.push_back(make_match(rule, cell_value, ctx));
-    if (rule.stop_if_true) {
-      break;
-    }
-  }
-  return matches;
+bool rule_uses_duplicates(RuleType type) {
+  return type == RuleType::DuplicateValues || type == RuleType::UniqueValues;
 }
 
 /// Overlapping part of `a` and `b`, or `nullopt` when they are disjoint
@@ -227,8 +147,108 @@ void merge_spans(std::vector<Span>& spans) {
 
 }  // namespace
 
+struct PreparedCfEvaluator::Impl {
+  struct RulePlanEntry {
+    const ConditionalFormat* block = nullptr;
+    const CFRule* rule = nullptr;
+    CellAddress anchor{};
+    std::size_t block_index = 0;
+  };
+
+  const Sheet& sheet;
+  CFHost host;
+  std::vector<RulePlanEntry> plan;
+  std::vector<std::optional<ColorScalePopulation>> populations;
+  std::vector<std::optional<DuplicateValuePopulation>> duplicates;
+  PreparedCfFormulaCache formula_cache;
+
+  Impl(const Sheet& source, const CFHost& source_host) : sheet(source), host(source_host) {
+    if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
+      return;
+    }
+    const std::vector<ConditionalFormat>& blocks = sheet.conditional_formats();
+    populations.resize(blocks.size());
+    duplicates.resize(blocks.size());
+    for (std::size_t block_index = 0; block_index < blocks.size(); ++block_index) {
+      const ConditionalFormat& block = blocks[block_index];
+      const CellAddress anchor = sqref_anchor(block.sqref);
+      for (const CFRule& rule : block.rules) {
+        plan.push_back(RulePlanEntry{&block, &rule, anchor, block_index});
+      }
+    }
+    // sort_by_index is stable, so equal priorities keep document order.
+    sort_by_index(plan, [](const RulePlanEntry& lhs, const RulePlanEntry& rhs) {
+      return lhs.rule->priority < rhs.rule->priority;
+    });
+  }
+
+  std::vector<CFMatch> evaluate(CellAddress target) {
+    std::vector<CFMatch> matches;
+    if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
+      return matches;
+    }
+    const eval::ScopedEvalProfile profile_scope(host.eval_ctx->excel_profile());
+    const Value cell_value = sheet.resolve_cell_value(target.row, target.col);
+    for (const RulePlanEntry& entry : plan) {
+      const ConditionalFormat& block = *entry.block;
+      const CFRule& rule = *entry.rule;
+      if (!sqref_contains(block.sqref, target)) {
+        continue;
+      }
+
+      CFEvalContext ctx;
+      ctx.anchor = entry.anchor;
+      ctx.target = target;
+      ctx.arena = host.arena;
+      ctx.registry = host.registry;
+      ctx.eval_ctx = host.eval_ctx;
+      ctx.today_serial = host.today_serial;
+      ctx.sqref = &block.sqref;
+      ctx.formula_cache = &formula_cache;
+
+      if (rule_uses_population(rule.type)) {
+        std::optional<ColorScalePopulation>& slot = populations[entry.block_index];
+        if (!slot.has_value()) {
+          slot = helpers::gather_population(block.sqref, sheet);
+        }
+        ctx.cached_population = &*slot;
+      }
+      if (rule_uses_duplicates(rule.type)) {
+        std::optional<DuplicateValuePopulation>& slot = duplicates[entry.block_index];
+        if (!slot.has_value()) {
+          slot = helpers::gather_duplicate_population(block.sqref, sheet, host.eval_ctx->excel_profile());
+        }
+        ctx.cached_duplicates = &*slot;
+      }
+
+      if (!match_rule(rule, cell_value, ctx)) {
+        continue;
+      }
+      matches.push_back(make_match(rule, cell_value, ctx));
+      if (rule.stop_if_true) {
+        break;
+      }
+    }
+    return matches;
+  }
+};
+
+PreparedCfEvaluator::PreparedCfEvaluator(const Sheet& sheet, const CFHost& host)
+    : impl_(std::make_unique<Impl>(sheet, host)) {}
+
+PreparedCfEvaluator::~PreparedCfEvaluator() = default;
+
+PreparedCfEvaluator::PreparedCfEvaluator(PreparedCfEvaluator&&) noexcept = default;
+
+PreparedCfEvaluator& PreparedCfEvaluator::operator=(PreparedCfEvaluator&&) noexcept = default;
+
+std::vector<CFMatch> PreparedCfEvaluator::evaluate(CellAddress target) {
+  return impl_->evaluate(target);
+}
+
 std::vector<CFMatch> evaluate_cf_at(const Sheet& sheet, CellAddress target, const CFHost& host) {
-  return evaluate_cf_at_impl(sheet, target, host, /*cache=*/nullptr);
+  PreparedCfEvaluator prepared(sheet, host);
+  return prepared.evaluate(target);
 }
 
 Expected<std::vector<CFRangeCellMatches>, Error> evaluate_cf_for_range(const Sheet& sheet, CFCellRange range,
@@ -262,11 +282,8 @@ Expected<std::vector<CFRangeCellMatches>, Error> evaluate_cf_for_range(const She
     return results;
   }
 
-  // One cache for the whole range. Slots are sized to match the
-  // sheet's block count; each slot is populated lazily the first time
-  // a range-aware rule needs it, then reused across every subsequent
-  // cell in the same block.
-  PopulationCache cache(sheet.conditional_formats().size());
+  // One priority plan and its per-block caches serve the whole viewport.
+  PreparedCfEvaluator prepared(sheet, host);
 
   // Row-major sweep over the union of the clipped rectangles. Rows come
   // from their merged row spans (ascending, disjoint) and each row's
@@ -296,7 +313,7 @@ Expected<std::vector<CFRangeCellMatches>, Error> evaluate_cf_for_range(const She
           CellAddress cell{};
           cell.row = row;
           cell.col = col;
-          std::vector<CFMatch> matches = evaluate_cf_at_impl(sheet, cell, host, &cache);
+          std::vector<CFMatch> matches = prepared.evaluate(cell);
           if (matches.empty()) {
             continue;
           }

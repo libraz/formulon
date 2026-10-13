@@ -292,7 +292,10 @@ bool match_duplicate_or_unique(const CFRule& rule, const Value& cell_value, cons
   if (!cell_value.is_number() && !cell_value.is_boolean() && !cell_value.is_text()) {
     return false;
   }
-  const std::size_t count = helpers::count_matches_in_sqref(cell_value, *ctx.sqref, *ctx.eval_ctx->current_sheet());
+  const std::size_t count =
+      ctx.cached_duplicates != nullptr
+          ? helpers::count_matches_in_population(cell_value, *ctx.cached_duplicates)
+          : helpers::count_matches_in_sqref(cell_value, *ctx.sqref, *ctx.eval_ctx->current_sheet());
   switch (rule.type) {
     case RuleType::DuplicateValues:
       return count >= 2;

@@ -92,6 +92,7 @@
 #define FORMULON_CF_CF_EVALUATOR_H_
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -121,6 +122,16 @@ namespace cf {
 /// neither see the layout nor populate the field — they pass `nullptr`
 /// (the default), and the evaluator gathers populations on demand.
 struct ColorScalePopulation;
+
+/// Cached value counts for DuplicateValues / UniqueValues rules. Defined in
+/// `cf_helpers.h`; callers outside the CF subsystem only carry the opaque
+/// pointer through `CFEvalContext`.
+struct DuplicateValuePopulation;
+
+/// Per-prepared-evaluator cache of parsed CF formula roots. The roots live in
+/// the host arena; only parsing is shared, while every target still receives
+/// its own relative-reference shift and evaluation.
+struct PreparedCfFormulaCache;
 
 /// Returns `true` when `rule` matches the cell carrying `cell_value`.
 ///
@@ -192,14 +203,18 @@ CFMatch make_match(const CFRule& rule);
 /// rules then never match. Other rule kinds ignore this field. The
 /// pointee is borrowed and must outlive the `match_rule` call.
 ///
-/// `cached_population` is an optimisation hint for the viewport API.
+/// `cached_population` is an optimisation hint for prepared walkers.
 /// When set, range-aware rule kinds (ColorScale, DataBar, IconSet,
 /// AboveAverage, Top10) read the sqref's numeric population from this
-/// pointer instead of re-walking the sheet. The viewport walker
-/// computes one population per `<conditionalFormatting>` block at the
-/// top of `evaluate_cf_for_range` and reuses it across every cell in
-/// the range; per-cell `evaluate_cf_at` callers leave this `nullptr`
-/// and the helpers compute on demand.
+/// pointer instead of re-walking the sheet. The viewport and AutoFilter
+/// walkers compute one population per `<conditionalFormatting>` block and
+/// reuse it across every cell; single-cell `evaluate_cf_at` calls use a
+/// single-use plan and may also populate it for rules sharing that block.
+/// `cached_duplicates` carries the analogous per-block count cache for
+/// DuplicateValues / UniqueValues.
+/// `formula_cache` is an internal per-prepared-walk cache of parsed formula
+/// roots. Relative references are still shifted and evaluated for each target
+/// cell; callers outside the prepared evaluator leave it null.
 struct CFEvalContext {
   CellAddress anchor{};
   CellAddress target{};
@@ -209,6 +224,8 @@ struct CFEvalContext {
   std::optional<double> today_serial;
   const std::vector<CFCellRange>* sqref = nullptr;
   const ColorScalePopulation* cached_population = nullptr;
+  const DuplicateValuePopulation* cached_duplicates = nullptr;
+  PreparedCfFormulaCache* formula_cache = nullptr;
 };
 
 /// Context-aware overload that handles every rule type the value-only
@@ -247,6 +264,32 @@ struct CFHost {
   const eval::FunctionRegistry* registry = nullptr;
   const eval::EvalContext* eval_ctx = nullptr;
   std::optional<double> today_serial;
+};
+
+/// Reusable, priority-sorted conditional-format rule plan.
+///
+/// The plan owns no workbook data: rule and sqref pointers refer to `sheet`,
+/// which must outlive this object. Neither the sheet's conditional formats nor
+/// its cells may change while the plan is alive, and `host.eval_ctx` must be
+/// evaluating on `sheet`. The viewport and AutoFilter walkers share one plan
+/// and its per-block population caches.
+class PreparedCfEvaluator {
+ public:
+  PreparedCfEvaluator(const Sheet& sheet, const CFHost& host);
+  ~PreparedCfEvaluator();
+
+  PreparedCfEvaluator(const PreparedCfEvaluator&) = delete;
+  PreparedCfEvaluator& operator=(const PreparedCfEvaluator&) = delete;
+  PreparedCfEvaluator(PreparedCfEvaluator&&) noexcept;
+  PreparedCfEvaluator& operator=(PreparedCfEvaluator&&) noexcept;
+
+  /// Evaluates the prepared rule chain for one target cell. The plan's
+  /// priority order and per-block caches are reused across calls.
+  std::vector<CFMatch> evaluate(CellAddress target);
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 /// Walks every `<conditionalFormatting>` block on `sheet` whose sqref

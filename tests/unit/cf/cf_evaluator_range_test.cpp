@@ -54,6 +54,13 @@ ConditionalFormat MakeBlock(std::vector<CFCellRange> sqref, std::vector<CFRule> 
   return block;
 }
 
+std::uint32_t g_cf_formula_calls = 0;
+
+Value CfFormulaCallCounter(const Value*, std::uint32_t, Arena&) {
+  ++g_cf_formula_calls;
+  return Value::number(static_cast<double>(g_cf_formula_calls));
+}
+
 CFRule MakeBlanksRule(std::int32_t priority, std::uint32_t dxf_id, std::string id, bool stop_if_true = false) {
   CFRule rule;
   rule.type = RuleType::ContainsBlanks;
@@ -162,6 +169,19 @@ TEST(CFEvaluator, EvaluateCfAtStopIfTrueHaltsEvaluation) {
                 {MakeBlanksRule(1, 10, "first", /*stop_if_true=*/true), MakeBlanksRule(2, 20, "second")}));
   const auto host = MakeHost(harness);
   std::vector<CFMatch> matches = evaluate_cf_at(harness.sheet, At(0, 0), host);
+  ASSERT_EQ(matches.size(), 1u);
+  EXPECT_EQ(matches[0].rule_id, "first");
+}
+
+TEST(CFEvaluator, EvaluateCfAtEqualPriorityStopIfTrueKeepsDocumentOrder) {
+  CFEvalHarness harness;
+  // Equal priorities are legal in the in-memory model; the first rule in
+  // workbook order owns the stopIfTrue decision.
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 0, 0)},
+                {MakeBlanksRule(1, 10, "first", /*stop_if_true=*/true), MakeBlanksRule(1, 20, "second")}));
+  const auto host = MakeHost(harness);
+  const std::vector<CFMatch> matches = evaluate_cf_at(harness.sheet, At(0, 0), host);
   ASSERT_EQ(matches.size(), 1u);
   EXPECT_EQ(matches[0].rule_id, "first");
 }
@@ -503,6 +523,168 @@ TEST(CFEvaluator, EvaluateCfForRangeCachedPathPreservesTop10Behavior) {
     const bool expected = row >= 3;
     EXPECT_EQ(per_cell.size(), expected ? 1u : 0u) << "row=" << row;
   }
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeDuplicateCachePreservesOverlappingSqrefMultiplicity) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(7.0));
+  CFRule duplicate = MakeRule(RuleType::DuplicateValues);
+  duplicate.priority = 1;
+  duplicate.id = "duplicate";
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 0, 0), MakeRange(0, 0, 0, 0)}, {duplicate}));
+
+  const auto host = MakeHost(harness);
+  const auto result = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 0, 0), host);
+  ASSERT_TRUE(static_cast<bool>(result));
+  ASSERT_EQ(result.value().size(), 1u);
+  ASSERT_EQ(result.value()[0].matches.size(), 1u);
+  EXPECT_EQ(result.value()[0].matches[0].rule_id, "duplicate");
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeDuplicateCacheFoldsSignedZeroAndKeepsKindsApart) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(0.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(-0.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(1.0));
+  harness.sheet.set_cell_value(3, 0, Value::boolean(true));
+  harness.sheet.set_cell_value(4, 0, Value::text("1"));
+  CFRule duplicate = MakeRule(RuleType::DuplicateValues);
+  duplicate.priority = 1;
+  duplicate.id = "duplicate";
+  harness.sheet.mutable_conditional_formats().push_back(MakeBlock({MakeRange(0, 0, 4, 0)}, {duplicate}));
+
+  const auto result = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), MakeHost(harness));
+  ASSERT_TRUE(static_cast<bool>(result));
+  ASSERT_EQ(result.value().size(), 2u);
+  EXPECT_EQ(result.value()[0].cell, At(0, 0));
+  EXPECT_EQ(result.value()[1].cell, At(1, 0));
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeFormulaCacheShiftsRelativeReferencePerCell) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(5.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(20.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(5.0));
+
+  CFRule expression = MakeRule(RuleType::Expression);
+  expression.priority = 1;
+  expression.id = "relative";
+  expression.formula1 = "A1>10";
+  harness.sheet.mutable_conditional_formats().push_back(MakeBlock({MakeRange(0, 0, 2, 0)}, {std::move(expression)}));
+
+  const auto result = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), MakeHost(harness));
+  ASSERT_TRUE(static_cast<bool>(result));
+  ASSERT_EQ(result.value().size(), 1u);
+  EXPECT_EQ(result.value()[0].cell, At(1, 0));
+  ASSERT_EQ(result.value()[0].matches.size(), 1u);
+  EXPECT_EQ(result.value()[0].matches[0].rule_id, "relative");
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeMalformedFormulaMatchesNoTarget) {
+  CFEvalHarness harness;
+  CFRule expression = MakeRule(RuleType::Expression);
+  expression.priority = 1;
+  expression.id = "malformed";
+  expression.formula1 = "(((";
+  harness.sheet.mutable_conditional_formats().push_back(MakeBlock({MakeRange(0, 0, 2, 0)}, {std::move(expression)}));
+
+  const auto result = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), MakeHost(harness));
+  ASSERT_TRUE(static_cast<bool>(result));
+  EXPECT_TRUE(result.value().empty());
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeFormulaCacheEvaluatesVolatileFunctionPerTarget) {
+  CFEvalHarness harness;
+  eval::FunctionRegistry registry;
+  ASSERT_TRUE(registry.register_function(eval::FunctionDef{"CF_FORMULA_CALL", 0U, 0U, &CfFormulaCallCounter}));
+
+  CFRule expression = MakeRule(RuleType::Expression);
+  expression.priority = 1;
+  expression.id = "per-target";
+  expression.formula1 = "CF_FORMULA_CALL()";
+  harness.sheet.mutable_conditional_formats().push_back(MakeBlock({MakeRange(0, 0, 2, 0)}, {std::move(expression)}));
+
+  CFHost host = MakeHost(harness);
+  host.registry = &registry;
+  g_cf_formula_calls = 0;
+  const auto result = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  ASSERT_TRUE(static_cast<bool>(result));
+  ASSERT_EQ(result.value().size(), 3u);
+  EXPECT_EQ(g_cf_formula_calls, 3U);
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeFormulaCacheShiftsSameSourceForDistinctAnchors) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(1.0));  // A1 matches block A.
+  harness.sheet.set_cell_value(1, 0, Value::number(0.0));  // A2 does not.
+  harness.sheet.set_cell_value(0, 1, Value::number(0.0));  // B1's own value is not consulted by block B.
+  harness.sheet.set_cell_value(1, 1, Value::number(1.0));  // B2 does not match A2 through block B.
+
+  CFRule first = MakeRule(RuleType::Expression);
+  first.priority = 1;
+  first.id = "block-a";
+  first.formula1 = "A1=1";
+  CFRule second = MakeRule(RuleType::Expression);
+  second.priority = 1;
+  second.id = "block-b";
+  second.formula1 = "A1=1";
+  harness.sheet.mutable_conditional_formats().push_back(MakeBlock({MakeRange(0, 0, 1, 0)}, {std::move(first)}));
+  harness.sheet.mutable_conditional_formats().push_back(MakeBlock({MakeRange(0, 1, 1, 1)}, {std::move(second)}));
+
+  const auto result = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 1, 1), MakeHost(harness));
+  ASSERT_TRUE(static_cast<bool>(result));
+  ASSERT_EQ(result.value().size(), 2u);
+  EXPECT_EQ(result.value()[0].cell, At(0, 0));
+  ASSERT_EQ(result.value()[0].matches.size(), 1u);
+  EXPECT_EQ(result.value()[0].matches[0].rule_id, "block-a");
+  EXPECT_EQ(result.value()[1].cell, At(0, 1));
+  ASSERT_EQ(result.value()[1].matches.size(), 1u);
+  EXPECT_EQ(result.value()[1].matches[0].rule_id, "block-b");
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeFormulaCacheCoversCellIsFormulaPair) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(1.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(2.0));
+  harness.sheet.set_cell_value(0, 1, Value::number(3.0));
+  harness.sheet.set_cell_value(1, 1, Value::number(4.0));
+
+  CFRule between = MakeRule(RuleType::CellIs);
+  between.priority = 1;
+  between.id = "between";
+  between.op = CellIsOperator::Between;
+  between.formula1 = "A1";
+  between.formula2 = "B1";
+  harness.sheet.mutable_conditional_formats().push_back(MakeBlock({MakeRange(0, 0, 1, 0)}, {std::move(between)}));
+
+  const auto result = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 1, 0), MakeHost(harness));
+  ASSERT_TRUE(static_cast<bool>(result));
+  ASSERT_EQ(result.value().size(), 2u);
+  EXPECT_EQ(result.value()[0].cell, At(0, 0));
+  EXPECT_EQ(result.value()[1].cell, At(1, 0));
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeFormulaCacheCoversCfvoFormulaThresholds) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(10.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(20.0));
+
+  CFRule color_scale = MakeRule(RuleType::ColorScale);
+  color_scale.priority = 1;
+  color_scale.id = "formula-scale";
+  color_scale.color_scale =
+      ColorScaleSpec{{CfValueObject{CfvoType::Formula, "A1", true}, CfValueObject{CfvoType::Formula, "A2", true}},
+                     {RGB(255, 0, 0), RGB(0, 0, 255)}};
+  harness.sheet.mutable_conditional_formats().push_back(MakeBlock({MakeRange(0, 0, 1, 0)}, {std::move(color_scale)}));
+
+  const auto result = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 1, 0), MakeHost(harness));
+  ASSERT_TRUE(static_cast<bool>(result));
+  ASSERT_EQ(result.value().size(), 2u);
+  ASSERT_TRUE(result.value()[0].matches[0].resolved_fill_color.has_value());
+  ASSERT_TRUE(result.value()[1].matches[0].resolved_fill_color.has_value());
+  EXPECT_EQ(result.value()[0].matches[0].resolved_fill_color->r, 255U);
+  EXPECT_EQ(result.value()[1].matches[0].resolved_fill_color->b, 255U);
 }
 
 // A rule whose sqref is an explicit multi-million-cell rectangle (not

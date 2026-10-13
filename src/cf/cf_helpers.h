@@ -17,15 +17,20 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "cf/cf_evaluator.h"
 #include "cf/cf_types.h"
+#include "excel_profile.h"
 #include "value.h"
 
 namespace formulon {
 class Sheet;
-}
+namespace parser {
+class AstNode;
+}  // namespace parser
+}  // namespace formulon
 
 namespace formulon::cf {
 
@@ -38,6 +43,23 @@ struct ColorScalePopulation {
   std::vector<double> sorted;  // ascending
   double min = 0.0;
   double max = 0.0;
+};
+
+/// Per-block counts for DuplicateValues / UniqueValues. Keys use the shared
+/// typed value identity at `profile`/`kCompare`, so cross-kind equality stays
+/// false. NaNs are omitted because a NaN never equals itself under IEEE `==`.
+struct DuplicateValuePopulation {
+  ExcelProfile profile = default_excel_profile();
+  std::unordered_map<std::string, std::size_t> keys;
+};
+
+/// Parsed roots reused by one prepared CF walk. A null value records a parse
+/// failure so malformed sources do not consume arena space again for each
+/// target cell. The map owns only source keys; AST nodes remain in the host
+/// arena for the lifetime of the prepared walk.
+struct PreparedCfFormulaCache {
+  std::unordered_map<std::string, std::size_t> indices;
+  std::vector<const parser::AstNode*> roots;
 };
 
 namespace helpers {
@@ -121,6 +143,16 @@ double sample_stddev(const std::vector<double>& values, double mean);
 
 /// Gathers the numeric population for `sqref` and sorts it ascending.
 ColorScalePopulation gather_population(const std::vector<CFCellRange>& sqref, const Sheet& sheet);
+
+/// Builds a per-block count cache using the same type separation and text
+/// collation as `cf_values_equal`. Every occurrence in every sqref rectangle
+/// is counted, including overlaps.
+DuplicateValuePopulation gather_duplicate_population(const std::vector<CFCellRange>& sqref, const Sheet& sheet,
+                                                     ExcelProfile profile);
+
+/// Looks up a target in a duplicate-value cache. Returns zero for errors,
+/// blanks, arrays and other non-scalar kinds.
+std::size_t count_matches_in_population(const Value& target, const DuplicateValuePopulation& population);
 
 /// Returns the cached population from `ctx` when present; otherwise
 /// gathers from the sheet into `fallback` and returns it. The returned
