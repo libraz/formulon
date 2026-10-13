@@ -70,68 +70,86 @@ TextMatchResult find_text_instance(std::string_view text, std::string_view delim
     const std::size_t at = instance_num > 0 ? 0u : text.size();
     return TextMatchResult{true, at, at};
   }
-  // Collect all literal delimiter byte offsets.
-  std::vector<std::pair<std::size_t, std::size_t>> hits;  // [start, end)
-  {
-    std::string lowered_text;
-    std::string lowered_delim;
-    std::string_view hay = text;
-    std::string_view needle = delimiter;
-    if (match_mode == 1) {
-      lowered_text = to_lower_ascii(text);
-      lowered_delim = to_lower_ascii(delimiter);
-      hay = lowered_text;
-      needle = lowered_delim;
-    }
-    std::size_t i = 0;
-    while (i <= hay.size()) {
-      const std::size_t pos = hay.find(needle, i);
+
+  std::string lowered_text;
+  std::string lowered_delim;
+  std::string_view hay = text;
+  std::string_view needle = delimiter;
+  if (match_mode == 1) {
+    lowered_text = to_lower_ascii(text);
+    lowered_delim = to_lower_ascii(delimiter);
+    hay = lowered_text;
+    needle = lowered_delim;
+  }
+
+  // Virtual sentinels are directional: positive instances add the end of
+  // text, while negative instances add the start. Keeping that distinction
+  // here lets the ordinary forward scan retain Excel's greedy, non-overlap
+  // matching without materialising every hit.
+  const bool use_virtual_end = match_end == 1 && instance_num > 0;
+  const bool use_virtual_start = match_end == 1 && instance_num < 0;
+  const auto hit_at = [&needle](std::size_t pos) { return TextMatchResult{true, pos, pos + needle.size()}; };
+
+  if (instance_num > 0) {
+    const std::size_t wanted = static_cast<std::size_t>(instance_num);
+    std::size_t ordinal = 0;
+    std::size_t scan = 0;
+    while (scan <= hay.size()) {
+      const std::size_t pos = hay.find(needle, scan);
       if (pos == std::string_view::npos) {
         break;
       }
-      hits.emplace_back(pos, pos + needle.size());
-      // Advance past the match to avoid overlapping counts.
-      i = pos + needle.size();
+      ++ordinal;
+      if (ordinal == wanted) {
+        return hit_at(pos);
+      }
+      // Advance past the match to preserve the existing greedy non-overlap
+      // rule (for example, "aa" in "aaaa" has hits at 0 and 2).
+      scan = pos + needle.size();
     }
-  }
-  // Virtual sentinels when match_end=1: for positive instance_num the end of
-  // text counts as a match (searching forward), for negative instance_num the
-  // start of text counts as a match (searching backward from the end). Both
-  // sentinels are never active at the same time.
-  const bool use_virtual_end = match_end == 1 && instance_num > 0;
-  const bool use_virtual_start = match_end == 1 && instance_num < 0;
-  std::vector<std::pair<std::size_t, std::size_t>> ordered;
-  ordered.reserve(hits.size() + 1u);
-  if (use_virtual_start) {
-    ordered.emplace_back(0u, 0u);
-  }
-  for (const auto& h : hits) {
-    ordered.push_back(h);
-  }
-  if (use_virtual_end) {
-    ordered.emplace_back(text.size(), text.size());
-  }
-  if (ordered.empty()) {
+    if (use_virtual_end && ordinal + 1u == wanted) {
+      return TextMatchResult{true, text.size(), text.size()};
+    }
     return {};
   }
-  std::size_t idx = 0;
-  if (instance_num > 0) {
-    if (static_cast<std::size_t>(instance_num) > ordered.size()) {
-      return {};
+
+  // Convert through a wider signed type before negating. Unary minus on
+  // INT_MIN is undefined; the snapped numeric argument can still produce it.
+  const std::size_t wanted_from_end = static_cast<std::size_t>(-(static_cast<std::int64_t>(instance_num)));
+  if (wanted_from_end == 1u) {
+    TextMatchResult last;
+    std::size_t scan = 0;
+    while (scan <= hay.size()) {
+      const std::size_t pos = hay.find(needle, scan);
+      if (pos == std::string_view::npos) {
+        break;
+      }
+      last = hit_at(pos);
+      scan = last.match_end_byte;
     }
-    idx = static_cast<std::size_t>(instance_num - 1);
-  } else {
-    const auto k = static_cast<std::size_t>(-instance_num);
-    if (k > ordered.size()) {
-      return {};
-    }
-    idx = ordered.size() - k;
+    return last.found ? last : (use_virtual_start ? TextMatchResult{true, 0u, 0u} : TextMatchResult{});
   }
-  TextMatchResult r;
-  r.found = true;
-  r.match_start_byte = ordered[idx].first;
-  r.match_end_byte = ordered[idx].second;
-  return r;
+
+  // Keep only start offsets for general negative instances. A second search
+  // would repeat nearly the entire scan for -2; storing offsets preserves the
+  // forward non-overlapping sequence without copying a second hit array.
+  std::vector<std::size_t> starts;
+  std::size_t scan = 0;
+  while (scan <= hay.size()) {
+    const std::size_t pos = hay.find(needle, scan);
+    if (pos == std::string_view::npos) {
+      break;
+    }
+    starts.push_back(pos);
+    scan = pos + needle.size();
+  }
+  if (wanted_from_end <= starts.size()) {
+    return hit_at(starts[starts.size() - wanted_from_end]);
+  }
+  if (use_virtual_start && wanted_from_end - 1u == starts.size()) {
+    return TextMatchResult{true, 0u, 0u};
+  }
+  return {};
 }
 
 // Reads the optional (instance_num, match_mode, match_end, if_not_found)
@@ -182,10 +200,10 @@ Expected<TextBeforeAfterOpts, ErrorCode> read_tba_opts(const Value* args, std::u
   return opts;
 }
 
-// Shared frame of TEXTBEFORE / TEXTAFTER; `slice` picks the side of the
-// located match that the function returns.
-template <typename Slice>
-Value text_before_after(const Value* args, std::uint32_t arity, Arena& arena, Slice slice) {
+// Shared frame of TEXTBEFORE / TEXTAFTER. A boolean keeps the two public
+// entry points on one non-templated implementation, avoiding duplicate code
+// generation for the otherwise identical argument and matching paths.
+Value text_before_after(const Value* args, std::uint32_t arity, Arena& arena, bool after) {
   // Registered with propagate_errors=false so if_not_found (args[5]) can pass
   // through as an error fallback. Propagate errors manually for args 0-4.
   for (std::uint32_t i = 0; i < arity && i < 5; ++i) {
@@ -231,7 +249,10 @@ Value text_before_after(const Value* args, std::uint32_t arity, Arena& arena, Sl
     }
     return Value::error(ErrorCode::NA);
   }
-  return Value::text(arena.intern(slice(std::string_view(text.value()), hit)));
+  const std::string_view text_view = text.value();
+  const std::string_view result =
+      after ? text_view.substr(hit.match_end_byte) : text_view.substr(0, hit.match_start_byte);
+  return Value::text(arena.intern(result));
 }
 
 }  // namespace
@@ -240,17 +261,12 @@ namespace text_detail {
 
 // TEXTBEFORE(text, delimiter, [instance_num], [match_mode], [match_end], [if_not_found])
 Value TextBefore_(const Value* args, std::uint32_t arity, Arena& arena) {
-  // Everything before the match's starting byte.
-  return text_before_after(args, arity, arena, [](std::string_view text, const TextMatchResult& hit) {
-    return text.substr(0, hit.match_start_byte);
-  });
+  return text_before_after(args, arity, arena, false);
 }
 
 // TEXTAFTER(text, delimiter, [instance_num], [match_mode], [match_end], [if_not_found])
 Value TextAfter_(const Value* args, std::uint32_t arity, Arena& arena) {
-  return text_before_after(args, arity, arena, [](std::string_view text, const TextMatchResult& hit) {
-    return text.substr(hit.match_end_byte);
-  });
+  return text_before_after(args, arity, arena, true);
 }
 
 }  // namespace text_detail

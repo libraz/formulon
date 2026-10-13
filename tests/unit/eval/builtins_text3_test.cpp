@@ -260,6 +260,19 @@ TEST(BuiltinsText3TextBefore, NegativeInstanceLast) {
   EXPECT_EQ(v.as_text(), "abc-def");
 }
 
+TEST(BuiltinsText3TextBefore, NegativeInstanceKeepsGreedyNonOverlappingHits) {
+  // The greedy "aa" hits in "aaaaa" begin at bytes 0 and 2. A reverse
+  // search that allowed overlap would incorrectly choose the hit at byte 3.
+  const Value v = EvalSource("=TEXTBEFORE(\"aaaaa\", \"aa\", -1)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "aa");
+
+  // The generic negative path must use the same non-overlapping ordering.
+  const Value second = EvalSource("=TEXTBEFORE(\"aaaaa\", \"aa\", -2)");
+  ASSERT_TRUE(second.is_text());
+  EXPECT_EQ(second.as_text(), "");
+}
+
 TEST(BuiltinsText3TextBefore, CaseInsensitive) {
   const Value v = EvalSource("=TEXTBEFORE(\"ABC\", \"b\", 1, 1)");
   ASSERT_TRUE(v.is_text());
@@ -284,6 +297,16 @@ TEST(BuiltinsText3TextBefore, MatchEndNegativeInstanceUsesStartSentinel) {
   EXPECT_EQ(v.as_text(), "");
 }
 
+TEST(BuiltinsText3TextBefore, MatchEndSentinelsKeepLiteralBoundaryRanks) {
+  const Value literal_at_start = EvalSource("=TEXTBEFORE(\"-abc\", \"-\", 1, 0, 1)");
+  ASSERT_TRUE(literal_at_start.is_text());
+  EXPECT_EQ(literal_at_start.as_text(), "");
+
+  const Value sentinel_at_end = EvalSource("=TEXTBEFORE(\"-abc\", \"-\", 2, 0, 1)");
+  ASSERT_TRUE(sentinel_at_end.is_text());
+  EXPECT_EQ(sentinel_at_end.as_text(), "-abc");
+}
+
 TEST(BuiltinsText3TextBefore, NotFoundDefaultIsNA) {
   const Value v = EvalSource("=TEXTBEFORE(\"abc\", \"-\")");
   ASSERT_TRUE(v.is_error());
@@ -300,6 +323,18 @@ TEST(BuiltinsText3TextBefore, InstanceZeroIsValueError) {
   const Value v = EvalSource("=TEXTBEFORE(\"abc-def\", \"-\", 0)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsText3TextBefore, PositiveInstanceOutOfRangeIsNotFound) {
+  const Value v = EvalSource("=TEXTBEFORE(\"a-b\", \"-\", 3)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsText3TextBefore, MinimumNegativeInstanceDoesNotOverflow) {
+  const Value v = EvalSource("=TEXTBEFORE(\"abc\", \"-\", -2147483648)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
 // An empty delimiter matches at the start of the text for any positive
@@ -381,6 +416,29 @@ TEST(BuiltinsText3TextAfter, MatchEndNegativeInstanceUsesStartSentinel) {
   const Value v = EvalSource("=TEXTAFTER(\"abc\", \"-\", -1, 0, 1)");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "abc");
+}
+
+TEST(BuiltinsText3TextAfter, MatchEndSentinelsKeepLiteralBoundaryRanks) {
+  const Value literal_at_end = EvalSource("=TEXTAFTER(\"abc-\", \"-\", -1, 0, 1)");
+  ASSERT_TRUE(literal_at_end.is_text());
+  EXPECT_EQ(literal_at_end.as_text(), "");
+
+  const Value sentinel_at_start = EvalSource("=TEXTAFTER(\"abc-\", \"-\", -2, 0, 1)");
+  ASSERT_TRUE(sentinel_at_start.is_text());
+  EXPECT_EQ(sentinel_at_start.as_text(), "abc-");
+}
+
+TEST(BuiltinsText3TextAfter, Utf8TextWithAsciiCaseFold) {
+  const Value after = EvalSource(
+      "=TEXTAFTER(\""
+      "\xE3\x81\x82"
+      "A"
+      "\xE3\x81\x84"
+      "B"
+      "\xE3\x81\x86"
+      "\", \"b\", 1, 1)");
+  ASSERT_TRUE(after.is_text());
+  EXPECT_EQ(after.as_text(), "\xE3\x81\x86");
 }
 
 TEST(BuiltinsText3TextAfter, NotFoundDefaultIsNA) {
