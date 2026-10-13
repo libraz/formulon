@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
 import tempfile
 import unittest
@@ -13,10 +15,13 @@ from tools.oracle.provenance import (
     active_variant_names,
     cf_active,
     gate_target_names,
+    main,
     validate_targets,
     workbook_active,
+    workbook_declared_active,
+    workbook_inactive_reason,
 )
-from tools.oracle.workbook_oracle_gen import _display_path, _workbook_primary
+from tools.oracle.workbook_oracle_gen import _display_path, _workbook_primary, partial_capture_refusal
 
 
 def _workbook_tree(root: Path, *, case_ids: list[str], golden_ids: list[str]) -> dict:
@@ -117,6 +122,88 @@ class WorkbookCaptureActivationTest(unittest.TestCase):
             root = Path(tmp)
             doc = _workbook_tree(root, case_ids=["a"], golden_ids=[])
             self.assertFalse(workbook_active(doc, root))
+
+
+class WorkbookCheckTest(unittest.TestCase):
+    """`workbook-check` fails only for a declared-active, inconsistent capture."""
+
+    def _run(self, root: Path, doc: dict) -> tuple[int, str]:
+        targets = root / "targets.json"
+        targets.write_text(json.dumps(doc), encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = main(["workbook-check", "--repo-root", str(root), "--targets-file", str(targets)])
+        return code, out.getvalue()
+
+    def _marker(self, root: Path) -> Path:
+        return root / "tests/oracle/targets/win/golden_wb/PROVENANCE.json"
+
+    def test_consistent_active_capture_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = _workbook_tree(root, case_ids=["a"], golden_ids=["a"])
+            self.assertEqual(self._run(root, doc)[0], 0)
+
+    def test_stale_golden_capture_id_fails_with_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = _workbook_tree(root, case_ids=["a"], golden_ids=["a"])
+            golden = root / "tests/oracle/targets/win/golden_wb/suite.golden.json"
+            data = json.loads(golden.read_text(encoding="utf-8"))
+            data["environment"]["capture_id"] = "capture-2"
+            golden.write_text(json.dumps(data), encoding="utf-8")
+            self.assertFalse(workbook_active(doc, root))
+            self.assertTrue(workbook_declared_active(doc, root))
+            self.assertIn("capture-2 != PROVENANCE capture_id capture-1", workbook_inactive_reason(doc, root) or "")
+            code, out = self._run(root, doc)
+            self.assertEqual(code, 1)
+            self.assertIn("suite.golden.json capture_id capture-2", out)
+
+    def test_missing_marker_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = _workbook_tree(root, case_ids=["a"], golden_ids=["a"])
+            self._marker(root).unlink()
+            self.assertEqual(self._run(root, doc)[0], 0)
+
+    def test_marker_declaring_itself_inactive_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = _workbook_tree(root, case_ids=["a"], golden_ids=["a"])
+            marker = self._marker(root)
+            data = json.loads(marker.read_text(encoding="utf-8"))
+            data["active_ctest"] = False
+            data["capture_id"] = "something-else"
+            marker.write_text(json.dumps(data), encoding="utf-8")
+            self.assertFalse(workbook_declared_active(doc, root))
+            self.assertEqual(self._run(root, doc)[0], 0)
+
+
+class PartialCaptureRefusalTest(unittest.TestCase):
+    """A `--suite` capture must not rewrite part of an active golden directory."""
+
+    def _dir(self, tmp: str, marker: dict | None) -> Path:
+        path = Path(tmp)
+        if marker is not None:
+            (path / "PROVENANCE.json").write_text(json.dumps(marker), encoding="utf-8")
+        return path
+
+    def test_partial_into_active_directory_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            golden = self._dir(tmp, {"active_ctest": True, "verified": True})
+            msg = partial_capture_refusal("win", golden, ["pivot_layout"], False)
+            self.assertIn("make oracle-promote TRACK=workbook TARGET=win", msg or "")
+
+    def test_override_full_capture_and_other_directories_are_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            active = self._dir(tmp, {"active_ctest": True, "verified": True})
+            self.assertIsNone(partial_capture_refusal("win", active, ["s"], True))
+            self.assertIsNone(partial_capture_refusal("win", active, None, False))
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(partial_capture_refusal("win", self._dir(tmp, None), ["s"], False))
+        with tempfile.TemporaryDirectory() as tmp:
+            inactive = self._dir(tmp, {"active_ctest": False, "verified": True})
+            self.assertIsNone(partial_capture_refusal("win", inactive, ["s"], False))
 
 
 class ProvenancePolicyTest(unittest.TestCase):

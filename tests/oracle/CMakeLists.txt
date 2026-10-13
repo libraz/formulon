@@ -775,6 +775,15 @@ if(Python3_Interpreter_FOUND)
     COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py check
   )
   set_tests_properties(formulon_oracle_provenance_check PROPERTIES LABELS "oracle;oracle-metadata")
+  # Fails when the workbook marker declares itself active but the goldens
+  # disagree, which would otherwise register zero WorkbookOracle cases.
+  add_test(
+    NAME formulon_workbook_oracle_activation_check
+    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py workbook-check
+            --repo-root ${CMAKE_SOURCE_DIR}
+            --targets-file ${CMAKE_SOURCE_DIR}/tools/oracle/targets.yaml
+  )
+  set_tests_properties(formulon_workbook_oracle_activation_check PROPERTIES LABELS "oracle;oracle-metadata")
   formulon_add_oracle_unittest(formulon_oracle_policy_unit tools.oracle.provenance_test)
   formulon_add_oracle_unittest(formulon_macos_excel_formula_unit tools.oracle.macos_excel_test)
   formulon_add_oracle_unittest(formulon_windows_excel_driver_unit tools.oracle.windows_excel_test)

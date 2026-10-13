@@ -114,8 +114,21 @@ formula-track primary.
 4. On a product-verified Microsoft 365 Windows + Excel host, generate the
    golden:
    ```
-   python3 tools/oracle/cli.py workbook --suite <suite>
+   python3 tools/oracle/cli.py workbook --suite <suite> --golden-dir <scratch dir>
    ```
+   While the target's `golden_wb/PROVENANCE.json` is active, the generator
+   refuses a `--suite` capture into that directory: rewriting one golden
+   leaves it with a different `capture_id` than the marker and the other
+   goldens, which deactivates every `WorkbookOracle.*` case. To land new
+   or changed cases on an active target, capture the full track and
+   promote it:
+   ```
+   make oracle-gen-workbook TARGET=win-365-ja_JP GOLDEN_DIR=<staging dir>
+   make oracle-promote TRACK=workbook TARGET=win-365-ja_JP FROM=<staging dir>
+   ```
+   The `formulon_workbook_oracle_activation_check` CTest fails when the
+   marker declares itself active but a golden disagrees with it, and names
+   the first mismatch. `provenance.py workbook-check` runs the same check.
 5. Build and run the test binary:
    ```
    cmake --build build --target formulon_workbook_oracle_tests --parallel

@@ -195,6 +195,37 @@ def _resolve_target(targets_doc: Dict[str, Any], name: Optional[str]) -> Dict[st
     return record
 
 
+def _declares_active_capture(golden_dir: Path) -> bool:
+    """Whether `golden_dir` holds a PROVENANCE.json that opts into active CTest coverage."""
+
+    try:
+        marker = json.loads((golden_dir / "PROVENANCE.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return isinstance(marker, dict) and marker.get("active_ctest") is True and marker.get("verified") is True
+
+
+def partial_capture_refusal(
+    target_name: str, golden_dir: Path, suites: Optional[List[str]], allow_partial: bool
+) -> Optional[str]:
+    """Message refusing a `--suite` capture into an active golden directory, else None.
+
+    A partial capture rewrites some goldens with a new capture_id while the
+    marker and the remaining goldens keep the old one, which deactivates the
+    whole track's CTest coverage.
+    """
+
+    if not suites or allow_partial or not _declares_active_capture(golden_dir):
+        return None
+    return (
+        f"refusing partial capture (--suite) into active golden directory {golden_dir}: "
+        "it would leave goldens from two captures and deactivate every WorkbookOracle case.\n"
+        "  Capture the full track (omit --suite; staged outside the repository with --golden-dir), then run\n"
+        f"    make oracle-promote TRACK=workbook TARGET={target_name} [FROM=<staging dir>]\n"
+        "  or pass --allow-partial to overwrite anyway."
+    )
+
+
 def _golden_dir_for_target(targets_doc: Dict[str, Any], target: Dict[str, Any]) -> Path:
     """Returns the golden_wb directory for `target`.
 
@@ -366,6 +397,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         help=("Directory to write *.golden.json files to. Overrides the per-target golden_wb path."),
     )
     parser.add_argument(
+        "--allow-partial",
+        action="store_true",
+        help="Permit --suite to write into a golden directory whose PROVENANCE.json is active.",
+    )
+    parser.add_argument(
         "--divergence",
         type=Path,
         default=DEFAULT_DIVERGENCE,
@@ -419,6 +455,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         golden_dir = args.golden_dir
     else:
         golden_dir = _golden_dir_for_target(targets_doc, target)
+    refusal = partial_capture_refusal(target["_name"], golden_dir, args.suite, args.allow_partial)
+    if refusal:
+        print(f"workbook-oracle-gen: {refusal}", file=sys.stderr)
+        return 2
     if staged:
         print(
             f"workbook-oracle-gen: target {target['_name']!r} has status=wanted; "

@@ -18,6 +18,7 @@ in review scripts::
     python3 tools/oracle/provenance.py check
     python3 tools/oracle/provenance.py active-variants
     python3 tools/oracle/provenance.py workbook-active
+    python3 tools/oracle/provenance.py workbook-check
     python3 tools/oracle/provenance.py cf-active
     python3 tools/oracle/provenance.py gate-targets --track formula
 
@@ -32,7 +33,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TARGETS = Path(__file__).resolve().parent / "targets.yaml"
@@ -331,60 +332,105 @@ def validate_targets(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> Lis
     return errors
 
 
-def workbook_active(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> bool:
-    """Whether the workbook track has a manifest-approved active capture."""
+_WorkbookMarker = Tuple[Optional[str], Optional[Mapping[str, Any]], Optional[Mapping[str, Any]], Optional[Path]]
+
+
+def _workbook_marker(doc: Mapping[str, Any], repo_root: Path) -> _WorkbookMarker:
+    """Resolve the workbook primary: (name, manifest record, parsed marker, marker path)."""
 
     tracks = doc.get("tracks")
     workbook = tracks.get("workbook") if isinstance(tracks, dict) else None
     target = workbook.get("primary") if isinstance(workbook, dict) else None
     targets = doc.get("targets")
     record = targets.get(target) if isinstance(targets, dict) and isinstance(target, str) else None
-    if not isinstance(record, dict) or _record_status(record) not in {"primary", "scaffolded"}:
-        return False
+    if not isinstance(record, dict):
+        return None, None, None, None
     marker = _target_root(repo_root, target, record) / "golden_wb" / "PROVENANCE.json"
-    if not marker.exists():
-        return False
     try:
         provenance = json.loads(marker.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
+        return target, record, None, marker
+    return target, record, provenance if isinstance(provenance, dict) else None, marker
+
+
+def workbook_declared_active(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> bool:
+    """Whether the workbook primary's marker claims to be active coverage.
+
+    This is only the marker's own claim (status, classification, verified,
+    active_ctest); `workbook_inactive_reason` says whether the goldens back it.
+    """
+
+    _target, record, provenance, _marker = _workbook_marker(doc, repo_root)
+    if record is None or provenance is None or _record_status(record) not in {"primary", "scaffolded"}:
         return False
-    if not isinstance(provenance, dict) or not _capture_marker_ready(provenance, target, record):
-        return False
+    return (
+        provenance.get("status") == record.get("status")
+        and provenance.get("classification") in {"active", "verified"}
+        and provenance.get("verified") is True
+        and provenance.get("active_ctest") is True
+    )
+
+
+def workbook_inactive_reason(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> Optional[str]:
+    """First reason the workbook track is not active coverage, or None if it is."""
+
+    target, record, provenance, marker = _workbook_marker(doc, repo_root)
+    if record is None or target is None or marker is None:
+        return "tracks.workbook.primary does not name a manifest target"
+    if _record_status(record) not in {"primary", "scaffolded"}:
+        return f"target {target!r} has status {_record_status(record)!r}, not primary/scaffolded"
+    if not marker.exists():
+        return f"{marker} does not exist"
+    if provenance is None:
+        return f"{marker.name} is unreadable or not a JSON object"
+    if not _capture_marker_ready(provenance, target, record):
+        return (
+            f"{marker.name} is internally inconsistent (target, product, locale, m365_sentinel, "
+            "capture_id, required/captured suites or suite_inventory)"
+        )
     if provenance.get("status") != record.get("status"):
-        return False
+        return f"{marker.name} status {provenance.get('status')!r} != manifest status {record.get('status')!r}"
     if provenance.get("classification") not in {"active", "verified"}:
-        return False
+        return f"{marker.name} classification {provenance.get('classification')!r} is not active/verified"
     if provenance.get("verified") is not True or provenance.get("active_ctest") is not True:
-        return False
+        return f"{marker.name} does not set verified=true and active_ctest=true"
     capture_id = provenance.get("capture_id")
     if not isinstance(capture_id, str) or not capture_id or provenance.get("all_suites_same_capture") is not True:
-        return False
+        return f"{marker.name} lacks a capture_id with all_suites_same_capture=true"
     cases_dir = repo_root / "tests" / "oracle" / "cases_wb"
     required = sorted(path.name[: -len(".case.json")] for path in cases_dir.glob("*.case.json"))
     if sorted(provenance.get("required_suites", [])) != required:
-        return False
+        return f"{marker.name} required_suites {sorted(provenance.get('required_suites', []))} != case files {required}"
     inventory = {item["suite"]: item for item in provenance["suite_inventory"]}
     import hashlib
 
+    golden_root = marker.parent
     for suite in required:
-        golden = _target_root(repo_root, target, record) / "golden_wb" / f"{suite}.golden.json"
+        name = f"{suite}.golden.json"
+        golden = golden_root / name
         if not golden.exists():
-            return False
+            return f"{name} is missing"
         try:
             doc_json = json.loads(golden.read_text(encoding="utf-8"))
             env = doc_json.get("environment")
             cases = doc_json.get("cases")
             case_doc = json.loads((cases_dir / f"{suite}.case.json").read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return False
-        if not isinstance(env, dict) or env.get("capture_id") != capture_id:
-            return False
-        if env.get("excel_locale") != record.get("locale") or env.get("excel_version") != provenance.get("product"):
-            return False
+        except (OSError, json.JSONDecodeError, AttributeError) as exc:
+            return f"{name} or its case file is unreadable: {exc}"
+        if not isinstance(env, dict):
+            return f"{name} has no environment block"
+        if env.get("capture_id") != capture_id:
+            return f"{name} capture_id {env.get('capture_id')} != PROVENANCE capture_id {capture_id}"
+        if env.get("excel_locale") != record.get("locale"):
+            return f"{name} excel_locale {env.get('excel_locale')!r} != manifest locale {record.get('locale')!r}"
+        if env.get("excel_version") != provenance.get("product"):
+            return (
+                f"{name} excel_version {env.get('excel_version')!r} != PROVENANCE product {provenance.get('product')!r}"
+            )
         if not isinstance(cases, list) or not cases:
-            return False
+            return f"{name} has no cases"
         if not isinstance(case_doc, dict):
-            return False
+            return f"{suite}.case.json is not a JSON object"
         expected_ids = {case.get("id") for case in case_doc.get("cases", []) if isinstance(case, dict)}
         golden_ids = {case.get("id") for case in cases if isinstance(case, dict)}
         # Deliberately directional. A golden asserting an id no case file
@@ -395,14 +441,24 @@ def workbook_active(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> bool
         # silently dropped every already-captured case in the tree to zero
         # coverage, so asking for new coverage cost you the coverage you
         # had.
-        if not expected_ids or not golden_ids or not golden_ids.issubset(expected_ids):
-            return False
+        if not expected_ids:
+            return f"{suite}.case.json declares no cases"
+        if not golden_ids.issubset(expected_ids):
+            return f"{name} asserts ids not declared by the case file: {sorted(golden_ids - expected_ids, key=str)}"
         item = inventory.get(suite)
-        if item is None or item.get("case_count") != len(cases):
-            return False
+        if item is None:
+            return f"{marker.name} suite_inventory has no entry for {suite}"
+        if item.get("case_count") != len(cases):
+            return f"{name} has {len(cases)} cases, PROVENANCE case_count is {item.get('case_count')}"
         if hashlib.sha256(golden.read_bytes()).hexdigest() != item.get("sha256"):
-            return False
-    return True
+            return f"{name} sha256 differs from PROVENANCE suite_inventory"
+    return None
+
+
+def workbook_active(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> bool:
+    """Whether the workbook track has a manifest-approved active capture."""
+
+    return workbook_inactive_reason(doc, repo_root) is None
 
 
 def _cf_primary(doc: Mapping[str, Any]) -> Optional[str]:
@@ -605,6 +661,32 @@ def _cmd_workbook_active(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_workbook_check(args: argparse.Namespace) -> int:
+    """Fail when the workbook marker claims to be active but the goldens disagree.
+
+    A marker that is absent or declares itself inactive (the state before a
+    capture lands) passes; a declared-active marker that `workbook_active`
+    rejects would silently register zero WorkbookOracle cases, so it fails.
+    """
+
+    try:
+        doc = _load_yaml(args.targets_file)
+    except RuntimeError as exc:
+        print(f"oracle-provenance: {exc}", file=sys.stderr)
+        return 2
+    if not workbook_declared_active(doc, args.repo_root):
+        print("workbook oracle: marker absent or not declared active; nothing to check")
+        return 0
+    reason = workbook_inactive_reason(doc, args.repo_root)
+    if reason is None:
+        print("workbook oracle: active")
+        return 0
+    print(f"FAIL workbook oracle declared active but not consistent: {reason}")
+    print("  WorkbookOracle.* would register zero cases. Recapture the full track and run")
+    print("  `make oracle-promote TRACK=workbook`.")
+    return 1
+
+
 def _cmd_cf_active(args: argparse.Namespace) -> int:
     try:
         doc = _load_yaml(args.targets_file)
@@ -622,7 +704,10 @@ def _cmd_cf_active(args: argparse.Namespace) -> int:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("check", "active-variants", "workbook-active", "cf-active", "gate-targets"))
+    parser.add_argument(
+        "command",
+        choices=("check", "active-variants", "workbook-active", "workbook-check", "cf-active", "gate-targets"),
+    )
     parser.add_argument("--track", default="formula", help="Track whose gate targets `gate-targets` prints.")
     parser.add_argument("--targets-file", type=Path, default=DEFAULT_TARGETS)
     parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
@@ -633,6 +718,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return _cmd_gate_targets(args)
     if args.command == "workbook-active":
         return _cmd_workbook_active(args)
+    if args.command == "workbook-check":
+        return _cmd_workbook_check(args)
     if args.command == "cf-active":
         return _cmd_cf_active(args)
     return _cmd_active(args)
