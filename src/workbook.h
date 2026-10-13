@@ -587,7 +587,7 @@ class Workbook {
   /// Replaces the workbook's passthrough-part list. Move-assigns to
   /// keep the I/O hand-off allocation-free for archives carrying many
   /// preserved parts.
-  void set_passthrough_parts(std::vector<PassthroughPart> parts) { passthrough_parts_ = std::move(parts); }
+  void set_passthrough_parts(std::vector<PassthroughPart> parts);
 
   /// Erases the passthrough entries marked non-zero in `tombstones`, keeping
   /// the surviving entries in their original order and moving their payload
@@ -1141,6 +1141,11 @@ class Workbook {
   // 1904 date system flag parsed from `<workbookPr date1904>`. Default
   // false (1900 system).
   bool date1904_ = false;
+  // Most callers receive parts from a reader that already sorted them by
+  // package path. Keep that fact across the move-only workbook operations so
+  // the common insertion path can use one lower-bound search instead of
+  // rescanning and sorting every retained part after each append.
+  bool passthrough_parts_sorted_ = true;
   // Pinned wall-clock reading for the clock seam above. Empty by default so
   // an untouched workbook behaves exactly as it did before the seam existed.
   std::optional<date_time::CivilTime> pinned_now_;

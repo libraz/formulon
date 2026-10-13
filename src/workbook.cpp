@@ -115,10 +115,46 @@ Workbook::Workbook(Workbook&&) noexcept = default;
 Workbook& Workbook::operator=(Workbook&&) noexcept = default;
 Workbook::~Workbook() = default;
 
+void Workbook::set_passthrough_parts(std::vector<PassthroughPart> parts) {
+  passthrough_parts_ = std::move(parts);
+  passthrough_parts_sorted_ = true;
+  for (std::size_t i = 1; i < passthrough_parts_.size(); ++i) {
+    if (passthrough_parts_[i].path < passthrough_parts_[i - 1U].path) {
+      passthrough_parts_sorted_ = false;
+      break;
+    }
+  }
+}
+
 Expected<void, Error> Workbook::add_passthrough_part(PassthroughPart part) {
   if (part.path.empty()) {
     return make_error(FormulonErrorCode::kInvalidArgument, "add_passthrough_part: empty part path");
   }
+
+  if (passthrough_parts_sorted_) {
+    // Readers and most callers hand us path-sorted parts. Locate the insertion
+    // point directly; equal paths are rejected before the vector is mutated.
+    std::size_t first = 0;
+    std::size_t last = passthrough_parts_.size();
+    while (first < last) {
+      const std::size_t middle = first + (last - first) / 2U;
+      if (passthrough_parts_[middle].path < part.path) {
+        first = middle + 1U;
+      } else {
+        last = middle;
+      }
+    }
+    if (first < passthrough_parts_.size() && passthrough_parts_[first].path == part.path) {
+      return make_error(FormulonErrorCode::kInvalidArgument, "add_passthrough_part: part already present",
+                        "path=" + part.path);
+    }
+    passthrough_parts_.insert(passthrough_parts_.begin() + static_cast<std::ptrdiff_t>(first), std::move(part));
+    return Expected<void, Error>::Ok();
+  }
+
+  // A caller may intentionally hand over an unsorted list through the setter.
+  // Preserve the old append-then-stable-sort behaviour for that one fallback
+  // path, and only mark the invariant restored after the successful sort.
   for (const PassthroughPart& existing : passthrough_parts_) {
     if (existing.path == part.path) {
       return make_error(FormulonErrorCode::kInvalidArgument, "add_passthrough_part: part already present",
@@ -127,6 +163,7 @@ Expected<void, Error> Workbook::add_passthrough_part(PassthroughPart part) {
   }
   passthrough_parts_.push_back(std::move(part));
   sort_passthrough_parts(passthrough_parts_);
+  passthrough_parts_sorted_ = true;
   return Expected<void, Error>::Ok();
 }
 

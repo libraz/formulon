@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -24,6 +25,15 @@ const PassthroughPart* FindPart(const Workbook& wb, const std::string& path) {
     }
   }
   return nullptr;
+}
+
+std::vector<std::string> PartPaths(const Workbook& wb) {
+  std::vector<std::string> paths;
+  paths.reserve(wb.passthrough_parts().size());
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    paths.push_back(part.path);
+  }
+  return paths;
 }
 
 Workbook RoundTrip(const Workbook& wb) {
@@ -359,6 +369,88 @@ TEST(Theme, PassthroughPartApiRejectsDuplicatesAndMissing) {
   wb.add_workbook_relationship("t", "xl/x.bin");
   wb.add_workbook_relationship("t", "xl/x.bin");
   EXPECT_EQ(wb.unknown_workbook_rels().size(), 1U);
+}
+
+TEST(Theme, PassthroughPartInsertionPreservesOrderAndRecordIdentity) {
+  Workbook wb = Workbook::create();
+  PassthroughPart retained("xl/media/retained.bin", "application/x-retained", {1, 2, 3});
+  retained.retained_origin = PassthroughPart::RetainedOrigin::kStyles;
+  retained.origin_cache_id = 17U;
+  retained.model_fingerprint = 0x1234U;
+  const std::uint8_t* const payload = retained.bytes.data();
+
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(std::move(retained))));
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/media/z.bin", "", {9}))));
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/media/a.bin", "", {0}))));
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/media/m.bin", "", {8}))));
+
+  EXPECT_EQ(PartPaths(wb),
+            (std::vector<std::string>{"xl/media/a.bin", "xl/media/m.bin", "xl/media/retained.bin", "xl/media/z.bin"}));
+  const PassthroughPart* found = FindPart(wb, "xl/media/retained.bin");
+  ASSERT_NE(found, nullptr);
+  EXPECT_EQ(found->bytes.data(), payload);
+  EXPECT_EQ(found->bytes, (std::vector<std::uint8_t>{1, 2, 3}));
+  EXPECT_EQ(found->content_type, "application/x-retained");
+  EXPECT_EQ(found->retained_origin, PassthroughPart::RetainedOrigin::kStyles);
+  EXPECT_EQ(found->origin_cache_id, 17U);
+  ASSERT_TRUE(found->model_fingerprint.has_value());
+  EXPECT_EQ(*found->model_fingerprint, 0x1234U);
+
+  EXPECT_FALSE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart{})));
+  EXPECT_EQ(PartPaths(wb),
+            (std::vector<std::string>{"xl/media/a.bin", "xl/media/m.bin", "xl/media/retained.bin", "xl/media/z.bin"}));
+}
+
+TEST(Theme, PassthroughPartSetterRetainsUnsortedOrderUntilSuccessfulInsertion) {
+  Workbook wb = Workbook::create();
+  std::vector<PassthroughPart> parts;
+  parts.emplace_back("xl/z.bin", "z/type", std::vector<std::uint8_t>{9});
+  parts.emplace_back("xl/a.bin", "a/type", std::vector<std::uint8_t>{1});
+  parts.emplace_back("xl/m.bin", "m/type", std::vector<std::uint8_t>{5});
+  wb.set_passthrough_parts(std::move(parts));
+
+  EXPECT_EQ(PartPaths(wb), (std::vector<std::string>{"xl/z.bin", "xl/a.bin", "xl/m.bin"}));
+  EXPECT_FALSE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/a.bin", "changed", {7}))));
+  EXPECT_EQ(PartPaths(wb), (std::vector<std::string>{"xl/z.bin", "xl/a.bin", "xl/m.bin"}));
+  EXPECT_EQ(wb.passthrough_parts()[1].bytes, (std::vector<std::uint8_t>{1}));
+  EXPECT_EQ(wb.passthrough_parts()[1].content_type, "a/type");
+
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/b.bin", "b/type", {2}))));
+  EXPECT_EQ(PartPaths(wb), (std::vector<std::string>{"xl/a.bin", "xl/b.bin", "xl/m.bin", "xl/z.bin"}));
+
+  ASSERT_TRUE(static_cast<bool>(wb.replace_passthrough_part("xl/m.bin", {6, 6})));
+  EXPECT_EQ(PartPaths(wb), (std::vector<std::string>{"xl/a.bin", "xl/b.bin", "xl/m.bin", "xl/z.bin"}));
+  EXPECT_EQ(wb.passthrough_parts()[2].bytes, (std::vector<std::uint8_t>{6, 6}));
+  EXPECT_EQ(wb.passthrough_parts()[2].content_type, "m/type");
+}
+
+TEST(Theme, PassthroughPartSortedDuplicatesAndMovesPreserveStableOrder) {
+  Workbook wb = Workbook::create();
+  std::vector<PassthroughPart> parts;
+  parts.emplace_back("xl/a.bin", "first", std::vector<std::uint8_t>{1});
+  parts.emplace_back("xl/a.bin", "second", std::vector<std::uint8_t>{2});
+  parts.emplace_back("xl/c.bin", "third", std::vector<std::uint8_t>{3});
+  wb.set_passthrough_parts(std::move(parts));
+
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/b.bin", "between", {4}))));
+  ASSERT_EQ(wb.passthrough_parts().size(), 4U);
+  EXPECT_EQ(PartPaths(wb), (std::vector<std::string>{"xl/a.bin", "xl/a.bin", "xl/b.bin", "xl/c.bin"}));
+  EXPECT_EQ(wb.passthrough_parts()[0].content_type, "first");
+  EXPECT_EQ(wb.passthrough_parts()[1].content_type, "second");
+
+  std::vector<std::uint8_t> tombstones{0, 1, 0, 0};
+  ASSERT_TRUE(static_cast<bool>(wb.erase_passthrough_parts(std::move(tombstones))));
+  EXPECT_EQ(PartPaths(wb), (std::vector<std::string>{"xl/a.bin", "xl/b.bin", "xl/c.bin"}));
+
+  Workbook moved = std::move(wb);
+  ASSERT_TRUE(static_cast<bool>(moved.add_passthrough_part(PassthroughPart("xl/d.bin", "last", {5}))));
+  EXPECT_EQ(PartPaths(moved), (std::vector<std::string>{"xl/a.bin", "xl/b.bin", "xl/c.bin", "xl/d.bin"}));
+
+  Workbook assigned = Workbook::create();
+  assigned = std::move(moved);
+  ASSERT_TRUE(static_cast<bool>(assigned.add_passthrough_part(PassthroughPart("xl/e.bin", "last", {6}))));
+  EXPECT_EQ(PartPaths(assigned),
+            (std::vector<std::string>{"xl/a.bin", "xl/b.bin", "xl/c.bin", "xl/d.bin", "xl/e.bin"}));
 }
 
 }  // namespace
