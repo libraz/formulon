@@ -82,6 +82,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   says. The pivot XML writer no longer emits the default subtotal item next
   to custom ones, and the reader treats custom functions as replacing the
   default subtotal.
+- Excel opens pivot tables authored with Formulon: a table with two or more
+  data fields writes the Values field on an axis (Excel refused the file
+  without it), a pivot field is flagged `dataField` only when a data field
+  refers to it, and authored tables carry Excel's `showAll="0"`,
+  `updatedVersion`, location offsets and values-row extension, plus
+  `refreshOnLoad` on the cache so Excel renders them on open.
 
 ## [0.15.1] - 2026-10-12
 

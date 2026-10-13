@@ -145,6 +145,12 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
   append_xml_attr(out, "xmlns:r", kRelsNs);
   append_xml_attr(out, "r:id", "rId1");
   append_xml_attr_uint(out, "recordCount", cache.records().size());
+  // A cache built in memory has no rendered pivot cells behind it, so ask
+  // Excel to rebuild the report on open. A cache read from a file carries
+  // its own attributes and is left as authored.
+  if (cache.passthrough_attrs().empty()) {
+    append_xml_attr(out, "refreshOnLoad", "1");
+  }
   // Re-emit any unmodelled root attributes captured on read (refreshedBy,
   // refreshedDate, createdVersion, ...).
   append_raw_attrs(out, cache.passthrough_attrs());

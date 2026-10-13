@@ -387,6 +387,23 @@ TEST(PivotCacheWriter, RecordCountAttributeMatchesRecords) {
 }
 
 // ---------------------------------------------------------------------------
+// refreshOnLoad: set for in-memory caches, left alone for captured ones
+// ---------------------------------------------------------------------------
+
+TEST(PivotCacheWriter, AuthoredCacheAsksExcelToRefreshOnLoad) {
+  pivot::PivotCache cache;
+  EXPECT_NE(write_pivot_cache_definition(cache).find(" refreshOnLoad=\"1\""), std::string::npos);
+}
+
+TEST(PivotCacheWriter, CapturedRootAttributesSuppressSynthesisedRefreshOnLoad) {
+  pivot::PivotCache cache;
+  cache.mutable_passthrough_attrs().emplace_back("createdVersion", "8");
+  const std::string xml = write_pivot_cache_definition(cache);
+  EXPECT_EQ(xml.find("refreshOnLoad"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("createdVersion=\"8\""), std::string::npos) << xml;
+}
+
+// ---------------------------------------------------------------------------
 // Record cell index / inline discrimination (item d)
 // ---------------------------------------------------------------------------
 

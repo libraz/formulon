@@ -296,6 +296,11 @@ TEST(PivotTableWriter, AllAxesRoundTrip) {
     f.custom_name = "F";
     table.mutable_fields().push_back(std::move(f));
   }
+  // The Value-axis field survives only while a data field refers to it.
+  pivot::PivotDataField df;
+  df.name = "Sum of F";
+  df.field_index = 2U;
+  table.mutable_data_fields().push_back(std::move(df));
 
   const std::string xml = write_pivot_table_definition(table);
   auto parsed_or = read_pivot_table_definition(Bytes(xml));
@@ -715,6 +720,7 @@ TEST(PivotTableWriter, UnusedFieldRoundTripsAsNoneAndDataCaptionEmitted) {
   xml.append("<pivotField/>");                   // unused: None
   xml.append("<pivotField dataField=\"1\"/>");   // Value
   xml.append("</pivotFields>");
+  xml.append("<dataFields count=\"1\"><dataField name=\"X\" fld=\"2\"/></dataFields>");
   xml.append("</pivotTableDefinition>");
 
   auto parsed_or = read_pivot_table_definition(Bytes(xml));
@@ -729,7 +735,7 @@ TEST(PivotTableWriter, UnusedFieldRoundTripsAsNoneAndDataCaptionEmitted) {
   const std::string written = write_pivot_table_definition(table);
   EXPECT_NE(written.find("dataCaption=\"Vals\""), std::string::npos) << written;
   // The unused field emits neither an axis nor dataField="1".
-  EXPECT_NE(written.find("<pivotField/>"), std::string::npos) << written;
+  EXPECT_NE(written.find("<pivotField showAll=\"0\"/>"), std::string::npos) << written;
 
   // A second round trip keeps the None field None (no dataField="1" creep).
   auto reparsed_or = read_pivot_table_definition(Bytes(written));
@@ -784,10 +790,11 @@ TEST(PivotTableWriter, RowFieldFormDecidesLayout) {
     const char* written_field_attrs;
   };
   const Case cases[] = {
-      {" outline=\"1\" outlineData=\"1\"", "", pivot::PivotLayout::Compact, "<pivotField axis=\"axisRow\"/>"},
+      {" outline=\"1\" outlineData=\"1\"", "", pivot::PivotLayout::Compact,
+       "<pivotField axis=\"axisRow\" showAll=\"0\"/>"},
       {" compact=\"0\" compactData=\"0\"", " compact=\"0\" outline=\"0\"", pivot::PivotLayout::Tabular,
-       "<pivotField axis=\"axisRow\" compact=\"0\" outline=\"0\"/>"},
-      {"", " compact=\"0\"", pivot::PivotLayout::Outline, "<pivotField axis=\"axisRow\" compact=\"0\"/>"},
+       "<pivotField axis=\"axisRow\" showAll=\"0\" compact=\"0\" outline=\"0\"/>"},
+      {"", " compact=\"0\"", pivot::PivotLayout::Outline, "<pivotField axis=\"axisRow\" showAll=\"0\" compact=\"0\"/>"},
   };
   for (const Case& c : cases) {
     std::string xml(kXmlDecl);
@@ -981,11 +988,143 @@ TEST(PivotTableWriter, ValueFieldWithoutItemsStaysSelfClosing) {
   amount.source_name = "Amount";
   amount.axis = pivot::PivotAxis::Value;
   table.mutable_fields().push_back(std::move(amount));
+  pivot::PivotDataField df;
+  df.name = "Sum of Amount";
+  df.field_index = 0U;
+  table.mutable_data_fields().push_back(std::move(df));
 
   const std::string xml = write_pivot_table_definition(table);
 
   EXPECT_EQ(xml.find("<items"), std::string::npos) << xml;
-  EXPECT_NE(xml.find("<pivotField dataField=\"1\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<pivotField dataField=\"1\" showAll=\"0\"/>"), std::string::npos) << xml;
+}
+
+// ---------------------------------------------------------------------------
+// Excel-accepted definition shape for authored tables
+// ---------------------------------------------------------------------------
+
+namespace {
+
+pivot::PivotTable TableWithRowAndDataFields(std::size_t data_field_count) {
+  pivot::PivotTable table;
+  table.set_name("PT");
+  table.set_anchor(2U, 0U, 10U, 3U);
+  pivot::PivotField region;
+  region.axis = pivot::PivotAxis::Row;
+  table.mutable_fields().push_back(std::move(region));
+  table.mutable_row_field_order().push_back(0U);
+  for (std::size_t i = 0; i < data_field_count; ++i) {
+    pivot::PivotField amount;
+    amount.axis = pivot::PivotAxis::Value;
+    table.mutable_fields().push_back(std::move(amount));
+    pivot::PivotDataField df;
+    df.name = "Sum of F" + std::to_string(i);
+    df.field_index = static_cast<std::uint32_t>(i + 1U);
+    table.mutable_data_fields().push_back(std::move(df));
+  }
+  return table;
+}
+
+}  // namespace
+
+TEST(PivotTableWriter, TwoDataFieldsPlaceValuesMarkerOnColumns) {
+  const std::string xml = write_pivot_table_definition(TableWithRowAndDataFields(2U));
+  EXPECT_NE(xml.find("<colFields count=\"1\"><field x=\"-2\"/></colFields>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("firstHeaderRow=\"0\" firstDataRow=\"1\" firstDataCol=\"1\""), std::string::npos) << xml;
+
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << parsed_or.error().message;
+  EXPECT_TRUE(parsed_or.value().col_field_order().empty());
+  ASSERT_TRUE(parsed_or.value().col_values_position().has_value());
+  EXPECT_EQ(parsed_or.value().col_values_position().value(), 0U);
+}
+
+TEST(PivotTableWriter, TwoDataFieldsKeepModelValuesMarkerOnRows) {
+  pivot::PivotTable table = TableWithRowAndDataFields(2U);
+  table.set_row_values_position(1U);
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("<rowFields count=\"2\"><field x=\"0\"/><field x=\"-2\"/></rowFields>"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("<colFields"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\""), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, TwoDataFieldsAppendValuesMarkerAfterRealColumnFields) {
+  pivot::PivotTable table = TableWithRowAndDataFields(2U);
+  pivot::PivotField product;
+  product.axis = pivot::PivotAxis::Col;
+  table.mutable_fields().push_back(std::move(product));
+  table.mutable_col_field_order().push_back(3U);
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("<colFields count=\"2\"><field x=\"3\"/><field x=\"-2\"/></colFields>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("firstHeaderRow=\"1\" firstDataRow=\"3\" firstDataCol=\"1\""), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, SingleDataFieldWritesNoValuesMarker) {
+  const std::string xml = write_pivot_table_definition(TableWithRowAndDataFields(1U));
+  EXPECT_EQ(xml.find("<colFields"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("-2"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\""), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, TabularTwoRowFieldsDeriveFirstDataCol) {
+  pivot::PivotTable table = TableWithRowAndDataFields(2U);
+  table.set_layout(pivot::PivotLayout::Tabular);
+  pivot::PivotField product;
+  product.axis = pivot::PivotAxis::Row;
+  table.mutable_fields().push_back(std::move(product));
+  table.mutable_row_field_order().push_back(3U);
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("firstHeaderRow=\"0\" firstDataRow=\"1\" firstDataCol=\"2\""), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, AuthoredFieldsCarryShowAllZeroAndUpdatedVersion) {
+  const std::string xml = write_pivot_table_definition(TableWithRowAndDataFields(1U));
+  EXPECT_NE(xml.find("<pivotField axis=\"axisRow\" showAll=\"0\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<pivotField dataField=\"1\" showAll=\"0\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find(" updatedVersion=\"8\""), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, AuthoredTableCarriesValuesRowExtension) {
+  const std::string xml = write_pivot_table_definition(TableWithRowAndDataFields(1U));
+  EXPECT_NE(xml.find("<extLst><ext uri=\"{962EF5D1-5CA2-4c93-8EF4-DBF5C05439D2}\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<x14:pivotTableDefinition hideValuesRow=\"1\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("</ext></extLst></pivotTableDefinition>"), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, CapturedExtLstIsKeptAndNotDuplicated) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("<location ref=\"A1:B2\"/><pivotFields count=\"0\"/>");
+  xml.append("<extLst><ext uri=\"{AAAA}\"/></extLst></pivotTableDefinition>");
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << parsed_or.error().message;
+  const std::string written = write_pivot_table_definition(parsed_or.value());
+  EXPECT_NE(written.find("{AAAA}"), std::string::npos) << written;
+  EXPECT_EQ(written.find("hideValuesRow"), std::string::npos) << written;
+  EXPECT_EQ(written.find("<extLst"), written.rfind("<extLst")) << written;
+}
+
+TEST(PivotTableWriter, DataFieldFlagFollowsTheDataFieldList) {
+  pivot::PivotTable table = TableWithRowAndDataFields(2U);
+  // Qty (field 2) is no longer aggregated, so it must not claim dataField="1".
+  table.mutable_data_fields().pop_back();
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("<pivotField dataField=\"1\" showAll=\"0\"/><pivotField showAll=\"0\"/>"), std::string::npos)
+      << xml;
+}
+
+TEST(PivotTableWriter, CapturedShowAllAndUpdatedVersionAreNotDuplicated) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\" updatedVersion=\"6\">");
+  xml.append("<location ref=\"A1:B2\"/><pivotFields count=\"1\"><pivotField axis=\"axisRow\" showAll=\"1\"/>");
+  xml.append("</pivotFields><rowFields count=\"1\"><field x=\"0\"/></rowFields></pivotTableDefinition>");
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << parsed_or.error().message;
+  const std::string written = write_pivot_table_definition(parsed_or.value());
+  EXPECT_NE(written.find("updatedVersion=\"6\""), std::string::npos) << written;
+  EXPECT_EQ(written.find("updatedVersion=\"8\""), std::string::npos) << written;
+  EXPECT_NE(written.find("showAll=\"1\""), std::string::npos) << written;
+  EXPECT_EQ(written.find("showAll=\"0\""), std::string::npos) << written;
 }
 
 // ---------------------------------------------------------------------------

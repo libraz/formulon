@@ -10,6 +10,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "io/pivot_attr_names.h"
@@ -52,19 +53,41 @@ void AppendOptionalLocationAttr(std::string& out, std::string_view name, std::op
   append_xml_attr_uint(out, name, *value);
 }
 
+/// Excel's x14 extension that hides the caption row of the Values field.
+constexpr std::string_view kValuesRowExtLst =
+    "<extLst><ext uri=\"{962EF5D1-5CA2-4c93-8EF4-DBF5C05439D2}\" "
+    "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">"
+    "<x14:pivotTableDefinition hideValuesRow=\"1\" "
+    "xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\"/></ext></extLst>";
+
+/// True when `attrs` already carries `name` (an attribute captured on read).
+bool HasRawAttr(const std::vector<std::pair<std::string, std::string>>& attrs, std::string_view name) {
+  for (const auto& attr : attrs) {
+    if (attr.first == name) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /// Emits one `<pivotField>` element. Self-closing when there are no
 /// items; open/close pair otherwise.
-void AppendPivotField(std::string& out, const pivot::PivotField& field, pivot::PivotLayout layout) {
+///
+/// `used_as_data` says whether some `<dataField fld>` refers to this field.
+/// Excel refuses a `dataField="1"` field that no data field refers to, so the
+/// flag follows the data-field list rather than the field's axis.
+void AppendPivotField(std::string& out, const pivot::PivotField& field, pivot::PivotLayout layout, bool used_as_data) {
   out.append("<pivotField");
-  if (field.axis == pivot::PivotAxis::Value) {
-    // Excel-saved files use `dataField="1"` for Value-axis fields; the
-    // reader accepts both that and `axis="axisValues"`, but emitting
-    // `dataField="1"` keeps the integration-test fixture grammar.
-    out.append(" dataField=\"1\"");
-  } else if (field.axis == pivot::PivotAxis::None) {
-    // Unused ("available") field: emit neither an axis nor dataField.
-  } else {
+  if (field.axis != pivot::PivotAxis::Value && field.axis != pivot::PivotAxis::None) {
     append_xml_attr(out, "axis", enum_name(kPivotAxisNames, field.axis));
+  }
+  if (used_as_data) {
+    out.append(" dataField=\"1\"");
+  }
+  // Excel writes `showAll="0"` on every field; without it a refresh shows
+  // items that have no data. A value captured on read is re-emitted below.
+  if (!HasRawAttr(field.passthrough_attrs, "showAll")) {
+    out.append(" showAll=\"0\"");
   }
   if (!field.custom_name.empty()) {
     append_xml_attr(out, "name", field.custom_name);
@@ -238,6 +261,33 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
   out.append("</dataFields>");
 }
 
+/// Location attributes Excel derives from the report shape, used when the
+/// model carries no authored value. `col_entries` / `row_entries` count the
+/// real fields plus the Values marker on that axis.
+struct LocationDefaults {
+  std::uint32_t first_header_row = 1;
+  std::uint32_t first_data_row = 1;
+  std::uint32_t first_data_col = 1;
+};
+
+LocationDefaults ComputeLocationDefaults(pivot::PivotLayout layout, std::size_t row_entries, std::size_t col_entries,
+                                         bool col_values_only) {
+  LocationDefaults d;
+  if (col_values_only) {
+    // Only the Values marker on columns: no "Column Labels" header row.
+    d.first_header_row = 0;
+    d.first_data_row = 1;
+  } else {
+    d.first_data_row = static_cast<std::uint32_t>(1U + col_entries);
+  }
+  if (row_entries > 0) {
+    d.first_data_col = layout == pivot::PivotLayout::Compact ? 1U : static_cast<std::uint32_t>(row_entries);
+  } else if (col_entries > 0) {
+    d.first_data_col = 0;
+  }
+  return d;
+}
+
 }  // namespace
 
 std::string write_pivot_table_definition(const pivot::PivotTable& table,
@@ -285,9 +335,27 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table,
       out.append(" compact=\"0\" compactData=\"0\" outline=\"1\" outlineData=\"1\"");
       break;
   }
+  // Without `updatedVersion` Excel adds a stray caption row above the
+  // pivot on refresh; a captured value is re-emitted below.
+  if (!HasRawAttr(table.passthrough_attrs(), "updatedVersion")) {
+    out.append(" updatedVersion=\"8\"");
+  }
   // Re-emit any unmodelled root attributes captured on read.
   append_raw_attrs(out, table.passthrough_attrs());
   out.append(">");
+
+  // Excel refuses a definition with two or more data fields unless the
+  // Values pseudo-field sits on an axis; default it to the end of the
+  // column axis when the model records no position.
+  std::optional<std::size_t> col_values_position = table.col_values_position();
+  if (table.data_fields().size() >= 2U && !table.row_values_position().has_value() &&
+      !col_values_position.has_value()) {
+    col_values_position = table.col_field_order().size();
+  }
+  const std::size_t row_entries = table.row_field_order().size() + (table.row_values_position().has_value() ? 1U : 0U);
+  const std::size_t col_entries = table.col_field_order().size() + (col_values_position.has_value() ? 1U : 0U);
+  const LocationDefaults loc_defaults = ComputeLocationDefaults(
+      table.layout(), row_entries, col_entries, col_values_position.has_value() && table.col_field_order().empty());
 
   out.append("<location ref=\"");
   // Anchor is unconditionally emitted as a range; an empty table
@@ -315,9 +383,12 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table,
   // ECMA-376 requires firstHeaderRow / firstDataRow / firstDataCol. Preserve
   // authored values, including explicit zero, while supplying the schema's
   // independent fallback for a model built without those attributes.
-  AppendOptionalLocationAttr(out, "firstHeaderRow", table.location_first_header_row().value_or(1U));
-  AppendOptionalLocationAttr(out, "firstDataRow", table.location_first_data_row().value_or(1U));
-  AppendOptionalLocationAttr(out, "firstDataCol", table.location_first_data_col().value_or(1U));
+  AppendOptionalLocationAttr(out, "firstHeaderRow",
+                             table.location_first_header_row().value_or(loc_defaults.first_header_row));
+  AppendOptionalLocationAttr(out, "firstDataRow",
+                             table.location_first_data_row().value_or(loc_defaults.first_data_row));
+  AppendOptionalLocationAttr(out, "firstDataCol",
+                             table.location_first_data_col().value_or(loc_defaults.first_data_col));
   // rowPageCount / colPageCount are optional and stay presence-based.
   AppendOptionalLocationAttr(out, "rowPageCount", table.location_row_page_count());
   AppendOptionalLocationAttr(out, "colPageCount", table.location_col_page_count());
@@ -329,8 +400,12 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table,
   out.append("<pivotFields count=\"");
   out.append(std::to_string(table.fields().size()));
   out.append("\">");
-  for (const pivot::PivotField& f : table.fields()) {
-    AppendPivotField(out, f, table.layout());
+  for (std::size_t i = 0; i < table.fields().size(); ++i) {
+    bool used_as_data = false;
+    for (const pivot::PivotDataField& df : table.data_fields()) {
+      used_as_data = used_as_data || df.field_index == i;
+    }
+    AppendPivotField(out, table.fields()[i], table.layout(), used_as_data);
   }
   out.append("</pivotFields>");
 
@@ -340,8 +415,8 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table,
   // `<rowItems>` and any other post-rowFields unmodelled elements.
   out.append(table.raw_passthrough_after_row_fields());
 
-  if (!table.col_field_order().empty() || table.col_values_position().has_value()) {
-    AppendFieldOrder(out, "colFields", table.col_field_order(), table.col_values_position());
+  if (!table.col_field_order().empty() || col_values_position.has_value()) {
+    AppendFieldOrder(out, "colFields", table.col_field_order(), col_values_position);
   }
   // `<colItems>` / `<pageFields>` and other post-colFields unmodelled
   // elements, which the schema places before `<dataFields>`.
@@ -380,6 +455,12 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table,
   // leave every bin empty.
   if (!table.raw_passthrough_xml().empty()) {
     out.append(table.raw_passthrough_xml());
+  }
+  // Without this extension Excel adds a caption row above the pivot on
+  // refresh. A table read from a file keeps its own `<extLst>`.
+  if (!HasRawAttr(table.passthrough_attrs(), "updatedVersion") &&
+      table.raw_passthrough_xml().find("<extLst") == std::string::npos) {
+    out.append(kValuesRowExtLst);
   }
 
   out.append("</pivotTableDefinition>");
