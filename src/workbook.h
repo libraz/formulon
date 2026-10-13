@@ -589,6 +589,11 @@ class Workbook {
   /// preserved parts.
   void set_passthrough_parts(std::vector<PassthroughPart> parts) { passthrough_parts_ = std::move(parts); }
 
+  /// Erases the passthrough entries marked non-zero in `tombstones`, keeping
+  /// the surviving entries in their original order and moving their payload
+  /// buffers instead of copying them. The mask must have one byte per entry.
+  Expected<void, Error> erase_passthrough_parts(std::vector<std::uint8_t> tombstones);
+
   /// Adds one passthrough part, keeping the list ordered by path. Returns
   /// `kInvalidArgument` when a part with the same path is already present or
   /// the path is empty.

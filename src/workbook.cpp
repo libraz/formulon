@@ -130,6 +130,26 @@ Expected<void, Error> Workbook::add_passthrough_part(PassthroughPart part) {
   return Expected<void, Error>::Ok();
 }
 
+Expected<void, Error> Workbook::erase_passthrough_parts(std::vector<std::uint8_t> tombstones) {
+  if (tombstones.size() != passthrough_parts_.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument,
+                      "erase_passthrough_parts: tombstone mask size does not match part count");
+  }
+  auto write = passthrough_parts_.begin();
+  for (std::size_t i = 0; i < passthrough_parts_.size(); ++i) {
+    if (tombstones[i] != 0U) {
+      continue;
+    }
+    auto read = passthrough_parts_.begin() + static_cast<std::ptrdiff_t>(i);
+    if (write != read) {
+      *write = std::move(*read);
+    }
+    ++write;
+  }
+  passthrough_parts_.erase(write, passthrough_parts_.end());
+  return Expected<void, Error>::Ok();
+}
+
 Expected<void, Error> Workbook::replace_passthrough_part(std::string_view path, std::vector<std::uint8_t> bytes) {
   for (PassthroughPart& existing : passthrough_parts_) {
     if (existing.path == path) {

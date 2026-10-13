@@ -1,7 +1,9 @@
 #include "io/ooxml/part_graph.h"
 
-#include <algorithm>
+#include <cstddef>
 #include <cstring>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include "io/ooxml/package_validator.h"
@@ -86,34 +88,126 @@ bool referenced(const Workbook& wb, const std::vector<PassthroughPart>& parts, c
 }
 
 void remove_orphans(Workbook& wb, std::vector<std::string> candidates) {
-  std::vector<PassthroughPart> parts = wb.passthrough_parts();
-  const auto find = [&parts](const std::string& path) {
-    return std::find_if(parts.begin(), parts.end(), [&path](const PassthroughPart& p) { return p.path == path; });
+  const std::vector<PassthroughPart>& parts = wb.passthrough_parts();
+  if (candidates.empty() || parts.empty()) {
+    return;
+  }
+  const std::size_t part_count = parts.size();
+  std::vector<std::uint8_t> tombstones(part_count, 0U);
+  struct PathIndex {
+    std::vector<std::size_t> indices;
+    std::size_t next_live = 0;
   };
-  bool removed = false;
+  std::unordered_map<std::string, std::size_t> path_indices;
+  std::vector<PathIndex> paths;
+  paths.reserve(part_count);
+  path_indices.reserve(part_count);
+  for (std::size_t i = 0; i < part_count; ++i) {
+    const auto [it, inserted] = path_indices.try_emplace(parts[i].path, paths.size());
+    if (inserted) {
+      paths.emplace_back();
+    }
+    paths[it->second].indices.push_back(i);
+  }
+
+  // A malformed rels part leaves the graph incomplete, so nothing is removed.
+  std::vector<std::vector<std::string>> outgoing(part_count);
+  std::unordered_map<std::string, std::size_t> inbound;
+  inbound.reserve(part_count);
+  for (std::size_t i = 0; i < part_count; ++i) {
+    if (!strings::ends_with(parts[i].path, ".rels")) {
+      continue;
+    }
+    auto rels = parse_part_rels(parts[i].bytes, dir_of(dir_of(parts[i].path)));
+    if (!rels) {
+      return;
+    }
+    std::vector<std::string>& targets = outgoing[i];
+    targets.reserve(rels.value().size());
+    for (const DrawingRel& rel : rels.value()) {
+      if (rel.external) {
+        continue;
+      }
+      targets.push_back(rel.target);
+      ++inbound[rel.target];
+    }
+  }
+
+  std::unordered_set<std::string> model_roots;
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    const Sheet& sheet = wb.sheet(i);
+    model_roots.insert(sheet.drawing_rel_target());
+    for (const UnknownRelationship& rel : sheet.unknown_relationships()) {
+      if (!rel.target_external) {
+        model_roots.insert(rel.target);
+      }
+    }
+  }
+  for (const UnknownRelationship& rel : wb.unknown_workbook_rels()) {
+    if (rel.target_external) {
+      continue;
+    }
+    model_roots.insert(rel.target);
+    model_roots.insert("xl/" + rel.target);
+  }
+
+  const auto first_live = [&path_indices, &paths, &tombstones](const std::string& path) {
+    const auto found = path_indices.find(path);
+    if (found == path_indices.end()) {
+      return tombstones.size();
+    }
+    PathIndex& index = paths[found->second];
+    while (index.next_live < index.indices.size() && tombstones[index.indices[index.next_live]] != 0U) {
+      ++index.next_live;
+    }
+    return index.next_live == index.indices.size() ? tombstones.size() : index.indices[index.next_live];
+  };
+  const auto decrement_outgoing = [&inbound](const std::vector<std::string>& targets) {
+    for (const std::string& target : targets) {
+      const auto found = inbound.find(target);
+      if (found != inbound.end() && found->second != 0U) {
+        --found->second;
+      }
+    }
+  };
+  const auto tombstone = [&tombstones](std::size_t index) {
+    if (tombstones[index] != 0U) {
+      return;
+    }
+    tombstones[index] = 1U;
+  };
+
+  bool removed_primary = false;
   while (!candidates.empty()) {
     const std::string path = std::move(candidates.back());
     candidates.pop_back();
-    auto it = find(path);
-    if (it == parts.end() || referenced(wb, parts, path)) {
+    const std::size_t primary = first_live(path);
+    if (primary == part_count || model_roots.find(path) != model_roots.end()) {
       continue;
     }
-    parts.erase(it);
-    removed = true;
-    auto rels_it = find(rels_path_for_part(path));
-    if (rels_it != parts.end()) {
-      if (auto rels = parse_part_rels(rels_it->bytes, dir_of(path))) {
-        for (DrawingRel& rel : rels.value()) {
-          if (!rel.external) {
-            candidates.push_back(std::move(rel.target));
-          }
-        }
+    const auto inbound_for_path = inbound.find(path);
+    if (inbound_for_path != inbound.end() && inbound_for_path->second != 0U) {
+      continue;
+    }
+
+    removed_primary = true;
+    tombstone(primary);
+    if (strings::ends_with(path, ".rels")) {
+      decrement_outgoing(outgoing[primary]);
+    }
+
+    const std::size_t rels_index = first_live(rels_path_for_part(path));
+    if (rels_index != part_count) {
+      // LIFO: the last relationship is processed first.
+      for (const std::string& target : outgoing[rels_index]) {
+        candidates.push_back(target);
       }
-      parts.erase(rels_it);
+      tombstone(rels_index);
+      decrement_outgoing(outgoing[rels_index]);
     }
   }
-  if (removed) {
-    wb.set_passthrough_parts(std::move(parts));
+  if (removed_primary) {
+    (void)wb.erase_passthrough_parts(std::move(tombstones));
   }
 }
 
