@@ -434,6 +434,16 @@ TEST(BuiltinsEngineering, BitRShiftMagnitudeCapNegative) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+TEST(BuiltinsEngineering, BitShiftCoercesValueBeforeShift) {
+  const Value lshift = EvalSource("=BITLSHIFT(-1,\"bad\")");
+  ASSERT_TRUE(lshift.is_error());
+  EXPECT_EQ(lshift.as_error(), ErrorCode::Num);
+
+  const Value rshift = EvalSource("=BITRSHIFT(\"bad\",54)");
+  ASSERT_TRUE(rshift.is_error());
+  EXPECT_EQ(rshift.as_error(), ErrorCode::Value);
+}
+
 TEST(BuiltinsEngineering, BitAndMaxInput) {
   // 2^48 - 1 is the maximum allowed input.
   const Value v = EvalSource("=BITAND(281474976710655,281474976710655)");

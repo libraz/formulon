@@ -263,49 +263,23 @@ std::string format_complex(double re, double im, char suffix) {
   re = normalize_zero(re);
   im = normalize_zero(im);
 
-  // Pure real.
   if (im == 0.0) {
-    std::string out;
-    out += locale_number_text(re);
-    return out;
+    return locale_number_text(re);
   }
 
-  // Pure imaginary.
-  if (re == 0.0) {
-    std::string out;
-    if (im == 1.0) {
-      // Bare "+i" is rendered as "i".
-      out.push_back(suffix);
-      return out;
-    }
-    if (im == -1.0) {
-      out.push_back('-');
-      out.push_back(suffix);
-      return out;
-    }
-    out += locale_number_text(im);
-    out.push_back(suffix);
-    return out;
-  }
-
-  // Full form.
   std::string out;
-  out += locale_number_text(re);
-  if (im > 0.0) {
-    out.push_back('+');
+  if (re != 0.0) {
+    out += locale_number_text(re);
+    if (im > 0.0) {
+      out.push_back('+');
+    }
   }
-  // im < 0 -> the number text already carries the leading '-'.
-  if (im == 1.0) {
-    // Drop the coefficient but keep the '+' we just appended.
-    out.push_back(suffix);
-    return out;
-  }
+
   if (im == -1.0) {
     out.push_back('-');
-    out.push_back(suffix);
-    return out;
+  } else if (im != 1.0) {
+    out += locale_number_text(im);
   }
-  out += locale_number_text(im);
   out.push_back(suffix);
   return out;
 }

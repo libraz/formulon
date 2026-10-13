@@ -102,6 +102,12 @@ TEST(BuiltinsComplex, FormatPureReal) {
   EXPECT_EQ(v.as_text(), "3");
 }
 
+TEST(BuiltinsComplex, FormatSignedZeroComponents) {
+  const Value v = EvalSource("=COMPLEX(-0,-0)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "0");
+}
+
 TEST(BuiltinsComplex, FormatFullPlusOneCoefDropped) {
   const Value v = EvalSource("=COMPLEX(3,1)");
   ASSERT_TRUE(v.is_text());

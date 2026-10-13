@@ -427,7 +427,7 @@ Expected<std::uint64_t, ErrorCode> apply_bit_shift(std::uint64_t n, int shift_le
   return n >> static_cast<unsigned>(amount);
 }
 
-Value BitLShift(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+Value apply_bit_shift_args(const Value* args, bool left) {
   auto n = coerce_48_bit_unsigned(args[0]);
   if (!n) {
     return Value::error(n.error());
@@ -436,30 +436,21 @@ Value BitLShift(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!shift) {
     return Value::error(shift.error());
   }
-  // BITLSHIFT interprets positive shift as "to the left".
-  auto result = apply_bit_shift(n.value(), shift.value());
+
+  // The shift coercion bounds the magnitude to 53 before this negation.
+  auto result = apply_bit_shift(n.value(), left ? shift.value() : -shift.value());
   if (!result) {
     return Value::error(result.error());
   }
   return Value::number(static_cast<double>(result.value()));
 }
 
+Value BitLShift(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return apply_bit_shift_args(args, true);
+}
+
 Value BitRShift(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto n = coerce_48_bit_unsigned(args[0]);
-  if (!n) {
-    return Value::error(n.error());
-  }
-  auto shift = coerce_shift(args[1]);
-  if (!shift) {
-    return Value::error(shift.error());
-  }
-  // BITRSHIFT interprets positive shift as "to the right" -- invert for
-  // the shared helper whose convention is "positive = left".
-  auto result = apply_bit_shift(n.value(), -shift.value());
-  if (!result) {
-    return Value::error(result.error());
-  }
-  return Value::number(static_cast<double>(result.value()));
+  return apply_bit_shift_args(args, false);
 }
 
 // ---------------------------------------------------------------------------
