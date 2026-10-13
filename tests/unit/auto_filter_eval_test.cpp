@@ -250,8 +250,8 @@ constexpr FilterEqualityCase kFilterEqualityCases[] = {
     {"circled one vs 1", "\xE2\x91\xA0", "1", true, true, false, false},
     {"fullwidth A vs A", "\xEF\xBC\xA1", "A", true, true, false, false},
     {"katakana a vs hiragana a", "\xE3\x82\xA2", "\xE3\x81\x82", true, true, false, false},
-    {"iteration marks", "\xE3\x82\x9D", "\xE3\x83\xBD", true, false, true, false},
-    {"sharp s vs ss", "\xC3\x9F", "ss", true, true, true, false},
+    {"iteration marks", "\xE3\x82\x9D", "\xE3\x83\xBD", true, false, true, true},
+    {"sharp s vs ss", "\xC3\x9F", "ss", true, true, true, true},
     {"a-umlaut vs a", "\xC3\xA4", "a", false, false, false, false},
     {"A vs a", "A", "a", true, true, true, true},
 };

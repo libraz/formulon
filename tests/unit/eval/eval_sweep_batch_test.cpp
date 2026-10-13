@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "eval/tree_walker/broadcast.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "util/test_eval_helpers.h"
@@ -216,29 +217,24 @@ TEST(UnionArg, OverlappingAreasAreDoubleCounted) {
 // 5. Half-width voicing composition in classic lookups (VLOOKUP / MATCH)
 // ---------------------------------------------------------------------------
 
-// Half-width katakana KA (U+FF76) + half-width voiced mark (U+FF9E): a base +
-// standalone voicing mark that Excel composes to full-width GA (U+30AC) before
-// text comparison. The lookup key uses the decomposed half-width form; the
-// stored cell uses the composed full-width form.
+// Half-width katakana KA (U+FF76) + half-width voiced mark (U+FF9E) against
+// full-width GA (U+30AC). Mac and Windows ja-JP both keep the width difference
+// for exact VLOOKUP / MATCH, while XLOOKUP ignores it.
 constexpr const char* kHalfWidthKaVoiced = "\xEF\xBD\xB6\xEF\xBE\x9E";  // ｶﾞ
 constexpr const char* kFullWidthGa = "\xE3\x82\xAC";                    // ガ
 
-TEST(HalfWidthVoicing, VlookupComposesLikeXlookup) {
-  Workbook wb = WorkbookBuilder().sheet("Sheet1").text_cell("A1", kFullWidthGa).cell("B1", 100.0).build();
-  const std::string vlookup = std::string("=VLOOKUP(\"") + kHalfWidthKaVoiced + "\", A1:B1, 2, FALSE)";
-  const Value v = EvalSourceIn(vlookup, wb, wb.sheet(0));
-  EXPECT_VALUE_NUMBER(v, 100.0);
-  // XLOOKUP already composes; confirm classic now agrees.
-  const std::string xlookup = std::string("=XLOOKUP(\"") + kHalfWidthKaVoiced + "\", A1:A1, B1:B1)";
-  const Value vx = EvalSourceIn(xlookup, wb, wb.sheet(0));
-  EXPECT_VALUE_NUMBER(vx, 100.0);
-}
-
-TEST(HalfWidthVoicing, MatchComposesLikeXmatch) {
-  Workbook wb = WorkbookBuilder().sheet("Sheet1").text_cell("A1", kFullWidthGa).build();
-  const std::string match = std::string("=MATCH(\"") + kHalfWidthKaVoiced + "\", A1:A1, 0)";
-  const Value v = EvalSourceIn(match, wb, wb.sheet(0));
-  EXPECT_VALUE_NUMBER(v, 1.0);
+TEST(HalfWidthVoicing, ExactClassicLookupsKeepWidthWhereXlookupIgnoresIt) {
+  for (const ExcelProfile profile : {mac_365_ja_jp_profile(), win_365_ja_jp_profile()}) {
+    SCOPED_TRACE(excel_profile_id(profile));
+    Workbook wb = WorkbookBuilder().sheet("Sheet1").text_cell("A1", kFullWidthGa).cell("B1", 100.0).build();
+    wb.set_excel_profile(profile);
+    const std::string vlookup = std::string("=VLOOKUP(\"") + kHalfWidthKaVoiced + "\", A1:B1, 2, FALSE)";
+    EXPECT_VALUE_ERROR(EvalSourceIn(vlookup, wb, wb.sheet(0)), ErrorCode::NA);
+    const std::string match = std::string("=MATCH(\"") + kHalfWidthKaVoiced + "\", A1:A1, 0)";
+    EXPECT_VALUE_ERROR(EvalSourceIn(match, wb, wb.sheet(0)), ErrorCode::NA);
+    const std::string xlookup = std::string("=XLOOKUP(\"") + kHalfWidthKaVoiced + "\", A1:A1, B1:B1)";
+    EXPECT_VALUE_NUMBER(EvalSourceIn(xlookup, wb, wb.sheet(0)), 100.0);
+  }
 }
 
 }  // namespace

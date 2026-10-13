@@ -142,8 +142,8 @@ struct ParsedCriterion {
   /// selected by `op`/`has_wildcard`, themselves fixed).
   const std::string& cached_folded_rhs(ExcelProfile profile, bool unescape_first) const;
 
-  /// Pre-folded `rhs_text` and its `kCompare` collation key for Mac profiles,
-  /// cached per (profile, unescape_first) like `cached_folded_rhs`.
+  /// Pre-folded `rhs_text` and its `kCompare` collation key, cached per
+  /// (profile, unescape_first) like `cached_folded_rhs`.
   struct CollationRhs {
     std::string prefolded;
     std::string key;

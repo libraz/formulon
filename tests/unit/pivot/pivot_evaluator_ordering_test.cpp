@@ -383,9 +383,9 @@ TEST(PivotEvaluatorCollation, MacItemOrderFollowsDynamicCollation) {
   EXPECT_EQ(zh_thai.rows[0].label, thai_e_ko);
 }
 
-// Windows keeps the byte model (win-365-ja_JP unique_case_insensitive_text,
-// xlookup_exact_voiced_compose, xlookup_exact_hira_eq_kata).
-TEST(PivotEvaluatorCollation, WindowsJaJpKeepsTheByteModel) {
+// Windows merges case and width but not kana type (win-365-ja_JP
+// unique_case_insensitive_text, xlookup_exact_voiced_compose, xlookup_exact_hira_eq_kata).
+TEST(PivotEvaluatorCollation, WindowsJaJpMergesAtDynamicStrength) {
   const ExcelProfile win = win_365_ja_jp_profile();
   EXPECT_EQ(evaluate_labels({"A", "a"}, win).rows.size(), 1U);
   EXPECT_EQ(evaluate_labels({"\xEF\xBD\xB6\xEF\xBE\x9E", "\xE3\x82\xAC"}, win).rows.size(), 1U);

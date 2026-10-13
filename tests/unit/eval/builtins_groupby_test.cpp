@@ -1358,15 +1358,15 @@ TEST(GroupByCollation, MacKeyOrderFollowsDynamicCollation) {
   }
 }
 
-// Windows keeps the byte model: ASCII case folds and a half-width voicing
-// mark composes (win-365-ja_JP unique_case_insensitive_text and
-// xlookup_exact_voiced_compose), but hiragana and katakana stay apart
-// (xlookup_exact_hira_eq_kata).
-TEST(GroupByCollation, WindowsJaJpKeepsTheByteModel) {
+// Windows groups across case, width and expansions but keeps hiragana and
+// katakana apart (win-365-ja_JP colfn_groupby_*).
+TEST(GroupByCollation, WindowsJaJpGroups) {
   const ExcelProfile win = win_365_ja_jp_profile();
   EXPECT_EQ(EvalNumber("=ROWS(GROUPBY({\"A\";\"a\"},{1;2},SUM,0,0))", win), 1.0);
   EXPECT_EQ(EvalNumber("=ROWS(GROUPBY({\"\xEF\xBD\xB6\xEF\xBE\x9E\";\"\xE3\x82\xAC\"},{1;2},SUM,0,0))", win), 1.0);
   EXPECT_EQ(EvalNumber("=ROWS(GROUPBY({\"\xE3\x81\x82\";\"\xE3\x82\xA2\"},{1;2},SUM,0,0))", win), 2.0);
+  EXPECT_EQ(EvalNumber("=ROWS(GROUPBY({\"\xEF\xBC\xA1\";\"A\"},{1;2},SUM,0,0))", win), 1.0);  // Ａ
+  EXPECT_EQ(EvalNumber("=ROWS(GROUPBY({\"\xC3\x9F\";\"ss\"},{1;2},SUM,0,0))", win), 1.0);     // ß
 }
 
 // PIVOTBY merges row and column items at the same strength as GROUPBY, so
@@ -1398,7 +1398,7 @@ TEST(PivotByCollation, MacRowOrderFollowsDynamicCollation) {
   EXPECT_EQ(EvalText(src, MacProfile(ExcelLocale::kEnUS)), "\xE3\x81\x8B\xE3\x83\xBC");
 }
 
-TEST(PivotByCollation, WindowsJaJpKeepsTheByteModel) {
+TEST(PivotByCollation, WindowsJaJpGroups) {
   const ExcelProfile win = win_365_ja_jp_profile();
   EXPECT_EQ(EvalNumber("=ROWS(PIVOTBY({\"A\";\"a\"},{\"X\";\"X\"},{1;2},SUM,0,0,,0))", win), 2.0);
   EXPECT_EQ(EvalNumber("=ROWS(PIVOTBY({\"\xE3\x81\x82\";\"\xE3\x82\xA2\"},{\"X\";\"X\"},{1;2},SUM,0,0,,0))", win), 3.0);

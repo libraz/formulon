@@ -931,12 +931,12 @@ struct EqCase {
 
 // Equality under the compare strength, one row per measured pair.
 const EqCase kEqCases[] = {
-    {"ß", "ss", true, true, true, false},   {"①", "1", true, true, false, false},
+    {"ß", "ss", true, true, true, true},    {"①", "1", true, true, false, false},
     {"Ａ", "A", true, true, false, false},  {"ｱ", "ア", true, true, false, false},
     {"ア", "あ", true, true, false, false}, {"かー", "かあ", true, false, false, false},
-    {"ä", "a", false, false, false, false}, {"Ä", "ä", true, true, true, false},
+    {"ä", "a", false, false, false, false}, {"Ä", "ä", true, true, true, true},
     {"A", "a", true, true, true, true},     {"ｶﾞ", "ガ", true, true, false, false},
-    {"ゝ", "ヽ", true, false, true, false},
+    {"ゝ", "ヽ", true, false, true, true},
 };
 
 constexpr ExcelProfile kMacZhCn{ExcelHost::kMac365, ExcelLocale::kZhCN};

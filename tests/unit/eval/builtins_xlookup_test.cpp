@@ -81,31 +81,23 @@ TEST(BuiltinsXLookup, ArrayLiteralLookupAndReturnArrays) {
   EXPECT_DOUBLE_EQ(v.as_number(), 20.0);
 }
 
-TEST(BuiltinsXLookup, ExactFullwidthDigitsFollowHostFolding) {
-  struct ProfileCase {
-    ExcelProfile profile;
-    bool folds_fullwidth_digits;
-  };
-  const ProfileCase cases[] = {
-      {mac_365_ja_jp_profile(), true},
-      {mac_365_en_us_profile(), true},
-      {win_365_ja_jp_profile(), false},
-      {win_365_en_us_profile(), false},
+// Both hosts fold full-width digits for an exact XLOOKUP (Mac and Windows ja-JP measured).
+TEST(BuiltinsXLookup, ExactFullwidthDigitsFoldOnEveryHost) {
+  const ExcelProfile profiles[] = {
+      mac_365_ja_jp_profile(),
+      mac_365_en_us_profile(),
+      win_365_ja_jp_profile(),
+      win_365_en_us_profile(),
   };
 
-  for (const ProfileCase& test_case : cases) {
-    SCOPED_TRACE(excel_profile_id(test_case.profile));
+  for (const ExcelProfile& profile : profiles) {
+    SCOPED_TRACE(excel_profile_id(profile));
     Workbook wb = Workbook::create();
-    wb.set_excel_profile(test_case.profile);
+    wb.set_excel_profile(profile);
     const Value v =
         formulon::test::EvalSourceIn("=XLOOKUP(\"１２３\",{\"123\";\"456\"},{\"hit\";\"miss\"})", wb, wb.sheet(0));
-    if (test_case.folds_fullwidth_digits) {
-      ASSERT_TRUE(v.is_text());
-      EXPECT_EQ(v.as_text(), "hit");
-    } else {
-      ASSERT_TRUE(v.is_error());
-      EXPECT_EQ(v.as_error(), ErrorCode::NA);
-    }
+    ASSERT_TRUE(v.is_text());
+    EXPECT_EQ(v.as_text(), "hit");
   }
 }
 
@@ -1039,7 +1031,7 @@ TEST(BuiltinsXMatchCollation, MacZhCnFixture) {
   }
 }
 
-TEST(BuiltinsXLookupCollation, WindowsKeepsByteModel) {
+TEST(BuiltinsXLookupCollation, WindowsJaFixture) {
   {
     const ExcelProfile p = win_365_ja_jp_profile();
     ScopedEvalProfile scope(p);
@@ -1050,7 +1042,19 @@ TEST(BuiltinsXLookupCollation, WindowsKeepsByteModel) {
     const ExcelProfile p = win_365_ja_jp_profile();
     ScopedEvalProfile scope(p);
     const Value v = EvalWithProfile(R"(=XLOOKUP("Ａ",{"zz";"A"},{1;2}))", p);
-    EXPECT_TRUE(ExpectHit(v, 0)) << R"(=XLOOKUP("Ａ",{"zz";"A"},{1;2}))";
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=XLOOKUP("Ａ",{"zz";"A"},{1;2}))";
+  }
+  {
+    const ExcelProfile p = win_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=XLOOKUP("ア",{"zz";"あ"},{1;2}))", p);
+    EXPECT_TRUE(ExpectHit(v, 0)) << R"(=XLOOKUP("ア",{"zz";"あ"},{1;2}))";
+  }
+  {
+    const ExcelProfile p = win_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=XLOOKUP("ae",{"zz";"æ"},{1;2}))", p);
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=XLOOKUP("ae",{"zz";"æ"},{1;2}))";
   }
 }
 

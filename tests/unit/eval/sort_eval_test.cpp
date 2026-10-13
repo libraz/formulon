@@ -612,8 +612,9 @@ const CollationPair kMacZh[] = {
 };
 
 const CollationPair kWinJa[] = {
-    {"ß", "ss", true, 2U, 2U}, {"ｶﾞ", "ガ", false, 1U, 1U}, {"ア", "あ", true, 2U, 2U},     {"Ａ", "A", true, 2U, 2U},
-    {"①", "1", true, 2U, 2U},  {"ä", "a", true, 2U, 2U},    {"かー", "かあ", true, 2U, 2U}, {"เก", "กา", true, 2U, 2U},
+    {"ß", "ss", false, 1U, 1U},     {"ｶﾞ", "ガ", false, 1U, 1U}, {"ア", "あ", false, 1U, 2U},
+    {"Ａ", "A", false, 1U, 1U},     {"①", "1", false, 1U, 1U},   {"ä", "a", true, 2U, 2U},
+    {"かー", "かあ", true, 2U, 2U}, {"เก", "กา", false, 1U, 2U},
 };
 
 struct CollationCase {

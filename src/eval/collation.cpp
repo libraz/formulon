@@ -4,6 +4,15 @@
 // arrays for the locale's Han rule, a string is tokenized with the contextual
 // rules (half-width voicing, ja prolonged-sound and iteration marks, zh repeat
 // marks, Thai prefix vowels), and each token's elements feed the key parts.
+//
+// Windows profiles reuse the locale's tables under the host rules measured on
+// win-365-ja_JP, an NLS-style word sort: script blocks keep the base order with
+// the locale's Han rule; hyphen, apostrophe and C0/C1 controls weigh only after
+// every other level; width and enclosed or super/subscript forms differ at the
+// compare-only level, kana type and smallness at the dynamic tertiary level;
+// ligatures expand exactly; prolonged-sound and iteration marks follow any kana
+// and sort above their substitute; number forms take their own primaries before
+// the digits; Thai prefix vowels stay in place and sort before the consonants.
 
 #include "eval/collation.h"
 
@@ -20,9 +29,7 @@
 
 #include "eval/collation_table.h"
 #include "eval/dbcs_table.h"
-#include "eval/jp_fold.h"
 #include "eval/jp_kana_table.h"
-#include "utils/strings.h"
 #include "utils/text_ops.h"
 
 namespace formulon {
@@ -55,6 +62,20 @@ struct Weight {
   std::uint8_t cls;
   std::int32_t p, s, d, c;
 };
+
+// Piecewise shift of primaries: (first source P, its target P), sorted by source.
+using Segments = std::vector<std::pair<std::int32_t, std::int32_t>>;
+
+std::int32_t apply_segments(const Segments& segments, std::int32_t p) noexcept {
+  auto it =
+      std::upper_bound(segments.begin(), segments.end(), p,
+                       [](std::int32_t v, const std::pair<std::int32_t, std::int32_t>& s) { return v < s.first; });
+  if (it == segments.begin()) {
+    return p;
+  }
+  --it;
+  return it->second + (p - it->first);
+}
 
 // ---------------------------------------------------------------- table decoding
 
@@ -278,13 +299,16 @@ std::vector<std::uint32_t> codepage_ideographs(const cd::CollationHanRule& rule)
 struct LocaleData {
   const BaseData* base;
   std::uint8_t rules;
-  std::vector<std::pair<std::int32_t, std::int32_t>> remap;
+  Segments remap;
   RunTable overrides;
   ExpansionTable expansions;
   std::vector<std::uint16_t> han_p;         // per unified ideograph: locale P, 0 when the rule does not place it
   std::vector<std::uint32_t> readings;      // per unified ideograph: syllable << 16 | rank, 0 when none
   std::array<std::int32_t, 128> ascii_p{};  // printable ASCII primary, -1 when not a plain primary
   bool ascii_fast = false;
+  bool win = false;                 // Windows host rules
+  std::vector<Segments> win_order;  // Windows: applied in turn to every table primary
+  std::int32_t number_form_p = 0;   // Windows: primary of the first number form
 
   explicit LocaleData(const cd::CollationLocaleTable& t)
       : base(t.base == cd::kCollationLocales[static_cast<std::size_t>(ExcelLocale::kEnUS)].base ? &base_w()
@@ -317,15 +341,13 @@ struct LocaleData {
     ascii_p.fill(-1);
   }
 
-  std::int32_t remap_p(std::int32_t p) const noexcept {
-    auto it =
-        std::upper_bound(remap.begin(), remap.end(), p,
-                         [](std::int32_t v, const std::pair<std::int32_t, std::int32_t>& s) { return v < s.first; });
-    if (it == remap.begin()) {
-      it = remap.end();
+  std::int32_t remap_p(std::int32_t p) const noexcept { return apply_segments(remap, p); }
+
+  std::int32_t order_p(std::int32_t p) const noexcept {
+    for (const Segments& s : win_order) {
+      p = apply_segments(s, p);
     }
-    --it;
-    return it->second + (p - it->first);
+    return p;
   }
 
   void load_codepage(const cd::CollationHanRule& rule) {
@@ -599,6 +621,69 @@ std::uint32_t halfwidth_voiced(std::uint32_t half, std::uint32_t mark) noexcept 
   return full >= 0x30CFu && full <= 0x30DDu && (full - 0x30CFu) % 3u == 0 ? full + 2u : 0;
 }
 
+// ---------------------------------------------------------------- Windows host
+
+constexpr std::int32_t kNumberFormCount = 3 + 0x40;  // U+00BC..U+00BE, U+2150..U+218F
+constexpr std::int32_t kWinMarkD = 4;                // kana mark above its substitute
+
+std::int32_t number_form_index(std::uint32_t cp) noexcept {
+  if (cp >= 0x00BCu && cp <= 0x00BEu) {
+    return static_cast<std::int32_t>(cp - 0x00BCu);
+  }
+  return cp >= 0x2150u && cp <= 0x218Fu ? static_cast<std::int32_t>(cp - 0x2150u) + 3 : -1;
+}
+
+// Word-sort weight of a hyphen or apostrophe, compared after every other level; -1 otherwise.
+std::int32_t win_word_weight(std::uint32_t cp) noexcept {
+  switch (cp) {
+    case 0x0027u:
+    case 0xFF07u:
+      return 1;
+    case 0x002Du:
+    case 0xFF0Du:
+      return 2;
+    default:
+      return -1;
+  }
+}
+
+// Compare-only width weight: -1 for narrow forms, 1 for wide, enclosed and super/subscript forms.
+std::int32_t win_width(std::uint32_t cp) noexcept {
+  if (cp == 0xFF9Eu || cp == 0xFF9Fu) {
+    return 0;
+  }
+  if ((cp >= 0xFF61u && cp <= 0xFFDCu) || (cp >= 0xFFE8u && cp <= 0xFFEEu)) {
+    return -1;
+  }
+  if (cp == 0x3000u || (cp >= 0xFF01u && cp <= 0xFF60u) || (cp >= 0xFFE0u && cp <= 0xFFE6u)) {
+    return 1;
+  }
+  if (cp == 0x00B2u || cp == 0x00B3u || cp == 0x00B9u || (cp >= 0x2070u && cp <= 0x209Fu) ||
+      (cp >= 0x2460u && cp <= 0x24FFu)) {
+    return 1;
+  }
+  return 0;
+}
+
+bool is_small_kana(std::uint32_t cp) noexcept {
+  static constexpr std::uint16_t kSmall[] = {0x3041u, 0x3043u, 0x3045u, 0x3047u, 0x3049u, 0x3063u, 0x3083u, 0x3085u,
+                                             0x3087u, 0x308Eu, 0x3095u, 0x3096u, 0x30A1u, 0x30A3u, 0x30A5u, 0x30A7u,
+                                             0x30A9u, 0x30C3u, 0x30E3u, 0x30E5u, 0x30E7u, 0x30EEu, 0x30F5u, 0x30F6u};
+  if ((cp >= 0x31F0u && cp <= 0x31FFu) || (cp >= 0xFF67u && cp <= 0xFF6Fu)) {
+    return true;
+  }
+  return std::find(std::begin(kSmall), std::end(kSmall), cp) != std::end(kSmall);
+}
+
+// Kana-type weight at the dynamic tertiary level: katakana below hiragana, small below normal.
+std::int32_t win_kana_d(std::uint32_t cp) noexcept {
+  const bool hiragana = is_hiragana_letter(cp);
+  if (!hiragana && !is_katakana_letter(cp)) {
+    return 0;
+  }
+  return (hiragana ? 2 : 0) + (is_small_kana(cp) ? 0 : 1);
+}
+
 // ---------------------------------------------------------------- elements
 
 std::int32_t out_of_range_index(std::uint32_t cp) noexcept {
@@ -635,7 +720,10 @@ bool single_weight(const LocaleData& L, std::uint32_t cp, Weight* out) noexcept 
   return false;
 }
 
-void append_elements(const LocaleData& L, std::uint32_t cp, bool expand, std::vector<Weight>& out, int depth) {
+void append_elements(const LocaleData& L, std::uint32_t cp, bool expand, std::vector<Weight>& out, int depth);
+
+// Elements from the locale tables; on Windows, primaries pass through `order_p`.
+void append_table_elements(const LocaleData& L, std::uint32_t cp, bool expand, std::vector<Weight>& out, int depth) {
   const Expansion* e = L.expansions.find(cp);
   const ExpansionTable* pool = &L.expansions;
   if (e == nullptr && !L.overrides.contains(cp)) {
@@ -643,7 +731,7 @@ void append_elements(const LocaleData& L, std::uint32_t cp, bool expand, std::ve
     pool = &L.base->expansions;
   }
   if (e != nullptr && depth < 8) {
-    std::int32_t level = e->level;
+    std::int32_t level = L.win ? 0 : e->level;  // Windows expansions are exact
     if (!expand && e->count > 1 && level == 0) {
       level = 3;  // unexpanded, it still differs from its targets at the compare-only level
     }
@@ -657,6 +745,9 @@ void append_elements(const LocaleData& L, std::uint32_t cp, bool expand, std::ve
   }
   Weight w{};
   if (single_weight(L, cp, &w)) {
+    if (w.cls == kBase) {
+      w.p = L.order_p(w.p);
+    }
     out.push_back(w);
     return;
   }
@@ -681,18 +772,113 @@ void append_elements(const LocaleData& L, std::uint32_t cp, bool expand, std::ve
     return;
   }
   if (cp <= 0xFFFFu) {
-    out.push_back(Weight{kBase, L.remap_p(L.base->out_of_range_p + out_of_range_index(cp)), 0, 0, 0});
+    out.push_back(Weight{kBase, L.order_p(L.remap_p(L.base->out_of_range_p + out_of_range_index(cp))), 0, 0, 0});
     return;
   }
   // Supplementary planes follow every BMP weight in code-point order, as two primaries.
   const std::int32_t top = L.remap_p(L.base->out_of_range_p + out_of_range_index(0xFFFFu));
   const auto index = static_cast<std::int32_t>(cp - 0x10000u);
-  out.push_back(Weight{kBase, top + 1 + index / (kMaxWeight + 1), 0, 0, 0});
+  out.push_back(Weight{kBase, L.order_p(top + 1 + index / (kMaxWeight + 1)), 0, 0, 0});
   out.push_back(Weight{kBase, index % (kMaxWeight + 1), 0, 0, 0});
 }
 
-LocaleData make_locale(std::size_t index) {
+void append_elements(const LocaleData& L, std::uint32_t cp, bool expand, std::vector<Weight>& out, int depth) {
+  if (!L.win) {
+    append_table_elements(L, cp, expand, out, depth);
+    return;
+  }
+  if (const std::int32_t i = number_form_index(cp); i >= 0) {
+    out.push_back(Weight{kBase, L.number_form_p + i, 0, 0, 0});
+    return;
+  }
+  if (cp == 0xFF9Eu || cp == 0xFF9Fu) {
+    append_elements(L, cp - 0xFF9Eu + 0x309Bu, expand, out, depth + 1);  // the full-width voicing marks
+    return;
+  }
+  if (cp == 0x200Bu) {
+    append_elements(L, 0x20u, expand, out, depth + 1);
+    return;
+  }
+  if (const std::int32_t word = win_word_weight(cp); word >= 0) {
+    out.push_back(Weight{kWord, word, 0, 0, win_width(cp)});
+    return;
+  }
+  const std::size_t start = out.size();
+  append_table_elements(L, cp, expand, out, depth);
+  // A precomposed syllable sorts after the same jamo typed separately.
+  const std::int32_t d = win_kana_d(cp) + (cp >= kSyllableFirst && cp <= kSyllableLast ? 1 : 0);
+  const std::int32_t c = win_width(cp);
+  for (std::size_t k = start; k < out.size(); ++k) {
+    Weight& w = out[k];
+    if (w.cls == kMid && cp < 0xA0u) {
+      w = Weight{kWord, 0, 0, 0, 0};  // a control character is a word-sort symbol
+    } else if (w.cls != kMark) {
+      w.d += d;
+      w.c = w.c == 0 ? c : w.c;
+    }
+  }
+}
+
+// Windows keeps the base script order: the locale's remap blocks, each with the
+// locale-only primaries that follow it, are laid out again in base order.
+Segments base_block_order(const LocaleData& L) {
+  const std::int32_t top = L.remap_p(L.base->out_of_range_p + out_of_range_index(0xFFFFu));
+  const std::int32_t end = top + 2 + static_cast<std::int32_t>(0x10FFFFu - 0x10000u) / (kMaxWeight + 1);
+  Segments by_locale = L.remap;  // (base P, locale P)
+  std::sort(by_locale.begin(), by_locale.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
+  struct Block {
+    std::int32_t base, first, end;  // locale P range [first, end)
+  };
+  std::vector<Block> blocks;
+  for (std::size_t i = 0; i < by_locale.size(); ++i) {
+    const std::int32_t next = i + 1 < by_locale.size() ? by_locale[i + 1].second : std::max(end, by_locale[i].second);
+    blocks.push_back(Block{by_locale[i].first, by_locale[i].second, next});
+  }
+  std::sort(blocks.begin(), blocks.end(), [](const Block& a, const Block& b) { return a.base < b.base; });
+  Segments out;
+  std::int32_t at = 0;
+  for (const Block& b : blocks) {
+    out.emplace_back(b.first, at);
+    at += b.end - b.first;
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+void set_win_order(LocaleData& L) {
+  L.win = true;
+  L.rules = static_cast<std::uint8_t>(L.rules & ~cd::kRuleThaiReorder);
+  if (L.base == &base_w()) {
+    L.win_order.push_back(base_block_order(L));
+  }
+  // Thai prefix vowels move ahead of the consonants.
+  Weight ko_kai{};
+  Weight first{};
+  if (single_weight(L, 0x0E01u, &ko_kai) && single_weight(L, 0x0E40u, &first)) {
+    const std::int32_t pk = L.order_p(ko_kai.p);
+    const std::int32_t pv = L.order_p(first.p);
+    bool run = pv > pk;
+    for (std::uint32_t k = 1; k < 5 && run; ++k) {
+      Weight w{};
+      run = single_weight(L, 0x0E40u + k, &w) && L.order_p(w.p) == pv + static_cast<std::int32_t>(k);
+    }
+    if (run) {
+      L.win_order.push_back(Segments{{0, 0}, {pk, pk + 5}, {pv, pk}, {pv + 5, pv + 5}});
+    }
+  }
+  // Number forms take their own primaries just before the digits.
+  Weight zero{};
+  if (single_weight(L, 0x30u, &zero)) {
+    L.number_form_p = L.order_p(zero.p);
+    L.win_order.push_back(Segments{{0, 0}, {L.number_form_p, L.number_form_p + kNumberFormCount}});
+  }
+}
+
+LocaleData make_locale(std::size_t index, bool win) {
   LocaleData data(cd::kCollationLocales[index]);
+  if (win) {
+    set_win_order(data);
+  }
   if (data.ascii_fast) {
     std::vector<Weight> expanded;
     std::vector<Weight> unexpanded;
@@ -711,9 +897,12 @@ LocaleData make_locale(std::size_t index) {
   return data;
 }
 
+constexpr std::size_t kLocaleCount = std::size(cd::kCollationLocales);
+
+// Index I below kLocaleCount is the Mac model of locale I, above it the Windows one.
 template <std::size_t I>
 const LocaleData& locale_data_at() {
-  static const LocaleData data = make_locale(I);
+  static const LocaleData data = make_locale(I % kLocaleCount, I >= kLocaleCount);
   return data;
 }
 
@@ -724,9 +913,10 @@ constexpr std::array<LocaleGetter, sizeof...(I)> make_getters(std::index_sequenc
   return {{&locale_data_at<I>...}};
 }
 
-const LocaleData& locale_data(ExcelLocale locale) {
-  static constexpr auto kGetters = make_getters(std::make_index_sequence<std::size(cd::kCollationLocales)>{});
-  return kGetters[static_cast<std::size_t>(locale)]();
+const LocaleData& locale_data(ExcelProfile profile) {
+  static constexpr auto kGetters = make_getters(std::make_index_sequence<2 * kLocaleCount>{});
+  const std::size_t host = profile.host == ExcelHost::kWin365 ? kLocaleCount : 0;
+  return kGetters[host + static_cast<std::size_t>(profile.locale)]();
 }
 
 // ---------------------------------------------------------------- keys
@@ -736,6 +926,7 @@ struct Token {
   std::uint32_t pos;     // code-point index in the original string
   std::uint32_t c_from;  // half-width base whose compare-only offset a composed kana keeps, or 0
   bool repeat;           // zh repeat mark: a secondary marker follows
+  std::uint32_t mark;    // Windows: the kana mark this token substitutes, or 0
 };
 
 void tokenize(const LocaleData& L, std::string_view s, CollationStrength strength, std::vector<Token>& toks) {
@@ -757,22 +948,25 @@ void tokenize(const LocaleData& L, std::string_view s, CollationStrength strengt
         }
       }
     }
-    toks.push_back(Token{cp, pos++, 0, false});
+    toks.push_back(Token{cp, pos++, 0, false, 0});
   }
-  if ((L.rules & cd::kRuleKanaMarks) != 0) {
+  if (L.win || (L.rules & cd::kRuleKanaMarks) != 0) {
     for (std::size_t i = 1; i < toks.size(); ++i) {
       const std::uint32_t prev = toks[i - 1].cp;
       const std::uint32_t cp = toks[i].cp;
+      // Windows repeats a kana of either script with either iteration mark.
+      const bool hiragana = is_hiragana_letter(prev) || (L.win && is_katakana_letter(prev));
+      const bool katakana = is_katakana_letter(prev) || (L.win && is_hiragana_letter(prev));
       std::uint32_t sub = 0;
       if (cp == 0x30FCu || cp == 0xFF70u) {
         sub = kana_vowel(prev);
-      } else if ((cp == 0x309Du || cp == 0x309Eu) && is_hiragana_letter(prev)) {
+      } else if ((cp == 0x309Du || cp == 0x309Eu) && hiragana) {
         sub = cp == 0x309Du ? prev : voiced_form(prev);
-      } else if ((cp == 0x30FDu || cp == 0x30FEu) && is_katakana_letter(prev)) {
+      } else if ((cp == 0x30FDu || cp == 0x30FEu) && katakana) {
         sub = cp == 0x30FDu ? prev : voiced_form(prev);
       }
       if (sub != 0) {
-        toks[i] = Token{sub, toks[i].pos, 0, false};
+        toks[i] = Token{sub, toks[i].pos, 0, false, L.win ? cp : 0u};
       }
     }
   }
@@ -789,7 +983,7 @@ void tokenize(const LocaleData& L, std::string_view s, CollationStrength strengt
       } else if (kind == static_cast<int>(cd::CollationRepeatKind::kVoiced)) {
         sub = voiced_form(prev);
       }
-      toks[i] = Token{sub != 0 ? sub : prev, toks[i].pos, 0, true};
+      toks[i] = Token{sub != 0 ? sub : prev, toks[i].pos, 0, true, 0};
     }
   }
   if ((L.rules & cd::kRuleThaiReorder) != 0) {
@@ -816,7 +1010,7 @@ std::int32_t first_c(const LocaleData& L, std::uint32_t cp, std::vector<Weight>&
   return tmp.empty() ? 0 : tmp.front().c;
 }
 
-void mac_key(const LocaleData& L, std::string_view s, CollationStrength strength, std::string& out) {
+void table_key(const LocaleData& L, std::string_view s, CollationStrength strength, std::string& out) {
   std::vector<Token> toks;
   tokenize(L, s, strength, toks);
   std::vector<Weight> els;
@@ -838,6 +1032,11 @@ void mac_key(const LocaleData& L, std::string_view s, CollationStrength strength
     }
     if (t.repeat) {
       els.push_back(Weight{kMark, 0, 1, 0, 0});
+    }
+    // Windows kana mark: its substitute's weights, above them at the kana-type level.
+    for (std::size_t k = start; t.mark != 0 && k < els.size(); ++k) {
+      els[k].d += kWinMarkD;
+      els[k].c = win_width(t.mark) != 0 ? win_width(t.mark) : els[k].c;
     }
   }
   bounds.push_back(static_cast<std::uint32_t>(els.size()));
@@ -944,36 +1143,21 @@ int ascii_compare(const LocaleData& L, std::string_view a, std::string_view b) n
   return a.size() == b.size() ? 0 : (a.size() < b.size() ? -1 : 1);
 }
 
-// Windows host: ASCII case-insensitive unsigned bytes; the dynamic and classic-exact
-// strengths first compose a half-width voicing mark onto its base.
-std::string legacy_text(std::string_view s, CollationStrength strength) {
-  return strength == CollationStrength::kCompare ? std::string(s) : compose_jp_halfwidth_voicing(s);
-}
-
 }  // namespace
 
 std::string collation_key(std::string_view s, ExcelProfile profile, CollationStrength strength) {
-  if (profile.host == ExcelHost::kWin365) {
-    return strings::to_ascii_lower(legacy_text(s, strength));
-  }
-  const LocaleData& L = locale_data(profile.locale);
+  const LocaleData& L = locale_data(profile);
   std::string out;
   if (ascii_fast(L, s)) {
     ascii_key(L, s, strength, out);
   } else {
-    mac_key(L, s, strength, out);
+    table_key(L, s, strength, out);
   }
   return out;
 }
 
 int collate(std::string_view a, std::string_view b, ExcelProfile profile, CollationStrength strength) {
-  if (profile.host == ExcelHost::kWin365) {
-    if (strength == CollationStrength::kCompare) {
-      return strings::case_insensitive_compare(a, b);
-    }
-    return strings::case_insensitive_compare(legacy_text(a, strength), legacy_text(b, strength));
-  }
-  const LocaleData& L = locale_data(profile.locale);
+  const LocaleData& L = locale_data(profile);
   if (ascii_fast(L, a) && ascii_fast(L, b)) {
     return ascii_compare(L, a, b);
   }

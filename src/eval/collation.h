@@ -4,9 +4,8 @@
 // measured tables in `collation_table.cpp`: primary, secondary, dynamic and
 // compare-only tertiary weights, then the zh word-sort symbols and a trailing
 // ignorable mark, the parts joined by 0x01. Comparing two strings is comparing
-// their keys bytewise. Windows profiles keep the engine's byte model: ASCII
-// case-insensitive unsigned byte order, with half-width voicing marks composed
-// for the dynamic and classic-exact strengths.
+// their keys bytewise. Windows profiles build the same keys from the same
+// tables under the host rules measured on win-365-ja_JP (collation.cpp).
 
 #ifndef FORMULON_EVAL_COLLATION_H_
 #define FORMULON_EVAL_COLLATION_H_
@@ -23,9 +22,9 @@ namespace eval {
 /// How much of the collation order a comparison sees.
 ///   * `kCompare`: operators, criteria, SWITCH, approximate MATCH / VLOOKUP.
 ///   * `kDynamic`: SORT, UNIQUE, GROUPBY, XLOOKUP / XMATCH, pivots; ignores the
-///     compare-only tertiary level (zh full/half width).
-///   * `kClassicExact`: exact MATCH / VLOOKUP / HLOOKUP; on Mac, no expansions
-///     and no half-width voicing composition (the Windows host composes it).
+///     compare-only tertiary level (zh and Windows full/half width).
+///   * `kClassicExact`: exact MATCH / VLOOKUP / HLOOKUP; no expansions and no
+///     half-width voicing composition.
 enum class CollationStrength : std::uint8_t { kCompare, kDynamic, kClassicExact };
 
 /// Order-preserving key of `s`: `collate(a, b)` has the sign of

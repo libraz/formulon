@@ -2,7 +2,8 @@
 // Unit tests for the text collation keys. Expectations come from the Mac Excel
 // measurements under tools/collation/data (FORMULON_COLLATION_DATA_DIR): the
 // probe matrix, the BMP sort order, the function equality table and the
-// trailing-ignorable table, plus the Windows host's existing byte model.
+// trailing-ignorable table, plus the Windows host rules measured on
+// win-365-ja_JP (tests/oracle/targets/win-365-ja_JP/golden/collation*.json).
 
 #include "eval/collation.h"
 
@@ -681,35 +682,120 @@ TEST(CollationFastPath, CaseInsensitiveAndPrefixOrder) {
 }
 
 // ---------------------------------------------------------------------------
-// Windows host: the engine's byte model.
+// Windows host rules.
 // ---------------------------------------------------------------------------
 
 int wcmp(std::string_view a, std::string_view b, CollationStrength strength = CollationStrength::kCompare) {
   return collate(a, b, win(ExcelLocale::kJaJP), strength);
 }
 
-TEST(CollationWinLegacy, AsciiCaseInsensitiveUnsignedBytes) {
+struct WinOrder {
+  const char* a;
+  const char* b;
+  int sign;
+};
+
+// win-365-ja_JP collation goldens, one row per rule.
+TEST(CollationWin, MeasuredCompareOrder) {
   ScopedEvalProfile scope(win(ExcelLocale::kJaJP));
-  EXPECT_EQ(wcmp("abc", "ABC"), 0);
-  EXPECT_LT(wcmp("_", "A"), 0) << "letters fold to lower case before the byte compare";
-  EXPECT_GT(wcmp("é", "z"), 0) << "bytes compare unsigned";
-  EXPECT_LT(wcmp("ab", "abc"), 0);
-  EXPECT_NE(wcmp("ß", "ss"), 0);
-  EXPECT_NE(wcmp("Ａ", "A"), 0);
+  const std::string ctrl = u8(0x01);
+  const std::string shy = u8(0xAD);
+  const std::string zwsp = u8(0x200B);
+  const WinOrder rows[] = {
+      {"á", "b", -1},       {"ä", "ae", -1},     {"ñ", "nz", -1},     {"ё", "Ё", 0},       {"ς", "σ", 0},
+      {"ß", "ss", 0},       {"æ", "ae", 0},      {"œ", "oe", 0},      {"ĳ", "ij", 0},      {"亜", "一", -1},
+      {"あ", "α", 1},       {"家", "가", 1},     {"刻z", "각a", 1},   {"a-b", "ab", 1},    {"a'b", "ab", 1},
+      {"co-op", "coop", 1}, {"a-b", "a'b", 1},   {"½", "1", -1},      {"Ⅰ", "i", -1},      {"Ａ", "A", 1},
+      {"１", "1", 1},       {"　", " ", 1},      {"①", "1", 1},       {"²", "2", 1},       {"ｶ", "カ", -1},
+      {"ｶﾞ", "ガ", -1},     {"ﾊﾟ", "パ", -1},    {"あ", "ア", 1},     {"ぁ", "あ", -1},    {"かー", "かあ", 1},
+      {"かゝ", "かか", 1},  {"かゞ", "かが", 1}, {"かヽ", "かか", 1}, {"がゝ", "がか", 1}, {"เ", "ก", -1},
+      {"เก", "กา", -1},     {"เก", "ก", -1},     {"a　b", "ab", -1},
+  };
+  for (const WinOrder& r : rows) {
+    EXPECT_EQ(wcmp(r.a, r.b), r.sign) << r.a << " | " << r.b;
+    EXPECT_EQ(wcmp(r.b, r.a), -r.sign) << r.b << " | " << r.a;
+  }
+  EXPECT_GT(wcmp("a" + ctrl + "b", "ab"), 0);
+  EXPECT_GT(wcmp("a" + ctrl, "a" + shy), 0);
+  EXPECT_EQ(wcmp("a" + shy + "b", "ab"), 0);
+  EXPECT_LT(wcmp("a" + zwsp + "b", "ab"), 0);
+  EXPECT_GT(wcmp("각", "가" + u8(0x11A8)), 0);
 }
 
-TEST(CollationWinLegacy, HalfwidthVoicingComposesOutsideCompare) {
+TEST(CollationWin, DynamicDropsOnlyWidth) {
   ScopedEvalProfile scope(win(ExcelLocale::kJaJP));
-  EXPECT_NE(wcmp("ｶﾞ", "ガ"), 0);
-  EXPECT_EQ(wcmp("ｶﾞ", "ガ", CollationStrength::kDynamic), 0);
-  EXPECT_EQ(wcmp("ｶﾞ", "ガ", CollationStrength::kClassicExact), 0);
-  EXPECT_EQ(wcmp("ﾊﾟ", "パ", CollationStrength::kDynamic), 0);
-  EXPECT_NE(wcmp("ｱ", "ア", CollationStrength::kDynamic), 0);
+  const CollationStrength dynamic = CollationStrength::kDynamic;
+  const WinOrder width_only[] = {{"Ａ", "A", 1},  {"①", "1", 1},    {"²", "2", 1},
+                                 {"ｱ", "ア", -1}, {"ｶﾞ", "ガ", -1}, {"ﾊﾟ", "パ", -1}};
+  for (const WinOrder& r : width_only) {
+    EXPECT_EQ(wcmp(r.a, r.b, dynamic), 0) << r.a << " | " << r.b;
+    EXPECT_EQ(wcmp(r.a, r.b), r.sign) << r.a << " | " << r.b;
+  }
+  const WinOrder kana_type[] = {{"ア", "あ", -1},     {"ぁ", "あ", -1},     {"ヴ", "ゔ", -1},
+                                {"かあ", "かー", -1}, {"かか", "かゝ", -1}, {"Ⅰ", "i", -1}};
+  for (const WinOrder& r : kana_type) {
+    EXPECT_EQ(wcmp(r.a, r.b, dynamic), r.sign) << r.a << " | " << r.b;
+  }
 }
 
-TEST(CollationWinLegacy, KeysAgreeWithCollate) {
-  const std::vector<std::string> strings = {"", "a", "A", "_", "é", "z", "ｶﾞ", "ガ", "あ", "ア", "ｱ", "abc", "ABD"};
-  for (const ExcelLocale locale : {ExcelLocale::kJaJP, ExcelLocale::kEnUS, ExcelLocale::kZhCN}) {
+TEST(CollationWin, ClassicExactKeepsWidthAndExpansionsApart) {
+  ScopedEvalProfile scope(win(ExcelLocale::kJaJP));
+  const CollationStrength exact = CollationStrength::kClassicExact;
+  EXPECT_NE(wcmp("ｶﾞ", "ガ", exact), 0);
+  EXPECT_NE(wcmp("ß", "ss", exact), 0);
+  EXPECT_NE(wcmp("æ", "ae", exact), 0);
+  EXPECT_NE(wcmp("ア", "あ", exact), 0);
+  EXPECT_EQ(wcmp("Ä", "ä", exact), 0);
+  EXPECT_EQ(wcmp("σ", "ς", exact), 0);
+}
+
+// SEARCH compares one character at a time at the compare strength.
+TEST(CollationWin, HalfwidthVoicingMarkMatchesFullwidth) {
+  const ExcelProfile profile = win(ExcelLocale::kJaJP);
+  ScopedEvalProfile scope(profile);
+  EXPECT_EQ(collation_key("ﾞ", profile, CollationStrength::kCompare),
+            collation_key("゛", profile, CollationStrength::kCompare));
+  EXPECT_NE(collation_key("ｱ", profile, CollationStrength::kCompare),
+            collation_key("ア", profile, CollationStrength::kCompare));
+}
+
+TEST(CollationWin, KeysAgreeWithCollate) {
+  const std::vector<std::string> strings = {"",
+                                            "a",
+                                            "A",
+                                            "_",
+                                            "é",
+                                            "z",
+                                            "ｶﾞ",
+                                            "ガ",
+                                            "あ",
+                                            "ア",
+                                            "ｱ",
+                                            "abc",
+                                            "ABD",
+                                            "a-b",
+                                            "ab",
+                                            "a'b",
+                                            "co-op",
+                                            "½",
+                                            "1",
+                                            "Ⅰ",
+                                            "เก",
+                                            "กา",
+                                            "家",
+                                            "가",
+                                            "かー",
+                                            "かあ",
+                                            "ß",
+                                            "ss",
+                                            "æ",
+                                            "a" + u8(0x01) + "b",
+                                            "a" + u8(0x200B) + "b",
+                                            "ー",
+                                            "ゝ",
+                                            u8(0x1F600)};
+  for (const ExcelLocale locale : {ExcelLocale::kJaJP, ExcelLocale::kEnUS, ExcelLocale::kZhCN, ExcelLocale::kKoKR,
+                                   ExcelLocale::kThTH, ExcelLocale::kRuRU}) {
     const ExcelProfile profile = win(locale);
     ScopedEvalProfile scope(profile);
     for (const CollationStrength strength :
@@ -718,6 +804,21 @@ TEST(CollationWinLegacy, KeysAgreeWithCollate) {
         for (const std::string& b : strings) {
           EXPECT_EQ(collate(a, b, profile, strength), key_sign(a, b, profile, strength)) << a << " | " << b;
         }
+      }
+    }
+  }
+}
+
+TEST(CollationWin, AsciiFastPathMatchesGeneralPath) {
+  const std::vector<std::string> strings = random_ascii(120);
+  for (const ExcelLocale locale : {ExcelLocale::kJaJP, ExcelLocale::kEnUS}) {
+    const ExcelProfile profile = win(locale);
+    ScopedEvalProfile scope(profile);
+    for (const std::string& a : strings) {
+      for (const std::string& b : strings) {
+        ASSERT_EQ(collate(a, b, profile, CollationStrength::kCompare),
+                  key_sign(a, b, profile, CollationStrength::kCompare))
+            << tag_of(locale) << " '" << a << "' '" << b << "'";
       }
     }
   }
@@ -746,7 +847,7 @@ int win_find(std::string_view value, std::vector<std::string> cells, CollationSt
 
 // win-365-ja_JP goldens (countif / lookup / dfunc kana folding probes). The
 // wildcard cases and the D-function header cases go through other paths.
-TEST(CollationWinLegacy, WindowsKanaFoldingGoldens) {
+TEST(CollationWin, WindowsKanaFoldingGoldens) {
   ScopedEvalProfile scope(win(ExcelLocale::kJaJP));
   EXPECT_EQ(win_count("あ", {"あ", "ア", "い"}), 1);
   EXPECT_EQ(win_count("ア", {"あ", "ア", "い"}), 1);

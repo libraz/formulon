@@ -651,12 +651,18 @@ TEST(BuiltinsHLookupCollation, MacZhCnFixture) {
   }
 }
 
-TEST(BuiltinsVLookupCollation, WindowsKeepsByteModel) {
+TEST(BuiltinsVLookupCollation, WindowsJaFixture) {
   {
     const ExcelProfile p = win_365_ja_jp_profile();
     ScopedEvalProfile scope(p);
     const Value v = EvalWithProfile(R"(=VLOOKUP("ｶﾞ",{"zz",1;"ガ",2},2,FALSE))", p);
-    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=VLOOKUP("ｶﾞ",{"zz",1;"ガ",2},2,FALSE))";
+    EXPECT_TRUE(ExpectHit(v, 0)) << R"(=VLOOKUP("ｶﾞ",{"zz",1;"ガ",2},2,FALSE))";
+  }
+  {
+    const ExcelProfile p = win_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=VLOOKUP("Ä",{"zz",1;"ä",2},2,FALSE))", p);
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=VLOOKUP("Ä",{"zz",1;"ä",2},2,FALSE))";
   }
   {
     const ExcelProfile p = win_365_ja_jp_profile();
@@ -681,12 +687,18 @@ TEST(BuiltinsVLookupCollation, WildcardsKeepFoldedPath) {
   }
 }
 
-TEST(BuiltinsHLookupCollation, WindowsKeepsByteModel) {
+TEST(BuiltinsHLookupCollation, WindowsJaFixture) {
   {
     const ExcelProfile p = win_365_ja_jp_profile();
     ScopedEvalProfile scope(p);
     const Value v = EvalWithProfile(R"(=HLOOKUP("ｶﾞ",{"zz","ガ";1,2},2,FALSE))", p);
-    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=HLOOKUP("ｶﾞ",{"zz","ガ";1,2},2,FALSE))";
+    EXPECT_TRUE(ExpectHit(v, 0)) << R"(=HLOOKUP("ｶﾞ",{"zz","ガ";1,2},2,FALSE))";
+  }
+  {
+    const ExcelProfile p = win_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=HLOOKUP("Ä",{"zz","ä";1,2},2,FALSE))", p);
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=HLOOKUP("Ä",{"zz","ä";1,2},2,FALSE))";
   }
   {
     const ExcelProfile p = win_365_ja_jp_profile();

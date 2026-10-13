@@ -147,11 +147,11 @@ std::string fold_criteria_text_for_profile(std::string_view input, ExcelProfile 
   return fold_fullwidth_digits_only(input);
 }
 
-// Pre-fold applied before a Mac collation compare: full-width digits everywhere,
-// plus half-width voicing composition on ja_JP only.
+// Pre-fold applied before a collation compare: full-width digits everywhere, plus
+// half-width voicing composition on Mac ja_JP only (Windows keeps `ｶﾞ` apart from `ガ`).
 std::string collation_prefold(std::string_view input, ExcelProfile profile) {
   std::string out = fold_fullwidth_digits_only(input);
-  if (profile.locale == ExcelLocale::kJaJP) {
+  if (profile.host == ExcelHost::kMac365 && profile.locale == ExcelLocale::kJaJP) {
     return compose_jp_halfwidth_voicing(out);
   }
   return out;
@@ -468,21 +468,11 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
   }
   const std::string& cell_text = cell_text_exp.value();
 
-  // Mac Excel ja-JP folds Japanese variants (hiragana<->katakana,
-  // half<->full-width katakana, full<->half-width ASCII, ideographic
-  // space) to a canonical form before COUNTIF / SUMIF / AVERAGEIF text
-  // equality compares. Apply once to the cell projection here; per-branch
-  // sites fold the RHS as needed. Wildcard detection on the criterion
-  // happened earlier on the original raw RHS, so a full-width ＊ stays
-  // un-flagged and folds to a literal `*` byte for comparison rather than
-  // gaining wildcard semantics.
-  // Mac text equality and ordering go through the collator; the wildcard and
-  // Windows paths keep the byte-level fold.
-  const bool collated = profile.host == ExcelHost::kMac365;
-  const std::string cell_folded = collated ? std::string() : fold_criteria_text_for_profile(cell_text, profile);
-  const auto wildcard_cell_folded = [&]() {
-    return collated ? fold_criteria_text_for_profile(cell_text, profile) : cell_folded;
-  };
+  // Text equality and ordering go through the collator; the wildcard path
+  // keeps the byte-level fold. Wildcard detection on the criterion happened
+  // earlier on the original raw RHS, so a full-width ＊ stays un-flagged and
+  // compares as a literal rather than gaining wildcard semantics.
+  const auto wildcard_cell_folded = [&]() { return fold_criteria_text_for_profile(cell_text, profile); };
   const auto collated_cmp = [&](bool unescape_first) {
     const ParsedCriterion::CollationRhs& rhs = c.cached_collation_rhs(profile, unescape_first);
     const std::string key = collation_key(collation_prefold(cell_text, profile), profile, CollationStrength::kCompare);
@@ -514,20 +504,9 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
         const std::string& rhs_folded = c.cached_folded_rhs(profile, /*unescape_first=*/false);
         return wildcard_match(rhs_folded, wildcard_cell_folded());
       }
-      if (collated) {
-        return c.prefix_match ? collated_prefix() : collated_cmp(true) == 0;
-      }
-      const std::string& literal = c.cached_folded_rhs(profile, /*unescape_first=*/true);
-      if (c.prefix_match) {
-        // D-function "begins-with" semantics: cell text starts with
-        // the literal (case-insensitive ASCII). Per Excel docs, the
-        // plain-text criterion "Sm" matches "Smith" and "Smithfield".
-        if (cell_folded.size() < literal.size()) {
-          return false;
-        }
-        return strings::case_insensitive_eq(std::string_view(cell_folded).substr(0, literal.size()), literal);
-      }
-      return strings::case_insensitive_eq(cell_folded, literal);
+      // D-function "begins-with" semantics: per Excel docs, the plain-text
+      // criterion "Sm" matches "Smith" and "Smithfield".
+      return c.prefix_match ? collated_prefix() : collated_cmp(true) == 0;
     }
     case CriteriaOp::NotEq: {
       if (c.has_wildcard) {
@@ -540,24 +519,7 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
         const std::string& rhs_folded = c.cached_folded_rhs(profile, /*unescape_first=*/false);
         return !wildcard_match(rhs_folded, wildcard_cell_folded());
       }
-      if (collated) {
-        return c.prefix_match ? !collated_prefix() : collated_cmp(true) != 0;
-      }
-      const std::string& literal = c.cached_folded_rhs(profile, /*unescape_first=*/true);
-      if (c.prefix_match) {
-        // D-function "does-NOT-begin-with" semantics: negation of the
-        // prefix test. Reachable only via `parse_criterion_dfunc`, and
-        // only when the original raw text started with "<>" (which maps
-        // to `CriteriaOp::NotEq` but otherwise leaves the RHS alone).
-        // Note: the current `parse_criterion_dfunc` never sets
-        // `prefix_match` for `Op::NotEq`, so this branch is reserved for
-        // future parity should Excel document a different behaviour.
-        if (cell_folded.size() < literal.size()) {
-          return true;
-        }
-        return !strings::case_insensitive_eq(std::string_view(cell_folded).substr(0, literal.size()), literal);
-      }
-      return !strings::case_insensitive_eq(cell_folded, literal);
+      return c.prefix_match ? !collated_prefix() : collated_cmp(true) != 0;
     }
     case CriteriaOp::Lt:
     case CriteriaOp::LtEq:
@@ -568,17 +530,12 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
       // matches. This is type separation, NOT a cross-type ordering: both
       // `COUNTIF(range, ">5x")` and `COUNTIF(range, "<5x")` skip a Number 6
       // entirely (Mac Excel 365 returns 1 and 0 respectively over
-      // {6, "5y", TRUE}). Text cells compare by collation on Mac (case-insensitive
-      // folded bytes on Windows); wildcards are literal for ordering ops.
+      // {6, "5y", TRUE}). Text cells compare by collation; wildcards are
+      // literal for ordering ops.
       if (cell.kind() != ValueKind::Text) {
         return false;
       }
-      if (collated) {
-        return apply_ordering(c.op, collated_cmp(false));
-      }
-      const std::string& rhs_folded = c.cached_folded_rhs(profile, /*unescape_first=*/false);
-      const int cmp = strings::case_insensitive_compare(cell_folded, rhs_folded);
-      return apply_ordering(c.op, cmp);
+      return apply_ordering(c.op, collated_cmp(false));
     }
   }
   return false;

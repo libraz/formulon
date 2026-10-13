@@ -219,25 +219,25 @@ struct EqCase {
 
 // Equality under the compare strength, one row per measured pair.
 const EqCase kEqCases[] = {
-    {"ß", "ss", true, true, true, false},   {"①", "1", true, true, false, false},
+    {"ß", "ss", true, true, true, true},    {"①", "1", true, true, false, false},
     {"Ａ", "A", true, true, false, false},  {"ｱ", "ア", true, true, false, false},
     {"ア", "あ", true, true, false, false}, {"かー", "かあ", true, false, false, false},
-    {"ä", "a", false, false, false, false}, {"Ä", "ä", true, true, true, false},
+    {"ä", "a", false, false, false, false}, {"Ä", "ä", true, true, true, true},
     {"A", "a", true, true, true, true},     {"ｶﾞ", "ガ", true, true, false, false},
-    {"ゝ", "ヽ", true, false, true, false},
+    {"ゝ", "ヽ", true, false, true, true},
 };
 
 struct OrderCase {
   const char* a;
   const char* b;
   int mac;  // sign on every measured Mac locale
-  int win;  // sign under the byte model
+  int win;  // sign on win-365-ja_JP
 };
 
 // Ordering under the compare strength.
 const OrderCase kOrderCases[] = {
-    {"a", "b", -1, -1},   {"B", "a", 1, 1},   {"ä", "b", -1, 1}, {"y", "ä", 1, -1},
-    {"あ", "か", -1, -1}, {"1", "a", -1, -1}, {"あ", "a", 1, 1}, {" ", "a", -1, -1},
+    {"a", "b", -1, -1},   {"B", "a", 1, 1},   {"ä", "b", -1, -1}, {"y", "ä", 1, 1},
+    {"あ", "か", -1, -1}, {"1", "a", -1, -1}, {"あ", "a", 1, 1},  {" ", "a", -1, -1},
 };
 
 int sign_of(int v) {
@@ -292,7 +292,7 @@ TEST(CompareValuesCollation, MacOrdering) {
   CheckOrdering(kMacZhCn, true);
 }
 
-TEST(CompareValuesCollation, WinOrderingIsByteModel) {
+TEST(CompareValuesCollation, WinOrdering) {
   CheckOrdering(win_365_ja_jp_profile(), false);
 }
 

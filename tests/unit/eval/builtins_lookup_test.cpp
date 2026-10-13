@@ -463,12 +463,24 @@ TEST(BuiltinsMatchCollation, MacZhCnFixture) {
   }
 }
 
-TEST(BuiltinsMatchCollation, WindowsKeepsByteModel) {
+TEST(BuiltinsMatchCollation, WindowsJaFixture) {
   {
     const ExcelProfile p = win_365_ja_jp_profile();
     ScopedEvalProfile scope(p);
     const Value v = EvalWithProfile(R"(=MATCH("ｶﾞ",{"zz";"ガ"},0))", p);
-    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=MATCH("ｶﾞ",{"zz";"ガ"},0))";
+    EXPECT_TRUE(ExpectHit(v, 0)) << R"(=MATCH("ｶﾞ",{"zz";"ガ"},0))";
+  }
+  {
+    const ExcelProfile p = win_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=MATCH("ß",{"zz";"ss"},0))", p);
+    EXPECT_TRUE(ExpectHit(v, 0)) << R"(=MATCH("ß",{"zz";"ss"},0))";
+  }
+  {
+    const ExcelProfile p = win_365_ja_jp_profile();
+    ScopedEvalProfile scope(p);
+    const Value v = EvalWithProfile(R"(=MATCH("σ",{"zz";"ς"},0))", p);
+    EXPECT_TRUE(ExpectHit(v, 2)) << R"(=MATCH("σ",{"zz";"ς"},0))";
   }
   {
     const ExcelProfile p = win_365_ja_jp_profile();

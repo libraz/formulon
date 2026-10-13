@@ -806,14 +806,21 @@ TEST(CriteriaCollation, MacOrderingUsesCollation) {
   EXPECT_FALSE(matches_criterion(Value::text("\xC3\x9F"), ne, en));
 }
 
-TEST(CriteriaCollation, WindowsJaKeepsByteModel) {
+TEST(CriteriaCollation, WindowsJaUsesCollation) {
   const ExcelProfile win = win_profile(ExcelLocale::kJaJP);
-  // Measured on Windows ja-JP: half-width kana equal only themselves.
+  // Measured on Windows ja-JP: width and kana type separate, case and ligatures do not.
   EXPECT_TRUE(countif_hit("\xEF\xBD\xB1", "\xEF\xBD\xB1", win));
-  EXPECT_FALSE(countif_hit("\xEF\xBD\xB1", "\xE3\x82\xA2", win));
-  EXPECT_FALSE(countif_hit("\xE3\x81\x82", "\xE3\x82\xA2", win));
+  EXPECT_FALSE(countif_hit("\xEF\xBD\xB1", "\xE3\x82\xA2", win));              // ｱ vs ア
+  EXPECT_FALSE(countif_hit("\xE3\x81\x82", "\xE3\x82\xA2", win));              // あ vs ア
+  EXPECT_FALSE(countif_hit("\xEF\xBD\xB6\xEF\xBE\x9E", "\xE3\x82\xAC", win));  // ｶﾞ vs ガ
   EXPECT_TRUE(countif_hit("ABC", "abc", win));
   EXPECT_TRUE(countif_hit("\xEF\xBC\x91\xEF\xBC\x92x", "12x", win));
+  EXPECT_TRUE(countif_hit("\xC3\x9F", "ss", win));  // ß
+  EXPECT_TRUE(countif_hit("\xC3\xA6", "ae", win));  // æ
+  EXPECT_FALSE(dcount_hit("\xC3\x9F", "ss", win));
+  const ScopedEvalProfile scope(win);
+  const ParsedCriterion gt = parse_criterion(Value::text(">ab"));
+  EXPECT_TRUE(matches_criterion(Value::text("a-b"), gt, win));  // hyphen weighs after every letter
 }
 
 }  // namespace
