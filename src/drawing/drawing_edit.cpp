@@ -177,6 +177,15 @@ std::string unused_part_path(const Workbook& wb, const std::string& stem, const 
   }
 }
 
+Expected<void, Error> prepare_drawing(const Workbook& wb, std::string& path, pugi::xml_document& doc) {
+  if (path.empty()) {
+    path = unused_part_path(wb, "xl/drawings/drawing", "xml");
+    doc.append_child("xdr:wsDr");
+    return Expected<void, Error>::Ok();
+  }
+  return load_drawing(wb, path, doc);
+}
+
 // Removes the top-level drawing elements `tops`, then the relationships no
 // remaining element names and the parts they leave unreferenced.
 Expected<void, Error> drop_objects(Workbook& wb, const std::string& path, pugi::xml_document& doc,
@@ -652,15 +661,8 @@ Expected<std::uint32_t, Error> insert_image(Workbook& wb, std::size_t sheet, con
   }
 
   const bool fresh = path.empty();
-  if (fresh) {
-    path = unused_part_path(wb, "xl/drawings/drawing", "xml");
-  }
   pugi::xml_document doc;
-  if (fresh) {
-    doc.append_child("xdr:wsDr");
-  } else {
-    RETURN_IF_ERROR(load_drawing(wb, path, doc));
-  }
+  RETURN_IF_ERROR(prepare_drawing(wb, path, doc));
   ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_rels(wb.passthrough_parts(), path));
   const std::uint32_t id = next_object_id(doc);
   std::string rid;
@@ -996,15 +998,8 @@ Expected<std::uint32_t, Error> restore_image(Workbook& wb, std::size_t sheet, co
   }
 
   const bool fresh = path.empty();
-  if (fresh) {
-    path = unused_part_path(wb, "xl/drawings/drawing", "xml");
-  }
   pugi::xml_document doc;
-  if (fresh) {
-    doc.append_child("xdr:wsDr");
-  } else {
-    RETURN_IF_ERROR(load_drawing(wb, path, doc));
-  }
+  RETURN_IF_ERROR(prepare_drawing(wb, path, doc));
   pugi::xml_node root = doc.document_element();
   ensure_attr(root, "xmlns:xdr", kNsXdr);
   ensure_attr(root, "xmlns:a", kNsA);
