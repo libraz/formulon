@@ -13,6 +13,7 @@
 #include "io/xsd_bool.h"
 #include "io/xsd_double.h"
 #include "pugixml.hpp"
+#include "utils/strings.h"
 
 namespace formulon::io {
 
@@ -664,15 +665,8 @@ Error invalid(std::string message) {
 
 }  // namespace
 
-Expected<AutoFilter, Error> parse_auto_filter_xml(std::string_view xml) {
-  pugi::xml_document doc;
-  const pugi::xml_parse_result parsed =
-      doc.load_buffer(xml.data(), xml.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parsed) {
-    return invalid(std::string("autoFilter: XML parse failed: ") + parsed.description());
-  }
-  const pugi::xml_node root = doc.first_child();
-  if (!is_element(root) || root.next_sibling() || std::string_view(root.name()) != "autoFilter") {
+static Expected<AutoFilter, Error> parse_auto_filter_node(const pugi::xml_node& root) {
+  if (!is_element(root) || std::string_view(root.name()) != "autoFilter") {
     return invalid("autoFilter: fragment is not a single autoFilter element");
   }
   Reader r;
@@ -699,6 +693,46 @@ Expected<AutoFilter, Error> parse_auto_filter_xml(std::string_view xml) {
     return invalid("autoFilter: element carries content the model cannot represent");
   }
   return filter;
+}
+
+Expected<AutoFilter, Error> parse_auto_filter_xml(std::string_view xml) {
+  pugi::xml_document doc;
+  const pugi::xml_parse_result parsed =
+      doc.load_buffer(xml.data(), xml.size(), pugi::parse_default, pugi::encoding_utf8);
+  if (!parsed) {
+    return invalid(std::string("autoFilter: XML parse failed: ") + parsed.description());
+  }
+  const pugi::xml_node root = doc.first_child();
+  if (root.next_sibling()) {
+    return invalid("autoFilter: fragment is not a single autoFilter element");
+  }
+  return parse_auto_filter_node(root);
+}
+
+AutoFilter auto_filter_from_node(const pugi::xml_node& root) {
+  // Fall back to the string entry when the DOM holds nodes parse_default would drop.
+  for (pugi::xml_node node = root.first_child(); node;) {
+    const pugi::xml_node_type type = node.type();
+    if (type == pugi::node_comment || type == pugi::node_pi || type == pugi::node_declaration ||
+        type == pugi::node_doctype || (type == pugi::node_pcdata && strings::trim(node.value()).empty())) {
+      return auto_filter_from_xml(raw_xml(root));
+    }
+    if (node.first_child()) {
+      node = node.first_child();
+      continue;
+    }
+    while (node != root && !node.next_sibling()) {
+      node = node.parent();
+    }
+    node = node == root ? pugi::xml_node{} : node.next_sibling();
+  }
+  auto parsed = parse_auto_filter_node(root);
+  if (parsed) {
+    return std::move(parsed.value());
+  }
+  AutoFilter opaque;
+  opaque.opaque_xml = raw_xml(root);
+  return opaque;
 }
 
 std::string serialize_auto_filter(const AutoFilter& filter) {

@@ -189,7 +189,7 @@ Expected<void, Error> apply_worksheet_metadata(const pugi::xml_document& doc, st
     print.header_footer_xml = raw_xml(header_footer);
   }
   if (pugi::xml_node auto_filter = worksheet.child("autoFilter")) {
-    wb.sheet(i).set_auto_filter(auto_filter_from_xml(raw_xml(auto_filter)));
+    wb.sheet(i).set_auto_filter(auto_filter_from_node(auto_filter));
   }
   // Worksheet-level `<extLst>` holds the *data* for 2010+ extensions —
   // notably `x14:conditionalFormattings` (DataBar negative-fill / axis /

@@ -110,7 +110,7 @@ Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table
     table.table_style_info_xml = raw_xml(style_info);
   }
   if (pugi::xml_node auto_filter = root.child("autoFilter"); auto_filter) {
-    table.auto_filter_xml.set(auto_filter_from_xml(raw_xml(auto_filter)));
+    table.auto_filter_xml.set(auto_filter_from_node(auto_filter));
   }
   if (pugi::xml_node sort_state = root.child("sortState"); sort_state) {
     table.sort_state_xml = raw_xml(sort_state);

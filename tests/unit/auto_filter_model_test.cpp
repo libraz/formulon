@@ -16,7 +16,9 @@
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "io/xlsb/writer.h"
+#include "io/xml_utils.h"
 #include "io/zip_reader.h"
+#include "pugixml.hpp"
 #include "sheet.h"
 #include "table.h"
 #include "utils/error.h"
@@ -171,6 +173,36 @@ const DefinedName* FilterDatabaseName(const Workbook& wb, std::int32_t sheet) {
     }
   }
   return nullptr;
+}
+
+TEST(AutoFilterModel, DomReaderMatchesStringReaderWithRetainedExtensionNodes) {
+  const char* fragments[] = {
+      "<autoFilter ref=\"A1:A3\"><filterColumn colId=\"0\"><filters><filter val=\"x\"/>"
+      "</filters></filterColumn></autoFilter>",
+      "<autoFilter ref=\"A1:A3\"><!--top--><extLst><ext uri=\"urn:x\"><!--nested-->"
+      "<?probe x?><x> </x></ext></extLst></autoFilter>",
+      "<autoFilter ref=\"A1:A3\"><extLst><ext uri=\"urn:x\"><x> </x></ext></extLst></autoFilter>",
+      "<autoFilter ref=\"A1:A3\"><!--keep--><unsupported/></autoFilter>", "<wrong ref=\"A1:A3\"/>"};
+  for (const char* fragment : fragments) {
+    SCOPED_TRACE(fragment);
+    pugi::xml_document doc;
+    ASSERT_TRUE(doc.load_string(
+        fragment, pugi::parse_default | pugi::parse_comments | pugi::parse_pi | pugi::parse_ws_pcdata_single));
+    const std::string raw = io::raw_xml(doc.first_child());
+    const AutoFilter from_string = io::auto_filter_from_xml(raw);
+    const AutoFilter from_node = io::auto_filter_from_node(doc.first_child());
+    EXPECT_EQ(from_node.is_opaque(), from_string.is_opaque());
+    EXPECT_EQ(io::serialize_auto_filter(from_node), io::serialize_auto_filter(from_string));
+    if (from_node.is_opaque()) {
+      EXPECT_EQ(from_node.opaque_xml, raw);
+    }
+  }
+}
+
+TEST(AutoFilterModel, StringReaderStillRequiresOneWellFormedRoot) {
+  EXPECT_FALSE(io::parse_auto_filter_xml("<autoFilter ref=\"A1:A3\"/><extra/>"));
+  EXPECT_FALSE(io::parse_auto_filter_xml("<autoFilter"));
+  EXPECT_FALSE(io::parse_auto_filter_xml(""));
 }
 
 TEST(AutoFilterModel, EveryFixtureKindRoundTrips) {

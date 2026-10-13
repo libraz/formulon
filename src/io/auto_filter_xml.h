@@ -24,6 +24,10 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 
+namespace pugi {
+class xml_node;
+}
+
 namespace formulon::io {
 
 /// Parses one `<autoFilter>` element. Returns `kAutoFilterInvalid` when the
@@ -41,6 +45,9 @@ std::string auto_filter_xml(const AutoFilter* filter);
 /// Reads a non-empty `<autoFilter>` element; a fragment the model cannot
 /// represent comes back opaque.
 AutoFilter auto_filter_from_xml(std::string_view xml);
+
+/// Reads an existing DOM element, retaining the string reader's model and opaque fallback semantics.
+AutoFilter auto_filter_from_node(const pugi::xml_node& node);
 
 }  // namespace formulon::io
 
