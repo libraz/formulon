@@ -743,3 +743,60 @@ def check_python_inline_structs() -> List[str]:
                     f"{list(zip(c_offsets, member_widths))}"
                 )
     return problems
+
+
+# ---------------------------------------------------------------------------
+# Check: public methods of each Python class <-> the `__init__.pyi` stub.
+# ---------------------------------------------------------------------------
+
+PYTHON_STUB = PYTHON_PKG_DIR / "__init__.pyi"
+
+
+def _class_public_methods(tree: ast.AST) -> dict[str, Set[str]]:
+    """Map each top-level class name to its public (non-underscore) `def` names."""
+    classes: dict[str, Set[str]] = {}
+    for node in getattr(tree, "body", []):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        classes.setdefault(node.name, set()).update(
+            item.name
+            for item in node.body
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_")
+        )
+    return classes
+
+
+def check_python_stub_methods() -> List[str]:
+    """Every public method of a runtime class is in the stub, and vice versa.
+
+    Both sides are read with `ast` (the runtime package is never imported, as
+    that would load the WASM module). A stub class is compared with the
+    runtime class of the same name; a stub class with no runtime counterpart
+    is not a drift of this kind and is skipped.
+    """
+    problems: List[str] = []
+
+    runtime: dict[str, Set[str]] = {}
+    for py_file in sorted(PYTHON_PKG_DIR.glob("*.py")):
+        try:
+            tree = ast.parse(_read(py_file), filename=str(py_file))
+        except SyntaxError as exc:
+            problems.append(f"python-stub-methods: cannot parse {py_file.relative_to(REPO_ROOT)}: {exc}")
+            continue
+        for name, methods in _class_public_methods(tree).items():
+            runtime.setdefault(name, set()).update(methods)
+
+    try:
+        stub_tree = ast.parse(_read(PYTHON_STUB), filename=str(PYTHON_STUB))
+    except SyntaxError as exc:
+        problems.append(f"python-stub-methods: cannot parse {PYTHON_STUB.relative_to(REPO_ROOT)}: {exc}")
+        return problems
+
+    for name, stub_methods in sorted(_class_public_methods(stub_tree).items()):
+        if name not in runtime:
+            continue
+        for method in sorted(runtime[name] - stub_methods):
+            problems.append(f"python-stub-methods: {name}.{method} exists at runtime but is missing from __init__.pyi")
+        for method in sorted(stub_methods - runtime[name]):
+            problems.append(f"python-stub-methods: {name}.{method} is declared in __init__.pyi but absent at runtime")
+    return problems

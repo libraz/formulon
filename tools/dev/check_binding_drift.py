@@ -32,6 +32,12 @@ Checks:
                   `fm_value_t`, `fm_print_range_t` -- have their size
                   literals and their decoders' offsets and field widths
                   measured against the header.
+  python-stub-methods
+                  Every public method of a runtime class in
+                  packages/python/formulon/*.py (notably `Workbook`) is
+                  declared in the same-named class of `__init__.pyi`, and
+                  every stub method exists at runtime. Both sides are
+                  parsed with `ast`; the package is never imported.
   dts-wasm        src/wasm/formulon.d.ts (Workbook / WorkbookCtor /
                   FormulonModule method surface) matches what is
                   registered in src/wasm/parts/bindings_register.cpp.
@@ -133,6 +139,7 @@ from binding_drift.python_checks import (
     check_python_exports,
     check_python_inline_structs,
     check_python_struct_layouts,
+    check_python_stub_methods,
 )
 from binding_drift.shape_checks import check_dts_shared_shapes, check_style_record_fields
 from binding_drift.surface_files import _SKIPPED
@@ -142,6 +149,7 @@ CHECKS = {
     "python-struct-layouts": check_python_struct_layouts,
     "python-call-signatures": check_python_call_signatures,
     "python-inline-structs": check_python_inline_structs,
+    "python-stub-methods": check_python_stub_methods,
     "dts-wasm": check_dts_wasm,
     "dts-node": check_dts_node,
     "dts-shared-shapes": check_dts_shared_shapes,

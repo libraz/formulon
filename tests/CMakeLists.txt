@@ -505,6 +505,7 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   # declares. Everything else here compares two hand-maintained descriptions.
   formulon_add_binding_drift_test(binding_drift_python_call_signatures python-call-signatures)
   formulon_add_binding_drift_test(binding_drift_python_inline_structs python-inline-structs)
+  formulon_add_binding_drift_test(binding_drift_python_stub_methods python-stub-methods)
   formulon_add_binding_drift_test(binding_drift_dts_wasm dts-wasm)
   formulon_add_binding_drift_test(binding_drift_dts_node dts-node)
   # The two `dts-*` checks above compare method names only. These compare

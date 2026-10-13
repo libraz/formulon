@@ -66,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "<item> Total" in the locale's wording.
 - Compact-layout row cells report the row's hierarchy depth and its own field
   name instead of depth 0 and the outermost field.
+- The Python type stub declares `Workbook.set_column_style` and
+  `clear_column_style`, which existed at runtime only.
 
 ## [0.15.1] - 2026-10-12
 
