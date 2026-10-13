@@ -866,7 +866,9 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   //       — captured with an empty content type; the writer relies on
   //       the round-tripped `<Default>` registration.
   std::vector<PassthroughPart> unknown_parts;
-  unknown_parts.reserve(override_part_entries.size());
+  unknown_parts.reserve(override_part_entries.size() + extra_passthrough_parts.size());
+  std::unordered_set<std::string> captured;
+  captured.reserve(override_part_entries.size() + extra_passthrough_parts.size());
   for (const ooxml::OverrideEntry& entry : override_part_entries) {
     if (consumed_parts.find(entry.part_name) != consumed_parts.end()) {
       continue;
@@ -894,11 +896,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     part.content_type = entry.content_type;
     part.bytes = std::move(part_bytes);
     unknown_parts.push_back(std::move(part));
+    captured.insert(entry.part_name);
   }
   for (PassthroughPart& part : extra_passthrough_parts) {
-    auto duplicate = std::find_if(unknown_parts.begin(), unknown_parts.end(),
-                                  [&part](const PassthroughPart& existing) { return existing.path == part.path; });
-    if (duplicate == unknown_parts.end()) {
+    if (captured.insert(part.path).second) {
       unknown_parts.push_back(std::move(part));
     }
   }
@@ -911,38 +912,30 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // .xlsx packages silently lose macros, images, shapes, and note
   // geometry on the first round-trip. Captured with an empty content
   // type; the writer relies on the round-tripped `<Default>` entries.
-  {
-    std::unordered_set<std::string> captured;
-    captured.reserve(unknown_parts.size());
-    for (const PassthroughPart& part : unknown_parts) {
-      captured.insert(part.path);
+  for (const std::string& name : zip.list_entries()) {
+    // Directory markers and empty names are not parts.
+    if (name.empty() || name.back() == '/') {
+      continue;
     }
-    for (const std::string& name : zip.list_entries()) {
-      // Directory markers and empty names are not parts.
-      if (name.empty() || name.back() == '/') {
-        continue;
-      }
-      // Same zip-slip guard as the Override sweep: a Default-typed archive
-      // entry with a traversal-shaped name must not be round-tripped.
-      if (!ooxml::is_safe_part_name(name)) {
-        return make_error(FormulonErrorCode::kIoZipSlip, "archive entry name escapes package root; refusing to load",
-                          "context=ooxml_reader part=" + name);
-      }
-      if (consumed_parts.find(name) != consumed_parts.end()) {
-        continue;
-      }
-      if (captured.find(name) != captured.end()) {
-        continue;
-      }
-      ASSIGN_OR_RETURN(auto part_bytes, zip.read_entry(name));
-      PassthroughPart part;
-      part.path = name;
-      // Empty content type: the part is Default-typed, so the writer
-      // must not emit a per-part `<Override>` for it.
-      part.bytes = std::move(part_bytes);
-      unknown_parts.push_back(std::move(part));
-      captured.insert(name);
+    // Same zip-slip guard as the Override sweep: a Default-typed archive
+    // entry with a traversal-shaped name must not be round-tripped.
+    if (!ooxml::is_safe_part_name(name)) {
+      return make_error(FormulonErrorCode::kIoZipSlip, "archive entry name escapes package root; refusing to load",
+                        "context=ooxml_reader part=" + name);
     }
+    if (consumed_parts.find(name) != consumed_parts.end()) {
+      continue;
+    }
+    if (!captured.insert(name).second) {
+      continue;
+    }
+    ASSIGN_OR_RETURN(auto part_bytes, zip.read_entry(name));
+    PassthroughPart part;
+    part.path = name;
+    // Empty content type: the part is Default-typed, so the writer
+    // must not emit a per-part `<Override>` for it.
+    part.bytes = std::move(part_bytes);
+    unknown_parts.push_back(std::move(part));
   }
 
   // Stable order so callers / tests can compare deterministically.
