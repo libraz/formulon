@@ -873,7 +873,14 @@ def _write_cell(sht, addr: str, rec: Dict[str, Any]) -> None:
             except Exception:
                 rng.formula = "'"
             return
+        # A value assignment parses number-, date- and boolean-looking text
+        # ("123", "TRUE"), so that case is re-entered behind the same prefix.
         rng.value = text
+        if rng.value != text:
+            try:
+                rng.formula2 = "'" + text
+            except Exception:
+                rng.formula = "'" + text
         return
     if kind == "formula":
         try:

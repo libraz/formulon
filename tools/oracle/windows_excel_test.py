@@ -515,5 +515,39 @@ class WindowsEmptyTextReadbackTest(unittest.TestCase):
         self.assertEqual((result.kind, result.value, result.array_shape), ("array", ["", None], [2, 1]))
 
 
+class _FakeCoercingCell:
+    """A cell whose value assignment parses boolean-looking text, like COM."""
+
+    def __init__(self):
+        self.value = None
+        self.formula2 = None
+
+    def __setattr__(self, name, value):
+        if name == "value" and isinstance(value, str) and value.upper() in ("TRUE", "FALSE"):
+            value = value.upper() == "TRUE"
+        object.__setattr__(self, name, value)
+
+
+class _FakeCoercingSheet:
+    def __init__(self):
+        self.cell = _FakeCoercingCell()
+
+    def range(self, _address):
+        return self.cell
+
+
+class WindowsTextSetupTest(unittest.TestCase):
+    def test_boolean_looking_text_is_reentered_behind_a_prefix(self) -> None:
+        sheet = _FakeCoercingSheet()
+        windows_excel._write_cell(sheet, "A1", {"kind": "text", "value": "TRUE"})
+        self.assertEqual(sheet.cell.formula2, "'TRUE")
+
+    def test_plain_text_keeps_the_value_assignment(self) -> None:
+        sheet = _FakeCoercingSheet()
+        windows_excel._write_cell(sheet, "A1", {"kind": "text", "value": "abc"})
+        self.assertEqual(sheet.cell.value, "abc")
+        self.assertIsNone(sheet.cell.formula2)
+
+
 if __name__ == "__main__":
     unittest.main()
