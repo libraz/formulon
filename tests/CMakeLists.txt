@@ -422,7 +422,8 @@ target_compile_definitions(formulon_unit_tests
 # alongside the rest in <2 s wall-clock on a modern workstation.
 # Separating them into a dedicated SLOW binary would force the gtest
 # fixture to be duplicated, which is a worse trade.
-gtest_discover_tests(formulon_unit_tests)
+# Listing the coverage-instrumented binary overran the 5 s default on CI.
+gtest_discover_tests(formulon_unit_tests DISCOVERY_TIMEOUT 120)
 
 # Behavior-vocabulary drift check. Parallel to RegistryCatalog.AllRegisteredInCatalog
 # but for function sub-behaviors (format codes, era strings, locale separators).
