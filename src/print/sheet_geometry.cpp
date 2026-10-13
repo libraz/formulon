@@ -1,6 +1,7 @@
 #include "print/sheet_geometry.h"
 
 #include <algorithm>
+#include <unordered_set>
 #include <utility>
 
 #include "sheet.h"
@@ -302,15 +303,34 @@ double row_offset_pt(const Sheet& sheet, std::uint32_t row) {
   // overrides instead of materialising every row.
   const double default_height = default_row_height_pt(sheet);
   double offset = default_height * static_cast<double>(row);
-  std::vector<std::uint32_t> seen;
-  for (const RowLayout& layout : sheet.layout().row_overrides) {
+  if (row == 0U) {
+    return offset;
+  }
+  const auto& overrides = sheet.layout().row_overrides;
+  const bool ordered =
+      std::adjacent_find(overrides.begin(), overrides.end(), [](const RowLayout& lhs, const RowLayout& rhs) {
+        return lhs.row >= rhs.row;
+      }) == overrides.end();
+  if (ordered) {
+    for (const RowLayout& layout : overrides) {
+      if (layout.row >= row) {
+        break;
+      }
+      offset += OverrideRowHeight(layout, default_height) - default_height;
+    }
+    return offset;
+  }
+  // Preserve first-override precedence for directly constructed layouts
+  // that bypass the sorted, unique row-edit helpers.
+  std::unordered_set<std::uint32_t> seen;
+  seen.reserve(overrides.size());
+  for (const RowLayout& layout : overrides) {
     if (layout.row >= row) {
       continue;
     }
-    if (std::find(seen.begin(), seen.end(), layout.row) != seen.end()) {
+    if (!seen.insert(layout.row).second) {
       continue;
     }
-    seen.push_back(layout.row);
     offset += OverrideRowHeight(layout, default_height) - default_height;
   }
   return offset;

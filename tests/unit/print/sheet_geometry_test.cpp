@@ -174,6 +174,17 @@ TEST(SheetGeometry, OverridesAndHiddenTracksShapeEffectiveSizes) {
   EXPECT_DOUBLE_EQ(heights[2], kStandardRowPt);
 }
 
+TEST(SheetGeometry, RowOffsetUsesFirstUnsortedDuplicateOverrideOnce) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  AddRow(&sheet, 5U, 20.0, false);
+  AddRow(&sheet, 2U, 30.0, false);
+  AddRow(&sheet, 5U, 40.0, false);
+
+  const double expected = kStandardRowPt * 6.0 + (20.0 - kStandardRowPt) + (30.0 - kStandardRowPt);
+  EXPECT_DOUBLE_EQ(row_offset_pt(sheet, 6U), expected);
+}
+
 TEST(SheetGeometry, CellRectHasTopLeftOriginAndSkipsHiddenTracks) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
