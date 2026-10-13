@@ -224,14 +224,24 @@ Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
       static_cast<unsigned char>(xml[2]) == 0xBF) {
     return Value::error(ErrorCode::Value);
   }
-  if (xml.rfind("\xC3\xAF\xC2\xBB\xC2\xBF", 0) == 0) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (xml.rfind("\xC3\xAF\xEF\xBD\xBB\xEF\xBD\xBF", 0) == 0) {
-    return Value::error(ErrorCode::Value);
-  }
-  pugi::xml_parse_result parse = doc.load_buffer(xml.data(), xml.size());
+  // Fragment mode keeps document-level text so the well-formedness check below can see it.
+  pugi::xml_parse_result parse = doc.load_buffer(xml.data(), xml.size(), pugi::parse_default | pugi::parse_fragment);
   if (!parse) {
+    return Value::error(ErrorCode::Value);
+  }
+  // Excel requires a well-formed document: one root element and no text outside it.
+  std::size_t roots = 0;
+  for (const pugi::xml_node node : doc.children()) {
+    if (node.type() == pugi::node_element) {
+      ++roots;
+    } else if (node.type() == pugi::node_pcdata || node.type() == pugi::node_cdata) {
+      const std::string_view text(node.value());
+      if (text.find_first_not_of(" \t\r\n") != std::string_view::npos) {
+        return Value::error(ErrorCode::Value);
+      }
+    }
+  }
+  if (roots != 1U) {
     return Value::error(ErrorCode::Value);
   }
 

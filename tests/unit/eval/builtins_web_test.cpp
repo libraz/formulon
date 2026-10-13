@@ -184,6 +184,22 @@ TEST(BuiltinsWebFilterXml, MalformedXmlReturnsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsWebFilterXml, TextOutsideRootReturnsValue) {
+  for (const char* src : {"=FILTERXML(\"x<r><a>v</a></r>\",\"//a\")", "=FILTERXML(\"<r><a>v</a></r>x\",\"//a\")",
+                          "=FILTERXML(\"<r><a>v</a></r><s/>\",\"//a\")"}) {
+    SCOPED_TRACE(src);
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error());
+    EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  }
+}
+
+TEST(BuiltinsWebFilterXml, WhitespaceOutsideRootIsAccepted) {
+  const Value v = EvalSource("=FILTERXML(\" <r><a>v</a></r>\" & CHAR(10),\"//a\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "v");
+}
+
 TEST(BuiltinsWebFilterXml, MalformedXPathReturnsValue) {
   // "///" is a syntax error in XPath 1.0.
   const Value v = EvalSource("=FILTERXML(\"<r/>\",\"///\")");
