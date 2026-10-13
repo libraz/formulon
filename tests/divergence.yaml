@@ -116,25 +116,6 @@ entries:
     prefer: formulon
     first_noted: 2026-08-05
     last_verified_excel_version: "16.112.1"
-  # Mac Excel composes a base letter and a following combining mark into the
-  # precomposed letter before collating; Formulon gives the combining mark its
-  # own secondary weight and does not compose.
-  - id: col_comb_acute_decomposed
-    applies_to: [mac, win-365-ja_JP]
-    mode: skip-oracle
-    cause: accepted-divergence
-    reason: "\"a\"&UNICHAR(769) vs \"á\": Mac Excel 365 returns EQ in every measured locale, as does Windows Excel 365 ja-JP (16.0.20430), so it composes the combining acute onto its base. Formulon collates a combining mark as a separate secondary-only element and returns LT. Canonical composition is not modelled; the measured cells that depend on it are listed in tools/collation/data/fixtures/excused_<locale>.tsv."
-    prefer: mac-excel-365
-    first_noted: 2026-10-11
-    last_verified_excel_version: "16.113.4"
-  - id: col_comb_acute_ctx
-    applies_to: [mac, win-365-ja_JP]
-    mode: skip-oracle
-    cause: accepted-divergence
-    reason: "\"áb\" vs \"a\"&UNICHAR(769)&\"b\": the same composition inside a word; Mac and Windows Excel 365 return EQ and Formulon, which does not compose combining marks, orders the precomposed letter first. See col_comb_acute_decomposed."
-    prefer: mac-excel-365
-    first_noted: 2026-10-11
-    last_verified_excel_version: "16.113.4"
   # Windows Excel 365, the primary reference, rejects an unsupported
   # WEEKNUM return_type with #NUM! (16.0.20228); Mac Excel 365 falls back to
   # type 1 and returns the week number instead.
@@ -1353,15 +1334,6 @@ entries:
     first_noted: 2026-10-08
     last_verified_excel_version: "16.113.3"
 
-  # Upper-tail probability rounding is amplified by inverse beta conditioning.
-  - id: betainv_roundtrip
-    applies_to: [mac]
-    cause: accepted-divergence
-    mode: skip-oracle
-    reason: 'BETA.INV(BETA.DIST(0.9,0.1,10,TRUE),0.1,10): Mac Excel 365 returns 0.9000004941424153; Formulon returns 0.89999934430275 (difference about 1.15e-6). The CDF is within 1.44e-12 of 1 and its local density is about 1.45e-10, amplifying one probability ulp into about 7.7e-7 in x. Retain the general CDF/inverse calculation rather than bias its probability rounding to this Excel result.'
-    prefer: formulon
-    first_noted: 2026-10-08
-    last_verified_excel_version: "16.113.3"
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
