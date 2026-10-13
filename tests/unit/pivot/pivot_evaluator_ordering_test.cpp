@@ -131,6 +131,7 @@ TEST(PivotEvaluator, FieldSortByValueFieldReordersAxisAndValues) {
 }
 
 TEST(HierarchyBuilder, StoresRecordIndicesOnlyForValueSortedLevels) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
   PivotCache cache = build_basic_cache();
   const std::vector<HierLevel> levels = {
       HierLevel{0U, nullptr, true, std::nullopt, std::nullopt, nullptr},
