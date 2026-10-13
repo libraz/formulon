@@ -148,7 +148,12 @@ pivot:
   grand_totals: {rows: true, cols: true}   # optional, defaults true/true
   filters:                     # optional manual item filters
     - {field: Region, hide: [South]}
+  field_options:               # optional per-field subtotal settings
+    Region: {subtotal_top: false, default_subtotal: true}
 ```
+
+`field_options` keys default to Excel's own: `subtotal_top: true` (the
+subtotal sits on the group's heading row) and `default_subtotal: true`.
 
 `page_fields` places source fields on Excel's report-filter/page axis. The
 optional `formula_probes` list contains `{id, cell, formula}` records. The

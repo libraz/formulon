@@ -360,6 +360,9 @@ export interface PivotFieldSpec {
   customName?: string;
   /** One of `PivotAxis.*`. */
   axis: number;
+  /** Subtotal on the group's own heading row (default `true`, as in Excel);
+   *  `false` heads the group with a label-only row and closes it with an
+   *  `"<item> Total"` row. */
   subtotalTop?: boolean;
   /** `numFmtId` as a decimal string (built-in or from `addNumFmt`). */
   numberFormat?: string;
@@ -2799,11 +2802,13 @@ export interface Workbook {
 
   /** Number of fields configured on the pivot. */
   pivotFieldCount(sheet: number, pivotIdx: number): NumberResult;
-  /** Appends a new field. Returns `{ status, index: fieldIdx }`. */
+  /** Appends a new field. Returns `{ status, index: fieldIdx }`. A field
+   *  added on the row or column axis is appended to that axis's order. */
   pivotFieldAdd(sheet: number, pivotIdx: number, spec: PivotFieldSpec): AddStyleResult;
-  /** Drops every field from the pivot. */
+  /** Drops every field from the pivot, emptying the row and column orders. */
   pivotFieldClear(sheet: number, pivotIdx: number): Status;
-  /** Sets the axis of pivot field `fieldIdx`. */
+  /** Sets the axis of pivot field `fieldIdx`. Moving onto the row or column
+   *  axis appends the field to that axis's order; moving off removes it. */
   pivotFieldSetAxis(sheet: number, pivotIdx: number, fieldIdx: number, axis: number): Status;
   /** Sets the sibling order of pivot field `fieldIdx`; `order` is one of
    *  `PivotSortOrder.*`. `PivotSortOrder.Manual` keeps items in
@@ -2872,7 +2877,9 @@ export interface Workbook {
   pivotFieldSetNumberFormat(sheet: number, pivotIdx: number, fieldIdx: number, utf8: string): Status;
 
   /** Replaces the row-axis field order with `indices`. Each entry must
-   *  be `< pivotFieldCount`. Pass an empty array to clear. */
+   *  be `< pivotFieldCount` and appear once. The list is the axis's whole
+   *  membership: listed fields move onto the row axis and fields left out
+   *  come off it. Pass an empty array to clear. */
   pivotSetRowFieldOrder(sheet: number, pivotIdx: number, indices: ReadonlyArray<number>): Status;
   /** Replaces the column-axis field order. Same contract as rows. */
   pivotSetColFieldOrder(sheet: number, pivotIdx: number, indices: ReadonlyArray<number>): Status;

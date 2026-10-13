@@ -357,8 +357,11 @@ std::optional<IconRender> resolve_icon_set(const CFRule& rule, const Value& cell
   if (spec.floor.gte ? cell < *floor : cell <= *floor) {
     return std::nullopt;
   }
+  // A loaded file may list more thresholds than the set has icons; the
+  // surplus boundaries are ignored so the index stays inside the set.
+  const std::size_t boundaries = std::min(resolved->size(), icon_count(spec.name) - 1U);
   std::uint8_t icon_index = 0;
-  for (std::size_t i = 0; i < resolved->size(); ++i) {
+  for (std::size_t i = 0; i < boundaries; ++i) {
     const bool above = spec.thresholds[i].gte ? (cell >= (*resolved)[i]) : (cell > (*resolved)[i]);
     if (above) {
       icon_index = static_cast<std::uint8_t>(i + 1);
@@ -366,7 +369,7 @@ std::optional<IconRender> resolve_icon_set(const CFRule& rule, const Value& cell
   }
 
   if (spec.reverse) {
-    const auto bucket_count = static_cast<std::uint8_t>(resolved->size() + 1);
+    const auto bucket_count = static_cast<std::uint8_t>(boundaries + 1);
     icon_index = static_cast<std::uint8_t>(bucket_count - 1 - icon_index);
   }
 

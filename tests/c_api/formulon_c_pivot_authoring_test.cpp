@@ -799,3 +799,64 @@ TEST(FormulonCApiPivot, PivotCacheRecordSettersRejectOutOfRangeFieldIndex) {
   EXPECT_EQ(fm_workbook_pivot_cache_record_set_blank(wb.handle, cache_id, 0, kMax), kInvalid);
   EXPECT_EQ(fm_workbook_pivot_cache_record_set_error(wb.handle, cache_id, 0, kMax, 0), kInvalid);
 }
+
+TEST(FormulonCApiPivot, FieldAxisKeepsRowAndColumnOrdersInStep) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+  const std::string kRegionRows = "<rowFields count=\"1\"><field x=\"0\"/></rowFields>";
+  const std::string kRegionCols = "<colFields count=\"1\"><field x=\"0\"/></colFields>";
+  // The helper adds Region on the row axis and then restates the same order.
+  std::string xml = SavedPivotXml(wb.handle);
+  EXPECT_NE(xml.find(kRegionRows), std::string::npos) << xml;
+
+  // A field added on the row axis is placed without an explicit order.
+  ASSERT_EQ(fm_workbook_pivot_field_clear(wb.handle, 0, pivot_idx), 0);
+  fm_pivot_field_spec_t region_spec{};
+  region_spec.source_name = "Region";
+  region_spec.axis = FM_PIVOT_AXIS_ROW;
+  region_spec.subtotal_top = 1;
+  std::size_t region = 99;
+  ASSERT_EQ(fm_workbook_pivot_field_add(wb.handle, 0, pivot_idx, &region_spec, &region), 0) << fm_last_error_message();
+  fm_pivot_field_spec_t amount_spec{};
+  amount_spec.source_name = "Amount";
+  amount_spec.axis = FM_PIVOT_AXIS_VALUE;
+  amount_spec.subtotal_top = 1;
+  std::size_t amount = 99;
+  ASSERT_EQ(fm_workbook_pivot_field_add(wb.handle, 0, pivot_idx, &amount_spec, &amount), 0) << fm_last_error_message();
+  EXPECT_EQ(RowLabels(wb.handle, pivot_idx), (std::vector<std::string>{"North", "South"}));
+
+  // Moving the field, twice, lists it once in the new order only.
+  ASSERT_EQ(fm_workbook_pivot_field_set_axis(wb.handle, 0, pivot_idx, region, FM_PIVOT_AXIS_COL), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_set_axis(wb.handle, 0, pivot_idx, region, FM_PIVOT_AXIS_COL), 0);
+  xml = SavedPivotXml(wb.handle);
+  EXPECT_EQ(xml.find("<rowFields"), std::string::npos) << xml;
+  EXPECT_NE(xml.find(kRegionCols), std::string::npos) << xml;
+
+  // Off both axes, then back onto the rows.
+  ASSERT_EQ(fm_workbook_pivot_field_set_axis(wb.handle, 0, pivot_idx, region, FM_PIVOT_AXIS_VALUE), 0);
+  xml = SavedPivotXml(wb.handle);
+  EXPECT_EQ(xml.find("<rowFields"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("<colFields"), std::string::npos) << xml;
+  ASSERT_EQ(fm_workbook_pivot_field_set_axis(wb.handle, 0, pivot_idx, region, FM_PIVOT_AXIS_ROW), 0);
+  EXPECT_NE(SavedPivotXml(wb.handle).find(kRegionRows), std::string::npos);
+
+  // Setting an order moves its fields onto that axis and drops the rest.
+  const auto region_index = static_cast<std::uint32_t>(region);
+  ASSERT_EQ(fm_workbook_pivot_set_col_field_order(wb.handle, 0, pivot_idx, &region_index, 1U), 0);
+  xml = SavedPivotXml(wb.handle);
+  EXPECT_EQ(xml.find("<rowFields"), std::string::npos) << xml;
+  EXPECT_NE(xml.find(kRegionCols), std::string::npos) << xml;
+  ASSERT_EQ(fm_workbook_pivot_set_col_field_order(wb.handle, 0, pivot_idx, nullptr, 0U), 0);
+  xml = SavedPivotXml(wb.handle);
+  EXPECT_EQ(xml.find("<colFields"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("axis=\"axisCol\""), std::string::npos) << xml;
+
+  const std::uint32_t twice[] = {region_index, region_index};
+  EXPECT_EQ(fm_workbook_pivot_set_row_field_order(wb.handle, 0, pivot_idx, twice, 2U),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(SavedPivotXml(wb.handle).find("<rowFields"), std::string::npos);
+}

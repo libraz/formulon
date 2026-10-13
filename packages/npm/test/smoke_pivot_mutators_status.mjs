@@ -77,12 +77,12 @@ function pivotGrid(wb, pivot = 0) {
 const BASE_GRID = ['行ラベル|Sum of Amount', 'East|15', 'West|37', '総計|52'];
 const TWO_LEVEL_GRID = [
   '行ラベル|Sum of Amount',
+  'East|15',
   'Apple|10',
   'Pear|5',
-  'East|15',
+  'West|37',
   'Apple|30',
   'Pear|7',
-  'West|37',
   '総計|52',
 ];
 const DATE_SERIAL_GRID = ['行ラベル|Sum of Amount', '45292|10', '45323|30', '45658|5', '45689|7', '総計|52'];
@@ -385,7 +385,8 @@ const PIVOT_MUTATORS = [
       act: (b) => b.wb.pivotFieldClear(0, b.pivot),
       expect: (b) => {
         assert.equal(b.wb.pivotFieldCount(0, b.pivot).value, 0);
-        assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
+        // The row order empties with the fields; East's hidden flag goes too.
+        assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', '|52']);
       },
     },
   ],
@@ -410,16 +411,18 @@ const PIVOT_MUTATORS = [
     'pivotFieldSetSubtotalTop',
     {
       setup: twoLevels,
-      act: (b) => b.wb.pivotFieldSetSubtotalTop(0, b.pivot, b.region, true),
+      act: (b) => b.wb.pivotFieldSetSubtotalTop(0, b.pivot, b.region, false),
       expect: (b) =>
         assert.deepEqual(pivotGrid(b.wb), [
           '行ラベル|Sum of Amount',
-          'East|15',
+          'East|',
           'Apple|10',
           'Pear|5',
-          'West|37',
+          'East 集計|15',
+          'West|',
           'Apple|30',
           'Pear|7',
+          'West 集計|37',
           '総計|52',
         ]),
     },
@@ -466,12 +469,12 @@ const PIVOT_MUTATORS = [
       expect: (b) =>
         assert.deepEqual(pivotGrid(b.wb), [
           '行ラベル|Sum of Amount',
+          'East|10',
           'Apple|10',
           'Pear|5',
-          'East|10',
+          'West|30',
           'Apple|30',
           'Pear|7',
-          'West|30',
           '総計|52',
         ]),
     },

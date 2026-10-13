@@ -347,22 +347,32 @@ Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec, ExcelPr
     table.mutable_fields()[idx].axis = PivotAxis::Page;
   }
 
-  // Excel's compact layout (the default) implicitly shows a subtotal
-  // row for every non-leaf row field. The declarative spec does not
-  // model that directly, so flip `subtotal_top` on every row / col
-  // field that has at least one descendant on the same axis. The
-  // leaf-most field on each axis is left alone — its values already
-  // occupy the data rows / columns.
-  if (table.mutable_row_field_order().size() > 1) {
-    for (std::size_t i = 0; i + 1 < table.mutable_row_field_order().size(); ++i) {
-      const std::uint32_t idx = table.mutable_row_field_order()[i];
-      table.mutable_fields()[idx].subtotal_top = true;
+  // Per-field subtotal settings; a field left unlisted keeps Excel's
+  // defaults (subtotal shown, at the top of its group).
+  if (const JsonValue* options_v = pivot.find("field_options"); options_v != nullptr && !options_v->is_null()) {
+    if (!options_v->is_object()) {
+      return invalid("pivot 'field_options' must be an object");
     }
-  }
-  if (table.mutable_col_field_order().size() > 1) {
-    for (std::size_t i = 0; i + 1 < table.mutable_col_field_order().size(); ++i) {
-      const std::uint32_t idx = table.mutable_col_field_order()[i];
-      table.mutable_fields()[idx].subtotal_top = true;
+    for (const auto& [name, option] : options_v->as_object()) {
+      const std::uint32_t idx = header_index(headers, name);
+      if (idx >= headers.size()) {
+        return invalid("pivot 'field_options' names a non-source field '" + name + "'");
+      }
+      if (!option.is_object()) {
+        return invalid("pivot 'field_options' entries must be objects");
+      }
+      for (const auto& [key, flag] : option.as_object()) {
+        if (!flag.is_bool()) {
+          return invalid("pivot field option '" + key + "' must be a boolean");
+        }
+        if (key == "subtotal_top") {
+          table.mutable_fields()[idx].subtotal_top = flag.as_bool();
+        } else if (key == "default_subtotal") {
+          table.mutable_fields()[idx].default_subtotal = flag.as_bool();
+        } else {
+          return invalid("unknown pivot field option '" + key + "'");
+        }
+      }
     }
   }
 

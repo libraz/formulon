@@ -228,6 +228,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/workbook_bin_writer.cpp
   src/io/xlsb/writer.cpp
   src/cf/auto_filter_eval.cpp
+  src/cf/cf_authoring.cpp
   src/cf/cf_evaluator.cpp
   src/cf/cf_helpers.cpp
   src/cf/rule_match.cpp

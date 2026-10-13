@@ -706,4 +706,38 @@ TEST_F(FormulonCApiSheetFeatures, MutatorsRejectOutOfGridCoordinatesBeforeMutati
   fm_buffer_free(saved);
 }
 
+// DV formulas are stored as files carry them: one leading '=' is dropped, so
+// a save / load cycle returns the text the setter stored.
+TEST_F(FormulonCApiSheetFeatures, ValidationStoresFormulasWithoutTheLeadingEquals) {
+  fm_merge_range r{0, 0, 5, 0};
+  fm_data_validation v{};
+  v.ranges = &r;
+  v.range_count = 1;
+  v.type = 1;  // whole
+  v.op = 0;    // between
+  v.formula1 = "=$B$1";
+  v.formula2 = "=$B$1+10";
+  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, v), 0) << fm_last_error_message();
+  fm_data_validation got{};
+  ASSERT_EQ(fm_sheet_get_validation_at(wb_, 0, 0, &got), 0);
+  EXPECT_STREQ(got.formula1, "$B$1");
+  EXPECT_STREQ(got.formula2, "$B$1+10");
+
+  v.formula1 = "==$B$1";
+  EXPECT_EQ(fm_sheet_add_validation(wb_, 0, v),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kParserUnexpectedToken));
+
+  std::uint8_t* saved = nullptr;
+  std::size_t saved_len = 0U;
+  ASSERT_EQ(fm_workbook_save(wb_, &saved, &saved_len), 0);
+  fm_workbook_t* reloaded = nullptr;
+  const fm_status_t loaded = fm_workbook_load(saved, saved_len, &reloaded);
+  fm_buffer_free(saved);
+  ASSERT_EQ(loaded, 0);
+  ASSERT_EQ(fm_sheet_get_validation_at(reloaded, 0, 0, &got), 0);
+  EXPECT_STREQ(got.formula1, "$B$1");
+  EXPECT_STREQ(got.formula2, "$B$1+10");
+  fm_workbook_destroy(reloaded);
+}
+
 }  // namespace

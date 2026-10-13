@@ -11,6 +11,7 @@
 
 #include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
+#include "utils/error.h"
 #include "value.h"
 
 namespace {
@@ -172,14 +173,14 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameAddsAndUpdates) {
   // The scope out-param is optional; NULL exercises the skip path.
   ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 0, &nm, &fr, nullptr), 0);
   EXPECT_STREQ(nm, "MyName");
-  EXPECT_STREQ(fr, "=42");
+  EXPECT_STREQ(fr, "42");
 
   // Update the formula text via case-insensitive match.
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "MYNAME", "=99"), 0);
   EXPECT_EQ(fm_workbook_defined_name_count(wb.handle), 1U);
   ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 0, &nm, &fr, nullptr), 0);
   EXPECT_STREQ(nm, "MyName");  // authored case preserved
-  EXPECT_STREQ(fr, "=99");
+  EXPECT_STREQ(fr, "99");
 }
 
 TEST(WorkbookSheetOpsCApi, SetDefinedNameScopedAllowsWorkbookAndSheetNames) {
@@ -195,24 +196,65 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameScopedAllowsWorkbookAndSheetNames) {
   int32_t local_sheet_id = -99;
   ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 0, &nm, &fr, &local_sheet_id), 0);
   EXPECT_STREQ(nm, "Rate");
-  EXPECT_STREQ(fr, "=1");
+  EXPECT_STREQ(fr, "1");
   EXPECT_EQ(local_sheet_id, -1);
 
   ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 1, &nm, &fr, &local_sheet_id), 0);
   EXPECT_STREQ(nm, "Rate");
-  EXPECT_STREQ(fr, "=2");
+  EXPECT_STREQ(fr, "2");
   EXPECT_EQ(local_sheet_id, 1);
 
   ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "RATE", "=3", 1), 0);
   ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 1, &nm, &fr, &local_sheet_id), 0);
   EXPECT_STREQ(nm, "Rate");
-  EXPECT_STREQ(fr, "=3");
+  EXPECT_STREQ(fr, "3");
   EXPECT_EQ(local_sheet_id, 1);
 
   ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Rate", "", 1), 0);
   EXPECT_EQ(fm_workbook_defined_name_count(wb.handle), 1U);
   ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 0, &nm, &fr, &local_sheet_id), 0);
   EXPECT_EQ(local_sheet_id, -1);
+}
+
+// The name stores its formula as files carry it, so a save / load cycle
+// returns the same text the setter stored.
+TEST(WorkbookSheetOpsCApi, SetDefinedNameDropsTheLeadingEquals) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Foo", "=Sheet1!$A$1"), 0);
+  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Bar", "=Sheet1!$B$2", 0), 0);
+  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Baz", "Sheet1!$C$3"), 0);
+  EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Bad", "==1"),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kParserUnexpectedToken));
+
+  const char* expected[] = {"Sheet1!$A$1", "Sheet1!$B$2", "Sheet1!$C$3"};
+  const char* nm = nullptr;
+  const char* fr = nullptr;
+  ASSERT_EQ(fm_workbook_defined_name_count(wb.handle), 3U);
+  for (std::size_t i = 0; i < 3U; ++i) {
+    ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, i, &nm, &fr, nullptr), 0);
+    EXPECT_STREQ(fr, expected[i]) << nm;
+  }
+
+  uint8_t* bytes = nullptr;
+  size_t len = 0;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &bytes, &len), 0);
+  WorkbookGuard reloaded;
+  const fm_status_t loaded = fm_workbook_load(bytes, len, &reloaded.handle);
+  fm_buffer_free(bytes);
+  ASSERT_EQ(loaded, 0);
+  ASSERT_EQ(fm_workbook_defined_name_count(reloaded.handle), 3U);
+  // The writer may reorder names, so match them by name.
+  const char* names[] = {"Foo", "Bar", "Baz"};
+  for (std::size_t i = 0; i < 3U; ++i) {
+    ASSERT_EQ(fm_workbook_defined_name_at(reloaded.handle, i, &nm, &fr, nullptr), 0);
+    std::size_t k = 0;
+    while (k < 3U && std::strcmp(nm, names[k]) != 0) {
+      ++k;
+    }
+    ASSERT_LT(k, 3U) << nm;
+    EXPECT_STREQ(fr, expected[k]) << nm;
+  }
 }
 
 TEST(WorkbookSheetOpsCApi, SetDefinedNameScopedRejectsOutOfRangeScope) {

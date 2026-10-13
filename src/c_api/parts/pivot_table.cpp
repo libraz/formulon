@@ -5,6 +5,7 @@
 
 #include "pivot/pivot_table.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -86,6 +87,43 @@ std::optional<fm_pivot_axis_t> pivot_axis_to_fm(formulon::pivot::PivotAxis axis)
     case formulon::pivot::PivotAxis::None:
     default:
       return std::nullopt;
+  }
+}
+
+// Drops `field` from the row (or column) order, shifting a Values marker
+// that sat after it.
+void remove_from_field_order(formulon::pivot::PivotTable& table, bool row, std::uint32_t field) {
+  std::vector<std::uint32_t>& order = row ? table.mutable_row_field_order() : table.mutable_col_field_order();
+  const auto it = std::find(order.begin(), order.end(), field);
+  if (it == order.end()) {
+    return;
+  }
+  const auto index = static_cast<std::size_t>(it - order.begin());
+  order.erase(it);
+  const std::optional<std::size_t> values_position = row ? table.row_values_position() : table.col_values_position();
+  if (values_position.has_value() && index < *values_position) {
+    if (row) {
+      table.set_row_values_position(*values_position - 1U);
+    } else {
+      table.set_col_values_position(*values_position - 1U);
+    }
+  }
+}
+
+// Keeps the row / column orders in step with `field`'s axis: a Row or Col
+// field is listed once in that axis's order (appended when new) and in no
+// other order.
+void sync_field_order(formulon::pivot::PivotTable& table, std::uint32_t field) {
+  const formulon::pivot::PivotAxis axis = table.fields()[field].axis;
+  for (const bool row : {true, false}) {
+    if (axis != (row ? formulon::pivot::PivotAxis::Row : formulon::pivot::PivotAxis::Col)) {
+      remove_from_field_order(table, row, field);
+      continue;
+    }
+    std::vector<std::uint32_t>& order = row ? table.mutable_row_field_order() : table.mutable_col_field_order();
+    if (std::find(order.begin(), order.end(), field) == order.end()) {
+      order.push_back(field);
+    }
   }
 }
 
@@ -314,6 +352,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_add(fm_workbook_t* wb, std::size_
   field.number_format = spec->number_format != nullptr ? spec->number_format : "";
   table->mutable_fields().push_back(std::move(field));
   *out_field_idx = table->fields().size() - 1U;
+  sync_field_order(*table, static_cast<std::uint32_t>(*out_field_idx));
   invalidate_pivot_result(wb->workbook(), *table);
   return 0;
 }
@@ -327,6 +366,15 @@ extern "C" fm_status_t fm_workbook_pivot_field_clear(fm_workbook_t* wb, std::siz
     return rc;
   }
   table->mutable_fields().clear();
+  table->mutable_row_field_order().clear();
+  table->mutable_col_field_order().clear();
+  // A Values marker can only lead an empty order.
+  if (table->row_values_position().has_value()) {
+    table->set_row_values_position(0U);
+  }
+  if (table->col_values_position().has_value()) {
+    table->set_col_values_position(0U);
+  }
   invalidate_pivot_result(wb->workbook(), *table);
   return 0;
 }
@@ -392,10 +440,17 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_axis(fm_workbook_t* wb, std::
   if (enum_status != 0) {
     return enum_status;
   }
-  return mutate_pivot_field(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_set_axis",
-                            [axis](formulon::pivot::PivotField& field) {
-                              field.axis = pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(axis));
-                            });
+  formulon::pivot::PivotTable* table = nullptr;
+  formulon::pivot::PivotField* field = nullptr;
+  if (fm_status_t rc = resolve_pivot_field(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_set_axis",
+                                           &table, &field);
+      rc != 0) {
+    return rc;
+  }
+  field->axis = pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(axis));
+  sync_field_order(*table, static_cast<std::uint32_t>(field_idx));
+  invalidate_pivot_result(wb->workbook(), *table);
+  return 0;
 }
 
 extern "C" fm_status_t fm_workbook_pivot_field_set_sort(fm_workbook_t* wb, std::size_t sheet_index,
@@ -661,9 +716,35 @@ fm_status_t set_field_order(fm_workbook_t* wb, std::size_t sheet_index, std::siz
                                (std::string(fn) + ": indices[i] out of range").c_str(),
                                "i=" + std::to_string(i) + " value=" + std::to_string(indices[i]));
     }
+    if (std::find(indices, indices + i, indices[i]) != indices + i) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               (std::string(fn) + ": indices lists a field twice").c_str(),
+                               "i=" + std::to_string(i) + " value=" + std::to_string(indices[i]));
+    }
   }
+  // The list is the axis's whole membership: a field left out comes off the
+  // axis, and a listed field moves onto it from wherever it was.
+  const formulon::pivot::PivotAxis axis = row ? formulon::pivot::PivotAxis::Row : formulon::pivot::PivotAxis::Col;
   std::vector<std::uint32_t>& target = row ? table->mutable_row_field_order() : table->mutable_col_field_order();
+  for (const std::uint32_t field : target) {
+    if (field < field_count && std::find(indices, indices + count, field) == indices + count) {
+      table->mutable_fields()[field].axis = formulon::pivot::PivotAxis::None;
+    }
+  }
+  for (std::size_t i = 0; i < count; ++i) {
+    table->mutable_fields()[indices[i]].axis = axis;
+    remove_from_field_order(*table, !row, indices[i]);
+  }
   target.assign(indices, indices + count);
+  // Keep a Values marker within the new order's slots.
+  const std::optional<std::size_t> values_position = row ? table->row_values_position() : table->col_values_position();
+  if (values_position.has_value() && *values_position > count) {
+    if (row) {
+      table->set_row_values_position(count);
+    } else {
+      table->set_col_values_position(count);
+    }
+  }
   invalidate_pivot_result(wb->workbook(), *table);
   return 0;
 }

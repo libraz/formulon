@@ -25,6 +25,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "cf/cf_authoring.h"
 #include "cf/cf_types.h"
 #include "color_resolve.h"
 #include "io/cf_overlay.h"
@@ -34,8 +35,8 @@
 
 using formulon::c_api::BorrowedArrayArena;
 using formulon::c_api::BorrowedStringArena;
-using formulon::c_api::parts::check_formula_parses;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::validate;
@@ -292,7 +293,10 @@ bool copy_data_bar_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
 }
 
 bool copy_icon_set_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_rule) {
-  if (rule.icon_set_engaged == 0 || (rule.icon_set_threshold_count > 0 && rule.icon_set_thresholds == nullptr)) {
+  // An N-icon set carries exactly its N-1 boundaries; the floor is separate.
+  if (rule.icon_set_engaged == 0 || rule.icon_set_thresholds == nullptr ||
+      rule.icon_set_threshold_count + 1U !=
+          formulon::cf::icon_count(static_cast<formulon::cf::IconSetName>(rule.icon_set_name))) {
     return false;
   }
   formulon::cf::IconSetSpec spec;
@@ -309,6 +313,37 @@ bool copy_icon_set_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
   }
   out_rule->icon_set = std::move(spec);
   return true;
+}
+
+// Stores every formula-typed threshold of `out_rule`'s visual payload the way
+// files carry it (see `check_stored_formula`).
+fm_status_t store_cfvo_formulas(formulon::cf::CFRule* out_rule) {
+  std::vector<formulon::cf::CfValueObject*> cfvos;
+  if (out_rule->color_scale.has_value()) {
+    for (auto& v : out_rule->color_scale->thresholds) {
+      cfvos.push_back(&v);
+    }
+  }
+  if (out_rule->data_bar.has_value()) {
+    cfvos.push_back(&out_rule->data_bar->min);
+    cfvos.push_back(&out_rule->data_bar->max);
+  }
+  if (out_rule->icon_set.has_value()) {
+    cfvos.push_back(&out_rule->icon_set->floor);
+    for (auto& v : out_rule->icon_set->thresholds) {
+      cfvos.push_back(&v);
+    }
+  }
+  for (formulon::cf::CfValueObject* v : cfvos) {
+    if (v->type != formulon::cf::CfvoType::Formula) {
+      continue;
+    }
+    const std::string source = std::move(v->value);
+    if (auto rc = check_stored_formula("fm_sheet_cf_add_rule", source, "field=cfvo.value", &v->value); rc != 0) {
+      return rc;
+    }
+  }
+  return 0;
 }
 
 }  // namespace
@@ -428,20 +463,18 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
     out_rule.id = std::string("{FC000000-0000-0000-0000-") + buf + "}";
   }
   if (rule.formula1 != nullptr) {
-    if (rule.formula1[0] != '\0') {
-      if (auto rc = check_formula_parses("fm_sheet_cf_add_rule", rule.formula1, "field=formula1"); rc != 0) {
-        return rc;
-      }
+    if (auto rc =
+            check_stored_formula("fm_sheet_cf_add_rule", rule.formula1, "field=formula1", &out_rule.formula1.emplace());
+        rc != 0) {
+      return rc;
     }
-    out_rule.formula1 = std::string(rule.formula1);
   }
   if (rule.formula2 != nullptr) {
-    if (rule.formula2[0] != '\0') {
-      if (auto rc = check_formula_parses("fm_sheet_cf_add_rule", rule.formula2, "field=formula2"); rc != 0) {
-        return rc;
-      }
+    if (auto rc =
+            check_stored_formula("fm_sheet_cf_add_rule", rule.formula2, "field=formula2", &out_rule.formula2.emplace());
+        rc != 0) {
+      return rc;
     }
-    out_rule.formula2 = std::string(rule.formula2);
   }
   if (rule.op_engaged != 0) {
     out_rule.op = static_cast<formulon::cf::CellIsOperator>(rule.op);
@@ -462,6 +495,12 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
   if (rule.time_period_engaged != 0) {
     out_rule.time_period = static_cast<formulon::cf::TimePeriod>(rule.time_period);
   }
+  if (!out_rule.formula1.has_value() || out_rule.formula1->empty()) {
+    // Excel stores a derived formula for these types and readers surface it.
+    if (auto derived = formulon::cf::derived_rule_formula(out_rule, new_block.sqref.front().first)) {
+      out_rule.formula1 = std::move(*derived);
+    }
+  }
   if (out_rule.type == formulon::cf::RuleType::ColorScale && !copy_color_scale_payload(rule, &out_rule)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_sheet_cf_add_rule: invalid colorScale payload");
@@ -473,6 +512,9 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
   if (out_rule.type == formulon::cf::RuleType::IconSet && !copy_icon_set_payload(rule, &out_rule)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_sheet_cf_add_rule: invalid iconSet payload");
+  }
+  if (auto rc = store_cfvo_formulas(&out_rule); rc != 0) {
+    return rc;
   }
 
   new_block.rules.push_back(std::move(out_rule));

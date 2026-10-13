@@ -126,12 +126,12 @@ _BASE_GRID = ["行ラベル|Sum of Amount", "East|15", "West|37", "総計|52"]
 
 _TWO_LEVEL_GRID = [
     "行ラベル|Sum of Amount",
+    "East|15",
     "Apple|10",
     "Pear|5",
-    "East|15",
+    "West|37",
     "Apple|30",
     "Pear|7",
-    "West|37",
     "総計|52",
 ]
 
@@ -268,7 +268,8 @@ class PivotMutatorTableTests(unittest.TestCase):
 
         def field_clear(t: Any, f: _PivotFixture, r: None) -> None:
             eq(f.wb.pivot_field_count(0, f.pivot), 0)
-            eq(f.grid(), _BASE_GRID)
+            # The row order empties with the fields; East's hidden flag goes too.
+            eq(f.grid(), ["行ラベル|Sum of Amount", "|52"])
 
         def add_item_at_setup(f: _PivotFixture) -> None:
             # Only the index-addressed form can name the blank item.
@@ -446,17 +447,19 @@ class PivotMutatorTableTests(unittest.TestCase):
             ),
             "pivot_field_set_subtotal_top": (
                 _two_levels,
-                lambda f: f.wb.pivot_field_set_subtotal_top(0, f.pivot, f.region, True),
+                lambda f: f.wb.pivot_field_set_subtotal_top(0, f.pivot, f.region, False),
                 None,
                 grid_is(
                     [
                         "行ラベル|Sum of Amount",
-                        "East|15",
+                        "East|",
                         "Apple|10",
                         "Pear|5",
-                        "West|37",
+                        "East 集計|15",
+                        "West|",
                         "Apple|30",
                         "Pear|7",
+                        "West 集計|37",
                         "総計|52",
                     ]
                 ),
@@ -492,12 +495,12 @@ class PivotMutatorTableTests(unittest.TestCase):
                 grid_is(
                     [
                         "行ラベル|Sum of Amount",
+                        "East|10",
                         "Apple|10",
                         "Pear|5",
-                        "East|10",
+                        "West|30",
                         "Apple|30",
                         "Pear|7",
-                        "West|30",
                         "総計|52",
                     ]
                 ),

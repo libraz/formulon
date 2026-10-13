@@ -30,6 +30,9 @@
 //       {"field": "Region", "hide": ["South"]}
 //     ],
 //     "page_fields": ["Region"],     // optional report-filter fields
+//     "field_options": {               // optional per-field subtotals
+//       "Region": {"subtotal_top": false, "default_subtotal": true}
+//     },
 //     "formula_probes": [              // optional post-build formulas
 //       {"id": "page", "cell": "Report!Z1",
 //        "formula": "=GETPIVOTDATA(...)"}
@@ -40,6 +43,7 @@
 // StdDev, StdDevP, Var, VarP. All fields except `source`, `anchor`,
 // `data_fields` are optional; `row_fields` / `col_fields` / `filters`
 // default to empty, `layout` to Compact, `grand_totals` to {true,true}.
+// `field_options` keys default to Excel's: subtotal shown, at the top.
 //
 // Declarative `print` block shape
 // -------------------------------

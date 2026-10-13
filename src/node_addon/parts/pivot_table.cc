@@ -197,7 +197,7 @@ Napi::Value Workbook::PivotFieldAdd(const Napi::CallbackInfo& info) {
   c_spec.source_name = has_source ? source_name.c_str() : nullptr;
   c_spec.custom_name = has_custom ? custom_name.c_str() : nullptr;
   c_spec.axis = static_cast<fm_pivot_axis_t>(reader.U32(spec, "axis", 0U));
-  c_spec.subtotal_top = reader.Bool(spec, "subtotalTop", false) ? 1 : 0;
+  c_spec.subtotal_top = reader.Bool(spec, "subtotalTop", true) ? 1 : 0;
   c_spec.number_format = has_nfmt ? number_format.c_str() : nullptr;
 
   if (!reader.ok()) {

@@ -2044,12 +2044,17 @@ class PivotWorksheetSource:
 
 @dataclass
 class PivotFieldSpec:
-    """Argument shape for :meth:`Workbook.pivot_field_add`."""
+    """Argument shape for :meth:`Workbook.pivot_field_add`.
+
+    ``subtotal_top`` defaults to ``True``, Excel's default: a group's subtotal
+    sits on its own heading row. ``False`` heads the group with a label-only
+    row and closes it with an ``"<item> Total"`` row.
+    """
 
     source_name: str
     custom_name: str = ""
     axis: "PivotAxis | int" = PivotAxis.ROW
-    subtotal_top: bool = False
+    subtotal_top: bool = True
     number_format: str = ""
 
 
@@ -7708,7 +7713,11 @@ class Workbook:
         )
 
     def pivot_field_add(self, sheet: int, pivot_index: int, spec: PivotFieldSpec) -> int:
-        """Append a field to the pivot; return its index."""
+        """Append a field to the pivot; return its index.
+
+        A field added on the row or column axis is appended to that axis's
+        field order.
+        """
         h = self._require()
         owned: List[int] = []
         ptr = S.alloc_struct(LIB, S.PIVOT_FIELD_SPEC)
@@ -7754,7 +7763,11 @@ class Workbook:
         )
 
     def pivot_field_set_axis(self, sheet: int, pivot_index: int, field_idx: int, axis: "PivotAxis | int") -> None:
-        """Set the axis of pivot field ``field_idx``."""
+        """Set the axis of pivot field ``field_idx``.
+
+        Moving onto the row or column axis appends the field to that axis's
+        order; moving off removes it from the order it was in.
+        """
         h = self._require()
         _check(
             LIB.fm_workbook_pivot_field_set_axis(
@@ -7994,7 +8007,11 @@ class Workbook:
             LIB.free(fmt_ptr)
 
     def pivot_set_row_field_order(self, sheet: int, pivot_index: int, indices: Sequence[int]) -> None:
-        """Replace the row-axis field order with ``indices``."""
+        """Replace the row-axis field order with ``indices``.
+
+        The list is the axis's whole membership: listed fields move onto the
+        row axis, and fields left out come off it. Each index may appear once.
+        """
         self._pivot_set_field_order(
             LIB.fm_workbook_pivot_set_row_field_order,
             _uint(sheet, "sheet_index"),
@@ -8003,7 +8020,10 @@ class Workbook:
         )
 
     def pivot_set_col_field_order(self, sheet: int, pivot_index: int, indices: Sequence[int]) -> None:
-        """Replace the column-axis field order with ``indices``."""
+        """Replace the column-axis field order with ``indices``.
+
+        Same contract as :meth:`pivot_set_row_field_order`.
+        """
         self._pivot_set_field_order(
             LIB.fm_workbook_pivot_set_col_field_order,
             _uint(sheet, "sheet_index"),

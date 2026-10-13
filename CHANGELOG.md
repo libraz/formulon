@@ -24,6 +24,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   added by label now binds to the cache's shared item of that label, so its
   saved `<item x>` matches. Pass `1` / `true` for the former ascending and
   `0` / `false` for descending.
+- `fm_sheet_cf_add_rule`, `fm_sheet_add_validation`,
+  `fm_workbook_set_defined_name[_scoped]` and formula-typed conditional-format
+  thresholds store formula text without its leading `=`, the form files carry
+  and readers produce: getters return `$B1>100` rather than `=$B1>100`, and
+  saved files no longer contain `<formula>=…`. A formula starting with `==`
+  and an unparseable formula-typed threshold are rejected with
+  `kParserUnexpectedToken`.
+- `fm_sheet_cf_add_rule` rejects an icon-set rule unless it carries exactly
+  N-1 thresholds for its N-icon set (`kInvalidArgument`).
+- Pivot fields added through the Python, Node and WASM bindings default
+  `subtotal_top` to true, matching Excel and OOXML; set it to false explicitly
+  for subtotals at the bottom.
+- `fm_workbook_pivot_field_add` and `fm_workbook_pivot_field_set_axis` keep
+  the row and column field orders in step with the field's axis, so a field
+  added on the row or column axis shows without a separate order call.
+  `fm_workbook_pivot_set_row_field_order` / `_col_field_order` set the axis's
+  whole membership (unlisted former members leave the axis) and reject
+  duplicate indices. `fm_workbook_pivot_field_clear` also empties both orders.
 
 ### Fixed
 
@@ -31,6 +49,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   conditional-format rules keep a resolvable `dxf_id`, `.xlsb` to `.xlsx`
   conversion keeps their formatting, and `add_dxf` after loading no longer
   collides with Excel's first dxf.
+- Text, blanks, errors and timePeriod conditional-format rules added without a
+  formula now carry the formula Excel stores (e.g.
+  `NOT(ISERROR(SEARCH("ab",B1)))`, `FLOOR(B2,1)=TODAY()-1`), anchored at the
+  top-left cell of the first range, so both writers save it and `formula1`
+  reads back populated.
+- An icon-set rule with surplus thresholds no longer renders an out-of-range
+  icon; evaluation ignores thresholds past the set's N-1.
+- Compact and outline pivots with a subtotal at the bottom
+  (`subtotalTop="0"`) or no subtotal (`defaultSubtotal="0"`) show the outer
+  item on its own heading row, and a bottom subtotal row is labelled
+  "<item> Total" in the locale's wording.
+- Compact-layout row cells report the row's hierarchy depth and its own field
+  name instead of depth 0 and the outermost field.
 
 ## [0.15.1] - 2026-10-12
 

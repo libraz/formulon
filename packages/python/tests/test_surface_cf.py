@@ -163,7 +163,8 @@ class ConditionalFormatTests(unittest.TestCase):
             ConditionalFormatInput(
                 sqref=[MergeRange(0, 2, 4, 2)],
                 type=4,
-                icon_set=IconSet(0, [CfValueObject(1, "0"), CfValueObject(1, "33"), CfValueObject(1, "67")]),
+                # 4Arrows: a 4-icon set carries three thresholds.
+                icon_set=IconSet(8, [CfValueObject(1, "0"), CfValueObject(1, "33"), CfValueObject(1, "67")]),
             ),
         ]
 

@@ -41,7 +41,8 @@ const ICON_SET_RULE = Object.freeze({
   sqref: [{ firstRow: 0, firstCol: 2, lastRow: 4, lastCol: 2 }],
   type: 4,
   iconSet: {
-    name: 0,
+    // 4Arrows: a 4-icon set carries three thresholds.
+    name: 8,
     thresholds: [
       { type: 1, value: '0' },
       { type: 1, value: '33' },

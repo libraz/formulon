@@ -25,8 +25,8 @@
 #include "utils/error.h"
 #include "value.h"
 
-using formulon::c_api::parts::check_formula_parses;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::set_binding_error;
@@ -335,12 +335,10 @@ extern "C" fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, uint32_t inde
 
 namespace {
 
-// Shared entry check of the defined-name setters: a non-empty formula must parse.
-fm_status_t check_defined_name_formula(const char* fn, const char* name, const char* formula) {
-  if (formula[0] == '\0') {
-    return 0;
-  }
-  return check_formula_parses(fn, formula, "name=" + std::string(name));
+// Shared entry check of the defined-name setters: a non-empty formula must parse,
+// and is stored without its leading '='. An empty one removes the name.
+fm_status_t check_defined_name_formula(const char* fn, const char* name, const char* formula, std::string* out) {
+  return check_stored_formula(fn, formula, "name=" + std::string(name), out);
 }
 
 }  // namespace
@@ -351,10 +349,11 @@ extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const cha
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_defined_name: NULL argument");
   }
-  if (auto rc = check_defined_name_formula("fm_workbook_set_defined_name", name, formula); rc != 0) {
+  std::string stored;
+  if (auto rc = check_defined_name_formula("fm_workbook_set_defined_name", name, formula, &stored); rc != 0) {
     return rc;
   }
-  auto r = wb->workbook().set_defined_name(std::string(name), std::string(formula));
+  auto r = wb->workbook().set_defined_name(std::string(name), std::move(stored));
   if (!r) {
     return set_last_error(r.error());
   }
@@ -368,10 +367,11 @@ extern "C" fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, co
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_defined_name_scoped: NULL argument");
   }
-  if (auto rc = check_defined_name_formula("fm_workbook_set_defined_name_scoped", name, formula); rc != 0) {
+  std::string stored;
+  if (auto rc = check_defined_name_formula("fm_workbook_set_defined_name_scoped", name, formula, &stored); rc != 0) {
     return rc;
   }
-  auto r = wb->workbook().set_defined_name_scoped(std::string(name), std::string(formula), local_sheet_id);
+  auto r = wb->workbook().set_defined_name_scoped(std::string(name), std::move(stored), local_sheet_id);
   if (!r) {
     return set_last_error(r.error());
   }

@@ -742,6 +742,33 @@ TEST(CFEvaluator, IconSetReverseFlipsBucketIndex) {
   EXPECT_EQ(high.icon_render->icon_index, 0);
 }
 
+TEST(CFEvaluator, IconSetIgnoresThresholdsBeyondItsIcons) {
+  // A loaded 3-icon set with four thresholds: only 20 / 40 count, so the
+  // index never leaves 0..2 (forward or reversed).
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::IconSet);
+  IconSetSpec spec = ThreeIconNumberSet("20", "40", IconSetName::Three_Arrows);
+  spec.thresholds.push_back(IconCfvo(CfvoType::Number, "60"));
+  spec.thresholds.push_back(IconCfvo(CfvoType::Number, "80"));
+  r.icon_set = spec;
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch high = make_match(r, Value::number(90.0), ctx);
+  ASSERT_TRUE(high.icon_render.has_value());
+  EXPECT_EQ(high.icon_render->icon_index, 2);
+
+  spec.reverse = true;
+  r.icon_set = spec;
+  CFMatch reversed_high = make_match(r, Value::number(90.0), ctx);
+  ASSERT_TRUE(reversed_high.icon_render.has_value());
+  EXPECT_EQ(reversed_high.icon_render->icon_index, 0);
+  CFMatch reversed_low = make_match(r, Value::number(10.0), ctx);
+  ASSERT_TRUE(reversed_low.icon_render.has_value());
+  EXPECT_EQ(reversed_low.icon_render->icon_index, 2);
+}
+
 TEST(CFEvaluator, IconSetFiveIconAssignsAcrossFourThresholds) {
   CFEvalHarness harness;
   PopulateLinearPopulation(harness);

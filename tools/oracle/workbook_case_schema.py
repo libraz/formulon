@@ -176,6 +176,10 @@ def _validate_hidden_list(raw: Any, where: str, *, label: str) -> None:
         seen.add(key)
 
 
+# Per-field keys the pivot block's `field_options` accepts.
+_PIVOT_FIELD_OPTIONS = frozenset({"subtotal_top", "default_subtotal"})
+
+
 def _validate_pivot_block(raw: Any, where: str) -> None:
     """Validate the declarative pivot block and optional formula probes.
 
@@ -206,6 +210,19 @@ def _validate_pivot_block(raw: Any, where: str) -> None:
         if overlap:
             raise ValidationError(f"{where}/{axis}: field appears on multiple axes: {sorted(overlap)}")
         seen_axis.update(fields)
+    options = raw.get("field_options")
+    if options is not None:
+        if not isinstance(options, dict):
+            raise ValidationError(f"{where}/field_options: expected a mapping of field name to options")
+        for name, option in options.items():
+            option_where = _at(where, "field_options", name)
+            if not isinstance(option, dict) or not option:
+                raise ValidationError(f"{option_where}: expected a non-empty mapping")
+            for key, flag in option.items():
+                if key not in _PIVOT_FIELD_OPTIONS:
+                    raise ValidationError(f"{option_where}/{key}: unknown field option")
+                if not isinstance(flag, bool):
+                    raise ValidationError(f"{option_where}/{key}: expected a boolean")
     data_fields = raw.get("data_fields")
     if isinstance(data_fields, list):
         for i, data_field in enumerate(data_fields):

@@ -15,10 +15,10 @@
 #include "utils/error.h"
 #include "workbook.h"
 
-using formulon::c_api::parts::check_formula_parses;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_u32;
+using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::validate;
@@ -446,16 +446,17 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::uint32_t 
     return rc;
   }
   const char* const formula_fields[] = {v.formula1, v.formula2};
+  formulon::DataValidation out;
+  std::string* const formula_slots[] = {&out.formula1, &out.formula2};
   for (std::size_t i = 0; i < 2; ++i) {
-    if (formula_fields[i] != nullptr && formula_fields[i][0] != '\0') {
-      if (auto rc = check_formula_parses("fm_sheet_add_validation", formula_fields[i],
-                                         i == 0 ? "field=formula1" : "field=formula2");
+    if (formula_fields[i] != nullptr) {
+      if (auto rc = check_stored_formula("fm_sheet_add_validation", formula_fields[i],
+                                         i == 0 ? "field=formula1" : "field=formula2", formula_slots[i]);
           rc != 0) {
         return rc;
       }
     }
   }
-  formulon::DataValidation out;
   out.ranges.reserve(v.range_count);
   for (std::uint32_t i = 0; i < v.range_count; ++i) {
     formulon::MergeRange r;
@@ -472,8 +473,6 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::uint32_t 
   out.show_input_message = v.show_input_message != 0;
   out.show_error_message = v.show_error_message != 0;
   out.show_dropdown = v.show_dropdown != 0;
-  out.formula1 = (v.formula1 != nullptr) ? std::string(v.formula1) : std::string();
-  out.formula2 = (v.formula2 != nullptr) ? std::string(v.formula2) : std::string();
   out.error_title = (v.error_title != nullptr) ? std::string(v.error_title) : std::string();
   out.error_message = (v.error_message != nullptr) ? std::string(v.error_message) : std::string();
   out.prompt_title = (v.prompt_title != nullptr) ? std::string(v.prompt_title) : std::string();

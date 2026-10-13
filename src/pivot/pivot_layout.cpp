@@ -121,6 +121,8 @@ struct AxisEntry {
   /// Subtotal over a group that contains the Values level: Excel names it
   /// "<group> <data field>" in place of the localized subtotal wording.
   std::string subtotal_label;
+  /// Subtotal that doubles as its group's heading row, labelled bare.
+  bool heads_group = false;
 };
 
 std::vector<std::size_t> subtotal_counts_for_axis(const PivotTable& table,
@@ -260,7 +262,13 @@ class AxisWalk {
     // own row, so Excel opens it with a label-only row and moves its
     // subtotals below it, one per data field.
     const bool values_below = !data_field && shape_.values_at.has_value() && *shape_.values_at > depth;
-    if (shape_.group_rows && values_below) {
+    const std::size_t count =
+        !node.children.empty() && depth < shape_.subtotal_counts.size() ? shape_.subtotal_counts[depth] : 0;
+    const bool first =
+        count > 0 && !values_below && depth < shape_.subtotal_first.size() && shape_.subtotal_first[depth];
+    // Any other group shows its label on a row of its own: a subtotal at the
+    // bottom, or none, cannot stand in for it.
+    if (shape_.group_rows && (values_below || (!node.children.empty() && !first))) {
       push(EntryKind::Group, std::nullopt);
     }
     if (node.children.empty()) {
@@ -271,7 +279,6 @@ class AxisWalk {
     const std::size_t group_begin = entries_.size();
     level(node.children, depth + 1, data_field, 0);
     const std::size_t subtotal_begin = entries_.size();
-    const std::size_t count = depth < shape_.subtotal_counts.size() ? shape_.subtotal_counts[depth] : 0;
     const std::size_t subtotal_index = subtotal_cursor_;
     subtotal_cursor_ += count;
     for (std::size_t offset = 0; offset < count; ++offset) {
@@ -282,10 +289,10 @@ class AxisWalk {
         }
       } else {
         push(EntryKind::Subtotal, data_field, subtotal_index + offset);
+        entries_.back().heads_group = first;
       }
     }
-    const bool first = depth < shape_.subtotal_first.size() && shape_.subtotal_first[depth];
-    if (first && !values_below) {
+    if (first) {
       std::rotate(entries_.begin() + static_cast<std::ptrdiff_t>(group_begin),
                   entries_.begin() + static_cast<std::ptrdiff_t>(subtotal_begin), entries_.end());
     }
@@ -742,13 +749,13 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
       if (multi_col_layout) {
         if (subtotal || entry.kind == EntryKind::Group || outline) {
           // Subtotal and group rows, and every outline row, label only
-          // their own level. A tabular subtotal takes the localized
-          // wording; outline's doubles as the group's header row.
+          // their own level. A subtotal takes the localized wording unless
+          // it doubles as the group's heading row.
           if (depth == last_depth && depth < labels.size()) {
             label = labels[depth];
             if (subtotal && !entry.subtotal_label.empty()) {
               label = entry.subtotal_label;
-            } else if (subtotal && tabular) {
+            } else if (subtotal && !entry.heads_group) {
               label = subtotal_label(label);
             }
           }
@@ -762,10 +769,11 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         }
       } else if (compact) {
         // Compact form shows each row's own level in the single label
-        // column; a subtotal there is the bare group label, since it heads
-        // its group, unless it totals one data field of the group.
+        // column; a subtotal heading its group is the bare group label.
         if (subtotal && !entry.subtotal_label.empty()) {
           label = entry.subtotal_label;
+        } else if (subtotal && !entry.heads_group && !labels.empty()) {
+          label = subtotal_label(labels.back());
         } else if (!labels.empty()) {
           label = labels.back();
         } else if (row_levels == 0 && col_depth > 0 && r_entry == 0) {
@@ -780,12 +788,15 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         }
       }
       const PivotCellKind kind = subtotal ? PivotCellKind::RowSubtotal : PivotCellKind::RowLabel;
+      // Compact folds every level into one column, so the cell reports the
+      // row's hierarchy level rather than its physical column.
+      const std::size_t level = compact ? last_depth : depth;
       if (label.empty()) {
         append_cell(cells, row, left + static_cast<std::uint32_t>(depth), Value::blank(), kind,
-                    static_cast<std::uint32_t>(depth), row_level_name(depth));
+                    static_cast<std::uint32_t>(level), row_level_name(level));
       } else {
         append_cell(cells, row, left + static_cast<std::uint32_t>(depth), text_value(cells, label), kind,
-                    static_cast<std::uint32_t>(depth), row_level_name(depth));
+                    static_cast<std::uint32_t>(level), row_level_name(level));
       }
       if (tabular && entry.kind == EntryKind::Leaf && depth < labels.size()) {
         prev_row_labels[depth] = labels[depth];

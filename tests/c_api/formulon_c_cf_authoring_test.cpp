@@ -1,5 +1,7 @@
 // Stable C ABI conditional-format authoring tests.
 
+#include <iterator>
+
 #include "formulon_c_cf_test_helpers.h"
 
 TEST(FormulonCApiCfMutate, AddCellIsRuleRoundTrips) {
@@ -305,4 +307,169 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   EXPECT_EQ(reloaded_blocks[1].rules[0].data_bar->fill.g, 142U);
   ASSERT_TRUE(reloaded_blocks[2].rules[0].icon_set.has_value());
   EXPECT_EQ(reloaded_blocks[2].rules[0].icon_set->thresholds.size(), 2U);
+}
+
+// One leading '=' is accepted and dropped, so the stored rule matches the
+// one a reader builds from the saved file.
+TEST(FormulonCApiCfMutate, AddRuleStoresFormulasWithoutTheLeadingEquals) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 1;  // CellIs
+  rule.op_engaged = 1;
+  rule.op = 6;  // Between
+  rule.formula1 = "=$B1>100";
+  rule.formula2 = "=SUM($C$1:$C$2)";
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+  std::size_t index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &index), 0) << fm_last_error_message();
+
+  fm_cfvo_t thresholds[2]{};
+  thresholds[0].type = 5;  // Formula
+  thresholds[0].value = "=$D$1";
+  thresholds[0].gte = 1;
+  thresholds[1].type = 4;  // Max
+  thresholds[1].gte = 1;
+  fm_cf_color_t colors[2]{{255, 0, 0, 255}, {0, 255, 0, 255}};
+  fm_cf_rule_t scale{};
+  scale.type = 2;  // ColorScale
+  scale.sqref = &sqref;
+  scale.sqref_count = 1;
+  scale.color_scale_thresholds = thresholds;
+  scale.color_scale_colors = colors;
+  scale.color_scale_count = 2;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, scale, &index), 0) << fm_last_error_message();
+
+  fm_cf_rule_t out{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_STREQ(out.formula1, "$B1>100");
+  EXPECT_STREQ(out.formula2, "SUM($C$1:$C$2)");
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 1, &out), 0);
+  ASSERT_EQ(out.color_scale_count, 2U);
+  EXPECT_STREQ(out.color_scale_thresholds[0].value, "$D$1");
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_sheet_cf_get_at(reloaded.handle, 0, 0, &out), 0);
+  EXPECT_STREQ(out.formula1, "$B1>100");
+  EXPECT_STREQ(out.formula2, "SUM($C$1:$C$2)");
+
+  // Only one '=' is the entry marker; a formula that still starts with one
+  // after it does not parse.
+  rule.formula1 = "==$B1>100";
+  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &index),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kParserUnexpectedToken));
+  thresholds[0].value = "=SUM(";
+  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, scale, &index),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kParserUnexpectedToken));
+}
+
+// An N-icon set carries exactly N-1 thresholds; the floor is separate.
+TEST(FormulonCApiCfMutate, AddRuleRejectsIconThresholdCountsOtherThanIconsMinusOne) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cf_cell_range_t sqref{0, 0, 4, 0};
+  fm_cfvo_t thresholds[4]{};
+  for (fm_cfvo_t& t : thresholds) {
+    t.type = 1;  // Percent
+    t.value = "50";
+    t.gte = 1;
+  }
+  fm_cf_rule_t rule{};
+  rule.type = 4;  // IconSet
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+  rule.icon_set_engaged = 1;
+  rule.icon_set_name = 0;  // Three_Arrows
+  rule.icon_set_thresholds = thresholds;
+  std::size_t index = 0;
+  for (std::uint32_t count : {0U, 1U, 3U, 4U}) {
+    rule.icon_set_threshold_count = count;
+    EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &index),
+              static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument))
+        << "count=" << count;
+  }
+  rule.icon_set_threshold_count = 2;
+  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &index), 0) << fm_last_error_message();
+  rule.icon_set_name = 8;  // Four_Arrows
+  EXPECT_NE(fm_sheet_cf_add_rule(wb.handle, 0, rule, &index), 0);
+  rule.icon_set_threshold_count = 3;
+  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &index), 0) << fm_last_error_message();
+  rule.icon_set_name = 16;  // Five_Quarters
+  rule.icon_set_threshold_count = 4;
+  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &index), 0) << fm_last_error_message();
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 3U);
+}
+
+// Text, blanks, errors and timePeriod rules authored without a formula carry
+// the one Excel stores, anchored at the top-left cell of the first range.
+TEST(FormulonCApiCfMutate, AddRuleDerivesExcelsFormulaForSideFieldRules) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  // B2:B10 and D5; the anchor is B2, the top-left of the first range.
+  fm_cf_cell_range_t ranges[2]{{1, 1, 9, 1}, {4, 3, 4, 3}};
+  struct Case {
+    std::uint8_t type;
+    const char* text;
+    int time_period;
+    const char* formula1;
+    const char* expected;
+  };
+  const Case cases[] = {
+      {7, "ab", -1, nullptr, "NOT(ISERROR(SEARCH(\"ab\",B2)))"},
+      {8, "q\"r", -1, "", "ISERROR(SEARCH(\"q\"\"r\",B2))"},
+      {9, "x", -1, nullptr, "LEFT(B2,LEN(\"x\"))=\"x\""},
+      {10, "y", -1, nullptr, "RIGHT(B2,LEN(\"y\"))=\"y\""},
+      {11, nullptr, -1, nullptr, "LEN(TRIM(B2))=0"},
+      {12, nullptr, -1, nullptr, "LEN(TRIM(B2))>0"},
+      {13, nullptr, -1, nullptr, "ISERROR(B2)"},
+      {14, nullptr, -1, nullptr, "NOT(ISERROR(B2))"},
+      {15, nullptr, 1, nullptr, "FLOOR(B2,1)=TODAY()-1"},
+      {15, nullptr, 8, nullptr, "AND(MONTH(B2)=MONTH(EDATE(TODAY(),0-1)),YEAR(B2)=YEAR(EDATE(TODAY(),0-1)))"},
+      // A caller-supplied formula is kept.
+      {11, nullptr, -1, "=ISBLANK(B2)", "ISBLANK(B2)"},
+  };
+  for (const Case& c : cases) {
+    fm_cf_rule_t rule{};
+    rule.type = c.type;
+    rule.text = c.text;
+    rule.formula1 = c.formula1;
+    if (c.time_period >= 0) {
+      rule.time_period_engaged = 1;
+      rule.time_period = static_cast<std::uint8_t>(c.time_period);
+    }
+    rule.sqref = ranges;
+    rule.sqref_count = 2;
+    std::size_t index = 0;
+    ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &index), 0) << fm_last_error_message();
+    fm_cf_rule_t out{};
+    ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, index, &out), 0);
+    ASSERT_NE(out.formula1, nullptr) << "type=" << static_cast<int>(c.type);
+    EXPECT_STREQ(out.formula1, c.expected);
+  }
+
+  // Both writers carry the derived formulas, and readers return them unchanged.
+  for (std::int32_t format :
+       {static_cast<std::int32_t>(FM_WORKBOOK_FORMAT_XLSX), static_cast<std::int32_t>(FM_WORKBOOK_FORMAT_XLSB)}) {
+    BufferGuard saved;
+    ASSERT_EQ(fm_workbook_save_as(wb.handle, format, &saved.data, &saved.len), 0)
+        << "format=" << format << ": " << fm_last_error_message();
+    WorkbookGuard reloaded;
+    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+    std::size_t count = 0;
+    ASSERT_EQ(fm_sheet_cf_count(reloaded.handle, 0, &count), 0);
+    ASSERT_EQ(count, std::size(cases));
+    for (std::size_t i = 0; i < count; ++i) {
+      fm_cf_rule_t out{};
+      ASSERT_EQ(fm_sheet_cf_get_at(reloaded.handle, 0, i, &out), 0);
+      ASSERT_NE(out.formula1, nullptr) << "format=" << format << " rule=" << i;
+      EXPECT_STREQ(out.formula1, cases[i].expected) << "format=" << format << " rule=" << i;
+    }
+  }
 }

@@ -194,13 +194,6 @@ bool HasFormulas(cf::RuleType t) {
   }
 }
 
-std::size_t IconCount(cf::IconSetName name) {
-  const auto v = static_cast<std::uint8_t>(name);
-  return v <= static_cast<std::uint8_t>(cf::IconSetName::Three_Symbols2)       ? 3U
-         : v <= static_cast<std::uint8_t>(cf::IconSetName::Four_TrafficLights) ? 4U
-                                                                               : 5U;
-}
-
 bool Consumed(const ByteSpan& p) {
   return p.size == 0U;
 }
@@ -388,7 +381,7 @@ bool DecodeRuleBody(BlockCursor& blocks, cf::CFRule& rule, const MergeRange& bas
           }
           ++index;
         }
-        if (rec.type != kEndIconSet || index != IconCount(spec.name) ||
+        if (rec.type != kEndIconSet || index != cf::icon_count(spec.name) ||
             (index < 4U && (flags.value() >> (3U + index)) != 0U)) {
           return false;
         }
@@ -730,7 +723,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
     EmitColor(dst, bar.fill);
     emit_record(dst, kEndDataBar, ByteSpan{});
   } else if (rule.type == cf::RuleType::IconSet) {
-    if (!rule.icon_set || rule.icon_set->thresholds.size() + 1U != IconCount(rule.icon_set->name)) {
+    if (!rule.icon_set || rule.icon_set->thresholds.size() + 1U != cf::icon_count(rule.icon_set->name)) {
       return Refuse("xlsb icon set threshold count does not match its icons");
     }
     const cf::IconSetSpec& set = *rule.icon_set;

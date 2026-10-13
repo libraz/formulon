@@ -392,7 +392,7 @@ JsAddStyleResult JsWorkbook::pivotFieldAdd(uint32_t sheet, uint32_t pivotIdx, em
   // lossy integer conversions are reported before the C ABI is called.
   const char* source_name_ptr = reader.optional_string(spec, "sourceName", source_name, "pivotField.sourceName");
   const char* custom_name_ptr = reader.optional_string(spec, "customName", custom_name, "pivotField.customName");
-  const bool subtotal_top = reader.boolean(spec, "subtotalTop", false, "pivotField.subtotalTop");
+  const bool subtotal_top = reader.boolean(spec, "subtotalTop", true, "pivotField.subtotalTop");
   const char* number_format_ptr =
       reader.optional_string(spec, "numberFormat", number_format, "pivotField.numberFormat");
 

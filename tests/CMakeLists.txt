@@ -357,6 +357,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/pivot/pivot_layout_subtotals_test.cpp
   unit/pivot/pivot_show_values_as_test.cpp
   unit/pivot/pivot_types_test.cpp
+  unit/cf/cf_authoring_test.cpp
   unit/cf/cf_evaluator_test.cpp
   unit/cf/cf_theme_color_test.cpp
   unit/cf/cf_whole_axis_test.cpp

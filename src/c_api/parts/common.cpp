@@ -565,6 +565,25 @@ fm_status_t check_formula_parses(const char* api, std::string_view formula, std:
                            (std::string(api) + ": formula does not parse").c_str(), std::move(context));
 }
 
+fm_status_t check_stored_formula(const char* api, std::string_view formula, std::string context, std::string* out) {
+  if (!formula.empty()) {
+    const bool marked = formula.front() == '=';
+    // The parser skips one '=' of its own, so a second one is refused here.
+    if (marked && formula.size() > 1U && formula[1] == '=') {
+      return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
+                               (std::string(api) + ": formula does not parse").c_str(), std::move(context));
+    }
+    if (auto rc = check_formula_parses(api, formula, std::move(context)); rc != 0) {
+      return rc;
+    }
+    if (marked) {
+      formula.remove_prefix(1);
+    }
+  }
+  out->assign(formula.data(), formula.size());
+  return 0;
+}
+
 }  // namespace parts
 }  // namespace c_api
 }  // namespace formulon

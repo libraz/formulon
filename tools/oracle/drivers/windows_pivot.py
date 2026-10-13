@@ -33,6 +33,10 @@ _XL_ORIENT_COLUMN = 2
 _XL_ORIENT_PAGE = 3
 _XL_ORIENT_DATA = 4
 
+# Excel `XlSubtototalLocationType` values for `LayoutSubtotalLocation`.
+_XL_AT_TOP = 1
+_XL_AT_BOTTOM = 2
+
 # Excel `XlPivotTableSourceType.xlDatabase`.
 _XL_DATABASE = 1
 
@@ -144,6 +148,16 @@ def build_pivot_table(wb, pivot_spec: Dict[str, Any]):
             pivot.RowGrand = bool(grand["rows"])
         if "cols" in grand:
             pivot.ColumnGrand = bool(grand["cols"])
+
+    # Per-field subtotal settings, applied after the layout in case it resets
+    # them. Not best-effort: an ignored option would capture the default shape.
+    for field_name, options in (pivot_spec.get("field_options") or {}).items():
+        field = pivot.PivotFields(field_name)
+        if "default_subtotal" in options:
+            # `Subtotals(1)` is Automatic; the other eleven stay off.
+            field.Subtotals = (bool(options["default_subtotal"]),) + (False,) * 11
+        if "subtotal_top" in options:
+            field.LayoutSubtotalLocation = _XL_AT_TOP if options["subtotal_top"] else _XL_AT_BOTTOM
 
     pivot.RefreshTable()
     return pivot

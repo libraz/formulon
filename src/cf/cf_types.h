@@ -10,6 +10,7 @@
 #define FORMULON_CF_CF_TYPES_H_
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -111,6 +112,11 @@ inline constexpr std::array<std::string_view, 17> kIconSetNames = {
     "3Arrows",        "3ArrowsGray", "3Flags",      "3TrafficLights1", "3TrafficLights2", "3Signs",
     "3Symbols",       "3Symbols2",   "4Arrows",     "4ArrowsGray",     "4RedToBlack",     "4Rating",
     "4TrafficLights", "5Arrows",     "5ArrowsGray", "5Rating",         "5Quarters"};
+
+/// Icons drawn by `name`; its rule carries `icon_count(name) - 1` thresholds.
+constexpr std::size_t icon_count(IconSetName name) noexcept {
+  return name <= IconSetName::Three_Symbols2 ? 3U : name <= IconSetName::Four_TrafficLights ? 4U : 5U;
+}
 
 /// `<cfRule type="timePeriod">` value bucket.
 enum class TimePeriod : std::uint8_t {

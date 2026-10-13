@@ -200,8 +200,9 @@ class DefinedNameTests(unittest.TestCase):
             wb.set_defined_name("Rate", "=1")
             wb.set_defined_name_scoped("Rate", "=2", 1)
             names = {(dn.name, dn.local_sheet_id): dn.formula for dn in wb.iter_defined_names()}
-            self.assertEqual(names[("Rate", -1)], "=1")
-            self.assertEqual(names[("Rate", 1)], "=2")
+            # The setter drops the leading "=", as the file form carries none.
+            self.assertEqual(names[("Rate", -1)], "1")
+            self.assertEqual(names[("Rate", 1)], "2")
 
             wb.set_defined_name_scoped("Rate", "", 1)
             self.assertNotIn(

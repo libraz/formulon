@@ -91,6 +91,13 @@ fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* mess
 // `kParserUnexpectedToken` ("<api>: formula does not parse") with `context`.
 fm_status_t check_formula_parses(const char* api, std::string_view formula, std::string context);
 
+// Entry form of formula text stored outside a cell (CF, DV, defined name, CF
+// threshold): a non-empty `formula` must pass `check_formula_parses`, and
+// `*out` receives it without its one leading '=', the spelling files carry
+// and readers produce; a second leading '=' is refused. An empty `formula`
+// yields "".
+fm_status_t check_stored_formula(const char* api, std::string_view formula, std::string context, std::string* out);
+
 // Returns the thread-local diagnostic message buffer (always non-null).
 const char* last_error_message();
 

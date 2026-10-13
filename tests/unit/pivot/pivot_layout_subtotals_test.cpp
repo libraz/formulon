@@ -393,43 +393,116 @@ TEST(PivotLayout, TotalStripCoversEveryRowForEveryDataField) {
   EXPECT_EQ(counts, (std::vector<double>{1.0, 1.0, 2.0, 2.0, 3.0, 3.0}));
 }
 
-TEST(PivotLayout, CompactLayoutHonorsFieldSubtotalTop) {
+/// The projected grid below the anchor, one `|`-joined string per row; a
+/// missing or blank cell is empty and numbers print as integers.
+std::vector<std::string> grid_rows(const PivotCells& cells) {
+  std::vector<std::string> rows;
+  for (std::uint32_t row = cells.top; row < cells.top + cells.rows; ++row) {
+    std::string line;
+    for (std::uint32_t col = cells.left; col < cells.left + cells.cols; ++col) {
+      if (col != cells.left) {
+        line += '|';
+      }
+      const PivotCell* cell = find_cell(cells, row, col);
+      if (cell == nullptr) {
+        continue;
+      }
+      if (cell->value.is_text()) {
+        line += std::string(cell->value.as_text());
+      } else if (cell->value.is_number()) {
+        line += std::to_string(static_cast<long long>(cell->value.as_number()));
+      }
+    }
+    rows.push_back(std::move(line));
+  }
+  return rows;
+}
+
+/// Region > Product over the basic cache, in an Excel-style locale.
+PivotCells layout_region_product(PivotLayout mode, bool subtotal_top, bool default_subtotal) {
   PivotCache cache = build_basic_cache();
-  cache.mutable_records().erase(cache.mutable_records().begin() + 2, cache.mutable_records().begin() + 4);
-  // Keep just the North group.
   PivotTable table = build_table(/*row=*/{0, 1}, /*col=*/{});
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
-  table.mutable_fields()[0].subtotal_top = false;
+  table.set_layout(mode);
+  table.mutable_fields()[0].subtotal_top = subtotal_top;
+  table.mutable_fields()[0].default_subtotal = default_subtotal;
 
   auto result_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
-  ASSERT_EQ(result_or.value().row_subtotals.size(), 1U);
-
+  if (!result_or) {
+    ADD_FAILURE() << result_or.error().message;
+    return {};
+  }
   PivotLayoutOptions options;
   options.row_labels_label = "Row Labels";
+  options.subtotal_suffix = " Total";
   auto cells_or = layout(table, result_or.value(), options);
-  ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message;
-  const PivotCells& cells = cells_or.value();
-
-  const PivotCell* north_subtotal = nullptr;
-  std::uint32_t north_last_detail_row = 0;
-  for (const PivotCell& cell : cells.cells) {
-    if (cell.kind != PivotCellKind::RowLabel && cell.kind != PivotCellKind::RowSubtotal) {
-      continue;
-    }
-    if (!cell.value.is_text()) {
-      continue;
-    }
-    if (cell.kind == PivotCellKind::RowSubtotal && cell.value.as_text() == "North") {
-      north_subtotal = &cell;
-    }
-    if (cell.kind == PivotCellKind::RowLabel &&
-        (cell.value.as_text() == "Gadget" || cell.value.as_text() == "Widget")) {
-      north_last_detail_row = std::max(north_last_detail_row, cell.row);
-    }
+  if (!cells_or) {
+    ADD_FAILURE() << cells_or.error().message;
+    return {};
   }
-  ASSERT_NE(north_subtotal, nullptr);
-  EXPECT_GT(north_subtotal->row, north_last_detail_row);
+  return cells_or.take();
+}
+
+TEST(PivotLayout, CompactSubtotalTopSitsOnTheGroupRow) {
+  const PivotCells cells = layout_region_product(PivotLayout::Compact, /*subtotal_top=*/true, true);
+  EXPECT_EQ(grid_rows(cells), (std::vector<std::string>{"Row Labels|Sum of Amount", "North|175", "Gadget|50",
+                                                        "Widget|125", "South|500", "Gadget|300", "Widget|200"}));
+  const PivotCell* north = find_cell(cells, cells.top + 1, cells.left);
+  ASSERT_NE(north, nullptr);
+  EXPECT_EQ(north->kind, PivotCellKind::RowSubtotal);
+  EXPECT_EQ(north->depth, 0U);
+  EXPECT_EQ(north->field_name, "Region");
+  // Compact reports the inner level's depth and field, not column 0's.
+  const PivotCell* gadget = find_cell(cells, cells.top + 2, cells.left);
+  ASSERT_NE(gadget, nullptr);
+  EXPECT_EQ(gadget->kind, PivotCellKind::RowLabel);
+  EXPECT_EQ(gadget->depth, 1U);
+  EXPECT_EQ(gadget->field_name, "Product");
+}
+
+TEST(PivotLayout, CompactSubtotalBottomOpensWithAHeaderRow) {
+  const PivotCells cells = layout_region_product(PivotLayout::Compact, /*subtotal_top=*/false, true);
+  EXPECT_EQ(grid_rows(cells),
+            (std::vector<std::string>{"Row Labels|Sum of Amount", "North|", "Gadget|50", "Widget|125",
+                                      "North Total|175", "South|", "Gadget|300", "Widget|200", "South Total|500"}));
+  const PivotCell* header = find_cell(cells, cells.top + 1, cells.left);
+  ASSERT_NE(header, nullptr);
+  EXPECT_EQ(header->kind, PivotCellKind::RowLabel);
+  EXPECT_EQ(header->depth, 0U);
+  EXPECT_EQ(header->field_name, "Region");
+  EXPECT_EQ(find_cell(cells, cells.top + 1, cells.left + 1), nullptr);
+  const PivotCell* widget = find_cell(cells, cells.top + 3, cells.left);
+  ASSERT_NE(widget, nullptr);
+  EXPECT_EQ(widget->depth, 1U);
+  EXPECT_EQ(widget->field_name, "Product");
+  const PivotCell* total = find_cell(cells, cells.top + 4, cells.left);
+  ASSERT_NE(total, nullptr);
+  EXPECT_EQ(total->kind, PivotCellKind::RowSubtotal);
+  EXPECT_EQ(total->depth, 0U);
+  EXPECT_EQ(total->field_name, "Region");
+}
+
+TEST(PivotLayout, CompactWithoutSubtotalKeepsTheGroupRow) {
+  const PivotCells cells = layout_region_product(PivotLayout::Compact, /*subtotal_top=*/true, false);
+  EXPECT_EQ(grid_rows(cells), (std::vector<std::string>{"Row Labels|Sum of Amount", "North|", "Gadget|50", "Widget|125",
+                                                        "South|", "Gadget|300", "Widget|200"}));
+}
+
+TEST(PivotLayout, OutlineSubtotalPlacementFollowsTheField) {
+  EXPECT_EQ(grid_rows(layout_region_product(PivotLayout::Outline, /*subtotal_top=*/true, true)),
+            (std::vector<std::string>{"Region|Product|Sum of Amount", "North||175", "|Gadget|50", "|Widget|125",
+                                      "South||500", "|Gadget|300", "|Widget|200"}));
+  const PivotCells bottom = layout_region_product(PivotLayout::Outline, /*subtotal_top=*/false, true);
+  EXPECT_EQ(grid_rows(bottom), (std::vector<std::string>{"Region|Product|Sum of Amount", "North||", "|Gadget|50",
+                                                         "|Widget|125", "North Total||175", "South||", "|Gadget|300",
+                                                         "|Widget|200", "South Total||500"}));
+  const PivotCell* gadget = find_cell(bottom, bottom.top + 2, bottom.left + 1);
+  ASSERT_NE(gadget, nullptr);
+  EXPECT_EQ(gadget->depth, 1U);
+  EXPECT_EQ(gadget->field_name, "Product");
+  EXPECT_EQ(grid_rows(layout_region_product(PivotLayout::Outline, /*subtotal_top=*/true, false)),
+            (std::vector<std::string>{"Region|Product|Sum of Amount", "North||", "|Gadget|50", "|Widget|125", "South||",
+                                      "|Gadget|300", "|Widget|200"}));
 }
 
 TEST(PivotLayout, InsertsColSubtotalColumnsWhenEvaluatorProvidesMetadata) {
@@ -658,7 +731,13 @@ TEST(PivotLayout, ProjectsDeepPostOrderSubtotalsAccordingToSubtotalTop) {
       }
     }
     EXPECT_EQ(projected_subtotals, result.row_subtotals.size());
-    EXPECT_EQ(cells.rows, expected.size() + 1U);
+    // Compact and Outline open each group whose subtotal sits below it with
+    // a label-only row: 2, 3 and 4 groups at the three non-leaf levels.
+    std::size_t header_rows = 0;
+    if (layout_mode != PivotLayout::Tabular) {
+      header_rows = (level_one_top ? 0U : 2U) + (level_two_top ? 0U : 3U) + (level_three_top ? 0U : 4U);
+    }
+    EXPECT_EQ(cells.rows, expected.size() + header_rows + 1U);
   };
 
   // Compact and Outline apply the flag at each of the three non-leaf

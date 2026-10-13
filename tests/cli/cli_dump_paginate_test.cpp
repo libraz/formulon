@@ -187,8 +187,9 @@ TEST(FormulonCli, DumpMetadataDistinguishesDefinedNameScope) {
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
   // Workbook-scoped names print bare; sheet-scoped names are prefixed
   // with `SheetName!` so the two scopes don't collide in the dump.
-  EXPECT_NE(r.stdout_text.find("WorkbookConst =1"), std::string::npos) << "stdout=" << r.stdout_text;
-  EXPECT_NE(r.stdout_text.find("Sheet1!SheetLocal ="), std::string::npos) << "stdout=" << r.stdout_text;
+  // The setters store formulas without the leading '=', as files carry them.
+  EXPECT_NE(r.stdout_text.find("WorkbookConst 1\n"), std::string::npos) << "stdout=" << r.stdout_text;
+  EXPECT_NE(r.stdout_text.find("Sheet1!SheetLocal Sheet1!$A$1\n"), std::string::npos) << "stdout=" << r.stdout_text;
 }
 
 TEST(FormulonCli, DumpMetadataRecoversFromOutOfRangeDefinedNameScope) {

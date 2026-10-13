@@ -651,7 +651,8 @@ FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, uint32_t index, c
  * `formula` removes the existing entry, or is a no-op when no such
  * entry is present. Use `fm_workbook_set_defined_name_scoped` for
  * sheet-scoped names. A non-empty `formula` that does not parse is
- * rejected and leaves the name list unchanged.
+ * rejected and leaves the name list unchanged. One leading `=` is
+ * accepted and dropped: the name stores the formula as files carry it.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -667,7 +668,8 @@ FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const char* n
  * `local_sheet_id == -1` selects workbook scope. Values `>= 0` select
  * the corresponding 0-based sheet-local scope. An empty `formula`
  * removes the matching entry in that scope. A non-empty `formula` that
- * does not parse is rejected and leaves the name list unchanged.
+ * does not parse is rejected and leaves the name list unchanged. One
+ * leading `=` is accepted and dropped, as for `fm_workbook_set_defined_name`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -1852,6 +1854,8 @@ FM_API fm_status_t fm_sheet_get_validation_at(fm_workbook_t* wb, uint32_t sheet,
  * are not normalised — callers should pass already-normalised
  * `(first <= last)` rectangles. Every rectangle must lie within the
  * Excel grid; all ranges are validated before the rule is stored.
+ * `v.formula1` / `v.formula2` may carry one leading `=`, which is dropped:
+ * the rule stores them as files carry them.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
@@ -3491,7 +3495,16 @@ FM_API fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, size_t sheet_inde
  * A `DataBar` payload is rejected when either length percentage exceeds
  * 100, when `data_bar_min_length_pct > data_bar_max_length_pct` (an
  * inverted bar Excel cannot render), or when an engaged
- * `data_bar_axis_position` is outside `0..2`.
+ * `data_bar_axis_position` is outside `0..2`. An `IconSet` payload is
+ * rejected unless it carries exactly N-1 `icon_set_thresholds` for its
+ * N-icon set (the floor is `icon_set_floor`, not a threshold).
+ *
+ * `rule.formula1` / `rule.formula2` and formula-typed `fm_cfvo_t` values
+ * may carry one leading `=`, which is dropped: the rule stores them as
+ * files carry them. For the text (7-10), blanks / errors (11-14) and
+ * `TimePeriod` (15) types, a `NULL` or empty `rule.formula1` is filled
+ * with the formula Excel stores for the rule, relative to the top-left
+ * cell of `rule.sqref[0]` (e.g. `NOT(ISERROR(SEARCH("ab",B1)))`).
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when `wb` or `out_index` is `NULL`, or
@@ -3507,8 +3520,9 @@ FM_API fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, size_t sheet_inde
  *           `type` names no declared enumerator, when `rule.dxf_id` is
  *           engaged but past the end of the workbook's `<dxfs>` table,
  *           or when a visual payload is missing / malformed;
- *         `kParserUnexpectedToken` (1000) when a non-empty `rule.formula1`
- *           or `rule.formula2` does not parse (the rule is not stored).
+ *         `kParserUnexpectedToken` (1000) when a non-empty `rule.formula1`,
+ *           `rule.formula2` or formula-typed `fm_cfvo_t` value does not
+ *           parse (the rule is not stored).
  */
 FM_API fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, size_t sheet_index, fm_cf_rule_t rule, size_t* out_index);
 
@@ -3840,7 +3854,10 @@ typedef enum {
  *   * `source_name`   — required; matches a `PivotCacheField::name`.
  *   * `custom_name`   — nullable; pass `NULL` or the empty string for none.
  *   * `axis`          — initial axis for the field.
- *   * `subtotal_top`  — non-zero to render subtotals at the group head.
+ *   * `subtotal_top`  — non-zero to render subtotals at the group head. Excel
+ *                       and OOXML (`subtotalTop`) default to 1; a
+ *                       zero-initialised spec asks for subtotals at the
+ *                       bottom, so set it explicitly.
  *   * `number_format` — nullable; the field's `numFmtId` as a decimal string,
  *                       e.g. an id returned by `fm_styles_add_num_fmt` or a
  *                       built-in id. `NULL` or `""` means none; any other
@@ -4135,7 +4152,8 @@ FM_API fm_status_t fm_workbook_pivot_field_count(const fm_workbook_t* wb, size_t
 /**
  * @brief Appends a new field to the pivot. `spec->source_name` must be
  *        non-NULL; the other string fields are nullable. `out_field_idx`
- *        receives the new field's index.
+ *        receives the new field's index. A field added on the row or column
+ *        axis is appended to that axis's field order.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb`, `spec`, `out_field_idx` or
@@ -4146,14 +4164,16 @@ FM_API fm_status_t fm_workbook_pivot_field_count(const fm_workbook_t* wb, size_t
 FM_API fm_status_t fm_workbook_pivot_field_add(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                const fm_pivot_field_spec_t* spec, size_t* out_field_idx);
 
-/** @brief Drops every field from the pivot. */
+/** @brief Drops every field from the pivot, emptying the row and column field orders. */
 FM_API fm_status_t fm_workbook_pivot_field_clear(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index);
 
 /**
  * @brief Sets the axis of pivot field `field_idx`.
  *
  * `axis` is a raw signed 32-bit ordinal; unknown values return
- * `kInvalidArgument`.
+ * `kInvalidArgument`. Moving a field onto the row or column axis appends it
+ * to that axis's field order (a field already there keeps its place);
+ * moving it off removes it from the order it was in.
  */
 FM_API fm_status_t fm_workbook_pivot_field_set_axis(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                     size_t field_idx, int32_t axis);
@@ -4269,7 +4289,12 @@ FM_API fm_status_t fm_workbook_pivot_field_set_number_format(fm_workbook_t* wb, 
 
 /**
  * @brief Replaces the row-axis field order with `indices[0..count)`.
- *        Each entry must be `< field_count`. Pass `count == 0` to clear.
+ *        Each entry must be `< field_count` and appear once, else
+ *        `kInvalidArgument`. The list is the axis's whole membership: listed
+ *        fields move onto the row axis (leaving the column order), and fields
+ *        previously on it but not listed come off every axis. Pass
+ *        `count == 0` to clear. Adding or moving a field already maintains
+ *        the order, so this is needed only to reorder.
  */
 FM_API fm_status_t fm_workbook_pivot_set_row_field_order(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                          const uint32_t* indices, size_t count);

@@ -96,13 +96,14 @@ export function registerSheetPivot(Module, test) {
       const a = wb.definedNameAt(0);
       assert.ok(a.status.ok);
       assert.equal(a.name, 'Pi');
-      assert.equal(a.formula, '=3.14');
+      // The setter drops the leading '=', as the file form carries none.
+      assert.equal(a.formula, '3.14');
 
       assert.ok(wb.setDefinedName('PI', '=3.14159').ok);
       assert.equal(wb.definedNameCount().value, 1);
       const b = wb.definedNameAt(0);
       assert.equal(b.name, 'Pi'); // authored case preserved
-      assert.equal(b.formula, '=3.14159');
+      assert.equal(b.formula, '3.14159');
 
       assert.ok(wb.setDefinedName('Pi', '').ok);
       assert.equal(wb.definedNameCount().value, 0);
