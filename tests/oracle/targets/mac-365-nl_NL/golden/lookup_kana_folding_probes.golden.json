@@ -6,7 +6,7 @@
     "excel_locale": "nl-NL",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T23:51:35Z"
+    "generated_at": "2026-10-12T17:32:23Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -118,7 +118,10 @@
           "value": "789"
         }
       },
-      "skipped": "Mac Excel 365 ja-JP and en-US return 1 for MATCH(\"１２３\",A1:A3,0) with text \"123\" in A1; Formulon returns #N/A. Remove this debt when classic lookup equality folds fullwidth numeric text."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "match_wildcard_hira_prefix_over_kata",

@@ -2,11 +2,11 @@
   "suite": "locale_profile_measurements",
   "description": "Behaviour that may differ between Excel locales and hosts: width and kana folding at COUNTIF criteria, exact MATCH / XLOOKUP / VLOOKUP and DCOUNT criteria; a blank scalar reference in GCD / LCM; a fractional INDEX row; and two-digit years in DATEVALUE and VALUE.\n",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.113.4",
     "excel_locale": "es-ES",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T07:26:15Z"
+    "generated_at": "2026-10-12T17:26:08Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -134,7 +134,10 @@
           "value": "124"
         }
       },
-      "skipped": "Mac Excel 365 ja-JP folds fullwidth numeric text \"１２３\" to \"123\" in exact MATCH lookup and returns the first matching entry (1); Formulon selects the later exact-spelling entry (2). Probe: locale_profile_measurements.fold_match_fullwidth_digits. Resolve when exact lookup equality folds fullwidth numeric text."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "fold_match_fullwidth_latin",
@@ -231,7 +234,10 @@
           "value": 303.0
         }
       },
-      "skipped": "Mac Excel 365 ja-JP folds fullwidth numeric text \"１２３\" to \"123\" in exact XLOOKUP lookup and returns the first matching entry (101); Formulon selects the later exact-spelling entry (202). Probe: locale_profile_measurements.fold_xlookup_fullwidth_digits. Resolve when exact lookup equality folds fullwidth numeric text."
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
     },
     {
       "id": "fold_xlookup_fullwidth_latin",
@@ -564,7 +570,10 @@
           "value": 303.0
         }
       },
-      "skipped": "Mac Excel 365 ja-JP folds fullwidth numeric text \"１２３\" to \"123\" in exact VLOOKUP lookup and returns the first matching entry (101); Formulon selects the later exact-spelling entry (202). Probe: locale_profile_measurements.fold_vlookup_fullwidth_digits. Resolve when exact lookup equality folds fullwidth numeric text."
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
     },
     {
       "id": "fold_vlookup_fullwidth_latin",

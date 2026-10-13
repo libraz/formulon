@@ -2,11 +2,11 @@
   "suite": "lookup_kana_folding_probes",
   "description": "Mac Excel ja-JP COUNTIF / SUMIF text equality folds kana variants (hiragana<->katakana, half<->full kana with voicing composition, full<->half ASCII). The criteria.cpp matcher implements that fold. Lookup functions (VLOOKUP, HLOOKUP, MATCH, XLOOKUP, XMATCH) use separate text-equality paths, so it is unclear whether Mac applies the same fold there. These probes pin Mac's behaviour empirically before deciding whether the lookup family needs the same fix.\n",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.113.4",
     "excel_locale": "pt-BR",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T17:42:29Z"
+    "generated_at": "2026-10-12T17:28:14Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -118,7 +118,10 @@
           "value": "789"
         }
       },
-      "skipped": "Mac Excel 365 ja-JP and en-US return 1 for MATCH(\"１２３\",A1:A3,0) with text \"123\" in A1; Formulon returns #N/A. Remove this debt when classic lookup equality folds fullwidth numeric text."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "match_wildcard_hira_prefix_over_kata",
