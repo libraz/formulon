@@ -519,8 +519,8 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
                          std::vector<std::optional<Aggregation>> specs;
                          if (depth < table.row_field_order().size()) {
                            const std::uint32_t group_fi = table.row_field_order()[depth];
-                           if (group_fi < table.fields().size() && !table.fields()[group_fi].subtotal_fns.empty()) {
-                             for (const SubtotalFn fn : table.fields()[group_fi].subtotal_fns) {
+                           if (group_fi < table.fields().size()) {
+                             for (const SubtotalFn fn : ordered_subtotal_fns(table.fields()[group_fi])) {
                                specs.push_back(aggregation_from_subtotal_fn(fn));
                              }
                            }
@@ -569,8 +569,8 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
           std::vector<std::optional<Aggregation>> specs;
           if (depth < table.col_field_order().size()) {
             const std::uint32_t group_fi = table.col_field_order()[depth];
-            if (group_fi < table.fields().size() && !table.fields()[group_fi].subtotal_fns.empty()) {
-              for (const SubtotalFn fn : table.fields()[group_fi].subtotal_fns) {
+            if (group_fi < table.fields().size()) {
+              for (const SubtotalFn fn : ordered_subtotal_fns(table.fields()[group_fi])) {
                 specs.push_back(aggregation_from_subtotal_fn(fn));
               }
             }

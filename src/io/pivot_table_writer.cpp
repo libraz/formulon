@@ -77,14 +77,16 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, pivot::P
   if (!field.subtotal_top) {
     out.append(" subtotalTop=\"0\"");
   }
-  // `defaultSubtotal` defaults to true; only emit it when turned OFF so
-  // an explicit suppression survives the round trip. The custom
-  // `*Subtotal` attributes are emitted only for the functions actually
-  // selected, matching the writer's "preserve only non-default" rule.
-  if (!field.default_subtotal) {
+  // Custom functions replace the automatic subtotal, and Excel then writes
+  // neither `defaultSubtotal` nor a `t="default"` item. Without custom
+  // functions, `defaultSubtotal` is emitted only when turned OFF so an
+  // explicit suppression survives the round trip.
+  const std::vector<pivot::SubtotalFn> subtotal_fns = pivot::ordered_subtotal_fns(field);
+  const bool automatic_subtotal = field.default_subtotal && subtotal_fns.empty();
+  if (!field.default_subtotal && subtotal_fns.empty()) {
     out.append(" defaultSubtotal=\"0\"");
   }
-  for (const pivot::SubtotalFn fn : field.subtotal_fns) {
+  for (const pivot::SubtotalFn fn : subtotal_fns) {
     const PivotSubtotalName* names = find_pivot_subtotal_name(fn);
     if (names == nullptr) {
       continue;
@@ -122,8 +124,8 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, pivot::P
   // field whose items lack its subtotal entry as damaged and offers to
   // repair the file, and every part of that file is otherwise valid, so
   // nothing short of Excel's own verdict reports it.
-  std::size_t subtotal_markers = field.default_subtotal ? 1U : 0U;
-  for (const pivot::SubtotalFn fn : field.subtotal_fns) {
+  std::size_t subtotal_markers = automatic_subtotal ? 1U : 0U;
+  for (const pivot::SubtotalFn fn : subtotal_fns) {
     if (find_pivot_subtotal_name(fn) != nullptr) {
       ++subtotal_markers;
     }
@@ -148,10 +150,10 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, pivot::P
     }
     out.append("/>");
   }
-  if (field.default_subtotal) {
+  if (automatic_subtotal) {
     out.append("<item t=\"default\"/>");
   }
-  for (const pivot::SubtotalFn fn : field.subtotal_fns) {
+  for (const pivot::SubtotalFn fn : subtotal_fns) {
     const PivotSubtotalName* names = find_pivot_subtotal_name(fn);
     if (names == nullptr) {
       continue;

@@ -7,10 +7,12 @@
 #include <utility>
 #include <vector>
 
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_layout.h"
+#include "pivot/pivot_locale.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -771,10 +773,13 @@ TEST(PivotLayout, ProjectsMultipleCustomSubtotalsAsOneContiguousNodeBlock) {
   auto cells_or = layout(table, result, options);
   ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message << " " << cells_or.error().context;
   const PivotCells& cells = cells_or.value();
-  const std::vector<double> expected = {207.0, 204.0, 201.0, 202.0, 1.0,   2.0,   203.0, 211.0, 3.0,
-                                        206.0, 205.0, 212.0, 4.0,   210.0, 209.0, 208.0, 213.0, 5.0};
+  // Several functions on one field ignore `subtotal_top`: the group opens
+  // with a label-only row and every function follows its children.
+  const std::vector<double> expected = {207.0, 204.0, 1.0,   2.0,   201.0, 202.0, 3.0, 203.0, 211.0,
+                                        206.0, 4.0,   205.0, 212.0, 210.0, 209.0, 5.0, 208.0, 213.0};
   EXPECT_EQ(projected_data_values(cells, cells.left + 1U), expected);
-  EXPECT_EQ(cells.rows, expected.size() + 1U);
+  constexpr std::size_t kLabelOnlyGroupRows = 4U;  // A1x, A1y, A2x, B1x.
+  EXPECT_EQ(cells.rows, expected.size() + kLabelOnlyGroupRows + 1U);
   std::size_t subtotal_rows = 0;
   for (PivotCellKind kind : projected_data_kinds(cells, cells.left + 1U)) {
     if (kind == PivotCellKind::RowSubtotal) {
@@ -952,6 +957,119 @@ TEST(PivotLayout, SortIndependentSubtotalProjectionKeepsBothAxesAndGrandTotals) 
   // both differ from the evaluator's raw map traversal in at least one axis.
   assert_sorted_layout(/*sort_by_value=*/false);
   assert_sorted_layout(/*sort_by_value=*/true);
+}
+
+// ---------------------------------------------------------------------------
+// Custom subtotal functions on a row field, measured on Mac Excel 365 ja-JP:
+// Region > Product with Sum of Amt / Sum of Qty over East A, North A+B and
+// South A+B.
+// ---------------------------------------------------------------------------
+
+PivotCells layout_custom_subtotals(PivotLayout mode, bool subtotal_top, std::vector<SubtotalFn> fns) {
+  PivotCache cache;
+  cache.set_cache_id(7);
+  for (const char* name : {"Region", "Product", "Amt", "Qty"}) {
+    cache.mutable_fields().push_back(PivotCacheField{name, {}});
+  }
+  auto add = [&](const char* region, const char* product, double amt, double qty) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, region));
+    rec.cells.push_back(owned_text(cache, product));
+    rec.cells.push_back(Value::number(amt));
+    rec.cells.push_back(Value::number(qty));
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  add("North", "A", 100, 1);
+  add("North", "B", 200, 2);
+  add("South", "A", 300, 3);
+  add("South", "B", 400, 4);
+  add("East", "A", 500, 5);
+
+  PivotTable table;
+  table.set_name("Pivot1");
+  table.set_pivot_cache_id(7);
+  table.set_anchor(2, 3, 1, 1);
+  const char* names[] = {"Region", "Product", "Amt", "Qty"};
+  for (std::size_t i = 0; i < 4; ++i) {
+    PivotField field;
+    field.source_name = names[i];
+    field.axis = i < 2 ? PivotAxis::Row : PivotAxis::Value;
+    table.mutable_fields().push_back(std::move(field));
+  }
+  table.mutable_row_field_order() = {0, 1};
+  for (std::uint32_t i = 2; i < 4; ++i) {
+    PivotDataField data;
+    data.name = std::string("Sum of ") + names[i];
+    data.field_index = i;
+    data.aggregation = Aggregation::Sum;
+    table.mutable_data_fields().push_back(std::move(data));
+  }
+  table.set_layout(mode);
+  table.mutable_fields()[0].subtotal_top = subtotal_top;
+  table.mutable_fields()[0].subtotal_fns = std::move(fns);
+
+  auto result_or = evaluate(table, cache);
+  if (!result_or) {
+    ADD_FAILURE() << result_or.error().message;
+    return {};
+  }
+  auto cells_or =
+      layout(table, result_or.value(), pivot_layout_options_for(ExcelProfile{ExcelHost::kMac365, ExcelLocale::kJaJP}));
+  if (!cells_or) {
+    ADD_FAILURE() << cells_or.error().message;
+    return {};
+  }
+  return cells_or.take();
+}
+
+/// The grid from the first data row (the "East" group) down, skipping the
+/// header block whose height depends on the layout.
+std::vector<std::string> body_rows(const PivotCells& cells) {
+  std::vector<std::string> rows = grid_rows(cells);
+  const auto first =
+      std::find_if(rows.begin(), rows.end(), [](const std::string& row) { return row.rfind("East", 0) == 0; });
+  return std::vector<std::string>(first, rows.end());
+}
+
+TEST(PivotLayout, TwoCustomFunctionsAtTopIgnoreSubtotalTopInCompact) {
+  const PivotCells cells =
+      layout_custom_subtotals(PivotLayout::Compact, /*subtotal_top=*/true, {SubtotalFn::Max, SubtotalFn::Sum});
+  EXPECT_EQ(body_rows(cells),
+            (std::vector<std::string>{"East||", "A|500|5", "East 合計|500|5", "East 最大|500|5", "North||", "A|100|1",
+                                      "B|200|2", "North 合計|300|3", "North 最大|200|2", "South||", "A|300|3",
+                                      "B|400|4", "South 合計|700|7", "South 最大|400|4", "総計|1500|15"}));
+}
+
+TEST(PivotLayout, SingleCustomFunctionAtBottomIsLabelledWithTheFunction) {
+  const PivotCells cells = layout_custom_subtotals(PivotLayout::Compact, /*subtotal_top=*/false, {SubtotalFn::Max});
+  EXPECT_EQ(body_rows(cells), (std::vector<std::string>{"East||", "A|500|5", "East 最大|500|5", "North||", "A|100|1",
+                                                        "B|200|2", "North 最大|200|2", "South||", "A|300|3", "B|400|4",
+                                                        "South 最大|400|4", "総計|1500|15"}));
+}
+
+TEST(PivotLayout, SingleCustomFunctionAtTopHeadsTheGroupRow) {
+  const PivotCells cells = layout_custom_subtotals(PivotLayout::Compact, /*subtotal_top=*/true, {SubtotalFn::Max});
+  EXPECT_EQ(body_rows(cells), (std::vector<std::string>{"East|500|5", "A|500|5", "North|200|2", "A|100|1", "B|200|2",
+                                                        "South|400|4", "A|300|3", "B|400|4", "総計|1500|15"}));
+}
+
+TEST(PivotLayout, TabularSingleCustomFunctionAtTopStillGetsABottomRow) {
+  const PivotCells cells = layout_custom_subtotals(PivotLayout::Tabular, /*subtotal_top=*/true, {SubtotalFn::Max});
+  EXPECT_EQ(body_rows(cells), (std::vector<std::string>{"East|A|500|5", "East 最大||500|5", "North|A|100|1", "|B|200|2",
+                                                        "North 最大||200|2", "South|A|300|3", "|B|400|4",
+                                                        "South 最大||400|4", "総計||1500|15"}));
+}
+
+TEST(PivotLayout, CustomFunctionRowsFollowTheFixedFunctionOrder) {
+  const PivotCells cells = layout_custom_subtotals(PivotLayout::Compact, /*subtotal_top=*/true,
+                                                   {SubtotalFn::Max, SubtotalFn::Min, SubtotalFn::Average});
+  std::vector<std::string> labels;
+  for (const std::string& row : body_rows(cells)) {
+    labels.push_back(row.substr(0, row.find('|')));
+  }
+  EXPECT_EQ(labels, (std::vector<std::string>{"East", "A", "East 平均", "East 最大", "East 最小", "North", "A", "B",
+                                              "North 平均", "North 最大", "North 最小", "South", "A", "B", "South 平均",
+                                              "South 最大", "South 最小", "総計"}));
 }
 
 }  // namespace

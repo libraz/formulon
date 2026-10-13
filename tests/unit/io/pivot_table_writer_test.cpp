@@ -945,6 +945,33 @@ TEST(PivotTableWriter, CustomSubtotalSelectionEmitsOneEntryPerFunction) {
   EXPECT_EQ(xml.find("<item t=\"default\"/>"), std::string::npos) << xml;
 }
 
+TEST(PivotTableWriter, CustomFunctionsReplaceTheDefaultSubtotalAsExcelWritesThem) {
+  pivot::PivotTable table = TableWithTwoItemRowField();
+  pivot::PivotField& region = table.mutable_fields()[0];
+  region.subtotal_fns = {pivot::SubtotalFn::Max, pivot::SubtotalFn::Sum};
+
+  const std::string xml = write_pivot_table_definition(table);
+
+  // Excel lists the functions in a fixed order and writes neither a
+  // `t="default"` item nor `defaultSubtotal` next to them.
+  EXPECT_NE(xml.find(" sumSubtotal=\"1\" maxSubtotal=\"1\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<items count=\"4\">"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<item t=\"sum\"/><item t=\"max\"/></items>"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("t=\"default\""), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("defaultSubtotal"), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, CountAndAverageUseTheMeasuredAttributeNames) {
+  pivot::PivotTable table = TableWithTwoItemRowField();
+  table.mutable_fields()[0].subtotal_fns = {pivot::SubtotalFn::Average, pivot::SubtotalFn::Count};
+
+  const std::string xml = write_pivot_table_definition(table);
+
+  EXPECT_NE(xml.find(" countASubtotal=\"1\" avgSubtotal=\"1\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<item t=\"countA\"/><item t=\"avg\"/></items>"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("t=\"default\""), std::string::npos) << xml;
+}
+
 TEST(PivotTableWriter, ValueFieldWithoutItemsStaysSelfClosing) {
   // A data-only field carries no item list, so it must not acquire one
   // just because subtotals default to on.

@@ -129,6 +129,11 @@ Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot:
         field.subtotal_fns.push_back(e.fn);
       }
     }
+    // Custom functions replace the default subtotal; Excel writes them
+    // without `defaultSubtotal` or a `t="default"` item.
+    if (!field.subtotal_fns.empty()) {
+      field.default_subtotal = false;
+    }
     // `sortType="descending"` reverses sibling order; `"manual"` defers
     // to this field's `<items>` document order instead of label order.
     // A missing attribute keeps the ascending-by-label default already

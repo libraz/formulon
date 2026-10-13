@@ -72,6 +72,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   name instead of depth 0 and the outermost field.
 - The Python type stub declares `Workbook.set_column_style` and
   `clear_column_style`, which existed at runtime only.
+- Conditional-format relative formulas, and the formulas derived for text,
+  blanks, errors and time-period rules, anchor at the top-left of the
+  bounding box of all sqref ranges, as Excel does, instead of at the first
+  listed range.
+- Pivot custom subtotal rows are labelled with their function name
+  ("East 最大") and follow Excel's fixed function order; two or more
+  functions place the subtotals below the group whatever `subtotal_top`
+  says. The pivot XML writer no longer emits the default subtotal item next
+  to custom ones, and the reader treats custom functions as replacing the
+  default subtotal.
 
 ## [0.15.1] - 2026-10-12
 

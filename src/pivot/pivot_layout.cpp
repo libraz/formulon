@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "pivot/field_lookup.h"
+#include "pivot/pivot_locale.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -123,6 +124,9 @@ struct AxisEntry {
   std::string subtotal_label;
   /// Subtotal that doubles as its group's heading row, labelled bare.
   bool heads_group = false;
+  /// Custom subtotal function of a labelled subtotal: Excel names the row
+  /// "<group> <function>" in place of the localized subtotal wording.
+  std::optional<SubtotalFn> custom_fn;
 };
 
 std::vector<std::size_t> subtotal_counts_for_axis(const PivotTable& table,
@@ -134,9 +138,22 @@ std::vector<std::size_t> subtotal_counts_for_axis(const PivotTable& table,
       continue;
     }
     const PivotField& field = table.fields()[field_index];
-    counts[depth] = !field.subtotal_fns.empty() ? field.subtotal_fns.size() : (field.default_subtotal ? 1U : 0U);
+    const std::size_t custom = ordered_subtotal_fns(field).size();
+    counts[depth] = custom > 0 ? custom : (field.default_subtotal ? 1U : 0U);
   }
   return counts;
+}
+
+/// Per depth, the field's custom subtotal functions in Excel's fixed order.
+std::vector<std::vector<SubtotalFn>> subtotal_fns_for_axis(const PivotTable& table,
+                                                           const std::vector<std::uint32_t>& field_order) {
+  std::vector<std::vector<SubtotalFn>> fns(field_order.size());
+  for (std::size_t depth = 0; depth < field_order.size(); ++depth) {
+    if (field_order[depth] < table.fields().size()) {
+      fns[depth] = ordered_subtotal_fns(table.fields()[field_order[depth]]);
+    }
+  }
+  return fns;
 }
 
 /// The two fields of a `RowSubtotal` / `ColSubtotal` the projection reads,
@@ -191,11 +208,12 @@ Expected<void, Error> check_axis_impl(const AxisHierarchyNode& node, std::vector
 
 /// How one axis is projected into entries.
 struct AxisShape {
-  std::size_t depth = 0;                     ///< Real fields on the axis.
-  std::optional<std::size_t> values_at;      ///< Level the Values pseudo-field occupies, if on this axis.
-  bool group_rows = false;                   ///< Compact / outline row axis: groups open with their own row.
-  std::vector<bool> subtotal_first;          ///< Per depth: the subtotal leads its group.
-  std::vector<std::size_t> subtotal_counts;  ///< Per depth: subtotals the evaluator emitted.
+  std::size_t depth = 0;                              ///< Real fields on the axis.
+  std::optional<std::size_t> values_at;               ///< Level the Values pseudo-field occupies, if on this axis.
+  bool group_rows = false;                            ///< Compact / outline row axis: groups open with their own row.
+  std::vector<bool> subtotal_first;                   ///< Per depth: the subtotal leads its group.
+  std::vector<std::size_t> subtotal_counts;           ///< Per depth: subtotals the evaluator emitted.
+  std::vector<std::vector<SubtotalFn>> subtotal_fns;  ///< Per depth: custom functions, in row order.
 };
 
 class AxisWalk {
@@ -264,8 +282,11 @@ class AxisWalk {
     const bool values_below = !data_field && shape_.values_at.has_value() && *shape_.values_at > depth;
     const std::size_t count =
         !node.children.empty() && depth < shape_.subtotal_counts.size() ? shape_.subtotal_counts[depth] : 0;
+    // Excel ignores `subtotal_top` once a field carries several functions:
+    // the header row stays blank and every function gets a row below.
     const bool first =
-        count > 0 && !values_below && depth < shape_.subtotal_first.size() && shape_.subtotal_first[depth];
+        count == 1 && !values_below && depth < shape_.subtotal_first.size() && shape_.subtotal_first[depth];
+    const std::vector<SubtotalFn>* fns = depth < shape_.subtotal_fns.size() ? &shape_.subtotal_fns[depth] : nullptr;
     // Any other group shows its label on a row of its own: a subtotal at the
     // bottom, or none, cannot stand in for it.
     if (shape_.group_rows && (values_below || (!node.children.empty() && !first))) {
@@ -290,6 +311,9 @@ class AxisWalk {
       } else {
         push(EntryKind::Subtotal, data_field, subtotal_index + offset);
         entries_.back().heads_group = first;
+        if (!first && fns != nullptr && offset < fns->size()) {
+          entries_.back().custom_fn = (*fns)[offset];
+        }
       }
     }
     if (first) {
@@ -400,6 +424,19 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   const auto subtotal_label = [&](const std::string& group) {
     return options.subtotal_prefix + group + subtotal_suffix;
   };
+  // Only the ja-JP function words are measured; the other locales reuse the
+  // data-field function names as an estimate.
+  const auto entry_subtotal_label = [&](const AxisEntry& entry, const std::string& group) {
+    if (!entry.subtotal_label.empty()) {
+      return entry.subtotal_label;
+    }
+    if (entry.custom_fn.has_value()) {
+      return group + " " +
+             std::string(aggregation_label(static_cast<Aggregation>(static_cast<std::uint8_t>(*entry.custom_fn)),
+                                           options.profile));
+    }
+    return subtotal_label(group);
+  };
   const auto data_total_label = [&](std::size_t df) {
     return options.data_total_prefix + data_field_name(table, df) + options.data_total_suffix;
   };
@@ -428,12 +465,14 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
     }
   }
   row_shape.subtotal_counts = subtotal_counts_for_axis(table, table.row_field_order());
+  row_shape.subtotal_fns = subtotal_fns_for_axis(table, table.row_field_order());
   AxisShape col_shape;
   col_shape.depth = col_depth;
   if (values_on_cols) {
     col_shape.values_at = std::min(table.col_values_position().value_or(col_depth), col_depth);
   }
   col_shape.subtotal_counts = subtotal_counts_for_axis(table, table.col_field_order());
+  col_shape.subtotal_fns = subtotal_fns_for_axis(table, table.col_field_order());
   const std::size_t row_levels = row_depth + (values_on_rows ? 1 : 0);
   const std::size_t col_levels = col_depth + (values_on_cols ? 1 : 0);
 
@@ -611,7 +650,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         label = entry.labels[depth];
       }
       if (subtotal_here) {
-        label = entry.subtotal_label.empty() ? subtotal_label(label) : entry.subtotal_label;
+        label = entry_subtotal_label(entry, label);
       } else if (blank_repeats && !leaf_depth && c_entry > 0) {
         const std::vector<std::string>& prev = col_entries[c_entry - 1].labels;
         if (prev.size() > depth && entry.labels.size() > depth &&
@@ -753,10 +792,8 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
           // it doubles as the group's heading row.
           if (depth == last_depth && depth < labels.size()) {
             label = labels[depth];
-            if (subtotal && !entry.subtotal_label.empty()) {
-              label = entry.subtotal_label;
-            } else if (subtotal && !entry.heads_group) {
-              label = subtotal_label(label);
+            if (subtotal && !entry.heads_group) {
+              label = entry_subtotal_label(entry, label);
             }
           }
         } else if (depth < labels.size()) {
@@ -773,7 +810,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         if (subtotal && !entry.subtotal_label.empty()) {
           label = entry.subtotal_label;
         } else if (subtotal && !entry.heads_group && !labels.empty()) {
-          label = subtotal_label(labels.back());
+          label = entry_subtotal_label(entry, labels.back());
         } else if (!labels.empty()) {
           label = labels.back();
         } else if (row_levels == 0 && col_depth > 0 && r_entry == 0) {
@@ -784,7 +821,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
       } else if (depth < labels.size()) {
         label = labels[depth];
         if (subtotal && depth == last_depth) {
-          label = entry.subtotal_label.empty() ? subtotal_label(label) : entry.subtotal_label;
+          label = entry_subtotal_label(entry, label);
         }
       }
       const PivotCellKind kind = subtotal ? PivotCellKind::RowSubtotal : PivotCellKind::RowLabel;

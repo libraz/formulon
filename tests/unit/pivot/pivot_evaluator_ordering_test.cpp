@@ -251,19 +251,19 @@ TEST(PivotEvaluator, SortedSubtotalWalkPreservesTypedDuplicateDisplayLabels) {
   }
   EXPECT_EQ(cells_in_render_order, (std::vector<std::pair<PivotCellKind, double>>{
                                        {PivotCellKind::RowSubtotal, 30.0},  // S subtotal.
+                                       {PivotCellKind::Data, 10.0},         // S / Number(3) detail.
                                        {PivotCellKind::RowSubtotal, 10.0},  // S / Number(3) SUM.
                                        {PivotCellKind::RowSubtotal, 10.0},  // S / Number(3) AVERAGE.
-                                       {PivotCellKind::Data, 10.0},         // S / Number(3) detail.
+                                       {PivotCellKind::Data, 20.0},         // S / Text("3") detail.
                                        {PivotCellKind::RowSubtotal, 20.0},  // S / Text("3") SUM.
                                        {PivotCellKind::RowSubtotal, 20.0},  // S / Text("3") AVERAGE.
-                                       {PivotCellKind::Data, 20.0},         // S / Text("3") detail.
                                        {PivotCellKind::RowSubtotal, 70.0},  // D subtotal.
+                                       {PivotCellKind::Data, 30.0},         // D / Number(1) detail.
                                        {PivotCellKind::RowSubtotal, 30.0},  // D / Number(1) SUM.
                                        {PivotCellKind::RowSubtotal, 30.0},  // D / Number(1) AVERAGE.
-                                       {PivotCellKind::Data, 30.0},         // D / Number(1) detail.
+                                       {PivotCellKind::Data, 40.0},         // D / Text("1") detail.
                                        {PivotCellKind::RowSubtotal, 40.0},  // D / Text("1") SUM.
                                        {PivotCellKind::RowSubtotal, 40.0},  // D / Text("1") AVERAGE.
-                                       {PivotCellKind::Data, 40.0},         // D / Text("1") detail.
                                        {PivotCellKind::GrandTotal, 100.0},
                                    }));
   EXPECT_EQ(cells.cols, 2U);

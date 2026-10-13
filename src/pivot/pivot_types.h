@@ -9,6 +9,7 @@
 #ifndef FORMULON_PIVOT_PIVOT_TYPES_H_
 #define FORMULON_PIVOT_PIVOT_TYPES_H_
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -520,6 +521,16 @@ struct PivotField {
   /// so these are preserved for round-trip only.
   std::vector<std::pair<std::string, std::string>> passthrough_attrs;
 };
+
+/// The field's custom subtotal functions in the fixed order Excel lists
+/// them (enum order, duplicates dropped) rather than the order they were
+/// added. Layout rows and the written `<items>` markers both follow it.
+inline std::vector<SubtotalFn> ordered_subtotal_fns(const PivotField& field) {
+  std::vector<SubtotalFn> fns = field.subtotal_fns;
+  std::sort(fns.begin(), fns.end());
+  fns.erase(std::unique(fns.begin(), fns.end()), fns.end());
+  return fns;
+}
 
 }  // namespace formulon::pivot
 
