@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "cf/cf_types.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
@@ -98,6 +99,44 @@ TEST(AutoFilterEval, ProbeTable) {
     ++evaluated;
   }
   EXPECT_EQ(evaluated, 60U);
+}
+
+TEST(AutoFilterEval, IconFilterMatchesConditionalFormatIconsAcrossVisibleRows) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::text("header"));
+  const std::vector<double> values{10.0, 30.0, 50.0, 70.0, 90.0};
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    sheet.set_cell_value(static_cast<std::uint32_t>(i + 1U), 0, Value::number(values[i]));
+  }
+
+  cf::CFRule icon_rule;
+  icon_rule.type = cf::RuleType::IconSet;
+  icon_rule.priority = 1;
+  icon_rule.id = "arrows";
+  cf::IconSetSpec icon_spec;
+  icon_spec.name = cf::IconSetName::Three_Arrows;
+  icon_spec.floor = cf::CfValueObject{cf::CfvoType::Number, "0", true};
+  icon_spec.thresholds = {cf::CfValueObject{cf::CfvoType::Number, "33", true},
+                          cf::CfValueObject{cf::CfvoType::Number, "67", true}};
+  icon_rule.icon_set = std::move(icon_spec);
+  cf::ConditionalFormat conditional_format;
+  conditional_format.sqref.push_back(cf::CFCellRange{CellAddress{1, 0}, CellAddress{5, 0}});
+  conditional_format.rules.push_back(std::move(icon_rule));
+  sheet.mutable_conditional_formats().push_back(std::move(conditional_format));
+
+  AutoFilter filter;
+  filter.range = MergeRange{0, 0, 5, 0};
+  FilterColumn column;
+  column.kind = FilterKind::kIcon;
+  column.icon.icon_set = cf::IconSetName::Three_Arrows;
+  column.icon.icon_id = 2U;
+  filter.columns.push_back(std::move(column));
+
+  const auto visible = evaluate_auto_filter(wb, sheet, filter);
+  ASSERT_TRUE(static_cast<bool>(visible));
+  ASSERT_EQ(visible.value().size(), values.size());
+  EXPECT_EQ(visible.value(), (std::vector<bool>{false, false, false, true, true}));
 }
 
 // Reapplying re-derives every body row: a matching row hidden by hand is shown

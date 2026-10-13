@@ -35,17 +35,15 @@
 namespace formulon {
 namespace {
 
-/// Shared state of one evaluation: the sheet, the evaluator collaborators
-/// and the per-column cell values read once.
+/// Shared state of one evaluation: the sheet, evaluator collaborators, and a
+/// reusable conditional-format plan for colour/icon columns.
 struct Run {
   const Workbook& wb;
   const Sheet& sheet;
-  Arena* arena;
-  const eval::FunctionRegistry* registry;
-  const eval::EvalContext* eval_ctx;
   double today;
   std::uint32_t first_body_row;
   std::uint32_t body_rows;
+  cf::PreparedCfEvaluator* cf_evaluator;
 };
 
 // --- Text helpers -----------------------------------------------------------
@@ -340,18 +338,13 @@ CellColors cell_colors(const Run& run, std::uint32_t row, std::uint32_t col) {
   out.has_fill = style.fill_pattern != 0U;
   out.fill_rgb = style.fill_foreground.argb & 0x00FFFFFFU;
   out.font_rgb = style.font_color.argb & 0x00FFFFFFU;
-  if (run.sheet.conditional_formats().empty() || run.arena == nullptr || run.eval_ctx == nullptr) {
+  if (run.sheet.conditional_formats().empty() || run.cf_evaluator == nullptr) {
     return out;
   }
-  cf::CFHost host;
-  host.arena = run.arena;
-  host.registry = run.registry;
-  host.eval_ctx = run.eval_ctx;
-  host.today_serial = run.today;
   bool fill_set = false;
   bool font_set = false;
   const auto& dxfs = run.wb.styles().dxfs;
-  for (const cf::CFMatch& m : cf::evaluate_cf_at(run.sheet, CellAddress{row, col}, host)) {
+  for (const cf::CFMatch& m : run.cf_evaluator->evaluate(CellAddress{row, col})) {
     if (m.icon_render.has_value() && !out.icon.has_value()) {
       out.icon = m.icon_render;
     }
@@ -418,13 +411,20 @@ void apply_column(const FilterColumn& column, const Run& run, std::uint32_t col,
   if (column.kind == FilterKind::kNone) {
     return;
   }
+  const bool needs_values = column.kind == FilterKind::kValues || column.kind == FilterKind::kCustom ||
+                            column.kind == FilterKind::kTop10 || column.kind == FilterKind::kDynamic;
+  const bool needs_numbers = column.kind == FilterKind::kTop10 || column.kind == FilterKind::kDynamic;
   std::vector<Value> values;
-  values.reserve(run.body_rows);
+  if (needs_values) {
+    values.reserve(run.body_rows);
+  }
   std::vector<double> numbers;
-  for (std::uint32_t i = 0; i < run.body_rows; ++i) {
-    values.push_back(run.sheet.resolve_cell_value(run.first_body_row + i, col));
-    if (values.back().is_number()) {
-      numbers.push_back(values.back().as_number());
+  if (needs_values) {
+    for (std::uint32_t i = 0; i < run.body_rows; ++i) {
+      values.push_back(run.sheet.resolve_cell_value(run.first_body_row + i, col));
+      if (needs_numbers && values.back().is_number()) {
+        numbers.push_back(values.back().as_number());
+      }
     }
   }
   std::optional<double> threshold;
@@ -444,21 +444,21 @@ void apply_column(const FilterColumn& column, const Run& run, std::uint32_t col,
       continue;
     }
     const std::uint32_t row = run.first_body_row + i;
-    const Value& v = values[i];
+    const Value* value = needs_values ? &values[i] : nullptr;
     bool match = true;
     switch (column.kind) {
       case FilterKind::kValues:
-        match = match_values(column.values, run, row, col, v);
+        match = match_values(column.values, run, row, col, *value);
         break;
       case FilterKind::kCustom:
-        match = match_custom(column.custom, v, run, row, col);
+        match = match_custom(column.custom, *value, run, row, col);
         break;
       case FilterKind::kTop10:
-        match = threshold.has_value() && v.is_number() &&
-                (column.top10.top ? v.as_number() >= *threshold : v.as_number() <= *threshold);
+        match = threshold.has_value() && value->is_number() &&
+                (column.top10.top ? value->as_number() >= *threshold : value->as_number() <= *threshold);
         break;
       case FilterKind::kDynamic:
-        match = match_dynamic(column.dynamic, v, run, average);
+        match = match_dynamic(column.dynamic, *value, run, average);
         break;
       case FilterKind::kColor:
         match = match_color(column.color, run, row, col);
@@ -507,14 +507,22 @@ Expected<std::vector<bool>, Error> evaluate_auto_filter(const Workbook& wb, cons
 
   const MergeRange& range = filter.range;
   const std::uint32_t body_rows = range.last_row - range.first_row;
-  Run run{wb,
-          sheet,
-          arena,
-          deps.registry != nullptr ? deps.registry : &eval::default_registry(),
-          ctx,
-          today_serial(*ctx, wb.date1904()),
-          range.first_row + 1U,
-          body_rows};
+  const eval::FunctionRegistry* registry = deps.registry != nullptr ? deps.registry : &eval::default_registry();
+  const double today = today_serial(*ctx, wb.date1904());
+  std::optional<cf::PreparedCfEvaluator> cf_evaluator;
+  for (const FilterColumn& column : filter.columns) {
+    if (column.kind != FilterKind::kColor && column.kind != FilterKind::kIcon) {
+      continue;
+    }
+    cf::CFHost cf_host;
+    cf_host.arena = arena;
+    cf_host.registry = registry;
+    cf_host.eval_ctx = ctx;
+    cf_host.today_serial = today;
+    cf_evaluator.emplace(sheet, cf_host);
+    break;
+  }
+  Run run{wb, sheet, today, range.first_row + 1U, body_rows, cf_evaluator.has_value() ? &*cf_evaluator : nullptr};
   std::vector<bool> visible(body_rows, true);
   for (const FilterColumn& column : filter.columns) {
     apply_column(column, run, range.first_col + column.col_id, visible);
