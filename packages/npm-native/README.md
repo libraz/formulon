@@ -17,8 +17,8 @@ Formula evaluation uses Formulon's default `win-365-en_US` profile. Call
 `mac-*` profiles and `win-365-ja_JP` are measured against Excel; the other
 `win-*` profiles are estimated from the Mac measurements.
 On a `mac-*` profile, text comparison, sorting, lookups and grouping follow
-that locale's measured Mac Excel collation; `win-*` profiles compare text
-case-insensitively by bytes, because Windows ordering is not measured.
+that locale's measured Mac Excel collation; `win-*` profiles add the Windows
+word-sort rules measured on Windows Excel 365 ja-JP to that locale's collation.
 
 ## What this is
 

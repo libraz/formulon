@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [0.15.2] - 2026-10-14
+
+### BREAKING
 
 - Python `ConditionalFormatInput` drops `dxf_id_engaged`, `op_engaged`,
   `rank_engaged`, `std_dev_engaged` and `time_period_engaged`: `dxf_id`, `op`,
@@ -121,6 +123,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exact, so it lands on the true inverse instead of the edge of a flat CDF
   region (`BETA.INV(BETA.DIST(0.9,0.1,10,TRUE),0.1,10)` now agrees with Excel
   to within 1e-6, where it was off by 1.15e-6).
+
+### Performance
+
+- Conditional-format and AutoFilter colour/icon evaluation prepare the rule
+  plan once per range walk instead of rescanning the range per cell.
+- Pivot aggregation works over record-index views instead of copying values
+  per group.
+- Loading and saving `.xlsx` / `.xlsb` parse `[Content_Types].xml` and each
+  rels part once, look up passthrough parts by path, and prune orphan parts
+  without rescanning the part graph.
+- `TEXTSPLIT`, `TEXTBEFORE` / `TEXTAFTER` and wildcard `XLOOKUP` / `XMATCH`
+  prepare their delimiters and patterns once per call, and function-name
+  lookup no longer allocates.
 
 ## [0.15.1] - 2026-10-12
 
@@ -2621,7 +2636,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.15.2...HEAD
+[0.15.2]: https://github.com/libraz/formulon/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/libraz/formulon/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/libraz/formulon/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/libraz/formulon/compare/v0.13.0...v0.14.0

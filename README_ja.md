@@ -99,7 +99,7 @@ with formulon.Workbook.create_default() as wb:
         print(profile, [wb.get_display_text(0, row, 0)[0] for row in range(3)])
 ```
 
-プロファイル ID は `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` です。`mac-*` のすべてと `win-365-ja_JP` は Excel で測定したもので、それ以外の `win-*` は Mac での測定値からの推定です。`mac-*` では、テキストの比較、並べ替え、検索、グループ化が、そのロケールの Mac Excel で測定した照合順序に従います。`win-*` では Windows の順序を測定していないため、大文字と小文字だけを区別しないバイト比較になります。プロファイルはファイルに保存されないため、アプリケーション側で対象の ID を保持し、読み込み後に設定し直してください。
+プロファイル ID は `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` です。`mac-*` のすべてと `win-365-ja_JP` は Excel で測定したもので、それ以外の `win-*` は Mac での測定値からの推定です。`mac-*` では、テキストの比較、並べ替え、検索、グループ化が、そのロケールの Mac Excel で測定した照合順序に従います。`win-*` では、そのロケールの照合順序に、Windows Excel 365 ja-JP で測定した Windows の単語並べ替え規則が加わります。プロファイルはファイルに保存されないため、アプリケーション側で対象の ID を保持し、読み込み後に設定し直してください。
 
 Excel がそのロケールで新規作成するのと同じブックが必要なら、`createDefault` の代わりに `Workbook.createForProfile(id)`（Python では `Workbook.create_for_profile`）を使います。プロファイルを選ぶのに加えて、本文とふりがなのフォント、ローカライズされた標準スタイル名と最初のシート名、ページ余白を、Excel がそのロケールで使う値に合わせます。
 
