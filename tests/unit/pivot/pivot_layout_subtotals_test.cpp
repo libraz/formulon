@@ -194,7 +194,8 @@ std::vector<double> projected_data_values(const PivotCells& cells, std::uint32_t
   std::vector<double> values;
   for (std::uint32_t row = cells.top + 1; row < cells.top + cells.rows; ++row) {
     const PivotCell* cell = find_cell(cells, row, data_col);
-    if (cell == nullptr) {
+    // Group heading rows span the data area as blanks.
+    if (cell == nullptr || cell->kind == PivotCellKind::Blank) {
       continue;
     }
     EXPECT_TRUE(cell->value.is_number());
@@ -209,7 +210,7 @@ std::vector<PivotCellKind> projected_data_kinds(const PivotCells& cells, std::ui
   std::vector<PivotCellKind> kinds;
   for (std::uint32_t row = cells.top + 1; row < cells.top + cells.rows; ++row) {
     const PivotCell* cell = find_cell(cells, row, data_col);
-    if (cell != nullptr) {
+    if (cell != nullptr && cell->kind != PivotCellKind::Blank) {
       kinds.push_back(cell->kind);
     }
   }
@@ -472,7 +473,10 @@ TEST(PivotLayout, CompactSubtotalBottomOpensWithAHeaderRow) {
   EXPECT_EQ(header->kind, PivotCellKind::RowLabel);
   EXPECT_EQ(header->depth, 0U);
   EXPECT_EQ(header->field_name, "Region");
-  EXPECT_EQ(find_cell(cells, cells.top + 1, cells.left + 1), nullptr);
+  const PivotCell* header_value = find_cell(cells, cells.top + 1, cells.left + 1);
+  ASSERT_NE(header_value, nullptr);
+  EXPECT_EQ(header_value->kind, PivotCellKind::Blank);
+  EXPECT_TRUE(header_value->value.is_blank());
   const PivotCell* widget = find_cell(cells, cells.top + 3, cells.left);
   ASSERT_NE(widget, nullptr);
   EXPECT_EQ(widget->depth, 1U);

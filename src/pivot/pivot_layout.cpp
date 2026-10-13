@@ -841,6 +841,11 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
       }
     }
     if (entry.kind == EntryKind::Group) {
+      // A heading row without its subtotal still spans the data area as blanks.
+      for (std::size_t c_entry = 0; c_entry < col_entries.size(); ++c_entry) {
+        append_cell(cells, row, data_left + static_cast<std::uint32_t>(c_entry), Value::blank(), PivotCellKind::Blank,
+                    0);
+      }
       continue;
     }
     for (std::size_t c_entry = 0; c_entry < col_entries.size(); ++c_entry) {
