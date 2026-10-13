@@ -297,9 +297,9 @@ bool write_out_of_range_defined_names_fixture(const std::string& path) {
   }
 
   std::vector<formulon::DefinedName> names;
-  names.push_back(formulon::DefinedName{"Before", "=1", -1, false, ""});
-  names.push_back(formulon::DefinedName{"Bad", "=Sheet1!$A$1", 99, false, ""});
-  names.push_back(formulon::DefinedName{"After", "=2", -1, false, ""});
+  names.push_back(formulon::DefinedName{"Before", "1", -1, false, ""});
+  names.push_back(formulon::DefinedName{"Bad", "Sheet1!$A$1", 99, false, ""});
+  names.push_back(formulon::DefinedName{"After", "2", -1, false, ""});
   wb.set_defined_names(std::move(names));
 
   auto saved = wb.save();

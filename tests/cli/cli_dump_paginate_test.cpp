@@ -202,9 +202,9 @@ TEST(FormulonCli, DumpMetadataRecoversFromOutOfRangeDefinedNameScope) {
   EXPECT_TRUE(r.stderr_text.empty());
   EXPECT_EQ(r.stdout_text,
             "[defined_names]\n"
-            "Before =1\n"
-            "#99!Bad =Sheet1!$A$1\n"
-            "After =2\n"
+            "Before 1\n"
+            "#99!Bad Sheet1!$A$1\n"
+            "After 2\n"
             "[tables]\n"
             "[passthrough_parts]\n");
 }
