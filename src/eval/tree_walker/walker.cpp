@@ -517,22 +517,9 @@ Value eval_node_plain(const parser::AstNode& node, Arena& arena, const FunctionR
       if (!callee.is_lambda()) {
         return Value::error(ErrorCode::Value);
       }
-      // Hand off to the shared invoker. Argument-AST accessors differ
-      // between the `LambdaCall` case (here) and the name-bound dispatch
-      // path in `dispatch_call`, so we materialise a flat pointer array
-      // before invoking.
-      //
-      // Only the arguments the call actually writes are passed. Trailing
-      // optional parameters the call omits are bound to the omitted
-      // sentinel by `invoke_lambda` itself, which is what `ISOMITTED` reads
-      // inside the body; nothing about omission is decided here.
-      const std::uint32_t arity = node.as_lambda_call_arity();
-      std::vector<const parser::AstNode*> argv;
-      argv.reserve(arity);
-      for (std::uint32_t i = 0; i < arity; ++i) {
-        argv.push_back(&node.as_lambda_call_arg(i));
-      }
-      return invoke_lambda(callee.as_lambda(), arity, argv.empty() ? nullptr : argv.data(), arena, registry, ctx);
+      // invoke_lambda takes the arena slots directly and binds omitted optionals.
+      return invoke_lambda(callee.as_lambda(), node.as_lambda_call_arity(), node.as_lambda_call_args(), arena, registry,
+                           ctx);
     }
 
     case parser::NodeKind::IntersectOp:

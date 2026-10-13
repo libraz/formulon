@@ -269,6 +269,9 @@ TEST(AstNodeCall, VariadicArgsCopiedToArena) {
   EXPECT_EQ(n->kind(), NodeKind::Call);
   EXPECT_EQ(n->as_call_name(), "SUM");
   EXPECT_EQ(n->as_call_arity(), 3u);
+  ASSERT_NE(n->as_call_args(), nullptr);
+  EXPECT_EQ(n->as_call_args()[0], &n->as_call_arg(0));
+  EXPECT_EQ(n->as_call_args()[2], &n->as_call_arg(2));
   EXPECT_DOUBLE_EQ(n->as_call_arg(0).as_literal().as_number(), 1.0);
   EXPECT_DOUBLE_EQ(n->as_call_arg(2).as_literal().as_number(), 3.0);
 }
@@ -279,6 +282,7 @@ TEST(AstNodeCall, ZeroArityIsLegal) {
   ASSERT_NE(n, nullptr);
   EXPECT_EQ(n->as_call_name(), "NOW");
   EXPECT_EQ(n->as_call_arity(), 0u);
+  EXPECT_EQ(n->as_call_args(), nullptr);
 }
 
 TEST(AstNodeArrayLiteral, RowMajorAccessorRoundtrips) {
@@ -355,8 +359,19 @@ TEST(AstNodeLambdaCall, CalleeAndArgsRoundtrip) {
   EXPECT_EQ(n->kind(), NodeKind::LambdaCall);
   EXPECT_EQ(&n->as_lambda_call_callee(), callee);
   EXPECT_EQ(n->as_lambda_call_arity(), 2u);
+  ASSERT_NE(n->as_lambda_call_args(), nullptr);
+  EXPECT_EQ(n->as_lambda_call_args()[0], &n->as_lambda_call_arg(0));
+  EXPECT_EQ(n->as_lambda_call_args()[1], &n->as_lambda_call_arg(1));
   EXPECT_DOUBLE_EQ(n->as_lambda_call_arg(0).as_literal().as_number(), 10.0);
   EXPECT_DOUBLE_EQ(n->as_lambda_call_arg(1).as_literal().as_number(), 20.0);
+}
+
+TEST(AstNodeLambdaCall, ZeroArityBorrowsNoArgumentSlots) {
+  Arena a;
+  AstNode* n = make_lambda_call(a, make_name_ref(a, "myfn"), nullptr, 0);
+  ASSERT_NE(n, nullptr);
+  EXPECT_EQ(n->as_lambda_call_arity(), 0U);
+  EXPECT_EQ(n->as_lambda_call_args(), nullptr);
 }
 
 TEST(AstNodeChildren, VisitsInSourceOrderAndStopsEarly) {

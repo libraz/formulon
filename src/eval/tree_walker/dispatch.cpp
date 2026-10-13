@@ -431,13 +431,7 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       const auto read = [&](const parser::AstNode& ref) { return eval_node_shaped(ref, arena, registry, ctx); };
       const Value bound = NameEnv::binding_value(*binding, arena, read);
       if (bound.is_lambda()) {
-        // Build a flat argv pointer array from the call's child slots.
-        std::vector<const parser::AstNode*> argv;
-        argv.reserve(arity);
-        for (std::uint32_t i = 0; i < arity; ++i) {
-          argv.push_back(&node.as_call_arg(i));
-        }
-        return invoke_lambda(bound.as_lambda(), arity, argv.empty() ? nullptr : argv.data(), arena, registry, ctx);
+        return invoke_lambda(bound.as_lambda(), arity, node.as_call_args(), arena, registry, ctx);
       }
       if (bound.is_error()) {
         return bound;
@@ -463,12 +457,7 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     if (!defined.is_lambda()) {
       return Value::error(ErrorCode::Value);
     }
-    std::vector<const parser::AstNode*> argv;
-    argv.reserve(arity);
-    for (std::uint32_t i = 0; i < arity; ++i) {
-      argv.push_back(&node.as_call_arg(i));
-    }
-    return invoke_lambda(defined.as_lambda(), arity, argv.empty() ? nullptr : argv.data(), arena, registry, ctx);
+    return invoke_lambda(defined.as_lambda(), arity, node.as_call_args(), arena, registry, ctx);
   }
 
   if (LazyImpl lazy = find_lazy_impl(name); lazy != nullptr) {

@@ -133,25 +133,16 @@ bool ReferenceResultRect(const parser::AstNode& target, Arena& arena, const Func
       const parser::AstNode* callee = parser::make_name_ref(arena, name);
       const LambdaValue* lv =
           callee != nullptr ? resolve_callable(*callee, arity, arena, registry, ctx, &callee_err) : nullptr;
-      std::vector<const parser::AstNode*> args;
-      for (std::uint32_t i = 0; i < arity; ++i) {
-        args.push_back(&target.as_call_arg(i));
-      }
-      return lv != nullptr && resolve_lambda_reference(lv, arity, args.empty() ? nullptr : args.data(), arena, registry,
-                                                       ctx, sheet, top, left, bottom, right, &err);
+      return lv != nullptr && resolve_lambda_reference(lv, arity, target.as_call_args(), arena, registry, ctx, sheet,
+                                                       top, left, bottom, right, &err);
     }
     case parser::NodeKind::LambdaCall: {
       const Value callee = eval_node(target.as_lambda_call_callee(), arena, registry, ctx);
       if (!callee.is_lambda()) {
         return false;
       }
-      std::vector<const parser::AstNode*> args;
-      for (std::uint32_t i = 0; i < target.as_lambda_call_arity(); ++i) {
-        args.push_back(&target.as_lambda_call_arg(i));
-      }
-      return resolve_lambda_reference(callee.as_lambda(), static_cast<std::uint32_t>(args.size()),
-                                      args.empty() ? nullptr : args.data(), arena, registry, ctx, sheet, top, left,
-                                      bottom, right, &err);
+      return resolve_lambda_reference(callee.as_lambda(), target.as_lambda_call_arity(), target.as_lambda_call_args(),
+                                      arena, registry, ctx, sheet, top, left, bottom, right, &err);
     }
     default:
       return false;

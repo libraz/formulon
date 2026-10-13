@@ -846,6 +846,11 @@ std::uint32_t AstNode::as_call_arity() const {
   return data_.call.arity;
 }
 
+const AstNode* const* AstNode::as_call_args() const {
+  FM_CHECK(kind_ == NodeKind::Call, "AstNode::as_call_args on non-Call");
+  return data_.call.args;
+}
+
 const AstNode& AstNode::as_call_arg(std::uint32_t i) const {
   FM_CHECK(kind_ == NodeKind::Call, "AstNode::as_call_arg on non-Call");
   FM_CHECK(i < data_.call.arity, "AstNode::as_call_arg index out of range");
@@ -919,6 +924,11 @@ const AstNode& AstNode::as_lambda_call_callee() const {
 std::uint32_t AstNode::as_lambda_call_arity() const {
   FM_CHECK(kind_ == NodeKind::LambdaCall, "AstNode::as_lambda_call_arity on non-LambdaCall");
   return data_.lambda_call.arity;
+}
+
+const AstNode* const* AstNode::as_lambda_call_args() const {
+  FM_CHECK(kind_ == NodeKind::LambdaCall, "AstNode::as_lambda_call_args on non-LambdaCall");
+  return data_.lambda_call.args;
 }
 
 const AstNode& AstNode::as_lambda_call_arg(std::uint32_t i) const {

@@ -252,6 +252,8 @@ class AstNode final {
   std::string_view as_call_name() const;
   std::uint32_t as_call_arity() const;
   const AstNode& as_call_arg(std::uint32_t i) const;
+  /// Borrowed arena-owned argument slots; nullptr for zero arity.
+  const AstNode* const* as_call_args() const;
 
   // --- ArrayLiteral --------------------------------------------------------
   std::uint32_t as_array_rows() const;
@@ -274,6 +276,8 @@ class AstNode final {
   const AstNode& as_lambda_call_callee() const;
   std::uint32_t as_lambda_call_arity() const;
   const AstNode& as_lambda_call_arg(std::uint32_t i) const;
+  /// Borrowed arena-owned argument slots; nullptr for zero arity.
+  const AstNode* const* as_lambda_call_args() const;
 
   // --- ErrorLiteral --------------------------------------------------------
   ErrorCode as_error_literal() const;
