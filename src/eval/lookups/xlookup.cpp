@@ -194,6 +194,32 @@ bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards, Ex
   return false;
 }
 
+// The wildcard query is immutable for one linear scan. Keeping the folded
+// pattern or unescaped literal here avoids repeating query-side work for every
+// candidate cell. The candidate still needs its own profile-specific fold when
+// the query is a pattern.
+struct PreparedWildcardQuery {
+  bool has_pattern = false;
+  std::string prepared;
+};
+
+PreparedWildcardQuery prepare_wildcard_query(std::string_view raw, ExcelProfile profile) {
+  if (scan_has_wildcard(raw)) {
+    return PreparedWildcardQuery{true, xlookup_exact_key(raw, profile)};
+  }
+  return PreparedWildcardQuery{false, unescape_wildcard_literal(raw)};
+}
+
+bool prepared_wildcard_eq(const Value& cell, const PreparedWildcardQuery& query, ExcelProfile profile) {
+  if (!cell.is_text()) {
+    return false;
+  }
+  if (query.has_pattern) {
+    return wildcard_match(query.prepared, xlookup_exact_key(cell.as_text(), profile));
+  }
+  return collate(cell.as_text(), query.prepared, profile, CollationStrength::kDynamic) == 0;
+}
+
 // Scan `cells` (already flattened to a 1-D axis of the lookup_array) for
 // `lookup_value`, honouring Excel 365's XLOOKUP match_mode / search_mode
 // combinations. Returns the 0-based offset of the match, or `SIZE_MAX`
@@ -222,9 +248,14 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
     auto idx_at = [&](std::size_t k) -> std::size_t { return reverse ? (n - 1U - k) : k; };
 
     if (match_mode == XMatchMode::Exact || match_mode == XMatchMode::Wildcard) {
+      std::optional<PreparedWildcardQuery> prepared;
+      if (wildcards && lookup_value.is_text()) {
+        prepared = prepare_wildcard_query(lookup_value.as_text(), profile);
+      }
       for (std::size_t k = 0; k < n; ++k) {
         const std::size_t i = idx_at(k);
-        if (xlookup_exact_eq(cells[i], lookup_value, wildcards, profile)) {
+        if (prepared.has_value() ? prepared_wildcard_eq(cells[i], prepared.value(), profile)
+                                 : xlookup_exact_eq(cells[i], lookup_value, wildcards, profile)) {
           return i;
         }
       }

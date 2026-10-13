@@ -417,6 +417,24 @@ TEST(BuiltinsXLookup, WildcardEscapeLiteralStar) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
+TEST(BuiltinsXLookup, WildcardEscapeLiteralMissesNonLiteralText) {
+  Workbook wb = Workbook::create();
+  SeedColumnPair(wb, {Value::text("x"), Value::text("**"), Value::text("star")},
+                 {Value::number(1.0), Value::number(2.0), Value::number(3.0)});
+  const Value v = EvalSourceIn("=XLOOKUP(\"~*\", A1:A3, B1:B3, \"nf\", 2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_text()) << v.debug_to_string();
+  EXPECT_EQ(v.as_text(), "nf");
+}
+
+TEST(BuiltinsXLookup, WildcardEscapeLiteralQuestionReverseSearch) {
+  Workbook wb = Workbook::create();
+  SeedColumnPair(wb, {Value::text("?"), Value::text("x"), Value::text("?")},
+                 {Value::number(1.0), Value::number(2.0), Value::number(3.0)});
+  const Value v = EvalSourceIn("=XLOOKUP(\"~?\", A1:A3, B1:B3, \"nf\", 2, -1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
+}
+
 TEST(BuiltinsXLookup, SearchModeReverseDuplicates) {
   // {10, 20, 20, 30} — forward scan hits row 2, reverse scan hits row 3.
   Workbook wb = Workbook::create();
@@ -1085,6 +1103,33 @@ TEST(BuiltinsXLookupCollation, WildcardMode) {
   }
 }
 
+TEST(BuiltinsXLookupCollation, WildcardModePreservesProfileFolding) {
+  const ExcelProfile profiles[] = {
+      mac_365_ja_jp_profile(),
+      mac_365_en_us_profile(),
+      win_365_ja_jp_profile(),
+      win_365_en_us_profile(),
+  };
+  for (const ExcelProfile& profile : profiles) {
+    SCOPED_TRACE(excel_profile_id(profile));
+    const Value v = EvalWithProfile(R"(=XLOOKUP("a*",{"zz";"ABC"},{1;2},0,2))", profile);
+    EXPECT_TRUE(ExpectHit(v, 2));
+  }
+
+  // Mac lookup folding turns full-width ASCII into ASCII before wildcard
+  // matching; the Windows profile intentionally preserves that distinction.
+  const Value mac_fullwidth = EvalWithProfile(R"(=XLOOKUP("Ａ*",{"zz";"ABC"},{1;2},,2))", mac_365_ja_jp_profile());
+  EXPECT_TRUE(ExpectHit(mac_fullwidth, 2));
+  const Value win_fullwidth = EvalWithProfile(R"(=XLOOKUP("Ａ*",{"zz";"ABC"},{1;2},,2))", win_365_ja_jp_profile());
+  EXPECT_TRUE(ExpectHit(win_fullwidth, 0));
+
+  for (const ExcelProfile& profile : profiles) {
+    SCOPED_TRACE(excel_profile_id(profile));
+    const Value kana = EvalWithProfile(R"(=XLOOKUP("ｶﾞ*",{"zz";"ガラス"},{1;2},0,2))", profile);
+    EXPECT_TRUE(ExpectHit(kana, 2));
+  }
+}
+
 TEST(BuiltinsXMatchCollation, BinarySearchUsesDynamicOrder) {
   {
     const ExcelProfile p = mac_365_ja_jp_profile();
@@ -1104,6 +1149,24 @@ TEST(BuiltinsXMatchCollation, BinarySearchUsesDynamicOrder) {
     const Value v = EvalWithProfile(R"(=XMATCH("Ａ",{"A";"b";"c"},0,2))", p);
     EXPECT_TRUE(ExpectHit(v, 1)) << R"(=XMATCH("Ａ",{"A";"b";"c"},0,2))";
   }
+}
+
+TEST(BuiltinsXMatch, WildcardEscapeLiteralMissAndReverseHit) {
+  const Value miss = EvalSource(R"(=XMATCH("~*",{"x";"**"},2))");
+  EXPECT_EQ(miss.as_error(), ErrorCode::NA) << miss.debug_to_string();
+
+  const Value hit = EvalSource(R"(=XMATCH("~?",{"?";"x";"?"},2,-1))");
+  ASSERT_TRUE(hit.is_number()) << hit.debug_to_string();
+  EXPECT_DOUBLE_EQ(hit.as_number(), 3.0);
+}
+
+TEST(BuiltinsXMatch, WildcardModeKeepsNonTextLookupKinds) {
+  const Value number = EvalSource(R"(=XMATCH(0,{"text";0;FALSE},2))");
+  ASSERT_TRUE(number.is_number());
+  EXPECT_DOUBLE_EQ(number.as_number(), 2.0);
+  const Value boolean = EvalSource(R"(=XMATCH(TRUE,{1;FALSE;TRUE},2,-1))");
+  ASSERT_TRUE(boolean.is_number());
+  EXPECT_DOUBLE_EQ(boolean.as_number(), 3.0);
 }
 
 }  // namespace
