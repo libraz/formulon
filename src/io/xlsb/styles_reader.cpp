@@ -29,6 +29,8 @@
 //   BrtBorder(46): u8 diagonal flags (bit 0 down, bit 1 up), then five
 //                  sides in the order top, bottom, left, right,
 //                  diagonal, each u8 style + u8 unused + BrtColor.
+//   BrtDXF  (507): u16 flags, u16 reserved, u16 property count, then typed
+//                  properties (ids and layouts in `io/xlsb/dxf_props.h`).
 //
 // Every one of these is decoded into the shared `StylesTable`, so a
 // `.xlsb`-sourced workbook hands its consumers the same font / fill /
@@ -40,8 +42,10 @@
 #include <cstdint>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "io/xlsb/brt_color.h"
+#include "io/xlsb/dxf_props.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/xf_flags.h"
 #include "utils/status_macros.h"
@@ -378,6 +382,201 @@ Expected<void, Error> DecodeXf(ByteSpan payload, XfTarget target, StylesTable& t
   return Expected<void, Error>::Ok();
 }
 
+/// Wire underline value -> `FontRecord::underline` ordinal; unnamed values read as none.
+std::uint8_t UnderlineOrdinal(std::uint16_t wire) {
+  for (std::uint8_t ordinal = 1U; ordinal < sizeof(kDxfUnderlineWire); ++ordinal) {
+    if (kDxfUnderlineWire[ordinal] == wire) {
+      return ordinal;
+    }
+  }
+  return 0U;
+}
+
+/// Decodes a property colour. Unlike a table entry, a property exists only
+/// because the dxf states it, so the automatic selector is a real `auto`
+/// colour rather than the absent-element idiom.
+Expected<void, Error> DecodeStatedColor(ByteSpan& p, std::uint32_t unset_argb, std::uint32_t& argb, ColorSpec& spec) {
+  const bool automatic = p.size > 0U && (p.data[0] >> 1U) == 0U;
+  if (auto color = DecodeColor(p, unset_argb, argb, spec); !color) {
+    return std::move(color.error());
+  }
+  if (automatic && spec.kind == ColorSpec::Kind::kNone) {
+    spec.kind = ColorSpec::Kind::kAuto;
+  }
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> DecodeDxfBorderSide(ByteSpan& d, BorderSide& side) {
+  std::uint32_t argb = 0;
+  ColorSpec spec;
+  if (auto color = DecodeStatedColor(d, /*unset_argb=*/0U, argb, spec); !color) {
+    return std::move(color.error());
+  }
+  auto style_or = read_u16(d);
+  if (!style_or) {
+    return std::move(style_or.error());
+  }
+  side.style = style_or.value() <= 13U ? static_cast<std::uint8_t>(style_or.value()) : std::uint8_t{0};
+  if (side.style != 0U) {
+    side.color_argb = argb;
+    side.color = spec;
+  }
+  return Expected<void, Error>::Ok();
+}
+
+/// Reads a wide string with a u16 length (the BrtDXF flavour of XLWideString).
+Expected<std::string, Error> ReadShortWideString(ByteSpan& d) {
+  ASSIGN_OR_RETURN(const std::uint16_t cch, read_u16(d));
+  const std::size_t bytes = static_cast<std::size_t>(cch) * 2U;
+  if (d.size < bytes) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtDXF string truncated",
+                      "context=xlsb_styles_reader");
+  }
+  // Re-frame with a u32 length to reuse the XLWideString UTF-16 decoder.
+  std::vector<std::uint8_t> framed = {static_cast<std::uint8_t>(cch & 0xFFU), static_cast<std::uint8_t>(cch >> 8U), 0U,
+                                      0U};
+  framed.insert(framed.end(), d.data, d.data + bytes);
+  ByteSpan wide{framed.data(), framed.size()};
+  return read_xlwidestring(wide);
+}
+
+/// Applies one BrtDXF property to `dxf`; `d` is the property data. A type
+/// outside the measured table is skipped, as an undecoded record is.
+Expected<void, Error> ApplyDxfProp(std::uint16_t type, ByteSpan d, DifferentialFormat& dxf) {
+  FontRecord& font = dxf.font;
+  FillRecord& fill = dxf.fill;
+  BorderRecord& border = dxf.border;
+  switch (type) {
+    case kDxfPropFillPattern: {
+      ASSIGN_OR_RETURN(const std::uint8_t pattern, read_u8(d));
+      dxf.has_fill = true;
+      fill.pattern = pattern <= 18U ? pattern : std::uint8_t{0};
+      break;
+    }
+    case kDxfPropFillFg:
+      dxf.has_fill = true;
+      return DecodeStatedColor(d, /*unset_argb=*/0U, fill.fg_argb, fill.fg);
+    case kDxfPropFillBg:
+      dxf.has_fill = true;
+      return DecodeStatedColor(d, /*unset_argb=*/0U, fill.bg_argb, fill.bg);
+    case kDxfPropFontColor:
+      dxf.has_font = true;
+      return DecodeStatedColor(d, /*unset_argb=*/font.color_argb, font.color_argb, font.color);
+    case kDxfPropBorderTop:
+      dxf.has_border = true;
+      return DecodeDxfBorderSide(d, border.top);
+    case kDxfPropBorderBottom:
+      dxf.has_border = true;
+      return DecodeDxfBorderSide(d, border.bottom);
+    case kDxfPropBorderLeft:
+      dxf.has_border = true;
+      return DecodeDxfBorderSide(d, border.left);
+    case kDxfPropBorderRight:
+      dxf.has_border = true;
+      return DecodeDxfBorderSide(d, border.right);
+    case kDxfPropBorderDiagonal:
+      dxf.has_border = true;
+      return DecodeDxfBorderSide(d, border.diagonal);
+    case kDxfPropDiagonalUp:
+    case kDxfPropDiagonalDown: {
+      ASSIGN_OR_RETURN(const std::uint8_t flag, read_u8(d));
+      dxf.has_border = true;
+      (type == kDxfPropDiagonalUp ? border.diagonal_up : border.diagonal_down) = flag != 0U;
+      break;
+    }
+    case kDxfPropFontName: {
+      ASSIGN_OR_RETURN(auto name, ReadShortWideString(d));
+      dxf.has_font = true;
+      font.name = std::move(name);
+      break;
+    }
+    case kDxfPropFontWeight: {
+      ASSIGN_OR_RETURN(const std::uint16_t weight, read_u16(d));
+      dxf.has_font = true;
+      font.has_bold = true;
+      font.bold = weight >= 550U;
+      break;
+    }
+    case kDxfPropUnderline: {
+      ASSIGN_OR_RETURN(const std::uint16_t wire, read_u16(d));
+      dxf.has_font = true;
+      font.underline = UnderlineOrdinal(wire);
+      break;
+    }
+    case kDxfPropVertAlign: {
+      ASSIGN_OR_RETURN(const std::uint16_t align, read_u16(d));
+      dxf.has_font = true;
+      font.vert_align = (align == 1U || align == 2U) ? static_cast<std::uint8_t>(align) : std::uint8_t{0};
+      break;
+    }
+    case kDxfPropItalic: {
+      ASSIGN_OR_RETURN(const std::uint8_t flag, read_u8(d));
+      dxf.has_font = true;
+      font.has_italic = true;
+      font.italic = flag != 0U;
+      break;
+    }
+    case kDxfPropStrike: {
+      ASSIGN_OR_RETURN(const std::uint8_t flag, read_u8(d));
+      dxf.has_font = true;
+      font.has_strike = true;
+      font.strike = flag != 0U;
+      break;
+    }
+    case kDxfPropFontSize: {
+      ASSIGN_OR_RETURN(const std::uint32_t twips, read_u32(d));
+      dxf.has_font = true;
+      font.has_size = true;
+      font.size = static_cast<double>(twips) / 20.0;
+      break;
+    }
+    case kDxfPropNumFmtId: {
+      ASSIGN_OR_RETURN(const std::uint16_t id, read_u16(d));
+      dxf.has_num_fmt = true;
+      dxf.num_fmt_id = id;
+      break;
+    }
+    case kDxfPropNumFmtCode: {
+      ASSIGN_OR_RETURN(auto code, ReadShortWideString(d));
+      dxf.has_num_fmt = true;
+      dxf.num_fmt_code = std::move(code);
+      break;
+    }
+    default:
+      break;
+  }
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> DecodeDxf(ByteSpan payload, StylesTable& table) {
+  ByteSpan p = payload;
+  // The leading flags and reserved words carry nothing the model holds.
+  ASSIGN_OR_RETURN(const std::uint16_t flags, read_u16(p));
+  ASSIGN_OR_RETURN(const std::uint16_t reserved, read_u16(p));
+  ASSIGN_OR_RETURN(const std::uint16_t count, read_u16(p));
+  static_cast<void>(flags);
+  static_cast<void>(reserved);
+  DifferentialFormat dxf;
+  // A differential font without `<sz>` leaves the size unchanged.
+  dxf.font.has_size = false;
+  for (std::uint16_t i = 0; i < count; ++i) {
+    ASSIGN_OR_RETURN(const std::uint16_t type, read_u16(p));
+    ASSIGN_OR_RETURN(const std::uint16_t size, read_u16(p));
+    if (size < 4U || static_cast<std::size_t>(size) - 4U > p.size) {
+      return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtDXF property truncated",
+                        "context=xlsb_styles_reader");
+    }
+    const ByteSpan data{p.data, static_cast<std::size_t>(size) - 4U};
+    p.data += data.size;
+    p.size -= data.size;
+    if (auto r = ApplyDxfProp(type, data, dxf); !r) {
+      return std::move(r.error());
+    }
+  }
+  table.dxfs.push_back(std::move(dxf));
+  return Expected<void, Error>::Ok();
+}
+
 }  // namespace
 
 Expected<StylesTable, Error> read_styles_bin(ByteSpan bytes) {
@@ -390,6 +589,12 @@ Expected<StylesTable, Error> read_styles_bin(ByteSpan bytes) {
       return std::move(rec_or.error());
     }
     const XlsbRecord& rec = rec_or.value();
+    if (rec.type == kBrtDxf) {
+      if (auto r = DecodeDxf(rec.payload, table); !r) {
+        return std::move(r.error());
+      }
+      continue;
+    }
     switch (static_cast<XlsbRecordType>(rec.type)) {
       case XlsbRecordType::BrtFmt: {
         if (auto r = DecodeFmt(rec.payload, table); !r) {

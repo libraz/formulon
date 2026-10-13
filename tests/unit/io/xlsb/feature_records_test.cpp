@@ -35,6 +35,7 @@
 //              Excel keeps only the name
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -50,6 +51,7 @@
 #include "io/ooxml_writer.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/styles_reader.h"
 #include "io/xlsb/styles_writer.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
@@ -535,6 +537,119 @@ TEST(XlsbFeatureRecords, DxfRecordsMatchExcel) {
     ASSERT_TRUE(static_cast<bool>(styles));
     EXPECT_EQ(Joined(DxfRecords(SpanOf(written))), Joined(DxfRecords(SpanOf(styles.value())))) << name;
   }
+}
+
+void DescribeColorSpec(std::ostream& os, const ColorSpec& c) {
+  os << "<" << static_cast<int>(c.kind);
+  switch (c.kind) {
+    case ColorSpec::Kind::kRgb:
+      os << " rgb=" << std::hex << c.rgb << std::dec;
+      break;
+    case ColorSpec::Kind::kTheme:
+      os << " theme=" << c.theme << " tint=" << std::lround(c.tint * 1e4);
+      break;
+    case ColorSpec::Kind::kIndexed:
+      os << " indexed=" << c.indexed;
+      break;
+    case ColorSpec::Kind::kNone:
+    case ColorSpec::Kind::kAuto:
+      break;
+  }
+  os << ">";
+}
+
+void DescribeBorderSide(std::ostream& os, const BorderSide& side) {
+  os << " " << static_cast<int>(side.style);
+  if (side.style != 0U) {
+    DescribeColorSpec(os, side.color);
+  }
+}
+
+/// Every dxf field Excel keeps for a CF dxf; alignment and protection are
+/// not modelled structurally on the wire.
+std::string DescribeDxfs(const StylesTable& styles) {
+  std::ostringstream os;
+  for (const DifferentialFormat& d : styles.dxfs) {
+    os << "{";
+    if (d.has_font) {
+      const FontRecord& f = d.font;
+      os << "font name=" << f.name << " size=" << (f.has_size ? f.size : -1.0) << " b=" << f.has_bold << f.bold
+         << " i=" << f.has_italic << f.italic << " s=" << f.has_strike << f.strike
+         << " u=" << static_cast<int>(f.underline) << " v=" << static_cast<int>(f.vert_align) << " color";
+      DescribeColorSpec(os, f.color);
+      os << ";";
+    }
+    if (d.has_fill) {
+      os << "fill " << static_cast<int>(d.fill.pattern);
+      DescribeColorSpec(os, d.fill.fg);
+      DescribeColorSpec(os, d.fill.bg);
+      os << ";";
+    }
+    if (d.has_border) {
+      const BorderRecord& b = d.border;
+      os << "border up=" << b.diagonal_up << " down=" << b.diagonal_down;
+      for (const BorderSide* side : {&b.top, &b.bottom, &b.left, &b.right, &b.diagonal}) {
+        DescribeBorderSide(os, *side);
+      }
+      os << ";";
+    }
+    if (d.has_num_fmt) {
+      os << "numfmt " << d.num_fmt_id << " " << d.num_fmt_code << ";";
+    }
+    os << "}\n";
+  }
+  return os.str();
+}
+
+// The dxfs decoded from Excel's .xlsb equal those Excel wrote into its .xlsx.
+TEST(XlsbFeatureRecords, DxfsDecodeLikeExcelsXlsx) {
+  for (const char* name : {"dxf", "dxfnum", "dxfhand"}) {
+    const Workbook from_xlsx = ReadXlsx(name);
+    const Workbook from_xlsb = ReadXlsbBytes(ReadFileBytes(FixturePath(name, "xlsb")));
+    ASSERT_FALSE(from_xlsx.styles().dxfs.empty()) << name;
+    EXPECT_EQ(DescribeDxfs(from_xlsb.styles()), DescribeDxfs(from_xlsx.styles())) << name;
+  }
+}
+
+// Decoded dxfs write back to the same BrtDXF bytes, and survive an XLSB save.
+TEST(XlsbFeatureRecords, DxfsSurviveXlsbSaveAndLoad) {
+  for (const char* name : {"dxf", "dxfnum", "dxfhand"}) {
+    const Workbook from_xlsb = ReadXlsbBytes(ReadFileBytes(FixturePath(name, "xlsb")));
+    const std::vector<std::uint8_t> first = io::xlsb::write_styles_bin(from_xlsb.styles());
+    auto reread = io::xlsb::read_styles_bin(SpanOf(first));
+    ASSERT_TRUE(static_cast<bool>(reread)) << reread.error().message;
+    EXPECT_EQ(DescribeDxfs(reread.value()), DescribeDxfs(from_xlsb.styles())) << name;
+    const std::vector<std::uint8_t> second = io::xlsb::write_styles_bin(reread.value());
+    EXPECT_EQ(Joined(DxfRecords(SpanOf(second))), Joined(DxfRecords(SpanOf(first)))) << name;
+
+    auto saved = io::xlsb::write_xlsb(from_xlsb);
+    ASSERT_TRUE(static_cast<bool>(saved)) << name << ": " << saved.error().message;
+    const Workbook back = ReadXlsbBytes(saved.value());
+    EXPECT_EQ(DescribeDxfs(back.styles()), DescribeDxfs(from_xlsb.styles())) << name;
+  }
+}
+
+// CF rules loaded from an .xlsb keep the dxf they name, and it resolves.
+TEST(XlsbFeatureRecords, CfRulesFromXlsbReportTheirDxf) {
+  const Workbook from_xlsx = ReadXlsx("dxf");
+  const Workbook from_xlsb = ReadXlsbBytes(ReadFileBytes(FixturePath("dxf", "xlsb")));
+  std::vector<std::optional<std::uint32_t>> expected;
+  for (const cf::ConditionalFormat& f : from_xlsx.sheet(0).conditional_formats()) {
+    for (const cf::CFRule& r : f.rules) {
+      expected.push_back(r.dxf_id);
+    }
+  }
+  std::vector<std::optional<std::uint32_t>> actual;
+  for (const cf::ConditionalFormat& f : from_xlsb.sheet(0).conditional_formats()) {
+    for (const cf::CFRule& r : f.rules) {
+      actual.push_back(r.dxf_id);
+      if (r.dxf_id) {
+        EXPECT_LT(*r.dxf_id, from_xlsb.styles().dxfs.size());
+      }
+    }
+  }
+  ASSERT_FALSE(expected.empty());
+  EXPECT_EQ(actual, expected);
 }
 
 // CF and DV formulas are held in formula-bar spelling, like cell formulas:

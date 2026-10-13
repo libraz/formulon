@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   saved `<item x>` matches. Pass `1` / `true` for the former ascending and
   `0` / `false` for descending.
 
+### Fixed
+
+- XLSB loading now decodes differential formats (`BrtDXF`), so
+  conditional-format rules keep a resolvable `dxf_id`, `.xlsb` to `.xlsx`
+  conversion keeps their formatting, and `add_dxf` after loading no longer
+  collides with Excel's first dxf.
+
 ## [0.15.1] - 2026-10-12
 
 ### Changed

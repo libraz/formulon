@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "io/xlsb/brt_color.h"
+#include "io/xlsb/dxf_props.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/xf_flags.h"
@@ -34,33 +35,6 @@ constexpr std::uint16_t kBrtEndFmts = 616;
 constexpr std::uint16_t kBrtBeginStyles = 619;
 constexpr std::uint16_t kBrtEndStyles = 620;
 constexpr std::uint16_t kBrtStyle = 48;
-constexpr std::uint16_t kBrtBeginDxfs = 505;
-constexpr std::uint16_t kBrtEndDxfs = 506;
-constexpr std::uint16_t kBrtDxf = 507;
-
-// BrtDXF property types, measured against Excel-saved dxfs (each checked
-// against the <dxf> Excel wrote for the same book).
-constexpr std::uint16_t kPropFillPattern = 0;
-constexpr std::uint16_t kPropFillFg = 1;
-constexpr std::uint16_t kPropFillBg = 2;
-constexpr std::uint16_t kPropFontColor = 5;
-constexpr std::uint16_t kPropBorderTop = 6;
-constexpr std::uint16_t kPropBorderBottom = 7;
-constexpr std::uint16_t kPropBorderLeft = 8;
-constexpr std::uint16_t kPropBorderRight = 9;
-constexpr std::uint16_t kPropBorderDiagonal = 10;
-constexpr std::uint16_t kPropDiagonalUp = 13;
-constexpr std::uint16_t kPropDiagonalDown = 14;
-constexpr std::uint16_t kPropFontName = 24;
-constexpr std::uint16_t kPropFontWeight = 25;
-constexpr std::uint16_t kPropUnderline = 26;
-constexpr std::uint16_t kPropVertAlign = 27;
-constexpr std::uint16_t kPropItalic = 28;
-constexpr std::uint16_t kPropStrike = 29;
-constexpr std::uint16_t kPropFontSize = 36;
-constexpr std::uint16_t kPropNumFmtCode = 38;
-constexpr std::uint16_t kPropNumFmtId = 41;
-constexpr std::uint8_t kUnderlineMap[] = {0U, 1U, 2U, 0x21U, 0x22U};
 
 std::uint16_t ClampIndex(std::uint32_t value) {
   return static_cast<std::uint16_t>(std::min<std::uint32_t>(value, std::numeric_limits<std::uint16_t>::max()));
@@ -90,7 +64,7 @@ void EmitFont(std::vector<std::uint8_t>& out, const FontRecord& font) {
   emit_u16(payload, flags);
   emit_u16(payload, font.bold ? 700U : 400U);
   emit_u16(payload, font.vert_align == 1U ? 1U : (font.vert_align == 2U ? 2U : 0U));
-  emit_u8(payload, kUnderlineMap[std::min<std::uint8_t>(font.underline, 4U)]);
+  emit_u8(payload, kDxfUnderlineWire[std::min<std::uint8_t>(font.underline, 4U)]);
   emit_u8(payload, font.has_family ? font.family : 0U);
   emit_u8(payload, font.has_charset ? font.charset : 0U);
   emit_u8(payload, 0U);
@@ -221,57 +195,58 @@ void EmitDxf(std::vector<std::uint8_t>& out, const DifferentialFormat& dxf) {
   std::uint16_t count = 0;
   if (dxf.has_fill) {
     const FillRecord& fill = dxf.fill;
-    AppendProp(props, count, kPropFillPattern, {static_cast<std::uint8_t>(fill.pattern <= 18U ? fill.pattern : 0U)});
+    AppendProp(props, count, kDxfPropFillPattern, {static_cast<std::uint8_t>(fill.pattern <= 18U ? fill.pattern : 0U)});
     if (fill.fg.kind != ColorSpec::Kind::kNone) {
-      AppendProp(props, count, kPropFillFg, ColorProp(fill.fg_argb, fill.fg));
+      AppendProp(props, count, kDxfPropFillFg, ColorProp(fill.fg_argb, fill.fg));
     }
     if (fill.bg.kind != ColorSpec::Kind::kNone) {
-      AppendProp(props, count, kPropFillBg, ColorProp(fill.bg_argb, fill.bg));
+      AppendProp(props, count, kDxfPropFillBg, ColorProp(fill.bg_argb, fill.bg));
     }
   }
   if (dxf.has_font) {
     const FontRecord& font = dxf.font;
     // 0xFF000000 is the "automatic" sentinel an unstated colour carries.
     if (font.color.kind != ColorSpec::Kind::kNone || font.color_argb != 0xFF000000U) {
-      AppendProp(props, count, kPropFontColor, ColorProp(font.color_argb, font.color));
+      AppendProp(props, count, kDxfPropFontColor, ColorProp(font.color_argb, font.color));
     }
     if (!font.name.empty()) {
-      AppendProp(props, count, kPropFontName, ShortWideString(font.name));
+      AppendProp(props, count, kDxfPropFontName, ShortWideString(font.name));
     }
     if (font.has_bold && font.bold) {
-      AppendProp(props, count, kPropFontWeight, {0xBC, 0x02});  // 700
+      AppendProp(props, count, kDxfPropFontWeight, {0xBC, 0x02});  // 700
     }
     if (font.underline != 0U) {
-      AppendProp(props, count, kPropUnderline, {kUnderlineMap[std::min<std::uint8_t>(font.underline, 4U)], 0x00});
+      AppendProp(props, count, kDxfPropUnderline,
+                 {kDxfUnderlineWire[std::min<std::uint8_t>(font.underline, 4U)], 0x00});
     }
     if (font.vert_align == 1U || font.vert_align == 2U) {
-      AppendProp(props, count, kPropVertAlign, {font.vert_align, 0x00});
+      AppendProp(props, count, kDxfPropVertAlign, {font.vert_align, 0x00});
     }
     if (font.has_italic && font.italic) {
-      AppendProp(props, count, kPropItalic, {0x01});
+      AppendProp(props, count, kDxfPropItalic, {0x01});
     }
     if (font.has_strike && font.strike) {
-      AppendProp(props, count, kPropStrike, {0x01});
+      AppendProp(props, count, kDxfPropStrike, {0x01});
     }
     if (font.has_size) {
       std::vector<std::uint8_t> twips;
       emit_u32(twips, FontHeightTwips(font.size));
-      AppendProp(props, count, kPropFontSize, twips);
+      AppendProp(props, count, kDxfPropFontSize, twips);
     }
   }
   if (dxf.has_num_fmt) {
     std::vector<std::uint8_t> id;
     emit_u16(id, dxf.num_fmt_id);
-    AppendProp(props, count, kPropNumFmtId, id);
-    AppendProp(props, count, kPropNumFmtCode, ShortWideString(dxf.num_fmt_code));
+    AppendProp(props, count, kDxfPropNumFmtId, id);
+    AppendProp(props, count, kDxfPropNumFmtCode, ShortWideString(dxf.num_fmt_code));
   }
   if (dxf.has_border) {
     const BorderRecord& border = dxf.border;
-    const std::pair<std::uint16_t, const BorderSide*> sides[] = {{kPropBorderTop, &border.top},
-                                                                 {kPropBorderBottom, &border.bottom},
-                                                                 {kPropBorderLeft, &border.left},
-                                                                 {kPropBorderRight, &border.right},
-                                                                 {kPropBorderDiagonal, &border.diagonal}};
+    const std::pair<std::uint16_t, const BorderSide*> sides[] = {{kDxfPropBorderTop, &border.top},
+                                                                 {kDxfPropBorderBottom, &border.bottom},
+                                                                 {kDxfPropBorderLeft, &border.left},
+                                                                 {kDxfPropBorderRight, &border.right},
+                                                                 {kDxfPropBorderDiagonal, &border.diagonal}};
     for (const auto& [type, side] : sides) {
       if (side->style == 0U) {
         continue;
@@ -284,10 +259,10 @@ void EmitDxf(std::vector<std::uint8_t>& out, const DifferentialFormat& dxf) {
       AppendProp(props, count, type, data);
     }
     if (border.diagonal_down) {
-      AppendProp(props, count, kPropDiagonalDown, {0x01});
+      AppendProp(props, count, kDxfPropDiagonalDown, {0x01});
     }
     if (border.diagonal_up) {
-      AppendProp(props, count, kPropDiagonalUp, {0x01});
+      AppendProp(props, count, kDxfPropDiagonalUp, {0x01});
     }
   }
   std::vector<std::uint8_t> payload;

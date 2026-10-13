@@ -20,13 +20,13 @@
 // Styles, row/column layout, merged cells, pane state, and defined names are
 // emitted from the model.
 //
-// Conditional formats, data validation, auto-filter, print settings and
-// tables are not lowered to records. A sheet read from an `.xlsb` keeps them
-// as `Sheet::xlsb_tail()` and this writer re-emits those bytes verbatim
-// (together with the sheet's own rels, so the ids they carry still resolve).
-// A workbook built in memory or read from `.xlsx` has no such bytes; its
-// modelled equivalents are counted in `deferred_feature_count` and logged
-// under `xlsb.writer.deferred` rather than being dropped silently.
+// Conditional formats and data validation are lowered from the model to
+// records. Auto-filter, print settings and tables are not: a sheet read from
+// an `.xlsb` keeps them as `Sheet::xlsb_tail()` and this writer re-emits those
+// bytes verbatim (together with the sheet's own rels, so the ids they carry
+// still resolve). A workbook built in memory or read from `.xlsx` has no such
+// bytes; its modelled equivalents are counted in `deferred_feature_count` and
+// logged under `xlsb.writer.deferred` rather than being dropped silently.
 //
 // Hyperlinks are modelled, not deferred: `Sheet::hyperlinks()` is lowered to
 // `BrtHLink` records whatever container the workbook came from, so a raw

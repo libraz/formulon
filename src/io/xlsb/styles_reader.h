@@ -2,8 +2,10 @@
 // `xl/styles.bin` reader. Decodes the MS-XLSB styles part into
 // `StylesTable` so both the OOXML and XLSB readers hand the same
 // shape to `Workbook::set_styles`: custom `<numFmt>` entries (`BrtFmt`),
-// the font / fill / border tables (`BrtFont` / `BrtFill` / `BrtBorder`)
-// and the `<cellXfs>` / `<cellStyleXfs>` tables (`BrtXF`).
+// the font / fill / border tables (`BrtFont` / `BrtFill` / `BrtBorder`),
+// the `<cellXfs>` / `<cellStyleXfs>` tables (`BrtXF`) and the differential
+// formats (`BrtDXF`). A `BrtDXF` property outside the measured table in
+// `io/xlsb/dxf_props.h` is skipped, so it does not reach a converted `.xlsx`.
 //
 // Decoding the records rather than counting them is what keeps a
 // `.xlsb`-sourced workbook honest on the two paths raw-byte passthrough of
@@ -47,8 +49,8 @@ namespace xlsb {
 ///
 /// Errors:
 ///   * `kIoXlsbRecordTruncated` — a record's payload would overrun the
-///     part, or a `BrtFont` / `BrtFill` / `BrtBorder` payload is shorter
-///     than its fixed-size fields require.
+///     part, or a `BrtFont` / `BrtFill` / `BrtBorder` / `BrtDXF` payload is
+///     shorter than its fixed-size fields require.
 ///   * `kIoXlsbCorrupt` — a `BrtFmt` / `BrtXF` payload is shorter than
 ///     its fixed-size fields require.
 Expected<StylesTable, Error> read_styles_bin(ByteSpan bytes);
