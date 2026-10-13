@@ -4,9 +4,9 @@
   "classification": "active",
   "verified": true,
   "active_ctest": true,
-  "capture_id": "win-365-ja_JP:16.0.20326:ja-JP:2026-09-30T07:10:35Z",
+  "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-13T03:12:28Z",
   "all_suites_same_capture": true,
-  "product": "16.0.20326",
+  "product": "16.0.20430",
   "locale": "ja-JP",
   "m365_sentinel": "ARRAYTOTEXT(1) == text '1'",
   "required_suites": [
@@ -39,68 +39,68 @@
     {
       "suite": "example_smoke",
       "case_count": 1,
-      "sha256": "d10ef53873a5b65a3a7a124d7f0c9bc5a5cd3a86d4b570f222b8720c958a6143",
-      "capture_id": "win-365-ja_JP:16.0.20326:ja-JP:2026-09-30T07:10:35Z"
+      "sha256": "39518b12b769183240e3d52a83d4668dcdfa3a05bf7d05ef3b24d6c5a2cd9a0a",
+      "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-13T03:12:28Z"
     },
     {
       "suite": "getpivotdata_page_data",
       "case_count": 2,
-      "sha256": "076d52f11712cdba2b982d19bd3453c1a433c045db786fc58a9da2fc3a1466b9",
-      "capture_id": "win-365-ja_JP:16.0.20326:ja-JP:2026-09-30T07:10:35Z"
+      "sha256": "83a9b36bc666eab2d050781937af19c515c4ddebcf5f2e756bbca45e496f3931",
+      "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-13T03:12:28Z"
     },
     {
       "suite": "pivot_aggregations",
       "case_count": 10,
-      "sha256": "7c7690c6edd1abdd3a7cd6f70c682001defe9d92820fc0f0cc84069d8d6373b6",
-      "capture_id": "win-365-ja_JP:16.0.20326:ja-JP:2026-09-30T07:10:35Z"
+      "sha256": "a2aa2a7b378191256b034a059aa8c7b603e30c4336e15a383802dec99bf0919a",
+      "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-13T03:12:28Z"
     },
     {
       "suite": "pivot_basic",
       "case_count": 9,
-      "sha256": "6ace87f37d34e1af56b93c759645c15e1529be24bd5224f15c0be5ef0ffbe60d",
-      "capture_id": "win-365-ja_JP:16.0.20326:ja-JP:2026-09-30T07:10:35Z"
+      "sha256": "a630fccccefd1808291773af789d7d66a5f4ed31fdc15faac6930aa06f923a26",
+      "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-13T03:12:28Z"
     },
     {
       "suite": "pivot_cross_axis",
       "case_count": 11,
-      "sha256": "001f41cebd9ab064bc51ae18b9394c91d8f47745f435c00304fdb68649cd4756",
-      "capture_id": "win-365-ja_JP:16.0.20326:ja-JP:2026-09-30T07:10:35Z"
+      "sha256": "c29dad9c57daa588810e6ec08fff59d735415be0d92182005287e49f3164bc71",
+      "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-13T03:12:28Z"
     },
     {
       "suite": "pivot_layout",
-      "case_count": 10,
-      "sha256": "84162beccf80766f6a35e30abaea3cc6731609ad67d827e27f6c26ef5c673c21",
-      "capture_id": "win-365-ja_JP:16.0.20326:ja-JP:2026-09-30T07:10:35Z"
+      "case_count": 21,
+      "sha256": "5ceb7beb92838c147436d5faac4c7b63e6750fccacb1dfc1c6d1c8782570909b",
+      "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-13T03:12:28Z"
     },
     {
       "suite": "print_basic",
       "case_count": 10,
-      "sha256": "b787c005cacf8fbbcc9da43d03e6cc7661959e2a2aae5854b43036e97f727c17",
-      "capture_id": "win-365-ja_JP:16.0.20326:ja-JP:2026-09-30T07:10:35Z"
+      "sha256": "daaa4d3980dcf828b2e23d21a4d3272a49e88637dce0118395d9a6bfe35eda7c",
+      "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-13T03:12:28Z"
     },
     {
       "suite": "print_fit",
       "case_count": 7,
-      "sha256": "53fbb63661792c13937a15ecc52d582e40ae5a9a9b7329a78d1326fd0d508ad1",
-      "capture_id": "win-365-ja_JP:16.0.20326:ja-JP:2026-09-30T07:10:35Z"
+      "sha256": "0657fb00424efef5c7d3638e12cefb6f214072e567b27de0992362dd850c7159",
+      "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-13T03:12:28Z"
     },
     {
       "suite": "print_matrix",
       "case_count": 18,
-      "sha256": "196012931022a344168bb6bf08a30c5aad0cd4eae5aae76ad39c256b458f4c54",
-      "capture_id": "win-365-ja_JP:16.0.20326:ja-JP:2026-09-30T07:10:35Z"
+      "sha256": "6bee8f7da664a14f864b835259d792069800d7f0aed911bb75fe2e137911fee1",
+      "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-13T03:12:28Z"
     },
     {
       "suite": "print_pagination",
       "case_count": 9,
-      "sha256": "501abe1b79beda0d1db86a30487cda30b222848cb657b8917e15b4bf113f62f6",
-      "capture_id": "win-365-ja_JP:16.0.20326:ja-JP:2026-09-30T07:10:35Z"
+      "sha256": "07d9ad87a5f24061549d5df5be57a40eb854dfd69430f7fac3b662b7ddf78f87",
+      "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-13T03:12:28Z"
     },
     {
       "suite": "print_roundtrip",
       "case_count": 6,
-      "sha256": "8f24b3d28c80f1c82e6b767be2b3fcc09336d695a8a7f9585748ef33d7e49ae5",
-      "capture_id": "win-365-ja_JP:16.0.20326:ja-JP:2026-09-30T07:10:35Z"
+      "sha256": "b983d7e4ece26b170afb5c5aa0f844643fe44cb6fe725a973b76f20897892517",
+      "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-13T03:12:28Z"
     }
   ]
 }
