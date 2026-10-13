@@ -424,16 +424,16 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   const auto subtotal_label = [&](const std::string& group) {
     return options.subtotal_prefix + group + subtotal_suffix;
   };
-  // Only the ja-JP function words are measured; the other locales reuse the
-  // data-field function names as an estimate.
+  // A custom subtotal row puts its function word where the locale puts the
+  // automatic subtotal word: after the item, or before it in prefix locales.
   const auto entry_subtotal_label = [&](const AxisEntry& entry, const std::string& group) {
     if (!entry.subtotal_label.empty()) {
       return entry.subtotal_label;
     }
     if (entry.custom_fn.has_value()) {
-      return group + " " +
-             std::string(aggregation_label(static_cast<Aggregation>(static_cast<std::uint8_t>(*entry.custom_fn)),
-                                           options.profile));
+      const std::string word(subtotal_function_label(
+          static_cast<Aggregation>(static_cast<std::uint8_t>(*entry.custom_fn)), options.profile));
+      return options.subtotal_prefix.empty() ? group + " " + word : word + " " + group;
     }
     return subtotal_label(group);
   };

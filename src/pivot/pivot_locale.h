@@ -36,6 +36,11 @@ pivot::PivotLayoutOptions pivot_layout_options_for(ExcelProfile profile);
 /// static storage and is safe to copy or compare.
 std::string_view aggregation_label(pivot::Aggregation agg, ExcelProfile profile);
 
+/// Returns the localized function word on a custom subtotal row ("East 最大",
+/// "Somme East"). It equals `aggregation_label` except in zh-CN, whose
+/// data-field captions carry a suffix the subtotal row omits.
+std::string_view subtotal_function_label(pivot::Aggregation agg, ExcelProfile profile);
+
 /// Returns the separator placed between the localized aggregation
 /// label and the source field name in a data-field display name
 /// ("合計 / Amount" uses " / "; "Sum of Amount" uses " of ").

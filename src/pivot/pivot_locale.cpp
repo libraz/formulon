@@ -50,6 +50,11 @@ constexpr AggregationLabels kZhCnAggregationLabels{
     "求和项", "计数项",     "平均值项",       "最大值项", "最小值项",   "乘积项",
     "计数项", "标准偏差项", "总体标准偏差项", "方差项",   "总体方差项",
 };
+// A custom subtotal row names its function without the data-field caption's
+// trailing 项.
+constexpr AggregationLabels kZhCnSubtotalFunctionLabels{
+    "求和", "计数", "平均值", "最大值", "最小值", "乘积", "计数", "标准偏差", "总体标准偏差", "方差", "总体方差",
+};
 constexpr AggregationLabels kKoKrAggregationLabels{
     "합계", "개수", "평균", "최대", "최소", "곱", "개수", "표본 표준 편차", "표준 편차", "표본 분산", "분산",
 };
@@ -189,6 +194,13 @@ pivot::PivotLayoutOptions pivot_layout_options_for(ExcelProfile profile) {
 
 std::string_view aggregation_label(pivot::Aggregation agg, ExcelProfile profile) {
   return label_at(locale_labels(profile.locale).aggregation_labels, agg);
+}
+
+std::string_view subtotal_function_label(pivot::Aggregation agg, ExcelProfile profile) {
+  if (profile.locale == ExcelLocale::kZhCN) {
+    return label_at(kZhCnSubtotalFunctionLabels, agg);
+  }
+  return aggregation_label(agg, profile);
 }
 
 std::string_view data_field_separator(ExcelProfile profile) {

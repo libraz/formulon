@@ -76,8 +76,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   blanks, errors and time-period rules, anchor at the top-left of the
   bounding box of all sqref ranges, as Excel does, instead of at the first
   listed range.
-- Pivot custom subtotal rows are labelled with their function name
-  ("East 最大") and follow Excel's fixed function order; two or more
+- Pivot custom subtotal rows are labelled with their function name in the
+  UI locale's wording and position ("East 最大", "Somme East") and follow
+  Excel's fixed function order; two or more
   functions place the subtotals below the group whatever `subtotal_top`
   says. The pivot XML writer no longer emits the default subtotal item next
   to custom ones, and the reader treats custom functions as replacing the

@@ -969,7 +969,8 @@ TEST(PivotLayout, SortIndependentSubtotalProjectionKeepsBothAxesAndGrandTotals) 
 // South A+B.
 // ---------------------------------------------------------------------------
 
-PivotCells layout_custom_subtotals(PivotLayout mode, bool subtotal_top, std::vector<SubtotalFn> fns) {
+PivotCells layout_custom_subtotals(PivotLayout mode, bool subtotal_top, std::vector<SubtotalFn> fns,
+                                   ExcelLocale locale = ExcelLocale::kJaJP) {
   PivotCache cache;
   cache.set_cache_id(7);
   for (const char* name : {"Region", "Product", "Amt", "Qty"}) {
@@ -1017,8 +1018,7 @@ PivotCells layout_custom_subtotals(PivotLayout mode, bool subtotal_top, std::vec
     ADD_FAILURE() << result_or.error().message;
     return {};
   }
-  auto cells_or =
-      layout(table, result_or.value(), pivot_layout_options_for(ExcelProfile{ExcelHost::kMac365, ExcelLocale::kJaJP}));
+  auto cells_or = layout(table, result_or.value(), pivot_layout_options_for(ExcelProfile{ExcelHost::kMac365, locale}));
   if (!cells_or) {
     ADD_FAILURE() << cells_or.error().message;
     return {};
@@ -1049,6 +1049,23 @@ TEST(PivotLayout, SingleCustomFunctionAtBottomIsLabelledWithTheFunction) {
   EXPECT_EQ(body_rows(cells), (std::vector<std::string>{"East||", "A|500|5", "East 最大|500|5", "North||", "A|100|1",
                                                         "B|200|2", "North 最大|200|2", "South||", "A|300|3", "B|400|4",
                                                         "South 最大|400|4", "総計|1500|15"}));
+}
+
+TEST(PivotLayout, CustomFunctionWordFollowsTheLocaleSubtotalOrder) {
+  // Mac Excel 365: prefix locales put the word before the item; zh-CN drops
+  // the data-field caption's trailing 项.
+  const std::vector<std::string> fr = body_rows(
+      layout_custom_subtotals(PivotLayout::Compact, /*subtotal_top=*/false, {SubtotalFn::Max}, ExcelLocale::kFrFR));
+  EXPECT_NE(std::find(fr.begin(), fr.end(), "Max. East|500|5"), fr.end());
+  const std::vector<std::string> nl = body_rows(
+      layout_custom_subtotals(PivotLayout::Compact, /*subtotal_top=*/false, {SubtotalFn::Sum}, ExcelLocale::kNlNL));
+  EXPECT_NE(std::find(nl.begin(), nl.end(), "Som East|500|5"), nl.end());
+  const std::vector<std::string> zh = body_rows(
+      layout_custom_subtotals(PivotLayout::Compact, /*subtotal_top=*/false, {SubtotalFn::Sum}, ExcelLocale::kZhCN));
+  EXPECT_NE(std::find(zh.begin(), zh.end(), "East 求和|500|5"), zh.end());
+  const std::vector<std::string> en = body_rows(
+      layout_custom_subtotals(PivotLayout::Compact, /*subtotal_top=*/false, {SubtotalFn::StdDevP}, ExcelLocale::kEnUS));
+  EXPECT_NE(std::find(en.begin(), en.end(), "East StdDevp|0|0"), en.end());
 }
 
 TEST(PivotLayout, SingleCustomFunctionAtTopHeadsTheGroupRow) {
