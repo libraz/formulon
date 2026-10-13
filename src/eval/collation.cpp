@@ -2,8 +2,9 @@
 // tools/collation/generate_tables.py key for key: the generated tables are
 // decoded lazily per locale into sorted run arrays plus dense per-ideograph
 // arrays for the locale's Han rule, a string is tokenized with the contextual
-// rules (half-width voicing, ja prolonged-sound and iteration marks, zh repeat
-// marks, Thai prefix vowels), and each token's elements feed the key parts.
+// rules (half-width voicing, combining-mark composition, ja prolonged-sound and
+// iteration marks, zh repeat marks, Thai prefix vowels), and each token's
+// elements feed the key parts.
 //
 // Windows profiles reuse the locale's tables under the host rules measured on
 // win-365-ja_JP, an NLS-style word sort: script blocks keep the base order with
@@ -30,6 +31,7 @@
 #include "eval/collation_table.h"
 #include "eval/dbcs_table.h"
 #include "eval/jp_kana_table.h"
+#include "utils/index_sort.h"
 #include "utils/text_ops.h"
 
 namespace formulon {
@@ -37,6 +39,26 @@ namespace eval {
 namespace {
 
 namespace cd = collation_detail;
+
+// Sorts through the engine's one shared sort body; a std::sort per element
+// type would instantiate a full introsort each.
+template <typename T, typename Less>
+void shared_sort(std::vector<T>& items, const Less& less) {
+  const auto by_index = [&items, &less](std::uint32_t a, std::uint32_t b) { return less(items[a], items[b]); };
+  std::vector<std::uint32_t> order;
+  sorted_index_order(order, static_cast<std::uint32_t>(items.size()), make_index_less(by_index));
+  std::vector<T> sorted;
+  sorted.reserve(items.size());
+  for (const std::uint32_t i : order) {
+    sorted.push_back(items[i]);
+  }
+  items.swap(sorted);
+}
+
+template <typename T>
+void shared_sort(std::vector<T>& items) {
+  shared_sort(items, [](const T& a, const T& b) { return a < b; });
+}
 
 constexpr std::uint32_t kUroFirst = 0x4E00u;
 constexpr std::uint32_t kUroLast = 0x9FFFu;
@@ -241,6 +263,39 @@ const std::vector<std::uint16_t>& han_rank() {
   return ranks;
 }
 
+// Canonical compositions keyed by base << 7 | (mark - U+0300), sorted by key.
+const std::vector<std::pair<std::uint32_t, std::uint32_t>>& compositions() {
+  static const std::vector<std::pair<std::uint32_t, std::uint32_t>> table = [] {
+    const cd::CollationCompositionTable& t = cd::kCollationCompositions;
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> out;
+    out.reserve(t.count);
+    Varints gap(t.gap), base_col(t.base), mark(t.mark);
+    std::uint32_t cp = 0;
+    std::int32_t base = 0;
+    for (std::uint32_t i = 0; i < t.count; ++i) {
+      cp += gap.next();
+      base += base_col.next_signed();
+      out.emplace_back(static_cast<std::uint32_t>(base) << 7 | mark.next(), cp);
+    }
+    shared_sort(out);
+    return out;
+  }();
+  return table;
+}
+
+// The character `base` followed by the combining mark `mark` composes to, or 0.
+std::uint32_t compose_mark(std::uint32_t base, std::uint32_t mark) {
+  if (mark < 0x0300u || mark > 0x036Fu) {
+    return 0;
+  }
+  const std::uint32_t key = base << 7 | (mark - 0x0300u);
+  const auto& table = compositions();
+  const auto it =
+      std::lower_bound(table.begin(), table.end(), key,
+                       [](const std::pair<std::uint32_t, std::uint32_t>& e, std::uint32_t k) { return e.first < k; });
+  return it != table.end() && it->first == key ? it->second : 0;
+}
+
 struct BaseData {
   RunTable elements;
   ExpansionTable expansions;
@@ -400,7 +455,7 @@ struct LocaleData {
     for (std::uint32_t cp : last_group) {
       order.emplace_back(top + 1, cp);
     }
-    std::sort(order.begin(), order.end());
+    shared_sort(order);
     han_p.assign(kUroSize, 0);
     Varints p_col(t.p), p_len(t.p_length);
     std::size_t idx = 0;
@@ -825,7 +880,7 @@ Segments base_block_order(const LocaleData& L) {
   const std::int32_t top = L.remap_p(L.base->out_of_range_p + out_of_range_index(0xFFFFu));
   const std::int32_t end = top + 2 + static_cast<std::int32_t>(0x10FFFFu - 0x10000u) / (kMaxWeight + 1);
   Segments by_locale = L.remap;  // (base P, locale P)
-  std::sort(by_locale.begin(), by_locale.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
+  shared_sort(by_locale, [](const auto& a, const auto& b) { return a.second < b.second; });
   struct Block {
     std::int32_t base, first, end;  // locale P range [first, end)
   };
@@ -834,14 +889,14 @@ Segments base_block_order(const LocaleData& L) {
     const std::int32_t next = i + 1 < by_locale.size() ? by_locale[i + 1].second : std::max(end, by_locale[i].second);
     blocks.push_back(Block{by_locale[i].first, by_locale[i].second, next});
   }
-  std::sort(blocks.begin(), blocks.end(), [](const Block& a, const Block& b) { return a.base < b.base; });
+  shared_sort(blocks, [](const Block& a, const Block& b) { return a.base < b.base; });
   Segments out;
   std::int32_t at = 0;
   for (const Block& b : blocks) {
     out.emplace_back(b.first, at);
     at += b.end - b.first;
   }
-  std::sort(out.begin(), out.end());
+  shared_sort(out);
   return out;
 }
 
@@ -946,6 +1001,14 @@ void tokenize(const LocaleData& L, std::string_view s, CollationStrength strengt
           ++pos;
           continue;
         }
+      }
+    }
+    // A base and a following combining mark compose, repeatedly.
+    if (strength != CollationStrength::kClassicExact && !toks.empty() && toks.back().c_from == 0) {
+      if (const std::uint32_t c = compose_mark(toks.back().cp, cp); c != 0) {
+        toks.back().cp = c;
+        ++pos;
+        continue;
       }
     }
     toks.push_back(Token{cp, pos++, 0, false, 0});

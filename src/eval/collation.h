@@ -23,8 +23,8 @@ namespace eval {
 ///   * `kCompare`: operators, criteria, SWITCH, approximate MATCH / VLOOKUP.
 ///   * `kDynamic`: SORT, UNIQUE, GROUPBY, XLOOKUP / XMATCH, pivots; ignores the
 ///     compare-only tertiary level (zh and Windows full/half width).
-///   * `kClassicExact`: exact MATCH / VLOOKUP / HLOOKUP; no expansions and no
-///     half-width voicing composition.
+///   * `kClassicExact`: exact MATCH / VLOOKUP / HLOOKUP; no expansions, no
+///     half-width voicing composition and no combining-mark composition.
 enum class CollationStrength : std::uint8_t { kCompare, kDynamic, kClassicExact };
 
 /// Order-preserving key of `s`: `collate(a, b)` has the sign of

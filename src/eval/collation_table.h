@@ -172,6 +172,15 @@ struct CollationRankTable {
 };
 extern const CollationRankTable kCollationHanRank;
 
+/// Canonical compositions of a base and a combining mark (U+0300..U+036F), in
+/// composed order: gap = cp - previous cp (initially 0); base = zigzag(base -
+/// previous base) (initially 0); mark = mark - U+0300.
+struct CollationCompositionTable {
+  std::uint32_t count;
+  CollationColumn gap, base, mark;
+};
+extern const CollationCompositionTable kCollationCompositions;
+
 /// Indexed by ExcelLocale.
 extern const CollationLocaleTable kCollationLocales[14];
 

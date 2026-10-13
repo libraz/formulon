@@ -478,9 +478,10 @@ FORMULON_PER_LOCALE(CollationEq, check_eq)
 // ---------------------------------------------------------------------------
 
 // Trailing-ignorable probes: every row matches Excel except the pairs whose two
-// sides differ only by a combining sequence, a kana type, an expansion (where a
-// trailing ignorable on one side is not ordered as Excel orders it), or, on zh,
-// two empty strings each followed by an ignorable.
+// sides differ only by a combining sequence (a trailing U+200C after the composed
+// form), a kana type, an expansion (where a trailing ignorable on one side is not
+// ordered as Excel orders it), or, on zh, two empty strings each followed by an
+// ignorable.
 void check_tail(ExcelLocale locale) {
   const ExcelProfile profile = mac(locale);
   ScopedEvalProfile scope(profile);
@@ -528,7 +529,7 @@ void check_tail(ExcelLocale locale) {
                   << " want " << row[5];
   }
   // The reference model misses the same number of rows within those pairs.
-  EXPECT_EQ(known_misses, is_zh(locale) ? 64 : 82);
+  EXPECT_EQ(known_misses, is_zh(locale) ? 16 : 50);
 }
 
 FORMULON_PER_LOCALE(CollationRules, check_tail)
@@ -574,6 +575,22 @@ TEST(CollationRules, HangulDecomposesOutsideZh) {
   }
   EXPECT_GT(cmp("가z", "갂a", ExcelLocale::kKoKR), 0);
   EXPECT_NE(cmp("각", ga_jamo, ExcelLocale::kZhCN), 0);
+}
+
+TEST(CollationRules, CombiningMarksCompose) {
+  const std::string acute = u8(0x0301);
+  for (const ExcelLocale locale : {ExcelLocale::kJaJP, ExcelLocale::kEnUS, ExcelLocale::kZhCN}) {
+    for (const ExcelProfile profile : {mac(locale), win(locale)}) {
+      ScopedEvalProfile scope(profile);
+      for (const CollationStrength strength : {CollationStrength::kCompare, CollationStrength::kDynamic}) {
+        EXPECT_EQ(collate("a" + acute, "á", profile, strength), 0) << tag_of(locale);
+        EXPECT_EQ(collate("a" + acute + "b", "áb", profile, strength), 0) << tag_of(locale);
+        EXPECT_EQ(collate("a" + u8(0x0308) + u8(0x0304), "ǟ", profile, strength), 0) << tag_of(locale);
+      }
+      EXPECT_NE(collate("a" + acute, "á", profile, CollationStrength::kClassicExact), 0) << tag_of(locale);
+      EXPECT_NE(collate("á" + acute, "á", profile, CollationStrength::kCompare), 0) << tag_of(locale);
+    }
+  }
 }
 
 TEST(CollationRules, ZhWordSortAndWidth) {

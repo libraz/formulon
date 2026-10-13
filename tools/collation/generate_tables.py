@@ -65,6 +65,7 @@ EXACT_RANGES = (
     (0xFF00, 0xFFEF),  # halfwidth and fullwidth forms
 )
 URO = (0x4E00, 0x9FFF)
+COMBINING_MARKS = (0x0300, 0x036F)  # a base and a following mark compose canonically
 SYLLABLES = (0xAC00, 0xD7A3)
 COMPAT_IDEOGRAPHS = (0xF900, 0xFAFF)
 
@@ -438,6 +439,23 @@ class Tables:
     bases: dict[str, BaseTable]
     han_rank: dict[int, int]  # unified ideograph -> rank in the W (radical-stroke) order
     locales: dict[str, LocaleTable]
+    compositions: dict[tuple[int, int], int]  # (base, combining mark) -> composed character
+
+
+def build_compositions() -> dict[tuple[int, int], int]:
+    """Canonical compositions of a base and a combining mark whose result is reproduced exactly."""
+    out = {}
+    for cp in range(0x10000):
+        if not is_exact(cp):
+            continue
+        decomposition = unicodedata.decomposition(chr(cp))
+        if decomposition.startswith("<"):
+            continue
+        parts = [int(x, 16) for x in decomposition.split()]
+        if len(parts) == 2 and in_range(parts[1], COMBINING_MARKS):
+            if unicodedata.normalize("NFC", chr(parts[0]) + chr(parts[1])) == chr(cp):
+                out[(parts[0], parts[1])] = cp
+    return out
 
 
 def base_expansions(m: Measured) -> dict[int, tuple[tuple[int, ...], int]]:
@@ -653,7 +671,7 @@ def build() -> Build:
         t = locales[tag]
         if t.overrides or t.expansions or len(t.remap) > 1 + (name == "W"):
             fail(f"{tag}: the base locale must reproduce its own table unchanged")
-    tables = Tables(bases, han_rank, locales)
+    tables = Tables(bases, han_rank, locales, build_compositions())
     check_ranges(tables)
     return Build(tables, measured, spaces)
 
@@ -993,6 +1011,28 @@ def decode_strokes(runs: Encoded, ps: Encoded) -> tuple[dict[int, int], list[int
     return groups, out
 
 
+def encode_compositions(comps: dict[tuple[int, int], int]) -> Encoded:
+    """Records in composed order: gap = cp - previous cp, base = zigzag(base - previous base), mark = mark - U+0300."""
+    cols = {"gap": [], "base": [], "mark": []}
+    prev_cp, prev_base = 0, 0
+    for cp, (base, mark) in sorted((cp, pair) for pair, cp in comps.items()):
+        cols["gap"].append(cp - prev_cp)
+        cols["base"].append(zigzag(base - prev_base))
+        cols["mark"].append(mark - COMBINING_MARKS[0])
+        prev_cp, prev_base = cp, base
+    return Encoded(len(comps), {k: leb128(v) for k, v in cols.items()})
+
+
+def decode_compositions(e: Encoded) -> dict[tuple[int, int], int]:
+    cols = {k: unleb128(v) for k, v in e.columns.items()}
+    out, cp, base = {}, 0, 0
+    for i in range(e.count):
+        cp += cols["gap"][i]
+        base += unzigzag(cols["base"][i])
+        out[(base, COMBINING_MARKS[0] + cols["mark"][i])] = cp
+    return out
+
+
 def encode_han_rank(rank: dict[int, int]) -> Encoded:
     cps = sorted(rank)
     cols = {"gap": [], "length": [], "rank": [], "step": []}
@@ -1033,6 +1073,7 @@ class EncodedTables:
     bases: dict[str, dict[str, Encoded]]
     han_rank: Encoded
     locales: dict[str, dict[str, Encoded]]
+    compositions: Encoded
 
 
 def encode(t: Tables) -> EncodedTables:
@@ -1063,7 +1104,7 @@ def encode(t: Tables) -> EncodedTables:
             e["reading_runs"] = encode_pairs(h.readings, *READING_RUNS)
             e["unlisted"], e["unlisted_cp"] = encode_unlisted(h.unlisted)
         locales[tag] = e
-    return EncodedTables(bases, encode_han_rank(t.han_rank), locales)
+    return EncodedTables(bases, encode_han_rank(t.han_rank), locales, encode_compositions(t.compositions))
 
 
 def decode(e: EncodedTables, t: Tables) -> Tables:
@@ -1099,7 +1140,7 @@ def decode(e: EncodedTables, t: Tables) -> Tables:
             decode_expansions(el["expansions"]),
             h,
         )
-    return Tables(bases, decode_han_rank(e.han_rank), locales)
+    return Tables(bases, decode_han_rank(e.han_rank), locales, decode_compositions(e.compositions))
 
 
 # ---------------------------------------------------------------- reference model
@@ -1158,6 +1199,7 @@ class Collator:
         self.loc = tables.locales[tag]
         self.base = tables.bases[self.loc.base]
         self.han_rank = tables.han_rank
+        self.compositions = tables.compositions
         h = self.loc.han
         self.han_p = {}
         self.readings = {}
@@ -1259,6 +1301,15 @@ class Collator:
                     continue
                 out.append(t)
                 i += 1
+            toks = out
+            # A base and a following combining mark compose, repeatedly.
+            out = []
+            for t in toks:
+                c = self.compositions.get((out[-1].cp, t.cp)) if out and out[-1].c_from is None else None
+                if c is not None:
+                    out[-1] = Token(c, out[-1].pos)
+                    continue
+                out.append(t)
             toks = out
         # ja: prolonged-sound and iteration marks take the preceding kana.
         if self.loc.rules & RULE_KANA_MARKS:
@@ -1592,6 +1643,15 @@ struct CollationRankTable {
 };
 extern const CollationRankTable kCollationHanRank;
 
+/// Canonical compositions of a base and a combining mark (U+0300..U+036F), in
+/// composed order: gap = cp - previous cp (initially 0); base = zigzag(base -
+/// previous base) (initially 0); mark = mark - U+0300.
+struct CollationCompositionTable {
+  std::uint32_t count;
+  CollationColumn gap, base, mark;
+};
+extern const CollationCompositionTable kCollationCompositions;
+
 /// Indexed by ExcelLocale.
 extern const CollationLocaleTable kCollationLocales[@LOCALE_COUNT@];
 
@@ -1675,6 +1735,7 @@ def render_source(t: Tables, e: EncodedTables) -> tuple[str, bytes]:
             + "}"
         )
     rank_init = em.table(e.han_rank, "kHanRank", ("gap", "length", "rank", "step"))
+    composition_init = em.table(e.compositions, "kCompositions", ("gap", "base", "mark"))
     locale_inits = []
     for tag in LOCALES:
         loc, el = t.locales[tag], e.locales[tag]
@@ -1748,6 +1809,8 @@ def render_source(t: Tables, e: EncodedTables) -> tuple[str, bytes]:
         "\n"
         f"const CollationRankTable kCollationHanRank = {rank_init};\n"
         "\n"
+        f"const CollationCompositionTable kCollationCompositions = {composition_init};\n"
+        "\n"
         "namespace {\n"
         "\n"
         + "".join(f"const CollationBaseTable kCollationBase{name} = {init};\n" for name, init in base_inits.items())
@@ -1814,7 +1877,7 @@ def generate() -> Generated:
 
 
 def tables_equal(a: Tables, b: Tables) -> bool:
-    if a.han_rank != b.han_rank:
+    if a.han_rank != b.han_rank or a.compositions != b.compositions:
         return False
     for name in a.bases:
         x, y = a.bases[name], b.bases[name]

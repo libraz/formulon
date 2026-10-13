@@ -1,17 +1,9 @@
 a	b	strength	expected	model
-U+00E1	U+0061 U+0301	compare	0	+
 U+304B U+3041	U+30AB U+30A2	compare	-	+
 U+0061 U+0001	U+0061 U+0301	compare	-	+
-U+0061 U+0301	U+00E1	compare	0	-
 U+0061 U+0301	U+0061 U+0001	compare	+	-
-U+0061 U+0301 U+0062	U+00E1 U+0062	compare	0	-
-U+00E1 U+0062	U+0061 U+0301 U+0062	compare	0	+
 U+30AB U+30A2	U+304B U+3041	compare	+	-
-U+00E1	U+0061 U+0301	dynamic	0	+
 U+304B U+3041	U+30AB U+30A2	dynamic	-	+
 U+0061 U+0001	U+0061 U+0301	dynamic	-	+
-U+0061 U+0301	U+00E1	dynamic	0	-
 U+0061 U+0301	U+0061 U+0001	dynamic	+	-
-U+0061 U+0301 U+0062	U+00E1 U+0062	dynamic	0	-
-U+00E1 U+0062	U+0061 U+0301 U+0062	dynamic	0	+
 U+30AB U+30A2	U+304B U+3041	dynamic	+	-
