@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/eval_profile_scope.h"
 #include "eval/text_format/number_format_types.h"
 #include "excel_locale.h"
 #include "utils/double_parse.h"
@@ -627,7 +628,7 @@ void set_tag_language(std::uint16_t lcid, FormatTag* tag) noexcept {
   constexpr std::uint16_t kFirstLanguage = 0x0400;
   if (lcid >= kFirstLanguage) {
     tag->language_set = true;
-    tag->language = tag_language_for_lcid(lcid);
+    tag->language = tag_language_for_lcid(lcid, eval::current_eval_profile().host);
   }
 }
 
@@ -646,7 +647,8 @@ bool parse_format_tag(std::string_view spec, FormatTag* tag) noexcept {
   }
   // A language name that also reads as hex (`de`) is the name.
   std::uint32_t value = 0;
-  if (tag_language_for_name(spec) == nullptr && parse_tag_hex(spec, &value)) {
+  const ExcelHost host = eval::current_eval_profile().host;
+  if (tag_language_for_name(spec, host) == nullptr && parse_tag_hex(spec, &value)) {
     const std::uint32_t language = value & kLanguageMask;
     if (language == kSystemDate || language == kSystemTime) {
       tag->system = language == kSystemDate ? SystemFormat::kLongDate : SystemFormat::kTime;
@@ -686,7 +688,7 @@ bool parse_format_tag(std::string_view spec, FormatTag* tag) noexcept {
       break;
     }
   }
-  const TagLanguage* language = tag_language_for_name(name);
+  const TagLanguage* language = tag_language_for_name(name, host);
   if (language == nullptr) {
     return true;
   }

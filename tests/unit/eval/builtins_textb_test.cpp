@@ -419,6 +419,18 @@ TEST(TextCode, WinHostUsesCp932Fallbacks) {
   EXPECT_DOUBLE_EQ(v.as_number(), 63.0);
 }
 
+TEST(TextCode, WinHostHangulIsQuestionMark) {
+  const Value v = EvalSourceWithHost("=CODE(\"한\")", ExcelHost::kWin365);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 63.0);
+}
+
+TEST(TextLenb, WinHostHangulIsOneByte) {
+  const Value v = EvalSourceWithHost("=LENB(\"한글\")", ExcelHost::kWin365);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
 TEST(TextCode, ErrorPropagates) {
   const Value v = EvalSource("=CODE(#REF!)");
   ASSERT_TRUE(v.is_error());

@@ -21,6 +21,7 @@
 #include <string_view>
 
 #include "eval/a1_parse.h"
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/datetime_lazy.h"
 #include "eval/eval_context.h"
@@ -48,6 +49,12 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+// Hangul has no CP932 mapping, so Windows ja-JP stores each such character as the single byte '?'.
+bool is_hangul(std::uint32_t cp) noexcept {
+  return (cp >= 0x1100u && cp <= 0x11FFu) || (cp >= 0x3130u && cp <= 0x318Fu) || (cp >= 0xA960u && cp <= 0xA97Fu) ||
+         (cp >= 0xAC00u && cp <= 0xD7FFu);
+}
 
 // Returns true when `node` is a static reference-shaped AST. Does NOT
 // include reference-returning calls (`is_reference_call_name`); those need
@@ -455,7 +462,7 @@ Value eval_code_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     if (decoded.codepoint == 0x9AD9u) {
       return Value::number(38526.0);
     }
-    if (decoded.codepoint > 0xFFFFu) {
+    if (decoded.codepoint > 0xFFFFu || is_hangul(decoded.codepoint)) {
       return Value::number(63.0);
     }
   }
@@ -491,7 +498,8 @@ Value eval_lenb_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
       }
       if (step == 1U && cp == 0xFFFDu) {
         bytes += 1U;
-      } else if (cp <= 0x00FFu || (cp >= 0xFF61u && cp <= 0xFF9Fu)) {
+      } else if (cp <= 0x00FFu || (cp >= 0xFF61u && cp <= 0xFF9Fu) ||
+                 (is_hangul(cp) && locale_facts(profile).dbcs_codepage == DbcsCodepage::kJis0208)) {
         bytes += 1U;
       } else {
         bytes += 2U;
@@ -538,6 +546,41 @@ Value eval_weeknum_lazy(const parser::AstNode& call, Arena& arena, const Functio
   return entry->impl(args, evaluated, arena, ctx.date1904());
 }
 
+namespace {
+
+// Windows ja-JP writes a format's `\` as a literal ¥ rather than an escape
+// (text_format.text_backslash_escape); an array of formats is rewritten per element.
+Value backslash_as_yen(const Value& fmt, Arena& arena) {
+  if (fmt.is_array()) {
+    const ArrayValue* src = fmt.as_array();
+    Value* cells = nullptr;
+    ArrayValue* out = allocate_array_value(src->rows, src->cols, arena, cells, kMaxDerivedArrayCells);
+    if (out == nullptr) {
+      return Value::error(ErrorCode::Num);
+    }
+    const std::size_t count = static_cast<std::size_t>(src->rows) * src->cols;
+    for (std::size_t i = 0; i < count; ++i) {
+      cells[i] = backslash_as_yen(src->cells[i], arena);
+    }
+    return Value::array(out);
+  }
+  if (!fmt.is_text() || fmt.as_text().find('\\') == std::string_view::npos) {
+    return fmt;
+  }
+  std::string rewritten;
+  rewritten.reserve(fmt.as_text().size() + 4U);
+  for (const char ch : fmt.as_text()) {
+    if (ch == '\\') {
+      rewritten += "\xC2\xA5";
+    } else {
+      rewritten.push_back(ch);
+    }
+  }
+  return Value::text(arena.intern(rewritten));
+}
+
+}  // namespace
+
 Value eval_text_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx) {
   if (call.as_call_arity() != 2U) {
@@ -553,24 +596,7 @@ Value eval_text_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   }
   const ExcelProfile profile = ctx.excel_profile();
   if (profile.host == ExcelHost::kWin365 && sbcs_codepage(profile) == SbcsCodepage::kCp932) {
-    auto fmt = coerce_to_text(args[1]);
-    if (!fmt) {
-      return Value::error(fmt.error());
-    }
-    std::string rewritten;
-    rewritten.reserve(fmt.value().size());
-    bool changed = false;
-    for (char ch : fmt.value()) {
-      if (ch == '\\') {
-        rewritten += "\xC2\xA5";
-        changed = true;
-      } else {
-        rewritten.push_back(ch);
-      }
-    }
-    if (changed) {
-      args[1] = Value::text(arena.intern(rewritten));
-    }
+    args[1] = backslash_as_yen(args[1], arena);
   }
   // TEXT is date1904-sensitive (date format codes read the workbook epoch),
   // so it is served through the shared ctx-date1904 lookup rather than the

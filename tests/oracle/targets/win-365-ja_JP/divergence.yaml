@@ -79,3 +79,53 @@ entries:
     prefer: formulon
     first_noted: 2026-09-30
     last_verified_excel_version: "16.0.20228"
+  # Windows results measured on 16.0.20430 whose governing rule is not
+  # identified from the available cases; no host-specific rule is inferred.
+  - id: date_year_snap_1900
+    applies_to: [win-365-ja_JP]
+    mode: skip-oracle
+    cause: engine-gap
+    reason: "DATE(1899.9999999,1,1): Win Excel 365 returns 0 where Formulon (and Mac Excel 365) returns 1. A fractional year that snaps up to 1900 is otherwise handled like any other snapped year (DATE(2025.9999999,6,15) agrees), and no rule explaining the 0 is identified from the measurements."
+    prefer: win-excel-365
+    first_noted: 2026-10-13
+    last_verified_excel_version: "16.0.20430"
+  - id: weeknum_neg2
+    applies_to: [win-365-ja_JP]
+    mode: skip-oracle
+    cause: engine-gap
+    reason: "WEEKNUM(DATE(2025,3,1),-2): Win Excel 365 returns 9 where Formulon returns #NUM!. The same host returns #NUM! for WEEKNUM(10,-2), so the return_type -2 rule is not identified from the measurements."
+    prefer: win-excel-365
+    first_noted: 2026-10-13
+    last_verified_excel_version: "16.0.20430"
+  - id: fn_02
+    applies_to: [win-365-ja_JP]
+    mode: skip-oracle
+    cause: engine-gap
+    reason: "POWER(-8,-1/3): Win Excel 365 returns -0.5 where Formulon (and Mac Excel 365) returns -0.5000000000000001, one unit in the last place apart. The odd-root evaluation (exp/log) rounds differently on Windows; no formulation reproducing every power_negative_base golden bit-exactly is identified from the measurements."
+    prefer: win-excel-365
+    first_noted: 2026-10-13
+    last_verified_excel_version: "16.0.20430"
+  - id: op_02
+    applies_to: [win-365-ja_JP]
+    mode: skip-oracle
+    cause: engine-gap
+    reason: "(-8)^(-1/3): Win Excel 365 returns -0.5 where Formulon (and Mac Excel 365) returns -0.5000000000000001, one unit in the last place apart. The odd-root evaluation (exp/log) rounds differently on Windows; no formulation reproducing every power_negative_base golden bit-exactly is identified from the measurements."
+    prefer: win-excel-365
+    first_noted: 2026-10-13
+    last_verified_excel_version: "16.0.20430"
+  - id: fn_29
+    applies_to: [win-365-ja_JP]
+    mode: skip-oracle
+    cause: engine-gap
+    reason: "POWER(-1E300,1/3): Win Excel 365 returns -9.999999999999827e+99 where Formulon (and Mac Excel 365) returns -9.999999999999825e+99, one unit in the last place apart. The odd-root evaluation (exp/log) rounds differently on Windows; no formulation reproducing every power_negative_base golden bit-exactly is identified from the measurements."
+    prefer: win-excel-365
+    first_noted: 2026-10-13
+    last_verified_excel_version: "16.0.20430"
+  - id: op_29
+    applies_to: [win-365-ja_JP]
+    mode: skip-oracle
+    cause: engine-gap
+    reason: "(-1E300)^(1/3): Win Excel 365 returns -9.999999999999827e+99 where Formulon (and Mac Excel 365) returns -9.999999999999825e+99, one unit in the last place apart. The odd-root evaluation (exp/log) rounds differently on Windows; no formulation reproducing every power_negative_base golden bit-exactly is identified from the measurements."
+    prefer: win-excel-365
+    first_noted: 2026-10-13
+    last_verified_excel_version: "16.0.20430"

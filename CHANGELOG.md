@@ -89,6 +89,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refers to it, and authored tables carry Excel's `showAll="0"`,
   `updatedVersion`, location offsets and values-row extension, plus
   `refreshOnLoad` on the cache so Excel renders them on open.
+- Windows profiles (`win-*`, including the default `win-365-en_US`) collate
+  text with the locale-aware collator measured on Windows Excel 365 ja-JP
+  instead of an ASCII case-insensitive byte comparison. Comparisons, sorting,
+  lookups and criteria follow Windows word sort: hyphen and apostrophe count
+  only after every other difference, `æ` equals `ae`, half-width kana sort
+  before full-width and katakana before hiragana, Thai prefix vowels keep
+  their position, and Hangul sorts before Han.
+- `TEXT` on Windows ja-JP accepts an array of formats again (the `\` to `¥`
+  rewrite applies per element instead of failing the call), and `[$-LCID]`
+  tags render Windows' own month and day names (`[$-411]mmm` is `1`,
+  `[$-404]mmmm` is `一月`). The system long-date tag drops the weekday on
+  Windows ja-JP.
+- `CODE` and `LENB` on Windows ja-JP treat Hangul as the single CP932 byte `?`
+  (`CODE("한")` is 63, `LENB("한글")` is 2).
 
 ## [0.15.1] - 2026-10-12
 

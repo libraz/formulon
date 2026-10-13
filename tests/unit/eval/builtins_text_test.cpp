@@ -300,6 +300,18 @@ TEST(TextProfileLazyDispatch, TextBackslashRewriteUsesTheSbcCodepage) {
   }
 }
 
+TEST(TextProfileLazyDispatch, TextBackslashRewriteBroadcastsOverFormatArrays) {
+  const Value joined = EvalWithProfile("=TEXTJOIN(\"|\",FALSE,IFERROR(TEXT(1234.5,{\"0\",\"0\\:0\",\"0 \\3\"}),\"#\"))",
+                                       win_365_ja_jp_profile());
+  ASSERT_TRUE(joined.is_text());
+  EXPECT_EQ(joined.as_text(),
+            "1235|#|1235 \xC2\xA5"
+            "3");
+  const Value mac = EvalWithProfile("=TEXTJOIN(\"|\",FALSE,TEXT(1234.5,{\"0\",\"0\\:0\"}))", mac_365_ja_jp_profile());
+  ASSERT_TRUE(mac.is_text());
+  EXPECT_EQ(mac.as_text(), "1235|123:5");
+}
+
 // ---------------------------------------------------------------------------
 // LEFT
 // ---------------------------------------------------------------------------

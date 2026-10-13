@@ -439,15 +439,35 @@ TEST(ExcelLocale, WidthFoldingDependsOnHostExceptForChinese) {
 }
 
 TEST(ExcelLocale, TagLanguagesFollowMeasuredLcidsAndNames) {
-  ASSERT_NE(tag_language_for_lcid(0x0411), nullptr);
-  EXPECT_EQ(tag_language_for_lcid(0x0411)->month_long[2], "3月");
-  EXPECT_TRUE(tag_language_for_lcid(0x0411)->japanese_era);
-  EXPECT_EQ(tag_language_for_lcid(0x0807), tag_language_for_lcid(0x0407));
-  EXPECT_EQ(tag_language_for_lcid(0x0809), nullptr);
-  EXPECT_EQ(tag_language_for_name("JA-jp"), tag_language_for_lcid(0x0411));
-  EXPECT_EQ(tag_language_for_name("de"), tag_language_for_lcid(0x0407));
-  EXPECT_EQ(tag_language_for_name("es"), nullptr);
-  EXPECT_EQ(&native_tag_language(ExcelLocale::kZhTW), tag_language_for_lcid(0x0404));
+  constexpr ExcelHost kMac = ExcelHost::kMac365;
+  ASSERT_NE(tag_language_for_lcid(0x0411, kMac), nullptr);
+  EXPECT_EQ(tag_language_for_lcid(0x0411, kMac)->month_long[2], "3月");
+  EXPECT_TRUE(tag_language_for_lcid(0x0411, kMac)->japanese_era);
+  EXPECT_EQ(tag_language_for_lcid(0x0807, kMac), tag_language_for_lcid(0x0407, kMac));
+  EXPECT_EQ(tag_language_for_lcid(0x0809, kMac), nullptr);
+  EXPECT_EQ(tag_language_for_name("JA-jp", kMac), tag_language_for_lcid(0x0411, kMac));
+  EXPECT_EQ(tag_language_for_name("de", kMac), tag_language_for_lcid(0x0407, kMac));
+  EXPECT_EQ(tag_language_for_name("es", kMac), nullptr);
+  EXPECT_EQ(&native_tag_language(profile_of(kMac, ExcelLocale::kZhTW)), tag_language_for_lcid(0x0404, kMac));
+}
+
+TEST(ExcelLocale, TagLanguagesTakeWindowsSpellings) {
+  constexpr ExcelHost kMac = ExcelHost::kMac365;
+  constexpr ExcelHost kWin = ExcelHost::kWin365;
+  EXPECT_EQ(tag_language_for_lcid(0x0411, kMac)->month_short[0], "1月");
+  EXPECT_EQ(tag_language_for_lcid(0x0411, kWin)->month_short[0], "1");
+  EXPECT_TRUE(tag_language_for_lcid(0x0411, kWin)->japanese_era);
+  EXPECT_EQ(tag_language_for_lcid(0x0412, kWin)->month_short[11], "12");
+  EXPECT_EQ(tag_language_for_lcid(0x0807, kWin)->month_short[2], "Mrz");
+  EXPECT_EQ(tag_language_for_lcid(0x0404, kWin)->month_short[0], "一月");
+  EXPECT_EQ(tag_language_for_lcid(0x0419, kWin)->month_long[0], "Январь");
+  EXPECT_EQ(tag_language_for_lcid(0x041E, kWin)->day_short[0], "อา.");
+  EXPECT_EQ(tag_language_for_lcid(0x040A, kWin)->am_name, "AM");
+  EXPECT_EQ(tag_language_for_lcid(0x0416, kWin)->day_short[6], "sáb");
+  // Languages with no Windows delta share the Mac table.
+  EXPECT_EQ(tag_language_for_lcid(0x040C, kWin), tag_language_for_lcid(0x040C, kMac));
+  EXPECT_EQ(tag_language_for_name("ko", kWin), tag_language_for_lcid(0x0412, kWin));
+  EXPECT_EQ(&native_tag_language(win_365_ja_jp_profile()), tag_language_for_lcid(0x0411, kWin));
 }
 
 TEST(ExcelLocale, NumeralSystemsMapToDigitStyles) {

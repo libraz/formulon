@@ -430,6 +430,139 @@ constexpr TagLanguage kTagDutch{
     false,
 };
 
+// Windows spellings, measured on win-365-ja_JP; a tag absent here spells as on Mac.
+// locale_tokens.lcid_names_411: mmm is the bare month number.
+constexpr TagLanguage kWinTagJapanese{
+    kTagJapanese.month_long, {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"},
+    kTagJapanese.day_long,   kTagJapanese.day_short,
+    kTagJapanese.am_name,    kTagJapanese.pm_name,
+    &kJapaneseDbnumStyles,   true,
+};
+
+// locale_tokens.lcid_names_407
+constexpr TagLanguage kWinTagGerman{
+    kTagGerman.month_long,
+    {"Jan", "Feb", "Mrz", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"},
+    kTagGerman.day_long,
+    kTagGerman.day_short,
+    kTagGerman.am_name,
+    kTagGerman.pm_name,
+    nullptr,
+    false,
+};
+
+// locale_tokens.lcid_names_412
+constexpr TagLanguage kWinTagKorean{
+    kTagKorean.month_long, {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"},
+    kTagKorean.day_long,   kTagKorean.day_short,
+    kTagKorean.am_name,    kTagKorean.pm_name,
+    &kKoreanDbnumStyles,   false,
+};
+
+// locale_tokens.lcid_names_41e
+constexpr TagLanguage kWinTagThai{
+    kTagThai.month_long,
+    kTagThai.month_short,
+    {"อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"},
+    {"อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."},
+    kTagThai.am_name,
+    kTagThai.pm_name,
+    nullptr,
+    false,
+};
+
+// locale_tokens.lcid_names_c0a
+constexpr TagLanguage kWinTagSpanish{
+    kTagSpanish.month_long,
+    kTagSpanish.month_short,
+    kTagSpanish.day_long,
+    kTagSpanish.day_short,
+    "AM",
+    "PM",
+    nullptr,
+    false,
+};
+
+// locale_tokens.lcid_names_416
+constexpr TagLanguage kWinTagPortuguese{
+    kTagPortuguese.month_long,
+    {"jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"},
+    kTagPortuguese.day_long,
+    {"dom", "seg", "ter", "qua", "qui", "sex", "sáb"},
+    kTagPortuguese.am_name,
+    kTagPortuguese.pm_name,
+    nullptr,
+    false,
+};
+
+// locale_tokens.lcid_names_419
+constexpr TagLanguage kWinTagRussian{
+    {"Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь",
+     "Декабрь"},
+    {"янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"},
+    kTagRussian.day_long,
+    kTagRussian.day_short,
+    kTagRussian.am_name,
+    kTagRussian.pm_name,
+    nullptr,
+    false,
+};
+
+// unmeasured on Windows: the genitive months over the Windows short names.
+constexpr TagLanguage kWinTagRussianGenitive{
+    kTagRussianGenitive.month_long,
+    kWinTagRussian.month_short,
+    kWinTagRussian.day_long,
+    kWinTagRussian.day_short,
+    kWinTagRussian.am_name,
+    kWinTagRussian.pm_name,
+    nullptr,
+    false,
+};
+
+// locale_tokens.lcid_names_404
+constexpr TagLanguage kWinTagTraditionalChinese{
+    kTagChinese.month_long,          kTagChinese.month_long,
+    kTagTraditionalChinese.day_long, kTagTraditionalChinese.day_short,
+    kTagTraditionalChinese.am_name,  kTagTraditionalChinese.pm_name,
+    &kTraditionalChineseDbnumStyles, false,
+};
+
+// The Windows spelling of a Mac tag language.
+const TagLanguage* host_spelling(const TagLanguage* language, ExcelHost host) noexcept {
+  if (host != ExcelHost::kWin365) {
+    return language;
+  }
+  if (language == &kTagJapanese) {
+    return &kWinTagJapanese;
+  }
+  if (language == &kTagGerman) {
+    return &kWinTagGerman;
+  }
+  if (language == &kTagKorean) {
+    return &kWinTagKorean;
+  }
+  if (language == &kTagThai) {
+    return &kWinTagThai;
+  }
+  if (language == &kTagSpanish) {
+    return &kWinTagSpanish;
+  }
+  if (language == &kTagPortuguese) {
+    return &kWinTagPortuguese;
+  }
+  if (language == &kTagRussian) {
+    return &kWinTagRussian;
+  }
+  if (language == &kTagRussianGenitive) {
+    return &kWinTagRussianGenitive;
+  }
+  if (language == &kTagTraditionalChinese) {
+    return &kWinTagTraditionalChinese;
+  }
+  return language;
+}
+
 // @size-budget: 12 KB
 constexpr LocaleFacts kJapaneseFacts{
     '.',                  // locale_tokens.fixed_negative
@@ -1495,7 +1628,9 @@ WidthFolding width_folding(ExcelProfile profile) noexcept {
   return profile.host == ExcelHost::kMac365 ? WidthFolding::kMac : WidthFolding::kWin;
 }
 
-const TagLanguage* tag_language_for_lcid(std::uint16_t lcid) noexcept {
+namespace {
+
+const TagLanguage* mac_tag_language(std::uint16_t lcid) noexcept {
   // Regional LCIDs measured to share the base spellings (locale_tokens.lcid_regional_variants).
   switch (lcid) {
     case 0x0411:
@@ -1538,7 +1673,13 @@ const TagLanguage* tag_language_for_lcid(std::uint16_t lcid) noexcept {
   }
 }
 
-const TagLanguage* tag_language_for_name(std::string_view name) noexcept {
+}  // namespace
+
+const TagLanguage* tag_language_for_lcid(std::uint16_t lcid, ExcelHost host) noexcept {
+  return host_spelling(mac_tag_language(lcid), host);
+}
+
+const TagLanguage* tag_language_for_name(std::string_view name, ExcelHost host) noexcept {
   // Bare language names measured to match the regional tables (locale_tokens.lcid_language_names).
   struct NamedLcid {
     std::string_view name;
@@ -1553,13 +1694,15 @@ const TagLanguage* tag_language_for_name(std::string_view name) noexcept {
   };
   for (const NamedLcid& entry : kNames) {
     if (strings::case_insensitive_eq(entry.name, name)) {
-      return tag_language_for_lcid(entry.lcid);
+      return tag_language_for_lcid(entry.lcid, host);
     }
   }
   return nullptr;
 }
 
-const TagLanguage& native_tag_language(ExcelLocale locale) noexcept {
+namespace {
+
+const TagLanguage& mac_native_tag_language(ExcelLocale locale) noexcept {
   switch (locale) {
     case ExcelLocale::kJaJP:
       return kTagJapanese;
@@ -1593,6 +1736,12 @@ const TagLanguage& native_tag_language(ExcelLocale locale) noexcept {
   return kTagEnglish;
 }
 
+}  // namespace
+
+const TagLanguage& native_tag_language(ExcelProfile profile) noexcept {
+  return *host_spelling(&mac_native_tag_language(profile.locale), profile.host);
+}
+
 const DbnumStyle* numeral_system_style(std::uint8_t code) noexcept {
   // 1B-27 are the ja, zh-CN, zh-TW and ko DBNum styles in turn (locale_tokens.lcid_numeral_systems).
   constexpr std::uint8_t kFirstDigitSet = 0x02;
@@ -1619,7 +1768,9 @@ std::string_view system_date_format(ExcelProfile profile) noexcept {
   // locale_tokens.text_system_date_tag; ru-RU writes genitive month names through 0xFC19.
   switch (profile.locale) {
     case ExcelLocale::kJaJP:
-      return "[$-411]yyyy\"年\"m\"月\"d\"日\" dddd";
+      // The Windows long date carries no weekday.
+      return profile.host == ExcelHost::kWin365 ? "[$-411]yyyy\"年\"m\"月\"d\"日\""
+                                                : "[$-411]yyyy\"年\"m\"月\"d\"日\" dddd";
     case ExcelLocale::kEnUS:
       return "[$-409]dddd\", \"mmmm\" \"d\", \"yyyy";
     case ExcelLocale::kDeDE:

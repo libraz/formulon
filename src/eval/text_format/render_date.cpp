@@ -50,6 +50,8 @@ constexpr std::uint8_t kCalendarThai = 0x07;
 constexpr std::uint8_t kCalendarJulian = 0x0D;
 constexpr std::uint8_t kCalendarTaiwanLunisolar = 0x15;
 constexpr std::uint16_t kEnglishLcid = 0x0409;
+constexpr std::uint16_t kJapaneseLcid = 0x0411;
+constexpr std::uint16_t kKoreanLcid = 0x0412;
 constexpr std::uint16_t kChineseLcid = 0x0804;
 constexpr std::uint16_t kTraditionalChineseLcid = 0x0404;
 constexpr std::uint16_t kThaiLcid = 0x041E;
@@ -81,7 +83,7 @@ void use_tag_names(const TagLanguage& language, DateNames* names) noexcept {
   names->weekday_short = &language.day_short;
 }
 
-DateNames date_names(const FormatTag& tag, const LocaleFacts& facts, ExcelLocale locale) noexcept {
+DateNames date_names(const FormatTag& tag, const LocaleFacts& facts, ExcelProfile profile) noexcept {
   DateNames names{&facts.month_long, &facts.month_short,  &facts.day_long,
                   &facts.day_short,  &facts.weekday_long, &facts.weekday_short,
                   facts.am_name,     facts.pm_name,       false};
@@ -92,24 +94,35 @@ DateNames date_names(const FormatTag& tag, const LocaleFacts& facts, ExcelLocale
     names.tag_meridiem = true;
   }
   // A calendar brings its own month and day names; AM/PM stay the language's.
+  const ExcelHost host = profile.host;
+  const bool win = host == ExcelHost::kWin365;
   switch (tag.calendar) {
     case kCalendarEnglishNames:
-      use_tag_names(*tag_language_for_lcid(kEnglishLcid), &names);
+      use_tag_names(*tag_language_for_lcid(kEnglishLcid, host), &names);
+      break;
+    case kCalendarJapanese:
+      // Windows writes the Japanese calendar in Japanese names.
+      if (win) {
+        use_tag_names(*tag_language_for_lcid(kJapaneseLcid, host), &names);
+      }
       break;
     case kCalendarTaiwan: {
-      const TagLanguage& months = *tag_language_for_lcid(kChineseLcid);
-      use_tag_names(*tag_language_for_lcid(kTraditionalChineseLcid), &names);
+      const TagLanguage& months = *tag_language_for_lcid(kChineseLcid, host);
+      use_tag_names(*tag_language_for_lcid(kTraditionalChineseLcid, host), &names);
       names.month_long = &months.month_long;
       names.month_short = &months.month_long;
       break;
     }
     case kCalendarKorean:
+      // Windows writes the Korean calendar in Korean names, Mac in the profile's.
+      use_tag_names(win ? *tag_language_for_lcid(kKoreanLcid, host) : native_tag_language(profile), &names);
+      break;
     case kCalendarJulian:
     case kCalendarTaiwanLunisolar:
-      use_tag_names(native_tag_language(locale), &names);
+      use_tag_names(native_tag_language(profile), &names);
       break;
     case kCalendarThai:
-      use_tag_names(*tag_language_for_lcid(kThaiLcid), &names);
+      use_tag_names(*tag_language_for_lcid(kThaiLcid, host), &names);
       break;
     default:
       break;
@@ -197,7 +210,7 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
   const ExcelProfile profile = eval::current_eval_profile();
   const LocaleFacts& facts = locale_facts(profile);
   const FormatTag& tag = section.tag;
-  const DateNames names = date_names(tag, facts, profile.locale);
+  const DateNames names = date_names(tag, facts, profile);
   // `e`, `g` and `r` write the era under the Japanese calendar or a Japanese
   // language; any other tag language or calendar turns them into the year.
   const bool tag_era = tag.language_set ? tag.language != nullptr && tag.language->japanese_era : facts.japanese_era;

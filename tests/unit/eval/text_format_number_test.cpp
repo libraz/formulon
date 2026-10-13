@@ -821,6 +821,31 @@ TEST(NumberFormatLocaleTag, SystemDateAndTime) {
   EXPECT_EQ(StatusJaJp(-1.0, "[$-F800]"), FormatStatus::kValueError);
 }
 
+std::string RenderWinJaJp(double value, std::string_view format) {
+  const eval::ScopedEvalProfile profile_scope(win_365_ja_jp_profile());
+  std::string out;
+  const FormatStatus s = apply_format(value, format, out);
+  EXPECT_EQ(s, FormatStatus::kOk);
+  return out;
+}
+
+TEST(NumberFormatLocaleTag, WindowsSpellsTagLanguagesItsOwnWay) {
+  EXPECT_EQ(RenderWinJaJp(kMarch5th2024, "[$-411]mmmm mmm"), "3月 3");
+  EXPECT_EQ(RenderWinJaJp(kMarch5th2024, "[$-ko]mmm ddd"), "3 화");
+  EXPECT_EQ(RenderWinJaJp(kMarch5th2024, "[$-de]mmm"), "Mrz");
+  EXPECT_EQ(RenderWinJaJp(kMarch5th2024, "[$-zh-Hant]mmmm mmm"), "三月 三月");
+  EXPECT_EQ(RenderWinJaJp(kMarch5th2024, "[$-419]mmmm mmm"), "Март мар");
+  EXPECT_EQ(RenderWinJaJp(kMarch5th2024, "[$-41E]dddd ddd"), "อังคาร อ.");
+  EXPECT_EQ(RenderWinJaJp(kMarch5th2024, "[$-pt-BR-x-y]mmm ddd"), "mar ter");
+  EXPECT_EQ(RenderWinJaJp(kMarch5th2024 + 0.6, "[$-40A]h AM/PM"), "2 PM");
+  // The Japanese and Korean calendars bring their own language's names.
+  EXPECT_EQ(RenderWinJaJp(kMarch5th2024 + 0.55, "[$-30409]mmmm dddd h AM/PM"), "3月 火曜日 1 PM");
+  EXPECT_EQ(RenderWinJaJp(kMarch5th2024, "[$-50412]mmmm dddd"), "3월 화요일");
+  EXPECT_EQ(Render(kMarch5th2024, "[$-50412]mmmm dddd"), "3月 火曜日");
+  // The system long date carries no weekday.
+  EXPECT_EQ(RenderWinJaJp(kMarch5th2024 + 0.5, "[$-F800]"), "2024年3月5日");
+}
+
 TEST(NumberFormatLocaleTag, RejectedSpecs) {
   EXPECT_EQ(StatusJaJp(kMarch5th2024, "[$-411][$-409]mmmm"), FormatStatus::kValueError);
   EXPECT_EQ(StatusJaJp(1.0, "[$-€-407]0"), FormatStatus::kValueError);

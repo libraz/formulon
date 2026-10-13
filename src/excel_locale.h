@@ -243,12 +243,12 @@ bool error_name_measured(std::size_t error_ordinal) noexcept;
 SbcsCodepage sbcs_codepage(ExcelProfile profile) noexcept;
 WidthFolding width_folding(ExcelProfile profile) noexcept;
 
-/// Language a numeric `[$-LCID]` tag names, or null when its spellings are not modelled.
-const TagLanguage* tag_language_for_lcid(std::uint16_t lcid) noexcept;
+/// Language a numeric `[$-LCID]` tag names, in `host`'s spellings, or null when not modelled.
+const TagLanguage* tag_language_for_lcid(std::uint16_t lcid, ExcelHost host) noexcept;
 /// Language a named tag (`[$-ja-JP]`, case-insensitive) names, or null when not modelled.
-const TagLanguage* tag_language_for_name(std::string_view name) noexcept;
-/// The tag language of the locale's own LCID.
-const TagLanguage& native_tag_language(ExcelLocale locale) noexcept;
+const TagLanguage* tag_language_for_name(std::string_view name, ExcelHost host) noexcept;
+/// The tag language of the profile locale's own LCID.
+const TagLanguage& native_tag_language(ExcelProfile profile) noexcept;
 /// Digit style of the `NN` byte of `[$-NN000000]`; null for ASCII digits.
 const DbnumStyle* numeral_system_style(std::uint8_t code) noexcept;
 /// Invariant format codes `[$-F800]` / `[$-x-sysdate]` and `[$-F400]` / `[$-x-systime]` render through.
