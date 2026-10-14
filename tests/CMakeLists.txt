@@ -519,6 +519,7 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   formulon_add_binding_drift_test(binding_drift_dts_shared_shapes dts-shared-shapes)
   formulon_add_binding_drift_test(binding_drift_pure_js_helpers pure-js-helpers)
   formulon_add_binding_drift_test(binding_drift_readme_counts readme-counts)
+  formulon_add_binding_drift_test(binding_drift_readme_facts readme-facts)
   formulon_add_binding_drift_test(binding_drift_dts_enums dts-enums)
   formulon_add_binding_drift_test(binding_drift_style_record_fields style-record-fields)
   # Byte-compares the files `stage.mjs` copies verbatim into the native
@@ -539,6 +540,13 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   # `int32_t`, so a binding author comparing against a stale number never
   # matches, and mis-classifies whatever code holds that value instead.
   formulon_add_binding_drift_test(binding_drift_header_error_codes header-error-codes)
+  # Unit tests of the drift checks themselves, so a check that stops
+  # detecting anything fails here instead of reporting "no drift".
+  add_test(
+    NAME BindingDriftUnitTests
+    COMMAND ${_FORMULON_BEHAVIOR_PY} -m tools.dev.binding_drift_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   # Structural invariants enforced by "exactly one implementation exists":
   # the bounds-checked array-allocation seam (what keeps a wasm32
   # `rows * cols` from wrapping into a short buffer) and the raw-XML

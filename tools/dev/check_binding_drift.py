@@ -67,6 +67,13 @@ Checks:
                   packages/npm-native/README.md matches the actual count
                   registered in workbook_class.cc and its shared/WASM-only
                   projection is current.
+  readme-facts    Every hand-written fact the five READMEs state -- function
+                  counts, size ceilings, profile count / ids / default,
+                  Node and Python minimums, CLI platforms -- matches its
+                  source (status.py, wasm_size_report.sh, excel_profile.h,
+                  package manifests, release.yml). A reworded sentence the
+                  pattern no longer finds fails too, so a fact cannot drop
+                  out of the check silently.
   dts-enums       Every `export enum` in src/wasm/formulon.d.ts that
                   mirrors a C/C++ enum (embind passes these through as
                   plain numbers rather than registering a real
@@ -141,6 +148,7 @@ from binding_drift.python_checks import (
     check_python_struct_layouts,
     check_python_stub_methods,
 )
+from binding_drift.readme_checks import check_readme_facts
 from binding_drift.shape_checks import check_dts_shared_shapes, check_style_record_fields
 from binding_drift.surface_files import _SKIPPED
 
@@ -155,6 +163,7 @@ CHECKS = {
     "dts-shared-shapes": check_dts_shared_shapes,
     "pure-js-helpers": check_pure_js_helpers,
     "readme-counts": check_readme_counts,
+    "readme-facts": check_readme_facts,
     "dts-enums": check_dts_enums,
     "style-record-fields": check_style_record_fields,
     "staged-dist": check_staged_dist,

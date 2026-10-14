@@ -8,7 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from tools.dev.binding_drift import declaration_checks, ts_decl
+from tools.dev.binding_drift import declaration_checks, readme_checks, ts_decl
 
 
 class JavaScriptSurfaceTest(unittest.TestCase):
@@ -194,6 +194,34 @@ class StagedSurfaceTest(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual(len(skipped), 1)
         self.assertIn("has not been staged", skipped[0])
+
+
+class ReadmeFactsTest(unittest.TestCase):
+    def _problems_after(self, old: str, new: str) -> list[str]:
+        original = readme_checks._read
+        with patch.object(readme_checks, "_read", lambda path: original(path).replace(old, new)):
+            return readme_checks.check_readme_facts()
+
+    def test_current_readmes_match_their_sources(self) -> None:
+        self.assertEqual(readme_checks.check_readme_facts(), [])
+
+    def test_each_fact_catches_a_stale_claim(self) -> None:
+        stale = {
+            "function-counts": ("526 Excel function names", "525 Excel function names"),
+            "size-ceilings": ("1056 KiB Brotli", "1040 KiB Brotli"),
+            "default-profile": ("New workbooks use `win-365-en_US`", "New workbooks use `mac-365-ja_JP`"),
+            "profile-ids": (",nl_NL}", ",nl_NL,pl_PL}"),
+            "node-min": ("Node 22+", "Node 20+"),
+            "cli-platforms": ("`linux-arm64` are on", "`win-x64` are on"),
+        }
+        for fact, (old, new) in stale.items():
+            with self.subTest(fact=fact):
+                problems = self._problems_after(old, new)
+                self.assertTrue(any(f" {fact} says " in p for p in problems), problems)
+
+    def test_a_reworded_sentence_fails_instead_of_passing_silently(self) -> None:
+        problems = self._problems_after("Excel behavior profiles across", "profiles over")
+        self.assertTrue(any("profile-count sentence not found" in p for p in problems), problems)
 
 
 if __name__ == "__main__":
