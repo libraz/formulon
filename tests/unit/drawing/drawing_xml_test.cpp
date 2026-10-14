@@ -9,6 +9,7 @@
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "passthrough_part.h"
+#include "sheet.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -270,6 +271,201 @@ TEST(DrawingXml, WorkbookRoundTripKeepsDrawingBytes) {
   ASSERT_EQ(listed.value().size(), 6U);
   EXPECT_EQ(listed.value()[0].media_path, "xl/media/image1.png");
   EXPECT_EQ(listed.value()[0].image_format, ImageFormat::kPng);
+}
+
+constexpr const char* kCtDrawing = "application/vnd.openxmlformats-officedocument.drawing+xml";
+constexpr const char* kCtChart = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
+constexpr const char* kChartRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+constexpr const char* kWsDrOpen =
+    "<xdr:wsDr xmlns:xdr=\"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing\" "
+    "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" "
+    "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">";
+constexpr const char* kMarkers =
+    "<xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff>"
+    "</xdr:from><xdr:to><xdr:col>4</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>8</xdr:row><xdr:rowOff>0</xdr:rowOff>"
+    "</xdr:to>";
+
+std::string Frame(std::uint32_t id, const std::string& data) {
+  return "<xdr:graphicFrame macro=\"\"><xdr:nvGraphicFramePr><xdr:cNvPr id=\"" + std::to_string(id) +
+         "\" name=\"F\"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm/><a:graphic>" + data +
+         "</a:graphic></xdr:graphicFrame>";
+}
+
+std::string ChartData(const std::string& rid_attr) {
+  return "<a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"><c:chart "
+         "xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\" " +
+         rid_attr + "/></a:graphicData>";
+}
+
+std::string Relationship(const char* id, const char* type, const char* target) {
+  return std::string("<Relationship Id=\"") + id + "\" Type=\"" + type + "\" Target=\"" + target + "\"/>";
+}
+
+std::string RelsOf(const std::string& body) {
+  return "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" + body +
+         "</Relationships>";
+}
+
+void AddPart(Workbook& wb, const std::string& path, const char* content_type, const std::string& bytes) {
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart(path, content_type, ToBytes(bytes)))));
+}
+
+// Sheet 0: a chart, a chartex frame wrapped in mc:AlternateContent, a chart
+// frame without a relationship, a diagram frame and a picture.
+Workbook ChartSheetZero() {
+  const std::string chartex =
+      "<mc:AlternateContent xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\">"
+      "<mc:Choice xmlns:cx1=\"http://schemas.microsoft.com/office/drawing/2015/9/8/chartex\" Requires=\"cx1\">"
+      "<xdr:twoCellAnchor>" +
+      std::string(kMarkers) +
+      Frame(3,
+            "<a:graphicData uri=\"http://schemas.microsoft.com/office/drawing/2014/chartex\"><cx:chart "
+            "xmlns:cx=\"http://schemas.microsoft.com/office/drawing/2014/chartex\" r:id=\"rId2\"/></a:graphicData>") +
+      "<xdr:clientData/></xdr:twoCellAnchor></mc:Choice><mc:Fallback><xdr:twoCellAnchor>" + kMarkers +
+      "<xdr:sp macro=\"\" textlink=\"\"><xdr:nvSpPr><xdr:cNvPr id=\"0\" name=\"\"/><xdr:cNvSpPr/></xdr:nvSpPr>"
+      "<xdr:spPr/></xdr:sp><xdr:clientData/></xdr:twoCellAnchor></mc:Fallback></mc:AlternateContent>";
+  const std::string drawing =
+      std::string(kWsDrOpen) + "<xdr:twoCellAnchor>" + kMarkers + Frame(2, ChartData("r:id=\"rId1\"")) +
+      "<xdr:clientData/></xdr:twoCellAnchor>" + chartex + "<xdr:twoCellAnchor>" + kMarkers + Frame(4, ChartData("")) +
+      "<xdr:clientData/></xdr:twoCellAnchor><xdr:twoCellAnchor>" + kMarkers +
+      Frame(5, "<a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\"/>") +
+      "<xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>";
+  Workbook wb = Workbook::create();
+  AddPart(wb, "xl/drawings/drawing1.xml", kCtDrawing, drawing);
+  AddPart(wb, "xl/drawings/_rels/drawing1.xml.rels", "",
+          RelsOf(Relationship("rId1", kChartRelType, "../charts/chart1.xml") +
+                 Relationship("rId2", "http://schemas.microsoft.com/office/2014/relationships/chartEx",
+                              "../charts/chartEx1.xml")));
+  AddPart(wb, "xl/charts/chart1.xml", kCtChart, "<c:chartSpace/>");
+  AddPart(wb, "xl/charts/chartEx1.xml", "application/vnd.ms-office.chartex+xml", "<cx:chartSpace/>");
+  wb.sheet(0).set_drawing_rel_target("xl/drawings/drawing1.xml");
+  return wb;
+}
+
+// Adds chartsheet `name` whose drawing shows chart part `chart`.
+std::size_t AddChartsheet(Workbook& wb, const std::string& name, int n) {
+  const std::size_t index = wb.add_sheet(name);
+  const std::string sheet_path = "xl/chartsheets/sheet" + std::to_string(n) + ".xml";
+  const std::string drawing_path = "xl/drawings/drawing" + std::to_string(n + 1) + ".xml";
+  const std::string chart_target = "../charts/chart" + std::to_string(n + 1) + ".xml";
+  wb.sheet(index).set_opaque_ooxml_sheet(
+      sheet_path, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet");
+  AddPart(wb, sheet_path, "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml",
+          "<chartsheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+          "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheetViews><sheetView "
+          "zoomScale=\"100\" workbookViewId=\"0\"/></sheetViews><drawing r:id=\"rId1\"/></chartsheet>");
+  AddPart(wb, "xl/chartsheets/_rels/sheet" + std::to_string(n) + ".xml.rels", "",
+          RelsOf(Relationship("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
+                              ("../drawings/drawing" + std::to_string(n + 1) + ".xml").c_str())));
+  AddPart(wb, drawing_path, kCtDrawing,
+          std::string(kWsDrOpen) +
+              "<xdr:absoluteAnchor><xdr:pos x=\"0\" y=\"0\"/><xdr:ext cx=\"8666049\" cy=\"6293304\"/>" +
+              Frame(2, ChartData("r:id=\"rId1\"")) + "<xdr:clientData/></xdr:absoluteAnchor></xdr:wsDr>");
+  AddPart(wb, "xl/drawings/_rels/drawing" + std::to_string(n + 1) + ".xml.rels", "",
+          RelsOf(Relationship("rId1", kChartRelType, chart_target.c_str())));
+  AddPart(wb, "xl/charts/chart" + std::to_string(n + 1) + ".xml", kCtChart, "<c:chartSpace/>");
+  return index;
+}
+
+TEST(DrawingXml, ListsChartPartsOfASheet) {
+  Workbook wb = ChartSheetZero();
+  auto refs = list_chart_parts(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(refs));
+  ASSERT_EQ(refs.value().size(), 3U);
+  EXPECT_EQ(refs.value()[0].object_id, 2U);
+  EXPECT_EQ(refs.value()[0].part_path, "xl/charts/chart1.xml");
+  EXPECT_FALSE(refs.value()[0].is_chartex);
+  EXPECT_EQ(refs.value()[1].object_id, 3U);
+  EXPECT_EQ(refs.value()[1].part_path, "xl/charts/chartEx1.xml");
+  EXPECT_TRUE(refs.value()[1].is_chartex);
+  // A frame whose relationship does not resolve is listed without a part.
+  EXPECT_EQ(refs.value()[2].object_id, 4U);
+  EXPECT_TRUE(refs.value()[2].part_path.empty());
+
+  Workbook empty = Workbook::create();
+  auto none = list_chart_parts(empty, 0);
+  ASSERT_TRUE(static_cast<bool>(none));
+  EXPECT_TRUE(none.value().empty());
+  EXPECT_EQ(list_chart_parts(empty, 1).error().code, FormulonErrorCode::kInvalidArgument);
+  ASSERT_TRUE(static_cast<bool>(
+      empty.add_passthrough_part(PassthroughPart("xl/drawings/drawing1.xml", kCtDrawing, ToBytes("<notDrawing/>")))));
+  empty.sheet(0).set_drawing_rel_target("xl/drawings/drawing1.xml");
+  EXPECT_EQ(list_chart_parts(empty, 0).error().code, FormulonErrorCode::kIoDrawingUnparseable);
+}
+
+TEST(DrawingXml, ChartsheetDrawingIsListed) {
+  Workbook wb = ChartSheetZero();
+  const std::size_t chartsheet = AddChartsheet(wb, "Chart1", 1);
+  auto objects = list_drawing_objects(wb, chartsheet);
+  ASSERT_TRUE(static_cast<bool>(objects));
+  ASSERT_EQ(objects.value().size(), 1U);
+  EXPECT_EQ(objects.value()[0].kind, DrawingObjectKind::kChart);
+  EXPECT_EQ(objects.value()[0].anchor_kind, AnchorKind::kAbsolute);
+  EXPECT_EQ(objects.value()[0].cx, 8666049);
+  auto path = sheet_drawing_path(wb, chartsheet);
+  ASSERT_TRUE(static_cast<bool>(path));
+  EXPECT_EQ(path.value(), "xl/drawings/drawing2.xml");
+  auto refs = list_chart_parts(wb, chartsheet);
+  ASSERT_TRUE(static_cast<bool>(refs));
+  ASSERT_EQ(refs.value().size(), 1U);
+  EXPECT_EQ(refs.value()[0].part_path, "xl/charts/chart2.xml");
+
+  // A chartsheet's drawing is listed but not edited.
+  DrawingAnchor anchor;
+  anchor.anchor_kind = AnchorKind::kTwoCell;
+  EXPECT_EQ(set_drawing_anchor(wb, chartsheet, 2, anchor).error().code, FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(remove_drawing(wb, chartsheet, 2).error().code, FormulonErrorCode::kInvalidArgument);
+  ImageInsertOptions placement;
+  placement.width_emu = 100;
+  placement.height_emu = 100;
+  EXPECT_EQ(insert_graphic_frame(wb, chartsheet, placement, ChartData("r:id=\"{rId}\""), "xl/charts/chart9.xml",
+                                 kChartRelType)
+                .error()
+                .code,
+            FormulonErrorCode::kInvalidArgument);
+  EXPECT_TRUE(wb.sheet(chartsheet).drawing_rel_target().empty());
+
+  // A chartsheet whose rels part does not parse.
+  ASSERT_TRUE(static_cast<bool>(wb.replace_passthrough_part("xl/chartsheets/_rels/sheet1.xml.rels", ToBytes("<x"))));
+  EXPECT_EQ(list_drawing_objects(wb, chartsheet).error().code, FormulonErrorCode::kIoDrawingUnparseable);
+}
+
+TEST(DrawingXml, AllChartPartsCoversEverySheet) {
+  Workbook wb = ChartSheetZero();
+  wb.add_sheet("Plain");
+  const std::size_t chartsheet = AddChartsheet(wb, "Chart1", 1);
+  const std::size_t broken = wb.add_sheet("Broken");
+  ASSERT_TRUE(static_cast<bool>(
+      wb.add_passthrough_part(PassthroughPart("xl/drawings/drawing9.xml", kCtDrawing, ToBytes("<x")))));
+  wb.sheet(broken).set_drawing_rel_target("xl/drawings/drawing9.xml");
+
+  auto all = all_chart_parts(wb);
+  ASSERT_TRUE(static_cast<bool>(all));
+  ASSERT_EQ(all.value().size(), 4U);
+  EXPECT_EQ(all.value()[0].sheet, 0U);
+  EXPECT_EQ(all.value()[0].ref.part_path, "xl/charts/chart1.xml");
+  EXPECT_EQ(all.value()[1].sheet, 0U);
+  EXPECT_TRUE(all.value()[1].ref.is_chartex);
+  EXPECT_EQ(all.value()[2].sheet, 0U);
+  EXPECT_EQ(all.value()[3].sheet, chartsheet);
+  EXPECT_EQ(all.value()[3].ref.object_id, 2U);
+  EXPECT_EQ(all.value()[3].ref.part_path, "xl/charts/chart2.xml");
+}
+
+TEST(DrawingXml, ChartsheetSurvivesSaveAndReload) {
+  Workbook wb = ChartSheetZero();
+  const std::size_t chartsheet = AddChartsheet(wb, "Chart1", 1);
+  auto bytes = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes)) << bytes.error().message;
+  auto read = io::read_ooxml(io::ByteSpan{bytes.value().data(), bytes.value().size()});
+  ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
+  const Workbook& reloaded = read.value().workbook;
+  ASSERT_TRUE(reloaded.sheet(chartsheet).is_opaque_ooxml_sheet());
+  auto all = all_chart_parts(reloaded);
+  ASSERT_TRUE(static_cast<bool>(all));
+  ASSERT_EQ(all.value().size(), 4U);
+  EXPECT_EQ(all.value()[3].sheet, chartsheet);
+  EXPECT_EQ(all.value()[3].ref.part_path, "xl/charts/chart2.xml");
 }
 
 }  // namespace

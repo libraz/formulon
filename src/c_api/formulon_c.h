@@ -60,7 +60,7 @@
  *     be freed. Their exact invalidation boundary is part of each API's
  *     contract below; do not infer it from the C pointer type alone.
  *   * Buffers returned through `fm_workbook_save`, `fm_workbook_save_as`,
- *     `fm_workbook_save_with_diagnostics` and `fm_sheet_snapshot_image` are
+ *     `fm_workbook_save_with_diagnostics` and `fm_sheet_snapshot_drawing` are
  *     heap-allocated by the library with `new[]` and must be released by passing the same
  *     pointer to `fm_buffer_free`. Mixing `malloc`/`free` and
  *     `new[]`/`delete[]` across the boundary is undefined.
@@ -6564,8 +6564,8 @@ FM_API fm_status_t fm_styles_add_num_fmt(fm_workbook_t* wb, const char* format_c
  *   * `record.font_index` must satisfy `< font_count` (no auto-grow).
  *   * `record.fill_index` must satisfy `< fill_count`.
  *   * `record.border_index` must satisfy `< border_count`.
- *   * `record.num_fmt_id` must either be a documented built-in
- *     (`< 164` AND resolves through `builtin_num_fmt`) or already
+ *   * `record.num_fmt_id` must either be a built-in id with a format
+ *     code in at least one locale (`5`-`8`, `41`-`44` included) or already
  *     registered as a custom entry. Unknown ids surface
  *     `kInvalidArgument`.
  *   * Alignment values outside their Excel ranges are rejected when the
@@ -6934,7 +6934,7 @@ FM_API fm_status_t fm_workbook_external_link_count(fm_workbook_t* wb, uint32_t* 
 FM_API fm_status_t fm_workbook_external_link_at(fm_workbook_t* wb, uint32_t index, fm_external_link_record_t* out);
 
 /* -------------------------------------------------------------------------- */
-/* Drawing images                                                             */
+/* Drawing objects                                                            */
 /* -------------------------------------------------------------------------- */
 
 /** @brief Raster format of an image; `UNKNOWN` marks "no image bytes found". */
@@ -7039,13 +7039,13 @@ typedef struct {
 } fm_image_insert;
 
 /**
- * @brief New placement of an existing picture, in the quantities
+ * @brief New placement of an existing picture or chart, in the quantities
  *        `fm_sheet_drawing_object_at` reports.
  *
  * `anchor_kind` is `FM_ANCHOR_KIND_ONE_CELL` or `FM_ANCHOR_KIND_TWO_CELL`;
  * `edit_as` (an `fm_anchor_edit_as_t`) is honoured for a two-cell anchor
  * only. `row`/`col`/`*_off_emu` are the top-left marker of the anchor box
- * (`from_*`). `width_emu`/`height_emu` are the picture's own unrotated size
+ * (`from_*`). `width_emu`/`height_emu` are the object's own unrotated size
  * (`cx`/`cy`); `0` keeps the current value.
  */
 typedef struct {
@@ -7057,10 +7057,10 @@ typedef struct {
   int64_t col_off_emu;
   int64_t width_emu;
   int64_t height_emu;
-} fm_image_anchor;
+} fm_drawing_anchor;
 
-/** @brief `fm_sheet_restore_image` flag: restore as a copy with a fresh id, added on top. */
-#define FM_IMAGE_RESTORE_NEW_ID 1u
+/** @brief `fm_sheet_restore_drawing` flag: restore as a copy with a fresh id, added on top. */
+#define FM_DRAWING_RESTORE_NEW_ID 1u
 
 /**
  * @brief Sniffs the format and pixel size of PNG, JPEG, GIF or BMP bytes
@@ -7143,104 +7143,1224 @@ FM_API fm_status_t fm_sheet_insert_image(fm_workbook_t* wb, size_t sheet_index, 
                                          const fm_image_insert* opts, uint32_t* out_object_id);
 
 /**
- * @brief Removes the picture `object_id`, and its media part and
- *        relationship once nothing else references them.
+ * @brief Removes the picture or chart `object_id`, the relationships it
+ *        names, and the parts it reaches (media, or a chart part and its
+ *        style, colors and embeddings) once nothing else references them.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
  *         `kInvalidArgument` when `sheet_index` is out of range or the sheet
- *         has no picture with that id;
+ *         has no picture or chart with that id;
  *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
  *         or was retained from an `.xlsb` package.
  */
-FM_API fm_status_t fm_sheet_remove_image(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id);
+FM_API fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id);
 
 /**
- * @brief Moves and resizes the picture `object_id` (the first one when ids
- *        repeat), keeping its id, name, crop, rotation, flips and every
- *        other element.
+ * @brief Moves and resizes the picture or chart `object_id` (the first one
+ *        when ids repeat), keeping its id, name, crop, rotation, flips and
+ *        every other element.
  *
  * Only the anchor markers, `editAs` when its value changes, and the
- * picture's `a:off`/`a:ext` are rewritten. A picture rotated into [45, 135)
- * or [225, 315) degrees gets an anchor box with width and height swapped
- * about the same centre. A placement equal to the current one writes
- * nothing. An absolute picture can be converted by naming a one-cell or
- * two-cell kind.
+ * object's `a:off`/`a:ext` (a chart's `xdr:xfrm`) are rewritten. A picture
+ * rotated into [45, 135) or [225, 315) degrees gets an anchor box with
+ * width and height swapped about the same centre. A placement equal to the
+ * current one writes nothing. An absolute object can be converted by naming
+ * a one-cell or two-cell kind.
  *
  * @return `kOk` on success;
  *         `kInvalidArgument` when `sheet_index` is out of range, an enum
  *         field is outside its domain, the anchor kind is absolute, an
  *         offset or size is negative or 2^31 EMU or more, the anchor lies
- *         outside the sheet, or the sheet has no picture with that id;
+ *         outside the sheet, or the sheet has no picture or chart with that
+ *         id;
  *         `kBindingNullPointer` if `anchor == NULL`;
  *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
  *         or was retained from an `.xlsb` package.
  */
-FM_API fm_status_t fm_sheet_set_image_anchor(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                             const fm_image_anchor* anchor);
+FM_API fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                               const fm_drawing_anchor* anchor);
 
 /**
- * @brief Moves the picture `object_id` so it becomes item `index` of the
- *        drawing's object list (0 is the back).
+ * @brief Moves the picture or chart `object_id` so it becomes item `index`
+ *        of the drawing's object list (0 is the back).
  *
- * The unit moved is the picture's top-level element, a whole
+ * The unit moved is the object's top-level element, a whole
  * `mc:AlternateContent` included; other objects keep their relative order
  * and ids. An unchanged order writes nothing.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
  *         `kInvalidArgument` when `sheet_index` is out of range, the sheet
- *         has no picture with that id, or `index` is not less than the
- *         object count;
+ *         has no picture or chart with that id, or `index` is not less than
+ *         the object count;
  *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
  *         or was retained from an `.xlsb` package.
  */
-FM_API fm_status_t fm_sheet_set_image_z_order(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                              uint32_t index);
+FM_API fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                                uint32_t index);
 
 /**
- * @brief Captures the picture `object_id` as an opaque, versioned byte
- *        string: its list position, its element, and the relationships and
- *        media it references.
+ * @brief Captures the picture or chart `object_id` as an opaque, versioned
+ *        byte string: its list position, its element, the relationships it
+ *        names with their parts, and every part reachable from those parts'
+ *        relationships (a chart's style, colors, user shapes, embeddings).
  *
  * On success `*out_bytes` is a heap-allocated buffer of `*out_len` bytes
  * that MUST be released with `fm_buffer_free`. Both are zeroed before
  * validation and stay zero on failure. Hand the bytes to
- * `fm_sheet_restore_image` to put the picture back.
+ * `fm_sheet_restore_drawing` to put the object back.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
  *         `kInvalidArgument` when `sheet_index` is out of range or the sheet
- *         has no picture with that id;
+ *         has no picture or chart with that id;
  *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
- *         or a referenced part has relationships of its own.
+ *         or was retained from an `.xlsb` package.
  */
-FM_API fm_status_t fm_sheet_snapshot_image(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                           uint8_t** out_bytes, size_t* out_len);
+FM_API fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                             uint8_t** out_bytes, size_t* out_len);
 
 /**
- * @brief Puts a `fm_sheet_snapshot_image` capture into sheet `sheet_index`
- *        and returns the picture's id.
+ * @brief Puts a `fm_sheet_snapshot_drawing` capture (this version or an
+ *        earlier one) into sheet `sheet_index` and returns the object's id.
  *
- * A picture with the same id is replaced and the capture returns to its
- * recorded list position (capped at the object count); an id not present is
- * added at that position. With `FM_IMAGE_RESTORE_NEW_ID` the capture is
- * added on top as a copy with a fresh id and no `a16:creationId`. Existing
- * relationships and media with the same content are reused. A sheet
- * without a drawing gets a new one.
+ * An object with the same id is replaced, the parts it reaches are
+ * rewritten in place, and the capture returns to its recorded list position
+ * (capped at the object count); an id not present is added at that
+ * position. With `FM_DRAWING_RESTORE_NEW_ID` the capture is added on top as
+ * a copy with a fresh id and no `a16:creationId`, its chart parts copied to
+ * fresh paths. A part whose path is free is written there, a media part
+ * with identical bytes is shared, and any other occupied path takes a fresh
+ * one with the relationships naming it re-pointed. A sheet without a
+ * drawing gets a new one.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
  *         `kInvalidArgument` when `sheet_index` is out of range, the bytes
  *         are not a valid capture, `flags` has an unknown bit, the id is
- *         held by a non-picture object, or the package would exceed the
+ *         held by another kind of object, or the package would exceed the
  *         reader's limits;
  *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
  *         or was retained from an `.xlsb` package. The workbook is then
  *         unchanged.
  */
-FM_API fm_status_t fm_sheet_restore_image(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,
-                                          uint32_t flags, uint32_t* out_object_id);
+FM_API fm_status_t fm_sheet_restore_drawing(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,
+                                            uint32_t flags, uint32_t* out_object_id);
+
+/* -------------------------------------------------------------------------- */
+/* Charts                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * A chart is addressed as `(sheet_index, object_id)`, the `cNvPr` id
+ * `fm_sheet_drawing_object_at` reports with `FM_DRAWING_OBJECT_CHART`; the
+ * drawing operations above move, reorder, capture, restore and remove it.
+ *
+ * Reads go through an owned handle (`fm_chart_t`, `fm_chart_data_t`) that
+ * snapshots the chart when opened; every string it hands out is UTF-8 owned
+ * by the handle and stays valid until the handle is destroyed. On the read
+ * side an optional integer has a `has_*` flag, an optional double is NaN
+ * when absent, and an optional string is `NULL` when absent.
+ *
+ * Patch structs carry one `fm_chart_patch_op_t` per field: a zeroed struct
+ * changes nothing, `FM_CHART_PATCH_CLEAR` removes the element, and
+ * `FM_CHART_PATCH_SET` writes the value beside it. A field that cannot be
+ * removed rejects `CLEAR` with `kInvalidArgument`. Colors are ARGB
+ * (`0xAARRGGBB`); transparency is a percentage (0..100).
+ *
+ * Edits patch the chart part and write nothing when the result is
+ * unchanged. Common failures, besides those each entry lists:
+ * `kInvalidArgument` for an out-of-range sheet, unknown id, plot, series or
+ * axis, or an enum value outside its domain; `kIoChartUnparseable` (5025)
+ * when the chart part does not parse; `kIoChartUnsupportedKind` (5027) for
+ * an edit to a chartex chart; `kIoDrawingUnparseable` (5024) for an edit to
+ * a chart on a drawing retained from an `.xlsb` package. A failed edit
+ * leaves the workbook unchanged.
+ */
+
+/** @brief Plot group type. Mirrors `formulon::ChartPlotType`. */
+typedef enum {
+  FM_CHART_PLOT_BAR = 0,
+  FM_CHART_PLOT_BAR_3D = 1,
+  FM_CHART_PLOT_LINE = 2,
+  FM_CHART_PLOT_LINE_3D = 3,
+  FM_CHART_PLOT_AREA = 4,
+  FM_CHART_PLOT_AREA_3D = 5,
+  FM_CHART_PLOT_PIE = 6,
+  FM_CHART_PLOT_PIE_3D = 7,
+  FM_CHART_PLOT_DOUGHNUT = 8,
+  FM_CHART_PLOT_OF_PIE = 9,
+  FM_CHART_PLOT_SCATTER = 10,
+  FM_CHART_PLOT_BUBBLE = 11,
+  FM_CHART_PLOT_RADAR = 12,
+  FM_CHART_PLOT_STOCK = 13,
+  FM_CHART_PLOT_SURFACE = 14,
+  FM_CHART_PLOT_SURFACE_3D = 15,
+  FM_CHART_PLOT_CHARTEX = 16,
+} fm_chart_plot_type_t;
+
+/** @brief Kinds `fm_sheet_insert_chart` and `fm_sheet_set_chart_type` produce. */
+typedef enum {
+  FM_CHART_INSERT_COLUMN = 0,
+  FM_CHART_INSERT_BAR = 1,
+  FM_CHART_INSERT_LINE = 2,
+  FM_CHART_INSERT_AREA = 3,
+  FM_CHART_INSERT_PIE = 4,
+  FM_CHART_INSERT_SCATTER = 5,
+  FM_CHART_INSERT_DOUGHNUT = 6,
+} fm_chart_insert_kind_t;
+
+typedef enum {
+  FM_CHART_GROUPING_CLUSTERED = 0,
+  FM_CHART_GROUPING_STACKED = 1,
+  FM_CHART_GROUPING_PERCENT_STACKED = 2,
+  FM_CHART_GROUPING_STANDARD = 3,
+} fm_chart_grouping_t;
+
+/** @brief `c:dispBlanksAs`; `ABSENT` means the element is not written. */
+typedef enum {
+  FM_CHART_BLANKS_ABSENT = 0,
+  FM_CHART_BLANKS_GAP = 1,
+  FM_CHART_BLANKS_ZERO = 2,
+  FM_CHART_BLANKS_SPAN = 3,
+} fm_chart_blanks_as_t;
+
+/** @brief How a resolved point is drawn. */
+typedef enum {
+  FM_CHART_POINT_VALUE = 0,
+  FM_CHART_POINT_GAP = 1,
+  FM_CHART_POINT_CONNECT = 2,
+} fm_chart_point_state_t;
+
+typedef enum {
+  FM_CHART_AXIS_CATEGORY = 0,
+  FM_CHART_AXIS_VALUE = 1,
+  FM_CHART_AXIS_DATE = 2,
+  FM_CHART_AXIS_SERIES = 3,
+} fm_chart_axis_kind_t;
+
+typedef enum {
+  FM_CHART_AXIS_POS_BOTTOM = 0,
+  FM_CHART_AXIS_POS_TOP = 1,
+  FM_CHART_AXIS_POS_LEFT = 2,
+  FM_CHART_AXIS_POS_RIGHT = 3,
+} fm_chart_axis_position_t;
+
+/** @brief Where an axis crosses its cross axis; `AT` uses `crosses_at`. */
+typedef enum {
+  FM_CHART_CROSSES_ABSENT = 0,
+  FM_CHART_CROSSES_AUTO_ZERO = 1,
+  FM_CHART_CROSSES_MIN = 2,
+  FM_CHART_CROSSES_MAX = 3,
+  FM_CHART_CROSSES_AT = 4,
+} fm_chart_axis_crosses_t;
+
+/** @brief `AUTO` (title element without text) lets the viewer supply its default. */
+typedef enum {
+  FM_CHART_TITLE_NONE = 0,
+  FM_CHART_TITLE_TEXT = 1,
+  FM_CHART_TITLE_REF = 2,
+  FM_CHART_TITLE_AUTO = 3,
+} fm_chart_title_kind_t;
+
+typedef enum {
+  FM_CHART_DIRECTION_AUTO = 0,
+  FM_CHART_DIRECTION_COLUMNS = 1,
+  FM_CHART_DIRECTION_ROWS = 2,
+} fm_chart_series_direction_t;
+
+/** @brief Whether a source range's first row / column is used as headings. */
+typedef enum {
+  FM_CHART_HEADER_AUTO = 0,
+  FM_CHART_HEADER_YES = 1,
+  FM_CHART_HEADER_NO = 2,
+} fm_chart_header_mode_t;
+
+typedef enum {
+  FM_CHART_LEGEND_NONE = 0,
+  FM_CHART_LEGEND_BOTTOM = 1,
+  FM_CHART_LEGEND_TOP = 2,
+  FM_CHART_LEGEND_LEFT = 3,
+  FM_CHART_LEGEND_RIGHT = 4,
+  FM_CHART_LEGEND_TOP_RIGHT = 5,
+} fm_chart_legend_position_t;
+
+typedef enum {
+  FM_CHART_DASH_SOLID = 0,
+  FM_CHART_DASH_DASH = 1,
+  FM_CHART_DASH_DOT = 2,
+  FM_CHART_DASH_DASH_DOT = 3,
+  FM_CHART_DASH_OTHER = 4,
+} fm_chart_line_dash_t;
+
+typedef enum {
+  FM_CHART_MARKER_NONE = 0,
+  FM_CHART_MARKER_AUTO = 1,
+  FM_CHART_MARKER_CIRCLE = 2,
+  FM_CHART_MARKER_SQUARE = 3,
+  FM_CHART_MARKER_DIAMOND = 4,
+  FM_CHART_MARKER_TRIANGLE = 5,
+  FM_CHART_MARKER_OTHER = 6,
+} fm_chart_marker_symbol_t;
+
+typedef enum {
+  FM_CHART_LABEL_BEST_FIT = 0,
+  FM_CHART_LABEL_CENTER = 1,
+  FM_CHART_LABEL_INSIDE_BASE = 2,
+  FM_CHART_LABEL_INSIDE_END = 3,
+  FM_CHART_LABEL_OUTSIDE_END = 4,
+  FM_CHART_LABEL_ABOVE = 5,
+  FM_CHART_LABEL_BELOW = 6,
+  FM_CHART_LABEL_LEFT = 7,
+  FM_CHART_LABEL_RIGHT = 8,
+} fm_chart_label_position_t;
+
+/** @brief `c:barDir` of a bar plot. */
+typedef enum {
+  FM_CHART_BAR_DIR_ABSENT = 0,
+  FM_CHART_BAR_DIR_COL = 1,
+  FM_CHART_BAR_DIR_BAR = 2,
+} fm_chart_bar_direction_t;
+
+/** @brief A boolean element whose absence differs from either value. */
+typedef enum {
+  FM_CHART_TRI_ABSENT = 0,
+  FM_CHART_TRI_FALSE = 1,
+  FM_CHART_TRI_TRUE = 2,
+} fm_chart_tri_t;
+
+/** @brief Which input of a series a data source or resolved range belongs to. */
+typedef enum {
+  FM_CHART_ROLE_NAME = 0,
+  FM_CHART_ROLE_CATEGORIES = 1,
+  FM_CHART_ROLE_VALUES = 2,
+  FM_CHART_ROLE_X = 3,
+  FM_CHART_ROLE_Y = 4,
+  FM_CHART_ROLE_SIZE = 5,
+} fm_chart_role_t;
+
+/** @brief Patch field operation; the zero value leaves the element alone. */
+typedef enum {
+  FM_CHART_PATCH_KEEP = 0,
+  FM_CHART_PATCH_CLEAR = 1,
+  FM_CHART_PATCH_SET = 2,
+} fm_chart_patch_op_t;
+
+/* ---- Chart model reads --------------------------------------------------- */
+
+/** @brief Opaque snapshot of a chart's typed view. Release with `fm_chart_destroy`. */
+typedef struct fm_chart fm_chart_t;
+
+/**
+ * @brief A chart or axis title. `kind` is an `fm_chart_title_kind_t`;
+ *        `text` is the flattened rich text (`TEXT`) and `formula` the
+ *        reference (`REF`), each empty otherwise. As input, `NULL` reads as
+ *        empty.
+ */
+typedef struct {
+  int32_t kind;
+  const char* text;
+  const char* formula;
+} fm_chart_title_t;
+
+/** @brief Solid fill; `transparency_pct` is NaN when the color has no alpha. */
+typedef struct {
+  int32_t has_color;
+  uint32_t color;
+  double transparency_pct;
+} fm_chart_fill_t;
+
+/**
+ * @brief Outline. `width_pt` and `transparency_pct` are NaN when absent;
+ *        `dash` (an `fm_chart_line_dash_t`) is meaningful when `has_dash`;
+ *        `none` is non-zero for an explicit no-line.
+ */
+typedef struct {
+  int32_t has_color;
+  uint32_t color;
+  double transparency_pct;
+  double width_pt;
+  int32_t has_dash;
+  int32_t dash;
+  int32_t none;
+} fm_chart_line_t;
+
+/** @brief Marker; `symbol` is an `fm_chart_marker_symbol_t`. */
+typedef struct {
+  int32_t symbol;
+  int32_t has_size;
+  uint32_t size;
+  fm_chart_fill_t fill;
+  fm_chart_line_t line;
+} fm_chart_marker_t;
+
+/**
+ * @brief Data labels of a series. `separator` and `number_format` are
+ *        `NULL` when absent; `position` (an `fm_chart_label_position_t`) is
+ *        meaningful when `has_position`; `font_size_pt` is NaN when absent.
+ */
+typedef struct {
+  int32_t show_value;
+  int32_t show_category;
+  int32_t show_series;
+  int32_t show_percent;
+  int32_t show_legend_key;
+  const char* separator;
+  int32_t has_position;
+  int32_t position;
+  const char* number_format;
+  int32_t source_linked;
+  int32_t has_font_color;
+  uint32_t font_color;
+  double font_size_pt;
+  int32_t deleted;
+} fm_chart_labels_t;
+
+/**
+ * @brief Top-level fields of a chart.
+ *
+ * The anchor fields read as `fm_drawing_object` does. `legend_position` is
+ * `FM_CHART_LEGEND_NONE` when the chart has no legend. `auto_title_deleted`
+ * and `plot_vis_only` are `fm_chart_tri_t`; `blanks_as` an
+ * `fm_chart_blanks_as_t`. `source_range` is the sheet-qualified rectangle
+ * every series was split from, `NULL` (with the other `source_*` fields
+ * zero) when the series share no such rectangle.
+ */
+typedef struct {
+  uint32_t object_id;
+  const char* name;
+  const char* descr;
+  int32_t is_chartex;
+  int32_t is_pivot_chart;
+  int32_t on_chartsheet;
+  int32_t anchor_kind;
+  int32_t edit_as;
+  uint32_t from_row;
+  uint32_t from_col;
+  int64_t from_row_off;
+  int64_t from_col_off;
+  uint32_t to_row;
+  uint32_t to_col;
+  int64_t to_row_off;
+  int64_t to_col_off;
+  int64_t cx;
+  int64_t cy;
+  fm_chart_title_t title;
+  int32_t auto_title_deleted;
+  int32_t legend_position;
+  int32_t legend_overlay;
+  size_t legend_hidden_count;
+  int32_t blanks_as;
+  int32_t plot_vis_only;
+  int32_t date1904;
+  int32_t has_style;
+  int32_t style;
+  size_t plot_count;
+  size_t axis_count;
+  size_t hidden_category_count;
+  const char* source_range;
+  int32_t source_direction;
+  int32_t source_header_row;
+  int32_t source_header_column;
+} fm_chart_info_t;
+
+/**
+ * @brief One plot group. `type` is an `fm_chart_plot_type_t`, `bar_dir` an
+ *        `fm_chart_bar_direction_t`, `vary_colors` an `fm_chart_tri_t`.
+ *        `chartex_layout` is empty unless the plot is chartex.
+ */
+typedef struct {
+  int32_t type;
+  const char* chartex_layout;
+  int32_t bar_dir;
+  int32_t has_grouping;
+  int32_t grouping;
+  int32_t vary_colors;
+  int32_t has_gap_width;
+  uint32_t gap_width;
+  int32_t has_overlap;
+  int32_t overlap;
+  int32_t has_hole_size;
+  uint32_t hole_size;
+  int32_t has_first_slice_angle;
+  uint32_t first_slice_angle;
+  size_t axis_id_count;
+  size_t series_count;
+} fm_chart_plot_t;
+
+/** @brief Kind of a series input. */
+typedef enum {
+  FM_CHART_SOURCE_NONE = 0,
+  FM_CHART_SOURCE_REF = 1,
+  FM_CHART_SOURCE_LITERAL = 2,
+} fm_chart_source_kind_t;
+
+/**
+ * @brief One series input. `kind` is an `fm_chart_source_kind_t`;
+ *        `formula` is the reference text (empty unless `REF`);
+ *        `literal_count` counts the points `fm_chart_series_literal_at`
+ *        reads (`LITERAL` only).
+ */
+typedef struct {
+  int32_t kind;
+  const char* formula;
+  size_t literal_count;
+} fm_chart_data_source_t;
+
+/**
+ * @brief One series of a plot group. `smooth` is an `fm_chart_tri_t`;
+ *        `marker` and `labels` are meaningful when their `has_*` flag is
+ *        set. `point_count` counts the formatted points
+ *        `fm_chart_series_point_at` reads.
+ */
+typedef struct {
+  uint32_t idx;
+  uint32_t order;
+  int32_t filtered;
+  fm_chart_data_source_t name;
+  fm_chart_data_source_t categories;
+  fm_chart_data_source_t values;
+  fm_chart_data_source_t x;
+  fm_chart_data_source_t y;
+  fm_chart_data_source_t size;
+  fm_chart_fill_t fill;
+  fm_chart_line_t line;
+  int32_t has_marker;
+  fm_chart_marker_t marker;
+  int32_t smooth;
+  size_t point_count;
+  int32_t has_labels;
+  fm_chart_labels_t labels;
+} fm_chart_series_t;
+
+/** @brief A literal point: a number, or `text` when `is_text`. */
+typedef struct {
+  uint32_t idx;
+  int32_t is_text;
+  double number;
+  const char* text;
+} fm_chart_literal_t;
+
+/** @brief One formatted data point (`c:dPt`). */
+typedef struct {
+  uint32_t idx;
+  fm_chart_fill_t fill;
+  fm_chart_line_t line;
+  int32_t has_marker;
+  fm_chart_marker_t marker;
+} fm_chart_point_t;
+
+/**
+ * @brief One axis. `kind` is an `fm_chart_axis_kind_t`, `position` an
+ *        `fm_chart_axis_position_t`, `crosses` an `fm_chart_axis_crosses_t`.
+ *        `crosses_at`, `log_base`, `min`, `max`, `major_unit` and
+ *        `minor_unit` are NaN when absent; `number_format` and
+ *        `tick_label_pos` are `NULL` when absent.
+ */
+typedef struct {
+  uint32_t id;
+  int32_t kind;
+  int32_t position;
+  int32_t deleted;
+  uint32_t cross_axis;
+  int32_t crosses;
+  double crosses_at;
+  int32_t reversed;
+  double log_base;
+  double min;
+  double max;
+  double major_unit;
+  double minor_unit;
+  const char* number_format;
+  int32_t source_linked;
+  fm_chart_title_t title;
+  int32_t major_gridlines;
+  int32_t minor_gridlines;
+  const char* tick_label_pos;
+} fm_chart_axis_t;
+
+/**
+ * @brief Reads the chart `object_id` into an owned snapshot.
+ *
+ * `*out` is set to `NULL` before validation; on success the caller owns it
+ * and releases it with `fm_chart_destroy`. Later workbook edits do not
+ * change it.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `out` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or the sheet
+ *         has no chart with that id;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse;
+ *         `kIoChartUnparseable` (5025) when the chart part does not parse.
+ */
+FM_API fm_status_t fm_sheet_chart_open(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                       fm_chart_t** out);
+
+/** @brief Releases a chart handle. `chart == NULL` is a no-op. */
+FM_API void fm_chart_destroy(fm_chart_t* chart);
+
+/**
+ * @brief Reads the chart's top-level fields.
+ *
+ * @return `kOk` on success; `kBindingNullPointer` when any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_chart_info(const fm_chart_t* chart, fm_chart_info_t* out);
+
+/**
+ * @brief Reads the `c:idx` of legend entry `idx` hidden from the legend
+ *        (`idx < legend_hidden_count`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_chart_legend_hidden_at(const fm_chart_t* chart, size_t idx, uint32_t* out);
+
+/**
+ * @brief Reads the position of hidden category `idx`
+ *        (`idx < hidden_category_count`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_chart_hidden_category_at(const fm_chart_t* chart, size_t idx, uint32_t* out);
+
+/**
+ * @brief Reads plot group `plot` (`plot < plot_count`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `plot` is out of range.
+ */
+FM_API fm_status_t fm_chart_plot_at(const fm_chart_t* chart, size_t plot, fm_chart_plot_t* out);
+
+/**
+ * @brief Reads axis id `idx` of plot group `plot` (`idx < axis_id_count`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `plot` or `idx` is out of range.
+ */
+FM_API fm_status_t fm_chart_plot_axis_id_at(const fm_chart_t* chart, size_t plot, size_t idx, uint32_t* out);
+
+/**
+ * @brief Reads series `series` of plot group `plot`, in document order
+ *        (`series < series_count`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `plot` or `series` is out of range.
+ */
+FM_API fm_status_t fm_chart_series_at(const fm_chart_t* chart, size_t plot, size_t series, fm_chart_series_t* out);
+
+/**
+ * @brief Reads literal point `idx` of input `role` (an `fm_chart_role_t`)
+ *        of a series (`idx < literal_count`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `plot`, `series`, `role` or `idx` is out
+ *         of range.
+ */
+FM_API fm_status_t fm_chart_series_literal_at(const fm_chart_t* chart, size_t plot, size_t series, int32_t role,
+                                              size_t idx, fm_chart_literal_t* out);
+
+/**
+ * @brief Reads formatted point `idx` of a series (`idx < point_count`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `plot`, `series` or `idx` is out of range.
+ */
+FM_API fm_status_t fm_chart_series_point_at(const fm_chart_t* chart, size_t plot, size_t series, size_t idx,
+                                            fm_chart_point_t* out);
+
+/**
+ * @brief Reads axis `idx` (`idx < axis_count`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_chart_axis_at(const fm_chart_t* chart, size_t idx, fm_chart_axis_t* out);
+
+/* ---- Resolved chart data ------------------------------------------------- */
+
+/** @brief Opaque resolved series data. Release with `fm_chart_data_destroy`. */
+typedef struct fm_chart_data fm_chart_data_t;
+
+/**
+ * @brief Overrides `fm_sheet_chart_preview_open` applies to a copy of the
+ *        chart. `source` is `NULL` to keep the chart's own range; each other
+ *        field applies when its `_op` is `FM_CHART_PATCH_SET` (`CLEAR` is
+ *        rejected). `direction` is an `fm_chart_series_direction_t`,
+ *        `blanks_as` an `fm_chart_blanks_as_t`; the rest are 0/1.
+ */
+typedef struct {
+  const char* source;
+  int32_t direction_op;
+  int32_t direction;
+  int32_t header_row_op;
+  int32_t header_row;
+  int32_t header_column_op;
+  int32_t header_column;
+  int32_t blanks_as_op;
+  int32_t blanks_as;
+  int32_t plot_vis_only_op;
+  int32_t plot_vis_only;
+} fm_chart_preview_overrides;
+
+/**
+ * @brief Summary of resolved chart data.
+ *
+ * `is_xy` is non-zero for the XY domain (scatter, bubble), where points
+ * carry an x value. `category_value_count` is non-zero only for numeric
+ * (date) categories and then equals `category_label_count`.
+ * `categories_generated` is set when no category reference exists and the
+ * labels are 1..n. `title_text` is `NULL` when the chart has no resolved
+ * title text.
+ */
+typedef struct {
+  int32_t is_xy;
+  size_t point_count;
+  size_t series_count;
+  size_t category_label_count;
+  size_t category_value_count;
+  size_t category_level_count;
+  const char* category_format_code;
+  int32_t categories_generated;
+  const char* title_text;
+  size_t axis_title_count;
+  size_t unresolved_count;
+} fm_chart_data_info_t;
+
+/**
+ * @brief One resolved series. `name` is `NULL` when the series has no name
+ *        reference. `point_count` is the length of the arrays
+ *        `fm_chart_data_series_points` returns. `range_count[role]` counts
+ *        the resolved rectangles of each `fm_chart_role_t` input.
+ */
+typedef struct {
+  size_t plot_index;
+  uint32_t idx;
+  const char* name;
+  const char* format_code;
+  int32_t filtered;
+  size_t point_count;
+  int32_t has_sizes;
+  size_t range_count[6];
+} fm_chart_data_series_t;
+
+/**
+ * @brief Parallel point arrays of one series, owned by the handle.
+ *
+ * `values` (the y value in the XY domain) and `states` (each an
+ * `fm_chart_point_state_t`) have `count` entries. `x` is `NULL` outside the
+ * XY domain; `sizes` is `NULL` unless the series is a bubble series.
+ */
+typedef struct {
+  size_t count;
+  const double* values;
+  const uint8_t* states;
+  const double* x;
+  const double* sizes;
+} fm_chart_data_points_t;
+
+/** @brief A rectangle of cells on one sheet (0-based, inclusive). */
+typedef struct {
+  size_t sheet;
+  uint32_t top;
+  uint32_t left;
+  uint32_t bottom;
+  uint32_t right;
+} fm_chart_sheet_range_t;
+
+/** @brief Resolved title text of one axis. */
+typedef struct {
+  uint32_t axis_id;
+  const char* text;
+} fm_chart_axis_title_text_t;
+
+/**
+ * @brief An input that did not resolve; its points read as gaps. `source`
+ *        is `name`, `cat`, `val`, `x`, `y`, `size`, `title` or
+ *        `axis_title`; `series_idx` is the series' `c:idx` (0 for a title)
+ *        and `axis_id` the axis of an `axis_title`.
+ */
+typedef struct {
+  uint32_t series_idx;
+  const char* source;
+  uint32_t axis_id;
+} fm_chart_unresolved_t;
+
+/**
+ * @brief Resolves the chart's series against the current cell values, by
+ *        Excel's rules (hidden cells, blanks, errors, filters).
+ *
+ * `*out` is set to `NULL` before validation; on success the caller owns it
+ * and releases it with `fm_chart_data_destroy`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `out` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or the sheet
+ *         has no chart with that id;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse;
+ *         `kIoChartUnparseable` (5025) when the chart part does not parse.
+ */
+FM_API fm_status_t fm_sheet_chart_data_open(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                            fm_chart_data_t** out);
+
+/**
+ * @brief `fm_sheet_chart_data_open` for a copy of the chart with
+ *        `overrides` applied; the workbook is not changed.
+ *
+ * A source, direction or header override re-splits the series as
+ * `fm_sheet_set_chart_source` does: over the overridden range (an unset
+ * direction or header is auto), else over the chart's derived range (unset
+ * ones as derived).
+ *
+ * @return as `fm_sheet_chart_data_open`, and
+ *         `kBindingNullPointer` when `overrides` is `NULL`;
+ *         `kInvalidArgument` for a `CLEAR` op or an out-of-domain value;
+ *         `kIoChartInvalidReference` (5026) when `source` does not resolve;
+ *         `kIoChartUnsupportedKind` (5027) for a chartex chart.
+ */
+FM_API fm_status_t fm_sheet_chart_preview_open(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                               const fm_chart_preview_overrides* overrides, fm_chart_data_t** out);
+
+/** @brief Releases a chart data handle. `data == NULL` is a no-op. */
+FM_API void fm_chart_data_destroy(fm_chart_data_t* data);
+
+/**
+ * @brief Reads the data summary.
+ *
+ * @return `kOk` on success; `kBindingNullPointer` when any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_chart_data_info(const fm_chart_data_t* data, fm_chart_data_info_t* out);
+
+/**
+ * @brief Reads category label `idx` (`idx < category_label_count`) and, for
+ *        numeric categories, its value (NaN otherwise).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_chart_data_category_at(const fm_chart_data_t* data, size_t idx, const char** out_label,
+                                             double* out_value);
+
+/**
+ * @brief Reads the label count of upper category level `level`
+ *        (`level < category_level_count`, outermost first).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `level` is out of range.
+ */
+FM_API fm_status_t fm_chart_data_category_level_size(const fm_chart_data_t* data, size_t level, size_t* out_count);
+
+/**
+ * @brief Reads label `idx` of upper category level `level`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `level` or `idx` is out of range.
+ */
+FM_API fm_status_t fm_chart_data_category_level_at(const fm_chart_data_t* data, size_t level, size_t idx,
+                                                   const char** out_label);
+
+/**
+ * @brief Reads resolved series `series` (`series < series_count`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `series` is out of range.
+ */
+FM_API fm_status_t fm_chart_data_series_at(const fm_chart_data_t* data, size_t series, fm_chart_data_series_t* out);
+
+/**
+ * @brief Returns the point arrays of series `series`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `series` is out of range.
+ */
+FM_API fm_status_t fm_chart_data_series_points(const fm_chart_data_t* data, size_t series, fm_chart_data_points_t* out);
+
+/**
+ * @brief Reads resolved rectangle `idx` of input `role` (an
+ *        `fm_chart_role_t`) of series `series` (`idx < range_count[role]`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `series`, `role` or `idx` is out of range.
+ */
+FM_API fm_status_t fm_chart_data_range_at(const fm_chart_data_t* data, size_t series, int32_t role, size_t idx,
+                                          fm_chart_sheet_range_t* out);
+
+/**
+ * @brief Reads axis title `idx` (`idx < axis_title_count`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_chart_data_axis_title_at(const fm_chart_data_t* data, size_t idx,
+                                               fm_chart_axis_title_text_t* out);
+
+/**
+ * @brief Reads unresolved input `idx` (`idx < unresolved_count`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_chart_data_unresolved_at(const fm_chart_data_t* data, size_t idx, fm_chart_unresolved_t* out);
+
+/* ---- Creation and edits -------------------------------------------------- */
+
+/**
+ * @brief Options of `fm_sheet_insert_chart`.
+ *
+ * `kind` is an `fm_chart_insert_kind_t`; `grouping` (an
+ * `fm_chart_grouping_t`) applies to column, bar, line and area. `source` is
+ * one A1 rectangle, sheet-qualified or on the target sheet. `direction` is
+ * an `fm_chart_series_direction_t`, `header_row`/`header_column`
+ * `fm_chart_header_mode_t`s (`AUTO` follows Excel's detection). `title` is
+ * `NULL` for Excel's automatic title, empty for none, else the text.
+ * `legend` is an `fm_chart_legend_position_t`. `placement` reads as for
+ * `fm_sheet_insert_image`, its `name` and `descr` naming the chart (an
+ * empty name becomes `Chart <id>`), except that a zero width or height
+ * means Excel's default 360 x 216 pt frame. Excel inserts charts with a
+ * two-cell anchor.
+ */
+typedef struct {
+  int32_t kind;
+  int32_t grouping;
+  const char* source;
+  int32_t direction;
+  int32_t header_row;
+  int32_t header_column;
+  const char* title;
+  int32_t legend;
+  fm_image_insert placement;
+} fm_chart_insert;
+
+/** @brief Solid fill patch; `transparency_pct` needs a solid color. */
+typedef struct {
+  int32_t color_op;
+  uint32_t color;
+  int32_t transparency_op;
+  double transparency_pct;
+} fm_chart_fill_patch;
+
+/** @brief Outline patch; `dash` is an `fm_chart_line_dash_t`, `none` 0/1 (`CLEAR` rejected). */
+typedef struct {
+  int32_t color_op;
+  uint32_t color;
+  int32_t transparency_op;
+  double transparency_pct;
+  int32_t width_op;
+  double width_pt;
+  int32_t dash_op;
+  int32_t dash;
+  int32_t none_op;
+  int32_t none;
+} fm_chart_line_patch;
+
+/** @brief Marker patch; `symbol` is an `fm_chart_marker_symbol_t` (`CLEAR` rejected). */
+typedef struct {
+  int32_t symbol_op;
+  int32_t symbol;
+  int32_t size_op;
+  double size;
+  fm_chart_fill_patch fill;
+  fm_chart_line_patch line;
+} fm_chart_marker_patch;
+
+/**
+ * @brief Data-label patch. The `show_*` flags are 0/1 (`CLEAR` rejected);
+ *        `position` is an `fm_chart_label_position_t`.
+ */
+typedef struct {
+  int32_t show_value_op;
+  int32_t show_value;
+  int32_t show_category_op;
+  int32_t show_category;
+  int32_t show_series_op;
+  int32_t show_series;
+  int32_t show_percent_op;
+  int32_t show_percent;
+  int32_t show_legend_key_op;
+  int32_t show_legend_key;
+  int32_t separator_op;
+  const char* separator;
+  int32_t position_op;
+  int32_t position;
+  int32_t number_format_op;
+  const char* number_format;
+  int32_t font_color_op;
+  uint32_t font_color;
+  int32_t font_size_op;
+  double font_size_pt;
+} fm_chart_labels_patch;
+
+/**
+ * @brief Series patch.
+ *
+ * Each reference is `NULL` to keep it; otherwise the new reference text, an
+ * empty string removing `name`, `categories` or `x`. An empty `values`, `y`
+ * or `size` is `kInvalidArgument`. `marker_op`/`labels_op` `CLEAR` removes
+ * the marker or the data labels; `smooth` is 0/1 (`CLEAR` rejected).
+ */
+typedef struct {
+  const char* name;
+  const char* categories;
+  const char* values;
+  const char* x;
+  const char* y;
+  const char* size;
+  fm_chart_fill_patch fill;
+  fm_chart_line_patch line;
+  int32_t marker_op;
+  fm_chart_marker_patch marker;
+  int32_t smooth_op;
+  int32_t smooth;
+  int32_t labels_op;
+  fm_chart_labels_patch labels;
+} fm_chart_series_patch;
+
+/** @brief Data-point patch; a patch that changes nothing removes the point's formatting. */
+typedef struct {
+  fm_chart_fill_patch fill;
+  fm_chart_line_patch line;
+  int32_t marker_op;
+  fm_chart_marker_patch marker;
+} fm_chart_point_patch;
+
+/**
+ * @brief Plot-group patch (`CLEAR` rejected on every field). A field the
+ *        plot type does not have is `kInvalidArgument`; `hole_size` is
+ *        10..90 and doughnut only.
+ */
+typedef struct {
+  int32_t gap_width_op;
+  uint32_t gap_width;
+  int32_t overlap_op;
+  int32_t overlap;
+  int32_t first_slice_angle_op;
+  uint32_t first_slice_angle;
+  int32_t vary_colors_op;
+  int32_t vary_colors;
+  int32_t hole_size_op;
+  uint32_t hole_size;
+} fm_chart_plot_patch;
+
+/**
+ * @brief Axis patch.
+ *
+ * `visible`, `major_gridlines` and `reversed` are 0/1 and `crosses` an
+ * `fm_chart_axis_crosses_t` (`CLEAR` rejected on these four); `crosses_at`
+ * is read when `crosses` is `FM_CHART_CROSSES_AT`. `CLEAR` on `title`
+ * removes the axis title, on `log_base` makes the axis linear, and on
+ * `tick_label_pos` (`nextTo`, `low`, `high`, `none`) restores the default.
+ */
+typedef struct {
+  int32_t visible_op;
+  int32_t visible;
+  int32_t title_op;
+  const char* title;
+  int32_t min_op;
+  double min;
+  int32_t max_op;
+  double max;
+  int32_t major_unit_op;
+  double major_unit;
+  int32_t number_format_op;
+  const char* number_format;
+  int32_t major_gridlines_op;
+  int32_t major_gridlines;
+  int32_t reversed_op;
+  int32_t reversed;
+  int32_t log_base_op;
+  double log_base;
+  int32_t crosses_op;
+  int32_t crosses;
+  double crosses_at;
+  int32_t tick_label_pos_op;
+  const char* tick_label_pos;
+} fm_chart_axis_patch;
+
+/**
+ * @brief Legend state. `position` is an `fm_chart_legend_position_t`;
+ *        `FM_CHART_LEGEND_NONE` removes the legend. With `hidden_series_op`
+ *        `SET` the `hidden_series_count` series `c:idx` values replace the
+ *        hidden legend entries (`hidden_series` may be `NULL` when the count
+ *        is 0); `KEEP` leaves them alone.
+ */
+typedef struct {
+  int32_t position;
+  int32_t overlay;
+  int32_t hidden_series_op;
+  const uint32_t* hidden_series;
+  size_t hidden_series_count;
+} fm_chart_legend_patch;
+
+/**
+ * @brief Creates a chart from `opts` with filled caches and returns its
+ *        object id.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `opts`, `opts->source` or
+ *         `out_object_id` is `NULL`;
+ *         `kInvalidArgument` for a bad sheet, enum value or placement (as
+ *         `fm_sheet_insert_image`), or a source that does not yield a series;
+ *         `kIoChartInvalidReference` (5026) when `source` does not resolve to
+ *         one rectangle;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         or was retained from an `.xlsb` package. The workbook is then
+ *         unchanged.
+ */
+FM_API fm_status_t fm_sheet_insert_chart(fm_workbook_t* wb, size_t sheet_index, const fm_chart_insert* opts,
+                                         uint32_t* out_object_id);
+
+/**
+ * @brief Replaces plot group `plot` with `kind` (an
+ *        `fm_chart_insert_kind_t`) and `grouping` (an `fm_chart_grouping_t`),
+ *        keeping each series' references, idx, order and explicit colors.
+ *
+ * @return `kOk` on success, or a common chart failure;
+ *         `kIoChartUnsupportedKind` (5027) for a pivot chart, or a plot that
+ *         shares its axes with another plot group.
+ */
+FM_API fm_status_t fm_sheet_set_chart_type(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
+                                           int32_t kind, int32_t grouping);
+
+/**
+ * @brief Sets the chart title: `NONE` removes it, `TEXT` writes `text`,
+ *        `REF` writes the reference `formula`, `AUTO` leaves the text to
+ *        the viewer.
+ *
+ * @return `kOk` on success, or a common chart failure;
+ *         `kBindingNullPointer` when `title` is `NULL`;
+ *         `kIoChartInvalidReference` (5026) when `formula` does not resolve.
+ */
+FM_API fm_status_t fm_sheet_set_chart_title(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                            const fm_chart_title_t* title);
+
+/**
+ * @brief Sets the legend position, overlay and hidden entries.
+ *
+ * @return `kOk` on success, or a common chart failure;
+ *         `kBindingNullPointer` when `legend` is `NULL`, or
+ *         `hidden_series` is `NULL` with a non-zero count.
+ */
+FM_API fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                             const fm_chart_legend_patch* legend);
+
+/**
+ * @brief Patches axis `axis_id`.
+ *
+ * @return `kOk` on success, or a common chart failure;
+ *         `kBindingNullPointer` when `patch` is `NULL`.
+ */
+FM_API fm_status_t fm_sheet_set_chart_axis(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, uint32_t axis_id,
+                                           const fm_chart_axis_patch* patch);
+
+/**
+ * @brief Writes `c:dispBlanksAs` (an `fm_chart_blanks_as_t`) and
+ *        `c:plotVisOnly` (an `fm_chart_tri_t`); `ABSENT` removes the element.
+ *
+ * @return `kOk` on success, or a common chart failure.
+ */
+FM_API fm_status_t fm_sheet_set_chart_display(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                              int32_t blanks_as, int32_t plot_vis_only);
+
+/**
+ * @brief Patches the series with `c:idx` `series_idx` of plot group `plot`.
+ *        A changed reference refreshes its cache.
+ *
+ * @return `kOk` on success, or a common chart failure;
+ *         `kBindingNullPointer` when `patch` is `NULL`;
+ *         `kIoChartInvalidReference` (5026) when a reference does not
+ *         resolve;
+ *         `kIoChartUnsupportedKind` (5027) for a reference edit on a pivot
+ *         chart.
+ */
+FM_API fm_status_t fm_sheet_set_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
+                                             uint32_t series_idx, const fm_chart_series_patch* patch);
+
+/**
+ * @brief Patches point `point_idx` of series `series_idx`; a patch that
+ *        changes nothing removes the point's formatting.
+ *
+ * @return `kOk` on success, or a common chart failure;
+ *         `kBindingNullPointer` when `patch` is `NULL`.
+ */
+FM_API fm_status_t fm_sheet_set_chart_point(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
+                                            uint32_t series_idx, uint32_t point_idx, const fm_chart_point_patch* patch);
+
+/**
+ * @brief Patches plot group `plot`.
+ *
+ * @return `kOk` on success, or a common chart failure;
+ *         `kBindingNullPointer` when `patch` is `NULL`.
+ */
+FM_API fm_status_t fm_sheet_set_chart_plot(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
+                                           const fm_chart_plot_patch* patch);
+
+/**
+ * @brief Replaces the chart filter: the listed series (by `c:idx`) and
+ *        categories (positions in the full category range) are hidden.
+ *        Either array may be `NULL` when its count is 0.
+ *
+ * @return `kOk` on success, or a common chart failure;
+ *         `kBindingNullPointer` when an array is `NULL` with a non-zero count;
+ *         `kIoChartUnsupportedKind` (5027) for a pivot chart.
+ */
+FM_API fm_status_t fm_sheet_set_chart_filter(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                             const uint32_t* hidden_series, size_t hidden_series_count,
+                                             const uint32_t* hidden_categories, size_t hidden_category_count);
+
+/**
+ * @brief Appends a series to plot group `plot` from `patch` (which must set
+ *        `values`, or `y` for a scatter plot) and returns its `c:idx`.
+ *
+ * @return `kOk` on success, or a common chart failure;
+ *         `kBindingNullPointer` when `patch` or `out_series_idx` is `NULL`;
+ *         `kIoChartInvalidReference` (5026) when a reference does not
+ *         resolve;
+ *         `kIoChartUnsupportedKind` (5027) for a pivot chart.
+ */
+FM_API fm_status_t fm_sheet_add_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
+                                             const fm_chart_series_patch* patch, uint32_t* out_series_idx);
+
+/**
+ * @brief Removes the series with `c:idx` `series_idx` from plot group `plot`.
+ *
+ * @return `kOk` on success, or a common chart failure;
+ *         `kIoChartUnsupportedKind` (5027) for a pivot chart.
+ */
+FM_API fm_status_t fm_sheet_remove_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
+                                                uint32_t series_idx);
+
+/**
+ * @brief Rebuilds every series from `source` by the insert splitting rules,
+ *        keeping the chart kind and each series' formatting by idx, and
+ *        clears the filter. `direction` is an `fm_chart_series_direction_t`,
+ *        the header modes `fm_chart_header_mode_t`s.
+ *
+ * @return `kOk` on success, or a common chart failure;
+ *         `kBindingNullPointer` when `source` is `NULL`;
+ *         `kIoChartInvalidReference` (5026) when `source` does not resolve to
+ *         one rectangle;
+ *         `kIoChartUnsupportedKind` (5027) for a pivot chart.
+ */
+FM_API fm_status_t fm_sheet_set_chart_source(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                             const char* source, int32_t direction, int32_t header_row,
+                                             int32_t header_column);
 
 /* -------------------------------------------------------------------------- */
 /* Version                                                                    */

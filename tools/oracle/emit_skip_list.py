@@ -45,7 +45,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
 FORMULA_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases"
 
-TRACKS = ("formula", "workbook")
+TRACKS = ("formula", "workbook", "chart")
 
 
 def track_primary(targets_doc: dict, track: str) -> str:

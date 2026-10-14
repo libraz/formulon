@@ -10,6 +10,7 @@ Subcommands:
     cli.py list                              # print available targets
     cli.py gen [--target NAME] [--all]       # delegate to oracle_gen
     cli.py workbook [--target NAME]          # workbook track (pivot / print)
+    cli.py chart [--suite NAME]              # chart track (caches, refs, edits)
     cli.py setup [--target NAME]             # run preflight checks
     cli.py contribute [--target NAME]        # contributor onramp:
                                              #   banner + preflight + gen
@@ -35,12 +36,13 @@ from typing import Any, Dict, List, Optional
 # Local imports — accept both `python3 tools/oracle/cli.py` (no package)
 # and `python3 -m tools.oracle.cli` (package-style).
 try:  # pragma: no cover - trivial fallback
-    from tools.oracle import oracle_gen, workbook_oracle_gen
+    from tools.oracle import chart_oracle_gen, oracle_gen, workbook_oracle_gen
     from tools.oracle.contribute import _cmd_contribute
     from tools.oracle.preflight import _cmd_setup
     from tools.oracle.targets_manifest import DEFAULT_TARGETS_FILE, _load_targets, _platform_label, _select_targets
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import chart_oracle_gen  # type: ignore
     import oracle_gen  # type: ignore
     import workbook_oracle_gen  # type: ignore
     from contribute import _cmd_contribute  # type: ignore
@@ -114,6 +116,18 @@ def _cmd_workbook(args: argparse.Namespace) -> int:
     return workbook_oracle_gen.main(gen_argv)
 
 
+def _cmd_chart(args: argparse.Namespace) -> int:
+    """Captures the chart track through `chart_oracle_gen` (tracks.chart.primary)."""
+
+    gen_argv: List[str] = ["capture", "--targets-file", str(args.targets_file)]
+    for s in args.suite or []:
+        gen_argv.extend(["--suite", s])
+    if args.dump:
+        gen_argv.extend(["--dump", str(args.dump)])
+    print("[oracle-cli] track=chart")
+    return chart_oracle_gen.main(gen_argv)
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="oracle-cli",
@@ -177,6 +191,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     p_wb.add_argument("--visible", action="store_true")
     p_wb.set_defaults(func=_cmd_workbook)
+
+    p_chart = sub.add_parser("chart", help="Generate goldens for the chart oracle track.")
+    p_chart.add_argument("--suite", action="append", default=None, metavar="NAME")
+    p_chart.add_argument("--dump", default=None, metavar="PATH", help="chart_model_dump binary.")
+    p_chart.set_defaults(func=_cmd_chart)
 
     p_setup = sub.add_parser(
         "setup",

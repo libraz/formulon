@@ -10,10 +10,15 @@
 //
 // A top-level `mc:AlternateContent` contributes the anchors of its first
 // `mc:Choice`; its `mc:Fallback` is a rendering of the same object.
+//
+// A sheet's drawing is found through the worksheet's drawing relationship,
+// one retained from an `.xlsb` package, or, for a chartsheet, the drawing
+// relationship in the chartsheet part's rels part.
 
 #ifndef FORMULON_DRAWING_DRAWING_XML_H_
 #define FORMULON_DRAWING_DRAWING_XML_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -26,6 +31,8 @@
 #include "utils/expected.h"
 
 namespace formulon {
+
+class Workbook;
 
 /// What an anchor holds.
 enum class DrawingObjectKind : std::int32_t {
@@ -82,6 +89,19 @@ struct DrawingObject {
   ImageFormat image_format = ImageFormat::kUnknown;  ///< Filled by callers that hold the media bytes.
 };
 
+/// A chart frame and the chart part it shows.
+struct ChartPartRef {
+  std::uint32_t object_id = 0;  ///< `cNvPr/@id` of the `graphicFrame`.
+  std::string part_path;        ///< Chart part; empty when the frame's relationship does not resolve.
+  bool is_chartex = false;      ///< A `cx:chart` (chartex) part rather than a `c:chart` one.
+};
+
+/// A `ChartPartRef` with the index of the sheet (worksheet or chartsheet) holding it.
+struct SheetChartPartRef {
+  std::size_t sheet = 0;
+  ChartPartRef ref;
+};
+
 /// `Target=` value reaching package path `target` from a part in directory
 /// `from_dir` (no trailing slash; `xl/drawings` + `xl/media/image1.png` ->
 /// `../media/image1.png`).
@@ -115,6 +135,24 @@ DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vecto
 /// Reads every anchored object of a parsed drawing part.
 std::vector<DrawingObject> read_drawing_objects(const pugi::xml_document& doc,
                                                 const std::vector<io::ooxml::DrawingRel>& rels);
+
+/// Package path of sheet `sheet`'s drawing, or empty when it has none. Fails
+/// with `kInvalidArgument` for a bad sheet and with `kIoDrawingUnparseable`
+/// when a chartsheet's rels part does not parse.
+Expected<std::string, Error> sheet_drawing_path(const Workbook& wb, std::size_t sheet);
+
+/// The relationships of the part at `part_path`; none when it has no rels
+/// part. Fails with `kIoDrawingUnparseable` when the rels part does not parse.
+Expected<std::vector<io::ooxml::DrawingRel>, Error> load_part_rels(const Workbook& wb, std::string_view part_path);
+
+/// The chart frames of sheet `sheet`'s drawing in list order, resolved
+/// `graphicFrame` -> `c:chart` (or `cx:chart`) `r:id` -> drawing rels -> part.
+/// Fails like `list_drawing_objects`.
+Expected<std::vector<ChartPartRef>, Error> list_chart_parts(const Workbook& wb, std::size_t sheet);
+
+/// `list_chart_parts` over every sheet, chartsheets included. A sheet whose
+/// drawing does not parse contributes nothing.
+Expected<std::vector<SheetChartPartRef>, Error> all_chart_parts(const Workbook& wb);
 
 /// Reads an `xdr:from` / `xdr:to` marker.
 AnchorPoint read_anchor_point(const pugi::xml_node& marker);

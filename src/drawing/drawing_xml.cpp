@@ -1,9 +1,18 @@
 #include "drawing/drawing_xml.h"
 
 #include <cstring>
+#include <utility>
 
+#include "io/ooxml/package_validator.h"
+#include "io/ooxml/part_dom.h"
+#include "io/ooxml_defs.h"
 #include "io/xml_utils.h"
+#include "passthrough_part.h"
+#include "sheet.h"
+#include "unknown_relationship.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace {
@@ -78,6 +87,16 @@ pugi::xml_node find_descendant(const pugi::xml_node& node, std::string_view name
     }
   }
   return {};
+}
+
+// The `c:chart` / `cx:chart` element of a chart frame, looking through an
+// `mc:AlternateContent` inside `a:graphicData`.
+pugi::xml_node frame_chart(const pugi::xml_node& content) {
+  const pugi::xml_node data = child_local(child_local(content, "graphic"), "graphicData");
+  if (const pugi::xml_node chart = child_local(data, "chart")) {
+    return chart;
+  }
+  return child_local(child_local(child_local(data, "AlternateContent"), "Choice"), "chart");
 }
 
 }  // namespace
@@ -235,6 +254,85 @@ std::vector<DrawingObject> read_drawing_objects(const pugi::xml_document& doc,
     objects.push_back(read_drawing_object(anchor, rels));
   }
   return objects;
+}
+
+Expected<std::string, Error> sheet_drawing_path(const Workbook& wb, std::size_t sheet) {
+  if (sheet >= wb.sheet_count()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "drawing: sheet index out of range");
+  }
+  const Sheet& ws = wb.sheet(sheet);
+  if (!ws.drawing_rel_target().empty()) {
+    return ws.drawing_rel_target();
+  }
+  for (const UnknownRelationship& rel : ws.unknown_relationships()) {
+    if (rel.type == io::kRelDrawing && !rel.target_external) {
+      return rel.target;
+    }
+  }
+  if (ws.is_opaque_ooxml_sheet()) {
+    ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_part_rels(wb, ws.opaque_ooxml_part_path()));
+    for (const io::ooxml::DrawingRel& rel : rels) {
+      if (rel.type == io::kRelDrawing && !rel.external) {
+        return rel.target;
+      }
+    }
+  }
+  return std::string();
+}
+
+Expected<std::vector<io::ooxml::DrawingRel>, Error> load_part_rels(const Workbook& wb, std::string_view part_path) {
+  const PassthroughPart* rels = io::ooxml::find_passthrough_part(wb, io::ooxml::rels_path_for_part(part_path));
+  if (rels == nullptr) {
+    return std::vector<io::ooxml::DrawingRel>{};
+  }
+  return io::ooxml::parse_part_rels(rels->bytes, io::ooxml::dir_of(part_path));
+}
+
+Expected<std::vector<ChartPartRef>, Error> list_chart_parts(const Workbook& wb, std::size_t sheet) {
+  ASSIGN_OR_RETURN(std::string path, sheet_drawing_path(wb, sheet));
+  std::vector<ChartPartRef> charts;
+  if (path.empty()) {
+    return charts;
+  }
+  const PassthroughPart* part = io::ooxml::find_passthrough_part(wb, path);
+  if (part == nullptr) {
+    return unparseable("part is missing", path);
+  }
+  pugi::xml_document doc;
+  RETURN_IF_ERROR(parse_drawing_part(part->bytes, doc));
+  ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_part_rels(wb, path));
+  for (const pugi::xml_node& anchor : drawing_anchors(doc.document_element(), false)) {
+    const pugi::xml_node content = anchor_content(anchor);
+    if (classify(content) != DrawingObjectKind::kChart) {
+      continue;
+    }
+    ChartPartRef ref;
+    ref.object_id = anchor_cnvpr(anchor).attribute("id").as_uint();
+    ref.is_chartex = strings::ends_with(
+        child_local(child_local(content, "graphic"), "graphicData").attribute("uri").value(), "/chartex");
+    const std::string_view rid = attr_local(frame_chart(content), "id").value();
+    for (const io::ooxml::DrawingRel& rel : rels) {
+      if (!rel.external && !rid.empty() && rel.id == rid) {
+        ref.part_path = rel.target;
+      }
+    }
+    charts.push_back(std::move(ref));
+  }
+  return charts;
+}
+
+Expected<std::vector<SheetChartPartRef>, Error> all_chart_parts(const Workbook& wb) {
+  std::vector<SheetChartPartRef> charts;
+  for (std::size_t sheet = 0; sheet < wb.sheet_count(); ++sheet) {
+    auto refs = list_chart_parts(wb, sheet);
+    if (!refs) {
+      continue;
+    }
+    for (ChartPartRef& ref : refs.value()) {
+      charts.push_back(SheetChartPartRef{sheet, std::move(ref)});
+    }
+  }
+  return charts;
 }
 
 AnchorPoint read_anchor_point(const pugi::xml_node& marker) {

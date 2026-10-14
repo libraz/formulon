@@ -1,0 +1,48 @@
+# Chart type changes on Excel-saved fixtures, captured like the edit_format
+# suite: Formulon's file is re-saved by Excel, checked, and the re-saved
+# model is the golden.
+suite: edit_type
+description: Chart type changes re-saved by Excel.
+views: [shape, refs, format]
+capture_formulon: true
+cases:
+- id: type_column_to_line
+  fixture: chart_column.xlsx
+  target: {sheet: Sheet1, chart: col_clustered}
+  edits:
+  - {op: type, kind: line, grouping: clustered}
+- id: type_column_to_bar_stacked
+  fixture: chart_column.xlsx
+  target: {sheet: Sheet1, chart: col_clustered}
+  edits:
+  - {op: type, kind: bar, grouping: stacked}
+- id: type_line_to_area_percent
+  fixture: chart_line.xlsx
+  target: {sheet: Sheet1, chart: line_markers}
+  edits:
+  - {op: type, kind: area, grouping: percentStacked}
+- id: type_column_to_pie
+  fixture: chart_column.xlsx
+  target: {sheet: Sheet1, chart: col_clustered}
+  edits:
+  - {op: type, kind: pie, grouping: clustered}
+- id: type_pie_to_column
+  fixture: chart_pie.xlsx
+  target: {sheet: Sheet1, chart: pie_two}
+  edits:
+  - {op: type, kind: column, grouping: clustered}
+- id: type_scatter_to_line
+  fixture: chart_scatter.xlsx
+  target: {sheet: Sheet1, chart: scatter_lines}
+  edits:
+  - {op: type, kind: line, grouping: clustered}
+- id: type_area_to_doughnut
+  fixture: chart_area.xlsx
+  target: {sheet: Sheet1, chart: area_standard}
+  edits:
+  - {op: type, kind: doughnut, grouping: clustered}
+- id: type_bar_to_scatter
+  fixture: chart_bar.xlsx
+  target: {sheet: Sheet1, chart: bar_stacked}
+  edits:
+  - {op: type, kind: scatter, grouping: clustered}

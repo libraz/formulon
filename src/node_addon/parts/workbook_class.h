@@ -21,6 +21,20 @@ namespace formulon_node {
 /// and must outlive the C call. A missing `kind` reads as blank.
 bool ReadValueSpec(CheckedSpecReader& reader, const Napi::Object& spec, std::string& text, fm_value_t& value);
 
+/// Reads the placement fields shared by `fm_image_insert`, `fm_drawing_anchor`
+/// and a chart's `placement`; only the default anchor kind differs by caller.
+template <typename Record>
+void PullPlacement(CheckedSpecReader& reader, const Napi::Object& spec, Record& record, int32_t default_anchor_kind) {
+  record.anchor_kind = reader.I32(spec, "anchorKind", default_anchor_kind);
+  record.edit_as = reader.I32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
+  record.row = reader.U32(spec, "row", 0U);
+  record.col = reader.U32(spec, "col", 0U);
+  record.row_off_emu = reader.I64(spec, "rowOffEmu", 0);
+  record.col_off_emu = reader.I64(spec, "colOffEmu", 0);
+  record.width_emu = reader.I64(spec, "widthEmu", 0);
+  record.height_emu = reader.I64(spec, "heightEmu", 0);
+}
+
 class Workbook : public Napi::ObjectWrap<Workbook> {
  public:
   static Napi::Function GetClass(Napi::Env env);
@@ -403,16 +417,34 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value AddPerson(const Napi::CallbackInfo& info);
   Napi::Value RemovePerson(const Napi::CallbackInfo& info);
 
-  // Drawing images.
+  // Drawing images and the object operations shared with charts.
   Napi::Value ProbeImage(const Napi::CallbackInfo& info);
   Napi::Value ListDrawingObjects(const Napi::CallbackInfo& info);
   Napi::Value GetImage(const Napi::CallbackInfo& info);
   Napi::Value InsertImage(const Napi::CallbackInfo& info);
-  Napi::Value RemoveImage(const Napi::CallbackInfo& info);
-  Napi::Value SetImageAnchor(const Napi::CallbackInfo& info);
-  Napi::Value SetImageZOrder(const Napi::CallbackInfo& info);
-  Napi::Value SnapshotImage(const Napi::CallbackInfo& info);
-  Napi::Value RestoreImage(const Napi::CallbackInfo& info);
+  Napi::Value RemoveDrawing(const Napi::CallbackInfo& info);
+  Napi::Value SetDrawingAnchor(const Napi::CallbackInfo& info);
+  Napi::Value SetDrawingZOrder(const Napi::CallbackInfo& info);
+  Napi::Value SnapshotDrawing(const Napi::CallbackInfo& info);
+  Napi::Value RestoreDrawing(const Napi::CallbackInfo& info);
+
+  // Charts: typed reads, resolved data, creation and typed edits.
+  Napi::Value GetChart(const Napi::CallbackInfo& info);
+  Napi::Value GetChartData(const Napi::CallbackInfo& info);
+  Napi::Value PreviewChartData(const Napi::CallbackInfo& info);
+  Napi::Value InsertChart(const Napi::CallbackInfo& info);
+  Napi::Value SetChartType(const Napi::CallbackInfo& info);
+  Napi::Value SetChartTitle(const Napi::CallbackInfo& info);
+  Napi::Value SetChartLegend(const Napi::CallbackInfo& info);
+  Napi::Value SetChartAxis(const Napi::CallbackInfo& info);
+  Napi::Value SetChartDisplay(const Napi::CallbackInfo& info);
+  Napi::Value SetChartSeries(const Napi::CallbackInfo& info);
+  Napi::Value SetChartPoint(const Napi::CallbackInfo& info);
+  Napi::Value SetChartPlot(const Napi::CallbackInfo& info);
+  Napi::Value SetChartFilter(const Napi::CallbackInfo& info);
+  Napi::Value AddChartSeries(const Napi::CallbackInfo& info);
+  Napi::Value RemoveChartSeries(const Napi::CallbackInfo& info);
+  Napi::Value SetChartSource(const Napi::CallbackInfo& info);
 
   // ---- Argument helpers (visible to all part TUs) -------------------
   //

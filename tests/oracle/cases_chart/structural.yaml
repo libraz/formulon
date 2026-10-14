@@ -1,0 +1,196 @@
+# Reference following: every chart reference site after a structural edit
+# Excel made (row / column insert and delete, sheet rename, deleting a
+# referenced sheet) against the sites Formulon writes after the same edit.
+# Rows are 1-based, columns are letters; `count` defaults to 1.
+# `templates` only holds YAML anchors.
+suite: structural
+description: Chart references after row / column edits, sheet renames and sheet deletion.
+views: [refs]
+
+templates:
+  main: &main
+    name: Sheet1
+    cells:
+      A1: Cat
+      B1: V1
+      C1: V2
+      A2: a
+      A3: b
+      A4: c
+      A5: d
+      B2: 1
+      B3: 2
+      B4: 3
+      B5: 7
+      C2: 4
+      C3: 5
+      C4: 6
+      C5: 8
+      A8: p
+      A9: q
+      A10: r
+      A11: s
+      B8: 10
+      B9: 20
+      B10: 30
+      B11: 40
+  other: &other
+    name: Other
+    cells:
+      A1: OC
+      B1: OV
+      A2: p
+      A3: q
+      A4: r
+      B2: 10
+      B3: 20
+      B4: 30
+  my_data: &my_data
+    name: My Data
+    cells:
+      A1: MC
+      B1: MV
+      A2: u
+      A3: v
+      B2: 5
+      B3: 6
+  # Two charts: one over rows 2-5 (columns A:C), one over rows 8-11.
+  pair: &pair
+    - id: upper
+      kind: column
+      series:
+        - {name: "Sheet1!$B$1", cat: "Sheet1!$A$2:$A$5", val: "Sheet1!$B$2:$B$5"}
+        - {name: "Sheet1!$C$1", cat: "Sheet1!$A$2:$A$5", val: "Sheet1!$C$2:$C$5"}
+    - id: lower
+      kind: line
+      series:
+        - {name: "Sheet1!$B$1", cat: "Sheet1!$A$8:$A$11", val: "Sheet1!$B$8:$B$11"}
+
+cases:
+  - id: struct_insert_rows_inside
+    sheets: [*main]
+    charts: *pair
+    ops: [{op: insert_rows, sheet: Sheet1, at: 4, count: 2}]
+  - id: struct_insert_rows_above_all
+    sheets: [*main]
+    charts: *pair
+    ops: [{op: insert_rows, sheet: Sheet1, at: 1}]
+  - id: struct_insert_rows_between
+    sheets: [*main]
+    charts: *pair
+    ops: [{op: insert_rows, sheet: Sheet1, at: 7, count: 3}]
+  - id: struct_insert_rows_below_all
+    sheets: [*main]
+    charts: *pair
+    ops: [{op: insert_rows, sheet: Sheet1, at: 30}]
+  - id: struct_delete_rows_inside
+    sheets: [*main]
+    charts: *pair
+    ops: [{op: delete_rows, sheet: Sheet1, at: 3}]
+  - id: struct_delete_rows_first_of_range
+    sheets: [*main]
+    charts: *pair
+    ops: [{op: delete_rows, sheet: Sheet1, at: 2}]
+  - id: struct_delete_rows_whole_range
+    sheets: [*main]
+    charts: *pair
+    ops: [{op: delete_rows, sheet: Sheet1, at: 8, count: 4}]
+  - id: struct_delete_rows_overlapping_end
+    sheets: [*main]
+    charts: *pair
+    ops: [{op: delete_rows, sheet: Sheet1, at: 4, count: 5}]
+  - id: struct_delete_header_row
+    sheets: [*main]
+    charts: *pair
+    ops: [{op: delete_rows, sheet: Sheet1, at: 1}]
+  - id: struct_insert_cols_inside
+    sheets: [*main]
+    charts: *pair
+    ops: [{op: insert_cols, sheet: Sheet1, at: C}]
+  - id: struct_insert_cols_before_all
+    sheets: [*main]
+    charts: *pair
+    ops: [{op: insert_cols, sheet: Sheet1, at: A, count: 2}]
+  - id: struct_insert_cols_after_all
+    sheets: [*main]
+    charts: *pair
+    ops: [{op: insert_cols, sheet: Sheet1, at: E}]
+  - id: struct_delete_value_col
+    sheets: [*main]
+    charts: *pair
+    ops: [{op: delete_cols, sheet: Sheet1, at: B}]
+  - id: struct_delete_cat_col
+    sheets: [*main]
+    charts: *pair
+    ops: [{op: delete_cols, sheet: Sheet1, at: A}]
+  - id: struct_union_gap_insert
+    description: A row inserted into a union's gap shifts the later area; the areas stay separate.
+    sheets: [*main]
+    charts:
+      - {id: c1, kind: column, series: [{name: "Sheet1!$B$1", cat: "(Sheet1!$A$2:$A$3,Sheet1!$A$5)", val: "(Sheet1!$B$2:$B$3,Sheet1!$B$5)"}]}
+    ops: [{op: insert_rows, sheet: Sheet1, at: 4}]
+  - id: struct_union_delete_area
+    sheets: [*main]
+    charts:
+      - {id: c1, kind: column, series: [{name: "Sheet1!$B$1", cat: "(Sheet1!$A$2:$A$3,Sheet1!$A$5)", val: "(Sheet1!$B$2:$B$3,Sheet1!$B$5)"}]}
+    ops: [{op: delete_rows, sheet: Sheet1, at: 5}]
+  - id: struct_scatter_insert_cols
+    sheets: [*main]
+    charts:
+      - {id: c1, kind: scatter, series: [{name: "Sheet1!$C$1", x: "Sheet1!$B$2:$B$5", y: "Sheet1!$C$2:$C$5"}]}
+    ops: [{op: insert_cols, sheet: Sheet1, at: C}]
+  - id: struct_whole_column_insert_col
+    sheets: [*main]
+    charts:
+      - {id: c1, kind: column, series: [{name: "Sheet1!$B$1", val: "Sheet1!$B:$B"}]}
+    ops: [{op: insert_cols, sheet: Sheet1, at: A}]
+  - id: struct_name_series_insert_rows
+    description: A series over a defined name keeps the name; only the name's definition moves.
+    sheets: [*main]
+    names: [{name: WbVals, refers_to: "=Sheet1!$B$2:$B$5"}]
+    charts:
+      - {id: c1, kind: column, series: [{name: "Sheet1!$B$1", cat: "Sheet1!$A$2:$A$5", val: "[0]!WbVals"}]}
+    ops: [{op: insert_rows, sheet: Sheet1, at: 3}]
+  - id: struct_title_ref_insert_rows
+    sheets: [*main]
+    charts:
+      - {id: c1, kind: column, title_ref: "Sheet1!$B$1", series: [{name: "Sheet1!$B$1", cat: "Sheet1!$A$2:$A$5", val: "Sheet1!$B$2:$B$5"}]}
+    ops: [{op: insert_rows, sheet: Sheet1, at: 1}]
+
+  # -- other sheets ---------------------------------------------------------
+  - id: struct_other_sheet_insert_rows
+    sheets: [*main, *other]
+    charts:
+      - {id: c1, kind: column, series: [{name: "Other!$B$1", cat: "Other!$A$2:$A$4", val: "Other!$B$2:$B$4"}]}
+    ops: [{op: insert_rows, sheet: Other, at: 3}]
+  - id: struct_host_sheet_edit_leaves_other_refs
+    sheets: [*main, *other]
+    charts:
+      - {id: c1, kind: column, series: [{name: "Other!$B$1", cat: "Other!$A$2:$A$4", val: "Other!$B$2:$B$4"}]}
+    ops: [{op: insert_rows, sheet: Sheet1, at: 1, count: 2}]
+  - id: struct_rename_host_sheet
+    sheets: [*main, *other]
+    charts: *pair
+    ops: [{op: rename_sheet, sheet: Sheet1, to: Data}]
+  - id: struct_rename_to_quoted
+    sheets: [*main, *other]
+    charts:
+      - {id: c1, kind: column, title_ref: "Other!$B$1", series: [{name: "Other!$B$1", cat: "Other!$A$2:$A$4", val: "Other!$B$2:$B$4"}]}
+    ops: [{op: rename_sheet, sheet: Other, to: Q1 Sales}]
+  - id: struct_rename_from_quoted
+    sheets: [*main, *my_data]
+    charts:
+      - {id: c1, kind: column, series: [{name: "'My Data'!$B$1", cat: "'My Data'!$A$2:$A$3", val: "'My Data'!$B$2:$B$3"}]}
+    ops: [{op: rename_sheet, sheet: My Data, to: Plain}]
+  - id: struct_delete_referenced_sheet
+    sheets: [*main, *other]
+    charts:
+      - {id: c1, kind: column, series: [{name: "Other!$B$1", cat: "Other!$A$2:$A$4", val: "Other!$B$2:$B$4"}]}
+      - {id: c2, kind: line, series: [{name: "Sheet1!$B$1", cat: "Sheet1!$A$2:$A$5", val: "Sheet1!$B$2:$B$5"}]}
+    ops: [{op: delete_sheet, sheet: Other}]
+  - id: struct_delete_partly_referenced_sheet
+    description: Only the sources on the deleted sheet become #REF!.
+    sheets: [*main, *other]
+    charts:
+      - {id: c1, kind: column, series: [{name: "Sheet1!$B$1", cat: "Sheet1!$A$2:$A$4", val: "Other!$B$2:$B$4"}]}
+    ops: [{op: delete_sheet, sheet: Other}]

@@ -32,16 +32,22 @@ tests/oracle/
 │   └── datetime.yaml
 ├── cases_cf/                      conditional-formatting case sources
 │   └── <suite>.case.json/.yaml    declarative CF cases
+├── cases_chart/                   chart track case sources (<suite>.yaml)
+├── chart_model_dump.cpp           chart model reader + case builder (tool and verifier)
+├── chart_oracle_test.cpp          formulon_oracle_chart_tests
 ├── external/ironcalc/
 │   ├── fixtures/                 vendored upstream workbooks
 │   └── golden/                   imported external-corpus goldens
 └── targets/                      target-scoped outputs and metadata
-    ├── mac-365-ja_JP/            primary formula and CF target
+    ├── mac-365-ja_JP/            primary formula, CF and chart target
     │   ├── ENVIRONMENT.md
     │   ├── divergence.yaml        (optional) per-target overrides
     │   ├── golden/
     │   │   └── <suite>.golden.json
-    │   └── golden_cf/
+    │   ├── golden_cf/
+    │   │   ├── <suite>.golden.json
+    │   │   └── PROVENANCE.json
+    │   └── golden_chart/
     │       ├── <suite>.golden.json
     │       └── PROVENANCE.json
     └── <target>/                 e.g. win-365-ja_JP
@@ -73,6 +79,9 @@ tests/oracle/
   and SHA-256 for each golden. A legacy/reference marker is not active
   coverage; use `tools/oracle/.venv/bin/python tools/oracle/provenance.py
   cf-active` when an active verified capture is required.
+- `make oracle-gen-chart` — captures the chart track (`tracks.chart.primary`,
+  currently `mac-365-ja_JP`) into `golden_chart/` and writes its
+  `PROVENANCE.json`; see [Chart track](#chart-track).
 - Workbook closure is pending-aware in normal `oracle` metadata tests. The
   strict external-capture check (`--require-active`) is registered only with
   `-DFORMULON_ORACLE_RELEASE_GATES=ON`; a label alone never adds it to
@@ -174,6 +183,59 @@ The C++ verifier consumes this file end-to-end; it never touches YAML.
 2. On a Mac: `python3 tools/oracle/oracle_gen.py --suite <name>`.
 3. `make oracle-verify` should now run the new cases and pass.
 4. Commit YAML + golden together.
+
+## Chart track
+
+Charts are compared on what Excel saves, never on how it draws. Every
+model on both sides comes from `chart_model_dump` (built from
+`chart_model_dump.cpp`), which prints the views a suite names:
+
+| view | content |
+|---|---|
+| `shape` | plot types, bar direction, grouping, series count |
+| `refs` | every reference site: series name / cat / val / x / y / size, title |
+| `cache` | per series source: element, `ptCount`, each `pt` idx / value / `formatCode`, cache `formatCode` |
+| `format` | title, legend, axes, plot options, per-series fill / line / marker / labels / points |
+
+Suites (`cases_chart/<suite>.yaml`, validated by
+`tools/oracle/chart_case_schema.py`):
+
+- `data` (`cache`) — cells, hidden rows / columns / sheets and names; each
+  chart lists SERIES references. Excel and Formulon both create the chart
+  over a scratch block and then point its series at the references.
+- `structural` (`refs`) — charts, then row / column inserts and deletes,
+  sheet renames and sheet deletion.
+- `create` (`shape`, `refs`) — a chart created from a range with a
+  direction (`auto` / `rows` / `columns`).
+- `edit_*` (`shape`, `refs`, `format`) — an Excel-saved fixture under
+  `tests/fixtures/excel/` and a list of Formulon edits. Excel re-saves
+  Formulon's file, and the re-save is the golden.
+
+Each golden case carries its own `spec`, so `formulon_oracle_chart_tests`
+reads only the golden: it builds the spec in Formulon, saves, reads the
+file back and compares the suite's views exactly. A case edited after
+capture fails the schema check until it is captured again. A
+`skip-oracle` entry in `tests/divergence.yaml` naming a chart case id is
+honoured as on the workbook track: the capture records its reason in place
+of `expect`, and the verifier also reads the configure-time projection
+(`emit_skip_list.py --track chart`), so a later entry applies without a new
+capture.
+
+Suites with `capture_formulon: true` also pass Formulon's own file through
+the open check, which re-saves a file in Excel and fails on any of: (a) a
+chart part missing or not referenced from a drawing, (b) a changed
+reference site, (c) a changed series count or plot shape, (d) a chart
+object count in Excel that differs from the file's, (e) a formatting value
+that does not read back as written (edit suites and standalone use). Run it
+on any file with:
+
+```bash
+tools/oracle/.venv/bin/python tools/oracle/chart_oracle_gen.py open-check <file.xlsx>...
+```
+
+Rules that change only the drawing (`dispBlanksAs`, `dispNaAsBlank`, the
+title of a chart without `c:title`) have no capture and are recorded in
+`tests/divergence.yaml` with the unit tests that hold them.
 
 ## Accepted divergences
 

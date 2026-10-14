@@ -1,6 +1,7 @@
 # Hand-rolled type stubs for the Formulon public surface.
 # IDEs and type-checkers consume this rather than the runtime module.
 
+from dataclasses import dataclass
 from enum import IntEnum
 from typing import (
     Dict,
@@ -790,6 +791,386 @@ class DrawingObject:
         descr: str,
         media_path: str,
     ) -> None: ...
+
+class ChartPlotType(IntEnum):
+    BAR = 0
+    BAR_3D = 1
+    LINE = 2
+    LINE_3D = 3
+    AREA = 4
+    AREA_3D = 5
+    PIE = 6
+    PIE_3D = 7
+    DOUGHNUT = 8
+    OF_PIE = 9
+    SCATTER = 10
+    BUBBLE = 11
+    RADAR = 12
+    STOCK = 13
+    SURFACE = 14
+    SURFACE_3D = 15
+    CHARTEX = 16
+
+class ChartInsertKind(IntEnum):
+    COLUMN = 0
+    BAR = 1
+    LINE = 2
+    AREA = 3
+    PIE = 4
+    SCATTER = 5
+    DOUGHNUT = 6
+
+class ChartGrouping(IntEnum):
+    CLUSTERED = 0
+    STACKED = 1
+    PERCENT_STACKED = 2
+    STANDARD = 3
+
+class ChartBlanksAs(IntEnum):
+    ABSENT = 0
+    GAP = 1
+    ZERO = 2
+    SPAN = 3
+
+class ChartPointState(IntEnum):
+    VALUE = 0
+    GAP = 1
+    CONNECT = 2
+
+class ChartAxisKind(IntEnum):
+    CATEGORY = 0
+    VALUE = 1
+    DATE = 2
+    SERIES = 3
+
+class ChartAxisCrosses(IntEnum):
+    ABSENT = 0
+    AUTO_ZERO = 1
+    MIN = 2
+    MAX = 3
+    AT = 4
+
+class ChartTitleKind(IntEnum):
+    NONE = 0
+    TEXT = 1
+    REF = 2
+    AUTO = 3
+
+class ChartSeriesDirection(IntEnum):
+    AUTO = 0
+    COLUMNS = 1
+    ROWS = 2
+
+class ChartLegendPosition(IntEnum):
+    NONE = 0
+    BOTTOM = 1
+    TOP = 2
+    LEFT = 3
+    RIGHT = 4
+    TOP_RIGHT = 5
+
+class ChartLineDash(IntEnum):
+    SOLID = 0
+    DASH = 1
+    DOT = 2
+    DASH_DOT = 3
+    OTHER = 4
+
+class ChartMarkerSymbol(IntEnum):
+    NONE = 0
+    AUTO = 1
+    CIRCLE = 2
+    SQUARE = 3
+    DIAMOND = 4
+    TRIANGLE = 5
+    OTHER = 6
+
+class ChartLabelPosition(IntEnum):
+    BEST_FIT = 0
+    CENTER = 1
+    INSIDE_BASE = 2
+    INSIDE_END = 3
+    OUTSIDE_END = 4
+    ABOVE = 5
+    BELOW = 6
+    LEFT = 7
+    RIGHT = 8
+
+@dataclass
+class ChartDataSource:
+    kind: Literal["none", "ref", "literal"]
+    formula: str = ...
+    literal: List[Union[float, str]] = ...
+
+@dataclass
+class ChartTitleInfo:
+    kind: Union[ChartTitleKind, int]
+    text: str = ...
+    formula: str = ...
+
+@dataclass
+class ChartFillInfo:
+    color: Optional[int] = ...
+    transparency: Optional[float] = ...
+
+@dataclass
+class ChartLineInfo:
+    color: Optional[int] = ...
+    transparency: Optional[float] = ...
+    width_pt: Optional[float] = ...
+    dash: Optional[Union[ChartLineDash, int]] = ...
+    none: bool = ...
+
+@dataclass
+class ChartMarkerInfo:
+    symbol: Union[ChartMarkerSymbol, int]
+    size: Optional[int]
+    fill: ChartFillInfo
+    line: ChartLineInfo
+
+@dataclass
+class ChartLabelsInfo:
+    show_value: bool
+    show_category: bool
+    show_series: bool
+    show_percent: bool
+    show_legend_key: bool
+    separator: Optional[str]
+    position: Optional[Union[ChartLabelPosition, int]]
+    number_format: Optional[str]
+    source_linked: bool
+    font_color: Optional[int]
+    font_size_pt: Optional[float]
+    deleted: bool
+
+@dataclass
+class ChartPointInfo:
+    idx: int
+    fill: ChartFillInfo
+    line: ChartLineInfo
+    marker: Optional[ChartMarkerInfo]
+
+@dataclass
+class ChartSeriesInfo:
+    idx: int
+    order: int
+    filtered: bool
+    name: ChartDataSource
+    categories: ChartDataSource
+    values: ChartDataSource
+    x: ChartDataSource
+    y: ChartDataSource
+    size: ChartDataSource
+    fill: ChartFillInfo
+    line: ChartLineInfo
+    marker: Optional[ChartMarkerInfo]
+    smooth: Optional[bool]
+    points: List[ChartPointInfo]
+    labels: Optional[ChartLabelsInfo]
+
+@dataclass
+class ChartPlotInfo:
+    type: Union[ChartPlotType, int]
+    chartex_layout: Optional[str]
+    bar_direction: Optional[Literal["col", "bar"]]
+    grouping: Optional[Union[ChartGrouping, int]]
+    vary_colors: bool
+    gap_width: Optional[int]
+    overlap: Optional[int]
+    hole_size: Optional[int]
+    first_slice_angle: Optional[int]
+    axis_ids: List[int]
+    series: List[ChartSeriesInfo]
+
+@dataclass
+class ChartAxisInfo:
+    id: int
+    kind: Union[ChartAxisKind, int]
+    position: Literal["b", "t", "l", "r"]
+    deleted: bool
+    cross_axis: int
+    crosses: Union[ChartAxisCrosses, int]
+    crosses_at: Optional[float]
+    min: Optional[float]
+    max: Optional[float]
+    major_unit: Optional[float]
+    minor_unit: Optional[float]
+    log_base: Optional[float]
+    reversed: bool
+    number_format: Optional[str]
+    source_linked: bool
+    title: ChartTitleInfo
+    major_gridlines: bool
+    minor_gridlines: bool
+    tick_label_position: Optional[str]
+
+@dataclass
+class ChartLegendInfo:
+    position: Union[ChartLegendPosition, int]
+    overlay: bool
+    hidden_series: List[int] = ...
+
+@dataclass
+class ChartSourceInfo:
+    range: str
+    direction: Union[ChartSeriesDirection, int]
+    header_row: bool
+    header_column: bool
+
+@dataclass
+class ChartInfo:
+    object_id: int
+    name: str
+    description: str
+    is_chartex: bool
+    is_pivot_chart: bool
+    on_chartsheet: bool
+    title: ChartTitleInfo
+    auto_title_deleted: Optional[bool]
+    legend: ChartLegendInfo
+    blanks_as: Union[ChartBlanksAs, int]
+    plot_visible_only: Optional[bool]
+    date1904: bool
+    style: Optional[int]
+    plots: List[ChartPlotInfo]
+    axes: List[ChartAxisInfo]
+    hidden_categories: List[int]
+    source: Optional[ChartSourceInfo]
+
+@dataclass
+class ChartSheetRange:
+    sheet: int
+    top: int
+    left: int
+    bottom: int
+    right: int
+
+@dataclass
+class ChartSeriesRanges:
+    name: List[ChartSheetRange] = ...
+    categories: List[ChartSheetRange] = ...
+    values: List[ChartSheetRange] = ...
+    x: List[ChartSheetRange] = ...
+    y: List[ChartSheetRange] = ...
+    size: List[ChartSheetRange] = ...
+
+@dataclass
+class ChartDataSeries:
+    plot_index: int
+    idx: int
+    name: Optional[str]
+    format_code: str
+    filtered: bool
+    values: List[float]
+    states: List[int]
+    x: Optional[List[float]]
+    sizes: Optional[List[float]]
+    ranges: ChartSeriesRanges
+
+@dataclass
+class ChartCategories:
+    labels: List[str]
+    levels: List[List[str]]
+    values: Optional[List[float]]
+    format_code: str
+    generated: bool
+
+@dataclass
+class ChartAxisTitleText:
+    axis_id: int
+    text: str
+
+@dataclass
+class ChartUnresolved:
+    series_idx: int
+    source: str
+    axis_id: int
+
+@dataclass
+class ChartData:
+    domain: Literal["category", "xy"]
+    point_count: int
+    categories: ChartCategories
+    series: List[ChartDataSeries]
+    title_text: Optional[str]
+    axis_title_texts: List[ChartAxisTitleText]
+    unresolved: List[ChartUnresolved]
+
+class ChartFillPatch(TypedDict, total=False):
+    color: Optional[int]
+    transparency: Optional[float]
+
+class ChartLinePatch(TypedDict, total=False):
+    color: Optional[int]
+    transparency: Optional[float]
+    width_pt: Optional[float]
+    dash: Optional[Union[ChartLineDash, int]]
+    none: bool
+
+class ChartMarkerPatch(TypedDict, total=False):
+    symbol: Union[ChartMarkerSymbol, int]
+    size: Optional[float]
+    fill: ChartFillPatch
+    line: ChartLinePatch
+
+class ChartLabelsPatch(TypedDict, total=False):
+    show_value: bool
+    show_category: bool
+    show_series: bool
+    show_percent: bool
+    show_legend_key: bool
+    separator: Optional[str]
+    position: Union[ChartLabelPosition, int]
+    number_format: Optional[str]
+    font_color: Optional[int]
+    font_size_pt: Optional[float]
+
+class ChartSeriesPatch(TypedDict, total=False):
+    name: str
+    categories: str
+    values: str
+    x: str
+    y: str
+    size: str
+    fill: ChartFillPatch
+    line: ChartLinePatch
+    marker: Optional[ChartMarkerPatch]
+    smooth: bool
+    labels: Optional[ChartLabelsPatch]
+
+class ChartPointPatch(TypedDict, total=False):
+    fill: ChartFillPatch
+    line: ChartLinePatch
+    marker: Optional[ChartMarkerPatch]
+
+class ChartPlotPatch(TypedDict, total=False):
+    gap_width: int
+    overlap: int
+    first_slice_angle: int
+    vary_colors: bool
+    hole_size: int
+
+class ChartAxisPatch(TypedDict, total=False):
+    visible: bool
+    title: Optional[str]
+    min: Optional[float]
+    max: Optional[float]
+    major_unit: Optional[float]
+    number_format: Optional[str]
+    major_gridlines: bool
+    reversed: bool
+    log_base: Optional[float]
+    crosses: Union[ChartAxisCrosses, int]
+    crosses_at: float
+    tick_label_position: Optional[str]
+
+class ChartPreviewOverrides(TypedDict, total=False):
+    source: str
+    direction: Union[ChartSeriesDirection, int]
+    header_row: bool
+    header_column: bool
+    blanks_as: Union[ChartBlanksAs, int]
+    plot_visible_only: bool
 
 class Person:
     id: str
@@ -1873,8 +2254,8 @@ class Workbook:
         width_emu: int = ...,
         height_emu: int = ...,
     ) -> int: ...
-    def remove_image(self, sheet: int, object_id: int) -> None: ...
-    def set_image_anchor(
+    def remove_drawing(self, sheet: int, object_id: int) -> None: ...
+    def set_drawing_anchor(
         self,
         sheet: int,
         object_id: int,
@@ -1888,9 +2269,80 @@ class Workbook:
         width_emu: int = ...,
         height_emu: int = ...,
     ) -> None: ...
-    def set_image_z_order(self, sheet: int, object_id: int, index: int) -> None: ...
-    def snapshot_image(self, sheet: int, object_id: int) -> bytes: ...
-    def restore_image(self, sheet: int, data: Union[bytes, bytearray, memoryview], *, new_id: bool = ...) -> int: ...
+    def set_drawing_z_order(self, sheet: int, object_id: int, index: int) -> None: ...
+    def snapshot_drawing(self, sheet: int, object_id: int) -> bytes: ...
+    def restore_drawing(self, sheet: int, data: Union[bytes, bytearray, memoryview], *, new_id: bool = ...) -> int: ...
+    def get_chart(self, sheet: int, object_id: int) -> ChartInfo: ...
+    def get_chart_data(self, sheet: int, object_id: int) -> ChartData: ...
+    def preview_chart_data(
+        self, sheet: int, object_id: int, overrides: Optional[ChartPreviewOverrides] = ...
+    ) -> ChartData: ...
+    def insert_chart(
+        self,
+        sheet: int,
+        kind: Union[ChartInsertKind, int],
+        source: str,
+        *,
+        grouping: Union[ChartGrouping, int] = ...,
+        direction: Union[ChartSeriesDirection, int] = ...,
+        header_row: Optional[bool] = ...,
+        header_column: Optional[bool] = ...,
+        title: Optional[str] = ...,
+        legend: Union[ChartLegendPosition, int] = ...,
+        name: str = ...,
+        description: str = ...,
+        anchor_kind: Union[AnchorKind, int] = ...,
+        edit_as: Union[AnchorEditAs, int] = ...,
+        row: int = ...,
+        col: int = ...,
+        row_off_emu: int = ...,
+        col_off_emu: int = ...,
+        width_emu: int = ...,
+        height_emu: int = ...,
+    ) -> int: ...
+    def set_chart_type(
+        self,
+        sheet: int,
+        object_id: int,
+        plot: int,
+        kind: Union[ChartInsertKind, int],
+        grouping: Union[ChartGrouping, int] = ...,
+    ) -> None: ...
+    def set_chart_title(self, sheet: int, object_id: int, title: Optional[str]) -> None: ...
+    def set_chart_legend(
+        self,
+        sheet: int,
+        object_id: int,
+        position: Union[ChartLegendPosition, int],
+        overlay: bool = ...,
+        *,
+        hidden_series: Optional[Sequence[int]] = ...,
+    ) -> None: ...
+    def set_chart_axis(self, sheet: int, object_id: int, axis_id: int, patch: ChartAxisPatch) -> None: ...
+    def set_chart_display(
+        self, sheet: int, object_id: int, blanks_as: Union[ChartBlanksAs, int], plot_visible_only: Optional[bool]
+    ) -> None: ...
+    def set_chart_series(
+        self, sheet: int, object_id: int, plot: int, series_idx: int, patch: ChartSeriesPatch
+    ) -> None: ...
+    def set_chart_point(
+        self, sheet: int, object_id: int, plot: int, series_idx: int, point_idx: int, patch: Optional[ChartPointPatch]
+    ) -> None: ...
+    def set_chart_plot(self, sheet: int, object_id: int, plot: int, patch: ChartPlotPatch) -> None: ...
+    def set_chart_filter(
+        self, sheet: int, object_id: int, hidden_series: Sequence[int], hidden_categories: Sequence[int]
+    ) -> None: ...
+    def add_chart_series(self, sheet: int, object_id: int, plot: int, patch: ChartSeriesPatch) -> int: ...
+    def remove_chart_series(self, sheet: int, object_id: int, plot: int, series_idx: int) -> None: ...
+    def set_chart_source(
+        self,
+        sheet: int,
+        object_id: int,
+        source: str,
+        direction: Union[ChartSeriesDirection, int] = ...,
+        header_row: Optional[bool] = ...,
+        header_column: Optional[bool] = ...,
+    ) -> None: ...
     def get_persons(self) -> List[Person]: ...
     def add_person(self, person: Person) -> None: ...
     def remove_person(self, person_id: str) -> None: ...

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "auto_filter.h"
+#include "chart/chart_ref.h"
 #include "defined_name.h"
 #include "drawing/drawing_edit.h"
 #include "eval/dep_graph.h"
@@ -398,6 +399,8 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   std::vector<std::uint32_t> ignored_cache_ids;
   rewrite_sheet_metadata_formulas(sheets, per_sheet_transforms, wb.mutable_tables(), wb.mutable_pivot_caches(), {}, {},
                                   {}, ignored_cache_ids, name_transform);
+  // Chart refs are always sheet-qualified, so the unowned policy is the right one.
+  RETURN_IF_ERROR(chart_ref::rewrite_all(wb, name_transform));
   if (axis == parser::RowColAxis::kRow) {
     if (edit == parser::RowColEdit::kInsert) {
       target.insert_rows(origin, count);

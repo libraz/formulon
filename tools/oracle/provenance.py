@@ -20,6 +20,7 @@ in review scripts::
     python3 tools/oracle/provenance.py workbook-active
     python3 tools/oracle/provenance.py workbook-check
     python3 tools/oracle/provenance.py cf-active
+    python3 tools/oracle/provenance.py chart-active
     python3 tools/oracle/provenance.py gate-targets --track formula
 
 ``check`` exits non-zero on a stale or contradictory manifest.  It does not
@@ -40,6 +41,8 @@ DEFAULT_TARGETS = Path(__file__).resolve().parent / "targets.yaml"
 _VALID_STATUSES = {"primary", "scaffolded", "wanted"}
 _ACTIVE_STATUSES = {"primary", "scaffolded"}
 _M365_SENTINEL = "ARRAYTOTEXT(1) == text '1'"
+# Mac-captured tracks whose golden directory carries a hashed capture marker.
+CAPTURE_TRACKS = {"cf": "golden_cf", "chart": "golden_chart"}
 
 
 def _load_yaml(path: Path) -> Dict[str, Any]:
@@ -283,19 +286,21 @@ def validate_targets(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> Lis
         errors.append("primary: must name a target")
 
     tracks = doc.get("tracks")
-    if isinstance(tracks, Mapping) and "cf" in tracks:
-        cf_track = tracks.get("cf")
-        if not isinstance(cf_track, Mapping):
-            errors.append("tracks.cf: expected a mapping")
+    for track in CAPTURE_TRACKS:
+        if not isinstance(tracks, Mapping) or track not in tracks:
+            continue
+        track_doc = tracks.get(track)
+        if not isinstance(track_doc, Mapping):
+            errors.append(f"tracks.{track}: expected a mapping")
+            continue
+        track_primary = track_doc.get("primary")
+        if not isinstance(track_primary, str) or track_primary not in targets:
+            errors.append(f"tracks.{track}.primary: must name a target")
         else:
-            cf_primary = cf_track.get("primary")
-            if not isinstance(cf_primary, str) or cf_primary not in targets:
-                errors.append("tracks.cf.primary: must name a target")
-            else:
-                # Structural target errors are always reported.  A missing
-                # marker is allowed while a capture is pending, but an
-                # existing marker must be internally consistent.
-                errors.extend(_cf_provenance_errors(doc, repo_root))
+            # Structural target errors are always reported.  A missing
+            # marker is allowed while a capture is pending, but an
+            # existing marker must be internally consistent.
+            errors.extend(capture_marker_errors(doc, repo_root, track))
 
     errors.extend(_gate_errors(doc, repo_root))
 
@@ -461,48 +466,48 @@ def workbook_active(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> bool
     return workbook_inactive_reason(doc, repo_root) is None
 
 
-def _cf_primary(doc: Mapping[str, Any]) -> Optional[str]:
+def _capture_primary(doc: Mapping[str, Any], track: str) -> Optional[str]:
     tracks = doc.get("tracks")
-    cf_track = tracks.get("cf") if isinstance(tracks, Mapping) else None
-    primary = cf_track.get("primary") if isinstance(cf_track, Mapping) else None
+    track_doc = tracks.get(track) if isinstance(tracks, Mapping) else None
+    primary = track_doc.get("primary") if isinstance(track_doc, Mapping) else None
     return primary if isinstance(primary, str) and primary else None
 
 
-def _cf_provenance_errors(doc: Mapping[str, Any], repo_root: Path) -> List[str]:
-    """Validate the CF track's capture marker and every golden hash."""
+def capture_marker_errors(doc: Mapping[str, Any], repo_root: Path, track: str) -> List[str]:
+    """Validate a Mac-captured track's marker (CF or chart) and every golden hash."""
 
-    primary = _cf_primary(doc)
+    primary = _capture_primary(doc, track)
     if primary is None:
-        return ["tracks.cf.primary: must name a target"]
+        return [f"tracks.{track}.primary: must name a target"]
     targets = doc.get("targets")
     record = targets.get(primary) if isinstance(targets, Mapping) else None
     if not isinstance(record, Mapping):
-        return [f"tracks.cf.primary: unknown target {primary!r}"]
+        return [f"tracks.{track}.primary: unknown target {primary!r}"]
     errors: List[str] = []
     if record.get("status") not in {"primary", "scaffolded"}:
-        errors.append(f"tracks.cf.primary: target {primary!r} has non-generating status {record.get('status')!r}")
+        errors.append(f"tracks.{track}.primary: target {primary!r} has non-generating status {record.get('status')!r}")
     if record.get("driver") != "macos_excel":
-        errors.append(f"targets.{primary}: CF track requires driver='macos_excel'")
+        errors.append(f"targets.{primary}: {track} track requires driver='macos_excel'")
     if "Darwin" not in (record.get("runs_on") or []):
-        errors.append(f"targets.{primary}: CF track requires Darwin in runs_on")
+        errors.append(f"targets.{primary}: {track} track requires Darwin in runs_on")
     locale = record.get("locale")
     if not isinstance(locale, str) or not locale:
-        errors.append(f"targets.{primary}: CF track requires a locale")
+        errors.append(f"targets.{primary}: {track} track requires a locale")
 
-    golden_dir = _target_root(repo_root, primary, record) / "golden_cf"
+    golden_dir = _target_root(repo_root, primary, record) / CAPTURE_TRACKS[track]
     marker_path = golden_dir / "PROVENANCE.json"
     if not marker_path.exists():
         return errors
     try:
         marker = json.loads(marker_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        errors.append(f"tracks.cf: invalid {marker_path}: {exc}")
+        errors.append(f"tracks.{track}: invalid {marker_path}: {exc}")
         return errors
     if not isinstance(marker, Mapping):
-        return errors + [f"tracks.cf: {marker_path} must contain an object"]
+        return errors + [f"tracks.{track}: {marker_path} must contain an object"]
 
     required_pairs = {
-        "track": "cf",
+        "track": track,
         "target": primary,
         "status": record.get("status"),
         "locale": locale,
@@ -510,54 +515,54 @@ def _cf_provenance_errors(doc: Mapping[str, Any], repo_root: Path) -> List[str]:
     }
     for key, expected in required_pairs.items():
         if marker.get(key) != expected:
-            errors.append(f"tracks.cf: provenance {key!r} must be {expected!r}")
+            errors.append(f"tracks.{track}: provenance {key!r} must be {expected!r}")
     classification = marker.get("classification")
     if classification not in {"active", "verified", "reference-only"}:
-        errors.append("tracks.cf: provenance classification must be active, verified, or reference-only")
+        errors.append(f"tracks.{track}: provenance classification must be active, verified, or reference-only")
     if classification == "reference-only":
         if marker.get("verified") is True or marker.get("active_ctest") is True:
-            errors.append("tracks.cf: reference-only provenance cannot be active or verified")
+            errors.append(f"tracks.{track}: reference-only provenance cannot be active or verified")
     elif marker.get("verified") is not True or marker.get("active_ctest") is not True:
-        errors.append("tracks.cf: active provenance must set verified=true and active_ctest=true")
+        errors.append(f"tracks.{track}: active provenance must set verified=true and active_ctest=true")
     product = marker.get("product")
     if (
         not isinstance(product, str)
         or not product.strip()
         or (classification != "reference-only" and "unknown" in product.lower())
     ):
-        errors.append("tracks.cf: provenance product must identify the captured Excel build")
+        errors.append(f"tracks.{track}: provenance product must identify the captured Excel build")
     capture_id = marker.get("capture_id")
     if not isinstance(capture_id, str) or not capture_id:
-        errors.append("tracks.cf: provenance capture_id must be non-empty")
+        errors.append(f"tracks.{track}: provenance capture_id must be non-empty")
     if marker.get("all_suites_same_capture") is not True:
-        errors.append("tracks.cf: provenance all_suites_same_capture must be true")
+        errors.append(f"tracks.{track}: provenance all_suites_same_capture must be true")
 
     actual_paths = sorted(golden_dir.glob("*.golden.json")) if golden_dir.is_dir() else []
     actual_suites = sorted(path.name[: -len(".golden.json")] for path in actual_paths)
     required = marker.get("required_suites")
     captured = marker.get("captured_suites")
     if not isinstance(required, list) or not required or not all(isinstance(v, str) and v for v in required):
-        errors.append("tracks.cf: provenance required_suites must be a non-empty string list")
+        errors.append(f"tracks.{track}: provenance required_suites must be a non-empty string list")
         required = []
     if sorted(required) != actual_suites:
-        errors.append(f"tracks.cf: required_suites {sorted(required)!r} != on-disk suites {actual_suites!r}")
+        errors.append(f"tracks.{track}: required_suites {sorted(required)!r} != on-disk suites {actual_suites!r}")
     if not isinstance(captured, list) or sorted(captured) != sorted(required):
-        errors.append("tracks.cf: captured_suites must exactly match required_suites")
+        errors.append(f"tracks.{track}: captured_suites must exactly match required_suites")
     inventory = marker.get("suite_inventory")
     if not isinstance(inventory, list):
-        errors.append("tracks.cf: provenance suite_inventory must be a list")
+        errors.append(f"tracks.{track}: provenance suite_inventory must be a list")
         inventory = []
     by_suite: Dict[str, Mapping[str, Any]] = {}
     for item in inventory:
         if not isinstance(item, Mapping) or not isinstance(item.get("suite"), str):
-            errors.append("tracks.cf: suite_inventory entries require a string suite")
+            errors.append(f"tracks.{track}: suite_inventory entries require a string suite")
             continue
         suite = str(item["suite"])
         if suite in by_suite:
-            errors.append(f"tracks.cf: duplicate suite_inventory entry {suite!r}")
+            errors.append(f"tracks.{track}: duplicate suite_inventory entry {suite!r}")
         by_suite[suite] = item
     if set(by_suite) != set(actual_suites):
-        errors.append("tracks.cf: suite_inventory must cover every on-disk golden exactly once")
+        errors.append(f"tracks.{track}: suite_inventory must cover every on-disk golden exactly once")
     total_cases = 0
     for path in actual_paths:
         suite = path.name[: -len(".golden.json")]
@@ -567,36 +572,36 @@ def _cf_provenance_errors(doc: Mapping[str, Any], repo_root: Path) -> List[str]:
         try:
             golden = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            errors.append(f"tracks.cf: invalid golden {path}: {exc}")
+            errors.append(f"tracks.{track}: invalid golden {path}: {exc}")
             continue
         cases = golden.get("cases") if isinstance(golden, Mapping) else None
         count = len(cases) if isinstance(cases, list) else 0
         total_cases += count
         if not isinstance(golden, Mapping) or golden.get("name") != suite:
-            errors.append(f"tracks.cf: golden {suite!r} has an unexpected name")
+            errors.append(f"tracks.{track}: golden {suite!r} has an unexpected name")
         if count <= 0 or item.get("case_count") != count:
-            errors.append(f"tracks.cf: {suite!r} case_count does not match the golden")
+            errors.append(f"tracks.{track}: {suite!r} case_count does not match the golden")
         if item.get("capture_id") != capture_id:
-            errors.append(f"tracks.cf: {suite!r} capture_id does not match the marker")
+            errors.append(f"tracks.{track}: {suite!r} capture_id does not match the marker")
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         if item.get("sha256") != digest:
-            errors.append(f"tracks.cf: {suite!r} sha256 does not match the golden")
+            errors.append(f"tracks.{track}: {suite!r} sha256 does not match the golden")
     if marker.get("case_count") != total_cases:
-        errors.append("tracks.cf: aggregate case_count does not match the golden files")
+        errors.append(f"tracks.{track}: aggregate case_count does not match the golden files")
     return errors
 
 
-def cf_active(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> bool:
-    """Whether the manifest-selected CF capture is complete and verified."""
+def capture_active(doc: Mapping[str, Any], repo_root: Path, track: str) -> bool:
+    """Whether the manifest-selected capture of `track` is complete and verified."""
 
-    primary = _cf_primary(doc)
+    primary = _capture_primary(doc, track)
     if not primary:
         return False
     targets = doc.get("targets")
     record = targets.get(primary) if isinstance(targets, Mapping) else None
     if not isinstance(record, Mapping):
         return False
-    marker_dir = _target_root(repo_root, primary, record) / "golden_cf"
+    marker_dir = _target_root(repo_root, primary, record) / CAPTURE_TRACKS[track]
     marker_path = marker_dir / "PROVENANCE.json"
     if not marker_path.exists():
         return False
@@ -609,8 +614,20 @@ def cf_active(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> bool:
         and marker.get("classification") in {"active", "verified"}
         and marker.get("verified") is True
         and marker.get("active_ctest") is True
-        and not _cf_provenance_errors(doc, repo_root)
+        and not capture_marker_errors(doc, repo_root, track)
     )
+
+
+def cf_active(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> bool:
+    """Whether the manifest-selected CF capture is complete and verified."""
+
+    return capture_active(doc, repo_root, "cf")
+
+
+def chart_active(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> bool:
+    """Whether the manifest-selected chart capture is complete and verified."""
+
+    return capture_active(doc, repo_root, "chart")
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
@@ -687,16 +704,16 @@ def _cmd_workbook_check(args: argparse.Namespace) -> int:
     return 1
 
 
-def _cmd_cf_active(args: argparse.Namespace) -> int:
+def _cmd_capture_active(args: argparse.Namespace, track: str) -> int:
     try:
         doc = _load_yaml(args.targets_file)
     except RuntimeError as exc:
         print(f"oracle-provenance: {exc}", file=sys.stderr)
         return 2
-    if cf_active(doc, args.repo_root):
+    if capture_active(doc, args.repo_root, track):
         print("active")
         return 0
-    errors = _cf_provenance_errors(doc, args.repo_root)
+    errors = capture_marker_errors(doc, args.repo_root, track)
     for error in errors:
         print(f"FAIL {error}")
     return 1
@@ -706,7 +723,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "command",
-        choices=("check", "active-variants", "workbook-active", "workbook-check", "cf-active", "gate-targets"),
+        choices=(
+            "check",
+            "active-variants",
+            "workbook-active",
+            "workbook-check",
+            "cf-active",
+            "chart-active",
+            "gate-targets",
+        ),
     )
     parser.add_argument("--track", default="formula", help="Track whose gate targets `gate-targets` prints.")
     parser.add_argument("--targets-file", type=Path, default=DEFAULT_TARGETS)
@@ -721,7 +746,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "workbook-check":
         return _cmd_workbook_check(args)
     if args.command == "cf-active":
-        return _cmd_cf_active(args)
+        return _cmd_capture_active(args, "cf")
+    if args.command == "chart-active":
+        return _cmd_capture_active(args, "chart")
     return _cmd_active(args)
 
 

@@ -1,0 +1,4708 @@
+{
+ "name": "edit_type",
+ "track": "chart",
+ "description": "Chart type changes re-saved by Excel.",
+ "views": [
+  "shape",
+  "refs",
+  "format"
+ ],
+ "environment": {
+  "excel_version": "Microsoft Excel for Mac 16.113.4",
+  "excel_locale": "",
+  "generated_at": "2026-10-14T07:48:31Z"
+ },
+ "cases": [
+  {
+   "id": "type_column_to_line",
+   "spec": {
+    "fixture": "chart_column.xlsx",
+    "target": {
+     "sheet": "Sheet1",
+     "chart": "col_clustered"
+    },
+    "edits": [
+     {
+      "op": "type",
+      "kind": "line",
+      "grouping": "clustered"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "col_clustered",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "line",
+        "bar_dir": null,
+        "grouping": "standard",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "line",
+         "bar_dir": null,
+         "grouping": "standard",
+         "vary_colors": false,
+         "gap_width": null,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": "FF156082",
+            "alpha": null,
+            "width": 28575,
+            "dash": null
+           },
+           "marker": {
+            "symbol": "none",
+            "size": null,
+            "fill": {
+             "color": null,
+             "alpha": null
+            },
+            "line": {
+             "none": false,
+             "color": null,
+             "alpha": null,
+             "width": null,
+             "dash": null
+            }
+           },
+           "smooth": false,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": "FFE97132",
+            "alpha": null,
+            "width": 28575,
+            "dash": null
+           },
+           "marker": {
+            "symbol": "none",
+            "size": null,
+            "fill": {
+             "color": null,
+             "alpha": null
+            },
+            "line": {
+             "none": false,
+             "color": null,
+             "alpha": null,
+             "width": null,
+             "dash": null
+            }
+           },
+           "smooth": false,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "col_stacked",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "stacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "bar",
+         "bar_dir": "col",
+         "grouping": "stacked",
+         "vary_colors": false,
+         "gap_width": 219,
+         "overlap": 100,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": "FFE97132",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "col_percent",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "percentStacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "bar",
+         "bar_dir": "col",
+         "grouping": "percentStacked",
+         "vary_colors": false,
+         "gap_width": 219,
+         "overlap": 100,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": "FFE97132",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "0%",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "col_single",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "clustered",
+        "series": 1
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "bar",
+         "bar_dir": "col",
+         "grouping": "clustered",
+         "vary_colors": false,
+         "gap_width": 219,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "type_column_to_bar_stacked",
+   "spec": {
+    "fixture": "chart_column.xlsx",
+    "target": {
+     "sheet": "Sheet1",
+     "chart": "col_clustered"
+    },
+    "edits": [
+     {
+      "op": "type",
+      "kind": "bar",
+      "grouping": "stacked"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "col_clustered",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "bar",
+        "grouping": "stacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "bar",
+         "bar_dir": "bar",
+         "grouping": "stacked",
+         "vary_colors": false,
+         "gap_width": 219,
+         "overlap": 100,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": "FFE97132",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "col_stacked",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "stacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "bar",
+         "bar_dir": "col",
+         "grouping": "stacked",
+         "vary_colors": false,
+         "gap_width": 219,
+         "overlap": 100,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": "FFE97132",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "col_percent",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "percentStacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "bar",
+         "bar_dir": "col",
+         "grouping": "percentStacked",
+         "vary_colors": false,
+         "gap_width": 219,
+         "overlap": 100,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": "FFE97132",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "0%",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "col_single",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "clustered",
+        "series": 1
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "bar",
+         "bar_dir": "col",
+         "grouping": "clustered",
+         "vary_colors": false,
+         "gap_width": 219,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "type_line_to_area_percent",
+   "spec": {
+    "fixture": "chart_line.xlsx",
+    "target": {
+     "sheet": "Sheet1",
+     "chart": "line_markers"
+    },
+    "edits": [
+     {
+      "op": "type",
+      "kind": "area",
+      "grouping": "percentStacked"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "line_standard",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "line",
+        "bar_dir": null,
+        "grouping": "standard",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "line",
+         "bar_dir": null,
+         "grouping": "standard",
+         "vary_colors": false,
+         "gap_width": null,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": "FF156082",
+            "alpha": null,
+            "width": 28575,
+            "dash": null
+           },
+           "marker": {
+            "symbol": "none",
+            "size": null,
+            "fill": {
+             "color": null,
+             "alpha": null
+            },
+            "line": {
+             "none": false,
+             "color": null,
+             "alpha": null,
+             "width": null,
+             "dash": null
+            }
+           },
+           "smooth": false,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": "FFE97132",
+            "alpha": null,
+            "width": 28575,
+            "dash": null
+           },
+           "marker": {
+            "symbol": "none",
+            "size": null,
+            "fill": {
+             "color": null,
+             "alpha": null
+            },
+            "line": {
+             "none": false,
+             "color": null,
+             "alpha": null,
+             "width": null,
+             "dash": null
+            }
+           },
+           "smooth": false,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "line_stacked",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "line",
+        "bar_dir": null,
+        "grouping": "stacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "line",
+         "bar_dir": null,
+         "grouping": "stacked",
+         "vary_colors": false,
+         "gap_width": null,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": "FF156082",
+            "alpha": null,
+            "width": 28575,
+            "dash": null
+           },
+           "marker": {
+            "symbol": "none",
+            "size": null,
+            "fill": {
+             "color": null,
+             "alpha": null
+            },
+            "line": {
+             "none": false,
+             "color": null,
+             "alpha": null,
+             "width": null,
+             "dash": null
+            }
+           },
+           "smooth": false,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": "FFE97132",
+            "alpha": null,
+            "width": 28575,
+            "dash": null
+           },
+           "marker": {
+            "symbol": "none",
+            "size": null,
+            "fill": {
+             "color": null,
+             "alpha": null
+            },
+            "line": {
+             "none": false,
+             "color": null,
+             "alpha": null,
+             "width": null,
+             "dash": null
+            }
+           },
+           "smooth": false,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "line_percent",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "line",
+        "bar_dir": null,
+        "grouping": "percentStacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "line",
+         "bar_dir": null,
+         "grouping": "percentStacked",
+         "vary_colors": false,
+         "gap_width": null,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": "FF156082",
+            "alpha": null,
+            "width": 28575,
+            "dash": null
+           },
+           "marker": {
+            "symbol": "none",
+            "size": null,
+            "fill": {
+             "color": null,
+             "alpha": null
+            },
+            "line": {
+             "none": false,
+             "color": null,
+             "alpha": null,
+             "width": null,
+             "dash": null
+            }
+           },
+           "smooth": false,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": "FFE97132",
+            "alpha": null,
+            "width": 28575,
+            "dash": null
+           },
+           "marker": {
+            "symbol": "none",
+            "size": null,
+            "fill": {
+             "color": null,
+             "alpha": null
+            },
+            "line": {
+             "none": false,
+             "color": null,
+             "alpha": null,
+             "width": null,
+             "dash": null
+            }
+           },
+           "smooth": false,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "0%",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "line_markers",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "area",
+        "bar_dir": null,
+        "grouping": "percentStacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "area",
+         "bar_dir": null,
+         "grouping": "percentStacked",
+         "vary_colors": false,
+         "gap_width": null,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": "FFE97132",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": 25400,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "0%",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "type_column_to_pie",
+   "spec": {
+    "fixture": "chart_column.xlsx",
+    "target": {
+     "sheet": "Sheet1",
+     "chart": "col_clustered"
+    },
+    "edits": [
+     {
+      "op": "type",
+      "kind": "pie",
+      "grouping": "clustered"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "col_clustered",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "pie",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "auto",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "pie",
+         "bar_dir": null,
+         "grouping": null,
+         "vary_colors": true,
+         "gap_width": null,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": 0,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": [
+            {
+             "idx": 0,
+             "fill": {
+              "color": "FF156082",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": null,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 1,
+             "fill": {
+              "color": "FFE97132",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": null,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 2,
+             "fill": {
+              "color": "FF196B24",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": null,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 3,
+             "fill": {
+              "color": "FF0F9ED5",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": null,
+              "dash": null
+             },
+             "marker": null
+            }
+           ]
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": [
+            {
+             "idx": 0,
+             "fill": {
+              "color": "FF156082",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": null,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 1,
+             "fill": {
+              "color": "FFE97132",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": null,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 2,
+             "fill": {
+              "color": "FF196B24",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": null,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 3,
+             "fill": {
+              "color": "FF0F9ED5",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": null,
+              "dash": null
+             },
+             "marker": null
+            }
+           ]
+          }
+         ]
+        }
+       ],
+       "axes": []
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "col_stacked",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "stacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "bar",
+         "bar_dir": "col",
+         "grouping": "stacked",
+         "vary_colors": false,
+         "gap_width": 219,
+         "overlap": 100,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": "FFE97132",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "col_percent",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "percentStacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "bar",
+         "bar_dir": "col",
+         "grouping": "percentStacked",
+         "vary_colors": false,
+         "gap_width": 219,
+         "overlap": 100,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": "FFE97132",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "0%",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "col_single",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "clustered",
+        "series": 1
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "bar",
+         "bar_dir": "col",
+         "grouping": "clustered",
+         "vary_colors": false,
+         "gap_width": 219,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "type_pie_to_column",
+   "spec": {
+    "fixture": "chart_pie.xlsx",
+    "target": {
+     "sheet": "Sheet1",
+     "chart": "pie_two"
+    },
+    "edits": [
+     {
+      "op": "type",
+      "kind": "column",
+      "grouping": "clustered"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "pie_single",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "pie",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 1
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "auto",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "pie",
+         "bar_dir": null,
+         "grouping": null,
+         "vary_colors": true,
+         "gap_width": null,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": 0,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": [
+            {
+             "idx": 0,
+             "fill": {
+              "color": "FF156082",
+              "alpha": null
+             },
+             "line": {
+              "none": false,
+              "color": "FFFFFFFF",
+              "alpha": null,
+              "width": 19050,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 1,
+             "fill": {
+              "color": "FFE97132",
+              "alpha": null
+             },
+             "line": {
+              "none": false,
+              "color": "FFFFFFFF",
+              "alpha": null,
+              "width": 19050,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 2,
+             "fill": {
+              "color": "FF196B24",
+              "alpha": null
+             },
+             "line": {
+              "none": false,
+              "color": "FFFFFFFF",
+              "alpha": null,
+              "width": 19050,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 3,
+             "fill": {
+              "color": "FF0F9ED5",
+              "alpha": null
+             },
+             "line": {
+              "none": false,
+              "color": "FFFFFFFF",
+              "alpha": null,
+              "width": 19050,
+              "dash": null
+             },
+             "marker": null
+            }
+           ]
+          }
+         ]
+        }
+       ],
+       "axes": []
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "pie_two",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "clustered",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "auto",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "bar",
+         "bar_dir": "col",
+         "grouping": "clustered",
+         "vary_colors": false,
+         "gap_width": 150,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": "FFFFFFFF",
+            "alpha": null,
+            "width": 19050,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": "FFE97132",
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": "FFFFFFFF",
+            "alpha": null,
+            "width": 19050,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "type_scatter_to_line",
+   "spec": {
+    "fixture": "chart_scatter.xlsx",
+    "target": {
+     "sheet": "Sheet1",
+     "chart": "scatter_lines"
+    },
+    "edits": [
+     {
+      "op": "type",
+      "kind": "line",
+      "grouping": "clustered"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "scatter_markers",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "scatter",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$F$1",
+         "x": "Sheet1!$E$2:$E$5",
+         "y": "Sheet1!$F$2:$F$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$G$1",
+         "x": "Sheet1!$E$2:$E$5",
+         "y": "Sheet1!$G$2:$G$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "scatter",
+         "bar_dir": null,
+         "grouping": null,
+         "vary_colors": false,
+         "gap_width": null,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": 25400,
+            "dash": null
+           },
+           "marker": {
+            "symbol": "circle",
+            "size": 5,
+            "fill": {
+             "color": "FF156082",
+             "alpha": null
+            },
+            "line": {
+             "none": false,
+             "color": "FF156082",
+             "alpha": null,
+             "width": 9525,
+             "dash": null
+            }
+           },
+           "smooth": false,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": 25400,
+            "dash": null
+           },
+           "marker": {
+            "symbol": "circle",
+            "size": 5,
+            "fill": {
+             "color": "FFE97132",
+             "alpha": null
+            },
+            "line": {
+             "none": false,
+             "color": "FFE97132",
+             "alpha": null,
+             "width": 9525,
+             "dash": null
+            }
+           },
+           "smooth": false,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "val",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "scatter_lines",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "line",
+        "bar_dir": null,
+        "grouping": "standard",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$F$1",
+         "cat": "Sheet1!$E$2:$E$5",
+         "val": "Sheet1!$F$2:$F$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$G$1",
+         "cat": "Sheet1!$E$2:$E$5",
+         "val": "Sheet1!$G$2:$G$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "line",
+         "bar_dir": null,
+         "grouping": "standard",
+         "vary_colors": false,
+         "gap_width": null,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": "FF156082",
+            "alpha": null,
+            "width": 28575,
+            "dash": null
+           },
+           "marker": {
+            "symbol": "none",
+            "size": null,
+            "fill": {
+             "color": null,
+             "alpha": null
+            },
+            "line": {
+             "none": false,
+             "color": null,
+             "alpha": null,
+             "width": null,
+             "dash": null
+            }
+           },
+           "smooth": false,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": "FFE97132",
+            "alpha": null,
+            "width": 28575,
+            "dash": null
+           },
+           "marker": {
+            "symbol": "none",
+            "size": null,
+            "fill": {
+             "color": null,
+             "alpha": null
+            },
+            "line": {
+             "none": false,
+             "color": null,
+             "alpha": null,
+             "width": null,
+             "dash": null
+            }
+           },
+           "smooth": false,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "scatter_single",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "scatter",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 1
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$F$1",
+         "x": "Sheet1!$E$2:$E$5",
+         "y": "Sheet1!$F$2:$F$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "auto",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "scatter",
+         "bar_dir": null,
+         "grouping": null,
+         "vary_colors": false,
+         "gap_width": null,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": 25400,
+            "dash": null
+           },
+           "marker": {
+            "symbol": "circle",
+            "size": 5,
+            "fill": {
+             "color": "FF156082",
+             "alpha": null
+            },
+            "line": {
+             "none": false,
+             "color": "FF156082",
+             "alpha": null,
+             "width": 9525,
+             "dash": null
+            }
+           },
+           "smooth": false,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "val",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "type_area_to_doughnut",
+   "spec": {
+    "fixture": "chart_area.xlsx",
+    "target": {
+     "sheet": "Sheet1",
+     "chart": "area_standard"
+    },
+    "edits": [
+     {
+      "op": "type",
+      "kind": "doughnut",
+      "grouping": "clustered"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "area_standard",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "doughnut",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "doughnut",
+         "bar_dir": null,
+         "grouping": null,
+         "vary_colors": true,
+         "gap_width": null,
+         "overlap": null,
+         "hole_size": 50,
+         "first_slice_angle": 0,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": [
+            {
+             "idx": 0,
+             "fill": {
+              "color": "FF156082",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": null,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 1,
+             "fill": {
+              "color": "FFE97132",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": null,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 2,
+             "fill": {
+              "color": "FF196B24",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": null,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 3,
+             "fill": {
+              "color": "FF0F9ED5",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": null,
+              "dash": null
+             },
+             "marker": null
+            }
+           ]
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": false,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": [
+            {
+             "idx": 0,
+             "fill": {
+              "color": "FF156082",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": 25400,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 1,
+             "fill": {
+              "color": "FFE97132",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": 25400,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 2,
+             "fill": {
+              "color": "FF196B24",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": 25400,
+              "dash": null
+             },
+             "marker": null
+            },
+            {
+             "idx": 3,
+             "fill": {
+              "color": "FF0F9ED5",
+              "alpha": null
+             },
+             "line": {
+              "none": true,
+              "color": null,
+              "alpha": null,
+              "width": 25400,
+              "dash": null
+             },
+             "marker": null
+            }
+           ]
+          }
+         ]
+        }
+       ],
+       "axes": []
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "area_stacked",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "area",
+        "bar_dir": null,
+        "grouping": "stacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "area",
+         "bar_dir": null,
+         "grouping": "stacked",
+         "vary_colors": false,
+         "gap_width": null,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": "FFE97132",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": 25400,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "area_percent",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "area",
+        "bar_dir": null,
+        "grouping": "percentStacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "area",
+         "bar_dir": null,
+         "grouping": "percentStacked",
+         "vary_colors": false,
+         "gap_width": null,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": "FFE97132",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": 25400,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "0%",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "type_bar_to_scatter",
+   "spec": {
+    "fixture": "chart_bar.xlsx",
+    "target": {
+     "sheet": "Sheet1",
+     "chart": "bar_stacked"
+    },
+    "edits": [
+     {
+      "op": "type",
+      "kind": "scatter",
+      "grouping": "clustered"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "bar_clustered",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "bar",
+        "grouping": "clustered",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "bar",
+         "bar_dir": "bar",
+         "grouping": "clustered",
+         "vary_colors": false,
+         "gap_width": 182,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": "FFE97132",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "bar_stacked",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "scatter",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "x": "Sheet1!$A$2:$A$5",
+         "y": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "x": "Sheet1!$A$2:$A$5",
+         "y": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "scatter",
+         "bar_dir": null,
+         "grouping": null,
+         "vary_colors": false,
+         "gap_width": null,
+         "overlap": null,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": 25400,
+            "dash": null
+           },
+           "marker": {
+            "symbol": "circle",
+            "size": 5,
+            "fill": {
+             "color": "FF156082",
+             "alpha": null
+            },
+            "line": {
+             "none": false,
+             "color": "FF156082",
+             "alpha": null,
+             "width": 9525,
+             "dash": null
+            }
+           },
+           "smooth": false,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": null,
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": 25400,
+            "dash": null
+           },
+           "marker": {
+            "symbol": "circle",
+            "size": 5,
+            "fill": {
+             "color": "FFE97132",
+             "alpha": null
+            },
+            "line": {
+             "none": false,
+             "color": "FFE97132",
+             "alpha": null,
+             "width": 9525,
+             "dash": null
+            }
+           },
+           "smooth": false,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "val",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     },
+     {
+      "sheet": "Sheet1",
+      "name": "bar_percent",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "bar",
+        "grouping": "percentStacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      },
+      "format": {
+       "title": {
+        "kind": "none",
+        "text": null,
+        "ref": null
+       },
+       "auto_title_deleted": false,
+       "legend": {
+        "position": "b",
+        "overlay": false,
+        "hidden": []
+       },
+       "blanks_as": "gap",
+       "plot_vis_only": true,
+       "category_filter": [],
+       "plots": [
+        {
+         "type": "bar",
+         "bar_dir": "bar",
+         "grouping": "percentStacked",
+         "vary_colors": false,
+         "gap_width": 182,
+         "overlap": 100,
+         "hole_size": null,
+         "first_slice_angle": null,
+         "labels": {
+          "deleted": false,
+          "val": false,
+          "cat": false,
+          "ser": false,
+          "pct": false,
+          "legend_key": false,
+          "separator": null,
+          "position": null,
+          "num_fmt": null,
+          "font_color": null,
+          "font_size": null
+         },
+         "series": [
+          {
+           "idx": 0,
+           "filtered": false,
+           "fill": {
+            "color": "FF156082",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          },
+          {
+           "idx": 1,
+           "filtered": false,
+           "fill": {
+            "color": "FFE97132",
+            "alpha": null
+           },
+           "line": {
+            "none": true,
+            "color": null,
+            "alpha": null,
+            "width": null,
+            "dash": null
+           },
+           "marker": null,
+           "smooth": null,
+           "labels": null,
+           "points": []
+          }
+         ]
+        }
+       ],
+       "axes": [
+        {
+         "kind": "cat",
+         "position": "l",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "General",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": false,
+         "tick_label_pos": "nextTo"
+        },
+        {
+         "kind": "val",
+         "position": "b",
+         "deleted": false,
+         "crosses": "autoZero",
+         "crosses_at": null,
+         "reversed": false,
+         "log_base": null,
+         "min": null,
+         "max": null,
+         "major_unit": null,
+         "num_fmt": "0%",
+         "title": {
+          "kind": "none",
+          "text": null,
+          "ref": null
+         },
+         "major_gridlines": true,
+         "tick_label_pos": "nextTo"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

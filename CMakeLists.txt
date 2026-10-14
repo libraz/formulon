@@ -266,6 +266,13 @@ set(FORMULON_CORE_SOURCES
   src/drawing/drawing_xml.cpp
   src/drawing/image_header.cpp
   src/drawing/drawing_edit.cpp
+  src/chart/chart_xml.cpp
+  src/chart/chart_ref.cpp
+  src/chart/chart_source.cpp
+  src/chart/chart_data.cpp
+  src/chart/chart_cache.cpp
+  src/chart/chart_template.cpp
+  src/chart/chart_edit.cpp
   src/eval/array_alloc.cpp
   src/eval/coerce.cpp
   src/eval/rng.cpp
@@ -433,6 +440,7 @@ src/eval/aggregate_lazy.cpp
   src/c_api/parts/cf_eval.cpp
   src/c_api/parts/eval_adhoc.cpp
   src/c_api/parts/cf_mutate.cpp
+  src/c_api/parts/chart.cpp
   src/c_api/parts/common.cpp
   src/c_api/parts/diagnostics.cpp
   src/c_api/parts/drawing.cpp

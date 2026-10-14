@@ -14,6 +14,7 @@ from pathlib import Path
 from tools.oracle.provenance import (
     active_variant_names,
     cf_active,
+    chart_active,
     gate_target_names,
     main,
     validate_targets,
@@ -327,62 +328,114 @@ class ProvenancePolicyTest(unittest.TestCase):
             golden_path.unlink()
             self.assertEqual(active_variant_names(doc, root), [])
 
+    def _capture_tree(self, root: Path, track: str, subdir: str, suite: str) -> tuple[dict, Path]:
+        """One-suite Mac capture for `track` with a consistent marker; returns (manifest, golden)."""
+
+        golden_dir = root / "tests/oracle/targets/mac" / subdir
+        golden_dir.mkdir(parents=True)
+        golden_path = golden_dir / f"{suite}.golden.json"
+        golden_path.write_text(
+            json.dumps({"name": suite, "cases": [{"id": "case", "cells": [{"row": 0, "col": 0, "matches": []}]}]}),
+            encoding="utf-8",
+        )
+        marker = {
+            "track": track,
+            "target": "mac",
+            "status": "primary",
+            "classification": "active",
+            "verified": True,
+            "active_ctest": True,
+            "locale": "ja-JP",
+            "product": "Microsoft Excel for Mac 16.111.3",
+            "m365_sentinel": "ARRAYTOTEXT(1) == text '1'",
+            "capture_id": "capture-1",
+            "required_suites": [suite],
+            "captured_suites": [suite],
+            "case_count": 1,
+            "all_suites_same_capture": True,
+            "suite_inventory": [
+                {
+                    "suite": suite,
+                    "case_count": 1,
+                    "sha256": hashlib.sha256(golden_path.read_bytes()).hexdigest(),
+                    "capture_id": "capture-1",
+                }
+            ],
+        }
+        (golden_dir / "PROVENANCE.json").write_text(json.dumps(marker), encoding="utf-8")
+        doc = {
+            "primary": "mac",
+            "tracks": {track: {"primary": "mac", "variants": []}},
+            "targets": {
+                "mac": {
+                    "status": "primary",
+                    "driver": "macos_excel",
+                    "runs_on": ["Darwin"],
+                    "locale": "ja-JP",
+                }
+            },
+        }
+        return doc, golden_path
+
     def test_cf_primary_requires_complete_hashed_capture(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            golden_dir = root / "tests/oracle/targets/mac/golden_cf"
-            golden_dir.mkdir(parents=True)
-            golden_path = golden_dir / "cf_smoke.golden.json"
-            golden_path.write_text(
-                json.dumps(
-                    {
-                        "name": "cf_smoke",
-                        "cases": [{"id": "case", "cells": [{"row": 0, "col": 0, "matches": []}]}],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            marker = {
-                "track": "cf",
-                "target": "mac",
-                "status": "primary",
-                "classification": "active",
-                "verified": True,
-                "active_ctest": True,
-                "locale": "ja-JP",
-                "product": "Microsoft Excel for Mac 16.111.3",
-                "m365_sentinel": "ARRAYTOTEXT(1) == text '1'",
-                "capture_id": "capture-1",
-                "required_suites": ["cf_smoke"],
-                "captured_suites": ["cf_smoke"],
-                "case_count": 1,
-                "all_suites_same_capture": True,
-                "suite_inventory": [
-                    {
-                        "suite": "cf_smoke",
-                        "case_count": 1,
-                        "sha256": hashlib.sha256(golden_path.read_bytes()).hexdigest(),
-                        "capture_id": "capture-1",
-                    }
-                ],
-            }
-            (golden_dir / "PROVENANCE.json").write_text(json.dumps(marker), encoding="utf-8")
-            doc = {
-                "primary": "mac",
-                "tracks": {"cf": {"primary": "mac", "variants": []}},
-                "targets": {
-                    "mac": {
-                        "status": "primary",
-                        "driver": "macos_excel",
-                        "runs_on": ["Darwin"],
-                        "locale": "ja-JP",
-                    }
-                },
-            }
+            doc, golden_path = self._capture_tree(root, "cf", "golden_cf", "cf_smoke")
             self.assertTrue(cf_active(doc, root))
             self.assertEqual(validate_targets(doc, root), [])
             golden_path.write_text(golden_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
             self.assertFalse(cf_active(doc, root))
+
+    def test_chart_primary_requires_complete_hashed_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc, golden_path = self._capture_tree(root, "chart", "golden_chart", "data")
+            self.assertTrue(chart_active(doc, root))
+            self.assertEqual(validate_targets(doc, root), [])
+            golden_path.write_text(golden_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+            self.assertFalse(chart_active(doc, root))
+            errors = validate_targets(doc, root)
+            self.assertTrue(any(e.startswith("tracks.chart:") and "sha256" in e for e in errors), errors)
+
+    def test_chart_partial_capture_is_not_active(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc, golden_path = self._capture_tree(root, "chart", "golden_chart", "data")
+            marker_path = golden_path.parent / "PROVENANCE.json"
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+            marker["required_suites"] = ["data", "structural"]
+            marker["classification"] = "scaffolded"
+            marker["verified"] = False
+            marker["active_ctest"] = False
+            marker_path.write_text(json.dumps(marker), encoding="utf-8")
+            self.assertFalse(chart_active(doc, root))
+            errors = validate_targets(doc, root)
+            self.assertTrue(any("required_suites" in e for e in errors), errors)
+
+    def test_chart_marker_belongs_to_its_track(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc, golden_path = self._capture_tree(root, "chart", "golden_chart", "data")
+            marker_path = golden_path.parent / "PROVENANCE.json"
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+            marker["track"] = "cf"
+            marker_path.write_text(json.dumps(marker), encoding="utf-8")
+            self.assertFalse(chart_active(doc, root))
+            self.assertIn("tracks.chart: provenance 'track' must be 'chart'", validate_targets(doc, root))
+
+    def test_chart_track_without_marker_is_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc, golden_path = self._capture_tree(root, "chart", "golden_chart", "data")
+            (golden_path.parent / "PROVENANCE.json").unlink()
+            self.assertFalse(chart_active(doc, root))
+            self.assertEqual(validate_targets(doc, root), [])
+
+    def test_committed_manifest_names_the_chart_primary(self) -> None:
+        import yaml
+
+        doc = yaml.safe_load((Path(__file__).parent / "targets.yaml").read_text(encoding="utf-8"))
+        self.assertEqual(doc["tracks"]["chart"]["primary"], "mac-365-ja_JP")
 
 
 if __name__ == "__main__":

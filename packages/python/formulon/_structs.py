@@ -61,46 +61,76 @@ _FMT = {
 }
 
 
+def nested(layout: "Struct") -> Tuple:
+    """Field type for a struct embedded by value in another struct."""
+    return ("nested", layout.size, layout.align, layout)
+
+
+def array(elem: Tuple, count: int) -> Tuple:
+    """Field type for an inline ``elem[count]`` array of scalars."""
+    return ("array", elem[1] * count, elem[2], (_FMT[elem[0]], count))
+
+
 class Struct:
     """A wasm32 POD layout: ordered (name, ctype) fields with offsets."""
 
-    __slots__ = ("name", "fields", "offsets", "size")
+    __slots__ = ("name", "fields", "offsets", "size", "align", "_extra")
 
     def __init__(self, name: str, fields: List[Tuple[str, Tuple]]) -> None:
         self.name = name
         self.fields = fields
         self.offsets: Dict[str, Tuple[str, int]] = {}
+        self._extra: Dict[str, object] = {}
         off = 0
         max_align = 1
-        for fname, (kind, sz, align) in fields:
+        for fname, ctype in fields:
+            kind, sz, align = ctype[:3]
             off = (off + align - 1) // align * align
             self.offsets[fname] = (kind, off)
+            if len(ctype) > 3:
+                self._extra[fname] = ctype[3]
             off += sz
             max_align = max(max_align, align)
+        self.align = max_align
         self.size = (off + max_align - 1) // max_align * max_align
+
+    def pack_into(self, raw: bytearray, base: int, values: Dict[str, object]) -> None:
+        """Write ``values`` into ``raw`` at ``base``; a nested struct takes a dict."""
+        for fname, value in values.items():
+            kind, off = self.offsets[fname]
+            if kind == "nested":
+                self._extra[fname].pack_into(raw, base + off, value)
+            else:
+                struct.pack_into(_FMT[kind], raw, base + off, value)
 
     def pack(self, lib, ptr: int, values: Dict[str, object]) -> None:
         """Pack supplied fields into a zeroed block and write it once."""
         raw = bytearray(self.size)
-        for fname, value in values.items():
-            kind, off = self.offsets[fname]
-            struct.pack_into(_FMT[kind], raw, off, value)
+        self.pack_into(raw, 0, values)
         lib.write_bytes(ptr, raw)
+
+    def unpack_from(self, raw: bytes, base: int = 0) -> Dict[str, object]:
+        """Decode every scalar, nested-struct and array field of ``raw`` at ``base``."""
+        out: Dict[str, object] = {}
+        for fname, (kind, off) in self.offsets.items():
+            if kind == "nested":
+                out[fname] = self._extra[fname].unpack_from(raw, base + off)
+            elif kind == "array":
+                fmt, count = self._extra[fname]
+                out[fname] = list(struct.unpack_from("<" + fmt[1] * count, raw, base + off))
+            elif kind in _FMT:
+                out[fname] = struct.unpack_from(_FMT[kind], raw, base + off)[0]
+        return out
 
     def unpack(self, lib, ptr: int) -> Dict[str, int]:
         """Read every scalar field from ``[ptr, ptr+size)`` into a dict.
 
         Opaque blob fields (any ``kind`` not in ``_FMT``, e.g. an inline
         ``fm_value_t`` or ``fm_cfvo_t``) are skipped; callers decode those
-        separately against ``ptr + self.offsets[name][1]``.
+        separately against ``ptr + self.offsets[name][1]``. Nested structs
+        and inline arrays decode to a dict and a list.
         """
-        raw = lib.read_bytes(ptr, self.size)
-        out: Dict[str, int] = {}
-        for fname, (kind, off) in self.offsets.items():
-            if kind not in _FMT:
-                continue
-            out[fname] = struct.unpack_from(_FMT[kind], raw, off)[0]
-        return out
+        return self.unpack_from(lib.read_bytes(ptr, self.size))
 
 
 def alloc_struct(lib, layout: Struct) -> int:
@@ -1090,8 +1120,8 @@ IMAGE_INSERT = Struct(
     ],
 )
 
-IMAGE_ANCHOR = Struct(
-    "fm_image_anchor",
+DRAWING_ANCHOR = Struct(
+    "fm_drawing_anchor",
     [
         ("anchor_kind", I32),
         ("edit_as", I32),
@@ -1101,5 +1131,426 @@ IMAGE_ANCHOR = Struct(
         ("col_off_emu", I64),
         ("width_emu", I64),
         ("height_emu", I64),
+    ],
+)
+
+
+# ---------------------------------------------------------------------------
+# Charts
+# ---------------------------------------------------------------------------
+
+CHART_TITLE = Struct("fm_chart_title_t", [("kind", I32), ("text", PTR), ("formula", PTR)])
+
+CHART_FILL = Struct(
+    "fm_chart_fill_t",
+    [("has_color", I32), ("color", U32), ("transparency_pct", F64)],
+)
+
+CHART_LINE = Struct(
+    "fm_chart_line_t",
+    [
+        ("has_color", I32),
+        ("color", U32),
+        ("transparency_pct", F64),
+        ("width_pt", F64),
+        ("has_dash", I32),
+        ("dash", I32),
+        ("none", I32),
+    ],
+)
+
+CHART_MARKER = Struct(
+    "fm_chart_marker_t",
+    [
+        ("symbol", I32),
+        ("has_size", I32),
+        ("size", U32),
+        ("fill", nested(CHART_FILL)),
+        ("line", nested(CHART_LINE)),
+    ],
+)
+
+CHART_LABELS = Struct(
+    "fm_chart_labels_t",
+    [
+        ("show_value", I32),
+        ("show_category", I32),
+        ("show_series", I32),
+        ("show_percent", I32),
+        ("show_legend_key", I32),
+        ("separator", PTR),
+        ("has_position", I32),
+        ("position", I32),
+        ("number_format", PTR),
+        ("source_linked", I32),
+        ("has_font_color", I32),
+        ("font_color", U32),
+        ("font_size_pt", F64),
+        ("deleted", I32),
+    ],
+)
+
+CHART_INFO = Struct(
+    "fm_chart_info_t",
+    [
+        ("object_id", U32),
+        ("name", PTR),
+        ("descr", PTR),
+        ("is_chartex", I32),
+        ("is_pivot_chart", I32),
+        ("on_chartsheet", I32),
+        ("anchor_kind", I32),
+        ("edit_as", I32),
+        ("from_row", U32),
+        ("from_col", U32),
+        ("from_row_off", I64),
+        ("from_col_off", I64),
+        ("to_row", U32),
+        ("to_col", U32),
+        ("to_row_off", I64),
+        ("to_col_off", I64),
+        ("cx", I64),
+        ("cy", I64),
+        ("title", nested(CHART_TITLE)),
+        ("auto_title_deleted", I32),
+        ("legend_position", I32),
+        ("legend_overlay", I32),
+        ("legend_hidden_count", U32),
+        ("blanks_as", I32),
+        ("plot_vis_only", I32),
+        ("date1904", I32),
+        ("has_style", I32),
+        ("style", I32),
+        ("plot_count", U32),
+        ("axis_count", U32),
+        ("hidden_category_count", U32),
+        ("source_range", PTR),
+        ("source_direction", I32),
+        ("source_header_row", I32),
+        ("source_header_column", I32),
+    ],
+)
+
+CHART_PLOT = Struct(
+    "fm_chart_plot_t",
+    [
+        ("type", I32),
+        ("chartex_layout", PTR),
+        ("bar_dir", I32),
+        ("has_grouping", I32),
+        ("grouping", I32),
+        ("vary_colors", I32),
+        ("has_gap_width", I32),
+        ("gap_width", U32),
+        ("has_overlap", I32),
+        ("overlap", I32),
+        ("has_hole_size", I32),
+        ("hole_size", U32),
+        ("has_first_slice_angle", I32),
+        ("first_slice_angle", U32),
+        ("axis_id_count", U32),
+        ("series_count", U32),
+    ],
+)
+
+CHART_DATA_SOURCE = Struct(
+    "fm_chart_data_source_t",
+    [("kind", I32), ("formula", PTR), ("literal_count", U32)],
+)
+
+CHART_SERIES = Struct(
+    "fm_chart_series_t",
+    [
+        ("idx", U32),
+        ("order", U32),
+        ("filtered", I32),
+        ("name", nested(CHART_DATA_SOURCE)),
+        ("categories", nested(CHART_DATA_SOURCE)),
+        ("values", nested(CHART_DATA_SOURCE)),
+        ("x", nested(CHART_DATA_SOURCE)),
+        ("y", nested(CHART_DATA_SOURCE)),
+        ("size", nested(CHART_DATA_SOURCE)),
+        ("fill", nested(CHART_FILL)),
+        ("line", nested(CHART_LINE)),
+        ("has_marker", I32),
+        ("marker", nested(CHART_MARKER)),
+        ("smooth", I32),
+        ("point_count", U32),
+        ("has_labels", I32),
+        ("labels", nested(CHART_LABELS)),
+    ],
+)
+
+CHART_LITERAL = Struct(
+    "fm_chart_literal_t",
+    [("idx", U32), ("is_text", I32), ("number", F64), ("text", PTR)],
+)
+
+CHART_POINT = Struct(
+    "fm_chart_point_t",
+    [
+        ("idx", U32),
+        ("fill", nested(CHART_FILL)),
+        ("line", nested(CHART_LINE)),
+        ("has_marker", I32),
+        ("marker", nested(CHART_MARKER)),
+    ],
+)
+
+CHART_AXIS = Struct(
+    "fm_chart_axis_t",
+    [
+        ("id", U32),
+        ("kind", I32),
+        ("position", I32),
+        ("deleted", I32),
+        ("cross_axis", U32),
+        ("crosses", I32),
+        ("crosses_at", F64),
+        ("reversed", I32),
+        ("log_base", F64),
+        ("min", F64),
+        ("max", F64),
+        ("major_unit", F64),
+        ("minor_unit", F64),
+        ("number_format", PTR),
+        ("source_linked", I32),
+        ("title", nested(CHART_TITLE)),
+        ("major_gridlines", I32),
+        ("minor_gridlines", I32),
+        ("tick_label_pos", PTR),
+    ],
+)
+
+CHART_PREVIEW_OVERRIDES = Struct(
+    "fm_chart_preview_overrides",
+    [
+        ("source", PTR),
+        ("direction_op", I32),
+        ("direction", I32),
+        ("header_row_op", I32),
+        ("header_row", I32),
+        ("header_column_op", I32),
+        ("header_column", I32),
+        ("blanks_as_op", I32),
+        ("blanks_as", I32),
+        ("plot_vis_only_op", I32),
+        ("plot_vis_only", I32),
+    ],
+)
+
+CHART_DATA_INFO = Struct(
+    "fm_chart_data_info_t",
+    [
+        ("is_xy", I32),
+        ("point_count", U32),
+        ("series_count", U32),
+        ("category_label_count", U32),
+        ("category_value_count", U32),
+        ("category_level_count", U32),
+        ("category_format_code", PTR),
+        ("categories_generated", I32),
+        ("title_text", PTR),
+        ("axis_title_count", U32),
+        ("unresolved_count", U32),
+    ],
+)
+
+CHART_DATA_SERIES = Struct(
+    "fm_chart_data_series_t",
+    [
+        ("plot_index", U32),
+        ("idx", U32),
+        ("name", PTR),
+        ("format_code", PTR),
+        ("filtered", I32),
+        ("point_count", U32),
+        ("has_sizes", I32),
+        ("range_count", array(U32, 6)),
+    ],
+)
+
+CHART_DATA_POINTS = Struct(
+    "fm_chart_data_points_t",
+    [("count", U32), ("values", PTR), ("states", PTR), ("x", PTR), ("sizes", PTR)],
+)
+
+CHART_SHEET_RANGE = Struct(
+    "fm_chart_sheet_range_t",
+    [("sheet", U32), ("top", U32), ("left", U32), ("bottom", U32), ("right", U32)],
+)
+
+CHART_AXIS_TITLE_TEXT = Struct(
+    "fm_chart_axis_title_text_t",
+    [("axis_id", U32), ("text", PTR)],
+)
+
+CHART_UNRESOLVED = Struct(
+    "fm_chart_unresolved_t",
+    [("series_idx", U32), ("source", PTR), ("axis_id", U32)],
+)
+
+CHART_INSERT = Struct(
+    "fm_chart_insert",
+    [
+        ("kind", I32),
+        ("grouping", I32),
+        ("source", PTR),
+        ("direction", I32),
+        ("header_row", I32),
+        ("header_column", I32),
+        ("title", PTR),
+        ("legend", I32),
+        ("placement", nested(IMAGE_INSERT)),
+    ],
+)
+
+CHART_FILL_PATCH = Struct(
+    "fm_chart_fill_patch",
+    [
+        ("color_op", I32),
+        ("color", U32),
+        ("transparency_op", I32),
+        ("transparency_pct", F64),
+    ],
+)
+
+CHART_LINE_PATCH = Struct(
+    "fm_chart_line_patch",
+    [
+        ("color_op", I32),
+        ("color", U32),
+        ("transparency_op", I32),
+        ("transparency_pct", F64),
+        ("width_op", I32),
+        ("width_pt", F64),
+        ("dash_op", I32),
+        ("dash", I32),
+        ("none_op", I32),
+        ("none", I32),
+    ],
+)
+
+CHART_MARKER_PATCH = Struct(
+    "fm_chart_marker_patch",
+    [
+        ("symbol_op", I32),
+        ("symbol", I32),
+        ("size_op", I32),
+        ("size", F64),
+        ("fill", nested(CHART_FILL_PATCH)),
+        ("line", nested(CHART_LINE_PATCH)),
+    ],
+)
+
+CHART_LABELS_PATCH = Struct(
+    "fm_chart_labels_patch",
+    [
+        ("show_value_op", I32),
+        ("show_value", I32),
+        ("show_category_op", I32),
+        ("show_category", I32),
+        ("show_series_op", I32),
+        ("show_series", I32),
+        ("show_percent_op", I32),
+        ("show_percent", I32),
+        ("show_legend_key_op", I32),
+        ("show_legend_key", I32),
+        ("separator_op", I32),
+        ("separator", PTR),
+        ("position_op", I32),
+        ("position", I32),
+        ("number_format_op", I32),
+        ("number_format", PTR),
+        ("font_color_op", I32),
+        ("font_color", U32),
+        ("font_size_op", I32),
+        ("font_size_pt", F64),
+    ],
+)
+
+CHART_SERIES_PATCH = Struct(
+    "fm_chart_series_patch",
+    [
+        ("name", PTR),
+        ("categories", PTR),
+        ("values", PTR),
+        ("x", PTR),
+        ("y", PTR),
+        ("size", PTR),
+        ("fill", nested(CHART_FILL_PATCH)),
+        ("line", nested(CHART_LINE_PATCH)),
+        ("marker_op", I32),
+        ("marker", nested(CHART_MARKER_PATCH)),
+        ("smooth_op", I32),
+        ("smooth", I32),
+        ("labels_op", I32),
+        ("labels", nested(CHART_LABELS_PATCH)),
+    ],
+)
+
+CHART_POINT_PATCH = Struct(
+    "fm_chart_point_patch",
+    [
+        ("fill", nested(CHART_FILL_PATCH)),
+        ("line", nested(CHART_LINE_PATCH)),
+        ("marker_op", I32),
+        ("marker", nested(CHART_MARKER_PATCH)),
+    ],
+)
+
+CHART_PLOT_PATCH = Struct(
+    "fm_chart_plot_patch",
+    [
+        ("gap_width_op", I32),
+        ("gap_width", U32),
+        ("overlap_op", I32),
+        ("overlap", I32),
+        ("first_slice_angle_op", I32),
+        ("first_slice_angle", U32),
+        ("vary_colors_op", I32),
+        ("vary_colors", I32),
+        ("hole_size_op", I32),
+        ("hole_size", U32),
+    ],
+)
+
+CHART_AXIS_PATCH = Struct(
+    "fm_chart_axis_patch",
+    [
+        ("visible_op", I32),
+        ("visible", I32),
+        ("title_op", I32),
+        ("title", PTR),
+        ("min_op", I32),
+        ("min", F64),
+        ("max_op", I32),
+        ("max", F64),
+        ("major_unit_op", I32),
+        ("major_unit", F64),
+        ("number_format_op", I32),
+        ("number_format", PTR),
+        ("major_gridlines_op", I32),
+        ("major_gridlines", I32),
+        ("reversed_op", I32),
+        ("reversed", I32),
+        ("log_base_op", I32),
+        ("log_base", F64),
+        ("crosses_op", I32),
+        ("crosses", I32),
+        ("crosses_at", F64),
+        ("tick_label_pos_op", I32),
+        ("tick_label_pos", PTR),
+    ],
+)
+
+CHART_LEGEND_PATCH = Struct(
+    "fm_chart_legend_patch",
+    [
+        ("position", I32),
+        ("overlay", I32),
+        ("hidden_series_op", I32),
+        ("hidden_series", PTR),
+        ("hidden_series_count", U32),
     ],
 )

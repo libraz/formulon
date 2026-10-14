@@ -1899,6 +1899,136 @@ export enum AnchorEditAs {
   Absolute = 2,
 }
 
+/** Plot group type. Mirrors `fm_chart_plot_type_t`. */
+export enum ChartPlotType {
+  Bar = 0,
+  Bar3D = 1,
+  Line = 2,
+  Line3D = 3,
+  Area = 4,
+  Area3D = 5,
+  Pie = 6,
+  Pie3D = 7,
+  Doughnut = 8,
+  OfPie = 9,
+  Scatter = 10,
+  Bubble = 11,
+  Radar = 12,
+  Stock = 13,
+  Surface = 14,
+  Surface3D = 15,
+  Chartex = 16,
+}
+
+/** Kinds `insertChart` and `setChartType` produce. Mirrors `fm_chart_insert_kind_t`. */
+export enum ChartInsertKind {
+  Column = 0,
+  Bar = 1,
+  Line = 2,
+  Area = 3,
+  Pie = 4,
+  Scatter = 5,
+  Doughnut = 6,
+}
+
+/** Series grouping of a column, bar, line or area plot. Mirrors `fm_chart_grouping_t`. */
+export enum ChartGrouping {
+  Clustered = 0,
+  Stacked = 1,
+  PercentStacked = 2,
+  Standard = 3,
+}
+
+/** How blank cells are plotted; `Absent` writes no element. Mirrors `fm_chart_blanks_as_t`. */
+export enum ChartBlanksAs {
+  Absent = 0,
+  Gap = 1,
+  Zero = 2,
+  Span = 3,
+}
+
+/** How a resolved point is drawn. Mirrors `fm_chart_point_state_t`. */
+export enum ChartPointState {
+  Value = 0,
+  Gap = 1,
+  Connect = 2,
+}
+
+/** Axis kind. Mirrors `fm_chart_axis_kind_t`. */
+export enum ChartAxisKind {
+  Category = 0,
+  Value = 1,
+  Date = 2,
+  Series = 3,
+}
+
+/** Where an axis crosses its cross axis; `At` uses `crossesAt`. Mirrors `fm_chart_axis_crosses_t`. */
+export enum ChartAxisCrosses {
+  Absent = 0,
+  AutoZero = 1,
+  Min = 2,
+  Max = 3,
+  At = 4,
+}
+
+/** Title kind; `Auto` is a title element without text, left to the viewer. Mirrors `fm_chart_title_kind_t`. */
+export enum ChartTitleKind {
+  None = 0,
+  Text = 1,
+  Ref = 2,
+  Auto = 3,
+}
+
+/** Whether series run down columns or across rows; `Auto` follows Excel. Mirrors `fm_chart_series_direction_t`. */
+export enum ChartSeriesDirection {
+  Auto = 0,
+  Columns = 1,
+  Rows = 2,
+}
+
+/** Legend position; `None` has no legend. Mirrors `fm_chart_legend_position_t`. */
+export enum ChartLegendPosition {
+  None = 0,
+  Bottom = 1,
+  Top = 2,
+  Left = 3,
+  Right = 4,
+  TopRight = 5,
+}
+
+/** Outline dash style. Mirrors `fm_chart_line_dash_t`. */
+export enum ChartLineDash {
+  Solid = 0,
+  Dash = 1,
+  Dot = 2,
+  DashDot = 3,
+  Other = 4,
+}
+
+/** Marker symbol. Mirrors `fm_chart_marker_symbol_t`. */
+export enum ChartMarkerSymbol {
+  None = 0,
+  Auto = 1,
+  Circle = 2,
+  Square = 3,
+  Diamond = 4,
+  Triangle = 5,
+  Other = 6,
+}
+
+/** Data label position. Mirrors `fm_chart_label_position_t`. */
+export enum ChartLabelPosition {
+  BestFit = 0,
+  Center = 1,
+  InsideBase = 2,
+  InsideEnd = 3,
+  OutsideEnd = 4,
+  Above = 5,
+  Below = 6,
+  Left = 7,
+  Right = 8,
+}
+
 /** How a colour was resolved. Mirrors `fm_color_resolution_t`. `Exact` is a literal or workbook-supplied
  *  colour; `DefaultTheme` / `ThemeUnparseable` mean the current Excel Office (Aptos) theme was used because
  *  the theme part is absent / unparseable; `IndexOutOfRange` is black; `AutoContext` is an automatic colour
@@ -2282,7 +2412,7 @@ export interface ImageInsertOptions {
   heightEmu?: number;
 }
 
-/** Result of `Workbook.insertImage` and `Workbook.restoreImage`; `objectId` is zero on failure. */
+/** Result of `Workbook.insertImage` and `Workbook.restoreDrawing`; `objectId` is zero on failure. */
 export interface InsertImageResult {
   status: Status;
   objectId: number;
@@ -2304,6 +2434,318 @@ export interface ImagePlacement {
   heightEmu?: number;
 }
 
+/** One series input: nothing, a range reference, or literal points. */
+export interface ChartDataSource {
+  kind: 'none' | 'ref' | 'literal';
+  formula: string;
+  literal: (number | string)[];
+}
+
+/** Solid fill; `color` is ARGB (`0xAARRGGBB`), `transparency` a percentage (0..100). */
+export interface ChartFillInfo {
+  color: number | null;
+  transparency: number | null;
+}
+
+export interface ChartLineInfo {
+  color: number | null;
+  transparency: number | null;
+  widthPt: number | null;
+  dash: ChartLineDash | null;
+  none: boolean;
+}
+
+export interface ChartMarkerInfo {
+  symbol: ChartMarkerSymbol;
+  size: number | null;
+  fill: ChartFillInfo;
+  line: ChartLineInfo;
+}
+
+export interface ChartLabelsInfo {
+  showValue: boolean;
+  showCategory: boolean;
+  showSeries: boolean;
+  showPercent: boolean;
+  showLegendKey: boolean;
+  separator: string | null;
+  position: ChartLabelPosition | null;
+  numberFormat: string | null;
+  sourceLinked: boolean;
+  fontColor: number | null;
+  fontSizePt: number | null;
+  deleted: boolean;
+}
+
+/** A formatted data point (`c:dPt`). */
+export interface ChartPointInfo {
+  idx: number;
+  fill: ChartFillInfo;
+  line: ChartLineInfo;
+  marker: ChartMarkerInfo | null;
+}
+
+export interface ChartSeriesInfo {
+  idx: number;
+  order: number;
+  filtered: boolean;
+  name: ChartDataSource;
+  categories: ChartDataSource;
+  values: ChartDataSource;
+  x: ChartDataSource;
+  y: ChartDataSource;
+  size: ChartDataSource;
+  fill: ChartFillInfo;
+  line: ChartLineInfo;
+  marker: ChartMarkerInfo | null;
+  smooth: boolean | null;
+  points: ChartPointInfo[];
+  labels: ChartLabelsInfo | null;
+}
+
+export interface ChartPlotInfo {
+  type: ChartPlotType;
+  chartexLayout: string | null;
+  barDirection: 'col' | 'bar' | null;
+  grouping: ChartGrouping | null;
+  varyColors: boolean;
+  gapWidth: number | null;
+  overlap: number | null;
+  holeSize: number | null;
+  firstSliceAngle: number | null;
+  axisIds: number[];
+  series: ChartSeriesInfo[];
+}
+
+/** A chart or axis title: `text` for `Text`, `formula` for `Ref`, each empty otherwise. */
+export interface ChartTitleInfo {
+  kind: ChartTitleKind;
+  text: string;
+  formula: string;
+}
+
+export interface ChartAxisInfo {
+  id: number;
+  kind: ChartAxisKind;
+  position: 'b' | 't' | 'l' | 'r';
+  deleted: boolean;
+  crossAxis: number;
+  crosses: ChartAxisCrosses;
+  crossesAt: number | null;
+  min: number | null;
+  max: number | null;
+  majorUnit: number | null;
+  minorUnit: number | null;
+  logBase: number | null;
+  reversed: boolean;
+  numberFormat: string | null;
+  sourceLinked: boolean;
+  title: ChartTitleInfo;
+  majorGridlines: boolean;
+  minorGridlines: boolean;
+  tickLabelPosition: string | null;
+}
+
+/** The typed view of a chart. `source` is the rectangle every series was split from, `null` when they share none. */
+export interface ChartInfo {
+  objectId: number;
+  name: string;
+  description: string;
+  isChartex: boolean;
+  isPivotChart: boolean;
+  onChartsheet: boolean;
+  title: ChartTitleInfo;
+  autoTitleDeleted: boolean | null;
+  legend: { position: ChartLegendPosition; overlay: boolean; hiddenSeries: number[] };
+  blanksAs: ChartBlanksAs;
+  plotVisibleOnly: boolean | null;
+  date1904: boolean;
+  style: number | null;
+  plots: ChartPlotInfo[];
+  axes: ChartAxisInfo[];
+  hiddenCategories: number[];
+  source: { range: string; direction: ChartSeriesDirection; headerRow: boolean; headerColumn: boolean } | null;
+}
+
+/** A 0-based inclusive cell rectangle on sheet index `sheet`. */
+export interface ChartSheetRange {
+  sheet: number;
+  top: number;
+  left: number;
+  bottom: number;
+  right: number;
+}
+
+/** One resolved series; `values`, `states` (a {@link ChartPointState} each) and the optional `x` / `sizes` have `pointCount` entries. */
+export interface ChartDataSeries {
+  plotIndex: number;
+  idx: number;
+  name: string | null;
+  formatCode: string;
+  filtered: boolean;
+  values: Float64Array;
+  states: Uint8Array;
+  x: Float64Array | null;
+  sizes: Float64Array | null;
+  ranges: {
+    name: ChartSheetRange[];
+    categories: ChartSheetRange[];
+    values: ChartSheetRange[];
+    x: ChartSheetRange[];
+    y: ChartSheetRange[];
+    size: ChartSheetRange[];
+  };
+}
+
+/** Series resolved against the current cell values by Excel's rules. `unresolved` lists inputs that did not resolve; `axisId` names the axis of an `axis_title` entry. */
+export interface ChartData {
+  domain: 'category' | 'xy';
+  pointCount: number;
+  categories: {
+    labels: string[];
+    levels: string[][];
+    values: Float64Array | null;
+    formatCode: string;
+    generated: boolean;
+  };
+  series: ChartDataSeries[];
+  titleText: string | null;
+  axisTitleTexts: { axisId: number; text: string }[];
+  unresolved: { seriesIdx: number; source: string; axisId: number }[];
+}
+
+/** Options of `Workbook.insertChart`. An omitted `headerRow` / `headerColumn` follows Excel's detection, an omitted `title`
+ *  is Excel's automatic title and an empty one is no title. `placement` defaults to a two-cell anchor, and a zero
+ *  `widthEmu` / `heightEmu` means Excel's default frame. */
+export interface ChartInsertOptions {
+  kind: ChartInsertKind;
+  grouping?: ChartGrouping;
+  source: string;
+  direction?: ChartSeriesDirection;
+  headerRow?: boolean;
+  headerColumn?: boolean;
+  title?: string;
+  legend?: ChartLegendPosition;
+  name?: string;
+  description?: string;
+  placement?: ImagePlacement;
+}
+
+/** A patch leaves an omitted field unchanged; `null` removes the element. Colors are ARGB (`0xAARRGGBB`). */
+export interface ChartFillPatch {
+  color?: number | null;
+  transparency?: number | null;
+}
+
+export interface ChartLinePatch {
+  color?: number | null;
+  transparency?: number | null;
+  widthPt?: number | null;
+  dash?: ChartLineDash | null;
+  none?: boolean;
+}
+
+export interface ChartMarkerPatch {
+  symbol?: ChartMarkerSymbol;
+  size?: number | null;
+  fill?: ChartFillPatch;
+  line?: ChartLinePatch;
+}
+
+export interface ChartLabelsPatch {
+  showValue?: boolean;
+  showCategory?: boolean;
+  showSeries?: boolean;
+  showPercent?: boolean;
+  showLegendKey?: boolean;
+  separator?: string | null;
+  position?: ChartLabelPosition | null;
+  numberFormat?: string | null;
+  fontColor?: number | null;
+  fontSizePt?: number | null;
+}
+
+/** An empty string for `name`, `categories` or `x` removes the reference; one for `values`, `y` or `size` is rejected. */
+export interface ChartSeriesPatch {
+  name?: string;
+  categories?: string;
+  values?: string;
+  x?: string;
+  y?: string;
+  size?: string;
+  fill?: ChartFillPatch;
+  line?: ChartLinePatch;
+  marker?: ChartMarkerPatch | null;
+  smooth?: boolean;
+  labels?: ChartLabelsPatch | null;
+}
+
+export interface ChartPointPatch {
+  fill?: ChartFillPatch;
+  line?: ChartLinePatch;
+  marker?: ChartMarkerPatch | null;
+}
+
+/** A field the plot type does not have is rejected; `holeSize` is 10..90 and doughnut only. */
+export interface ChartPlotPatch {
+  gapWidth?: number;
+  overlap?: number;
+  firstSliceAngle?: number;
+  varyColors?: boolean;
+  holeSize?: number;
+}
+
+/** `crossesAt` is read when `crosses` is `At`. `null` on `logBase` makes the axis linear and on `tickLabelPosition`
+ *  (`nextTo`, `low`, `high`, `none`) restores the default. */
+export interface ChartAxisPatch {
+  visible?: boolean;
+  title?: string | null;
+  min?: number | null;
+  max?: number | null;
+  majorUnit?: number | null;
+  numberFormat?: string | null;
+  majorGridlines?: boolean;
+  reversed?: boolean;
+  logBase?: number | null;
+  crosses?: ChartAxisCrosses;
+  crossesAt?: number;
+  tickLabelPosition?: string | null;
+}
+
+/** Overrides `previewChartData` applies to a copy of the chart; an omitted field keeps the chart's own value. */
+export interface ChartPreviewOverrides {
+  source?: string;
+  direction?: ChartSeriesDirection;
+  headerRow?: boolean;
+  headerColumn?: boolean;
+  blanksAs?: ChartBlanksAs;
+  plotVisibleOnly?: boolean;
+}
+
+/** Result of `Workbook.getChart`; `chart` is `null` unless `status` is ok. */
+export interface ChartResult {
+  status: Status;
+  chart: ChartInfo | null;
+}
+
+/** Result of `Workbook.getChartData` and `previewChartData`; `data` is `null` unless `status` is ok. */
+export interface ChartDataResult {
+  status: Status;
+  data: ChartData | null;
+}
+
+/** Result of `Workbook.insertChart`; `objectId` is zero on failure. */
+export interface InsertChartResult {
+  status: Status;
+  objectId: number;
+}
+
+/** Result of `Workbook.addChartSeries`; `seriesIdx` is the new series' `c:idx`, zero on failure. */
+export interface AddChartSeriesResult {
+  status: Status;
+  seriesIdx: number;
+}
+
 /** Result of `Workbook.rangeStyleBases`; `xfIndices` is ascending and empty on failure. */
 export interface RangeStyleBasesResult {
   status: Status;
@@ -2317,14 +2759,14 @@ export interface RangeStyleSnapshotResult {
   bytes: Uint8Array;
 }
 
-/** Result of `Workbook.snapshotImage`. `bytes` is an opaque, versioned capture to hand
- *  to `restoreImage`; it is empty on failure. */
+/** Result of `Workbook.snapshotDrawing`. `bytes` is an opaque, versioned capture to hand
+ *  to `restoreDrawing`; it is empty on failure. */
 export interface ImageSnapshotResult {
   status: Status;
   bytes: Uint8Array;
 }
 
-/** Options of `Workbook.restoreImage`. With `newId` the capture is added on top as a
+/** Options of `Workbook.restoreDrawing`. With `newId` the capture is added on top as a
  *  copy with a fresh id; otherwise a picture with the same id is replaced. */
 export interface RestoreImageOptions {
   newId?: boolean;
@@ -2846,16 +3288,70 @@ export interface Workbook {
   getImage(sheet: number, objectId: number): ImageResult;
   /** Inserts `bytes` as a picture; existing drawing content is kept. */
   insertImage(sheet: number, bytes: Uint8Array, opts?: ImageInsertOptions): InsertImageResult;
-  /** Removes the picture `objectId` and its media once nothing else references it. */
-  removeImage(sheet: number, objectId: number): Status;
-  /** Moves and resizes the picture `objectId`, keeping its id, crop, rotation and every other element. */
-  setImageAnchor(sheet: number, objectId: number, placement: ImagePlacement): Status;
-  /** Makes the picture `objectId` item `index` of `listDrawingObjects`, whose order is the stacking order (0 is the back). */
-  setImageZOrder(sheet: number, objectId: number, index: number): Status;
-  /** Captures the picture `objectId` with its list position, element and media as opaque bytes for `restoreImage`. */
-  snapshotImage(sheet: number, objectId: number): ImageSnapshotResult;
-  /** Puts a `snapshotImage` capture back and returns the picture's id: in place of a picture with the same id at its recorded position, or as a copy on top with `newId`. */
-  restoreImage(sheet: number, bytes: Uint8Array, opts?: RestoreImageOptions): InsertImageResult;
+  /** Removes the picture or chart `objectId` and the parts only it reaches; other drawing content is kept. */
+  removeDrawing(sheet: number, objectId: number): Status;
+  /** Moves and resizes the picture or chart `objectId`, keeping its id, crop, rotation and every other element. */
+  setDrawingAnchor(sheet: number, objectId: number, placement: ImagePlacement): Status;
+  /** Makes the picture or chart `objectId` item `index` of `listDrawingObjects`, whose order is the stacking order (0 is the back). */
+  setDrawingZOrder(sheet: number, objectId: number, index: number): Status;
+  /** Captures the picture or chart `objectId` with its list position, element and dependent parts as opaque bytes for `restoreDrawing`. */
+  snapshotDrawing(sheet: number, objectId: number): ImageSnapshotResult;
+  /** Puts a `snapshotDrawing` capture back and returns the object's id: in place of an object with the same id at its recorded position, or as a copy on top with `newId`. */
+  restoreDrawing(sheet: number, bytes: Uint8Array, opts?: RestoreImageOptions): InsertImageResult;
+
+  // Charts. A chart is addressed as `(sheet, objectId)`, the id `listDrawingObjects` reports for a `DrawingObjectKind.Chart`.
+  /** Reads the typed view of the chart `objectId`. */
+  getChart(sheet: number, objectId: number): ChartResult;
+  /** Resolves the chart's series against the current cell values. */
+  getChartData(sheet: number, objectId: number): ChartDataResult;
+  /** Resolves the series as if `overrides` were applied to the chart; the workbook is not changed. */
+  previewChartData(sheet: number, objectId: number, overrides: ChartPreviewOverrides): ChartDataResult;
+  /** Creates a chart with filled caches and returns its object id. */
+  insertChart(sheet: number, options: ChartInsertOptions): InsertChartResult;
+  /** Replaces plot group `plot` with `kind`; `grouping` applies to column, bar, line and area. */
+  setChartType(sheet: number, objectId: number, plot: number, kind: ChartInsertKind, grouping?: ChartGrouping): Status;
+  /** Sets the chart title text, or removes the title with `null`. */
+  setChartTitle(sheet: number, objectId: number, title: string | null): Status;
+  /** Sets the legend position (`None` removes it) and overlay; `hiddenSeries` (series `c:idx` values) replaces the hidden legend entries when given. */
+  setChartLegend(
+    sheet: number,
+    objectId: number,
+    position: ChartLegendPosition,
+    overlay: boolean,
+    hiddenSeries?: number[],
+  ): Status;
+  /** Patches the axis `axisId`. */
+  setChartAxis(sheet: number, objectId: number, axisId: number, patch: ChartAxisPatch): Status;
+  /** Sets how blanks are plotted and whether hidden cells are skipped; `Absent` and `null` remove the element. */
+  setChartDisplay(sheet: number, objectId: number, blanksAs: ChartBlanksAs, plotVisibleOnly: boolean | null): Status;
+  /** Patches the series with `c:idx` `seriesIdx` of plot group `plot`. */
+  setChartSeries(sheet: number, objectId: number, plot: number, seriesIdx: number, patch: ChartSeriesPatch): Status;
+  /** Patches a data point; `null` or an empty patch removes its formatting. */
+  setChartPoint(
+    sheet: number,
+    objectId: number,
+    plot: number,
+    seriesIdx: number,
+    pointIdx: number,
+    patch: ChartPointPatch | null,
+  ): Status;
+  /** Patches plot group `plot`. */
+  setChartPlot(sheet: number, objectId: number, plot: number, patch: ChartPlotPatch): Status;
+  /** Replaces the chart filter: series by `c:idx` and categories by position are hidden. */
+  setChartFilter(sheet: number, objectId: number, hiddenSeries: number[], hiddenCategories: number[]): Status;
+  /** Appends a series to plot group `plot`; the patch must set `values` (`y` for a scatter plot). */
+  addChartSeries(sheet: number, objectId: number, plot: number, patch: ChartSeriesPatch): AddChartSeriesResult;
+  /** Removes the series with `c:idx` `seriesIdx` from plot group `plot`. */
+  removeChartSeries(sheet: number, objectId: number, plot: number, seriesIdx: number): Status;
+  /** Rebuilds every series from `source`, keeping the chart kind and each series' formatting by idx, and clears the filter. An omitted header flag follows Excel's detection. */
+  setChartSource(
+    sheet: number,
+    objectId: number,
+    source: string,
+    direction: ChartSeriesDirection,
+    headerRow?: boolean,
+    headerColumn?: boolean,
+  ): Status;
 
   /** Number of OOXML parts the reader carried through unchanged. */
   passthroughCount(): NumberResult;

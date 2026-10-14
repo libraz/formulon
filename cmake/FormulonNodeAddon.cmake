@@ -70,6 +70,7 @@ add_library(formulon_node MODULE
   src/node_addon/parts/addon_common.cc
   src/node_addon/parts/auto_filter.cc
   src/node_addon/parts/cells.cc
+  src/node_addon/parts/chart.cc
   src/node_addon/parts/conditional_format.cc
   src/node_addon/parts/drawing.cc
   src/node_addon/parts/free_funcs.cc

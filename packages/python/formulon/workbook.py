@@ -26,7 +26,20 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Dict, Iterator, List, Literal, NamedTuple, Optional, Sequence, Tuple, Union, cast
+from typing import (
+    Dict,
+    Iterator,
+    List,
+    Literal,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+    TypedDict,
+    Union,
+    cast,
+)
 
 from . import _structs as S
 from ._c import LIB, FormulonError, ValueKind, _sint, _uint, fm_value_t_size
@@ -48,6 +61,48 @@ __all__ = [
     "AnchorEditAs",
     "ImageInfo",
     "DrawingObject",
+    "ChartAxisCrosses",
+    "ChartAxisInfo",
+    "ChartAxisKind",
+    "ChartAxisPatch",
+    "ChartAxisTitleText",
+    "ChartBlanksAs",
+    "ChartCategories",
+    "ChartData",
+    "ChartDataSeries",
+    "ChartDataSource",
+    "ChartFillInfo",
+    "ChartFillPatch",
+    "ChartGrouping",
+    "ChartInfo",
+    "ChartInsertKind",
+    "ChartLabelPosition",
+    "ChartLabelsInfo",
+    "ChartLabelsPatch",
+    "ChartLegendInfo",
+    "ChartLegendPosition",
+    "ChartLineDash",
+    "ChartLineInfo",
+    "ChartLinePatch",
+    "ChartMarkerInfo",
+    "ChartMarkerPatch",
+    "ChartMarkerSymbol",
+    "ChartPlotInfo",
+    "ChartPlotPatch",
+    "ChartPlotType",
+    "ChartPointInfo",
+    "ChartPointPatch",
+    "ChartPointState",
+    "ChartPreviewOverrides",
+    "ChartSeriesDirection",
+    "ChartSeriesInfo",
+    "ChartSeriesPatch",
+    "ChartSeriesRanges",
+    "ChartSheetRange",
+    "ChartSourceInfo",
+    "ChartTitleInfo",
+    "ChartTitleKind",
+    "ChartUnresolved",
     "FilterKind",
     "FilterOperator",
     "DynamicFilterType",
@@ -1053,6 +1108,529 @@ class DrawingObject:
     name: str
     descr: str
     media_path: str
+
+
+class ChartPlotType(IntEnum):
+    """Plot group kind (``fm_chart_plot_type_t``)."""
+
+    BAR = 0
+    BAR_3D = 1
+    LINE = 2
+    LINE_3D = 3
+    AREA = 4
+    AREA_3D = 5
+    PIE = 6
+    PIE_3D = 7
+    DOUGHNUT = 8
+    OF_PIE = 9
+    SCATTER = 10
+    BUBBLE = 11
+    RADAR = 12
+    STOCK = 13
+    SURFACE = 14
+    SURFACE_3D = 15
+    CHARTEX = 16
+
+
+class ChartInsertKind(IntEnum):
+    """Kinds :meth:`Workbook.insert_chart` and :meth:`Workbook.set_chart_type` produce (``fm_chart_insert_kind_t``)."""
+
+    COLUMN = 0
+    BAR = 1
+    LINE = 2
+    AREA = 3
+    PIE = 4
+    SCATTER = 5
+    DOUGHNUT = 6
+
+
+class ChartGrouping(IntEnum):
+    """Series grouping of a bar, line or area plot (``fm_chart_grouping_t``)."""
+
+    CLUSTERED = 0
+    STACKED = 1
+    PERCENT_STACKED = 2
+    STANDARD = 3
+
+
+class ChartBlanksAs(IntEnum):
+    """How blank cells plot (``fm_chart_blanks_as_t``); ``ABSENT`` omits the element."""
+
+    ABSENT = 0
+    GAP = 1
+    ZERO = 2
+    SPAN = 3
+
+
+class ChartPointState(IntEnum):
+    """State of a resolved data point (``fm_chart_point_state_t``)."""
+
+    VALUE = 0
+    GAP = 1
+    CONNECT = 2
+
+
+class ChartAxisKind(IntEnum):
+    """Axis element type (``fm_chart_axis_kind_t``)."""
+
+    CATEGORY = 0
+    VALUE = 1
+    DATE = 2
+    SERIES = 3
+
+
+class ChartAxisCrosses(IntEnum):
+    """Where an axis crosses its partner (``fm_chart_axis_crosses_t``)."""
+
+    ABSENT = 0
+    AUTO_ZERO = 1
+    MIN = 2
+    MAX = 3
+    AT = 4
+
+
+class ChartTitleKind(IntEnum):
+    """What a chart or axis title holds (``fm_chart_title_kind_t``)."""
+
+    NONE = 0
+    TEXT = 1
+    REF = 2
+    AUTO = 3
+
+
+class ChartSeriesDirection(IntEnum):
+    """Direction series are split from a source range (``fm_chart_series_direction_t``)."""
+
+    AUTO = 0
+    COLUMNS = 1
+    ROWS = 2
+
+
+class ChartLegendPosition(IntEnum):
+    """Legend placement (``fm_chart_legend_position_t``); ``NONE`` is no legend."""
+
+    NONE = 0
+    BOTTOM = 1
+    TOP = 2
+    LEFT = 3
+    RIGHT = 4
+    TOP_RIGHT = 5
+
+
+class ChartLineDash(IntEnum):
+    """Outline dash style (``fm_chart_line_dash_t``)."""
+
+    SOLID = 0
+    DASH = 1
+    DOT = 2
+    DASH_DOT = 3
+    OTHER = 4
+
+
+class ChartMarkerSymbol(IntEnum):
+    """Series marker symbol (``fm_chart_marker_symbol_t``)."""
+
+    NONE = 0
+    AUTO = 1
+    CIRCLE = 2
+    SQUARE = 3
+    DIAMOND = 4
+    TRIANGLE = 5
+    OTHER = 6
+
+
+class ChartLabelPosition(IntEnum):
+    """Data label placement (``fm_chart_label_position_t``)."""
+
+    BEST_FIT = 0
+    CENTER = 1
+    INSIDE_BASE = 2
+    INSIDE_END = 3
+    OUTSIDE_END = 4
+    ABOVE = 5
+    BELOW = 6
+    LEFT = 7
+    RIGHT = 8
+
+
+@dataclass
+class ChartDataSource:
+    """One series input: ``kind`` is ``"none"``, ``"ref"`` (``formula`` set) or ``"literal"`` (``literal`` set)."""
+
+    kind: Literal["none", "ref", "literal"]
+    formula: str = ""
+    literal: List[Union[float, str]] = field(default_factory=list)
+
+
+@dataclass
+class ChartTitleInfo:
+    """A chart or axis title; ``text`` is the flattened rich text (``TEXT``), ``formula`` the reference (``REF``)."""
+
+    kind: Union[ChartTitleKind, int]
+    text: str = ""
+    formula: str = ""
+
+
+@dataclass
+class ChartFillInfo:
+    """Solid fill; ``color`` is ``0xAARRGGBB`` and ``transparency`` a percentage, each ``None`` when absent."""
+
+    color: Optional[int] = None
+    transparency: Optional[float] = None
+
+
+@dataclass
+class ChartLineInfo:
+    """Outline; ``none`` is an explicit no-line."""
+
+    color: Optional[int] = None
+    transparency: Optional[float] = None
+    width_pt: Optional[float] = None
+    dash: Optional[Union[ChartLineDash, int]] = None
+    none: bool = False
+
+
+@dataclass
+class ChartMarkerInfo:
+    """Series or point marker."""
+
+    symbol: Union[ChartMarkerSymbol, int]
+    size: Optional[int]
+    fill: ChartFillInfo
+    line: ChartLineInfo
+
+
+@dataclass
+class ChartLabelsInfo:
+    """Data labels of a series."""
+
+    show_value: bool
+    show_category: bool
+    show_series: bool
+    show_percent: bool
+    show_legend_key: bool
+    separator: Optional[str]
+    position: Optional[Union[ChartLabelPosition, int]]
+    number_format: Optional[str]
+    source_linked: bool
+    font_color: Optional[int]
+    font_size_pt: Optional[float]
+    deleted: bool
+
+
+@dataclass
+class ChartPointInfo:
+    """One formatted data point (``c:dPt``)."""
+
+    idx: int
+    fill: ChartFillInfo
+    line: ChartLineInfo
+    marker: Optional[ChartMarkerInfo]
+
+
+@dataclass
+class ChartSeriesInfo:
+    """One series of a plot group; ``idx`` is its ``c:idx``."""
+
+    idx: int
+    order: int
+    filtered: bool
+    name: ChartDataSource
+    categories: ChartDataSource
+    values: ChartDataSource
+    x: ChartDataSource
+    y: ChartDataSource
+    size: ChartDataSource
+    fill: ChartFillInfo
+    line: ChartLineInfo
+    marker: Optional[ChartMarkerInfo]
+    smooth: Optional[bool]
+    points: List[ChartPointInfo]
+    labels: Optional[ChartLabelsInfo]
+
+
+@dataclass
+class ChartPlotInfo:
+    """One plot group; ``bar_direction`` is ``"col"``, ``"bar"`` or ``None``."""
+
+    type: Union[ChartPlotType, int]
+    chartex_layout: Optional[str]
+    bar_direction: Optional[Literal["col", "bar"]]
+    grouping: Optional[Union[ChartGrouping, int]]
+    vary_colors: bool
+    gap_width: Optional[int]
+    overlap: Optional[int]
+    hole_size: Optional[int]
+    first_slice_angle: Optional[int]
+    axis_ids: List[int]
+    series: List[ChartSeriesInfo]
+
+
+@dataclass
+class ChartAxisInfo:
+    """One axis; ``position`` is ``"b"``, ``"t"``, ``"l"`` or ``"r"``. ``crosses_at`` is ``None`` unless ``crosses`` is ``AT``."""
+
+    id: int
+    kind: Union[ChartAxisKind, int]
+    position: Literal["b", "t", "l", "r"]
+    deleted: bool
+    cross_axis: int
+    crosses: Union[ChartAxisCrosses, int]
+    crosses_at: Optional[float]
+    min: Optional[float]
+    max: Optional[float]
+    major_unit: Optional[float]
+    minor_unit: Optional[float]
+    log_base: Optional[float]
+    reversed: bool
+    number_format: Optional[str]
+    source_linked: bool
+    title: ChartTitleInfo
+    major_gridlines: bool
+    minor_gridlines: bool
+    tick_label_position: Optional[str]
+
+
+@dataclass
+class ChartLegendInfo:
+    """Legend state; ``hidden_series`` lists the ``c:idx`` of series whose legend entry is hidden."""
+
+    position: Union[ChartLegendPosition, int]
+    overlay: bool
+    hidden_series: List[int] = field(default_factory=list)
+
+
+@dataclass
+class ChartSourceInfo:
+    """The rectangle every series was split from and how it was split."""
+
+    range: str
+    direction: Union[ChartSeriesDirection, int]
+    header_row: bool
+    header_column: bool
+
+
+@dataclass
+class ChartInfo:
+    """The typed view of a chart (:meth:`Workbook.get_chart`); ``source`` is ``None`` when series share no rectangle."""
+
+    object_id: int
+    name: str
+    description: str
+    is_chartex: bool
+    is_pivot_chart: bool
+    on_chartsheet: bool
+    title: ChartTitleInfo
+    auto_title_deleted: Optional[bool]
+    legend: ChartLegendInfo
+    blanks_as: Union[ChartBlanksAs, int]
+    plot_visible_only: Optional[bool]
+    date1904: bool
+    style: Optional[int]
+    plots: List[ChartPlotInfo]
+    axes: List[ChartAxisInfo]
+    hidden_categories: List[int]
+    source: Optional[ChartSourceInfo]
+
+
+@dataclass
+class ChartSheetRange:
+    """A rectangle of cells on one sheet (0-based, inclusive)."""
+
+    sheet: int
+    top: int
+    left: int
+    bottom: int
+    right: int
+
+
+@dataclass
+class ChartSeriesRanges:
+    """The resolved rectangles of each series input."""
+
+    name: List[ChartSheetRange] = field(default_factory=list)
+    categories: List[ChartSheetRange] = field(default_factory=list)
+    values: List[ChartSheetRange] = field(default_factory=list)
+    x: List[ChartSheetRange] = field(default_factory=list)
+    y: List[ChartSheetRange] = field(default_factory=list)
+    size: List[ChartSheetRange] = field(default_factory=list)
+
+
+@dataclass
+class ChartDataSeries:
+    """One resolved series; ``values`` and ``states`` (:class:`ChartPointState`) are parallel.
+
+    ``values`` is the y value in the XY domain; ``x`` is ``None`` outside it
+    and ``sizes`` is ``None`` unless the series is a bubble series.
+    """
+
+    plot_index: int
+    idx: int
+    name: Optional[str]
+    format_code: str
+    filtered: bool
+    values: List[float]
+    states: List[int]
+    x: Optional[List[float]]
+    sizes: Optional[List[float]]
+    ranges: ChartSeriesRanges
+
+
+@dataclass
+class ChartCategories:
+    """Resolved categories; ``values`` is set for numeric (date) categories and ``generated`` when the labels are 1..n."""
+
+    labels: List[str]
+    levels: List[List[str]]
+    values: Optional[List[float]]
+    format_code: str
+    generated: bool
+
+
+@dataclass
+class ChartAxisTitleText:
+    """Resolved title text of one axis."""
+
+    axis_id: int
+    text: str
+
+
+@dataclass
+class ChartUnresolved:
+    """An input that did not resolve; its points read as gaps.
+
+    ``source`` is ``name``, ``cat``, ``val``, ``x``, ``y``, ``size``, ``title`` or ``axis_title``.
+    """
+
+    series_idx: int
+    source: str
+    axis_id: int
+
+
+@dataclass
+class ChartData:
+    """A chart's series resolved against the current cell values (:meth:`Workbook.get_chart_data`)."""
+
+    domain: Literal["category", "xy"]
+    point_count: int
+    categories: ChartCategories
+    series: List[ChartDataSeries]
+    title_text: Optional[str]
+    axis_title_texts: List[ChartAxisTitleText]
+    unresolved: List[ChartUnresolved]
+
+
+class ChartFillPatch(TypedDict, total=False):
+    """Fill patch: an omitted key is kept, ``None`` removes the element."""
+
+    color: Optional[int]
+    transparency: Optional[float]
+
+
+class ChartLinePatch(TypedDict, total=False):
+    """Outline patch; ``none`` is a bool and rejects ``None``."""
+
+    color: Optional[int]
+    transparency: Optional[float]
+    width_pt: Optional[float]
+    dash: Optional[Union[ChartLineDash, int]]
+    none: bool
+
+
+class ChartMarkerPatch(TypedDict, total=False):
+    """Marker patch; ``symbol`` rejects ``None``."""
+
+    symbol: Union[ChartMarkerSymbol, int]
+    size: Optional[float]
+    fill: ChartFillPatch
+    line: ChartLinePatch
+
+
+class ChartLabelsPatch(TypedDict, total=False):
+    """Data-label patch; the ``show_*`` flags are bools and reject ``None``."""
+
+    show_value: bool
+    show_category: bool
+    show_series: bool
+    show_percent: bool
+    show_legend_key: bool
+    separator: Optional[str]
+    position: Union[ChartLabelPosition, int]
+    number_format: Optional[str]
+    font_color: Optional[int]
+    font_size_pt: Optional[float]
+
+
+class ChartSeriesPatch(TypedDict, total=False):
+    """Series patch.
+
+    A reference is its new text; ``""`` removes ``name``, ``categories`` or ``x``
+    (an empty ``values``, ``y`` or ``size`` is rejected). ``None`` on ``marker``
+    or ``labels`` removes it.
+    """
+
+    name: str
+    categories: str
+    values: str
+    x: str
+    y: str
+    size: str
+    fill: ChartFillPatch
+    line: ChartLinePatch
+    marker: Optional[ChartMarkerPatch]
+    smooth: bool
+    labels: Optional[ChartLabelsPatch]
+
+
+class ChartPointPatch(TypedDict, total=False):
+    """Data-point patch; an empty patch (or ``None``) removes the point's formatting."""
+
+    fill: ChartFillPatch
+    line: ChartLinePatch
+    marker: Optional[ChartMarkerPatch]
+
+
+class ChartPlotPatch(TypedDict, total=False):
+    """Plot-group patch; a field the plot type does not have is rejected. ``hole_size`` is 10..90 (doughnut only)."""
+
+    gap_width: int
+    overlap: int
+    first_slice_angle: int
+    vary_colors: bool
+    hole_size: int
+
+
+class ChartAxisPatch(TypedDict, total=False):
+    """Axis patch.
+
+    ``None`` on ``title`` removes the axis title, on ``log_base`` makes the axis
+    linear and on ``tick_label_position`` (``nextTo``, ``low``, ``high``, ``none``)
+    restores the default. ``crosses_at`` is read when ``crosses`` is ``AT``.
+    """
+
+    visible: bool
+    title: Optional[str]
+    min: Optional[float]
+    max: Optional[float]
+    major_unit: Optional[float]
+    number_format: Optional[str]
+    major_gridlines: bool
+    reversed: bool
+    log_base: Optional[float]
+    crosses: Union[ChartAxisCrosses, int]
+    crosses_at: float
+    tick_label_position: Optional[str]
+
+
+class ChartPreviewOverrides(TypedDict, total=False):
+    """Overrides for :meth:`Workbook.preview_chart_data`; an omitted key keeps the chart's own value."""
+
+    source: str
+    direction: Union[ChartSeriesDirection, int]
+    header_row: bool
+    header_column: bool
+    blanks_as: Union[ChartBlanksAs, int]
+    plot_visible_only: bool
 
 
 @dataclass
@@ -2247,6 +2825,500 @@ def _image_anchor_fields(
         "width_emu": int(width_emu),
         "height_emu": int(height_emu),
     }
+
+
+# ---------------------------------------------------------------------------
+# Chart marshalling
+# ---------------------------------------------------------------------------
+
+# `fm_chart_patch_op_t`: a zeroed patch field keeps, so only CLEAR and SET are written.
+_PATCH_CLEAR = 1
+_PATCH_SET = 2
+
+_CHART_AXIS_POSITIONS = {0: "b", 1: "t", 2: "l", 3: "r"}
+_CHART_BAR_DIRECTIONS = {1: "col", 2: "bar"}
+_CHART_SOURCE_KINDS = {0: "none", 1: "ref", 2: "literal"}
+# `fm_chart_role_t` order, which is also the order of `fm_chart_data_series_t.range_count`.
+_CHART_ROLES = ("name", "categories", "values", "x", "y", "size")
+
+# (patch key, C field, scalar kind) per patch struct.
+_FILL_PATCH_SPEC = (("color", "color", "u32"), ("transparency", "transparency_pct", "f64"))
+_LINE_PATCH_SPEC = (
+    ("color", "color", "u32"),
+    ("transparency", "transparency_pct", "f64"),
+    ("width_pt", "width_pt", "f64"),
+    ("dash", "dash", "i32"),
+    ("none", "none", "bool"),
+)
+_MARKER_PATCH_SPEC = (("symbol", "symbol", "i32"), ("size", "size", "f64"))
+_LABELS_PATCH_SPEC = (
+    ("show_value", "show_value", "bool"),
+    ("show_category", "show_category", "bool"),
+    ("show_series", "show_series", "bool"),
+    ("show_percent", "show_percent", "bool"),
+    ("show_legend_key", "show_legend_key", "bool"),
+    ("separator", "separator", "str"),
+    ("position", "position", "i32"),
+    ("number_format", "number_format", "str"),
+    ("font_color", "font_color", "u32"),
+    ("font_size_pt", "font_size_pt", "f64"),
+)
+_PLOT_PATCH_SPEC = (
+    ("gap_width", "gap_width", "u32"),
+    ("overlap", "overlap", "i32"),
+    ("first_slice_angle", "first_slice_angle", "u32"),
+    ("vary_colors", "vary_colors", "bool"),
+    ("hole_size", "hole_size", "u32"),
+)
+_AXIS_PATCH_SPEC = (
+    ("visible", "visible", "bool"),
+    ("title", "title", "str"),
+    ("min", "min", "f64"),
+    ("max", "max", "f64"),
+    ("major_unit", "major_unit", "f64"),
+    ("number_format", "number_format", "str"),
+    ("major_gridlines", "major_gridlines", "bool"),
+    ("reversed", "reversed", "bool"),
+    ("log_base", "log_base", "f64"),
+    ("crosses", "crosses", "i32"),
+    ("tick_label_position", "tick_label_pos", "str"),
+)
+# Patch fields whose `_op` companion drops the unit suffix of the value field.
+_PATCH_OP_PREFIX = {"transparency_pct": "transparency", "width_pt": "width", "font_size_pt": "font_size"}
+_PREVIEW_OVERRIDE_SPEC = (
+    ("direction", "direction", "i32"),
+    ("header_row", "header_row", "bool"),
+    ("header_column", "header_column", "bool"),
+    ("blanks_as", "blanks_as", "i32"),
+    ("plot_visible_only", "plot_vis_only", "bool"),
+)
+_SERIES_REF_KEYS = ("name", "categories", "values", "x", "y", "size")
+
+
+def _enum(cls, value: int):
+    """Wrap ``value`` in ``cls``, keeping the raw integer for a member the binding does not know."""
+    try:
+        return cls(value)
+    except ValueError:
+        return value
+
+
+def _nan_none(value: float) -> Optional[float]:
+    return None if value != value else value
+
+
+def _tri(value: int) -> Optional[bool]:
+    """Decode an ``fm_chart_tri_t`` (absent / false / true)."""
+    return None if value == 0 else value == 2
+
+
+def _opt_cstr(ptr: int) -> Optional[str]:
+    return LIB.read_cstr(ptr) if ptr else None
+
+
+def _read_struct(fn, layout: S.Struct, *args) -> Dict[str, object]:
+    """Call a ``(..., out_struct*)`` ABI function and decode the struct it fills."""
+    ptr = S.alloc_struct(LIB, layout)
+    try:
+        _check(fn(*args, ptr), getattr(fn, "__name__", layout.name))
+        return layout.unpack(LIB, ptr)
+    finally:
+        LIB.free(ptr)
+
+
+def _read_chart_title(d: Dict[str, object]) -> ChartTitleInfo:
+    return ChartTitleInfo(
+        kind=_enum(ChartTitleKind, d["kind"]), text=LIB.read_cstr(d["text"]), formula=LIB.read_cstr(d["formula"])
+    )
+
+
+def _read_chart_fill(d: Dict[str, object]) -> ChartFillInfo:
+    return ChartFillInfo(color=d["color"] if d["has_color"] else None, transparency=_nan_none(d["transparency_pct"]))
+
+
+def _read_chart_line(d: Dict[str, object]) -> ChartLineInfo:
+    return ChartLineInfo(
+        color=d["color"] if d["has_color"] else None,
+        transparency=_nan_none(d["transparency_pct"]),
+        width_pt=_nan_none(d["width_pt"]),
+        dash=_enum(ChartLineDash, d["dash"]) if d["has_dash"] else None,
+        none=bool(d["none"]),
+    )
+
+
+def _read_chart_marker(d: Dict[str, object]) -> ChartMarkerInfo:
+    return ChartMarkerInfo(
+        symbol=_enum(ChartMarkerSymbol, d["symbol"]),
+        size=d["size"] if d["has_size"] else None,
+        fill=_read_chart_fill(d["fill"]),
+        line=_read_chart_line(d["line"]),
+    )
+
+
+def _read_chart_labels(d: Dict[str, object]) -> ChartLabelsInfo:
+    return ChartLabelsInfo(
+        show_value=bool(d["show_value"]),
+        show_category=bool(d["show_category"]),
+        show_series=bool(d["show_series"]),
+        show_percent=bool(d["show_percent"]),
+        show_legend_key=bool(d["show_legend_key"]),
+        separator=_opt_cstr(d["separator"]),
+        position=_enum(ChartLabelPosition, d["position"]) if d["has_position"] else None,
+        number_format=_opt_cstr(d["number_format"]),
+        source_linked=bool(d["source_linked"]),
+        font_color=d["font_color"] if d["has_font_color"] else None,
+        font_size_pt=_nan_none(d["font_size_pt"]),
+        deleted=bool(d["deleted"]),
+    )
+
+
+def _read_chart_data_source(chart: int, plot: int, series: int, role: int, d: Dict[str, object]) -> ChartDataSource:
+    kind = _CHART_SOURCE_KINDS.get(d["kind"], "none")
+    literal: List[Union[float, str]] = []
+    if kind == "literal":
+        for i in range(d["literal_count"]):
+            point = _read_struct(LIB.fm_chart_series_literal_at, S.CHART_LITERAL, chart, plot, series, role, i)
+            literal.append(LIB.read_cstr(point["text"]) if point["is_text"] else point["number"])
+    return ChartDataSource(kind=kind, formula=LIB.read_cstr(d["formula"]), literal=literal)
+
+
+def _read_chart_series(chart: int, plot: int, series: int) -> ChartSeriesInfo:
+    d = _read_struct(LIB.fm_chart_series_at, S.CHART_SERIES, chart, plot, series)
+    sources = {key: _read_chart_data_source(chart, plot, series, role, d[key]) for role, key in enumerate(_CHART_ROLES)}
+    points: List[ChartPointInfo] = []
+    for i in range(d["point_count"]):
+        p = _read_struct(LIB.fm_chart_series_point_at, S.CHART_POINT, chart, plot, series, i)
+        points.append(
+            ChartPointInfo(
+                idx=p["idx"],
+                fill=_read_chart_fill(p["fill"]),
+                line=_read_chart_line(p["line"]),
+                marker=_read_chart_marker(p["marker"]) if p["has_marker"] else None,
+            )
+        )
+    return ChartSeriesInfo(
+        idx=d["idx"],
+        order=d["order"],
+        filtered=bool(d["filtered"]),
+        fill=_read_chart_fill(d["fill"]),
+        line=_read_chart_line(d["line"]),
+        marker=_read_chart_marker(d["marker"]) if d["has_marker"] else None,
+        smooth=_tri(d["smooth"]),
+        points=points,
+        labels=_read_chart_labels(d["labels"]) if d["has_labels"] else None,
+        **sources,
+    )
+
+
+def _read_chart_plot(chart: int, plot: int) -> ChartPlotInfo:
+    d = _read_struct(LIB.fm_chart_plot_at, S.CHART_PLOT, chart, plot)
+    return ChartPlotInfo(
+        type=_enum(ChartPlotType, d["type"]),
+        chartex_layout=LIB.read_cstr(d["chartex_layout"]) or None,
+        bar_direction=_CHART_BAR_DIRECTIONS.get(d["bar_dir"]),
+        grouping=_enum(ChartGrouping, d["grouping"]) if d["has_grouping"] else None,
+        vary_colors=_tri(d["vary_colors"]) is True,
+        gap_width=d["gap_width"] if d["has_gap_width"] else None,
+        overlap=d["overlap"] if d["has_overlap"] else None,
+        hole_size=d["hole_size"] if d["has_hole_size"] else None,
+        first_slice_angle=d["first_slice_angle"] if d["has_first_slice_angle"] else None,
+        axis_ids=[
+            _read_count(LIB.fm_chart_plot_axis_id_at, chart, _uint(plot, "plot"), _uint(i, "idx"))
+            for i in range(d["axis_id_count"])
+        ],
+        series=[_read_chart_series(chart, plot, i) for i in range(d["series_count"])],
+    )
+
+
+def _read_chart_axis(chart: int, idx: int) -> ChartAxisInfo:
+    d = _read_struct(LIB.fm_chart_axis_at, S.CHART_AXIS, chart, idx)
+    return ChartAxisInfo(
+        id=d["id"],
+        kind=_enum(ChartAxisKind, d["kind"]),
+        position=_CHART_AXIS_POSITIONS.get(d["position"], "b"),
+        deleted=bool(d["deleted"]),
+        cross_axis=d["cross_axis"],
+        crosses=_enum(ChartAxisCrosses, d["crosses"]),
+        crosses_at=_nan_none(d["crosses_at"]),
+        min=_nan_none(d["min"]),
+        max=_nan_none(d["max"]),
+        major_unit=_nan_none(d["major_unit"]),
+        minor_unit=_nan_none(d["minor_unit"]),
+        log_base=_nan_none(d["log_base"]),
+        reversed=bool(d["reversed"]),
+        number_format=_opt_cstr(d["number_format"]),
+        source_linked=bool(d["source_linked"]),
+        title=_read_chart_title(d["title"]),
+        major_gridlines=bool(d["major_gridlines"]),
+        minor_gridlines=bool(d["minor_gridlines"]),
+        tick_label_position=_opt_cstr(d["tick_label_pos"]),
+    )
+
+
+def _read_chart(chart: int) -> ChartInfo:
+    """Decode an open ``fm_chart_t`` handle."""
+    d = _read_struct(LIB.fm_chart_info, S.CHART_INFO, chart)
+    source = None
+    if d["source_range"]:
+        source = ChartSourceInfo(
+            range=LIB.read_cstr(d["source_range"]),
+            direction=_enum(ChartSeriesDirection, d["source_direction"]),
+            header_row=bool(d["source_header_row"]),
+            header_column=bool(d["source_header_column"]),
+        )
+    return ChartInfo(
+        object_id=d["object_id"],
+        name=LIB.read_cstr(d["name"]),
+        description=LIB.read_cstr(d["descr"]),
+        is_chartex=bool(d["is_chartex"]),
+        is_pivot_chart=bool(d["is_pivot_chart"]),
+        on_chartsheet=bool(d["on_chartsheet"]),
+        title=_read_chart_title(d["title"]),
+        auto_title_deleted=_tri(d["auto_title_deleted"]),
+        legend=ChartLegendInfo(
+            position=_enum(ChartLegendPosition, d["legend_position"]),
+            overlay=bool(d["legend_overlay"]),
+            hidden_series=[
+                _read_count(LIB.fm_chart_legend_hidden_at, chart, _uint(i, "idx"))
+                for i in range(d["legend_hidden_count"])
+            ],
+        ),
+        blanks_as=_enum(ChartBlanksAs, d["blanks_as"]),
+        plot_visible_only=_tri(d["plot_vis_only"]),
+        date1904=bool(d["date1904"]),
+        style=d["style"] if d["has_style"] else None,
+        plots=[_read_chart_plot(chart, i) for i in range(d["plot_count"])],
+        axes=[_read_chart_axis(chart, i) for i in range(d["axis_count"])],
+        hidden_categories=[
+            _read_count(LIB.fm_chart_hidden_category_at, chart, _uint(i, "idx"))
+            for i in range(d["hidden_category_count"])
+        ],
+        source=source,
+    )
+
+
+def _read_chart_data_array(ptr: int, count: int, fmt: str, width: int) -> Optional[List]:
+    """Copy ``count`` values of struct format ``fmt`` out of a handle-owned array; ``None`` for a NULL array."""
+    if not ptr:
+        return None
+    if count == 0:
+        return []
+    return list(struct.unpack(f"<{count}{fmt}", LIB.read_bytes(ptr, count * width)))
+
+
+def _read_chart_data(data: int) -> ChartData:
+    """Decode an open ``fm_chart_data_t`` handle."""
+    info = _read_struct(LIB.fm_chart_data_info, S.CHART_DATA_INFO, data)
+    labels: List[str] = []
+    values: List[float] = []
+    label_out = _alloc_out_ptr()
+    value_out = LIB.alloc(8)
+    try:
+        for i in range(info["category_label_count"]):
+            _check(
+                LIB.fm_chart_data_category_at(data, _uint(i, "idx"), label_out, value_out), "fm_chart_data_category_at"
+            )
+            labels.append(LIB.read_cstr(LIB.read_u32(label_out)))
+            values.append(LIB.read_f64(value_out))
+        levels: List[List[str]] = []
+        for level in range(info["category_level_count"]):
+            size = _read_count(LIB.fm_chart_data_category_level_size, data, _uint(level, "level"))
+            names: List[str] = []
+            for i in range(size):
+                _check(
+                    LIB.fm_chart_data_category_level_at(data, _uint(level, "level"), _uint(i, "idx"), label_out),
+                    "fm_chart_data_category_level_at",
+                )
+                names.append(LIB.read_cstr(LIB.read_u32(label_out)))
+            levels.append(names)
+    finally:
+        LIB.free(value_out)
+        LIB.free(label_out)
+
+    series: List[ChartDataSeries] = []
+    for i in range(info["series_count"]):
+        s = _read_struct(LIB.fm_chart_data_series_at, S.CHART_DATA_SERIES, data, i)
+        points = _read_struct(LIB.fm_chart_data_series_points, S.CHART_DATA_POINTS, data, i)
+        n = points["count"]
+        ranges = ChartSeriesRanges()
+        for role, key in enumerate(_CHART_ROLES):
+            for j in range(s["range_count"][role]):
+                r = _read_struct(LIB.fm_chart_data_range_at, S.CHART_SHEET_RANGE, data, i, role, j)
+                getattr(ranges, key).append(ChartSheetRange(**r))
+        series.append(
+            ChartDataSeries(
+                plot_index=s["plot_index"],
+                idx=s["idx"],
+                name=_opt_cstr(s["name"]),
+                format_code=LIB.read_cstr(s["format_code"]),
+                filtered=bool(s["filtered"]),
+                values=_read_chart_data_array(points["values"], n, "d", 8) or [],
+                states=_read_chart_data_array(points["states"], n, "B", 1) or [],
+                x=_read_chart_data_array(points["x"], n, "d", 8),
+                sizes=_read_chart_data_array(points["sizes"], n, "d", 8) if s["has_sizes"] else None,
+                ranges=ranges,
+            )
+        )
+    return ChartData(
+        domain="xy" if info["is_xy"] else "category",
+        point_count=info["point_count"],
+        categories=ChartCategories(
+            labels=labels,
+            levels=levels,
+            values=values if info["category_value_count"] else None,
+            format_code=LIB.read_cstr(info["category_format_code"]),
+            generated=bool(info["categories_generated"]),
+        ),
+        series=series,
+        title_text=_opt_cstr(info["title_text"]),
+        axis_title_texts=[
+            ChartAxisTitleText(axis_id=t["axis_id"], text=LIB.read_cstr(t["text"]))
+            for t in (
+                _read_struct(LIB.fm_chart_data_axis_title_at, S.CHART_AXIS_TITLE_TEXT, data, i)
+                for i in range(info["axis_title_count"])
+            )
+        ],
+        unresolved=[
+            ChartUnresolved(series_idx=u["series_idx"], source=LIB.read_cstr(u["source"]), axis_id=u["axis_id"])
+            for u in (
+                _read_struct(LIB.fm_chart_data_unresolved_at, S.CHART_UNRESOLVED, data, i)
+                for i in range(info["unresolved_count"])
+            )
+        ],
+    )
+
+
+def _str_ptr(value: str, owned: List[int]) -> int:
+    """Allocate ``value`` as UTF-8 even when empty (the ABI reads ``""`` and ``NULL`` differently)."""
+    ptr, _ = LIB.alloc_utf8(value)
+    owned.append(ptr)
+    return ptr
+
+
+def _patch_scalar(kind: str, value, key: str, owned: List[int]):
+    if kind == "u32":
+        return _uint(value, key)
+    if kind == "i32":
+        return _sint(value, key)
+    if kind == "bool":
+        return 1 if value else 0
+    if kind == "f64":
+        return float(value)
+    return _str_ptr(value, owned)
+
+
+def _check_patch_keys(patch: Mapping, spec: Sequence, extra: Sequence[str], what: str) -> None:
+    unknown = set(patch) - {key for key, _, _ in spec} - set(extra)
+    if unknown:
+        raise TypeError(f"formulon: unknown {what} key(s): {sorted(unknown)}")
+
+
+def _encode_patch(
+    spec: Sequence, patch: Mapping, extra: Sequence[str], what: str, owned: List[int]
+) -> Dict[str, object]:
+    """Encode the ``(op, value)`` pair of every ``spec`` key present in ``patch``.
+
+    An absent key stays zero (keep), ``None`` writes the clear op and any other
+    value the set op beside it.
+    """
+    _check_patch_keys(patch, spec, extra, what)
+    out: Dict[str, object] = {}
+    for key, field_name, kind in spec:
+        if key not in patch:
+            continue
+        value = patch[key]
+        op_field = _PATCH_OP_PREFIX.get(field_name, field_name) + "_op"
+        if value is None:
+            out[op_field] = _PATCH_CLEAR
+        else:
+            out[op_field] = _PATCH_SET
+            out[field_name] = _patch_scalar(kind, value, key, owned)
+    return out
+
+
+def _encode_fill_patch(patch: Optional[Mapping], owned: List[int]) -> Dict[str, object]:
+    return _encode_patch(_FILL_PATCH_SPEC, patch or {}, (), "fill patch", owned)
+
+
+def _encode_line_patch(patch: Optional[Mapping], owned: List[int]) -> Dict[str, object]:
+    return _encode_patch(_LINE_PATCH_SPEC, patch or {}, (), "line patch", owned)
+
+
+def _encode_marker_patch(patch: Mapping, owned: List[int]) -> Dict[str, object]:
+    out = _encode_patch(_MARKER_PATCH_SPEC, patch, ("fill", "line"), "marker patch", owned)
+    out["fill"] = _encode_fill_patch(patch.get("fill"), owned)
+    out["line"] = _encode_line_patch(patch.get("line"), owned)
+    return out
+
+
+def _encode_labels_patch(patch: Mapping, owned: List[int]) -> Dict[str, object]:
+    return _encode_patch(_LABELS_PATCH_SPEC, patch, (), "labels patch", owned)
+
+
+def _encode_optional_patch(out: Dict[str, object], key: str, patch: Mapping, encode, owned: List[int]) -> None:
+    """Encode a nested patch that ``None`` removes (``<key>_op`` beside the nested struct)."""
+    if key not in patch:
+        return
+    if patch[key] is None:
+        out[key + "_op"] = _PATCH_CLEAR
+    else:
+        out[key + "_op"] = _PATCH_SET
+        out[key] = encode(patch[key], owned)
+
+
+def _encode_series_patch(patch: Mapping, owned: List[int]) -> Dict[str, object]:
+    unknown = set(patch) - set(_SERIES_REF_KEYS) - {"fill", "line", "marker", "smooth", "labels"}
+    if unknown:
+        raise TypeError(f"formulon: unknown series patch key(s): {sorted(unknown)}")
+    out: Dict[str, object] = {key: _str_ptr(patch[key], owned) for key in _SERIES_REF_KEYS if key in patch}
+    out["fill"] = _encode_fill_patch(patch.get("fill"), owned)
+    out["line"] = _encode_line_patch(patch.get("line"), owned)
+    _encode_optional_patch(out, "marker", patch, _encode_marker_patch, owned)
+    _encode_optional_patch(out, "labels", patch, _encode_labels_patch, owned)
+    if "smooth" in patch:
+        out["smooth_op"] = _PATCH_CLEAR if patch["smooth"] is None else _PATCH_SET
+        out["smooth"] = 1 if patch["smooth"] else 0
+    return out
+
+
+def _encode_point_patch(patch: Optional[Mapping], owned: List[int]) -> Dict[str, object]:
+    patch = patch or {}
+    unknown = set(patch) - {"fill", "line", "marker"}
+    if unknown:
+        raise TypeError(f"formulon: unknown point patch key(s): {sorted(unknown)}")
+    out: Dict[str, object] = {
+        "fill": _encode_fill_patch(patch.get("fill"), owned),
+        "line": _encode_line_patch(patch.get("line"), owned),
+    }
+    _encode_optional_patch(out, "marker", patch, _encode_marker_patch, owned)
+    return out
+
+
+def _encode_axis_patch(patch: Mapping, owned: List[int]) -> Dict[str, object]:
+    out = _encode_patch(_AXIS_PATCH_SPEC, patch, ("crosses_at",), "axis patch", owned)
+    if "crosses_at" in patch:
+        out["crosses_at"] = float(patch["crosses_at"])
+    return out
+
+
+def _tri_flag(flag: Optional[bool]) -> int:
+    """Map an optional flag to ``fm_chart_tri_t``: absent, false, true."""
+    return 0 if flag is None else (2 if flag else 1)
+
+
+def _header_mode(flag: Optional[bool]) -> int:
+    """Map an optional flag to ``fm_chart_header_mode_t``: ``None`` is Excel's detection."""
+    return 0 if flag is None else (1 if flag else 2)
+
+
+def _id_array(values: Sequence[int], name: str, owned: List[int]) -> int:
+    """Allocate ``values`` as a ``uint32_t`` array (NULL when empty)."""
+    if not values:
+        return 0
+    ptr = LIB.alloc(4 * len(values))
+    owned.append(ptr)
+    LIB.write_bytes(ptr, struct.pack(f"<{len(values)}I", *(_uint(v, name) for v in values)))
+    return ptr
 
 
 def _read_owned_buffer(fn, *args, default_op: str = "save") -> bytes:
@@ -4856,15 +5928,15 @@ class Workbook:
             for p in owned:
                 LIB.free(p)
 
-    def remove_image(self, sheet: int, object_id: int) -> None:
-        """Remove the picture ``object_id``; other drawing content is kept."""
+    def remove_drawing(self, sheet: int, object_id: int) -> None:
+        """Remove the picture or chart ``object_id`` and the parts only it reaches; other drawing content is kept."""
         h = self._require()
         _check(
-            LIB.fm_sheet_remove_image(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id")),
-            "fm_sheet_remove_image",
+            LIB.fm_sheet_remove_drawing(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id")),
+            "fm_sheet_remove_drawing",
         )
 
-    def set_image_anchor(
+    def set_drawing_anchor(
         self,
         sheet: int,
         object_id: int,
@@ -4878,19 +5950,19 @@ class Workbook:
         width_emu: int = 0,
         height_emu: int = 0,
     ) -> None:
-        """Move and resize the picture ``object_id``, keeping its id, crop, rotation and every other element.
+        """Move and resize the picture or chart ``object_id``, keeping its id and every other element.
 
         The placement is in the quantities :meth:`list_drawing_objects`
         reports: ``(row, col)`` and the offsets are the top-left marker of the
-        anchor box, ``width_emu`` and ``height_emu`` the picture's own unrotated
+        anchor box, ``width_emu`` and ``height_emu`` the object's own unrotated
         size (``cx`` and ``cy``); ``0`` keeps the current size. ``edit_as`` is
         honoured for a two-cell anchor only.
         """
         h = self._require()
         owned: List[int] = []
         try:
-            ptr = _alloc_struct_array(S.IMAGE_ANCHOR, 1, owned)
-            S.IMAGE_ANCHOR.pack(
+            ptr = _alloc_struct_array(S.DRAWING_ANCHOR, 1, owned)
+            S.DRAWING_ANCHOR.pack(
                 LIB,
                 ptr,
                 _image_anchor_fields(
@@ -4905,27 +5977,27 @@ class Workbook:
                 ),
             )
             _check(
-                LIB.fm_sheet_set_image_anchor(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), ptr),
-                "fm_sheet_set_image_anchor",
+                LIB.fm_sheet_set_drawing_anchor(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), ptr),
+                "fm_sheet_set_drawing_anchor",
             )
         finally:
             for p in owned:
                 LIB.free(p)
 
-    def set_image_z_order(self, sheet: int, object_id: int, index: int) -> None:
-        """Make the picture ``object_id`` item ``index`` of :meth:`list_drawing_objects` (``0`` is the back)."""
+    def set_drawing_z_order(self, sheet: int, object_id: int, index: int) -> None:
+        """Make the picture or chart ``object_id`` item ``index`` of :meth:`list_drawing_objects` (``0`` is the back)."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_image_z_order(
+            LIB.fm_sheet_set_drawing_z_order(
                 h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), _uint(index, "index")
             ),
-            "fm_sheet_set_image_z_order",
+            "fm_sheet_set_drawing_z_order",
         )
 
-    def snapshot_image(self, sheet: int, object_id: int) -> bytes:
-        """Capture the picture ``object_id`` as opaque bytes for :meth:`restore_image`.
+    def snapshot_drawing(self, sheet: int, object_id: int) -> bytes:
+        """Capture the picture or chart ``object_id`` as opaque bytes for :meth:`restore_drawing`.
 
-        The capture holds the picture's list position, element and media.
+        The capture holds the object's list position, element and every part it reaches.
         """
         h = self._require()
         bytes_ptr = _alloc_out_ptr()
@@ -4933,10 +6005,10 @@ class Workbook:
         data_ptr = 0
         try:
             _check(
-                LIB.fm_sheet_snapshot_image(
+                LIB.fm_sheet_snapshot_drawing(
                     h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), bytes_ptr, len_ptr
                 ),
-                "fm_sheet_snapshot_image",
+                "fm_sheet_snapshot_drawing",
             )
             data_ptr = LIB.read_u32(bytes_ptr)
             return LIB.read_bytes(data_ptr, LIB.read_u32(len_ptr))
@@ -4946,10 +6018,10 @@ class Workbook:
             LIB.free(len_ptr)
             LIB.free(bytes_ptr)
 
-    def restore_image(self, sheet: int, data: Union[bytes, bytearray, memoryview], *, new_id: bool = False) -> int:
-        """Put a :meth:`snapshot_image` capture back and return the picture's id.
+    def restore_drawing(self, sheet: int, data: Union[bytes, bytearray, memoryview], *, new_id: bool = False) -> int:
+        """Put a :meth:`snapshot_drawing` capture back and return the object's id.
 
-        A picture with the same id is replaced and the capture returns to its
+        An object with the same id is replaced and the capture returns to its
         recorded list position. With ``new_id`` it is added on top as a copy
         with a fresh id.
         """
@@ -4959,15 +6031,422 @@ class Workbook:
         out = _alloc_out_ptr()
         try:
             _check(
-                LIB.fm_sheet_restore_image(
+                LIB.fm_sheet_restore_drawing(
                     h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len"), 1 if new_id else 0, out
                 ),
-                "fm_sheet_restore_image",
+                "fm_sheet_restore_drawing",
             )
             return LIB.read_u32(out)
         finally:
             LIB.free(out)
             LIB.free(buf)
+
+    def get_chart(self, sheet: int, object_id: int) -> ChartInfo:
+        """Return the typed view of the chart ``object_id``: plots, series, axes, legend and source.
+
+        Raises :class:`FormulonError` when the sheet has no chart with that id
+        or the chart part does not parse.
+        """
+        h = self._require()
+        chart = _read_count(LIB.fm_sheet_chart_open, h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"))
+        try:
+            return _read_chart(chart)
+        finally:
+            LIB.fm_chart_destroy(chart)
+
+    def get_chart_data(self, sheet: int, object_id: int) -> ChartData:
+        """Resolve the chart's series against the current cell values by Excel's rules."""
+        h = self._require()
+        data = _read_count(LIB.fm_sheet_chart_data_open, h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"))
+        try:
+            return _read_chart_data(data)
+        finally:
+            LIB.fm_chart_data_destroy(data)
+
+    def preview_chart_data(
+        self, sheet: int, object_id: int, overrides: Optional[ChartPreviewOverrides] = None
+    ) -> ChartData:
+        """Resolve the data of a copy of the chart with ``overrides`` applied; the workbook is unchanged.
+
+        Series are rebuilt as :meth:`set_chart_source` does: over the
+        overridden ``source`` (an unset direction or header is auto), else over
+        the chart's derived range.
+        """
+        h = self._require()
+        overrides = overrides or {}
+        owned: List[int] = []
+        data = 0
+        try:
+            fields = _encode_patch(_PREVIEW_OVERRIDE_SPEC, overrides, ("source",), "preview override", owned)
+            if "source" in overrides:
+                fields["source"] = _str_ptr(overrides["source"], owned)
+            ptr = _alloc_struct_array(S.CHART_PREVIEW_OVERRIDES, 1, owned)
+            S.CHART_PREVIEW_OVERRIDES.pack(LIB, ptr, fields)
+            data = _read_count(
+                LIB.fm_sheet_chart_preview_open,
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(object_id, "object_id"),
+                ptr,
+            )
+            return _read_chart_data(data)
+        finally:
+            if data:
+                LIB.fm_chart_data_destroy(data)
+            for p in owned:
+                LIB.free(p)
+
+    def insert_chart(
+        self,
+        sheet: int,
+        kind: Union[ChartInsertKind, int],
+        source: str,
+        *,
+        grouping: Union[ChartGrouping, int] = ChartGrouping.CLUSTERED,
+        direction: Union[ChartSeriesDirection, int] = ChartSeriesDirection.AUTO,
+        header_row: Optional[bool] = None,
+        header_column: Optional[bool] = None,
+        title: Optional[str] = None,
+        legend: Union[ChartLegendPosition, int] = ChartLegendPosition.BOTTOM,
+        name: str = "",
+        description: str = "",
+        anchor_kind: Union[AnchorKind, int] = AnchorKind.TWO_CELL,
+        edit_as: Union[AnchorEditAs, int] = AnchorEditAs.TWO_CELL,
+        row: int = 0,
+        col: int = 0,
+        row_off_emu: int = 0,
+        col_off_emu: int = 0,
+        width_emu: int = 0,
+        height_emu: int = 0,
+    ) -> int:
+        """Create a chart over the A1 rectangle ``source`` and return its object id.
+
+        ``source`` is sheet-qualified or on ``sheet``. ``grouping`` applies to
+        column, bar, line and area charts. ``header_row`` / ``header_column``
+        ``None`` follow Excel's detection. ``title`` is ``None`` for Excel's
+        automatic title, ``""`` for none, else the text. The placement reads as
+        for :meth:`insert_image` (an empty ``name`` becomes ``Chart <id>``),
+        except that a zero ``width_emu`` or ``height_emu`` means Excel's default
+        360 x 216 pt frame and the anchor defaults to two-cell.
+        """
+        h = self._require()
+        owned: List[int] = []
+        out = _alloc_out_ptr()
+        try:
+            owned.append(out)
+            ptr = _alloc_struct_array(S.CHART_INSERT, 1, owned)
+            placement = _image_anchor_fields(
+                anchor_kind, edit_as, row, col, row_off_emu, col_off_emu, width_emu, height_emu
+            )
+            placement["name"] = _opt_str_ptr(name, owned)
+            placement["descr"] = _opt_str_ptr(description, owned)
+            S.CHART_INSERT.pack(
+                LIB,
+                ptr,
+                {
+                    "kind": _sint(kind, "kind"),
+                    "grouping": _sint(grouping, "grouping"),
+                    "source": _str_ptr(source, owned),
+                    "direction": _sint(direction, "direction"),
+                    "header_row": _sint(_header_mode(header_row), "header_row"),
+                    "header_column": _sint(_header_mode(header_column), "header_column"),
+                    "title": 0 if title is None else _str_ptr(title, owned),
+                    "legend": _sint(legend, "legend"),
+                    "placement": placement,
+                },
+            )
+            _check(LIB.fm_sheet_insert_chart(h, _uint(sheet, "sheet_index"), ptr, out), "fm_sheet_insert_chart")
+            return LIB.read_u32(out)
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def set_chart_type(
+        self,
+        sheet: int,
+        object_id: int,
+        plot: int,
+        kind: Union[ChartInsertKind, int],
+        grouping: Union[ChartGrouping, int] = ChartGrouping.CLUSTERED,
+    ) -> None:
+        """Replace plot group ``plot`` with ``kind``, keeping each series' references, idx, order and explicit colors."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_chart_type(
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(object_id, "object_id"),
+                _uint(plot, "plot"),
+                _sint(kind, "kind"),
+                _sint(grouping, "grouping"),
+            ),
+            "fm_sheet_set_chart_type",
+        )
+
+    def set_chart_title(self, sheet: int, object_id: int, title: Optional[str]) -> None:
+        """Set the chart title to ``title``; ``None`` removes it."""
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptr = _alloc_struct_array(S.CHART_TITLE, 1, owned)
+            fields: Dict[str, object] = {"kind": 0 if title is None else 1}
+            if title is not None:
+                fields["text"] = _str_ptr(title, owned)
+            S.CHART_TITLE.pack(LIB, ptr, fields)
+            _check(
+                LIB.fm_sheet_set_chart_title(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), ptr),
+                "fm_sheet_set_chart_title",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def set_chart_legend(
+        self,
+        sheet: int,
+        object_id: int,
+        position: Union[ChartLegendPosition, int],
+        overlay: bool = False,
+        *,
+        hidden_series: Optional[Sequence[int]] = None,
+    ) -> None:
+        """Set the legend position (``NONE`` removes it) and overlay.
+
+        ``hidden_series`` replaces the hidden legend entries (series ``c:idx``
+        values); ``None`` leaves them alone.
+        """
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptr = _alloc_struct_array(S.CHART_LEGEND_PATCH, 1, owned)
+            fields: Dict[str, object] = {"position": _sint(position, "position"), "overlay": 1 if overlay else 0}
+            if hidden_series is not None:
+                fields["hidden_series_op"] = 2
+                fields["hidden_series"] = _id_array(hidden_series, "hidden_series", owned)
+                fields["hidden_series_count"] = _uint(len(hidden_series), "hidden_series_count")
+            S.CHART_LEGEND_PATCH.pack(LIB, ptr, fields)
+            _check(
+                LIB.fm_sheet_set_chart_legend(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), ptr),
+                "fm_sheet_set_chart_legend",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def set_chart_axis(self, sheet: int, object_id: int, axis_id: int, patch: ChartAxisPatch) -> None:
+        """Patch axis ``axis_id``: an omitted key is kept, ``None`` removes the element."""
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptr = _alloc_struct_array(S.CHART_AXIS_PATCH, 1, owned)
+            fields = _encode_axis_patch(patch, owned)
+            S.CHART_AXIS_PATCH.pack(LIB, ptr, fields)
+            _check(
+                LIB.fm_sheet_set_chart_axis(
+                    h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), _uint(axis_id, "axis_id"), ptr
+                ),
+                "fm_sheet_set_chart_axis",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def set_chart_display(
+        self,
+        sheet: int,
+        object_id: int,
+        blanks_as: Union[ChartBlanksAs, int],
+        plot_visible_only: Optional[bool],
+    ) -> None:
+        """Write how blanks plot and whether hidden cells are skipped; ``ABSENT`` / ``None`` remove the element."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_chart_display(
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(object_id, "object_id"),
+                _sint(blanks_as, "blanks_as"),
+                _sint(_tri_flag(plot_visible_only), "plot_vis_only"),
+            ),
+            "fm_sheet_set_chart_display",
+        )
+
+    def set_chart_series(self, sheet: int, object_id: int, plot: int, series_idx: int, patch: ChartSeriesPatch) -> None:
+        """Patch the series with ``c:idx`` ``series_idx`` of plot group ``plot``; a changed reference refreshes its cache."""
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptr = _alloc_struct_array(S.CHART_SERIES_PATCH, 1, owned)
+            fields = _encode_series_patch(patch, owned)
+            S.CHART_SERIES_PATCH.pack(LIB, ptr, fields)
+            _check(
+                LIB.fm_sheet_set_chart_series(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(object_id, "object_id"),
+                    _uint(plot, "plot"),
+                    _uint(series_idx, "series_idx"),
+                    ptr,
+                ),
+                "fm_sheet_set_chart_series",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def set_chart_point(
+        self,
+        sheet: int,
+        object_id: int,
+        plot: int,
+        series_idx: int,
+        point_idx: int,
+        patch: Optional[ChartPointPatch],
+    ) -> None:
+        """Patch point ``point_idx`` of a series; ``None`` (or an empty patch) removes the point's formatting."""
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptr = _alloc_struct_array(S.CHART_POINT_PATCH, 1, owned)
+            fields = _encode_point_patch(patch, owned)
+            S.CHART_POINT_PATCH.pack(LIB, ptr, fields)
+            _check(
+                LIB.fm_sheet_set_chart_point(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(object_id, "object_id"),
+                    _uint(plot, "plot"),
+                    _uint(series_idx, "series_idx"),
+                    _uint(point_idx, "point_idx"),
+                    ptr,
+                ),
+                "fm_sheet_set_chart_point",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def set_chart_plot(self, sheet: int, object_id: int, plot: int, patch: ChartPlotPatch) -> None:
+        """Patch plot group ``plot``; a field the plot type does not have is rejected."""
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptr = _alloc_struct_array(S.CHART_PLOT_PATCH, 1, owned)
+            fields = _encode_patch(_PLOT_PATCH_SPEC, patch, (), "plot patch", owned)
+            S.CHART_PLOT_PATCH.pack(LIB, ptr, fields)
+            _check(
+                LIB.fm_sheet_set_chart_plot(
+                    h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), _uint(plot, "plot"), ptr
+                ),
+                "fm_sheet_set_chart_plot",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def set_chart_filter(
+        self,
+        sheet: int,
+        object_id: int,
+        hidden_series: Sequence[int],
+        hidden_categories: Sequence[int],
+    ) -> None:
+        """Replace the chart filter: the listed series (by ``c:idx``) and category positions are hidden."""
+        h = self._require()
+        owned: List[int] = []
+        try:
+            _check(
+                LIB.fm_sheet_set_chart_filter(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(object_id, "object_id"),
+                    _id_array(hidden_series, "hidden_series", owned),
+                    _uint(len(hidden_series), "hidden_series_count"),
+                    _id_array(hidden_categories, "hidden_categories", owned),
+                    _uint(len(hidden_categories), "hidden_category_count"),
+                ),
+                "fm_sheet_set_chart_filter",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def add_chart_series(self, sheet: int, object_id: int, plot: int, patch: ChartSeriesPatch) -> int:
+        """Append a series to plot group ``plot`` and return its ``c:idx``.
+
+        ``patch`` must set ``values`` (``y`` for a scatter plot).
+        """
+        h = self._require()
+        owned: List[int] = []
+        out = _alloc_out_ptr()
+        try:
+            owned.append(out)
+            ptr = _alloc_struct_array(S.CHART_SERIES_PATCH, 1, owned)
+            fields = _encode_series_patch(patch, owned)
+            S.CHART_SERIES_PATCH.pack(LIB, ptr, fields)
+            _check(
+                LIB.fm_sheet_add_chart_series(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(object_id, "object_id"),
+                    _uint(plot, "plot"),
+                    ptr,
+                    out,
+                ),
+                "fm_sheet_add_chart_series",
+            )
+            return LIB.read_u32(out)
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def remove_chart_series(self, sheet: int, object_id: int, plot: int, series_idx: int) -> None:
+        """Remove the series with ``c:idx`` ``series_idx`` from plot group ``plot``."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_remove_chart_series(
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(object_id, "object_id"),
+                _uint(plot, "plot"),
+                _uint(series_idx, "series_idx"),
+            ),
+            "fm_sheet_remove_chart_series",
+        )
+
+    def set_chart_source(
+        self,
+        sheet: int,
+        object_id: int,
+        source: str,
+        direction: Union[ChartSeriesDirection, int] = ChartSeriesDirection.AUTO,
+        header_row: Optional[bool] = None,
+        header_column: Optional[bool] = None,
+    ) -> None:
+        """Rebuild every series from ``source`` by the insert splitting rules.
+
+        The chart kind and each series' formatting (by idx) are kept and the
+        filter is cleared. ``header_row`` / ``header_column`` ``None`` follow
+        Excel's detection.
+        """
+        h = self._require()
+        owned: List[int] = []
+        try:
+            _check(
+                LIB.fm_sheet_set_chart_source(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(object_id, "object_id"),
+                    _str_ptr(source, owned),
+                    _sint(direction, "direction"),
+                    _sint(_header_mode(header_row), "header_row"),
+                    _sint(_header_mode(header_column), "header_column"),
+                ),
+                "fm_sheet_set_chart_source",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
 
     def get_persons(self) -> List[Person]:
         """Return the workbook's person list in file order."""

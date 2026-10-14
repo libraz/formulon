@@ -1,0 +1,63 @@
+{
+  "track": "chart",
+  "target": "mac-365-ja_JP",
+  "status": "primary",
+  "classification": "active",
+  "verified": true,
+  "active_ctest": true,
+  "locale": "ja-JP",
+  "product": "Microsoft Excel for Mac 16.113.4",
+  "m365_sentinel": "ARRAYTOTEXT(1) == text '1'",
+  "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T07:48:31Z",
+  "generated_at": "2026-10-14T07:48:31Z",
+  "required_suites": [
+    "create",
+    "data",
+    "edit_format",
+    "edit_type",
+    "structural"
+  ],
+  "captured_suites": [
+    "create",
+    "data",
+    "edit_format",
+    "edit_type",
+    "structural"
+  ],
+  "case_count": 170,
+  "all_suites_same_capture": true,
+  "suite_inventory": [
+    {
+      "suite": "create",
+      "case_count": 36,
+      "sha256": "d38794165517bb6d3db8bad463ff903988bb863980ffae8d79c36090a7f75af6",
+      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T07:48:31Z"
+    },
+    {
+      "suite": "data",
+      "case_count": 38,
+      "sha256": "f407c6a3063ae85cddb5a127d9c3b5b8486467fcc4e7f383e5cd5740401656ae",
+      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T07:48:31Z"
+    },
+    {
+      "suite": "edit_format",
+      "case_count": 61,
+      "sha256": "4a1d4c64c591128f23719352f886d4ff95f935ba48051270455cf3b2e05cf7f7",
+      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T07:48:31Z"
+    },
+    {
+      "suite": "edit_type",
+      "case_count": 8,
+      "sha256": "18d4de65dbf770f993beb295383ca58ef4e9bf3e425f9def808392e8372511f7",
+      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T07:48:31Z"
+    },
+    {
+      "suite": "structural",
+      "case_count": 27,
+      "sha256": "123286fd0b8a8c4f01253b4da35d1ea7128b2461ba776365a8a233fcb099558f",
+      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T07:48:31Z"
+    }
+  ],
+  "reason": "Chart goldens captured by the manifest-selected Mac Excel 365 target.",
+  "source": "tools/oracle/chart_oracle_gen.py"
+}

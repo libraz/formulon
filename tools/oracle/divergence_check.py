@@ -39,6 +39,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FORMULA_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases"
 WORKBOOK_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases_wb"
+CHART_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases_chart"
 DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
 IRONCALC_DIVERGENCE = REPO_ROOT / "tests" / "ironcalc_divergence.yaml"
 GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "targets" / "mac-365-ja_JP" / "golden"
@@ -118,7 +119,7 @@ def _formula_case_docs() -> tuple[dict, ...]:
 
 
 def load_case_catalog() -> tuple[set[str], dict[str, int]]:
-    """Load the raw case IDs and the per-suite case counts used by both tracks.
+    """Load the raw case IDs and the per-suite case counts of every track.
 
     The suite counts exist so a `suite:`-selected skip can be tallied in
     cases rather than entries: one such entry removes a whole suite from
@@ -135,6 +136,12 @@ def load_case_catalog() -> tuple[set[str], dict[str, int]]:
             ids.add(case["id"])
     for path in sorted(WORKBOOK_CASES_DIR.glob("*.case.json")):
         doc = json.loads(path.read_text(encoding="utf-8"))
+        for case in doc.get("cases") or []:
+            if isinstance(case, dict) and isinstance(case.get("id"), str):
+                ids.add(case["id"])
+    # The chart registry selects by id only, as the workbook one does.
+    for path in sorted(CHART_CASES_DIR.glob("*.yaml")):
+        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         for case in doc.get("cases") or []:
             if isinstance(case, dict) and isinstance(case.get("id"), str):
                 ids.add(case["id"])
@@ -183,6 +190,7 @@ def load_observations(golden_dirs: "list[Path] | None" = None) -> dict[str, str]
         golden_dirs = [
             REPO_ROOT / "tests/oracle/targets/mac-365-ja_JP/golden",
             REPO_ROOT / "tests/oracle/targets/win-365-ja_JP/golden_wb",
+            REPO_ROOT / "tests/oracle/targets/mac-365-ja_JP/golden_chart",
         ]
     for golden_dir in golden_dirs:
         for path in sorted(golden_dir.glob("*.golden.json")):

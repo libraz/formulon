@@ -200,7 +200,7 @@ TEST(DrawingEdit, InsertTwoRemoveOneKeepsOthers) {
   EXPECT_EQ(Part(saved, jpeg_path)->bytes, jpeg);
 
   const std::string png_path = objects[0].media_path;
-  ASSERT_TRUE(static_cast<bool>(remove_image(saved, 0, id1.value())));
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(saved, 0, id1.value())));
   objects = List(saved);
   ASSERT_EQ(objects.size(), 1U);
   EXPECT_EQ(objects[0].object_id, id2.value());
@@ -261,7 +261,7 @@ TEST(DrawingEdit, CoexistsWithChart) {
   EXPECT_NE(saved_rels.find("Target=\"../charts/chart1.xml\""), std::string::npos);
 
   // Removing the picture leaves the chart, its relationship and its part.
-  ASSERT_TRUE(static_cast<bool>(remove_image(saved, 0, id.value())));
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(saved, 0, id.value())));
   objects = List(saved);
   ASSERT_EQ(objects.size(), 2U);
   EXPECT_EQ(objects[0].kind, DrawingObjectKind::kChart);
@@ -269,8 +269,8 @@ TEST(DrawingEdit, CoexistsWithChart) {
   const std::string after_rels(Part(saved, kRelsPath)->bytes.begin(), Part(saved, kRelsPath)->bytes.end());
   EXPECT_NE(after_rels.find("rId1"), std::string::npos);
   EXPECT_EQ(after_rels.find("rId2"), std::string::npos);
-  // The chart is not a picture, so it cannot be removed as one.
-  auto refused = remove_image(saved, 0, 2);
+  // A shape is neither a picture nor a chart, so it cannot be removed.
+  auto refused = remove_drawing(saved, 0, 3);
   ASSERT_FALSE(static_cast<bool>(refused));
   EXPECT_EQ(refused.error().code, FormulonErrorCode::kInvalidArgument);
 }
@@ -494,7 +494,7 @@ TEST(DrawingEdit, RefusesXlsbRetainedDrawing) {
   auto inserted = insert_image(wb, 0, png.data(), png.size(), ImageInsertOptions{});
   ASSERT_FALSE(static_cast<bool>(inserted));
   EXPECT_EQ(inserted.error().code, FormulonErrorCode::kIoDrawingUnparseable);
-  auto removed = remove_image(wb, 0, 2);
+  auto removed = remove_drawing(wb, 0, 2);
   ASSERT_FALSE(static_cast<bool>(removed));
   EXPECT_EQ(removed.error().code, FormulonErrorCode::kIoDrawingUnparseable);
   EXPECT_EQ(wb.passthrough_parts().size(), 1U);
@@ -632,7 +632,7 @@ TEST(DrawingEdit, RejectsInvalidInsertions) {
 }
 
 // ---------------------------------------------------------------------------
-// set_image_anchor / set_image_z_order
+// set_drawing_anchor / set_drawing_z_order
 
 constexpr const char* kNsMc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
@@ -665,7 +665,7 @@ pugi::xml_node PicXfrm(const pugi::xml_node& anchor) {
 }
 
 // The anchor with every marker, `xdr:ext`/`xdr:pos` and `a:off`/`a:ext`
-// removed: what `set_image_anchor` must leave untouched.
+// removed: what `set_drawing_anchor` must leave untouched.
 std::string Skeleton(const pugi::xml_node& top) {
   pugi::xml_document copy;
   copy.append_copy(top);
@@ -699,7 +699,7 @@ struct Box {
 
 // The anchor box and `a:off` for a `cx` x `cy` picture rotated `deg` degrees
 // placed at `a`'s in-cell marker, computed from line offsets alone.
-Box ExpectedBox(const Workbook& wb, const ImageAnchor& a, std::int64_t cx, std::int64_t cy, int deg) {
+Box ExpectedBox(const Workbook& wb, const DrawingAnchor& a, std::int64_t cx, std::int64_t cy, int deg) {
   const bool swap = (deg >= 45 && deg < 135) || (deg >= 225 && deg < 315);
   Box box;
   box.box_w = swap ? cy : cx;
@@ -787,8 +787,8 @@ Workbook OnePicture(const std::string& top) {
                      {"xl/media/image1.png"});
 }
 
-ImageAnchor Placement(AnchorKind kind, EditAs edit_as, std::int64_t width, std::int64_t height) {
-  ImageAnchor a;
+DrawingAnchor Placement(AnchorKind kind, EditAs edit_as, std::int64_t width, std::int64_t height) {
+  DrawingAnchor a;
   a.anchor_kind = kind;
   a.edit_as = edit_as;
   a.row = 3;
@@ -800,8 +800,8 @@ ImageAnchor Placement(AnchorKind kind, EditAs edit_as, std::int64_t width, std::
   return a;
 }
 
-ImageAnchor FromListed(const DrawingObject& obj) {
-  ImageAnchor a;
+DrawingAnchor FromListed(const DrawingObject& obj) {
+  DrawingAnchor a;
   a.anchor_kind = obj.anchor_kind;
   a.edit_as = obj.edit_as;
   a.row = obj.from.row;
@@ -815,6 +815,194 @@ ImageAnchor FromListed(const DrawingObject& obj) {
 
 FormulonErrorCode Code(const Expected<void, Error>& result) {
   return result ? FormulonErrorCode::kOk : result.error().code;
+}
+
+constexpr const char* kChartRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+constexpr const char* kCtChart = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
+constexpr const char* kChartData =
+    "<a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"><c:chart "
+    "xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\" "
+    "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" r:id=\"{rId}\"/>"
+    "</a:graphicData>";
+
+// A two-cell chart frame 2 over B1:H15 (from col 1 row 0 to col 7 row 14)
+// showing chart1.xml, whose rels reach a style part, then picture 3.
+Workbook ChartAndPicture() {
+  const std::string drawing =
+      std::string(kWsDrOpen) + "<xdr:twoCellAnchor>" + Marker("from", 1, 0, 0, 0) + Marker("to", 7, 0, 14, 0) +
+      "<xdr:graphicFrame macro=\"\"><xdr:nvGraphicFramePr><xdr:cNvPr id=\"2\" name=\"Chart 1\"/>"
+      "<xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"0\" cy=\"0\"/>"
+      "</xdr:xfrm><a:graphic><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/chart\">"
+      "<c:chart xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" r:id=\"rId1\"/>"
+      "</a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>"
+      "<xdr:twoCellAnchor>" +
+      Marker("from", 9, 0, 2, 0) + Marker("to", 10, 0, 5, 0) + Pic(3, "rId2") + "</xdr:twoCellAnchor></xdr:wsDr>";
+  const std::string rels = std::string(kRelsOpen) + Rel("rId1", kChartRel, "../charts/chart1.xml") +
+                           Rel("rId2", kImageRel, "../media/image1.png") + "</Relationships>";
+  Workbook wb = WithDrawing(drawing, rels, {"xl/media/image1.png"});
+  EXPECT_TRUE(static_cast<bool>(wb.add_passthrough_part(
+      PassthroughPart("xl/charts/chart1.xml", kCtChart,
+                      ToBytes("<c:chartSpace xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"/>")))));
+  EXPECT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart(
+      "xl/charts/_rels/chart1.xml.rels", "",
+      ToBytes(std::string(kRelsOpen) +
+              Rel("rId1", "http://schemas.microsoft.com/office/2011/relationships/chartStyle", "style1.xml") +
+              "</Relationships>")))));
+  EXPECT_TRUE(static_cast<bool>(wb.add_passthrough_part(
+      PassthroughPart("xl/charts/style1.xml", "application/vnd.ms-office.chartstyle+xml",
+                      ToBytes("<cs:chartStyle xmlns:cs=\"http://schemas.microsoft.com/office/drawing/2012/"
+                              "chartStyle\" id=\"201\"/>")))));
+  return wb;
+}
+
+TEST(DrawingEdit, RemovesAChartWithItsParts) {
+  Workbook wb = ChartAndPicture();
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 2)));
+  const std::vector<DrawingObject> objects = List(wb);
+  ASSERT_EQ(objects.size(), 1U);
+  EXPECT_EQ(objects[0].object_id, 3U);
+  for (const char* path : {"xl/charts/chart1.xml", "xl/charts/_rels/chart1.xml.rels", "xl/charts/style1.xml"}) {
+    EXPECT_EQ(Part(wb, path), nullptr) << path;
+  }
+  EXPECT_NE(Part(wb, "xl/media/image1.png"), nullptr);
+  const std::string rels(Part(wb, kRelsPath)->bytes.begin(), Part(wb, kRelsPath)->bytes.end());
+  EXPECT_EQ(rels.find("chart1.xml"), std::string::npos);
+  EXPECT_NE(rels.find("image1.png"), std::string::npos);
+
+  Workbook saved = RoundTrip(wb);
+  EXPECT_EQ(List(saved).size(), 1U);
+  EXPECT_EQ(Part(saved, "xl/charts/chart1.xml"), nullptr);
+}
+
+TEST(DrawingEdit, InsertGraphicFrameAddsAChart) {
+  Workbook wb = Workbook::create();
+  ImageInsertOptions placement;
+  placement.anchor_kind = AnchorKind::kTwoCell;
+  placement.row = 3;
+  placement.col = 2;
+  placement.width_emu = 4572000;
+  placement.height_emu = 2743200;
+  auto id = insert_graphic_frame(wb, 0, placement, kChartData, "xl/charts/chart1.xml", kChartRel);
+  ASSERT_TRUE(static_cast<bool>(id)) << id.error().message;
+  EXPECT_EQ(id.value(), 2U);
+  const Bytes chart = ToBytes("<c:chartSpace xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"/>");
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/charts/chart1.xml", kCtChart, chart))));
+  EXPECT_EQ(wb.sheet(0).drawing_rel_target(), kDrawingPath);
+
+  std::vector<DrawingObject> objects = List(wb);
+  ASSERT_EQ(objects.size(), 1U);
+  EXPECT_EQ(objects[0].kind, DrawingObjectKind::kChart);
+  EXPECT_EQ(objects[0].anchor_kind, AnchorKind::kTwoCell);
+  EXPECT_EQ(objects[0].name, "Chart 2");
+  EXPECT_EQ(objects[0].from.row, 3U);
+  EXPECT_EQ(objects[0].from.col, 2U);
+  EXPECT_EQ(objects[0].cx, 4572000);
+  AnchorPoint to{3, 2, 0, 0};
+  Advance(wb, true, to.row, to.row_off, 2743200);
+  Advance(wb, false, to.col, to.col_off, 4572000);
+  ExpectPoint(objects[0].to, to);
+  auto refs = list_chart_parts(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(refs));
+  ASSERT_EQ(refs.value().size(), 1U);
+  EXPECT_EQ(refs.value()[0].object_id, 2U);
+  EXPECT_EQ(refs.value()[0].part_path, "xl/charts/chart1.xml");
+  EXPECT_FALSE(refs.value()[0].is_chartex);
+
+  // A second frame next to a picture takes the next id and relationship.
+  const Bytes png = Png(10, 10);
+  ASSERT_TRUE(static_cast<bool>(insert_image(wb, 0, png.data(), png.size(), ImageInsertOptions{})));
+  placement.name = "Sales";
+  placement.descr = "Monthly";
+  placement.anchor_kind = AnchorKind::kOneCell;
+  auto second = insert_graphic_frame(wb, 0, placement, kChartData, "xl/charts/chart2.xml", kChartRel);
+  ASSERT_TRUE(static_cast<bool>(second));
+  EXPECT_EQ(second.value(), 4U);
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/charts/chart2.xml", kCtChart, chart))));
+  objects = List(wb);
+  ASSERT_EQ(objects.size(), 3U);
+  EXPECT_EQ(objects[2].name, "Sales");
+  EXPECT_EQ(objects[2].descr, "Monthly");
+  EXPECT_EQ(objects[2].anchor_kind, AnchorKind::kOneCell);
+  EXPECT_EQ(objects[2].cy, 2743200);
+
+  Workbook saved = RoundTrip(wb);
+  refs = list_chart_parts(saved, 0);
+  ASSERT_TRUE(static_cast<bool>(refs));
+  ASSERT_EQ(refs.value().size(), 2U);
+  EXPECT_EQ(refs.value()[1].object_id, 4U);
+  EXPECT_EQ(refs.value()[1].part_path, "xl/charts/chart2.xml");
+  EXPECT_EQ(Part(saved, "xl/charts/chart2.xml")->bytes, chart);
+}
+
+TEST(DrawingEdit, InsertGraphicFrameRejectsBadInput) {
+  Workbook wb = ChartAndPicture();
+  const std::vector<PassthroughPart> before = wb.passthrough_parts();
+  ImageInsertOptions ok;
+  ok.anchor_kind = AnchorKind::kTwoCell;
+  ok.width_emu = 914400;
+  ok.height_emu = 914400;
+  const auto code = [&wb](const ImageInsertOptions& placement, const char* data, const char* target) {
+    auto result = insert_graphic_frame(wb, 0, placement, data, target, kChartRel);
+    return result ? FormulonErrorCode::kOk : result.error().code;
+  };
+  ImageInsertOptions no_size = ok;
+  no_size.height_emu = 0;
+  EXPECT_EQ(code(no_size, kChartData, "xl/charts/chart2.xml"), FormulonErrorCode::kInvalidArgument);
+  ImageInsertOptions absolute = ok;
+  absolute.anchor_kind = AnchorKind::kAbsolute;
+  EXPECT_EQ(code(absolute, kChartData, "xl/charts/chart2.xml"), FormulonErrorCode::kInvalidArgument);
+  ImageInsertOptions off_sheet = ok;
+  off_sheet.row = Sheet::kMaxRows;
+  EXPECT_EQ(code(off_sheet, kChartData, "xl/charts/chart2.xml"), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(code(ok, "<a:graphicData>", "xl/charts/chart2.xml"), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(code(ok, kChartData, "../outside.xml"), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(insert_graphic_frame(wb, 3, ok, kChartData, "xl/charts/chart2.xml", kChartRel).error().code,
+            FormulonErrorCode::kInvalidArgument);
+  ASSERT_EQ(wb.passthrough_parts().size(), before.size());
+  for (std::size_t i = 0; i < before.size(); ++i) {
+    EXPECT_EQ(wb.passthrough_parts()[i].bytes, before[i].bytes) << before[i].path;
+  }
+}
+
+TEST(DrawingAnchorUpdate, MovesAChartKeepingItsAnchorBoxSize) {
+  Workbook wb = ChartAndPicture();
+  const std::vector<Bytes> before = AllBytes(wb);
+  // Excel leaves a chart frame's xfrm zero; its size is the anchor box.
+  const DrawingObject chart = List(wb)[0];
+  ASSERT_EQ(chart.kind, DrawingObjectKind::kChart);
+  DrawingAnchor listed;
+  listed.anchor_kind = AnchorKind::kTwoCell;
+  listed.row = chart.from.row;
+  listed.col = chart.from.col;
+  ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, 2, listed)));
+  EXPECT_EQ(AllBytes(wb), before);
+
+  DrawingAnchor moved = listed;
+  moved.row = 20;
+  moved.col = 3;
+  ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, 2, moved)));
+  DrawingObject after = List(wb)[0];
+  ExpectPoint(after.from, AnchorPoint{20, 3, 0, 0});
+  ExpectPoint(after.to, AnchorPoint{34, 9, 0, 0});
+  pugi::xml_document doc;
+  ParseDrawing(wb, doc);
+  const pugi::xml_node frame = anchor_content(drawing_anchors(doc.document_element(), false)[0]);
+  const pugi::xml_node xfrm = child_local(frame, "xfrm");
+  EXPECT_EQ(child_local(xfrm, "off").attribute("x").as_llong(), sheet_offset_emu(wb, 0, false, 3));
+  EXPECT_EQ(child_local(xfrm, "off").attribute("y").as_llong(), sheet_offset_emu(wb, 0, true, 20));
+  EXPECT_EQ(child_local(xfrm, "ext").attribute("cy").as_llong(), 14 * 18 * 12700);
+  // Graphic data and the chart part are untouched.
+  EXPECT_NE(Raw(frame).find("r:id=\"rId1\""), std::string::npos);
+  EXPECT_EQ(Part(wb, "xl/charts/chart1.xml")->bytes, Part(ChartAndPicture(), "xl/charts/chart1.xml")->bytes);
+
+  DrawingAnchor resized = moved;
+  resized.anchor_kind = AnchorKind::kOneCell;
+  resized.height_emu = 18 * 12700 * 4;
+  ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, 2, resized)));
+  after = List(wb)[0];
+  EXPECT_EQ(after.anchor_kind, AnchorKind::kOneCell);
+  EXPECT_EQ(after.cy, 18 * 12700 * 4);
 }
 
 TEST(DrawingAnchorUpdate, SheetOffsetFollowsLineSizes) {
@@ -845,11 +1033,11 @@ TEST(DrawingAnchorUpdate, ListedPlacementWritesNothing) {
   ASSERT_TRUE(static_cast<bool>(insert_image(wb, 0, png.data(), png.size(), plain)));
   const std::vector<Bytes> before = AllBytes(wb);
   for (const DrawingObject& obj : List(wb)) {
-    ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, obj.object_id, FromListed(obj))));
-    ImageAnchor kept_size = FromListed(obj);
+    ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, obj.object_id, FromListed(obj))));
+    DrawingAnchor kept_size = FromListed(obj);
     kept_size.width_emu = 0;
     kept_size.height_emu = 0;
-    ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, obj.object_id, kept_size)));
+    ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, obj.object_id, kept_size)));
   }
   EXPECT_EQ(AllBytes(wb), before);
 }
@@ -861,8 +1049,8 @@ TEST(DrawingAnchorUpdate, MoveAndResizeRewriteMarkersAndXfrm) {
   options.anchor_kind = AnchorKind::kTwoCell;
   auto id = insert_image(wb, 0, png.data(), png.size(), options);
   ASSERT_TRUE(static_cast<bool>(id));
-  const ImageAnchor a = Placement(AnchorKind::kTwoCell, EditAs::kTwoCell, 3048000, 762000);
-  ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, id.value(), a)));
+  const DrawingAnchor a = Placement(AnchorKind::kTwoCell, EditAs::kTwoCell, 3048000, 762000);
+  ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, id.value(), a)));
   const Box box = ExpectedBox(wb, a, 3048000, 762000, 0);
   EXPECT_EQ(box.off_y, 3 * 228600 + 1000);
   pugi::xml_document doc;
@@ -875,11 +1063,11 @@ TEST(DrawingAnchorUpdate, MoveAndResizeRewriteMarkersAndXfrm) {
   EXPECT_EQ(objects[0].cy, 762000);
 
   // A zero size keeps the current one; only the marker moves.
-  ImageAnchor moved = a;
+  DrawingAnchor moved = a;
   moved.row = 9;
   moved.width_emu = 0;
   moved.height_emu = 0;
-  ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, id.value(), moved)));
+  ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, id.value(), moved)));
   pugi::xml_document again;
   ParseDrawing(wb, again);
   ExpectPlaced(drawing_anchors(again.document_element(), false)[0], AnchorKind::kTwoCell,
@@ -908,8 +1096,8 @@ TEST(DrawingAnchorUpdate, MeasuredExcelPictureKeepsEverythingElse) {
   ParseDrawing(wb, before);
   const std::string skeleton = Skeleton(before.document_element().first_child());
 
-  const ImageAnchor a = Placement(AnchorKind::kTwoCell, EditAs::kOneCell, 3048000, 762000);
-  ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, 3, a)));
+  const DrawingAnchor a = Placement(AnchorKind::kTwoCell, EditAs::kOneCell, 3048000, 762000);
+  ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, 3, a)));
   pugi::xml_document after;
   ParseDrawing(wb, after);
   const pugi::xml_node anchor = after.document_element().first_child();
@@ -931,8 +1119,8 @@ TEST(DrawingAnchorUpdate, RotatedPictureSwapsTheBox) {
     pugi::xml_document before;
     ParseDrawing(wb, before);
     const std::string skeleton = Skeleton(before.document_element().first_child());
-    const ImageAnchor a = Placement(AnchorKind::kTwoCell, EditAs::kTwoCell, 381000, 762001);
-    ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, 2, a)));
+    const DrawingAnchor a = Placement(AnchorKind::kTwoCell, EditAs::kTwoCell, 381000, 762001);
+    ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, 2, a)));
     const Box box = ExpectedBox(wb, a, 381000, 762001, c.deg < 0 ? c.deg + 360 : c.deg);
     EXPECT_EQ(box.box_w, c.swapped ? 762001 : 381000);
     if (c.swapped) {
@@ -950,15 +1138,15 @@ TEST(DrawingAnchorUpdate, RotatedPictureSwapsTheBox) {
     EXPECT_EQ(objects[0].cx, 381000);
     EXPECT_EQ(objects[0].cy, 762001);
     const std::vector<Bytes> placed = AllBytes(wb);
-    ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, 2, FromListed(objects[0]))));
+    ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, 2, FromListed(objects[0]))));
     EXPECT_EQ(AllBytes(wb), placed);
   }
 }
 
 TEST(DrawingAnchorUpdate, ConvertsBetweenAnchorKinds) {
   Workbook one = OnePicture(RichAnchor("one", 2, 0));
-  const ImageAnchor to_two = Placement(AnchorKind::kTwoCell, EditAs::kTwoCell, 0, 0);
-  ASSERT_TRUE(static_cast<bool>(set_image_anchor(one, 0, 2, to_two)));
+  const DrawingAnchor to_two = Placement(AnchorKind::kTwoCell, EditAs::kTwoCell, 0, 0);
+  ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(one, 0, 2, to_two)));
   pugi::xml_document doc;
   ParseDrawing(one, doc);
   pugi::xml_node anchor = doc.document_element().first_child();
@@ -967,8 +1155,8 @@ TEST(DrawingAnchorUpdate, ConvertsBetweenAnchorKinds) {
   ExpectPlaced(anchor, AnchorKind::kTwoCell, ExpectedBox(one, to_two, 381000, 762000, 0), 381000, 762000);
   EXPECT_EQ(local_name(child_local(anchor, "to").next_sibling()), "pic");
 
-  const ImageAnchor back = Placement(AnchorKind::kOneCell, EditAs::kTwoCell, 0, 0);
-  ASSERT_TRUE(static_cast<bool>(set_image_anchor(one, 0, 2, back)));
+  const DrawingAnchor back = Placement(AnchorKind::kOneCell, EditAs::kTwoCell, 0, 0);
+  ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(one, 0, 2, back)));
   pugi::xml_document doc2;
   ParseDrawing(one, doc2);
   anchor = doc2.document_element().first_child();
@@ -978,8 +1166,8 @@ TEST(DrawingAnchorUpdate, ConvertsBetweenAnchorKinds) {
   EXPECT_EQ(local_name(anchor.last_child()), "clientData");
 
   Workbook absolute = OnePicture(RichAnchor("absolute", 2, 0));
-  const ImageAnchor pinned = Placement(AnchorKind::kTwoCell, EditAs::kAbsolute, 0, 0);
-  ASSERT_TRUE(static_cast<bool>(set_image_anchor(absolute, 0, 2, pinned)));
+  const DrawingAnchor pinned = Placement(AnchorKind::kTwoCell, EditAs::kAbsolute, 0, 0);
+  ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(absolute, 0, 2, pinned)));
   pugi::xml_document doc3;
   ParseDrawing(absolute, doc3);
   anchor = doc3.document_element().first_child();
@@ -999,7 +1187,7 @@ TEST(DrawingAnchorUpdate, EditAsChangesOnlyWithItsValue) {
                         Case{" editAs=\"oneCell\"", EditAs::kOneCell, "oneCell"}}) {
     SCOPED_TRACE(std::string(c.attr) + " -> " + std::to_string(static_cast<int>(c.input)));
     Workbook wb = OnePicture(RichAnchor("two", 2, 0, c.attr));
-    ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, 2, Placement(AnchorKind::kTwoCell, c.input, 0, 0))));
+    ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, 2, Placement(AnchorKind::kTwoCell, c.input, 0, 0))));
     pugi::xml_document doc;
     ParseDrawing(wb, doc);
     const pugi::xml_attribute attr = doc.document_element().first_child().attribute("editAs");
@@ -1014,8 +1202,8 @@ TEST(DrawingAnchorUpdate, EditAsChangesOnlyWithItsValue) {
 
 TEST(DrawingAnchorUpdate, AlternateContentMovesBothBranches) {
   Workbook wb = OnePicture(Wrapped(RichAnchor("two", 2, 90)));
-  const ImageAnchor a = Placement(AnchorKind::kOneCell, EditAs::kTwoCell, 500000, 0);
-  ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, 2, a)));
+  const DrawingAnchor a = Placement(AnchorKind::kOneCell, EditAs::kTwoCell, 500000, 0);
+  ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, 2, a)));
   pugi::xml_document doc;
   ParseDrawing(wb, doc);
   const std::vector<pugi::xml_node> anchors = drawing_anchors(doc.document_element(), true);
@@ -1030,43 +1218,43 @@ TEST(DrawingAnchorUpdate, AlternateContentMovesBothBranches) {
 TEST(DrawingAnchorUpdate, RefusesBadPlacements) {
   Workbook wb = ThreePlacements();
   const Bytes before = Part(wb, kDrawingPath)->bytes;
-  const ImageAnchor ok = Placement(AnchorKind::kTwoCell, EditAs::kTwoCell, 0, 0);
-  ImageAnchor absolute = ok;
+  const DrawingAnchor ok = Placement(AnchorKind::kTwoCell, EditAs::kTwoCell, 0, 0);
+  DrawingAnchor absolute = ok;
   absolute.anchor_kind = AnchorKind::kAbsolute;
-  EXPECT_EQ(Code(set_image_anchor(wb, 0, 2, absolute)), FormulonErrorCode::kInvalidArgument);
-  ImageAnchor negative = ok;
+  EXPECT_EQ(Code(set_drawing_anchor(wb, 0, 2, absolute)), FormulonErrorCode::kInvalidArgument);
+  DrawingAnchor negative = ok;
   negative.col_off = -1;
-  EXPECT_EQ(Code(set_image_anchor(wb, 0, 2, negative)), FormulonErrorCode::kInvalidArgument);
-  ImageAnchor huge = ok;
+  EXPECT_EQ(Code(set_drawing_anchor(wb, 0, 2, negative)), FormulonErrorCode::kInvalidArgument);
+  DrawingAnchor huge = ok;
   huge.height_emu = std::int64_t{1} << 31;
-  EXPECT_EQ(Code(set_image_anchor(wb, 0, 2, huge)), FormulonErrorCode::kInvalidArgument);
-  ImageAnchor off_sheet = ok;
+  EXPECT_EQ(Code(set_drawing_anchor(wb, 0, 2, huge)), FormulonErrorCode::kInvalidArgument);
+  DrawingAnchor off_sheet = ok;
   off_sheet.col = Sheet::kMaxCols;
-  EXPECT_EQ(Code(set_image_anchor(wb, 0, 2, off_sheet)), FormulonErrorCode::kInvalidArgument);
-  ImageAnchor past_end = ok;
+  EXPECT_EQ(Code(set_drawing_anchor(wb, 0, 2, off_sheet)), FormulonErrorCode::kInvalidArgument);
+  DrawingAnchor past_end = ok;
   past_end.row = Sheet::kMaxRows - 1;
-  EXPECT_EQ(Code(set_image_anchor(wb, 0, 2, past_end)), FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(Code(set_image_anchor(wb, 0, 9, ok)), FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(Code(set_image_anchor(wb, 5, 2, ok)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_drawing_anchor(wb, 0, 2, past_end)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_drawing_anchor(wb, 0, 9, ok)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_drawing_anchor(wb, 5, 2, ok)), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(Part(wb, kDrawingPath)->bytes, before);
 
-  // Only pictures move: the chart with id 2 is refused.
+  // Only pictures and charts move: the diagram frame with id 2 is refused.
   const std::string chart =
       std::string(kWsDrOpen) + "<xdr:twoCellAnchor>" + Marker("from", 0, 0, 0, 0) + Marker("to", 6, 0, 14, 0) +
-      "<xdr:graphicFrame macro=\"\"><xdr:nvGraphicFramePr><xdr:cNvPr id=\"2\" name=\"Chart 1\"/>"
+      "<xdr:graphicFrame macro=\"\"><xdr:nvGraphicFramePr><xdr:cNvPr id=\"2\" name=\"Diagram 1\"/>"
       "<xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm/><a:graphic><a:graphicData "
-      "uri=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"/></a:graphic></xdr:graphicFrame>"
+      "uri=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\"/></a:graphic></xdr:graphicFrame>"
       "<xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>";
   Workbook charted = WithDrawing(chart, std::string(kRelsOpen) + "</Relationships>", {});
-  EXPECT_EQ(Code(set_image_anchor(charted, 0, 2, ok)), FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(Code(set_image_z_order(charted, 0, 2, 0)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_drawing_anchor(charted, 0, 2, ok)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_drawing_z_order(charted, 0, 2, 0)), FormulonErrorCode::kInvalidArgument);
 
   Workbook xlsb = Workbook::create();
   const Bytes drawing = ToBytes(std::string(kWsDrOpen) + RichAnchor("two", 2, 0) + "</xdr:wsDr>");
   ASSERT_TRUE(static_cast<bool>(xlsb.add_passthrough_part(PassthroughPart(kDrawingPath, kCtDrawing, drawing))));
   xlsb.sheet(0).set_unknown_relationships({UnknownRelationship{"rId1", kRelDrawing, kDrawingPath, false}});
-  EXPECT_EQ(Code(set_image_anchor(xlsb, 0, 2, ok)), FormulonErrorCode::kIoDrawingUnparseable);
-  EXPECT_EQ(Code(set_image_z_order(xlsb, 0, 2, 0)), FormulonErrorCode::kIoDrawingUnparseable);
+  EXPECT_EQ(Code(set_drawing_anchor(xlsb, 0, 2, ok)), FormulonErrorCode::kIoDrawingUnparseable);
+  EXPECT_EQ(Code(set_drawing_z_order(xlsb, 0, 2, 0)), FormulonErrorCode::kIoDrawingUnparseable);
   EXPECT_EQ(Part(xlsb, kDrawingPath)->bytes, drawing);
 }
 
@@ -1103,8 +1291,8 @@ TEST(DrawingAnchorUpdate, PairwiseCombinations) {
     ParseDrawing(wb, before);
     const std::int64_t cx = row.sized ? 500000 : 381000;
     const std::int64_t cy = row.sized ? 250001 : 762000;
-    const ImageAnchor a = Placement(row.input, row.edit_as, row.sized ? cx : 0, row.sized ? cy : 0);
-    ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, 2, a)));
+    const DrawingAnchor a = Placement(row.input, row.edit_as, row.sized ? cx : 0, row.sized ? cy : 0);
+    ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, 2, a)));
 
     const std::vector<DrawingObject> objects = List(wb);
     ASSERT_EQ(objects.size(), 1U);
@@ -1160,7 +1348,7 @@ TEST(DrawingZOrder, MovesTopLevelElements) {
        {Case{4, 0, Ids3{4, 2, 3}}, Case{2, 2, Ids3{3, 4, 2}}, Case{2, 1, Ids3{3, 2, 4}}, Case{4, 1, Ids3{2, 4, 3}}}) {
     SCOPED_TRACE(std::to_string(c.id) + " -> " + std::to_string(c.index));
     Workbook wb = ZOrderFixture();
-    ASSERT_TRUE(static_cast<bool>(set_image_z_order(wb, 0, c.id, c.index)));
+    ASSERT_TRUE(static_cast<bool>(set_drawing_z_order(wb, 0, c.id, c.index)));
     EXPECT_EQ(Ids(wb), c.expected);
     pugi::xml_document doc;
     ParseDrawing(wb, doc);
@@ -1177,21 +1365,31 @@ TEST(DrawingZOrder, MovesTopLevelElements) {
 TEST(DrawingZOrder, UnchangedOrderWritesNothing) {
   Workbook wb = ZOrderFixture();
   const std::vector<Bytes> before = AllBytes(wb);
-  ASSERT_TRUE(static_cast<bool>(set_image_z_order(wb, 0, 2, 0)));
-  ASSERT_TRUE(static_cast<bool>(set_image_z_order(wb, 0, 4, 2)));
+  ASSERT_TRUE(static_cast<bool>(set_drawing_z_order(wb, 0, 2, 0)));
+  ASSERT_TRUE(static_cast<bool>(set_drawing_z_order(wb, 0, 4, 2)));
   EXPECT_EQ(AllBytes(wb), before);
 }
 
-TEST(DrawingZOrder, RefusesOutOfRangeAndNonPictures) {
+TEST(DrawingZOrder, RefusesOutOfRangeAndShapes) {
   Workbook wb = ZOrderFixture();
   const std::vector<Bytes> before = AllBytes(wb);
-  EXPECT_EQ(Code(set_image_z_order(wb, 0, 2, 3)), FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(Code(set_image_z_order(wb, 0, 3, 0)), FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(Code(set_image_z_order(wb, 0, 7, 0)), FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(Code(set_image_z_order(wb, 2, 2, 0)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_drawing_z_order(wb, 0, 2, 3)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_drawing_z_order(wb, 0, 3, 0)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_drawing_z_order(wb, 0, 7, 0)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_drawing_z_order(wb, 2, 2, 0)), FormulonErrorCode::kInvalidArgument);
   Workbook empty = Workbook::create();
-  EXPECT_EQ(Code(set_image_z_order(empty, 0, 2, 0)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_drawing_z_order(empty, 0, 2, 0)), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(AllBytes(wb), before);
+}
+
+TEST(DrawingZOrder, MovesAChart) {
+  Workbook wb = ChartAndPicture();
+  ASSERT_TRUE(static_cast<bool>(set_drawing_z_order(wb, 0, 2, 1)));
+  EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{3, 2}));
+  auto refs = list_chart_parts(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(refs));
+  ASSERT_EQ(refs.value().size(), 1U);
+  EXPECT_EQ(refs.value()[0].part_path, "xl/charts/chart1.xml");
 }
 
 }  // namespace

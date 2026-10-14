@@ -378,6 +378,16 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/drawing/image_header_test.cpp
   unit/drawing/drawing_edit_test.cpp
   unit/drawing/drawing_snapshot_test.cpp
+  unit/chart/chart_model_test.cpp
+  unit/chart/chart_xml_test.cpp
+  unit/chart/chart_ref_test.cpp
+  unit/chart/chart_source_test.cpp
+  unit/chart/chart_template_test.cpp
+  unit/chart/chart_data_test.cpp
+  unit/chart/chart_structural_test.cpp
+  unit/chart/chart_cache_test.cpp
+  unit/chart/chart_edit_test.cpp
+  unit/chart/chart_save_test.cpp
   unit/registry_catalog_test.cpp
 )
 

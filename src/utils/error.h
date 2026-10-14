@@ -152,6 +152,16 @@ enum class FormulonErrorCode : int32_t {
   /// A sheet's drawing part could not be parsed, so typed drawing edits on
   /// it are refused rather than rewriting bytes the model cannot see.
   kIoDrawingUnparseable = 5024,
+  /// A chart part (or the drawing part reaching it) could not be parsed, so
+  /// typed chart reads and edits are refused rather than rewriting bytes the
+  /// model cannot see.
+  kIoChartUnparseable = 5025,
+  /// A chart series or title reference does not resolve to cell ranges of
+  /// this workbook (bad syntax, `#REF!`, external, or not a reference).
+  kIoChartInvalidReference = 5026,
+  /// The chart's kind or shape does not support the requested edit (chartex,
+  /// shared axes, pivot-chart series edits).
+  kIoChartUnsupportedKind = 5027,
 
   // ===== 6000-6999: Crypto / Security =====
   /// Allocated but not currently produced: Formulon does not decrypt
@@ -454,6 +464,12 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kIoImageUnsupported";
     case FormulonErrorCode::kIoDrawingUnparseable:
       return "kIoDrawingUnparseable";
+    case FormulonErrorCode::kIoChartUnparseable:
+      return "kIoChartUnparseable";
+    case FormulonErrorCode::kIoChartInvalidReference:
+      return "kIoChartInvalidReference";
+    case FormulonErrorCode::kIoChartUnsupportedKind:
+      return "kIoChartUnsupportedKind";
 
     // Crypto / Security
     case FormulonErrorCode::kCryptoAgileNotSupported:

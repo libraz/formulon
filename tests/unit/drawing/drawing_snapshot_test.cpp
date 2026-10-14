@@ -107,7 +107,7 @@ std::string TopXml(const Workbook& wb, std::size_t sheet, std::uint32_t id) {
   const pugi::xml_node root = doc.document_element();
   for (const pugi::xml_node& anchor : drawing_anchors(root, false)) {
     const DrawingObject obj = read_drawing_object(anchor, {});
-    if (obj.kind != DrawingObjectKind::kPicture || obj.object_id != id) {
+    if ((obj.kind != DrawingObjectKind::kPicture && obj.kind != DrawingObjectKind::kChart) || obj.object_id != id) {
       continue;
     }
     pugi::xml_node top = anchor;
@@ -149,7 +149,7 @@ std::string TopXml(const Workbook& wb, std::size_t sheet, std::uint32_t id) {
     out.print(writer, "", pugi::format_raw);
     return writer.out;
   }
-  ADD_FAILURE() << "no picture " << id;
+  ADD_FAILURE() << "no picture or chart " << id;
   return {};
 }
 
@@ -213,13 +213,13 @@ Workbook Fixture() {
 }
 
 Bytes Snapshot(const Workbook& wb, std::uint32_t id) {
-  auto bytes = snapshot_image(wb, 0, id);
+  auto bytes = snapshot_drawing(wb, 0, id);
   EXPECT_TRUE(static_cast<bool>(bytes));
   return bytes ? bytes.value() : Bytes{};
 }
 
 Expected<std::uint32_t, Error> Restore(Workbook& wb, std::size_t sheet, const Bytes& bytes, std::uint32_t flags = 0) {
-  return restore_image(wb, sheet, bytes.data(), bytes.size(), flags);
+  return restore_drawing(wb, sheet, bytes.data(), bytes.size(), flags);
 }
 
 Workbook RoundTrip(const Workbook& wb) {
@@ -238,7 +238,7 @@ TEST(DrawingSnapshot, DeleteThenRestoreReturnsTheSamePicture) {
     const std::string media = Find(wb, id).media_path;
     const Bytes media_bytes = Part(wb, media)->bytes;
     const Bytes snap = Snapshot(wb, id);
-    ASSERT_TRUE(static_cast<bool>(remove_image(wb, 0, id)));
+    ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, id)));
     ASSERT_EQ(Part(wb, media), nullptr);
 
     auto restored = Restore(wb, 0, snap);
@@ -262,13 +262,13 @@ TEST(DrawingSnapshot, MoveAndReorderThenRestore) {
   const std::string before = TopXml(wb, 0, 4);
   const DrawingObject listed = Find(wb, 4);
   const Bytes snap = Snapshot(wb, 4);
-  ImageAnchor moved;
+  DrawingAnchor moved;
   moved.anchor_kind = AnchorKind::kTwoCell;
   moved.row = 20;
   moved.col = 6;
   moved.width_emu = 400000;
-  ASSERT_TRUE(static_cast<bool>(set_image_anchor(wb, 0, 4, moved)));
-  ASSERT_TRUE(static_cast<bool>(set_image_z_order(wb, 0, 4, 0)));
+  ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, 4, moved)));
+  ASSERT_TRUE(static_cast<bool>(set_drawing_z_order(wb, 0, 4, 0)));
   ASSERT_EQ(Ids(wb), (std::vector<std::uint32_t>{4, 2, 3}));
 
   auto restored = Restore(wb, 0, snap);
@@ -287,7 +287,7 @@ TEST(DrawingSnapshot, MoveAndReorderThenRestore) {
   // Restoring the bottom picture after it moved to the top.
   const std::string bottom = TopXml(wb, 0, 2);
   const Bytes snap2 = Snapshot(wb, 2);
-  ASSERT_TRUE(static_cast<bool>(set_image_z_order(wb, 0, 2, 2)));
+  ASSERT_TRUE(static_cast<bool>(set_drawing_z_order(wb, 0, 2, 2)));
   ASSERT_TRUE(static_cast<bool>(Restore(wb, 0, snap2)));
   EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{2, 3, 4}));
   EXPECT_EQ(TopXml(wb, 0, 2), bottom);
@@ -298,7 +298,7 @@ TEST(DrawingSnapshot, NewIdAddsACopyOnTop) {
   const Bytes rels_before = Part(wb, kRelsPath)->bytes;
   const std::size_t parts_before = wb.passthrough_parts().size();
   const Bytes snap = Snapshot(wb, 2);
-  auto copy = Restore(wb, 0, snap, kImageRestoreNewId);
+  auto copy = Restore(wb, 0, snap, kDrawingRestoreNewId);
   ASSERT_TRUE(static_cast<bool>(copy));
   EXPECT_EQ(copy.value(), 5U);
   EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{2, 3, 4, 5}));
@@ -353,7 +353,7 @@ TEST(DrawingSnapshot, RestoresOntoAnotherSheet) {
 TEST(DrawingSnapshot, DifferentBytesAtThePathTakeAnotherPath) {
   Workbook wb = Fixture();
   const Bytes snap = Snapshot(wb, 2);
-  ASSERT_TRUE(static_cast<bool>(remove_image(wb, 0, 2)));
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 2)));
   const Bytes imposter = Png(5, 5);
   ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/media/image1.png", "", imposter))));
   ASSERT_TRUE(static_cast<bool>(Restore(wb, 0, snap)));
@@ -369,9 +369,9 @@ TEST(DrawingSnapshot, DifferentBytesAtThePathTakeAnotherPath) {
 TEST(DrawingSnapshot, SaveReloadKeepsTheList) {
   Workbook wb = Fixture();
   const Bytes snap = Snapshot(wb, 2);
-  ASSERT_TRUE(static_cast<bool>(remove_image(wb, 0, 2)));
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 2)));
   ASSERT_TRUE(static_cast<bool>(Restore(wb, 0, snap)));
-  ASSERT_TRUE(static_cast<bool>(Restore(wb, 0, snap, kImageRestoreNewId)));
+  ASSERT_TRUE(static_cast<bool>(Restore(wb, 0, snap, kDrawingRestoreNewId)));
   const std::vector<DrawingObject> before = List(wb);
   const std::vector<DrawingObject> after = List(RoundTrip(wb));
   ASSERT_EQ(after.size(), before.size());
@@ -410,7 +410,7 @@ Bytes Handmade(std::uint32_t version, const std::string& xml) {
 TEST(DrawingSnapshot, RejectsMalformedBytes) {
   Workbook wb = Fixture();
   const Bytes snap = Snapshot(wb, 4);
-  ASSERT_TRUE(static_cast<bool>(remove_image(wb, 0, 4)));
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 4)));
   const std::vector<PassthroughPart> parts = wb.passthrough_parts();
   const auto code = [&wb](const Bytes& bytes, std::uint32_t flags = 0) {
     auto result = Restore(wb, 0, bytes, flags);
@@ -420,7 +420,7 @@ TEST(DrawingSnapshot, RejectsMalformedBytes) {
   magic[0] = 'X';
   EXPECT_EQ(code(magic), FormulonErrorCode::kInvalidArgument);
   Bytes version = snap;
-  version[4] = 2;
+  version[4] = 3;
   EXPECT_EQ(code(version), FormulonErrorCode::kInvalidArgument);
   for (std::size_t len = 0; len < snap.size(); ++len) {
     const Bytes cut(snap.begin(), snap.begin() + static_cast<std::ptrdiff_t>(len));
@@ -436,7 +436,7 @@ TEST(DrawingSnapshot, RejectsMalformedBytes) {
                           "</xdr:oneCellAnchor>")),
             FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(Restore(wb, 0, Bytes{}).error().code, FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(restore_image(wb, 0, nullptr, 0, 0).error().code, FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(restore_drawing(wb, 0, nullptr, 0, 0).error().code, FormulonErrorCode::kInvalidArgument);
   ASSERT_EQ(wb.passthrough_parts().size(), parts.size());
   for (std::size_t i = 0; i < parts.size(); ++i) {
     EXPECT_EQ(wb.passthrough_parts()[i].bytes, parts[i].bytes) << parts[i].path;
@@ -448,16 +448,12 @@ TEST(DrawingSnapshot, RejectsMalformedBytes) {
 TEST(DrawingSnapshot, RefusesWhatItCannotCaptureOrPlace) {
   Workbook wb = Fixture();
   const auto snap_code = [&wb](std::uint32_t id) {
-    auto result = snapshot_image(wb, 0, id);
+    auto result = snapshot_drawing(wb, 0, id);
     return result ? FormulonErrorCode::kOk : result.error().code;
   };
   EXPECT_EQ(snap_code(3), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(snap_code(9), FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(snapshot_image(wb, 4, 2).error().code, FormulonErrorCode::kInvalidArgument);
-  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart(
-      "xl/media/_rels/image1.png.rels", "",
-      ToBytes("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"/>")))));
-  EXPECT_EQ(snap_code(2), FormulonErrorCode::kIoDrawingUnparseable);
+  EXPECT_EQ(snapshot_drawing(wb, 4, 2).error().code, FormulonErrorCode::kInvalidArgument);
   const Bytes snap4 = Snapshot(wb, 4);
 
   // Id 3 belongs to a shape on the target sheet.
@@ -480,6 +476,293 @@ TEST(DrawingSnapshot, RefusesWhatItCannotCaptureOrPlace) {
   ASSERT_FALSE(static_cast<bool>(refused));
   EXPECT_EQ(refused.error().code, FormulonErrorCode::kIoDrawingUnparseable);
   EXPECT_EQ(xlsb.passthrough_parts().size(), 1U);
+}
+
+constexpr const char* kChartRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+constexpr const char* kCtChart = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
+constexpr const char* kChartPath = "xl/charts/chart1.xml";
+constexpr const char* kChartRelsPath = "xl/charts/_rels/chart1.xml.rels";
+constexpr const char* kStylePath = "xl/charts/style1.xml";
+constexpr const char* kColorsPath = "xl/charts/colors1.xml";
+
+std::string ChartSpace(const char* title) {
+  return std::string(
+             "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n"
+             "<c:chartSpace xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"><c:chart><c:title>"
+             "<c:tx><c:v>") +
+         title + "</c:v></c:tx></c:title></c:chart></c:chartSpace>";
+}
+
+std::string ChartStyle(const char* id) {
+  return std::string("<cs:chartStyle xmlns:cs=\"http://schemas.microsoft.com/office/drawing/2012/chartStyle\" id=\"") +
+         id + "\"/>";
+}
+
+// A chart frame with `id` whose `c:chart` names `rid`, anchored at rows
+// `row`..`row + 10`.
+std::string ChartAnchor(std::uint32_t id, const char* rid, std::uint32_t row) {
+  return "<xdr:twoCellAnchor>" + Marker("from", 1, 0, row, 0) + Marker("to", 7, 0, row + 10, 0) +
+         "<xdr:graphicFrame macro=\"\"><xdr:nvGraphicFramePr><xdr:cNvPr id=\"" + std::to_string(id) +
+         "\" name=\"Chart " + std::to_string(id) +
+         "\"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"0\" "
+         "cy=\"0\"/></xdr:xfrm><a:graphic><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/"
+         "chart\"><c:chart xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\" r:id=\"" +
+         rid + "\"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>";
+}
+
+// Picture 2, chart 3 (with style and colors parts) and picture 4.
+Workbook ChartFixture() {
+  Workbook wb = Fixture();
+  const PassthroughPart* drawing_part = Part(wb, kDrawingPath);
+  std::string drawing(drawing_part->bytes.begin(), drawing_part->bytes.end());
+  const std::size_t pic4 = drawing.find("<xdr:oneCellAnchor><xdr:from><xdr:col>4<");
+  const std::size_t shape = drawing.find("<xdr:oneCellAnchor><xdr:from><xdr:col>8<");
+  drawing.replace(shape, pic4 - shape, ChartAnchor(3, "rId3", 12));
+  EXPECT_TRUE(static_cast<bool>(wb.replace_passthrough_part(kDrawingPath, ToBytes(drawing))));
+  const PassthroughPart* rels_part = Part(wb, kRelsPath);
+  std::string rels(rels_part->bytes.begin(), rels_part->bytes.end());
+  rels.insert(rels.find("</Relationships>"),
+              std::string("<Relationship Id=\"rId3\" Type=\"") + kChartRel + "\" Target=\"../charts/chart1.xml\"/>");
+  EXPECT_TRUE(static_cast<bool>(wb.replace_passthrough_part(kRelsPath, ToBytes(rels))));
+  const std::string chart_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId2\" Type=\"http://schemas.microsoft.com/office/2011/relationships/chartColorStyle\" "
+      "Target=\"colors1.xml\"/><Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.microsoft.com/office/2011/relationships/chartStyle\" Target=\"style1.xml\"/>"
+      "</Relationships>";
+  EXPECT_TRUE(
+      static_cast<bool>(wb.add_passthrough_part(PassthroughPart(kChartPath, kCtChart, ToBytes(ChartSpace("A"))))));
+  EXPECT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart(kChartRelsPath, "", ToBytes(chart_rels)))));
+  EXPECT_TRUE(static_cast<bool>(wb.add_passthrough_part(
+      PassthroughPart(kStylePath, "application/vnd.ms-office.chartstyle+xml", ToBytes(ChartStyle("201"))))));
+  EXPECT_TRUE(static_cast<bool>(wb.add_passthrough_part(
+      PassthroughPart(kColorsPath, "application/vnd.ms-office.chartcolorstyle+xml",
+                      ToBytes("<cs:colorStyle xmlns:cs=\"http://schemas.microsoft.com/office/drawing/2012/chartStyle\" "
+                              "meth=\"cycle\" id=\"10\"/>")))));
+  return wb;
+}
+
+// Chart part path of frame `id` on sheet 0, or empty.
+std::string ChartPathOf(const Workbook& wb, std::uint32_t id) {
+  auto refs = list_chart_parts(wb, 0);
+  EXPECT_TRUE(static_cast<bool>(refs));
+  for (const ChartPartRef& ref : refs ? refs.value() : std::vector<ChartPartRef>{}) {
+    if (ref.object_id == id) {
+      return ref.part_path;
+    }
+  }
+  return {};
+}
+
+std::string Text(const Workbook& wb, const std::string& path) {
+  const PassthroughPart* part = Part(wb, path);
+  return part == nullptr ? std::string() : std::string(part->bytes.begin(), part->bytes.end());
+}
+
+TEST(DrawingSnapshot, ChartRestoredOntoItsIdGetsItsPartsBack) {
+  Workbook wb = ChartFixture();
+  const std::string before = TopXml(wb, 0, 3);
+  const Bytes chart = Part(wb, kChartPath)->bytes;
+  const Bytes style = Part(wb, kStylePath)->bytes;
+  const Bytes chart_rels = Part(wb, kChartRelsPath)->bytes;
+  const Bytes snap = Snapshot(wb, 3);
+  ASSERT_EQ(snap[4], 2U);  // Current captures carry their dependent parts.
+
+  // Edit the chart part and its style, move the frame and send it to the back.
+  ASSERT_TRUE(static_cast<bool>(wb.replace_passthrough_part(kChartPath, ToBytes(ChartSpace("B")))));
+  ASSERT_TRUE(static_cast<bool>(wb.replace_passthrough_part(kStylePath, ToBytes(ChartStyle("300")))));
+  DrawingAnchor moved;
+  moved.anchor_kind = AnchorKind::kTwoCell;
+  moved.row = 30;
+  moved.col = 3;
+  ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, 3, moved)));
+  ASSERT_TRUE(static_cast<bool>(set_drawing_z_order(wb, 0, 3, 0)));
+  ASSERT_EQ(Ids(wb), (std::vector<std::uint32_t>{3, 2, 4}));
+  const std::size_t parts = wb.passthrough_parts().size();
+
+  auto restored = Restore(wb, 0, snap);
+  ASSERT_TRUE(static_cast<bool>(restored));
+  EXPECT_EQ(restored.value(), 3U);
+  EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{2, 3, 4}));
+  EXPECT_EQ(TopXml(wb, 0, 3), before);
+  EXPECT_EQ(ChartPathOf(wb, 3), kChartPath);
+  EXPECT_EQ(Part(wb, kChartPath)->bytes, chart);
+  EXPECT_EQ(Part(wb, kChartPath)->content_type, kCtChart);
+  EXPECT_EQ(Part(wb, kStylePath)->bytes, style);
+  EXPECT_EQ(Part(wb, kChartRelsPath)->bytes, chart_rels);
+  EXPECT_EQ(wb.passthrough_parts().size(), parts);
+}
+
+TEST(DrawingSnapshot, DeletedChartReturnsToItsRecordedPosition) {
+  Workbook wb = ChartFixture();
+  const std::string before = TopXml(wb, 0, 3);
+  const std::vector<PassthroughPart> parts = wb.passthrough_parts();
+  const Bytes snap = Snapshot(wb, 3);
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 3)));
+  for (const char* path : {kChartPath, kChartRelsPath, kStylePath, kColorsPath}) {
+    EXPECT_EQ(Part(wb, path), nullptr) << path;
+  }
+  EXPECT_EQ(Text(wb, kRelsPath).find("chart1.xml"), std::string::npos);
+
+  auto restored = Restore(wb, 0, snap);
+  ASSERT_TRUE(static_cast<bool>(restored));
+  EXPECT_EQ(restored.value(), 3U);
+  EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{2, 3, 4}));
+  EXPECT_EQ(TopXml(wb, 0, 3), before);
+  EXPECT_EQ(ChartPathOf(wb, 3), kChartPath);
+  ASSERT_EQ(wb.passthrough_parts().size(), parts.size());
+  for (const PassthroughPart& part : parts) {
+    if (part.path == kRelsPath || part.path == kDrawingPath) {
+      continue;  // The drawing and its rels are re-serialised.
+    }
+    ASSERT_NE(Part(wb, part.path), nullptr) << part.path;
+    EXPECT_EQ(Part(wb, part.path)->bytes, part.bytes) << part.path;
+    EXPECT_EQ(Part(wb, part.path)->content_type, part.content_type) << part.path;
+  }
+
+  Workbook reloaded = RoundTrip(wb);
+  EXPECT_EQ(Ids(reloaded), (std::vector<std::uint32_t>{2, 3, 4}));
+  EXPECT_EQ(ChartPathOf(reloaded, 3), kChartPath);
+  EXPECT_EQ(Part(reloaded, kStylePath)->bytes, Part(wb, kStylePath)->bytes);
+}
+
+TEST(DrawingSnapshot, ChartWhosePathWasReusedTakesAFreshOne) {
+  Workbook wb = ChartFixture();
+  const Bytes chart = Part(wb, kChartPath)->bytes;
+  const Bytes colors = Part(wb, kColorsPath)->bytes;
+  const Bytes snap = Snapshot(wb, 3);
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 3)));
+
+  // Another chart takes the freed chart and style paths.
+  ImageInsertOptions placement;
+  placement.anchor_kind = AnchorKind::kTwoCell;
+  placement.width_emu = 4572000;
+  placement.height_emu = 2743200;
+  auto other = insert_graphic_frame(wb, 0, placement,
+                                    "<a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/chart\">"
+                                    "<c:chart xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\" "
+                                    "r:id=\"{rId}\"/></a:graphicData>",
+                                    kChartPath, kChartRel);
+  ASSERT_TRUE(static_cast<bool>(other));
+  const Bytes other_chart = ToBytes(ChartSpace("Other"));
+  const Bytes other_style = ToBytes(ChartStyle("999"));
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart(kChartPath, kCtChart, other_chart))));
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart(
+      kChartRelsPath, "",
+      ToBytes("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship "
+              "Id=\"rId1\" Type=\"http://schemas.microsoft.com/office/2011/relationships/chartStyle\" "
+              "Target=\"style1.xml\"/></Relationships>")))));
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart(kStylePath, "", other_style))));
+  ASSERT_EQ(ChartPathOf(wb, other.value()), kChartPath);
+
+  auto restored = Restore(wb, 0, snap);
+  ASSERT_TRUE(static_cast<bool>(restored));
+  EXPECT_EQ(restored.value(), 3U);
+  EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{2, 3, 4, other.value()}));
+  // The restored chart moved to fresh chart and style paths; colors1 was free.
+  EXPECT_EQ(ChartPathOf(wb, 3), "xl/charts/chart2.xml");
+  EXPECT_EQ(Part(wb, "xl/charts/chart2.xml")->bytes, chart);
+  EXPECT_EQ(Part(wb, "xl/charts/chart2.xml")->content_type, kCtChart);
+  const std::string rels = Text(wb, "xl/charts/_rels/chart2.xml.rels");
+  EXPECT_NE(rels.find("Target=\"style2.xml\""), std::string::npos);
+  EXPECT_NE(rels.find("Target=\"colors1.xml\""), std::string::npos);
+  EXPECT_EQ(Text(wb, "xl/charts/style2.xml"), ChartStyle("201"));
+  EXPECT_EQ(Part(wb, kColorsPath)->bytes, colors);
+  // The other chart keeps its parts.
+  EXPECT_EQ(ChartPathOf(wb, other.value()), kChartPath);
+  EXPECT_EQ(Part(wb, kChartPath)->bytes, other_chart);
+  EXPECT_EQ(Part(wb, kStylePath)->bytes, other_style);
+
+  Workbook reloaded = RoundTrip(wb);
+  EXPECT_EQ(ChartPathOf(reloaded, 3), "xl/charts/chart2.xml");
+  EXPECT_EQ(Text(reloaded, "xl/charts/style2.xml"), ChartStyle("201"));
+}
+
+TEST(DrawingSnapshot, ChartCopyWithNewIdOwnsItsParts) {
+  Workbook wb = ChartFixture();
+  const Bytes snap = Snapshot(wb, 3);
+  const std::size_t parts = wb.passthrough_parts().size();
+  auto copy = Restore(wb, 0, snap, kDrawingRestoreNewId);
+  ASSERT_TRUE(static_cast<bool>(copy));
+  EXPECT_EQ(copy.value(), 5U);
+  EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{2, 3, 4, 5}));
+  EXPECT_EQ(ChartPathOf(wb, 3), kChartPath);
+  EXPECT_EQ(ChartPathOf(wb, 5), "xl/charts/chart2.xml");
+  EXPECT_EQ(Part(wb, "xl/charts/chart2.xml")->bytes, Part(wb, kChartPath)->bytes);
+  EXPECT_EQ(Text(wb, "xl/charts/style2.xml"), ChartStyle("201"));
+  EXPECT_NE(Part(wb, "xl/charts/colors2.xml"), nullptr);
+  // The chart part, its rels part, style and colors.
+  EXPECT_EQ(wb.passthrough_parts().size(), parts + 4U);
+
+  // Removing the copy leaves the original's parts.
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 5)));
+  EXPECT_EQ(Part(wb, "xl/charts/chart2.xml"), nullptr);
+  EXPECT_EQ(Part(wb, "xl/charts/style2.xml"), nullptr);
+  EXPECT_EQ(wb.passthrough_parts().size(), parts);
+  EXPECT_EQ(ChartPathOf(wb, 3), kChartPath);
+}
+
+TEST(DrawingSnapshot, LoadsAVersionOneCapture) {
+  // A picture capture in the format that predates dependent parts.
+  const std::string xml =
+      "<xdr:oneCellAnchor xmlns:xdr=\"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing\" "
+      "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">" +
+      Marker("from", 4, 0, 10, 0) +
+      "<xdr:ext cx=\"95250\" cy=\"95250\"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id=\"4\" name=\"Small\"/>"
+      "<xdr:cNvPicPr/></xdr:nvPicPr><xdr:blipFill><a:blip r:embed=\"rId2\"/></xdr:blipFill><xdr:spPr><a:xfrm>"
+      "<a:off x=\"0\" y=\"0\"/><a:ext cx=\"95250\" cy=\"95250\"/></a:xfrm></xdr:spPr></xdr:pic><xdr:clientData/>"
+      "</xdr:oneCellAnchor>";
+  const Bytes media = Png(10, 10);
+  Bytes v1 = {'F', 'M', 'I', 'S'};
+  PutU32(v1, 1);
+  PutU32(v1, 2);
+  const auto blob = [&v1](const std::string& text) {
+    PutU32(v1, static_cast<std::uint32_t>(text.size()));
+    v1.insert(v1.end(), text.begin(), text.end());
+  };
+  blob(xml);
+  PutU32(v1, 1);
+  blob("rId2");
+  blob(kImageRel);
+  blob("../media/image2.png");
+  PutU32(v1, 0);
+  PutU32(v1, 1);
+  blob("xl/media/image2.png");
+  blob("");
+  PutU32(v1, static_cast<std::uint32_t>(media.size()));
+  v1.insert(v1.end(), media.begin(), media.end());
+
+  Workbook wb = Fixture();
+  const std::string before = TopXml(wb, 0, 4);
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 4)));
+  ASSERT_EQ(Part(wb, "xl/media/image2.png"), nullptr);
+  auto restored = Restore(wb, 0, v1);
+  ASSERT_TRUE(static_cast<bool>(restored));
+  EXPECT_EQ(restored.value(), 4U);
+  EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{2, 3, 4}));
+  EXPECT_EQ(TopXml(wb, 0, 4), before);
+  EXPECT_EQ(Part(wb, "xl/media/image2.png")->bytes, media);
+}
+
+TEST(DrawingSnapshot, CapturesWhatAPartsOwnRelsReach) {
+  // A part the picture references may have relationships of its own.
+  Workbook wb = Fixture();
+  const Bytes thumb = Png(3, 3);
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart(
+      "xl/media/_rels/image1.png.rels", "",
+      ToBytes("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship "
+              "Id=\"rId1\" Type=\"" +
+              std::string(kImageRel) + "\" Target=\"thumb1.png\"/></Relationships>")))));
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/media/thumb1.png", "", thumb))));
+  const Bytes snap = Snapshot(wb, 2);
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 2)));
+  ASSERT_EQ(Part(wb, "xl/media/thumb1.png"), nullptr);
+  ASSERT_TRUE(static_cast<bool>(Restore(wb, 0, snap)));
+  EXPECT_EQ(Find(wb, 2).media_path, "xl/media/image1.png");
+  ASSERT_NE(Part(wb, "xl/media/_rels/image1.png.rels"), nullptr);
+  EXPECT_EQ(Part(wb, "xl/media/thumb1.png")->bytes, thumb);
 }
 
 }  // namespace

@@ -23,6 +23,7 @@
 #include "calc_settings.h"
 #include "cell.h"
 #include "cf/cf_types.h"
+#include "chart/chart_cache.h"
 #include "default_content_type.h"
 #include "external_link.h"
 #include "io/dynamic_array_formula.h"
@@ -849,7 +850,9 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       return std::move(r.error());
     }
   }
-  // 7. Passthrough parts.
+  // 7. Passthrough parts. Chart caches are refreshed into replacement bytes;
+  // the model is untouched.
+  ASSIGN_OR_RETURN(auto refreshed, refreshed_chart_parts(workbook));
   for (const PassthroughPart* part : plan.passthrough_kept) {
     // Never emit a traversal-shaped part name, even if one reached the model
     // through a path other than the reader (which already rejects them).
@@ -861,7 +864,10 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     if (auto fresh = CheckRetainedPartFreshness(workbook, *part); !fresh) {
       return std::move(fresh.error());
     }
-    if (auto r = AddPartBytes(writer.get(), part->path, part->bytes); !r) {
+    const auto replacement = std::find_if(refreshed.begin(), refreshed.end(),
+                                          [part](const PassthroughPart& r) { return r.path == part->path; });
+    const auto& part_bytes = replacement != refreshed.end() ? replacement->bytes : part->bytes;
+    if (auto r = AddPartBytes(writer.get(), part->path, part_bytes); !r) {
       return std::move(r.error());
     }
   }

@@ -168,6 +168,55 @@ export const DrawingObjectKind = Object.freeze({
 });
 export const AnchorKind = Object.freeze({ OneCell: 0, TwoCell: 1, Absolute: 2 });
 export const AnchorEditAs = Object.freeze({ TwoCell: 0, OneCell: 1, Absolute: 2 });
+export const ChartPlotType = Object.freeze({
+  Bar: 0,
+  Bar3D: 1,
+  Line: 2,
+  Line3D: 3,
+  Area: 4,
+  Area3D: 5,
+  Pie: 6,
+  Pie3D: 7,
+  Doughnut: 8,
+  OfPie: 9,
+  Scatter: 10,
+  Bubble: 11,
+  Radar: 12,
+  Stock: 13,
+  Surface: 14,
+  Surface3D: 15,
+  Chartex: 16,
+});
+export const ChartInsertKind = Object.freeze({ Column: 0, Bar: 1, Line: 2, Area: 3, Pie: 4, Scatter: 5, Doughnut: 6 });
+export const ChartGrouping = Object.freeze({ Clustered: 0, Stacked: 1, PercentStacked: 2, Standard: 3 });
+export const ChartBlanksAs = Object.freeze({ Absent: 0, Gap: 1, Zero: 2, Span: 3 });
+export const ChartPointState = Object.freeze({ Value: 0, Gap: 1, Connect: 2 });
+export const ChartAxisKind = Object.freeze({ Category: 0, Value: 1, Date: 2, Series: 3 });
+export const ChartAxisCrosses = Object.freeze({ Absent: 0, AutoZero: 1, Min: 2, Max: 3, At: 4 });
+export const ChartTitleKind = Object.freeze({ None: 0, Text: 1, Ref: 2, Auto: 3 });
+export const ChartSeriesDirection = Object.freeze({ Auto: 0, Columns: 1, Rows: 2 });
+export const ChartLegendPosition = Object.freeze({ None: 0, Bottom: 1, Top: 2, Left: 3, Right: 4, TopRight: 5 });
+export const ChartLineDash = Object.freeze({ Solid: 0, Dash: 1, Dot: 2, DashDot: 3, Other: 4 });
+export const ChartMarkerSymbol = Object.freeze({
+  None: 0,
+  Auto: 1,
+  Circle: 2,
+  Square: 3,
+  Diamond: 4,
+  Triangle: 5,
+  Other: 6,
+});
+export const ChartLabelPosition = Object.freeze({
+  BestFit: 0,
+  Center: 1,
+  InsideBase: 2,
+  InsideEnd: 3,
+  OutsideEnd: 4,
+  Above: 5,
+  Below: 6,
+  Left: 7,
+  Right: 8,
+});
 export const ThemeSource = Object.freeze({ Part: 0, Default: 1, Unparseable: 2 });
 export const EffectiveStyleSource = Object.freeze({ Cell: 0, Row: 1, Column: 2, Default: 3 });
 export const DisplayStatus = Object.freeze({ Ok: 0, Overflow: 1, InvalidFormat: 2 });

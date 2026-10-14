@@ -756,6 +756,71 @@ gtest_discover_tests(formulon_workbook_builder_test
   PROPERTIES LABELS "oracle"
 )
 
+# ---------------------------------------------------------------------------
+# Chart oracle target
+#
+# Replays the chart track's goldens (golden_chart/<suite>.golden.json, each
+# case carrying its own spec) and compares the projected chart model with
+# what Excel saved. `chart_model_dump` is the capture side's only reader of
+# chart parts: tools/oracle/chart_oracle_gen.py runs it on Excel's files and
+# on Formulon's builds, so both binaries compile the same source.
+# ---------------------------------------------------------------------------
+
+# skip-oracle entries reach the verifier through the same configure-time
+# projection the workbook track uses.
+set(_chart_oracle_skip_file "")
+if(Python3_Interpreter_FOUND)
+  set(_chart_oracle_skip_file "${CMAKE_CURRENT_BINARY_DIR}/chart_oracle_skips.json")
+  execute_process(
+    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
+            --track chart --out ${_chart_oracle_skip_file}
+    RESULT_VARIABLE _chart_skip_rc
+    OUTPUT_QUIET
+    ERROR_QUIET
+  )
+  if(NOT _chart_skip_rc EQUAL 0)
+    set(_chart_oracle_skip_file "")
+  endif()
+endif()
+set_property(
+  DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_SOURCE_DIR}/tests/divergence.yaml"
+)
+
+set(_chart_oracle_defs
+  FORMULON_CHART_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/targets/mac-365-ja_JP/golden_chart"
+  FORMULON_CHART_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures/excel"
+  FORMULON_CHART_ORACLE_SKIP_FILE="${_chart_oracle_skip_file}"
+)
+
+add_executable(chart_model_dump
+  chart_model_dump.cpp
+  json_reader.cpp
+)
+target_link_libraries(chart_model_dump PRIVATE formulon_static)
+target_include_directories(chart_model_dump PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR})
+target_compile_definitions(chart_model_dump PRIVATE ${_chart_oracle_defs})
+formulon_apply_warnings(chart_model_dump)
+
+add_executable(formulon_oracle_chart_tests
+  chart_oracle_test.cpp
+  chart_model_dump.cpp
+  json_reader.cpp
+)
+target_link_libraries(formulon_oracle_chart_tests PRIVATE formulon_static gtest_main)
+target_include_directories(formulon_oracle_chart_tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR})
+target_compile_definitions(formulon_oracle_chart_tests
+  PRIVATE ${_chart_oracle_defs} FORMULON_CHART_MODEL_DUMP_NO_MAIN
+)
+formulon_apply_warnings(formulon_oracle_chart_tests)
+
+# One CTest entry for the whole track; an empty golden directory fails it
+# rather than passing on zero cases.
+add_test(NAME formulon_oracle_chart_tests
+  COMMAND formulon_oracle_chart_tests --gtest_brief=1 --gtest_fail_if_no_test_selected
+)
+set_tests_properties(formulon_oracle_chart_tests PROPERTIES LABELS "oracle")
+
 # Metadata checks are read-only and deliberately separate from the executable
 # golden tests.  The closure check reports external-pending suites (including
 # an incomplete historical print suite) without fabricating or deleting data.
@@ -809,6 +874,7 @@ if(Python3_Interpreter_FOUND)
   )
   set_tests_properties(formulon_workbook_closure_check_optional PROPERTIES LABELS "oracle;oracle-metadata")
   formulon_add_oracle_unittest(formulon_workbook_case_schema_negative tools.oracle.workbook_case_schema_test)
+  formulon_add_oracle_unittest(formulon_chart_case_schema_unit tools.oracle.chart_case_schema_test)
   # Guards the divergence registry gate itself: the assertions here are what
   # keep the pending-stamp format, the explicit build rejections and the
   # mandatory `cause` enum from being loosened without notice.

@@ -416,17 +416,55 @@ fm_sheet_get_page_setup
 fm_sheet_get_page_margins
 fm_sheet_set_range_xf_index
 
-# -- Drawing images --------------------------------------------------------------
+# -- Drawing objects -------------------------------------------------------------
 fm_workbook_probe_image
 fm_sheet_drawing_object_count
 fm_sheet_drawing_object_at
 fm_sheet_get_image
 fm_sheet_insert_image
-fm_sheet_remove_image
-fm_sheet_set_image_anchor
-fm_sheet_set_image_z_order
-fm_sheet_snapshot_image
-fm_sheet_restore_image
+fm_sheet_remove_drawing
+fm_sheet_set_drawing_anchor
+fm_sheet_set_drawing_z_order
+fm_sheet_snapshot_drawing
+fm_sheet_restore_drawing
+
+# -- Charts ----------------------------------------------------------------------
+fm_sheet_chart_open
+fm_chart_destroy
+fm_chart_info
+fm_chart_legend_hidden_at
+fm_chart_hidden_category_at
+fm_chart_plot_at
+fm_chart_plot_axis_id_at
+fm_chart_series_at
+fm_chart_series_literal_at
+fm_chart_series_point_at
+fm_chart_axis_at
+fm_sheet_chart_data_open
+fm_sheet_chart_preview_open
+fm_chart_data_destroy
+fm_chart_data_info
+fm_chart_data_category_at
+fm_chart_data_category_level_size
+fm_chart_data_category_level_at
+fm_chart_data_series_at
+fm_chart_data_series_points
+fm_chart_data_range_at
+fm_chart_data_axis_title_at
+fm_chart_data_unresolved_at
+fm_sheet_insert_chart
+fm_sheet_set_chart_type
+fm_sheet_set_chart_title
+fm_sheet_set_chart_legend
+fm_sheet_set_chart_axis
+fm_sheet_set_chart_display
+fm_sheet_set_chart_series
+fm_sheet_set_chart_point
+fm_sheet_set_chart_plot
+fm_sheet_set_chart_filter
+fm_sheet_add_chart_series
+fm_sheet_remove_chart_series
+fm_sheet_set_chart_source
 
 # -- Version ---------------------------------------------------------------------
 fm_version_string

@@ -1,7 +1,7 @@
 # Oracle generation targets. The "primary" target is the canonical 1-bit
 # compatibility reference; variants are opt-in additional environments
 # whose goldens land under tests/oracle/targets/<name>/. The target root
-# contains the formula, CF, and workbook tracks captured for that target.
+# contains the formula, CF, chart, and workbook tracks captured for that target.
 # Every target listed in `tracks.formula.gates` is a required CTest oracle
 # (one binary per gate); other non-primary targets are opt-in.
 #
@@ -36,6 +36,12 @@ tracks:
     # Excel 365 ja-JP install as the formula track.  Keep this explicit per
     # track so the CF generator cannot silently fall back to an unrelated
     # target or to a historical Office 2019 directory.
+    primary: mac-365-ja_JP
+    variants: []
+  chart:
+    # Chart caches, reference following, creation and edits, captured by
+    # tools/oracle/chart_oracle_gen.py through Mac Excel's object model
+    # into golden_chart/ (marker: golden_chart/PROVENANCE.json).
     primary: mac-365-ja_JP
     variants: []
 

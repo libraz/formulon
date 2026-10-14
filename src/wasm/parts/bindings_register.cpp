@@ -273,15 +273,50 @@ EMSCRIPTEN_BINDINGS(formulon) {
                 emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, emscripten::val bytes) {
                   return self.insertImage(sheet, bytes, emscripten::val::object());
                 }))
-      .function("removeImage", &JsWorkbook::removeImage)
-      .function("setImageAnchor", &JsWorkbook::setImageAnchor)
-      .function("setImageZOrder", &JsWorkbook::setImageZOrder)
-      .function("snapshotImage", &JsWorkbook::snapshotImage)
-      .function("restoreImage", &JsWorkbook::restoreImage)
-      .function("restoreImage",
+      .function("removeDrawing", &JsWorkbook::removeDrawing)
+      .function("setDrawingAnchor", &JsWorkbook::setDrawingAnchor)
+      .function("setDrawingZOrder", &JsWorkbook::setDrawingZOrder)
+      .function("snapshotDrawing", &JsWorkbook::snapshotDrawing)
+      .function("restoreDrawing", &JsWorkbook::restoreDrawing)
+      .function("restoreDrawing",
                 emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, emscripten::val bytes) {
-                  return self.restoreImage(sheet, bytes, emscripten::val::object());
+                  return self.restoreDrawing(sheet, bytes, emscripten::val::object());
                 }))
+      .function("getChart", &JsWorkbook::getChart)
+      .function("getChartData", &JsWorkbook::getChartData)
+      .function("previewChartData", &JsWorkbook::previewChartData)
+      .function("insertChart", &JsWorkbook::insertChart)
+      .function("setChartType", &JsWorkbook::setChartType)
+      .function("setChartType", emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t objectId,
+                                                                 uint32_t plot, int32_t kind) {
+                  return self.setChartType(sheet, objectId, plot, kind, emscripten::val::undefined());
+                }))
+      .function("setChartTitle", &JsWorkbook::setChartTitle)
+      .function("setChartLegend", &JsWorkbook::setChartLegend)
+      .function("setChartLegend", emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t objectId,
+                                                                   int32_t position, bool overlay) {
+                  return self.setChartLegend(sheet, objectId, position, overlay, emscripten::val::undefined());
+                }))
+      .function("setChartAxis", &JsWorkbook::setChartAxis)
+      .function("setChartDisplay", &JsWorkbook::setChartDisplay)
+      .function("setChartSeries", &JsWorkbook::setChartSeries)
+      .function("setChartPoint", &JsWorkbook::setChartPoint)
+      .function("setChartPlot", &JsWorkbook::setChartPlot)
+      .function("setChartFilter", &JsWorkbook::setChartFilter)
+      .function("addChartSeries", &JsWorkbook::addChartSeries)
+      .function("removeChartSeries", &JsWorkbook::removeChartSeries)
+      .function("setChartSource", &JsWorkbook::setChartSource)
+      .function("setChartSource", emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t objectId,
+                                                                   const std::string& source, int32_t direction) {
+                  return self.setChartSource(sheet, objectId, source, direction, emscripten::val::undefined(),
+                                             emscripten::val::undefined());
+                }))
+      .function(
+          "setChartSource",
+          emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t objectId,
+                                           const std::string& source, int32_t direction, emscripten::val headerRow) {
+            return self.setChartSource(sheet, objectId, source, direction, headerRow, emscripten::val::undefined());
+          }))
       .function("getCellRectPt", &JsWorkbook::getCellRectPt)
       .function("getColumnWidthPt", &JsWorkbook::getColumnWidthPt)
       .function("getDisplayText", &JsWorkbook::getDisplayText)

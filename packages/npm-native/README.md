@@ -43,8 +43,8 @@ Why prefer the native build:
 This package exposes the shared `Workbook` surface of the WASM-backed
 `@libraz/formulon` package, all marshalling to the identical C-ABI
 functions. Its TypeScript declarations and its native class table
-register 295 instance methods plus the four static factories. Of those
-instance methods, 293 are shared with WASM; six remain WASM-only, while
+register 311 instance methods plus the four static factories. Of those
+instance methods, 309 are shared with WASM; six remain WASM-only, while
 `dispose()` and `memoryUsage()` are native-only lifecycle helpers.
 The shared `Workbook` methods use the same status-bearing result envelopes
 and field shapes; switching packages still requires updating the module
@@ -132,6 +132,14 @@ Merges / comments / hyperlinks / validations
   addHyperlink, getHyperlinks, removeHyperlink,
   removeHyperlinkAt, clearHyperlinks
   getValidations, addValidation, removeValidationAt, clearValidations
+
+Drawings & charts
+  probeImage, listDrawingObjects, getImage, insertImage
+  removeDrawing, setDrawingAnchor, setDrawingZOrder, snapshotDrawing, restoreDrawing
+  getChart, getChartData, previewChartData, insertChart
+  setChartType, setChartTitle, setChartLegend, setChartAxis, setChartDisplay,
+  setChartSeries, setChartPoint, setChartPlot, setChartFilter,
+  addChartSeries, removeChartSeries, setChartSource
 
 Conditional formatting
   getConditionalFormats, addConditionalFormat,

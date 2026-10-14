@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -21,6 +22,17 @@
 #include "table.h"
 
 namespace formulon {
+
+/// Outcome of `rewrite_formula`.
+struct FormulaRewriteResult {
+  std::string text;      ///< Rewritten formula (the input when nothing changed).
+  bool changed = false;  ///< Any reference was actually rewritten.
+  bool error = false;    ///< Parse failure or arena exhaustion; `text` is the input.
+};
+
+/// Rewrites one formula text through `transform`, keeping a leading `=` if
+/// present. An unchanged result lets the caller skip dependent bookkeeping.
+FormulaRewriteResult rewrite_formula(std::string_view formula, const parser::RefTransform& transform);
 
 // Applies a per-sheet AST transform to every non-cell formula holder:
 // conditional-format rules and their formula thresholds, hyperlink locations,

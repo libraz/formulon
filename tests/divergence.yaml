@@ -1335,6 +1335,51 @@ entries:
     first_noted: 2026-10-08
     last_verified_excel_version: "16.113.3"
 
+  # -- chart track: rules the chart oracle cannot observe -----------------
+  # The chart oracle compares what Excel saves (caches, references) and
+  # what its object model reports. These rules change only how Excel draws
+  # a chart, so no capture can pin them; unit tests hold them instead.
+  - id: chart_disp_blanks_as_unobservable
+    applies_to: [mac-365-ja_JP]
+    cause: excel-no-value
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/chart/chart_data_test.cpp]
+    reason: "c:dispBlanksAs gap / zero / span leaves both the saved cache (a blank cell writes no c:pt, ptCount still counts it) and Series.Values (blank reads '') identical, so how a blank point is drawn is not observable from a capture. Formulon reports each point's state (gap / zero-valued / connect) by the documented rule; chart_data_test pins it per chart type, and an absent element reads as zero, as Excel reads it."
+    prefer: formulon
+    first_noted: 2026-10-14
+    last_verified_excel_version: "16.113.4"
+  - id: chart_disp_na_as_blank_unobservable
+    applies_to: [mac-365-ja_JP]
+    cause: excel-no-value
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/chart/chart_data_test.cpp]
+    reason: "c16r3:dispNaAsBlank on or off leaves the saved cache (#N/A is written as a <c:v>#N/A</c:v> point either way) and Series.Values identical, so whether #N/A is drawn as a blank is not observable from a capture. Excel writes the extension with val=1 on a new chart and drops it on re-save when set to 0. Formulon applies the flag when resolving point states; chart_data_test pins it."
+    prefer: formulon
+    first_noted: 2026-10-14
+    last_verified_excel_version: "16.113.4"
+  # A series filter that leaves one visible series on a chart with no
+  # `c:title` and autoTitleDeleted=0 lands in the same undetermined state.
+  - ids: [edit_format_08_scatter, edit_format_17_area, edit_format_57_bar]
+    applies_to: [mac-365-ja_JP]
+    cause: non-identifiable
+    mode: skip-oracle
+    reason: "Each case filters a chart down to one visible series while its title stays absent (no c:title, autoTitleDeleted=0). On re-save Excel adds an automatic c:title to some such charts and not to others with the same part structure (it does for line_standard, not for line_markers), so the re-saved title kind does not follow from the file. Every other formatting value in these cases reads back as Formulon wrote it. Same behaviour as chart_absent_title_display_undetermined."
+    prefer: formulon
+    first_noted: 2026-10-14
+    last_verified_excel_version: "16.113.4"
+  - id: chart_absent_title_display_undetermined
+    applies_to: [mac-365-ja_JP]
+    cause: non-identifiable
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/chart/chart_xml_test.cpp]
+    reason: "A single-series chart with no c:title and autoTitleDeleted=0 shows the series name as its title in some files and no title in others with the same part structure (HasTitle read true for one, false for the other after it settled), so the part alone does not determine the title. Formulon reports such a chart's title as none and does not guess; chart_xml_test pins the reading of each Excel-saved fixture."
+    prefer: formulon
+    first_noted: 2026-10-14
+    last_verified_excel_version: "16.113.4"
+
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect

@@ -1,0 +1,2589 @@
+{
+ "name": "create",
+ "track": "chart",
+ "description": "Series insert_chart makes from a range, against Excel's set_source_data.",
+ "views": [
+  "shape",
+  "refs"
+ ],
+ "environment": {
+  "excel_version": "Microsoft Excel for Mac 16.113.4",
+  "excel_locale": "",
+  "generated_at": "2026-10-14T07:48:31Z"
+ },
+ "cases": [
+  {
+   "id": "create_line_rows_none_wide",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": 4,
+       "B1": 7,
+       "C1": 10,
+       "D1": 2,
+       "A2": 5,
+       "B2": 8,
+       "C2": 11,
+       "D2": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "line",
+      "source": "A1:D2",
+      "direction": "rows"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "line",
+        "bar_dir": null,
+        "grouping": "standard",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "val": "Sheet1!$A$1:$D$1"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "val": "Sheet1!$A$2:$D$2"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_doughnut_columns_both_wide",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "B1": "S1",
+       "C1": "S2",
+       "D1": "S3",
+       "E1": "S4",
+       "A2": "a",
+       "A3": "b",
+       "B2": 4,
+       "C2": 7,
+       "D2": 10,
+       "E2": 2,
+       "B3": 5,
+       "C3": 8,
+       "D3": 11,
+       "E3": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "doughnut",
+      "source": "A1:E3",
+      "direction": "columns"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "doughnut",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 4
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$3",
+         "val": "Sheet1!$B$2:$B$3"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$3",
+         "val": "Sheet1!$C$2:$C$3"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "name": "Sheet1!$D$1",
+         "cat": "Sheet1!$A$2:$A$3",
+         "val": "Sheet1!$D$2:$D$3"
+        },
+        {
+         "plot": 0,
+         "idx": 3,
+         "filtered": false,
+         "name": "Sheet1!$E$1",
+         "cat": "Sheet1!$A$2:$A$3",
+         "val": "Sheet1!$E$2:$E$3"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_bar_columns_none_square",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": 4,
+       "B1": 7,
+       "C1": 10,
+       "A2": 2,
+       "B2": 5,
+       "C2": 8,
+       "A3": 11,
+       "B3": 3,
+       "C3": 6
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "bar",
+      "source": "A1:C3",
+      "direction": "columns"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "bar",
+        "grouping": "clustered",
+        "series": 3
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "val": "Sheet1!$A$1:$A$3"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "val": "Sheet1!$B$1:$B$3"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "val": "Sheet1!$C$1:$C$3"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_pie_auto_both_square",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "B1": "S1",
+       "C1": "S2",
+       "D1": "S3",
+       "A2": "a",
+       "A3": "b",
+       "A4": "c",
+       "B2": 4,
+       "C2": 7,
+       "D2": 10,
+       "B3": 2,
+       "C3": 5,
+       "D3": 8,
+       "B4": 11,
+       "C4": 3,
+       "D4": 6
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "pie",
+      "source": "A1:D4",
+      "direction": "auto"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "pie",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 3
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$A$2",
+         "cat": "Sheet1!$B$1:$D$1",
+         "val": "Sheet1!$B$2:$D$2"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$A$3",
+         "cat": "Sheet1!$B$1:$D$1",
+         "val": "Sheet1!$B$3:$D$3"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "name": "Sheet1!$A$4",
+         "cat": "Sheet1!$B$1:$D$1",
+         "val": "Sheet1!$B$4:$D$4"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_column_auto_row_wide",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": "S1",
+       "B1": "S2",
+       "C1": "S3",
+       "D1": "S4",
+       "A2": 4,
+       "B2": 7,
+       "C2": 10,
+       "D2": 2,
+       "A3": 5,
+       "B3": 8,
+       "C3": 11,
+       "D3": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "column",
+      "source": "A1:D3",
+      "direction": "auto"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "clustered",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$D$1",
+         "val": "Sheet1!$A$2:$D$2"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$D$1",
+         "val": "Sheet1!$A$3:$D$3"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_bar_auto_col_wide",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": "a",
+       "A2": "b",
+       "B1": 4,
+       "C1": 7,
+       "D1": 10,
+       "E1": 2,
+       "B2": 5,
+       "C2": 8,
+       "D2": 11,
+       "E2": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "bar",
+      "source": "A1:E2",
+      "direction": "auto"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "bar",
+        "grouping": "clustered",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$A$1",
+         "val": "Sheet1!$B$1:$E$1"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$A$2",
+         "val": "Sheet1!$B$2:$E$2"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_scatter_rows_row_single",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": "S1",
+       "A2": 4,
+       "A3": 7,
+       "A4": 10,
+       "A5": 2
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "scatter",
+      "source": "A1:A5",
+      "direction": "rows"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "scatter",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 4
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "x": "Sheet1!$A$1",
+         "y": "Sheet1!$A$2"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "x": "Sheet1!$A$1",
+         "y": "Sheet1!$A$3"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "x": "Sheet1!$A$1",
+         "y": "Sheet1!$A$4"
+        },
+        {
+         "plot": 0,
+         "idx": 3,
+         "filtered": false,
+         "x": "Sheet1!$A$1",
+         "y": "Sheet1!$A$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_bar_rows_row_tall",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": "S1",
+       "B1": "S2",
+       "A2": 4,
+       "B2": 7,
+       "A3": 10,
+       "B3": 2,
+       "A4": 5,
+       "B4": 8,
+       "A5": 11,
+       "B5": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "bar",
+      "source": "A1:B5",
+      "direction": "rows"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "bar",
+        "grouping": "clustered",
+        "series": 4
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$B$1",
+         "val": "Sheet1!$A$2:$B$2"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$B$1",
+         "val": "Sheet1!$A$3:$B$3"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$B$1",
+         "val": "Sheet1!$A$4:$B$4"
+        },
+        {
+         "plot": 0,
+         "idx": 3,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$B$1",
+         "val": "Sheet1!$A$5:$B$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_line_columns_row_square",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": "S1",
+       "B1": "S2",
+       "C1": "S3",
+       "A2": 4,
+       "B2": 7,
+       "C2": 10,
+       "A3": 2,
+       "B3": 5,
+       "C3": 8,
+       "A4": 11,
+       "B4": 3,
+       "C4": 6
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "line",
+      "source": "A1:C4",
+      "direction": "columns"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "line",
+        "bar_dir": null,
+        "grouping": "standard",
+        "series": 3
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$A$1",
+         "val": "Sheet1!$A$2:$A$4"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "val": "Sheet1!$B$2:$B$4"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "val": "Sheet1!$C$2:$C$4"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_area_columns_col_tall",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": "a",
+       "A2": "b",
+       "A3": "c",
+       "A4": "d",
+       "B1": 4,
+       "C1": 7,
+       "B2": 10,
+       "C2": 2,
+       "B3": 5,
+       "C3": 8,
+       "B4": 11,
+       "C4": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "area",
+      "source": "A1:C4",
+      "direction": "columns"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "area",
+        "bar_dir": null,
+        "grouping": "standard",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$A$4",
+         "val": "Sheet1!$B$1:$B$4"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$A$4",
+         "val": "Sheet1!$C$1:$C$4"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_doughnut_rows_col_square",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": "a",
+       "A2": "b",
+       "A3": "c",
+       "B1": 4,
+       "C1": 7,
+       "D1": 10,
+       "B2": 2,
+       "C2": 5,
+       "D2": 8,
+       "B3": 11,
+       "C3": 3,
+       "D3": 6
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "doughnut",
+      "source": "A1:D3",
+      "direction": "rows"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "doughnut",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 3
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$A$1",
+         "val": "Sheet1!$B$1:$D$1"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$A$2",
+         "val": "Sheet1!$B$2:$D$2"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "name": "Sheet1!$A$3",
+         "val": "Sheet1!$B$3:$D$3"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_column_rows_both_tall",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "B1": "S1",
+       "C1": "S2",
+       "A2": "a",
+       "A3": "b",
+       "A4": "c",
+       "A5": "d",
+       "B2": 4,
+       "C2": 7,
+       "B3": 10,
+       "C3": 2,
+       "B4": 5,
+       "C4": 8,
+       "B5": 11,
+       "C5": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "column",
+      "source": "A1:C5",
+      "direction": "rows"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "clustered",
+        "series": 4
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$A$2",
+         "cat": "Sheet1!$B$1:$C$1",
+         "val": "Sheet1!$B$2:$C$2"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$A$3",
+         "cat": "Sheet1!$B$1:$C$1",
+         "val": "Sheet1!$B$3:$C$3"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "name": "Sheet1!$A$4",
+         "cat": "Sheet1!$B$1:$C$1",
+         "val": "Sheet1!$B$4:$C$4"
+        },
+        {
+         "plot": 0,
+         "idx": 3,
+         "filtered": false,
+         "name": "Sheet1!$A$5",
+         "cat": "Sheet1!$B$1:$C$1",
+         "val": "Sheet1!$B$5:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_scatter_columns_both_square",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "B1": "S1",
+       "C1": "S2",
+       "D1": "S3",
+       "A2": "a",
+       "A3": "b",
+       "A4": "c",
+       "B2": 4,
+       "C2": 7,
+       "D2": 10,
+       "B3": 2,
+       "C3": 5,
+       "D3": 8,
+       "B4": 11,
+       "C4": 3,
+       "D4": 6
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "scatter",
+      "source": "A1:D4",
+      "direction": "columns"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "scatter",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 3
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "x": "Sheet1!$A$2:$A$4",
+         "y": "Sheet1!$B$2:$B$4"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "x": "Sheet1!$A$2:$A$4",
+         "y": "Sheet1!$C$2:$C$4"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "name": "Sheet1!$D$1",
+         "x": "Sheet1!$A$2:$A$4",
+         "y": "Sheet1!$D$2:$D$4"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_area_auto_none_single",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": 4,
+       "A2": 7,
+       "A3": 10,
+       "A4": 2
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "area",
+      "source": "A1:A4",
+      "direction": "auto"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "area",
+        "bar_dir": null,
+        "grouping": "standard",
+        "series": 1
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "val": "Sheet1!$A$1:$A$4"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_scatter_auto_none_tall",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": 4,
+       "B1": 7,
+       "A2": 10,
+       "B2": 2,
+       "A3": 5,
+       "B3": 8,
+       "A4": 11,
+       "B4": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "scatter",
+      "source": "A1:B4",
+      "direction": "auto"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "scatter",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 1
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "x": "Sheet1!$A$1:$A$4",
+         "y": "Sheet1!$B$1:$B$4"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_column_columns_both_single",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "B1": "S1",
+       "A2": "a",
+       "A3": "b",
+       "A4": "c",
+       "A5": "d",
+       "B2": 4,
+       "B3": 7,
+       "B4": 10,
+       "B5": 2
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "column",
+      "source": "A1:B5",
+      "direction": "columns"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "clustered",
+        "series": 1
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_pie_columns_both_single",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "B1": "S1",
+       "A2": "a",
+       "A3": "b",
+       "A4": "c",
+       "A5": "d",
+       "B2": 4,
+       "B3": 7,
+       "B4": 10,
+       "B5": 2
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "pie",
+      "source": "A1:B5",
+      "direction": "columns"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "pie",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 1
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_pie_auto_row_wide",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": "S1",
+       "B1": "S2",
+       "C1": "S3",
+       "D1": "S4",
+       "A2": 4,
+       "B2": 7,
+       "C2": 10,
+       "D2": 2,
+       "A3": 5,
+       "B3": 8,
+       "C3": 11,
+       "D3": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "pie",
+      "source": "A1:D3",
+      "direction": "auto"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "pie",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$D$1",
+         "val": "Sheet1!$A$2:$D$2"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$D$1",
+         "val": "Sheet1!$A$3:$D$3"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_doughnut_auto_none_tall",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": 4,
+       "B1": 7,
+       "A2": 10,
+       "B2": 2,
+       "A3": 5,
+       "B3": 8,
+       "A4": 11,
+       "B4": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "doughnut",
+      "source": "A1:B4",
+      "direction": "auto"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "doughnut",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "val": "Sheet1!$A$1:$A$4"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "val": "Sheet1!$B$1:$B$4"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_line_auto_both_single",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "B1": "S1",
+       "A2": "a",
+       "A3": "b",
+       "A4": "c",
+       "A5": "d",
+       "B2": 4,
+       "B3": 7,
+       "B4": 10,
+       "B5": 2
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "line",
+      "source": "A1:B5",
+      "direction": "auto"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "line",
+        "bar_dir": null,
+        "grouping": "standard",
+        "series": 1
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_bar_columns_both_single",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "B1": "S1",
+       "A2": "a",
+       "A3": "b",
+       "A4": "c",
+       "A5": "d",
+       "B2": 4,
+       "B3": 7,
+       "B4": 10,
+       "B5": 2
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "bar",
+      "source": "A1:B5",
+      "direction": "columns"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "bar",
+        "grouping": "clustered",
+        "series": 1
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_area_rows_row_square",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": "S1",
+       "B1": "S2",
+       "C1": "S3",
+       "A2": 4,
+       "B2": 7,
+       "C2": 10,
+       "A3": 2,
+       "B3": 5,
+       "C3": 8,
+       "A4": 11,
+       "B4": 3,
+       "C4": 6
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "area",
+      "source": "A1:C4",
+      "direction": "rows"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "area",
+        "bar_dir": null,
+        "grouping": "standard",
+        "series": 3
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$C$1",
+         "val": "Sheet1!$A$2:$C$2"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$C$1",
+         "val": "Sheet1!$A$3:$C$3"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$C$1",
+         "val": "Sheet1!$A$4:$C$4"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_doughnut_rows_row_single",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": "S1",
+       "A2": 4,
+       "A3": 7,
+       "A4": 10,
+       "A5": 2
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "doughnut",
+      "source": "A1:A5",
+      "direction": "rows"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "doughnut",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 4
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "cat": "Sheet1!$A$1",
+         "val": "Sheet1!$A$2"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "cat": "Sheet1!$A$1",
+         "val": "Sheet1!$A$3"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "cat": "Sheet1!$A$1",
+         "val": "Sheet1!$A$4"
+        },
+        {
+         "plot": 0,
+         "idx": 3,
+         "filtered": false,
+         "cat": "Sheet1!$A$1",
+         "val": "Sheet1!$A$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_area_columns_none_wide",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": 4,
+       "B1": 7,
+       "C1": 10,
+       "D1": 2,
+       "A2": 5,
+       "B2": 8,
+       "C2": 11,
+       "D2": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "area",
+      "source": "A1:D2",
+      "direction": "columns"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "area",
+        "bar_dir": null,
+        "grouping": "standard",
+        "series": 4
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "val": "Sheet1!$A$1:$A$2"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "val": "Sheet1!$B$1:$B$2"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "val": "Sheet1!$C$1:$C$2"
+        },
+        {
+         "plot": 0,
+         "idx": 3,
+         "filtered": false,
+         "val": "Sheet1!$D$1:$D$2"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_column_auto_col_single",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": "a",
+       "A2": "b",
+       "A3": "c",
+       "A4": "d",
+       "B1": 4,
+       "B2": 7,
+       "B3": 10,
+       "B4": 2
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "column",
+      "source": "A1:B4",
+      "direction": "auto"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "clustered",
+        "series": 1
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$A$4",
+         "val": "Sheet1!$B$1:$B$4"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_scatter_columns_col_wide",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": "a",
+       "A2": "b",
+       "B1": 4,
+       "C1": 7,
+       "D1": 10,
+       "E1": 2,
+       "B2": 5,
+       "C2": 8,
+       "D2": 11,
+       "E2": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "scatter",
+      "source": "A1:E2",
+      "direction": "columns"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "scatter",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 4
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "x": "Sheet1!$A$1:$A$2",
+         "y": "Sheet1!$B$1:$B$2"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "x": "Sheet1!$A$1:$A$2",
+         "y": "Sheet1!$C$1:$C$2"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "x": "Sheet1!$A$1:$A$2",
+         "y": "Sheet1!$D$1:$D$2"
+        },
+        {
+         "plot": 0,
+         "idx": 3,
+         "filtered": false,
+         "x": "Sheet1!$A$1:$A$2",
+         "y": "Sheet1!$E$1:$E$2"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_pie_columns_col_tall",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": "a",
+       "A2": "b",
+       "A3": "c",
+       "A4": "d",
+       "B1": 4,
+       "C1": 7,
+       "B2": 10,
+       "C2": 2,
+       "B3": 5,
+       "C3": 8,
+       "B4": 11,
+       "C4": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "pie",
+      "source": "A1:C4",
+      "direction": "columns"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "pie",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$A$4",
+         "val": "Sheet1!$B$1:$B$4"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$A$4",
+         "val": "Sheet1!$C$1:$C$4"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_column_columns_none_tall",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": 4,
+       "B1": 7,
+       "A2": 10,
+       "B2": 2,
+       "A3": 5,
+       "B3": 8,
+       "A4": 11,
+       "B4": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "column",
+      "source": "A1:B4",
+      "direction": "columns"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "clustered",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "val": "Sheet1!$A$1:$A$4"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "val": "Sheet1!$B$1:$B$4"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_line_rows_col_tall",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": "a",
+       "A2": "b",
+       "A3": "c",
+       "A4": "d",
+       "B1": 4,
+       "C1": 7,
+       "B2": 10,
+       "C2": 2,
+       "B3": 5,
+       "C3": 8,
+       "B4": 11,
+       "C4": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "line",
+      "source": "A1:C4",
+      "direction": "rows"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "line",
+        "bar_dir": null,
+        "grouping": "standard",
+        "series": 4
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$A$1",
+         "val": "Sheet1!$B$1:$C$1"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$A$2",
+         "val": "Sheet1!$B$2:$C$2"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "name": "Sheet1!$A$3",
+         "val": "Sheet1!$B$3:$C$3"
+        },
+        {
+         "plot": 0,
+         "idx": 3,
+         "filtered": false,
+         "name": "Sheet1!$A$4",
+         "val": "Sheet1!$B$4:$C$4"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_pie_rows_none_tall",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": 4,
+       "B1": 7,
+       "A2": 10,
+       "B2": 2,
+       "A3": 5,
+       "B3": 8,
+       "A4": 11,
+       "B4": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "pie",
+      "source": "A1:B4",
+      "direction": "rows"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "pie",
+        "bar_dir": null,
+        "grouping": null,
+        "series": 4
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "val": "Sheet1!$A$1:$B$1"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "val": "Sheet1!$A$2:$B$2"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "val": "Sheet1!$A$3:$B$3"
+        },
+        {
+         "plot": 0,
+         "idx": 3,
+         "filtered": false,
+         "val": "Sheet1!$A$4:$B$4"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_area_auto_both_wide",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "B1": "S1",
+       "C1": "S2",
+       "D1": "S3",
+       "E1": "S4",
+       "A2": "a",
+       "A3": "b",
+       "B2": 4,
+       "C2": 7,
+       "D2": 10,
+       "E2": 2,
+       "B3": 5,
+       "C3": 8,
+       "D3": 11,
+       "E3": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "area",
+      "source": "A1:E3",
+      "direction": "auto"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "area",
+        "bar_dir": null,
+        "grouping": "standard",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$A$2",
+         "cat": "Sheet1!$B$1:$E$1",
+         "val": "Sheet1!$B$2:$E$2"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$A$3",
+         "cat": "Sheet1!$B$1:$E$1",
+         "val": "Sheet1!$B$3:$E$3"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_column_columns_col_square",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "A1": "a",
+       "A2": "b",
+       "A3": "c",
+       "B1": 4,
+       "C1": 7,
+       "D1": 10,
+       "B2": 2,
+       "C2": 5,
+       "D2": 8,
+       "B3": 11,
+       "C3": 3,
+       "D3": 6
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "column",
+      "source": "A1:D3",
+      "direction": "columns"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "clustered",
+        "series": 3
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$A$3",
+         "val": "Sheet1!$B$1:$B$3"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$A$3",
+         "val": "Sheet1!$C$1:$C$3"
+        },
+        {
+         "plot": 0,
+         "idx": 2,
+         "filtered": false,
+         "cat": "Sheet1!$A$1:$A$3",
+         "val": "Sheet1!$D$1:$D$3"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_column_stacked_auto_both_tall",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "B1": "S1",
+       "C1": "S2",
+       "A2": "a",
+       "A3": "b",
+       "A4": "c",
+       "A5": "d",
+       "B2": 4,
+       "C2": 7,
+       "B3": 10,
+       "C3": 2,
+       "B4": 5,
+       "C4": 8,
+       "B5": 11,
+       "C5": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "column",
+      "grouping": "stacked",
+      "source": "A1:C5",
+      "direction": "auto"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "col",
+        "grouping": "stacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_bar_percentStacked_auto_both_tall",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "B1": "S1",
+       "C1": "S2",
+       "A2": "a",
+       "A3": "b",
+       "A4": "c",
+       "A5": "d",
+       "B2": 4,
+       "C2": 7,
+       "B3": 10,
+       "C3": 2,
+       "B4": 5,
+       "C4": 8,
+       "B5": 11,
+       "C5": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "bar",
+      "grouping": "percentStacked",
+      "source": "A1:C5",
+      "direction": "auto"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "bar",
+        "bar_dir": "bar",
+        "grouping": "percentStacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_line_stacked_auto_both_tall",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "B1": "S1",
+       "C1": "S2",
+       "A2": "a",
+       "A3": "b",
+       "A4": "c",
+       "A5": "d",
+       "B2": 4,
+       "C2": 7,
+       "B3": 10,
+       "C3": 2,
+       "B4": 5,
+       "C4": 8,
+       "B5": 11,
+       "C5": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "line",
+      "grouping": "stacked",
+      "source": "A1:C5",
+      "direction": "auto"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "line",
+        "bar_dir": null,
+        "grouping": "stacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "create_area_percentStacked_auto_both_tall",
+   "spec": {
+    "sheets": [
+     {
+      "name": "Sheet1",
+      "cells": {
+       "B1": "S1",
+       "C1": "S2",
+       "A2": "a",
+       "A3": "b",
+       "A4": "c",
+       "A5": "d",
+       "B2": 4,
+       "C2": 7,
+       "B3": 10,
+       "C3": 2,
+       "B4": 5,
+       "C4": 8,
+       "B5": 11,
+       "C5": 3
+      }
+     }
+    ],
+    "charts": [
+     {
+      "id": "c1",
+      "kind": "area",
+      "grouping": "percentStacked",
+      "source": "A1:C5",
+      "direction": "auto"
+     }
+    ]
+   },
+   "expect": {
+    "charts": [
+     {
+      "sheet": "Sheet1",
+      "name": "c1",
+      "chartex": false,
+      "shape": [
+       {
+        "type": "area",
+        "bar_dir": null,
+        "grouping": "percentStacked",
+        "series": 2
+       }
+      ],
+      "refs": {
+       "series": [
+        {
+         "plot": 0,
+         "idx": 0,
+         "filtered": false,
+         "name": "Sheet1!$B$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$B$2:$B$5"
+        },
+        {
+         "plot": 0,
+         "idx": 1,
+         "filtered": false,
+         "name": "Sheet1!$C$1",
+         "cat": "Sheet1!$A$2:$A$5",
+         "val": "Sheet1!$C$2:$C$5"
+        }
+       ],
+       "title": null,
+       "axis_titles": []
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

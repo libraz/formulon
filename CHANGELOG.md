@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Charts. A chart is addressed by sheet and drawing object id, the id
+  `listDrawingObjects` reports for a chart object. `getChart` reads the
+  chart's typed view (plots, series and their references, formatting, data
+  labels, axes, title, legend, filters, and the source range the series were
+  split from); `getChartData` resolves the series against the current cell
+  values by Excel's rules for hidden cells, blanks and errors, and
+  `previewChartData` does the same for uncommitted source, direction,
+  heading and blank-handling changes without touching the workbook.
+  `insertChart` creates a column, bar, line, area, pie, doughnut or scatter
+  chart from one range. `setChartType`, `setChartTitle`, `setChartLegend`,
+  `setChartAxis`, `setChartDisplay`, `setChartSeries`, `setChartPoint`,
+  `setChartPlot`, `setChartFilter`, `addChartSeries`, `removeChartSeries` and
+  `setChartSource` edit the chart part in place, keeping everything they do
+  not touch. In the C ABI these are `fm_sheet_chart_open` /
+  `fm_sheet_chart_data_open` / `fm_sheet_chart_preview_open` (owned handles
+  read through `fm_chart_*` / `fm_chart_data_*` accessors),
+  `fm_sheet_insert_chart` and one `fm_sheet_set_chart_*` /
+  `fm_sheet_add_chart_series` / `fm_sheet_remove_chart_series` entry per
+  edit, with the status codes `kIoChartUnparseable` (5025),
+  `kIoChartInvalidReference` (5026) and `kIoChartUnsupportedKind` (5027).
+
+### Changed
+
+- Numbers in saved `.xlsx` cell values are spelled the way Excel writes
+  them: fixed notation with 15 significant digits when that round-trips
+  (else 17) for magnitudes from 0.01 up to 1E+16, and 17-digit exponential
+  form outside it.
+
+### Removed
+
+- **Breaking (C ABI and every binding):** the five picture operations are
+  renamed to drawing-object operations and now act on charts as well as
+  pictures. A snapshot of a chart carries its chart part and every part the
+  chart's relationships reach; snapshots taken by earlier versions still
+  restore. Migration, by rename only:
+
+  | Before | After |
+  |---|---|
+  | `fm_sheet_remove_image` / `removeImage` / `remove_image` | `fm_sheet_remove_drawing` / `removeDrawing` / `remove_drawing` |
+  | `fm_sheet_set_image_anchor` / `setImageAnchor` / `set_image_anchor` | `fm_sheet_set_drawing_anchor` / `setDrawingAnchor` / `set_drawing_anchor` |
+  | `fm_sheet_set_image_z_order` / `setImageZOrder` / `set_image_z_order` | `fm_sheet_set_drawing_z_order` / `setDrawingZOrder` / `set_drawing_z_order` |
+  | `fm_sheet_snapshot_image` / `snapshotImage` / `snapshot_image` | `fm_sheet_snapshot_drawing` / `snapshotDrawing` / `snapshot_drawing` |
+  | `fm_sheet_restore_image` / `restoreImage` / `restore_image` | `fm_sheet_restore_drawing` / `restoreDrawing` / `restore_drawing` |
+  | `fm_image_anchor` | `fm_drawing_anchor` (same layout) |
+  | `FM_IMAGE_RESTORE_NEW_ID` | `FM_DRAWING_RESTORE_NEW_ID` (same value) |
+
+  `probeImage`, `getImage` and `insertImage` keep their names. The old names
+  are gone rather than aliased, so a caller linked against an earlier
+  shared library must be recompiled.
+
 ## [0.15.2] - 2026-10-14
 
 ### BREAKING

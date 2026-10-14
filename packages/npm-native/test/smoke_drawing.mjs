@@ -105,10 +105,10 @@ test('images probe, insert, list, read back, survive save and load, and remove',
     const wb2 = mod.Workbook.loadBytes(saved.bytes ?? saved);
     try {
       const id = check(wb2);
-      must(wb2.removeImage(0, id), 'removeImage');
+      must(wb2.removeDrawing(0, id), 'removeDrawing');
       assert.equal(wb2.listDrawingObjects(0).length, 0);
       assert.equal(wb2.getImage(0, id).status.ok, false);
-      assert.equal(wb2.removeImage(0, id).ok, false);
+      assert.equal(wb2.removeDrawing(0, id).ok, false);
     } finally {
       wb2.dispose();
     }
@@ -123,13 +123,13 @@ test('images probe, insert, list, read back, survive save and load, and remove',
   }
 });
 
-test('setImageAnchor moves and resizes a picture and keeps its id', async () => {
+test('setDrawingAnchor moves and resizes a picture and keeps its id', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
     const ins = must(wb.insertImage(0, makePng(4), { name: 'logo', row: 1, col: 1 }), 'insertImage');
     must(
-      wb.setImageAnchor(0, ins.objectId, {
+      wb.setDrawingAnchor(0, ins.objectId, {
         anchorKind: mod.AnchorKind.TwoCell,
         editAs: mod.AnchorEditAs.OneCell,
         row: 5,
@@ -138,7 +138,7 @@ test('setImageAnchor moves and resizes a picture and keeps its id', async () => 
         colOffEmu: 2000,
         widthEmu: 200000,
       }),
-      'setImageAnchor',
+      'setDrawingAnchor',
     );
     const o = wb.listDrawingObjects(0)[0];
     assert.equal(o.objectId, ins.objectId);
@@ -151,14 +151,14 @@ test('setImageAnchor moves and resizes a picture and keeps its id', async () => 
     assert.equal(o.fromColOff, 2000);
     assert.equal(o.cx, 200000);
     assert.equal(o.cy, 9525);
-    assert.equal(wb.setImageAnchor(0, ins.objectId, { anchorKind: mod.AnchorKind.Absolute }).ok, false);
-    assert.equal(wb.setImageAnchor(0, 9999, {}).ok, false);
+    assert.equal(wb.setDrawingAnchor(0, ins.objectId, { anchorKind: mod.AnchorKind.Absolute }).ok, false);
+    assert.equal(wb.setDrawingAnchor(0, 9999, {}).ok, false);
   } finally {
     wb.dispose();
   }
 });
 
-test('setImageZOrder reorders pictures in listDrawingObjects order', async () => {
+test('setDrawingZOrder reorders pictures in listDrawingObjects order', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
@@ -167,47 +167,47 @@ test('setImageZOrder reorders pictures in listDrawingObjects order', async () =>
     const c = must(wb.insertImage(0, makePng(2), { row: 6 }), 'insertImage c');
     const ids = () => Array.from(wb.listDrawingObjects(0), (o) => o.objectId);
     assert.deepEqual(ids(), [a.objectId, b.objectId, c.objectId]);
-    must(wb.setImageZOrder(0, c.objectId, 0), 'setImageZOrder');
+    must(wb.setDrawingZOrder(0, c.objectId, 0), 'setDrawingZOrder');
     assert.deepEqual(ids(), [c.objectId, a.objectId, b.objectId]);
-    assert.equal(wb.setImageZOrder(0, c.objectId, 3).ok, false);
-    assert.equal(wb.setImageZOrder(0, 9999, 0).ok, false);
+    assert.equal(wb.setDrawingZOrder(0, c.objectId, 3).ok, false);
+    assert.equal(wb.setDrawingZOrder(0, 9999, 0).ok, false);
   } finally {
     wb.dispose();
   }
 });
 
-test('snapshotImage and restoreImage bring back a removed, moved or copied picture', async () => {
+test('snapshotDrawing and restoreDrawing bring back a removed, moved or copied picture', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
     const png = makePng(4);
     const a = must(wb.insertImage(0, png, { name: 'A', row: 1 }), 'insertImage a');
     const b = must(wb.insertImage(0, makePng(2), { name: 'B', row: 4 }), 'insertImage b');
-    const snap = must(wb.snapshotImage(0, a.objectId), 'snapshotImage');
+    const snap = must(wb.snapshotDrawing(0, a.objectId), 'snapshotDrawing');
     assert.ok(snap.bytes instanceof Uint8Array);
     assert.ok(snap.bytes.length > 0);
     const ids = () => Array.from(wb.listDrawingObjects(0), (o) => o.objectId);
 
-    must(wb.removeImage(0, a.objectId), 'removeImage');
-    const restored = must(wb.restoreImage(0, snap.bytes), 'restoreImage');
+    must(wb.removeDrawing(0, a.objectId), 'removeDrawing');
+    const restored = must(wb.restoreDrawing(0, snap.bytes), 'restoreDrawing');
     assert.equal(restored.objectId, a.objectId);
     assert.deepEqual(ids(), [a.objectId, b.objectId]);
     assert.deepEqual([...wb.getImage(0, a.objectId).bytes], [...png]);
 
-    must(wb.setImageAnchor(0, a.objectId, { row: 9 }), 'setImageAnchor');
-    must(wb.setImageZOrder(0, a.objectId, 1), 'setImageZOrder');
-    must(wb.restoreImage(0, snap.bytes, {}), 'restoreImage over a moved picture');
+    must(wb.setDrawingAnchor(0, a.objectId, { row: 9 }), 'setDrawingAnchor');
+    must(wb.setDrawingZOrder(0, a.objectId, 1), 'setDrawingZOrder');
+    must(wb.restoreDrawing(0, snap.bytes, {}), 'restoreDrawing over a moved picture');
     assert.deepEqual(ids(), [a.objectId, b.objectId]);
     assert.equal(wb.listDrawingObjects(0)[0].fromRow, 1);
 
-    const copy = must(wb.restoreImage(0, snap.bytes, { newId: true }), 'restoreImage newId');
+    const copy = must(wb.restoreDrawing(0, snap.bytes, { newId: true }), 'restoreDrawing newId');
     assert.notEqual(copy.objectId, a.objectId);
     assert.deepEqual(ids(), [a.objectId, b.objectId, copy.objectId]);
 
-    const bad = wb.restoreImage(0, new Uint8Array([1, 2, 3, 4]));
+    const bad = wb.restoreDrawing(0, new Uint8Array([1, 2, 3, 4]));
     assert.equal(bad.status.ok, false);
     assert.equal(bad.objectId, 0);
-    const missing = wb.snapshotImage(0, 9999);
+    const missing = wb.snapshotDrawing(0, 9999);
     assert.equal(missing.status.ok, false);
     assert.equal(missing.bytes.length, 0);
   } finally {

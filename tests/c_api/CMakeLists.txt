@@ -13,6 +13,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_cf_overlay_test.cpp
   formulon_c_cf_validation_test.cpp
   formulon_c_cf_visual_payload_test.cpp
+  formulon_c_chart_test.cpp
   formulon_c_clock_test.cpp
   formulon_c_collation_test.cpp
   formulon_c_display_text_test.cpp

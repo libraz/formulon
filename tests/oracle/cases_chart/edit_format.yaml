@@ -1,0 +1,1009 @@
+# Typed edits on Excel-saved fixtures: Formulon applies the edits and saves;
+# capture opens that file in Excel, re-saves it, checks the re-save (parts
+# present, refs unchanged, series and plot shape kept, chart object count,
+# and every formatting value read back as written) and records the
+# re-saved model. The verifier compares Formulon's own model of the edited
+# file with it. `factors` records the covering-array row each case came
+# from; the edits are derived from it.
+#
+# Factors (pairwise, coverwise seed 22):
+#   chart        column | bar | line | area | pie | scatter | doughnut
+#   title        keep | text | none | auto
+#   legend       keep | top | left | none | right_overlay
+#   labels       keep | val | val_fmt_font | ser_cat_sep | clear   (all series)
+#   series_style keep | fill_alpha | line_dash_width | marker | point_fill   (series 0)
+#   axis         keep | scale | fmt_grid_reversed | log_crosses | hidden_title | tick_low
+#   plot         keep | gap_overlap | vary_colors | first_slice | hole
+#   filter       keep | hide_series | hide_category
+#   display      keep | gap (written as zero + plotVisOnly off) | span
+# Constraints: no axis edits on pie / doughnut; markers on line / scatter
+# only; gap_overlap on column / bar; first_slice on pie / doughnut; hole on
+# doughnut; no category filter on scatter; no series filter on the
+# one-series doughnut; no fill on line / scatter series; span on line /
+# area / scatter only; no log axis on area.
+suite: edit_format
+description: Formatting edits re-saved by Excel.
+views: [shape, refs, format]
+capture_formulon: true
+cases:
+- id: edit_format_01_pie
+  factors: {chart: pie, title: auto, legend: top, labels: ser_cat_sep, series_style: point_fill, axis: keep, plot: first_slice,
+    filter: hide_series, display: keep}
+  fixture: chart_pie.xlsx
+  target: {sheet: Sheet1, chart: pie_two}
+  edits:
+  - {op: title, kind: auto}
+  - {op: legend, position: t}
+  - {op: plot, first_slice_angle: 90}
+  - op: point
+    series: 0
+    point: 1
+    fill: {color: 7030A0}
+  - op: series
+    series: all
+    labels: {ser: true, cat: true, separator: '; '}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_02_bar
+  factors: {chart: bar, title: text, legend: keep, labels: clear, series_style: keep, axis: hidden_title, plot: keep, filter: hide_series,
+    display: gap}
+  fixture: chart_bar.xlsx
+  target: {sheet: Sheet1, chart: bar_stacked}
+  edits:
+  - {op: title, kind: text, text: 売上推移}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: category, visible: false}
+  - {op: axis, axis: value, title: 金額}
+  - {op: series, series: all, labels: null}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_03_scatter
+  factors: {chart: scatter, title: none, legend: none, labels: ser_cat_sep, series_style: marker, axis: fmt_grid_reversed,
+    plot: keep, filter: keep, display: span}
+  fixture: chart_scatter.xlsx
+  target: {sheet: Sheet1, chart: scatter_lines}
+  edits:
+  - {op: title, kind: none}
+  - {op: legend, position: none}
+  - {op: display, blanks_as: span}
+  - {op: axis, axis: value, number_format: '0.0', major_gridlines: false, reversed: true}
+  - op: series
+    series: 0
+    marker:
+      symbol: diamond
+      size: 8
+      fill: {color: 00B050}
+  - op: series
+    series: all
+    labels: {ser: true, cat: true, separator: '; '}
+- id: edit_format_04_doughnut
+  factors: {chart: doughnut, title: none, legend: keep, labels: keep, series_style: point_fill, axis: keep, plot: hole, filter: hide_category,
+    display: gap}
+  fixture: chart_combo.xlsx
+  target: {sheet: Sheet1, chart: doughnut}
+  edits:
+  - {op: title, kind: none}
+  - {op: plot, hole_size: 60}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - op: point
+    series: 0
+    point: 1
+    fill: {color: 7030A0}
+  - op: filter
+    hidden_categories: [1]
+- id: edit_format_05_column
+  factors: {chart: column, title: keep, legend: left, labels: val_fmt_font, series_style: keep, axis: tick_low, plot: gap_overlap,
+    filter: hide_category, display: keep}
+  fixture: chart_column.xlsx
+  target: {sheet: Sheet1, chart: col_clustered}
+  edits:
+  - {op: legend, position: l}
+  - {op: plot, gap_width: 50, overlap: -20}
+  - {op: axis, axis: category, tick_label_pos: low}
+  - {op: axis, axis: value, crosses: at, crosses_at: 2}
+  - op: series
+    series: all
+    labels: {val: true, number_format: '0.0', font_color: C00000, font_size: 11}
+  - op: filter
+    hidden_categories: [1]
+- id: edit_format_06_bar
+  factors: {chart: bar, title: none, legend: right_overlay, labels: val, series_style: line_dash_width, axis: tick_low, plot: vary_colors,
+    filter: keep, display: keep}
+  fixture: chart_bar.xlsx
+  target: {sheet: Sheet1, chart: bar_stacked}
+  edits:
+  - {op: title, kind: none}
+  - {op: legend, position: r, overlay: true}
+  - {op: plot, vary_colors: true}
+  - {op: axis, axis: category, tick_label_pos: low}
+  - {op: axis, axis: value, crosses: at, crosses_at: 2}
+  - op: series
+    series: 0
+    line: {color: FF0000, width_pt: 2.25, dash: dash}
+  - op: series
+    series: all
+    labels: {val: true}
+- id: edit_format_07_line
+  factors: {chart: line, title: auto, legend: right_overlay, labels: clear, series_style: marker, axis: scale, plot: vary_colors,
+    filter: hide_category, display: span}
+  fixture: chart_line.xlsx
+  target: {sheet: Sheet1, chart: line_markers}
+  edits:
+  - {op: title, kind: auto}
+  - {op: legend, position: r, overlay: true}
+  - {op: plot, vary_colors: true}
+  - {op: display, blanks_as: span}
+  - {op: axis, axis: value, min: 0, max: 10, major_unit: 2}
+  - op: series
+    series: 0
+    marker:
+      symbol: diamond
+      size: 8
+      fill: {color: 00B050}
+  - {op: series, series: all, labels: null}
+  - op: filter
+    hidden_categories: [1]
+- id: edit_format_08_scatter
+  factors: {chart: scatter, title: keep, legend: top, labels: keep, series_style: line_dash_width, axis: log_crosses, plot: vary_colors,
+    filter: hide_series, display: span}
+  fixture: chart_scatter.xlsx
+  target: {sheet: Sheet1, chart: scatter_lines}
+  edits:
+  - {op: legend, position: t}
+  - {op: plot, vary_colors: true}
+  - {op: display, blanks_as: span}
+  - {op: axis, axis: value, log_base: 10}
+  - {op: axis, axis: category, crosses: max}
+  - op: series
+    series: 0
+    line: {color: FF0000, width_pt: 2.25, dash: dash}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_09_pie
+  factors: {chart: pie, title: text, legend: none, labels: keep, series_style: keep, axis: keep, plot: vary_colors, filter: keep,
+    display: gap}
+  fixture: chart_pie.xlsx
+  target: {sheet: Sheet1, chart: pie_two}
+  edits:
+  - {op: title, kind: text, text: 売上推移}
+  - {op: legend, position: none}
+  - {op: plot, vary_colors: false}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+- id: edit_format_10_area
+  factors: {chart: area, title: text, legend: left, labels: val, series_style: fill_alpha, axis: scale, plot: keep, filter: hide_series,
+    display: span}
+  fixture: chart_area.xlsx
+  target: {sheet: Sheet1, chart: area_standard}
+  edits:
+  - {op: title, kind: text, text: 売上推移}
+  - {op: legend, position: l}
+  - {op: display, blanks_as: span}
+  - {op: axis, axis: value, min: 0, max: 10, major_unit: 2}
+  - op: series
+    series: 0
+    fill: {color: 4472C4, transparency: 25}
+  - op: series
+    series: all
+    labels: {val: true}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_11_pie
+  factors: {chart: pie, title: text, legend: keep, labels: val_fmt_font, series_style: line_dash_width, axis: keep, plot: keep,
+    filter: hide_category, display: keep}
+  fixture: chart_pie.xlsx
+  target: {sheet: Sheet1, chart: pie_two}
+  edits:
+  - {op: title, kind: text, text: 売上推移}
+  - op: series
+    series: 0
+    line: {color: FF0000, width_pt: 2.25, dash: dash}
+  - op: series
+    series: all
+    labels: {val: true, number_format: '0.0', font_color: C00000, font_size: 11}
+  - op: filter
+    hidden_categories: [1]
+- id: edit_format_12_bar
+  factors: {chart: bar, title: auto, legend: top, labels: val, series_style: fill_alpha, axis: fmt_grid_reversed, plot: gap_overlap,
+    filter: hide_category, display: gap}
+  fixture: chart_bar.xlsx
+  target: {sheet: Sheet1, chart: bar_stacked}
+  edits:
+  - {op: title, kind: auto}
+  - {op: legend, position: t}
+  - {op: plot, gap_width: 50, overlap: -20}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: value, number_format: '0.0', major_gridlines: false, reversed: true}
+  - op: series
+    series: 0
+    fill: {color: 4472C4, transparency: 25}
+  - op: series
+    series: all
+    labels: {val: true}
+  - op: filter
+    hidden_categories: [1]
+- id: edit_format_13_scatter
+  factors: {chart: scatter, title: auto, legend: left, labels: clear, series_style: point_fill, axis: log_crosses, plot: vary_colors,
+    filter: keep, display: gap}
+  fixture: chart_scatter.xlsx
+  target: {sheet: Sheet1, chart: scatter_lines}
+  edits:
+  - {op: title, kind: auto}
+  - {op: legend, position: l}
+  - {op: plot, vary_colors: true}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: value, log_base: 10}
+  - {op: axis, axis: category, crosses: max}
+  - op: point
+    series: 0
+    point: 1
+    fill: {color: 7030A0}
+  - {op: series, series: all, labels: null}
+- id: edit_format_14_line
+  factors: {chart: line, title: text, legend: keep, labels: ser_cat_sep, series_style: marker, axis: tick_low, plot: keep,
+    filter: hide_series, display: gap}
+  fixture: chart_line.xlsx
+  target: {sheet: Sheet1, chart: line_markers}
+  edits:
+  - {op: title, kind: text, text: 売上推移}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: category, tick_label_pos: low}
+  - {op: axis, axis: value, crosses: at, crosses_at: 2}
+  - op: series
+    series: 0
+    marker:
+      symbol: diamond
+      size: 8
+      fill: {color: 00B050}
+  - op: series
+    series: all
+    labels: {ser: true, cat: true, separator: '; '}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_15_column
+  factors: {chart: column, title: keep, legend: right_overlay, labels: ser_cat_sep, series_style: fill_alpha, axis: keep,
+    plot: keep, filter: keep, display: gap}
+  fixture: chart_column.xlsx
+  target: {sheet: Sheet1, chart: col_clustered}
+  edits:
+  - {op: legend, position: r, overlay: true}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - op: series
+    series: 0
+    fill: {color: 4472C4, transparency: 25}
+  - op: series
+    series: all
+    labels: {ser: true, cat: true, separator: '; '}
+- id: edit_format_16_doughnut
+  factors: {chart: doughnut, title: keep, legend: none, labels: clear, series_style: line_dash_width, axis: keep, plot: first_slice,
+    filter: hide_category, display: keep}
+  fixture: chart_combo.xlsx
+  target: {sheet: Sheet1, chart: doughnut}
+  edits:
+  - {op: legend, position: none}
+  - {op: plot, first_slice_angle: 90}
+  - op: series
+    series: 0
+    line: {color: FF0000, width_pt: 2.25, dash: dash}
+  - {op: series, series: all, labels: null}
+  - op: filter
+    hidden_categories: [1]
+- id: edit_format_17_area
+  factors: {chart: area, title: keep, legend: right_overlay, labels: val_fmt_font, series_style: point_fill, axis: fmt_grid_reversed,
+    plot: vary_colors, filter: hide_series, display: keep}
+  fixture: chart_area.xlsx
+  target: {sheet: Sheet1, chart: area_standard}
+  edits:
+  - {op: legend, position: r, overlay: true}
+  - {op: plot, vary_colors: true}
+  - {op: axis, axis: value, number_format: '0.0', major_gridlines: false, reversed: true}
+  - op: point
+    series: 0
+    point: 1
+    fill: {color: 7030A0}
+  - op: series
+    series: all
+    labels: {val: true, number_format: '0.0', font_color: C00000, font_size: 11}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_18_column
+  factors: {chart: column, title: none, legend: top, labels: val_fmt_font, series_style: line_dash_width, axis: scale, plot: gap_overlap,
+    filter: keep, display: gap}
+  fixture: chart_column.xlsx
+  target: {sheet: Sheet1, chart: col_clustered}
+  edits:
+  - {op: title, kind: none}
+  - {op: legend, position: t}
+  - {op: plot, gap_width: 50, overlap: -20}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: value, min: 0, max: 10, major_unit: 2}
+  - op: series
+    series: 0
+    line: {color: FF0000, width_pt: 2.25, dash: dash}
+  - op: series
+    series: all
+    labels: {val: true, number_format: '0.0', font_color: C00000, font_size: 11}
+- id: edit_format_19_column
+  factors: {chart: column, title: auto, legend: none, labels: ser_cat_sep, series_style: line_dash_width, axis: hidden_title,
+    plot: gap_overlap, filter: hide_series, display: keep}
+  fixture: chart_column.xlsx
+  target: {sheet: Sheet1, chart: col_clustered}
+  edits:
+  - {op: title, kind: auto}
+  - {op: legend, position: none}
+  - {op: plot, gap_width: 50, overlap: -20}
+  - {op: axis, axis: category, visible: false}
+  - {op: axis, axis: value, title: 金額}
+  - op: series
+    series: 0
+    line: {color: FF0000, width_pt: 2.25, dash: dash}
+  - op: series
+    series: all
+    labels: {ser: true, cat: true, separator: '; '}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_20_doughnut
+  factors: {chart: doughnut, title: text, legend: right_overlay, labels: ser_cat_sep, series_style: keep, axis: keep, plot: hole,
+    filter: keep, display: keep}
+  fixture: chart_combo.xlsx
+  target: {sheet: Sheet1, chart: doughnut}
+  edits:
+  - {op: title, kind: text, text: 売上推移}
+  - {op: legend, position: r, overlay: true}
+  - {op: plot, hole_size: 60}
+  - op: series
+    series: all
+    labels: {ser: true, cat: true, separator: '; '}
+- id: edit_format_21_area
+  factors: {chart: area, title: auto, legend: top, labels: clear, series_style: keep, axis: tick_low, plot: keep, filter: hide_category,
+    display: gap}
+  fixture: chart_area.xlsx
+  target: {sheet: Sheet1, chart: area_standard}
+  edits:
+  - {op: title, kind: auto}
+  - {op: legend, position: t}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: category, tick_label_pos: low}
+  - {op: axis, axis: value, crosses: at, crosses_at: 2}
+  - {op: series, series: all, labels: null}
+  - op: filter
+    hidden_categories: [1]
+- id: edit_format_22_doughnut
+  factors: {chart: doughnut, title: none, legend: left, labels: keep, series_style: fill_alpha, axis: keep, plot: first_slice,
+    filter: keep, display: keep}
+  fixture: chart_combo.xlsx
+  target: {sheet: Sheet1, chart: doughnut}
+  edits:
+  - {op: title, kind: none}
+  - {op: legend, position: l}
+  - {op: plot, first_slice_angle: 90}
+  - op: series
+    series: 0
+    fill: {color: 4472C4, transparency: 25}
+- id: edit_format_23_line
+  factors: {chart: line, title: none, legend: none, labels: val_fmt_font, series_style: point_fill, axis: log_crosses, plot: keep,
+    filter: keep, display: span}
+  fixture: chart_line.xlsx
+  target: {sheet: Sheet1, chart: line_markers}
+  edits:
+  - {op: title, kind: none}
+  - {op: legend, position: none}
+  - {op: display, blanks_as: span}
+  - {op: axis, axis: value, log_base: 10}
+  - {op: axis, axis: category, crosses: max}
+  - op: point
+    series: 0
+    point: 1
+    fill: {color: 7030A0}
+  - op: series
+    series: all
+    labels: {val: true, number_format: '0.0', font_color: C00000, font_size: 11}
+- id: edit_format_24_doughnut
+  factors: {chart: doughnut, title: auto, legend: top, labels: val_fmt_font, series_style: fill_alpha, axis: keep, plot: hole,
+    filter: hide_category, display: keep}
+  fixture: chart_combo.xlsx
+  target: {sheet: Sheet1, chart: doughnut}
+  edits:
+  - {op: title, kind: auto}
+  - {op: legend, position: t}
+  - {op: plot, hole_size: 60}
+  - op: series
+    series: 0
+    fill: {color: 4472C4, transparency: 25}
+  - op: series
+    series: all
+    labels: {val: true, number_format: '0.0', font_color: C00000, font_size: 11}
+  - op: filter
+    hidden_categories: [1]
+- id: edit_format_25_area
+  factors: {chart: area, title: none, legend: left, labels: ser_cat_sep, series_style: keep, axis: hidden_title, plot: vary_colors,
+    filter: hide_category, display: span}
+  fixture: chart_area.xlsx
+  target: {sheet: Sheet1, chart: area_standard}
+  edits:
+  - {op: title, kind: none}
+  - {op: legend, position: l}
+  - {op: plot, vary_colors: true}
+  - {op: display, blanks_as: span}
+  - {op: axis, axis: category, visible: false}
+  - {op: axis, axis: value, title: 金額}
+  - op: series
+    series: all
+    labels: {ser: true, cat: true, separator: '; '}
+  - op: filter
+    hidden_categories: [1]
+- id: edit_format_26_area
+  factors: {chart: area, title: auto, legend: keep, labels: keep, series_style: fill_alpha, axis: keep, plot: vary_colors,
+    filter: keep, display: span}
+  fixture: chart_area.xlsx
+  target: {sheet: Sheet1, chart: area_standard}
+  edits:
+  - {op: title, kind: auto}
+  - {op: plot, vary_colors: true}
+  - {op: display, blanks_as: span}
+  - op: series
+    series: 0
+    fill: {color: 4472C4, transparency: 25}
+- id: edit_format_27_line
+  factors: {chart: line, title: none, legend: left, labels: val_fmt_font, series_style: marker, axis: hidden_title, plot: vary_colors,
+    filter: hide_category, display: keep}
+  fixture: chart_line.xlsx
+  target: {sheet: Sheet1, chart: line_markers}
+  edits:
+  - {op: title, kind: none}
+  - {op: legend, position: l}
+  - {op: plot, vary_colors: true}
+  - {op: axis, axis: category, visible: false}
+  - {op: axis, axis: value, title: 金額}
+  - op: series
+    series: 0
+    marker:
+      symbol: diamond
+      size: 8
+      fill: {color: 00B050}
+  - op: series
+    series: all
+    labels: {val: true, number_format: '0.0', font_color: C00000, font_size: 11}
+  - op: filter
+    hidden_categories: [1]
+- id: edit_format_28_column
+  factors: {chart: column, title: text, legend: right_overlay, labels: val, series_style: point_fill, axis: log_crosses, plot: gap_overlap,
+    filter: hide_series, display: keep}
+  fixture: chart_column.xlsx
+  target: {sheet: Sheet1, chart: col_clustered}
+  edits:
+  - {op: title, kind: text, text: 売上推移}
+  - {op: legend, position: r, overlay: true}
+  - {op: plot, gap_width: 50, overlap: -20}
+  - {op: axis, axis: value, log_base: 10}
+  - {op: axis, axis: category, crosses: max}
+  - op: point
+    series: 0
+    point: 1
+    fill: {color: 7030A0}
+  - op: series
+    series: all
+    labels: {val: true}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_29_pie
+  factors: {chart: pie, title: none, legend: none, labels: clear, series_style: fill_alpha, axis: keep, plot: first_slice,
+    filter: hide_series, display: gap}
+  fixture: chart_pie.xlsx
+  target: {sheet: Sheet1, chart: pie_two}
+  edits:
+  - {op: title, kind: none}
+  - {op: legend, position: none}
+  - {op: plot, first_slice_angle: 90}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - op: series
+    series: 0
+    fill: {color: 4472C4, transparency: 25}
+  - {op: series, series: all, labels: null}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_30_line
+  factors: {chart: line, title: text, legend: top, labels: keep, series_style: keep, axis: fmt_grid_reversed, plot: keep,
+    filter: keep, display: span}
+  fixture: chart_line.xlsx
+  target: {sheet: Sheet1, chart: line_markers}
+  edits:
+  - {op: title, kind: text, text: 売上推移}
+  - {op: legend, position: t}
+  - {op: display, blanks_as: span}
+  - {op: axis, axis: value, number_format: '0.0', major_gridlines: false, reversed: true}
+- id: edit_format_31_pie
+  factors: {chart: pie, title: auto, legend: right_overlay, labels: val, series_style: keep, axis: keep, plot: first_slice,
+    filter: hide_series, display: keep}
+  fixture: chart_pie.xlsx
+  target: {sheet: Sheet1, chart: pie_two}
+  edits:
+  - {op: title, kind: auto}
+  - {op: legend, position: r, overlay: true}
+  - {op: plot, first_slice_angle: 90}
+  - op: series
+    series: all
+    labels: {val: true}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_32_scatter
+  factors: {chart: scatter, title: keep, legend: keep, labels: val, series_style: marker, axis: hidden_title, plot: vary_colors,
+    filter: keep, display: span}
+  fixture: chart_scatter.xlsx
+  target: {sheet: Sheet1, chart: scatter_lines}
+  edits:
+  - {op: plot, vary_colors: true}
+  - {op: display, blanks_as: span}
+  - {op: axis, axis: category, visible: false}
+  - {op: axis, axis: value, title: 金額}
+  - op: series
+    series: 0
+    marker:
+      symbol: diamond
+      size: 8
+      fill: {color: 00B050}
+  - op: series
+    series: all
+    labels: {val: true}
+- id: edit_format_33_column
+  factors: {chart: column, title: text, legend: keep, labels: clear, series_style: line_dash_width, axis: fmt_grid_reversed,
+    plot: gap_overlap, filter: keep, display: gap}
+  fixture: chart_column.xlsx
+  target: {sheet: Sheet1, chart: col_clustered}
+  edits:
+  - {op: title, kind: text, text: 売上推移}
+  - {op: plot, gap_width: 50, overlap: -20}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: value, number_format: '0.0', major_gridlines: false, reversed: true}
+  - op: series
+    series: 0
+    line: {color: FF0000, width_pt: 2.25, dash: dash}
+  - {op: series, series: all, labels: null}
+- id: edit_format_34_column
+  factors: {chart: column, title: none, legend: right_overlay, labels: keep, series_style: point_fill, axis: hidden_title,
+    plot: vary_colors, filter: hide_category, display: keep}
+  fixture: chart_column.xlsx
+  target: {sheet: Sheet1, chart: col_clustered}
+  edits:
+  - {op: title, kind: none}
+  - {op: legend, position: r, overlay: true}
+  - {op: plot, vary_colors: true}
+  - {op: axis, axis: category, visible: false}
+  - {op: axis, axis: value, title: 金額}
+  - op: point
+    series: 0
+    point: 1
+    fill: {color: 7030A0}
+  - op: filter
+    hidden_categories: [1]
+- id: edit_format_35_line
+  factors: {chart: line, title: keep, legend: top, labels: val, series_style: marker, axis: keep, plot: vary_colors, filter: keep,
+    display: gap}
+  fixture: chart_line.xlsx
+  target: {sheet: Sheet1, chart: line_markers}
+  edits:
+  - {op: legend, position: t}
+  - {op: plot, vary_colors: true}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - op: series
+    series: 0
+    marker:
+      symbol: diamond
+      size: 8
+      fill: {color: 00B050}
+  - op: series
+    series: all
+    labels: {val: true}
+- id: edit_format_36_line
+  factors: {chart: line, title: keep, legend: left, labels: ser_cat_sep, series_style: line_dash_width, axis: scale, plot: vary_colors,
+    filter: hide_series, display: keep}
+  fixture: chart_line.xlsx
+  target: {sheet: Sheet1, chart: line_markers}
+  edits:
+  - {op: legend, position: l}
+  - {op: plot, vary_colors: true}
+  - {op: axis, axis: value, min: 0, max: 10, major_unit: 2}
+  - op: series
+    series: 0
+    line: {color: FF0000, width_pt: 2.25, dash: dash}
+  - op: series
+    series: all
+    labels: {ser: true, cat: true, separator: '; '}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_37_scatter
+  factors: {chart: scatter, title: text, legend: right_overlay, labels: val_fmt_font, series_style: keep, axis: scale, plot: vary_colors,
+    filter: hide_series, display: keep}
+  fixture: chart_scatter.xlsx
+  target: {sheet: Sheet1, chart: scatter_lines}
+  edits:
+  - {op: title, kind: text, text: 売上推移}
+  - {op: legend, position: r, overlay: true}
+  - {op: plot, vary_colors: true}
+  - {op: axis, axis: value, min: 0, max: 10, major_unit: 2}
+  - op: series
+    series: all
+    labels: {val: true, number_format: '0.0', font_color: C00000, font_size: 11}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_38_bar
+  factors: {chart: bar, title: keep, legend: keep, labels: val_fmt_font, series_style: point_fill, axis: keep, plot: gap_overlap,
+    filter: keep, display: gap}
+  fixture: chart_bar.xlsx
+  target: {sheet: Sheet1, chart: bar_stacked}
+  edits:
+  - {op: plot, gap_width: 50, overlap: -20}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - op: point
+    series: 0
+    point: 1
+    fill: {color: 7030A0}
+  - op: series
+    series: all
+    labels: {val: true, number_format: '0.0', font_color: C00000, font_size: 11}
+- id: edit_format_39_area
+  factors: {chart: area, title: text, legend: left, labels: val_fmt_font, series_style: line_dash_width, axis: fmt_grid_reversed,
+    plot: keep, filter: hide_series, display: gap}
+  fixture: chart_area.xlsx
+  target: {sheet: Sheet1, chart: area_standard}
+  edits:
+  - {op: title, kind: text, text: 売上推移}
+  - {op: legend, position: l}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: value, number_format: '0.0', major_gridlines: false, reversed: true}
+  - op: series
+    series: 0
+    line: {color: FF0000, width_pt: 2.25, dash: dash}
+  - op: series
+    series: all
+    labels: {val: true, number_format: '0.0', font_color: C00000, font_size: 11}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_40_area
+  factors: {chart: area, title: auto, legend: none, labels: val, series_style: line_dash_width, axis: tick_low, plot: vary_colors,
+    filter: keep, display: span}
+  fixture: chart_area.xlsx
+  target: {sheet: Sheet1, chart: area_standard}
+  edits:
+  - {op: title, kind: auto}
+  - {op: legend, position: none}
+  - {op: plot, vary_colors: true}
+  - {op: display, blanks_as: span}
+  - {op: axis, axis: category, tick_label_pos: low}
+  - {op: axis, axis: value, crosses: at, crosses_at: 2}
+  - op: series
+    series: 0
+    line: {color: FF0000, width_pt: 2.25, dash: dash}
+  - op: series
+    series: all
+    labels: {val: true}
+- id: edit_format_41_pie
+  factors: {chart: pie, title: keep, legend: left, labels: val, series_style: line_dash_width, axis: keep, plot: keep, filter: keep,
+    display: gap}
+  fixture: chart_pie.xlsx
+  target: {sheet: Sheet1, chart: pie_two}
+  edits:
+  - {op: legend, position: l}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - op: series
+    series: 0
+    line: {color: FF0000, width_pt: 2.25, dash: dash}
+  - op: series
+    series: all
+    labels: {val: true}
+- id: edit_format_42_bar
+  factors: {chart: bar, title: auto, legend: none, labels: val, series_style: keep, axis: log_crosses, plot: vary_colors,
+    filter: hide_category, display: gap}
+  fixture: chart_bar.xlsx
+  target: {sheet: Sheet1, chart: bar_stacked}
+  edits:
+  - {op: title, kind: auto}
+  - {op: legend, position: none}
+  - {op: plot, vary_colors: true}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: value, log_base: 10}
+  - {op: axis, axis: category, crosses: max}
+  - op: series
+    series: all
+    labels: {val: true}
+  - op: filter
+    hidden_categories: [1]
+- id: edit_format_43_bar
+  factors: {chart: bar, title: auto, legend: left, labels: ser_cat_sep, series_style: fill_alpha, axis: log_crosses, plot: gap_overlap,
+    filter: keep, display: gap}
+  fixture: chart_bar.xlsx
+  target: {sheet: Sheet1, chart: bar_stacked}
+  edits:
+  - {op: title, kind: auto}
+  - {op: legend, position: l}
+  - {op: plot, gap_width: 50, overlap: -20}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: value, log_base: 10}
+  - {op: axis, axis: category, crosses: max}
+  - op: series
+    series: 0
+    fill: {color: 4472C4, transparency: 25}
+  - op: series
+    series: all
+    labels: {ser: true, cat: true, separator: '; '}
+- id: edit_format_44_scatter
+  factors: {chart: scatter, title: none, legend: none, labels: keep, series_style: keep, axis: keep, plot: keep, filter: hide_series,
+    display: span}
+  fixture: chart_scatter.xlsx
+  target: {sheet: Sheet1, chart: scatter_lines}
+  edits:
+  - {op: title, kind: none}
+  - {op: legend, position: none}
+  - {op: display, blanks_as: span}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_45_scatter
+  factors: {chart: scatter, title: none, legend: right_overlay, labels: keep, series_style: marker, axis: scale, plot: vary_colors,
+    filter: keep, display: gap}
+  fixture: chart_scatter.xlsx
+  target: {sheet: Sheet1, chart: scatter_lines}
+  edits:
+  - {op: title, kind: none}
+  - {op: legend, position: r, overlay: true}
+  - {op: plot, vary_colors: true}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: value, min: 0, max: 10, major_unit: 2}
+  - op: series
+    series: 0
+    marker:
+      symbol: diamond
+      size: 8
+      fill: {color: 00B050}
+- id: edit_format_46_column
+  factors: {chart: column, title: auto, legend: top, labels: ser_cat_sep, series_style: keep, axis: hidden_title, plot: keep,
+    filter: hide_series, display: gap}
+  fixture: chart_column.xlsx
+  target: {sheet: Sheet1, chart: col_clustered}
+  edits:
+  - {op: title, kind: auto}
+  - {op: legend, position: t}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: category, visible: false}
+  - {op: axis, axis: value, title: 金額}
+  - op: series
+    series: all
+    labels: {ser: true, cat: true, separator: '; '}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_47_area
+  factors: {chart: area, title: auto, legend: keep, labels: clear, series_style: keep, axis: scale, plot: keep, filter: hide_series,
+    display: gap}
+  fixture: chart_area.xlsx
+  target: {sheet: Sheet1, chart: area_standard}
+  edits:
+  - {op: title, kind: auto}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: value, min: 0, max: 10, major_unit: 2}
+  - {op: series, series: all, labels: null}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_48_area
+  factors: {chart: area, title: auto, legend: top, labels: ser_cat_sep, series_style: fill_alpha, axis: hidden_title, plot: keep,
+    filter: hide_category, display: span}
+  fixture: chart_area.xlsx
+  target: {sheet: Sheet1, chart: area_standard}
+  edits:
+  - {op: title, kind: auto}
+  - {op: legend, position: t}
+  - {op: display, blanks_as: span}
+  - {op: axis, axis: category, visible: false}
+  - {op: axis, axis: value, title: 金額}
+  - op: series
+    series: 0
+    fill: {color: 4472C4, transparency: 25}
+  - op: series
+    series: all
+    labels: {ser: true, cat: true, separator: '; '}
+  - op: filter
+    hidden_categories: [1]
+- id: edit_format_49_bar
+  factors: {chart: bar, title: none, legend: top, labels: keep, series_style: fill_alpha, axis: hidden_title, plot: gap_overlap,
+    filter: keep, display: gap}
+  fixture: chart_bar.xlsx
+  target: {sheet: Sheet1, chart: bar_stacked}
+  edits:
+  - {op: title, kind: none}
+  - {op: legend, position: t}
+  - {op: plot, gap_width: 50, overlap: -20}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: category, visible: false}
+  - {op: axis, axis: value, title: 金額}
+  - op: series
+    series: 0
+    fill: {color: 4472C4, transparency: 25}
+- id: edit_format_50_line
+  factors: {chart: line, title: text, legend: right_overlay, labels: ser_cat_sep, series_style: marker, axis: log_crosses,
+    plot: vary_colors, filter: hide_category, display: gap}
+  fixture: chart_line.xlsx
+  target: {sheet: Sheet1, chart: line_markers}
+  edits:
+  - {op: title, kind: text, text: 売上推移}
+  - {op: legend, position: r, overlay: true}
+  - {op: plot, vary_colors: true}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: value, log_base: 10}
+  - {op: axis, axis: category, crosses: max}
+  - op: series
+    series: 0
+    marker:
+      symbol: diamond
+      size: 8
+      fill: {color: 00B050}
+  - op: series
+    series: all
+    labels: {ser: true, cat: true, separator: '; '}
+  - op: filter
+    hidden_categories: [1]
+- id: edit_format_51_line
+  factors: {chart: line, title: keep, legend: right_overlay, labels: keep, series_style: marker, axis: tick_low, plot: keep,
+    filter: hide_series, display: keep}
+  fixture: chart_line.xlsx
+  target: {sheet: Sheet1, chart: line_markers}
+  edits:
+  - {op: legend, position: r, overlay: true}
+  - {op: axis, axis: category, tick_label_pos: low}
+  - {op: axis, axis: value, crosses: at, crosses_at: 2}
+  - op: series
+    series: 0
+    marker:
+      symbol: diamond
+      size: 8
+      fill: {color: 00B050}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_52_pie
+  factors: {chart: pie, title: text, legend: top, labels: val_fmt_font, series_style: keep, axis: keep, plot: first_slice,
+    filter: keep, display: keep}
+  fixture: chart_pie.xlsx
+  target: {sheet: Sheet1, chart: pie_two}
+  edits:
+  - {op: title, kind: text, text: 売上推移}
+  - {op: legend, position: t}
+  - {op: plot, first_slice_angle: 90}
+  - op: series
+    series: all
+    labels: {val: true, number_format: '0.0', font_color: C00000, font_size: 11}
+- id: edit_format_53_doughnut
+  factors: {chart: doughnut, title: keep, legend: none, labels: val, series_style: line_dash_width, axis: keep, plot: hole,
+    filter: keep, display: keep}
+  fixture: chart_combo.xlsx
+  target: {sheet: Sheet1, chart: doughnut}
+  edits:
+  - {op: legend, position: none}
+  - {op: plot, hole_size: 60}
+  - op: series
+    series: 0
+    line: {color: FF0000, width_pt: 2.25, dash: dash}
+  - op: series
+    series: all
+    labels: {val: true}
+- id: edit_format_54_scatter
+  factors: {chart: scatter, title: none, legend: top, labels: val, series_style: point_fill, axis: tick_low, plot: vary_colors,
+    filter: keep, display: span}
+  fixture: chart_scatter.xlsx
+  target: {sheet: Sheet1, chart: scatter_lines}
+  edits:
+  - {op: title, kind: none}
+  - {op: legend, position: t}
+  - {op: plot, vary_colors: true}
+  - {op: display, blanks_as: span}
+  - {op: axis, axis: category, tick_label_pos: low}
+  - {op: axis, axis: value, crosses: at, crosses_at: 2}
+  - op: point
+    series: 0
+    point: 1
+    fill: {color: 7030A0}
+  - op: series
+    series: all
+    labels: {val: true}
+- id: edit_format_55_scatter
+  factors: {chart: scatter, title: none, legend: keep, labels: val_fmt_font, series_style: keep, axis: log_crosses, plot: keep,
+    filter: hide_series, display: keep}
+  fixture: chart_scatter.xlsx
+  target: {sheet: Sheet1, chart: scatter_lines}
+  edits:
+  - {op: title, kind: none}
+  - {op: axis, axis: value, log_base: 10}
+  - {op: axis, axis: category, crosses: max}
+  - op: series
+    series: all
+    labels: {val: true, number_format: '0.0', font_color: C00000, font_size: 11}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_56_column
+  factors: {chart: column, title: text, legend: left, labels: val_fmt_font, series_style: fill_alpha, axis: tick_low, plot: keep,
+    filter: hide_series, display: keep}
+  fixture: chart_column.xlsx
+  target: {sheet: Sheet1, chart: col_clustered}
+  edits:
+  - {op: title, kind: text, text: 売上推移}
+  - {op: legend, position: l}
+  - {op: axis, axis: category, tick_label_pos: low}
+  - {op: axis, axis: value, crosses: at, crosses_at: 2}
+  - op: series
+    series: 0
+    fill: {color: 4472C4, transparency: 25}
+  - op: series
+    series: all
+    labels: {val: true, number_format: '0.0', font_color: C00000, font_size: 11}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_57_bar
+  factors: {chart: bar, title: keep, legend: none, labels: clear, series_style: point_fill, axis: scale, plot: gap_overlap,
+    filter: hide_series, display: gap}
+  fixture: chart_bar.xlsx
+  target: {sheet: Sheet1, chart: bar_stacked}
+  edits:
+  - {op: legend, position: none}
+  - {op: plot, gap_width: 50, overlap: -20}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - {op: axis, axis: value, min: 0, max: 10, major_unit: 2}
+  - op: point
+    series: 0
+    point: 1
+    fill: {color: 7030A0}
+  - {op: series, series: all, labels: null}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_58_pie
+  factors: {chart: pie, title: none, legend: keep, labels: ser_cat_sep, series_style: point_fill, axis: keep, plot: first_slice,
+    filter: hide_series, display: gap}
+  fixture: chart_pie.xlsx
+  target: {sheet: Sheet1, chart: pie_two}
+  edits:
+  - {op: title, kind: none}
+  - {op: plot, first_slice_angle: 90}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - op: point
+    series: 0
+    point: 1
+    fill: {color: 7030A0}
+  - op: series
+    series: all
+    labels: {ser: true, cat: true, separator: '; '}
+  - op: filter
+    hidden_series: [1]
+- id: edit_format_59_doughnut
+  factors: {chart: doughnut, title: keep, legend: top, labels: val_fmt_font, series_style: line_dash_width, axis: keep, plot: keep,
+    filter: keep, display: gap}
+  fixture: chart_combo.xlsx
+  target: {sheet: Sheet1, chart: doughnut}
+  edits:
+  - {op: legend, position: t}
+  - {op: display, blanks_as: zero, plot_vis_only: false}
+  - op: series
+    series: 0
+    line: {color: FF0000, width_pt: 2.25, dash: dash}
+  - op: series
+    series: all
+    labels: {val: true, number_format: '0.0', font_color: C00000, font_size: 11}
+- id: edit_format_60_doughnut
+  factors: {chart: doughnut, title: text, legend: left, labels: clear, series_style: point_fill, axis: keep, plot: hole, filter: keep,
+    display: keep}
+  fixture: chart_combo.xlsx
+  target: {sheet: Sheet1, chart: doughnut}
+  edits:
+  - {op: title, kind: text, text: 売上推移}
+  - {op: legend, position: l}
+  - {op: plot, hole_size: 60}
+  - op: point
+    series: 0
+    point: 1
+    fill: {color: 7030A0}
+  - {op: series, series: all, labels: null}
+- id: edit_format_61_doughnut
+  factors: {chart: doughnut, title: keep, legend: left, labels: clear, series_style: line_dash_width, axis: keep, plot: vary_colors,
+    filter: keep, display: keep}
+  fixture: chart_combo.xlsx
+  target: {sheet: Sheet1, chart: doughnut}
+  edits:
+  - {op: legend, position: l}
+  - {op: plot, vary_colors: false}
+  - op: series
+    series: 0
+    line: {color: FF0000, width_pt: 2.25, dash: dash}
+  - {op: series, series: all, labels: null}

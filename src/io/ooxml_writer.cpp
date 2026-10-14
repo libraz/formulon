@@ -32,6 +32,7 @@
 #include <utility>
 #include <vector>
 
+#include "chart/chart_cache.h"
 #include "external_link.h"
 #include "io/auto_filter_xml.h"
 #include "io/comments_writer.h"
@@ -578,6 +579,12 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // 10. Passthrough parts — bytes from the original archive, written
   // verbatim. Their `<Override>` registration was already emitted in
   // step 1 (when content_type was non-empty).
+  // Chart caches are refreshed into replacement bytes; the model is untouched.
+  auto refreshed_or = refreshed_chart_parts(wb);
+  if (!refreshed_or) {
+    return std::move(refreshed_or.error());
+  }
+  const std::vector<PassthroughPart>& refreshed = refreshed_or.value();
   for (const PassthroughPart* part : plan.passthrough_kept) {
     // Never emit a traversal-shaped part name, even if one reached the model
     // through a path other than the reader (which already rejects them).
@@ -585,7 +592,10 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
       return make_error(FormulonErrorCode::kIoZipSlip, "passthrough part name escapes package root; refusing to write",
                         "context=write_ooxml part=" + part->path);
     }
-    auto result = AddPartBytes(writer.get(), part->path, part->bytes, &written_paths);
+    const auto replacement = std::find_if(refreshed.begin(), refreshed.end(),
+                                          [part](const PassthroughPart& r) { return r.path == part->path; });
+    const auto& bytes = replacement != refreshed.end() ? replacement->bytes : part->bytes;
+    auto result = AddPartBytes(writer.get(), part->path, bytes, &written_paths);
     if (!result) {
       return std::move(result.error());
     }

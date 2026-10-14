@@ -61,7 +61,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
         python-package python-test python-wheel \
         parity-test \
         oracle-setup oracle-setup-mac oracle-setup-wsl \
-        oracle-gen oracle-gen-cf oracle-gen-workbook oracle-promote \
+        oracle-gen oracle-gen-cf oracle-gen-chart oracle-gen-workbook oracle-promote \
         oracle-verify oracle-contribute oracle-contribute-list \
         ironcalc-import ironcalc-verify \
         fuzz fuzz-long bench coverage mutation \
@@ -587,6 +587,14 @@ oracle-gen:
 oracle-gen-cf:
 	@$(call require_oracle_venv,oracle-gen-cf)
 	@$(ORACLE_PY) tools/oracle/cf_oracle_gen.py $(if $(SUITE),--suite $(SUITE),)
+
+# Chart track (caches, reference following, creation, edits). macOS-only;
+# needs the chart_model_dump binary, which reads every chart model.
+oracle-gen-chart:
+	@$(call require_oracle_venv,oracle-gen-chart)
+	@cmake --build $(BUILD_DIR) --target chart_model_dump
+	@$(ORACLE_PY) tools/oracle/chart_oracle_gen.py capture $(if $(SUITE),--suite $(SUITE),) \
+	  --dump $(BUILD_DIR)/tests/oracle/chart_model_dump
 
 # Workbook track (pivot tables + print areas). Target is auto-detected
 # from the host OS; pass TARGET=<name> to override, GOLDEN_DIR=<path> to

@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "auto_filter.h"
+#include "chart/chart_ref.h"
 #include "defined_name.h"
 #include "drawing/drawing_edit.h"
 #include "eval/dep_graph.h"
@@ -29,6 +30,7 @@
 #include "io/dynamic_array_formula.h"
 #include "io/format_detect.h"
 #include "io/future_functions.h"
+#include "io/ooxml/part_graph.h"
 #include "io/ooxml_writer.h"
 #include "io/theme_part.h"
 #include "io/workbook_kind_ooxml.h"
@@ -526,6 +528,7 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
   // a changed formula against `new_name` before the workbook can resolve it.
   rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, old_name, new_name,
                               {}, ignored_cache_ids, defined_names_changed);
+  RETURN_IF_ERROR(chart_ref::rewrite_all(*this, transform));
   if (defined_names_changed) {
     // Defined-name expansion can change a formula's value without changing
     // the formula cell's own text. Sheet ids survive a rename, so retaining
@@ -579,12 +582,19 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
     pre_removal_sheet_order.push_back(sheet.name());
   }
 
+  // Resolved before the sheet leaves: its chart parts are cleaned up after the erase.
+  std::vector<std::string> drawing_candidates;
+  if (auto drawing = sheet_drawing_path(*this, index); drawing && !drawing.value().empty()) {
+    drawing_candidates.push_back(drawing.value());
+  }
+
   const parser::SheetRemovalTransform transform(pre_removal_sheet_order, index);
   std::vector<std::uint32_t> dropped_cache_ids;
   bool defined_names_changed = false;
   rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, removed_name,
                               dropped_cache_ids, defined_names_changed);
   (void)defined_names_changed;
+  RETURN_IF_ERROR(chart_ref::rewrite_all(*this, transform));
 
   // Sheet-scoped names owned by the removed sheet disappear; names scoped to
   // later sheets follow their owner as the sheet vector closes the gap.
@@ -643,6 +653,7 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
   // order. One and only one final reindex sees the final sheet/name/table/
   // cache topology and dirties every surviving formula consistently.
   sheets_.erase(sheets_.begin() + static_cast<std::ptrdiff_t>(index));
+  io::ooxml::remove_orphans(*this, std::move(drawing_candidates));
   reindex_all_formulas(sheets_, mutator, *this);
   return Expected<void, Error>::Ok();
 }

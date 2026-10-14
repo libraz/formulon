@@ -1,5 +1,6 @@
-// Drawing-image bindings: probe, enumerate, read, insert, remove,
-// re-anchor, re-order, snapshot and restore embedded pictures.
+// Drawing bindings: probe, enumerate, read and insert pictures, and the
+// remove, re-anchor, re-order, snapshot and restore operations that apply to
+// any picture or chart.
 
 #include <cstddef>
 #include <cstdint>
@@ -9,7 +10,7 @@
 
 namespace formulon_node {
 
-// ---- Drawing images -------------------------------------------------
+// ---- Drawing objects -------------------------------------------------
 
 namespace {
 
@@ -23,18 +24,6 @@ bool ReadImageBytes(const Napi::CallbackInfo& info, size_t idx, const uint8_t*& 
   data = u8.Data();
   len = u8.ElementLength();
   return true;
-}
-
-template <typename Record>
-void PullImageAnchor(CheckedSpecReader& reader, const Napi::Object& spec, Record& record) {
-  record.anchor_kind = reader.I32(spec, "anchorKind", FM_ANCHOR_KIND_ONE_CELL);
-  record.edit_as = reader.I32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
-  record.row = reader.U32(spec, "row", 0U);
-  record.col = reader.U32(spec, "col", 0U);
-  record.row_off_emu = reader.I64(spec, "rowOffEmu", 0);
-  record.col_off_emu = reader.I64(spec, "colOffEmu", 0);
-  record.width_emu = reader.I64(spec, "widthEmu", 0);
-  record.height_emu = reader.I64(spec, "heightEmu", 0);
 }
 
 }  // namespace
@@ -158,7 +147,7 @@ Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
   fm_image_insert opts{};
   opts.name = name.c_str();
   opts.descr = descr.c_str();
-  PullImageAnchor(reader, spec, opts);
+  PullPlacement(reader, spec, opts, FM_ANCHOR_KIND_ONE_CELL);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -169,41 +158,41 @@ Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
   return out;
 }
 
-Napi::Value Workbook::RemoveImage(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::RemoveDrawing(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  return MakeStatus(env, fm_sheet_remove_image(handle_, ArgU32(info, 0), ArgU32(info, 1)));
+  return MakeStatus(env, fm_sheet_remove_drawing(handle_, ArgU32(info, 0), ArgU32(info, 1)));
 }
 
-Napi::Value Workbook::SetImageAnchor(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::SetDrawingAnchor(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
   if (info.Length() < 3 || !info[2].IsObject()) {
-    return MakeBindingArgumentError(env, "setImageAnchor expects (sheet:number, objectId:number, placement:object)");
+    return MakeBindingArgumentError(env, "setDrawingAnchor expects (sheet:number, objectId:number, placement:object)");
   }
   CheckedSpecReader reader(env);
   const Napi::Object spec = info[2].As<Napi::Object>();
-  fm_image_anchor anchor{};
-  PullImageAnchor(reader, spec, anchor);
+  fm_drawing_anchor anchor{};
+  PullPlacement(reader, spec, anchor, FM_ANCHOR_KIND_ONE_CELL);
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_set_image_anchor(handle_, ArgU32(info, 0), ArgU32(info, 1), &anchor));
+  return MakeStatus(env, fm_sheet_set_drawing_anchor(handle_, ArgU32(info, 0), ArgU32(info, 1), &anchor));
 }
 
-Napi::Value Workbook::SetImageZOrder(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::SetDrawingZOrder(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  return MakeStatus(env, fm_sheet_set_image_z_order(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2)));
+  return MakeStatus(env, fm_sheet_set_drawing_z_order(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2)));
 }
 
-Napi::Value Workbook::SnapshotImage(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::SnapshotDrawing(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
@@ -213,7 +202,7 @@ Napi::Value Workbook::SnapshotImage(const Napi::CallbackInfo& info) {
   }
   uint8_t* bytes = nullptr;
   size_t len = 0;
-  const fm_status_t rc = fm_sheet_snapshot_image(handle_, ArgU32(info, 0), ArgU32(info, 1), &bytes, &len);
+  const fm_status_t rc = fm_sheet_snapshot_drawing(handle_, ArgU32(info, 0), ArgU32(info, 1), &bytes, &len);
   if (rc == 0) {
     out.Set("bytes", TakeSavedBytes(env, bytes, len));
   } else {
@@ -224,7 +213,7 @@ Napi::Value Workbook::SnapshotImage(const Napi::CallbackInfo& info) {
   return out;
 }
 
-Napi::Value Workbook::RestoreImage(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::RestoreDrawing(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
   out.Set("objectId", JsNumber(env, 0));
@@ -237,17 +226,17 @@ Napi::Value Workbook::RestoreImage(const Napi::CallbackInfo& info) {
   const bool has_opts = info.Length() > 2 && info[2].IsObject();
   if (!ReadImageBytes(info, 1, data, len) || (info.Length() > 2 && !info[2].IsUndefined() && !has_opts)) {
     out.Set("status",
-            MakeBindingArgumentError(env, "restoreImage expects (sheet:number, bytes:Uint8Array, opts?:object)"));
+            MakeBindingArgumentError(env, "restoreDrawing expects (sheet:number, bytes:Uint8Array, opts?:object)"));
     return out;
   }
   CheckedSpecReader reader(env);
   const Napi::Object spec = has_opts ? info[2].As<Napi::Object>() : Napi::Object::New(env);
-  const uint32_t flags = reader.Bool(spec, "newId", false) ? FM_IMAGE_RESTORE_NEW_ID : 0U;
+  const uint32_t flags = reader.Bool(spec, "newId", false) ? FM_DRAWING_RESTORE_NEW_ID : 0U;
   if (!reader.ok()) {
     return env.Undefined();
   }
   uint32_t object_id = 0;
-  const fm_status_t rc = fm_sheet_restore_image(handle_, ArgU32(info, 0), data, len, flags, &object_id);
+  const fm_status_t rc = fm_sheet_restore_drawing(handle_, ArgU32(info, 0), data, len, flags, &object_id);
   out.Set("objectId", JsNumber(env, rc == 0 ? object_id : 0));
   out.Set("status", MakeStatus(env, rc));
   return out;

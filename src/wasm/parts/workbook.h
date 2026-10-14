@@ -437,11 +437,32 @@ class JsWorkbook {
   emscripten::val listDrawingObjects(uint32_t sheet) const;
   emscripten::val getImage(uint32_t sheet, uint32_t objectId) const;
   emscripten::val insertImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts);
-  JsStatus removeImage(uint32_t sheet, uint32_t objectId);
-  JsStatus setImageAnchor(uint32_t sheet, uint32_t objectId, emscripten::val placement);
-  JsStatus setImageZOrder(uint32_t sheet, uint32_t objectId, uint32_t index);
-  emscripten::val snapshotImage(uint32_t sheet, uint32_t objectId) const;
-  emscripten::val restoreImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts);
+  JsStatus removeDrawing(uint32_t sheet, uint32_t objectId);
+  JsStatus setDrawingAnchor(uint32_t sheet, uint32_t objectId, emscripten::val placement);
+  JsStatus setDrawingZOrder(uint32_t sheet, uint32_t objectId, uint32_t index);
+  emscripten::val snapshotDrawing(uint32_t sheet, uint32_t objectId) const;
+  emscripten::val restoreDrawing(uint32_t sheet, emscripten::val bytes, emscripten::val opts);
+
+  emscripten::val getChart(uint32_t sheet, uint32_t objectId) const;
+  emscripten::val getChartData(uint32_t sheet, uint32_t objectId) const;
+  emscripten::val previewChartData(uint32_t sheet, uint32_t objectId, emscripten::val overrides) const;
+  emscripten::val insertChart(uint32_t sheet, emscripten::val options);
+  JsStatus setChartType(uint32_t sheet, uint32_t objectId, uint32_t plot, int32_t kind, emscripten::val grouping);
+  JsStatus setChartTitle(uint32_t sheet, uint32_t objectId, emscripten::val title);
+  JsStatus setChartLegend(uint32_t sheet, uint32_t objectId, int32_t position, bool overlay,
+                          emscripten::val hiddenSeries);
+  JsStatus setChartAxis(uint32_t sheet, uint32_t objectId, uint32_t axisId, emscripten::val patch);
+  JsStatus setChartDisplay(uint32_t sheet, uint32_t objectId, int32_t blanksAs, emscripten::val plotVisibleOnly);
+  JsStatus setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx, emscripten::val patch);
+  JsStatus setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx, uint32_t pointIdx,
+                         emscripten::val patch);
+  JsStatus setChartPlot(uint32_t sheet, uint32_t objectId, uint32_t plot, emscripten::val patch);
+  JsStatus setChartFilter(uint32_t sheet, uint32_t objectId, emscripten::val hiddenSeries,
+                          emscripten::val hiddenCategories);
+  emscripten::val addChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, emscripten::val patch);
+  JsStatus removeChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx);
+  JsStatus setChartSource(uint32_t sheet, uint32_t objectId, const std::string& source, int32_t direction,
+                          emscripten::val headerRow, emscripten::val headerColumn);
 
   emscripten::val getValidations(uint32_t sheet) const;
   JsStatus addValidation(uint32_t sheet, emscripten::val v);
@@ -635,6 +656,15 @@ JsStatus set_log_min_level(int32_t level);
 /// JSON record as a `Uint8Array` view valid only for the duration of the
 /// call; copy or decode it before returning.
 JsStatus set_log_sink(emscripten::val sink);
+
+/// Reads a placement record (`anchorKind`, `editAs`, `row`, `col`, the EMU
+/// offsets and size) shared by the picture, chart and re-anchor calls; an
+/// absent `anchorKind` takes `default_anchor_kind`.
+fm_drawing_anchor pull_drawing_anchor(JsNarrowNumericReader& reader, const emscripten::val& placement,
+                                      int32_t default_anchor_kind);
+
+/// Copies `anchor` into the placement fields of `ins`.
+void set_insert_placement(fm_image_insert& ins, const fm_drawing_anchor& anchor);
 
 }  // namespace parts
 }  // namespace wasm

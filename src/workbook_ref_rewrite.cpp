@@ -30,17 +30,6 @@
 #include "utils/arena.h"
 
 namespace formulon {
-namespace {
-
-// Rewrites a single formula text through `transform`. Returns the
-// rewritten body alongside a flag indicating whether any reference was
-// actually changed; an unchanged body lets the caller skip the
-// dep-graph re-register and avoid touching the cell.
-struct FormulaRewriteResult {
-  std::string text;
-  bool changed = false;
-  bool error = false;  // Parse failure or arena exhaustion.
-};
 
 FormulaRewriteResult rewrite_formula(std::string_view formula, const parser::RefTransform& transform) {
   FormulaRewriteResult out;
@@ -78,8 +67,6 @@ FormulaRewriteResult rewrite_formula(std::string_view formula, const parser::Ref
   out.changed = true;
   return out;
 }
-
-}  // namespace
 
 bool remap_book_views_xml(std::string& book_views_xml, const std::vector<std::uint32_t>& old_to_new) {
   if (book_views_xml.empty() || old_to_new.empty()) {
