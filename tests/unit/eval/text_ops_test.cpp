@@ -288,6 +288,30 @@ TEST(TextOpsDecodeUtf8, BadContinuationByte) {
   EXPECT_FALSE(r.valid);
 }
 
+TEST(TextOpsDecodeUtf8, RejectsNonRfc3629Sequences) {
+  const std::string invalid[] = {
+      std::string("\xC0\x80", 2),          // overlong U+0000
+      std::string("\xC1\xBF", 2),          // overlong U+007F
+      std::string("\xE0\x9F\x80", 3),      // below U+0800
+      std::string("\xED\xA0\x80", 3),      // UTF-16 high surrogate
+      std::string("\xF0\x8F\xBF\xBF", 4),  // below U+10000
+      std::string("\xF4\x90\x80\x80", 4),  // above U+10FFFF
+      std::string("\xF5\x80\x80\x80", 4),  // five-byte range lead
+  };
+  for (const std::string& bytes : invalid) {
+    const auto decoded = decode_first_utf8_codepoint(bytes);
+    EXPECT_FALSE(decoded.valid) << "unexpectedly accepted malformed UTF-8";
+    EXPECT_EQ(decoded.byte_len, 0u);
+  }
+}
+
+TEST(TextOpsDecodeUtf8, AcceptsMaximumUnicodeScalar) {
+  const auto decoded = decode_first_utf8_codepoint("\xF4\x8F\xBF\xBF");
+  EXPECT_TRUE(decoded.valid);
+  EXPECT_EQ(decoded.codepoint, 0x10FFFFu);
+  EXPECT_EQ(decoded.byte_len, 4u);
+}
+
 // ---------------------------------------------------------------------------
 // decode_utf8_step (lenient single-step decoder)
 // ---------------------------------------------------------------------------

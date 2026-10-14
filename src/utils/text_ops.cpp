@@ -194,15 +194,19 @@ Utf8DecodeResult decode_first_utf8_codepoint(std::string_view text) noexcept {
   }
   std::size_t need = 0;
   std::uint32_t value = 0;
-  if ((c0 & 0xE0u) == 0xC0u) {
+  std::uint32_t minimum = 0;
+  if (c0 >= 0xC2u && c0 <= 0xDFu) {
     need = 1;
     value = c0 & 0x1Fu;
-  } else if ((c0 & 0xF0u) == 0xE0u) {
+    minimum = 0x80u;
+  } else if (c0 >= 0xE0u && c0 <= 0xEFu) {
     need = 2;
     value = c0 & 0x0Fu;
-  } else if ((c0 & 0xF8u) == 0xF0u) {
+    minimum = 0x800u;
+  } else if (c0 >= 0xF0u && c0 <= 0xF4u) {
     need = 3;
     value = c0 & 0x07u;
+    minimum = 0x10000u;
   } else {
     return {false, 0u, 0u};
   }
@@ -215,6 +219,10 @@ Utf8DecodeResult decode_first_utf8_codepoint(std::string_view text) noexcept {
       return {false, 0u, 0u};
     }
     value = (value << 6) | (ck & 0x3Fu);
+  }
+  // Rejects overlong forms, surrogates and code points past U+10FFFF (leads E0 / ED / F0 / F4).
+  if (value < minimum || value > 0x10FFFFu || (value >= 0xD800u && value <= 0xDFFFu)) {
+    return {false, 0u, 0u};
   }
   return {true, value, need + 1};
 }

@@ -118,6 +118,36 @@ TEST(ArenaTest, AllocationLimitReportsStickyExhaustionUntilReset) {
   EXPECT_FALSE(arena.exhausted());
 }
 
+TEST(ArenaTest, RejectsHugeRequestWithoutWrappingExistingChunk) {
+  Arena arena(128);
+  void* first = arena.allocate(1, 1);
+  ASSERT_NE(nullptr, first);
+
+  EXPECT_EQ(nullptr, arena.allocate(SIZE_MAX, 1));
+  EXPECT_TRUE(arena.exhausted());
+  EXPECT_EQ(1u, arena.chunk_count());
+  EXPECT_NE(nullptr, arena.allocate(1, 1));
+}
+
+TEST(ArenaTest, RejectsHugeFreshChunkAndHeaderOverflow) {
+  Arena arena(SIZE_MAX);
+  EXPECT_EQ(nullptr, arena.allocate(1, 1));
+  EXPECT_TRUE(arena.exhausted());
+  EXPECT_EQ(0u, arena.chunk_count());
+  EXPECT_EQ(0u, arena.bytes_allocated());
+
+  Arena huge_request;
+  EXPECT_EQ(nullptr, huge_request.allocate(SIZE_MAX - 1, 1));
+  EXPECT_TRUE(huge_request.exhausted());
+  EXPECT_EQ(0u, huge_request.chunk_count());
+}
+
+TEST(ArenaTest, RejectsCreateArrayMultiplicationOverflowAsExhaustion) {
+  Arena arena(128);
+  EXPECT_EQ(nullptr, arena.create_array<std::uint64_t>(SIZE_MAX));
+  EXPECT_TRUE(arena.exhausted());
+}
+
 TEST(ArenaTest, GrowsToNewChunkWhenExhausted) {
   Arena arena(64);
   // First allocation opens the initial chunk.

@@ -34,11 +34,17 @@ TEST(SheetNameIdentity, LeavesNonCaseDifferencesDistinct) {
 }
 
 TEST(SheetNameIdentity, RejectsMalformedUtf8) {
-  for (const std::string malformed : {"\xC3", "\xE0\x80\x80", "\xED\xA0\x80", "\xF4\x90\x80\x80", "\x80"}) {
+  for (const std::string malformed :
+       {"\xC0\x80", "\xC3", "\xE0\x80\x80", "\xED\xA0\x80", "\xF4\x90\x80\x80", "\xF5\x80\x80\x80", "\x80"}) {
     EXPECT_FALSE(valid_utf8(malformed));
     EXPECT_FALSE(equal(malformed, malformed));
   }
   EXPECT_FALSE(equal("\xC3", "\xC3\xA4"));
+}
+
+TEST(SheetNameIdentity, AcceptsMaximumUnicodeScalar) {
+  EXPECT_TRUE(valid_utf8("\xF4\x8F\xBF\xBF"));
+  EXPECT_TRUE(equal("\xF4\x8F\xBF\xBF", "\xF4\x8F\xBF\xBF"));
 }
 
 }  // namespace

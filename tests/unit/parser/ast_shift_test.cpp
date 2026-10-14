@@ -43,6 +43,46 @@ const AstNode* MakeTooDeepAst(Arena& arena) {
   return node;
 }
 
+class IdentityTransform final : public RefTransform {
+ public:
+  std::optional<Reference> apply(const Reference& ref) const override { return ref; }
+};
+
+class SelectiveColumnTransform final : public RefTransform {
+ public:
+  SelectiveColumnTransform(std::uint32_t target_col, std::uint32_t replacement_col, int* calls) noexcept
+      : target_col_(target_col), replacement_col_(replacement_col), calls_(calls) {}
+
+  std::optional<Reference> apply(const Reference& ref) const override {
+    ++*calls_;
+    if (ref.col != target_col_) {
+      return ref;
+    }
+    Reference out = ref;
+    out.col = replacement_col_;
+    return out;
+  }
+
+ private:
+  std::uint32_t target_col_;
+  std::uint32_t replacement_col_;
+  int* calls_;
+};
+
+class SheetTransform final : public RefTransform {
+ public:
+  explicit SheetTransform(std::string_view sheet) noexcept : sheet_(sheet) {}
+
+  std::optional<Reference> apply(const Reference& ref) const override {
+    Reference out = ref;
+    out.sheet = sheet_;
+    return out;
+  }
+
+ private:
+  std::string_view sheet_;
+};
+
 std::string ParseShiftRelativeDump(std::string_view src, std::int32_t row_delta, std::int32_t col_delta) {
   Arena arena;
   const AstNode* root = ParseOrNull(src, arena);
@@ -103,6 +143,13 @@ TEST(ShiftRelativeRefs, RejectsAstDeeperThanSharedLimit) {
   ASSERT_NE(shifted, nullptr);
   ASSERT_EQ(shifted->kind(), NodeKind::ErrorLiteral);
   EXPECT_EQ(shifted->as_error_literal(), ErrorCode::Ref);
+}
+
+TEST(ShiftRelativeRefs, DepthCheckPreservesLargerCallerLimit) {
+  Arena arena;
+  const AstNode* root = MakeTooDeepAst(arena);
+  ASSERT_NE(root, nullptr);
+  EXPECT_TRUE(ast_depth_within_limit(*root, kMaxFormulaAstDepth + 1));
 }
 
 TEST(ShiftRelativeRefs, RowDeltaShiftsRelativeRow) {
@@ -174,6 +221,150 @@ TEST(ShiftRelativeRefs, IdentityWalkPreservesPointer) {
   ASSERT_NE(root, nullptr);
   const AstNode* shifted = shift_relative_refs(*root, arena, 5, 5);
   EXPECT_EQ(shifted, root) << "absolute-only refs should round-trip without allocation";
+}
+
+TEST(ShiftRefs, IdentityWalkDoesNotAllocateVariadicChildren) {
+  IdentityTransform transform;
+
+  {
+    Arena arena;
+    AstNode* first = make_literal(arena, Value::number(1.0));
+    AstNode* second = make_literal(arena, Value::number(2.0));
+    const AstNode* args[] = {first, second};
+    AstNode* call = make_call(arena, "SUM", args, 2);
+    ASSERT_NE(call, nullptr);
+    const std::size_t before = arena.bytes_used();
+    EXPECT_EQ(shift_refs(*call, arena, transform), call);
+    EXPECT_EQ(arena.bytes_used(), before);
+  }
+  {
+    Arena arena;
+    AstNode* first = make_literal(arena, Value::number(1.0));
+    AstNode* second = make_literal(arena, Value::number(2.0));
+    const AstNode* children[] = {first, second};
+    AstNode* union_node = make_union_op(arena, children, 2);
+    ASSERT_NE(union_node, nullptr);
+    const std::size_t before = arena.bytes_used();
+    EXPECT_EQ(shift_refs(*union_node, arena, transform), union_node);
+    EXPECT_EQ(arena.bytes_used(), before);
+  }
+  {
+    Arena arena;
+    AstNode* first = make_literal(arena, Value::number(1.0));
+    AstNode* second = make_literal(arena, Value::number(2.0));
+    const AstNode* elements[] = {first, second};
+    AstNode* array = make_array_literal(arena, 1, 2, elements);
+    ASSERT_NE(array, nullptr);
+    const std::size_t before = arena.bytes_used();
+    EXPECT_EQ(shift_refs(*array, arena, transform), array);
+    EXPECT_EQ(arena.bytes_used(), before);
+  }
+  {
+    Arena arena;
+    AstNode* binding_expr = make_literal(arena, Value::number(1.0));
+    AstNode* body = make_literal(arena, Value::number(2.0));
+    const std::string_view names[] = {"x"};
+    const AstNode* exprs[] = {binding_expr};
+    AstNode* let_node = make_let_binding(arena, names, exprs, 1, body);
+    ASSERT_NE(let_node, nullptr);
+    const std::size_t before = arena.bytes_used();
+    EXPECT_EQ(shift_refs(*let_node, arena, transform), let_node);
+    EXPECT_EQ(arena.bytes_used(), before);
+  }
+  {
+    Arena arena;
+    AstNode* callee = make_name_ref(arena, "fn");
+    AstNode* arg = make_literal(arena, Value::number(1.0));
+    const AstNode* args[] = {arg};
+    AstNode* lambda_call = make_lambda_call(arena, callee, args, 1);
+    ASSERT_NE(lambda_call, nullptr);
+    const std::size_t before = arena.bytes_used();
+    EXPECT_EQ(shift_refs(*lambda_call, arena, transform), lambda_call);
+    EXPECT_EQ(arena.bytes_used(), before);
+  }
+}
+
+TEST(ShiftRefs, ChangedMiddleChildPreservesPrefixAndAppliesOnce) {
+  Arena arena;
+  AstNode* first = make_ref(arena, Reference{});
+  Reference middle_ref;
+  middle_ref.col = 1;
+  AstNode* middle = make_ref(arena, middle_ref);
+  Reference last_ref;
+  last_ref.col = 2;
+  AstNode* last = make_ref(arena, last_ref);
+  const AstNode* args[] = {first, middle, last};
+  AstNode* call = make_call(arena, "SUM", args, 3);
+  ASSERT_NE(call, nullptr);
+
+  int calls = 0;
+  SelectiveColumnTransform transform(1, 9, &calls);
+  const AstNode* shifted = shift_refs(*call, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  ASSERT_EQ(shifted->kind(), NodeKind::Call);
+  EXPECT_EQ(calls, 3);
+  EXPECT_EQ(&shifted->as_call_arg(0), first);
+  EXPECT_NE(&shifted->as_call_arg(1), middle);
+  EXPECT_EQ(shifted->as_call_arg(1).as_ref().col, 9u);
+  EXPECT_EQ(&shifted->as_call_arg(2), last);
+}
+
+TEST(ShiftRefs, PropagatesInternFailureFromChangedReference) {
+  Arena source_arena;
+  Reference source_ref;
+  source_ref.sheet = "Sheet1";
+  AstNode* root = make_ref(source_arena, source_ref);
+  ASSERT_NE(root, nullptr);
+
+  const std::string long_sheet(512, 'x');
+  Arena destination_arena(256, 256);
+  SheetTransform transform(long_sheet);
+  EXPECT_EQ(shift_refs(*root, destination_arena, transform), nullptr);
+}
+
+TEST(ShiftRefs, LetBodyOnlyChangePreservesBindingExpression) {
+  Arena arena;
+  AstNode* binding_expr = make_literal(arena, Value::number(1.0));
+  Reference body_ref;
+  body_ref.col = 1;
+  AstNode* body = make_ref(arena, body_ref);
+  const std::string_view names[] = {"x"};
+  const AstNode* exprs[] = {binding_expr};
+  AstNode* let_node = make_let_binding(arena, names, exprs, 1, body);
+  ASSERT_NE(let_node, nullptr);
+
+  int calls = 0;
+  SelectiveColumnTransform transform(1, 9, &calls);
+  const AstNode* shifted = shift_refs(*let_node, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  ASSERT_EQ(shifted->kind(), NodeKind::LetBinding);
+  EXPECT_EQ(calls, 1);
+  EXPECT_EQ(&shifted->as_let_binding_expr(0), binding_expr);
+  EXPECT_NE(&shifted->as_let_body(), body);
+  EXPECT_EQ(shifted->as_let_body().as_ref().col, 9u);
+}
+
+TEST(ShiftRefs, LambdaCalleeChangePreservesArguments) {
+  Arena arena;
+  Reference callee_ref;
+  callee_ref.col = 1;
+  AstNode* callee = make_ref(arena, callee_ref);
+  Reference arg_ref;
+  arg_ref.col = 0;
+  AstNode* arg = make_ref(arena, arg_ref);
+  const AstNode* args[] = {arg};
+  AstNode* lambda_call = make_lambda_call(arena, callee, args, 1);
+  ASSERT_NE(lambda_call, nullptr);
+
+  int calls = 0;
+  SelectiveColumnTransform transform(1, 9, &calls);
+  const AstNode* shifted = shift_refs(*lambda_call, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  ASSERT_EQ(shifted->kind(), NodeKind::LambdaCall);
+  EXPECT_EQ(calls, 2);
+  EXPECT_NE(&shifted->as_lambda_call_callee(), callee);
+  EXPECT_EQ(shifted->as_lambda_call_callee().as_ref().col, 9u);
+  EXPECT_EQ(&shifted->as_lambda_call_arg(0), arg);
 }
 
 // ---------------------------------------------------------------------------

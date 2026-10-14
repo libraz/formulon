@@ -109,11 +109,12 @@ class Arena {
 
     // Head is either missing or too full. Size the new chunk so it can satisfy
     // the current request even after worst-case alignment padding.
-    if (bytes > SIZE_MAX - alignment) {
+    const std::size_t alignment_padding = alignment - 1;
+    if (bytes > SIZE_MAX - alignment_padding) {
       exhausted_ = true;
       return nullptr;
     }
-    const std::size_t needed = bytes + alignment;
+    const std::size_t needed = bytes + alignment_padding;
     std::size_t chunk_bytes = next_chunk_bytes_;
     if (chunk_bytes < needed) {
       chunk_bytes = needed;
@@ -130,6 +131,7 @@ class Arena {
     c->next = head_;
     head_ = c;
     ++chunk_count_;
+    // The new chunk was checked against the remaining max_bytes_ budget above.
     bytes_allocated_ += c->capacity;
 
     // Advance the default growth policy: double up to kMaxChunkBytes.
@@ -170,6 +172,7 @@ class Arena {
       return nullptr;
     }
     if (n > SIZE_MAX / sizeof(T)) {
+      exhausted_ = true;
       return nullptr;
     }
     void* raw = allocate(sizeof(T) * n, alignof(T));
@@ -251,26 +254,32 @@ class Arena {
 
   static constexpr std::size_t kMaxChunkBytes = 1u << 20;  // 1 MiB
 
-  static std::size_t align_up(std::size_t value, std::size_t alignment) noexcept {
-    return (value + (alignment - 1)) & ~(alignment - 1);
-  }
-
   static void* try_allocate_in(Chunk* c, std::size_t bytes, std::size_t alignment) noexcept {
-    auto base = reinterpret_cast<std::uintptr_t>(c->data);
-    const std::uintptr_t cursor = base + c->used;
-    const std::uintptr_t aligned = (cursor + (alignment - 1)) & ~(static_cast<std::uintptr_t>(alignment) - 1);
-    const std::size_t pad = static_cast<std::size_t>(aligned - cursor);
-    if (c->used + pad + bytes > c->capacity) {
+    const std::uintptr_t base = reinterpret_cast<std::uintptr_t>(c->data);
+    const std::uintptr_t alignment_u = static_cast<std::uintptr_t>(alignment);
+    const std::uintptr_t mask = alignment_u - 1U;
+    // Sum only the low alignment bits of `base` and `used`, so the cursor never wraps.
+    std::uintptr_t cursor_mod = (base & mask) + (static_cast<std::uintptr_t>(c->used) & mask);
+    if (cursor_mod >= alignment_u) {
+      cursor_mod -= alignment_u;
+    }
+    const std::size_t pad = cursor_mod == 0U ? 0U : alignment - static_cast<std::size_t>(cursor_mod);
+    const std::size_t remaining = c->capacity - c->used;
+    if (pad > remaining || bytes > remaining - pad) {
       return nullptr;
     }
-    c->used += pad + bytes;
-    return reinterpret_cast<void*>(aligned);
+    const std::size_t offset = c->used + pad;
+    c->used = offset + bytes;
+    return reinterpret_cast<void*>(base + static_cast<std::uintptr_t>(offset));
   }
 
   static Chunk* new_chunk(std::size_t capacity) noexcept {
     // Place the Chunk header in the same allocation as its data; the `data`
     // array is just a placeholder that marks where the payload begins.
     const std::size_t header_bytes = offsetof(Chunk, data);
+    if (header_bytes > SIZE_MAX - capacity) {
+      return nullptr;
+    }
     const std::size_t total = header_bytes + capacity;
     void* raw = std::malloc(total);
     if (raw == nullptr) {

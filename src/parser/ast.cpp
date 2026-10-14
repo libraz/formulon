@@ -6,6 +6,7 @@
 
 #include "parser/ast.h"
 
+#include <array>
 #include <cstring>
 #include <string_view>
 #include <vector>
@@ -20,6 +21,13 @@
 namespace formulon {
 namespace parser {
 namespace {
+
+// Arena::intern() uses an empty view for both a legitimate empty source and
+// allocation failure. Keep those cases distinct at every AST string boundary.
+bool InternChecked(Arena& arena, std::string_view source, std::string_view* destination) {
+  *destination = arena.intern(source);
+  return source.empty() || !destination->empty();
+}
 
 // Copies an array of N const AstNode pointers into arena-owned storage.
 // Returns nullptr on allocation failure or when n == 0 (callers handle the
@@ -48,7 +56,9 @@ const std::string_view* CopyNameArray(Arena& arena, const std::string_view* src,
     return nullptr;
   }
   for (std::uint32_t i = 0; i < n; ++i) {
-    dst[i] = arena.intern(src[i]);
+    if (!InternChecked(arena, src[i], &dst[i])) {
+      return nullptr;
+    }
   }
   return dst;
 }
@@ -152,6 +162,27 @@ bool ast_depth_within_limit(const AstNode& root, std::uint32_t max_depth) {
     std::uint64_t next_child;
     std::uint64_t child_count;
   };
+
+  // The formula-depth limit walks a fixed stack array; a larger requested limit uses the vector below.
+  if (max_depth <= kMaxFormulaAstDepth) {
+    std::array<Frame, kMaxFormulaAstDepth> stack;
+    std::size_t stack_size = 1;
+    stack[0] = Frame{&root, 0, ChildCount(root)};
+    while (stack_size != 0) {
+      Frame& frame = stack[stack_size - 1];
+      if (frame.next_child == frame.child_count) {
+        --stack_size;
+        continue;
+      }
+      const AstNode& child = ChildAt(*frame.node, frame.next_child++);
+      if (stack_size >= max_depth) {
+        return false;
+      }
+      stack[stack_size++] = Frame{&child, 0, ChildCount(child)};
+    }
+    return true;
+  }
+
   std::vector<Frame> stack;
   stack.push_back(Frame{&root, 0, ChildCount(root)});
   while (!stack.empty()) {
@@ -190,7 +221,12 @@ AstNode* make_literal(Arena& arena, Value v) {
   // the caller's source (e.g. a Tokenizer arena scoped to Parser::parse()).
   // This matches the pattern used by every other factory below
   // (make_ref, make_call, make_name_ref, etc.).
+  const bool text_payload = v.is_text();
+  const std::string_view source_text = text_payload ? v.as_text() : std::string_view{};
   v = adopt_text_into(arena, v);
+  if (text_payload && !source_text.empty() && v.as_text().empty()) {
+    return nullptr;
+  }
   n->data_.literal = v;
   return n;
 }
@@ -201,7 +237,9 @@ AstNode* make_ref(Arena& arena, const Reference& r) {
     return nullptr;
   }
   n->data_.ref = r;
-  n->data_.ref.sheet = arena.intern(r.sheet);
+  if (!InternChecked(arena, r.sheet, &n->data_.ref.sheet)) {
+    return nullptr;
+  }
   return n;
 }
 
@@ -213,7 +251,9 @@ AstNode* make_spill_ref(Arena& arena, const Reference& r) {
   // The anchor reference is structurally a single cell — `is_full_col` /
   // `is_full_row` are rejected at parse time before this factory runs.
   n->data_.spill_ref.anchor = r;
-  n->data_.spill_ref.anchor.sheet = arena.intern(r.sheet);
+  if (!InternChecked(arena, r.sheet, &n->data_.spill_ref.anchor.sheet)) {
+    return nullptr;
+  }
   n->data_.spill_ref.anchor_expr = nullptr;
   return n;
 }
@@ -236,8 +276,10 @@ AstNode* AstNode::make_ref3d_node(Arena& arena, std::string_view sheet_begin, st
   if (payload == nullptr) {
     return nullptr;
   }
-  payload->sheet_begin = arena.intern(sheet_begin);
-  payload->sheet_end = arena.intern(sheet_end);
+  if (!InternChecked(arena, sheet_begin, &payload->sheet_begin) ||
+      !InternChecked(arena, sheet_end, &payload->sheet_end)) {
+    return nullptr;
+  }
   payload->cell = cell;
   // The span endpoints carry the sheet identity; the inner cell refs are
   // always sheet-less.
@@ -273,10 +315,10 @@ AstNode* make_external_ref(Arena& arena, std::string_view path, std::string_view
   if (payload == nullptr) {
     return nullptr;
   }
-  payload->path = arena.intern(path);
-  payload->book = arena.intern(book);
-  payload->sheet = arena.intern(sheet);
-  payload->sheet_end = arena.intern(sheet_end);
+  if (!InternChecked(arena, path, &payload->path) || !InternChecked(arena, book, &payload->book) ||
+      !InternChecked(arena, sheet, &payload->sheet) || !InternChecked(arena, sheet_end, &payload->sheet_end)) {
+    return nullptr;
+  }
   payload->name = {};
   payload->cell = cell;
   // The payload's `sheet` carries the identity; the corner refs are
@@ -301,11 +343,11 @@ AstNode* make_external_name_ref(Arena& arena, std::string_view path, std::string
   if (payload == nullptr) {
     return nullptr;
   }
-  payload->path = arena.intern(path);
-  payload->book = arena.intern(book);
-  payload->sheet = arena.intern(sheet);
+  if (!InternChecked(arena, path, &payload->path) || !InternChecked(arena, book, &payload->book) ||
+      !InternChecked(arena, sheet, &payload->sheet) || !InternChecked(arena, name, &payload->name)) {
+    return nullptr;
+  }
   payload->sheet_end = {};
-  payload->name = arena.intern(name);
   payload->is_range = false;
   AstNode* n = AstNode::make_node(arena, NodeKind::ExternalRef);
   if (n == nullptr) {
@@ -321,8 +363,10 @@ AstNode* make_structured_ref(Arena& arena, std::string_view table, std::string_v
   if (n == nullptr) {
     return nullptr;
   }
-  n->data_.structured_ref.table = arena.intern(table);
-  n->data_.structured_ref.column = arena.intern(column);
+  if (!InternChecked(arena, table, &n->data_.structured_ref.table) ||
+      !InternChecked(arena, column, &n->data_.structured_ref.column)) {
+    return nullptr;
+  }
   n->data_.structured_ref.modifier = modifier;
   return n;
 }
@@ -332,17 +376,11 @@ AstNode* make_name_ref(Arena& arena, std::string_view name) {
   if (n == nullptr) {
     return nullptr;
   }
-  n->data_.name.name = arena.intern(name);
-  n->data_.name.sheet = {};
-  n->data_.name.sheet_quoted = false;
-  // `intern` returns an empty view both for empty input and for allocation
-  // failure. A non-empty source name that comes back empty therefore means
-  // the arena could not allocate; propagate that as a null node so the
-  // parser surfaces an allocation failure instead of silently minting a
-  // node whose name is empty (a different, valid-looking reference).
-  if (!name.empty() && n->data_.name.name.empty()) {
+  if (!InternChecked(arena, name, &n->data_.name.name)) {
     return nullptr;
   }
+  n->data_.name.sheet = {};
+  n->data_.name.sheet_quoted = false;
   return n;
 }
 
@@ -352,8 +390,7 @@ AstNode* make_sheet_name_ref(Arena& arena, std::string_view sheet, std::string_v
   if (n == nullptr) {
     return nullptr;
   }
-  n->data_.name.sheet = arena.intern(sheet);
-  if (n->data_.name.sheet.empty()) {
+  if (!InternChecked(arena, sheet, &n->data_.name.sheet)) {
     return nullptr;
   }
   n->data_.name.sheet_quoted = sheet_quoted;
@@ -448,11 +485,7 @@ AstNode* make_call(Arena& arena, std::string_view name, const AstNode* const* ar
   if (n == nullptr) {
     return nullptr;
   }
-  n->data_.call.name = arena.intern(name);
-  // A call always names a function, so an empty interned name for a
-  // non-empty source name signals arena allocation failure (see
-  // `make_name_ref`); propagate it as a null node.
-  if (!name.empty() && n->data_.call.name.empty()) {
+  if (!InternChecked(arena, name, &n->data_.call.name)) {
     return nullptr;
   }
   n->data_.call.args = copied;

@@ -179,6 +179,60 @@ TEST(AstNodeNameRef, StringInternedToArena) {
   EXPECT_EQ(n->as_name(), "foo");
 }
 
+TEST(AstFactories, RejectNonEmptyInternFailures) {
+  const std::string long_text(512, 'x');
+
+  Reference qualified;
+  qualified.sheet = long_text;
+  {
+    Arena arena(256, 256);
+    EXPECT_EQ(make_ref(arena, qualified), nullptr);
+  }
+  {
+    Arena arena(256, 256);
+    EXPECT_EQ(make_spill_ref(arena, qualified), nullptr);
+  }
+  {
+    Arena arena(256, 256);
+    EXPECT_EQ(make_ref3d(arena, long_text, {}, Reference{}), nullptr);
+  }
+  {
+    Arena arena(256, 256);
+    EXPECT_EQ(make_external_name_ref(arena, {}, {}, {}, long_text), nullptr);
+  }
+  {
+    Arena arena(256, 256);
+    EXPECT_EQ(make_structured_ref(arena, long_text, {}, StructuredRefModifier::None), nullptr);
+  }
+  {
+    Arena arena(256, 256);
+    EXPECT_EQ(make_literal(arena, Value::text(long_text)), nullptr);
+  }
+  {
+    Arena arena(256, 256);
+    AstNode* body = make_literal(arena, Value::number(1.0));
+    ASSERT_NE(body, nullptr);
+    const std::string_view params[] = {long_text};
+    EXPECT_EQ(make_lambda(arena, params, 1, 0, body), nullptr);
+  }
+  {
+    Arena arena(256, 256);
+    AstNode* body = make_literal(arena, Value::number(1.0));
+    ASSERT_NE(body, nullptr);
+    const std::string_view names[] = {long_text};
+    const AstNode* exprs[] = {body};
+    EXPECT_EQ(make_let_binding(arena, names, exprs, 1, body), nullptr);
+  }
+}
+
+TEST(AstFactories, EmptyInternedStringsRemainValid) {
+  Arena arena(1024, 1024);
+  EXPECT_NE(make_ref(arena, Reference{}), nullptr);
+  EXPECT_NE(make_spill_ref(arena, Reference{}), nullptr);
+  EXPECT_NE(make_structured_ref(arena, {}, {}, StructuredRefModifier::None), nullptr);
+  EXPECT_NE(make_literal(arena, Value::text("")), nullptr);
+}
+
 TEST(AstNodeUnaryOp, StoresOpAndOperand) {
   Arena a;
   AstNode* operand = make_literal(a, Value::number(3.0));

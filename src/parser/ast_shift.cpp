@@ -59,19 +59,43 @@ AstNode* MakeRefError(Arena& arena) {
 // allocation.
 const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransform& transform);
 
-// Appends the transform of `child` to `out`, setting `*changed` when it was
-// rewritten. Returns false when the transform failed.
-bool AppendTransformed(const AstNode& child, Arena& arena, const RefTransform& transform,
-                       std::vector<const AstNode*>* out, bool* changed) {
-  const AstNode* updated = TransformNode(child, arena, transform);
-  if (updated == nullptr) {
-    return false;
+// Transforms a child list once, allocating scratch only after the first
+// changed child. At that point the untouched prefix is copied from the
+// original node and each later transformed child is appended exactly once.
+// This keeps identity walks allocation-free without losing preceding siblings
+// when a change appears in the middle of a variadic node.
+template <typename ChildAt>
+bool TransformChildList(std::uint32_t count, Arena& arena, const RefTransform& transform, ChildAt child_at,
+                        std::vector<const AstNode*>* out, bool* changed) {
+  if (*changed) {
+    out->reserve(count);
   }
-  if (updated != &child) {
-    *changed = true;
+  for (std::uint32_t i = 0; i < count; ++i) {
+    const AstNode& child = child_at(i);
+    const AstNode* updated = TransformNode(child, arena, transform);
+    if (updated == nullptr) {
+      return false;
+    }
+    if (!*changed) {
+      if (updated == &child) {
+        continue;
+      }
+      *changed = true;
+      out->reserve(count);
+      for (std::uint32_t prefix = 0; prefix < i; ++prefix) {
+        out->push_back(&child_at(prefix));
+      }
+    }
+    out->push_back(updated);
   }
-  out->push_back(updated);
   return true;
+}
+
+bool SameReference(const Reference& lhs, const Reference& rhs) {
+  return lhs.sheet.data() == rhs.sheet.data() && lhs.sheet.size() == rhs.sheet.size() &&
+         lhs.sheet_quoted == rhs.sheet_quoted && lhs.col == rhs.col && lhs.row == rhs.row &&
+         lhs.col_abs == rhs.col_abs && lhs.row_abs == rhs.row_abs && lhs.is_full_col == rhs.is_full_col &&
+         lhs.is_full_row == rhs.is_full_row;
 }
 
 const AstNode* TransformRef(const AstNode& node, Arena& arena, const RefTransform& transform) {
@@ -83,9 +107,7 @@ const AstNode* TransformRef(const AstNode& node, Arena& arena, const RefTransfor
   // no-op for this reference.
   const Reference& orig = node.as_ref();
   const Reference& nr = *rewritten;
-  if (orig.sheet.data() == nr.sheet.data() && orig.sheet.size() == nr.sheet.size() &&
-      orig.sheet_quoted == nr.sheet_quoted && orig.col == nr.col && orig.row == nr.row && orig.col_abs == nr.col_abs &&
-      orig.row_abs == nr.row_abs && orig.is_full_col == nr.is_full_col && orig.is_full_row == nr.is_full_row) {
+  if (SameReference(orig, nr)) {
     return &node;
   }
   return make_ref(arena, nr);
@@ -108,19 +130,10 @@ const AstNode* TransformSpillRef(const AstNode& node, Arena& arena, const RefTra
   }
   const Reference& orig = node.as_spill_ref();
   const Reference& nr = *rewritten;
-  if (orig.sheet.data() == nr.sheet.data() && orig.sheet.size() == nr.sheet.size() &&
-      orig.sheet_quoted == nr.sheet_quoted && orig.col == nr.col && orig.row == nr.row && orig.col_abs == nr.col_abs &&
-      orig.row_abs == nr.row_abs && orig.is_full_col == nr.is_full_col && orig.is_full_row == nr.is_full_row) {
+  if (SameReference(orig, nr)) {
     return &node;
   }
   return make_spill_ref(arena, nr);
-}
-
-bool SameReference(const Reference& lhs, const Reference& rhs) {
-  return lhs.sheet.data() == rhs.sheet.data() && lhs.sheet.size() == rhs.sheet.size() &&
-         lhs.sheet_quoted == rhs.sheet_quoted && lhs.col == rhs.col && lhs.row == rhs.row &&
-         lhs.col_abs == rhs.col_abs && lhs.row_abs == rhs.row_abs && lhs.is_full_col == rhs.is_full_col &&
-         lhs.is_full_row == rhs.is_full_row;
 }
 
 const AstNode* TransformRef3D(const AstNode& node, Arena& arena, const RefTransform& transform) {
@@ -321,12 +334,11 @@ const AstNode* TransformImplicitIntersection(const AstNode& node, Arena& arena, 
 const AstNode* TransformUnion(const AstNode& node, Arena& arena, const RefTransform& transform) {
   const std::uint32_t n = node.as_union_arity();
   std::vector<const AstNode*> kids;
-  kids.reserve(n);
   bool changed = false;
-  for (std::uint32_t i = 0; i < n; ++i) {
-    if (!AppendTransformed(node.as_union_child(i), arena, transform, &kids, &changed)) {
-      return nullptr;
-    }
+  if (!TransformChildList(
+          n, arena, transform, [&](std::uint32_t i) -> const AstNode& { return node.as_union_child(i); }, &kids,
+          &changed)) {
+    return nullptr;
   }
   if (!changed) {
     return &node;
@@ -337,12 +349,11 @@ const AstNode* TransformUnion(const AstNode& node, Arena& arena, const RefTransf
 const AstNode* TransformCall(const AstNode& node, Arena& arena, const RefTransform& transform) {
   const std::uint32_t n = node.as_call_arity();
   std::vector<const AstNode*> args;
-  args.reserve(n);
   bool changed = false;
-  for (std::uint32_t i = 0; i < n; ++i) {
-    if (!AppendTransformed(node.as_call_arg(i), arena, transform, &args, &changed)) {
-      return nullptr;
-    }
+  if (!TransformChildList(
+          n, arena, transform, [&](std::uint32_t i) -> const AstNode& { return node.as_call_arg(i); }, &args,
+          &changed)) {
+    return nullptr;
   }
   if (!changed) {
     return &node;
@@ -355,14 +366,12 @@ const AstNode* TransformArrayLiteral(const AstNode& node, Arena& arena, const Re
   const std::uint32_t cols = node.as_array_cols();
   const std::uint32_t total = rows * cols;
   std::vector<const AstNode*> elems;
-  elems.reserve(total);
   bool changed = false;
-  for (std::uint32_t r = 0; r < rows; ++r) {
-    for (std::uint32_t c = 0; c < cols; ++c) {
-      if (!AppendTransformed(node.as_array_element(r, c), arena, transform, &elems, &changed)) {
-        return nullptr;
-      }
-    }
+  if (!TransformChildList(
+          total, arena, transform,
+          [&](std::uint32_t i) -> const AstNode& { return node.as_array_element(i / cols, i % cols); }, &elems,
+          &changed)) {
+    return nullptr;
   }
   if (!changed) {
     return &node;
@@ -392,16 +401,12 @@ const AstNode* TransformLambda(const AstNode& node, Arena& arena, const RefTrans
 
 const AstNode* TransformLet(const AstNode& node, Arena& arena, const RefTransform& transform) {
   const std::uint32_t n = node.as_let_binding_count();
-  std::vector<std::string_view> names;
-  names.reserve(n);
   std::vector<const AstNode*> exprs;
-  exprs.reserve(n);
   bool changed = false;
-  for (std::uint32_t i = 0; i < n; ++i) {
-    if (!AppendTransformed(node.as_let_binding_expr(i), arena, transform, &exprs, &changed)) {
-      return nullptr;
-    }
-    names.push_back(node.as_let_binding_name(i));
+  if (!TransformChildList(
+          n, arena, transform, [&](std::uint32_t i) -> const AstNode& { return node.as_let_binding_expr(i); }, &exprs,
+          &changed)) {
+    return nullptr;
   }
   const AstNode* body = TransformNode(node.as_let_body(), arena, transform);
   if (body == nullptr) {
@@ -409,6 +414,17 @@ const AstNode* TransformLet(const AstNode& node, Arena& arena, const RefTransfor
   }
   if (!changed && body == &node.as_let_body()) {
     return &node;
+  }
+  std::vector<std::string_view> names;
+  names.reserve(n);
+  for (std::uint32_t i = 0; i < n; ++i) {
+    names.push_back(node.as_let_binding_name(i));
+  }
+  if (!changed) {
+    exprs.reserve(n);
+    for (std::uint32_t i = 0; i < n; ++i) {
+      exprs.push_back(&node.as_let_binding_expr(i));
+    }
   }
   return make_let_binding(arena, names.data(), exprs.data(), n, const_cast<AstNode*>(body));
 }
@@ -425,12 +441,11 @@ const AstNode* TransformLambdaCall(const AstNode& node, Arena& arena, const RefT
   }
   const std::uint32_t n = node.as_lambda_call_arity();
   std::vector<const AstNode*> args;
-  args.reserve(n);
   bool changed = (callee != &node.as_lambda_call_callee());
-  for (std::uint32_t i = 0; i < n; ++i) {
-    if (!AppendTransformed(node.as_lambda_call_arg(i), arena, transform, &args, &changed)) {
-      return nullptr;
-    }
+  if (!TransformChildList(
+          n, arena, transform, [&](std::uint32_t i) -> const AstNode& { return node.as_lambda_call_arg(i); }, &args,
+          &changed)) {
+    return nullptr;
   }
   if (!changed) {
     return &node;
