@@ -183,13 +183,13 @@ export function registerCellGeometryDisplay(Module, test) {
     });
   });
 
-  test('formatValue picks fraction candidates in binary64, as native does', () => {
+  test('formatValue shares native fraction rounding and convergent selection', () => {
     withWorkbook(Module, (wb) => {
-      // A wider long double keeps 0.015 * 100 below 1.5 and picks 1/100, 4/1000 and 3/5.
+      // Fixed denominators round binary64 products; variable denominators keep the last bounded convergent.
       const cases = [
         [0.015, '?/100', '2/100'],
         [0.0045, '?/1000', '5/1000'],
-        [0.6125, '?/?', '5/8'],
+        [0.6125, '?/?', '3/5'],
       ];
       for (const [number, format, expected] of cases) {
         const out = wb.formatValue({ kind: 1, number, boolean: 0, text: '', errorCode: 0 }, format);
