@@ -8,6 +8,7 @@
 #include "sheet.h"
 #include "sheet_layout_edit.h"
 #include "styles.h"
+#include "theme.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -42,9 +43,15 @@ EffectiveStyle effective_style(const Workbook& wb, const Sheet& sheet, std::uint
   out.xf_index = choice.xf_index < styles.cell_xfs.size() ? choice.xf_index : 0U;
   const CellXf xf = styles.cell_xfs.empty() ? CellXf{} : styles.cell_xfs[out.xf_index];
 
-  const LoadedTheme theme = wb.load_theme();
+  std::optional<LoadedTheme> theme;
   const auto resolve = [&](const ColorSpec& spec, ColorContext context) {
-    return resolve_color(spec, theme.theme, theme.source, styles.indexed_colors, context);
+    if (spec.kind != ColorSpec::Kind::kTheme) {
+      return resolve_color(spec, default_theme(), ThemeSource::kDefault, styles.indexed_colors, context);
+    }
+    if (!theme) {
+      theme.emplace(wb.load_theme());
+    }
+    return resolve_color(spec, theme->theme, theme->source, styles.indexed_colors, context);
   };
 
   out.font_index = xf.font_index < styles.fonts.size() ? xf.font_index : 0U;

@@ -12,6 +12,7 @@
 #include "io/ooxml_writer.h"
 #include "io/styles_reader.h"
 #include "io/styles_writer.h"
+#include "passthrough_part.h"
 #include "styles.h"
 #include "theme.h"
 #include "workbook.h"
@@ -157,6 +158,41 @@ TEST(StyleResolve, ReportsFormatProtectionAndColours) {
   EXPECT_FALSE(plain.hidden);
   EXPECT_EQ(plain.fill_background.argb, 0xFFFFFFFFU);
   EXPECT_EQ(plain.border_colors[0].resolution, ColorResolution::kAutoContext);
+}
+
+TEST(StyleResolve, LiteralAndUnparseableThemeColorsKeepTheirResolution) {
+  constexpr const char* kThemeRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
+  constexpr const char* kThemeContentType = "application/vnd.openxmlformats-officedocument.theme+xml";
+  const std::string malformed_theme = "<a:theme>not a colour scheme</a:theme>";
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(
+      PassthroughPart("xl/theme/theme1.xml", kThemeContentType,
+                      std::vector<std::uint8_t>(malformed_theme.begin(), malformed_theme.end())))));
+  wb.add_workbook_relationship(kThemeRel, "xl/theme/theme1.xml");
+
+  StylesTable& styles = wb.mutable_styles();
+  styles.cell_xfs.assign(3U, CellXf{});
+  FontRecord theme_font;
+  theme_font.color.kind = ColorSpec::Kind::kTheme;
+  theme_font.color.theme = 1U;
+  styles.fonts.push_back(theme_font);
+  FontRecord rgb_font;
+  rgb_font.color = RgbSpec(0xFF123456U);
+  styles.fonts.push_back(rgb_font);
+  styles.cell_xfs[1].font_index = 1U;
+  styles.cell_xfs[2].font_index = 2U;
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_xf_index(0U, 0U, 0U, 1U)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(2.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_xf_index(0U, 1U, 0U, 2U)));
+
+  const EffectiveStyle themed = effective_style(wb, wb.sheet(0U), 0U, 0U);
+  EXPECT_EQ(themed.font_color.argb, default_theme().colors[0]);
+  EXPECT_EQ(themed.font_color.resolution, ColorResolution::kThemeUnparseable);
+
+  const EffectiveStyle literal = effective_style(wb, wb.sheet(0U), 1U, 0U);
+  EXPECT_EQ(literal.font_color.argb, 0xFF123456U);
+  EXPECT_EQ(literal.font_color.resolution, ColorResolution::kExact);
 }
 
 // ---------------------------------------------------------------------------
