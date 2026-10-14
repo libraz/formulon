@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -20,6 +21,7 @@
 #include "io/xlsb/reader.h"
 #include "sheet.h"
 #include "sheet_layout_edit.h"
+#include "styles.h"
 #include "workbook.h"
 
 #ifndef FORMULON_FIXTURES_DIR
@@ -691,6 +693,102 @@ TEST(ChartData, WholeColumnCacheOfAnUnresolvedSourceIsTrimmed) {
   EXPECT_EQ(DataText(ResolveSynthetic(wb, model)), "cats=1,2,3(gen)|<null>|2 0 5");
 }
 
+TEST(ChartData, RejectsSparseCacheWithOutOfGridIndex) {
+  const Workbook wb = GridBook();
+  ChartModel model = OneSeries(ChartPlotType::kBar, "", "[1]Data!$B$1");
+  ChartDataSource& val = model.plots[0].series[0].val;
+  val.point_count = 1U;
+  val.cache.push_back(ChartValue{std::numeric_limits<std::uint32_t>::max(), ChartValue::Kind::kNumber, 7.0, "", ""});
+
+  auto data = resolve_chart_data(wb, 0, model);
+  ASSERT_FALSE(static_cast<bool>(data));
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecResourceLimit);
+}
+
+TEST(ChartData, RejectsOutOfGridPointFromXmlLiteralBeforeDenseAllocation) {
+  const Workbook wb = GridBook();
+  const std::string xml =
+      "<?xml version=\"1.0\"?><c:chartSpace xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\">"
+      "<c:chart><c:plotArea><c:barChart><c:ser><c:idx val=\"0\"/><c:order val=\"0\"/>"
+      "<c:val><c:numLit><c:ptCount val=\"1\"/><c:pt idx=\"4294967295\"><c:v>7</c:v></c:pt>"
+      "</c:numLit></c:val></c:ser></c:barChart></c:plotArea></c:chart></c:chartSpace>";
+  pugi::xml_document doc;
+  auto parsed = parse_chart_part(std::vector<std::uint8_t>(xml.begin(), xml.end()), doc);
+  ASSERT_TRUE(static_cast<bool>(parsed));
+  auto model = read_chart_model(wb, doc);
+  ASSERT_TRUE(static_cast<bool>(model));
+
+  auto data = resolve_chart_data(wb, 0U, model.value());
+  ASSERT_FALSE(static_cast<bool>(data));
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecResourceLimit);
+}
+
+TEST(ChartData, RejectsOutOfGridPointFromXmlCacheBeforeDenseAllocation) {
+  const Workbook wb = GridBook();
+  const std::string xml =
+      "<?xml version=\"1.0\"?><c:chartSpace xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\">"
+      "<c:chart><c:plotArea><c:barChart><c:ser><c:idx val=\"0\"/><c:order val=\"0\"/>"
+      "<c:val><c:numRef><c:f>[1]Data!$B$1</c:f><c:numCache><c:ptCount val=\"1\"/>"
+      "<c:pt idx=\"4294967295\"><c:v>7</c:v></c:pt></c:numCache></c:numRef></c:val>"
+      "</c:ser></c:barChart></c:plotArea></c:chart></c:chartSpace>";
+  pugi::xml_document doc;
+  auto parsed = parse_chart_part(std::vector<std::uint8_t>(xml.begin(), xml.end()), doc);
+  ASSERT_TRUE(static_cast<bool>(parsed));
+  auto model = read_chart_model(wb, doc);
+  ASSERT_TRUE(static_cast<bool>(model));
+
+  auto data = resolve_chart_data(wb, 0U, model.value());
+  ASSERT_FALSE(static_cast<bool>(data));
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecResourceLimit);
+}
+
+TEST(ChartData, RejectsRectangularReferenceBeforePositionAllocation) {
+  const Workbook wb = GridBook();
+  // 16,383 columns by 1,000 rows exceeds the shared expansion budget. The
+  // source must fail before positions.reserve() or the nested walk.
+  ChartModel model = OneSeries(ChartPlotType::kBar, "", "Sheet1!$A$1:$XFC$1000");
+  auto data = resolve_chart_data(wb, 0U, model);
+  ASSERT_FALSE(static_cast<bool>(data));
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecResourceLimit);
+}
+
+TEST(ChartData, RejectsExcessiveSparsePointCountBeforeAllocation) {
+  const Workbook wb = GridBook();
+  ChartModel model = OneSeries(ChartPlotType::kBar, "", "[1]Data!$B$1");
+  ChartDataSource& val = model.plots[0].series[0].val;
+  val.point_count = Sheet::kMaxRows + 1U;
+
+  auto data = resolve_chart_data(wb, 0, model);
+  ASSERT_FALSE(static_cast<bool>(data));
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecResourceLimit);
+}
+
+TEST(ChartData, RejectsMultiLevelCacheBeyondCellBudgetBeforeAllocation) {
+  const Workbook wb = GridBook();
+  ChartModel model = OneSeries(ChartPlotType::kBar, "[1]Data!$A$1", "Sheet1!$B$2:$B$3");
+  ChartDataSource& cat = model.plots[0].series[0].cat;
+  cat.point_count = Sheet::kMaxRows - 1U;
+  cat.cache_levels.assign(10U, {});
+
+  auto data = resolve_chart_data(wb, 0, model);
+  ASSERT_FALSE(static_cast<bool>(data));
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecResourceLimit);
+}
+
+TEST(ChartData, DenseCacheScansUnsortedIndicesWithinExcelBounds) {
+  const Workbook wb = GridBook();
+  ChartModel model = OneSeries(ChartPlotType::kBar, "", "[1]Data!$B$1");
+  ChartDataSource& val = model.plots[0].series[0].val;
+  val.point_count = 2U;
+  val.cache.push_back(ChartValue{2U, ChartValue::Kind::kNumber, 5.0, "", ""});
+  val.cache.push_back(ChartValue{0U, ChartValue::Kind::kNumber, 2.0, "", ""});
+
+  auto data = resolve_chart_data(wb, 0, model);
+  ASSERT_TRUE(static_cast<bool>(data));
+  ASSERT_EQ(data.value().series.size(), 1U);
+  EXPECT_EQ(SeriesText(data.value().series[0]), "<null>|2 0 5");
+}
+
 TEST(ChartData, ResolvedRangesKeepTheReferencedExtent) {
   const Workbook wb = GridBook();
   ChartModel model = OneSeries(ChartPlotType::kBar, "Sheet1!$A$2:$A$3", "Sheet1!$B:$B");
@@ -725,6 +823,29 @@ TEST(ChartData, BubbleSizesAndXYDomain) {
   ASSERT_EQ(data.series.size(), 1U);
   EXPECT_EQ(SeriesText(data.series[0]), "<null>|1:3 2:4");
   EXPECT_EQ(data.series[0].sizes, (std::vector<double>{1, 2}));
+}
+
+TEST(ChartData, XYSeriesCarriesTheXAndYFormatCodes) {
+  Workbook wb = GridBook();
+  CellXf pct;
+  pct.num_fmt_id = 10;
+  pct.apply_number_format = true;
+  wb.mutable_styles().cell_xfs.push_back(pct);
+  const auto xf = static_cast<std::uint32_t>(wb.styles().cell_xfs.size() - 1);
+  wb.sheet(0).set_cell_xf_index(1, 1, xf);
+  wb.sheet(0).set_cell_xf_index(2, 1, xf);
+  ChartModel model;
+  ChartPlot plot;
+  plot.type = ChartPlotType::kScatter;
+  ChartSeries s;
+  s.x = Ref("Sheet1!$B$2:$B$3");
+  s.y = Ref("Sheet1!$C$2:$C$3");
+  plot.series.push_back(std::move(s));
+  model.plots.push_back(std::move(plot));
+  const ChartData data = ResolveSynthetic(wb, model);
+  ASSERT_EQ(data.series.size(), 1U);
+  EXPECT_EQ(data.series[0].x_format_code, "0.00%");
+  EXPECT_EQ(data.series[0].format_code, "General");
 }
 
 TEST(ChartData, TitleAndAxisTitleTexts) {

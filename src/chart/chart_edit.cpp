@@ -20,6 +20,7 @@
 #include "drawing/drawing_edit.h"
 #include "drawing/drawing_xml.h"
 #include "eval/function_registry.h"
+#include "io/ooxml/package_validator.h"
 #include "io/ooxml/part_dom.h"
 #include "io/ooxml_defs.h"
 #include "io/xml_escape.h"
@@ -80,6 +81,9 @@ constexpr const char* kRunOrder[] = {"ln", "noFill", "solidFill", "gradFill", "b
     "effectLst", "effectDag", "highlight", "uLnTx", "uLn", "uFillTx", "uFill", "latin", "ea", "cs", "sym",
     "hlinkClick", "hlinkMouseOver", "rtl", "extLst", nullptr};
 constexpr const char* kTextOrder[] = {"bodyPr", "lstStyle", "p", nullptr};
+// `c:symbol` values by `ChartMarkerSymbol`, up to the last one a marker can be written with.
+constexpr const char* kSymbols[] = {"none", "auto", "circle", "square", "diamond", "triangle", "x", "star",
+    "plus", "dot", "dash"};
 constexpr const char* kFills[] = {"noFill", "solidFill", "gradFill", "blipFill", "pattFill", "grpFill", nullptr};
 // clang-format on
 
@@ -474,8 +478,42 @@ xml_node fragment(pugi::xml_document& frag, const std::string& xml) {
   return load_xml(frag, xml) ? frag.first_child() : xml_node();
 }
 
-/// A chart part from the insert template, for its default elements.
-Expected<void, Error> template_doc(const Workbook& wb, ChartInsertKind kind, ChartGrouping grouping,
+/// A chart's style parts as marker settling needs them: Excel completes marker outlines only in a chart with
+/// a chart style part, in the colours of its colour style.
+struct Palette {
+  bool styled = false;
+  pugi::xml_document colors;
+};
+
+void load_palette(const Workbook& wb, const std::string& chart_path, Palette& out) {
+  const PassthroughPart* rels = io::ooxml::find_passthrough_part(wb, io::ooxml::rels_path_for_part(chart_path));
+  pugi::xml_document doc;
+  std::string colors;
+  if (rels != nullptr && doc.load_buffer(rels->bytes.data(), rels->bytes.size())) {
+    for (const xml_node& r : kids(doc.document_element(), "Relationship")) {
+      const std::string_view type = r.attribute("Type").value();
+      const auto ends = [&](std::string_view tail) {
+        return type.size() >= tail.size() && type.substr(type.size() - tail.size()) == tail;
+      };
+      if (ends("/chartStyle")) {
+        out.styled = true;
+      } else if (ends("/chartColorStyle")) {
+        auto path = io::ooxml::resolve_relative_path(io::ooxml::dir_of(chart_path), r.attribute("Target").value());
+        const PassthroughPart* part = path ? io::ooxml::find_passthrough_part(wb, path.value()) : nullptr;
+        if (part != nullptr) {
+          colors.assign(part->bytes.begin(), part->bytes.end());
+        }
+      }
+    }
+  }
+  if (colors.empty() || !load_xml(out.colors, colors) ||
+      std::string_view(out.colors.document_element().attribute("meth").value()) != "cycle") {
+    load_xml(out.colors, kDefaultChartColorStyle);
+  }
+}
+
+/// A chart part from the insert template, for its default elements, in the colours of chart `c`.
+Expected<void, Error> template_doc(const Workbook& wb, const Chart& c, ChartInsertKind kind, ChartGrouping grouping,
                                    const std::optional<std::string>& title, ChartLegendPosition legend,
                                    ChartSplit split, pugi::xml_document& out) {
   if (split.series.empty()) {
@@ -486,7 +524,9 @@ Expected<void, Error> template_doc(const Workbook& wb, ChartInsertKind kind, Cha
   options.grouping = grouping;
   options.title = title;
   options.legend = legend;
-  ASSIGN_OR_RETURN(std::string xml, build_chart_xml(wb, options, split));
+  Palette palette;
+  load_palette(wb, c.path, palette);
+  ASSIGN_OR_RETURN(std::string xml, build_chart_xml(wb, options, split, palette.colors.document_element()));
   if (!load_xml(out, xml)) {
     return unparseable("chart: template does not parse");
   }
@@ -617,9 +657,8 @@ Expected<void, Error> apply_marker(xml_node owner, Order order, const ChartPatch
   const ChartMarkerPatch& m = patch.value;
   xml_node node = ensure(owner, "c:marker", order);
   if (m.symbol.has_value()) {
-    static const char* const kSymbols[] = {"none", "auto", "circle", "square", "diamond", "triangle"};
     const int s = static_cast<int>(*m.symbol);
-    if (s < 0 || s > 5) {
+    if (s < 0 || s > static_cast<int>(ChartMarkerSymbol::kDash)) {
       return bad_arg("chart: marker symbol must be a named shape");
     }
     put_val(node, "c:symbol", kMarkerOrder, kSymbols[s]);
@@ -635,32 +674,72 @@ Expected<void, Error> apply_marker(xml_node owner, Order order, const ChartPatch
   return apply_shape(node, kMarkerOrder, m.fill, m.line);
 }
 
-/// Completes a series marker with a named symbol to the form Excel re-saves unchanged: size 5 when it has
-/// none, and with a fill and an outline, a 0.75 pt outline width and the series' accent colour.
-void settle_marker(xml_node ser) {
-  xml_node m = child_local(ser, "marker");
-  const std::string_view symbol = child_local(m, "symbol").attribute("val").value();
-  if (symbol.empty() || symbol == "none" || symbol == "auto") {
+// Symbols Excel gives an automatic marker, by series idx.
+constexpr ChartMarkerSymbol kAutoSymbols[] = {
+    ChartMarkerSymbol::kDiamond, ChartMarkerSymbol::kSquare, ChartMarkerSymbol::kTriangle,
+    ChartMarkerSymbol::kX,       ChartMarkerSymbol::kStar,   ChartMarkerSymbol::kCircle,
+    ChartMarkerSymbol::kPlus,    ChartMarkerSymbol::kDot,    ChartMarkerSymbol::kDash};
+
+/// Appends the automatic colour of series `idx` to `fill`.
+void append_series_color(xml_node fill, const Palette& p, std::uint32_t idx) {
+  pugi::xml_document frag;
+  if (const xml_node clr = fragment(frag, chart_cycle_color(p.colors.document_element(), idx))) {
+    fill.append_copy(clr);
+  }
+}
+
+/// Completes the marker of `owner` (series `ser` or one of its points) to the form Excel re-saves unchanged.
+/// An automatic symbol becomes the series' own (a series' by idx); a hidden marker keeps only its symbol; a
+/// shown one takes size 5 and, in a styled chart, a fill and a 0.75 pt outline in the series colour where unset.
+void settle_marker(xml_node ser, xml_node owner, const Palette& p) {
+  xml_node m = child_local(owner, "marker");
+  if (!m) {
+    return;
+  }
+  const std::uint32_t idx = val_u(ser, "idx");
+  std::string symbol = child_local(m, "symbol").attribute("val").value();
+  if (symbol.empty() || symbol == "auto") {
+    symbol = owner == ser ? "" : child_local(child_local(ser, "marker"), "symbol").attribute("val").value();
+    if (symbol.empty() || symbol == "auto") {
+      symbol = kSymbols[static_cast<int>(kAutoSymbols[idx % 9U])];
+    }
+    put_val(m, "c:symbol", kMarkerOrder, symbol);
+  }
+  if (symbol == "none") {
+    for (xml_node n = m.first_child(); n;) {
+      const xml_node next = n.next_sibling();
+      if (local_name(n) != "symbol") {
+        m.remove_child(n);
+      }
+      n = next;
+    }
     return;
   }
   if (!child_local(m, "size")) {
     put_val(m, "c:size", kMarkerOrder, "5");
   }
-  const xml_node sp = child_local(m, "spPr");
-  xml_node ln = child_local(sp, "ln");
+  if (!p.styled) {
+    return;
+  }
+  // A styled chart keeps its style part only while every shown marker has both a fill and an outline.
+  const bool fresh = !child_local(m, "spPr");
+  xml_node sp = ensure(m, "c:spPr", kMarkerOrder);
+  if (fresh) {
+    sp.append_child("a:effectLst");
+  }
   const auto filled = [](const xml_node& n) {
     return std::any_of(std::begin(kFills), std::end(kFills) - 1,
                        [&](const char* f) { return static_cast<bool>(child_local(n, f)); });
   };
-  if (!ln || !filled(sp)) {
-    return;
+  if (!filled(sp)) {
+    append_series_color(ensure(sp, "a:solidFill", kShapeOrder), p, idx);
   }
+  xml_node ln = ensure(sp, "a:ln", kShapeOrder);
   if (!ln.attribute("w")) {
     ln.prepend_attribute("w").set_value("9525");
   }
   if (!filled(ln)) {
-    set_attr(ensure(ln, "a:solidFill", kLineOrder).append_child("a:schemeClr"), "val",
-             "accent" + std::to_string(val_u(ser, "idx") % 6U + 1U));
+    append_series_color(ensure(ln, "a:solidFill", kLineOrder), p, idx);
   }
 }
 
@@ -1014,7 +1093,9 @@ Expected<void, Error> patch_series(const Workbook& wb, const Chart& c, xml_node 
   RETURN_IF_ERROR(apply_shape(ser, kSerOrder, marker_filled(plot) ? ChartFillPatch{} : p.fill, p.line));
   RETURN_IF_ERROR(apply_marker(ser, kSerOrder, p.marker));
   if (p.marker.is_set()) {
-    settle_marker(ser);
+    Palette palette;
+    load_palette(wb, c.path, palette);
+    settle_marker(ser, ser, palette);
   }
   if (p.smooth.has_value()) {
     put_val(ser, "c:smooth", kSerOrder, *p.smooth ? "1" : "0");
@@ -1022,9 +1103,9 @@ Expected<void, Error> patch_series(const Workbook& wb, const Chart& c, xml_node 
   return apply_labels(ser, is_pie(plot), c.lang(), p.labels);
 }
 
-std::string accent_sppr(std::uint32_t i) {
-  return "<c:spPr><a:solidFill><a:schemeClr val=\"accent" + std::to_string(i % 6U + 1U) +
-         "\"/></a:solidFill><a:ln><a:noFill/></a:ln><a:effectLst/></c:spPr>";
+std::string accent_sppr(const Palette& p, std::uint32_t i) {
+  return "<c:spPr><a:solidFill>" + chart_cycle_color(p.colors.document_element(), i) +
+         "</a:solidFill><a:ln><a:noFill/></a:ln><a:effectLst/></c:spPr>";
 }
 
 /// Inserts a copy of `src` among `ser`'s `c:dPt` in idx order.
@@ -1047,7 +1128,7 @@ xml_node find_point(const xml_node& ser, std::uint32_t idx) {
 }
 
 /// Excel's column vary-colours form: per-point accent fills replace the series fill.
-void vary_bar(xml_node plot, bool on) {
+void vary_bar(xml_node plot, bool on, const Palette& palette) {
   for (xml_node ser : plot_series(plot)) {
     if (on) {
       drop(ser, "spPr");
@@ -1059,8 +1140,8 @@ void vary_bar(xml_node plot, bool on) {
         pugi::xml_document frag;
         insert_point(ser,
                      fragment(frag, "<c:dPt><c:idx val=\"" + std::to_string(p) +
-                                        "\"/><c:invertIfNegative val=\"0\"/><c:bubble3D val=\"0\"/>" + accent_sppr(p) +
-                                        "</c:dPt>"),
+                                        "\"/><c:invertIfNegative val=\"0\"/><c:bubble3D val=\"0\"/>" +
+                                        accent_sppr(palette, p) + "</c:dPt>"),
                      p);
       }
       continue;
@@ -1074,7 +1155,7 @@ void vary_bar(xml_node plot, bool on) {
     }
     if (!child_local(ser, "spPr")) {
       pugi::xml_document frag;
-      copy_at(ser, fragment(frag, accent_sppr(val_u(ser, "idx"))), kSerOrder);
+      copy_at(ser, fragment(frag, accent_sppr(palette, val_u(ser, "idx"))), kSerOrder);
     }
   }
 }
@@ -1113,7 +1194,7 @@ Expected<void, Error> patch_source(const Workbook& wb, Chart& c, std::string_vie
   ASSIGN_OR_RETURN(ChartSplit split, split_chart_source(wb, c.host, source, static_cast<ChartInsertKind>(kind),
                                                         direction, header_row, header_column));
   pugi::xml_document t;
-  RETURN_IF_ERROR(template_doc(wb, static_cast<ChartInsertKind>(kind), grouping_of(plot), std::nullopt,
+  RETURN_IF_ERROR(template_doc(wb, c, static_cast<ChartInsertKind>(kind), grouping_of(plot), std::nullopt,
                                ChartLegendPosition::kRight, split, t));
   patch_series_filter(c, {});
   RETURN_IF_ERROR(patch_category_filter(wb, c, {}));
@@ -1204,6 +1285,162 @@ void replace_ln(xml_node sp, const xml_node& ln) {
   copy_at(sp, ln, kShapeOrder);
 }
 
+/// The width of the line template's automatic series line.
+constexpr std::string_view kAutoLineWidth = "28575";
+
+/// Whether two subtrees match by local names, attribute values and element children, walked without recursion.
+bool same_tree(const xml_node& a, const xml_node& b) {
+  std::vector<std::pair<xml_node, xml_node>> todo{{a, b}};
+  while (!todo.empty()) {
+    const auto [x, y] = todo.back();
+    todo.pop_back();
+    if (local_name(x) != local_name(y)) {
+      return false;
+    }
+    pugi::xml_attribute ax = x.first_attribute();
+    pugi::xml_attribute ay = y.first_attribute();
+    for (; ax && ay; ax = ax.next_attribute(), ay = ay.next_attribute()) {
+      if (std::string_view(ax.name()) != ay.name() || std::string_view(ax.value()) != ay.value()) {
+        return false;
+      }
+    }
+    if (ax || ay) {
+      return false;
+    }
+    const auto next = [](xml_node n) {
+      do {
+        n = n.next_sibling();
+      } while (n && n.type() != pugi::node_element);
+      return n;
+    };
+    xml_node cx = first_element(x);
+    xml_node cy = first_element(y);
+    for (; cx && cy; cx = next(cx), cy = next(cy)) {
+      todo.emplace_back(cx, cy);
+    }
+    if (cx || cy) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Replaces the automatic outline `ln` of bar / area shape properties `sp` with line `src` less what the automatic
+/// line sets: its cap and join, its width, and its colour when that is the series' automatic one.
+void outline_from_line(xml_node sp, xml_node ln, const xml_node& src) {
+  xml_node out = sp.insert_copy_after(src, ln);
+  sp.remove_child(ln);
+  out.remove_attribute("cap");
+  for (const char* join : {"round", "bevel", "miter"}) {
+    drop(out, join);
+  }
+  if (std::string_view(out.attribute("w").value()) == kAutoLineWidth) {
+    out.remove_attribute("w");
+  }
+  const xml_node colour = child_local(out, "solidFill");
+  const xml_node automatic = child_local(sp, "solidFill");
+  if (colour && automatic && same_tree(colour, automatic)) {
+    out.insert_child_before("a:noFill", colour);
+    out.remove_child(colour);
+  }
+}
+
+/// Replaces the automatic line `ln` of a line series with visible outline `src`, drawn with the automatic line's
+/// round cap and join and, when it states none, its width.
+void line_from_outline(xml_node ln, const xml_node& src) {
+  xml_node sp = ln.parent();
+  xml_node out = sp.insert_copy_after(src, ln);
+  sp.remove_child(ln);
+  if (!out.attribute("w")) {
+    out.prepend_attribute("w").set_value(std::string(kAutoLineWidth).c_str());
+  }
+  if (!out.attribute("cap")) {
+    out.insert_attribute_after("cap", out.attribute("w"));
+  }
+  out.attribute("cap").set_value("rnd");
+  for (const char* join : {"bevel", "miter"}) {
+    drop(out, join);
+  }
+  ensure(out, "a:round", kLineOrder);
+}
+
+/// Sets `to`'s series line as Excel changes type. Between line and bar / area types an explicit line becomes the
+/// outline and a visible outline the line; otherwise a bar or area series keeps the width of a hidden source line
+/// and has none, a line series from a scatter plot takes 1.5 pt, and one from an area plot is smoothed.
+void carry_series_line(const xml_node& from, xml_node to, int old_kind, int new_kind) {
+  if (new_kind == static_cast<int>(ChartInsertKind::kLine) && old_kind == static_cast<int>(ChartInsertKind::kArea)) {
+    put_val(to, "c:smooth", kSerOrder, "1");
+  }
+  xml_node ln = child_local(child_local(to, "spPr"), "ln");
+  if (!ln) {
+    return;
+  }
+  const xml_node src = child_local(child_local(from, "spPr"), "ln");
+  const Family before = family_of(old_kind);
+  const Family after = family_of(new_kind);
+  if (after == Family::kFill && before == Family::kLine) {
+    if (src) {
+      outline_from_line(child_local(to, "spPr"), ln, src);
+    }
+  } else if (after == Family::kFill) {
+    ln.remove_attribute("w");
+    if (src && child_local(src, "noFill") && src.attribute("w")) {
+      ln.prepend_attribute("w").set_value(src.attribute("w").value());
+    }
+  } else if (after == Family::kLine && before == Family::kFill) {
+    if (src && child_local(src, "solidFill")) {
+      line_from_outline(ln, src);
+    }
+  } else if (new_kind == static_cast<int>(ChartInsertKind::kLine) &&
+             old_kind == static_cast<int>(ChartInsertKind::kScatter)) {
+    set_attr(ln, "w", "19050");
+  }
+}
+
+/// Carries `from`'s points to `to` as Excel changes type: a line or scatter point takes the series' marker and
+/// line; a bar or area point keeps its shape properties, or from a line or scatter plot takes the series fill
+/// and keeps its own line.
+void convert_points(const xml_node& from, xml_node to, Family old_family, Family new_family, bool bar) {
+  const xml_node series_sp = child_local(to, "spPr");
+  for (const xml_node& d : kids(from, "dPt")) {
+    const std::uint32_t idx = val_u(d, "idx");
+    pugi::xml_document frag;
+    xml_node p = fragment(frag, "<c:dPt><c:idx val=\"" + std::to_string(idx) + "\"/>" +
+                                    (bar ? "<c:invertIfNegative val=\"0\"/>" : "") + "<c:bubble3D val=\"0\"/></c:dPt>");
+    if (new_family != Family::kFill) {
+      if (const xml_node marker = child_local(to, "marker")) {
+        copy_at(p, marker, kPointOrder);
+      }
+      xml_node sp = p.append_child("c:spPr");
+      if (const xml_node ln = child_local(series_sp, "ln")) {
+        sp.append_copy(ln);
+      }
+      sp.append_child("a:effectLst");
+    } else if (old_family == Family::kFill) {
+      if (const xml_node sp = child_local(d, "spPr")) {
+        copy_at(p, sp, kPointOrder);
+      }
+    } else if (old_family != Family::kLine || child_local(d, "spPr")) {
+      // A line point without shape properties of its own stays bare.
+      xml_node sp = p.append_child("c:spPr");
+      for (xml_node e = series_sp.first_child(); e; e = e.next_sibling()) {
+        if (rank(kFills, local_name(e)) >= 0) {
+          sp.append_copy(e);
+        }
+      }
+      const xml_node own = child_local(child_local(d, "spPr"), "ln");
+      if (const xml_node ln = own ? own : child_local(series_sp, "ln")) {
+        sp.append_copy(ln);
+      }
+      sp.append_child("a:effectLst");
+    }
+    if (const xml_node ext = child_local(d, "extLst")) {
+      copy_at(p, ext, kPointOrder);
+    }
+    insert_point(to, p, idx);
+  }
+}
+
 std::vector<xml_node> axes_of(const Chart& c, const std::vector<std::uint32_t>& ids) {
   std::vector<xml_node> out;
   for (const std::uint32_t id : ids) {
@@ -1288,7 +1525,7 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
     split.series.push_back(std::move(refs));
   }
   pugi::xml_document t;
-  RETURN_IF_ERROR(template_doc(wb, kind, grouping, std::nullopt, ChartLegendPosition::kRight, split, t));
+  RETURN_IF_ERROR(template_doc(wb, c, kind, grouping, std::nullopt, ChartLegendPosition::kRight, split, t));
   xml_node tplot = template_plot(t);
   const std::vector<xml_node> fresh = kids(tplot, "ser");
   for (std::size_t i = 0; i < sers.size() && i < fresh.size(); ++i) {
@@ -1312,8 +1549,14 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
     if (const xml_node ext = child_local(from, "extLst")) {
       copy_at(to, ext, kSerOrder);
     }
-    if (const auto color = main_color(from, family_of(old))) {
+    // Between line and bar / area types Excel re-derives the series colour.
+    const bool line_fill_swap = (family_of(old) == Family::kLine && family_of(k) == Family::kFill) ||
+                                (family_of(old) == Family::kFill && family_of(k) == Family::kLine);
+    if (const auto color = main_color(from, family_of(old)); color && !line_fill_swap) {
       set_main_color(to, family_of(k), *color);
+    }
+    if (!old_ring) {
+      carry_series_line(from, to, old, k);
     }
     // As Excel changes type: line formatting follows the colours between series and points; pie and doughnut swap
     // points as-is.
@@ -1328,6 +1571,8 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
       for (const xml_node& d : kids(to, "dPt")) {
         replace_ln(child_local(d, "spPr"), child_local(child_local(from, "spPr"), "ln"));
       }
+    } else if (!old_ring && !new_ring) {
+      convert_points(from, to, family_of(old), family_of(k), is_bar(tplot));
     }
   }
 
@@ -1436,7 +1681,7 @@ Expected<void, Error> patch_title(const Workbook& wb, const Chart& c, const Char
   }
   const bool text = title.kind == ChartTitleKind::kText;
   pugi::xml_document t;
-  RETURN_IF_ERROR(template_doc(wb, ChartInsertKind::kColumn, ChartGrouping::kClustered,
+  RETURN_IF_ERROR(template_doc(wb, c, ChartInsertKind::kColumn, ChartGrouping::kClustered,
                                text ? std::optional<std::string>(title.text) : std::nullopt,
                                ChartLegendPosition::kRight, {}, t));
   const xml_node from = child_local(template_chart(t), "title");
@@ -1622,7 +1867,7 @@ Expected<void, Error> set_chart_legend(Workbook& wb, std::size_t sheet, std::uin
   if (!node) {
     pugi::xml_document t;
     RETURN_IF_ERROR(
-        template_doc(wb, ChartInsertKind::kColumn, ChartGrouping::kClustered, std::nullopt, legend.position, {}, t));
+        template_doc(wb, c, ChartInsertKind::kColumn, ChartGrouping::kClustered, std::nullopt, legend.position, {}, t));
     node = copy_at(chart, child_local(template_chart(t), "legend"), kChartOrder);
   }
   static const char* const kPos[] = {"", "b", "t", "l", "r", "tr"};
@@ -1666,7 +1911,7 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
       return bad_arg("chart: an axis title needs text");
     }
     pugi::xml_document t;
-    RETURN_IF_ERROR(template_doc(wb, ChartInsertKind::kColumn, ChartGrouping::kClustered, patch.title.value,
+    RETURN_IF_ERROR(template_doc(wb, c, ChartInsertKind::kColumn, ChartGrouping::kClustered, patch.title.value,
                                  ChartLegendPosition::kRight, {}, t));
     drop(ax, "title");
     xml_node title = copy_at(ax, child_local(template_chart(t), "title"), kAxisOrder);
@@ -1832,6 +2077,11 @@ Expected<void, Error> set_chart_point(Workbook& wb, std::size_t sheet, std::uint
   }
   RETURN_IF_ERROR(apply_shape(point, kPointOrder, marker_filled(node) ? ChartFillPatch{} : patch.fill, patch.line));
   RETURN_IF_ERROR(apply_marker(point, kPointOrder, patch.marker));
+  if (patch.marker.is_set()) {
+    Palette palette;
+    load_palette(wb, c.path, palette);
+    settle_marker(ser, point, palette);
+  }
   return commit(wb, c, false);
 }
 
@@ -1869,7 +2119,9 @@ Expected<void, Error> set_chart_plot(Workbook& wb, std::size_t sheet, std::uint3
     const bool was = flag(child_local(node, "varyColors"));
     put_val(node, "c:varyColors", kPlotOrder, *patch.vary_colors ? "1" : "0");
     if (name == "barChart" && was != *patch.vary_colors) {
-      vary_bar(node, *patch.vary_colors);
+      Palette palette;
+      load_palette(wb, c.path, palette);
+      vary_bar(node, *patch.vary_colors, palette);
     }
   }
   return commit(wb, c, false);
@@ -1925,7 +2177,7 @@ Expected<std::uint32_t, Error> add_chart_series(Workbook& wb, std::size_t sheet,
   ChartSplit split;
   split.series.assign(idx + 1U, refs);
   pugi::xml_document t;
-  RETURN_IF_ERROR(template_doc(wb, static_cast<ChartInsertKind>(kind), grouping_of(node), std::nullopt,
+  RETURN_IF_ERROR(template_doc(wb, c, static_cast<ChartInsertKind>(kind), grouping_of(node), std::nullopt,
                                ChartLegendPosition::kRight, split, t));
   xml_node ser = copy_at(node, kids(template_plot(t), "ser").back(), kPlotOrder);
   put_val(ser, "c:order", kSerOrder, std::to_string(order));

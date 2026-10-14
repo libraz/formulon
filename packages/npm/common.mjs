@@ -204,7 +204,12 @@ export const ChartMarkerSymbol = Object.freeze({
   Square: 3,
   Diamond: 4,
   Triangle: 5,
-  Other: 6,
+  X: 6,
+  Star: 7,
+  Plus: 8,
+  Dot: 9,
+  Dash: 10,
+  Picture: 11,
 });
 export const ChartLabelPosition = Object.freeze({
   BestFit: 0,

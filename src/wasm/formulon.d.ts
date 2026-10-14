@@ -794,7 +794,7 @@ export interface SheetFormatDefaultsResult extends SheetFormatDefaults {
   status: Status;
   /** Character units the sheet lays columns out with: `defaultColWidth` when set, else 8.43. */
   effectiveDefaultColWidth: number;
-  /** Points the sheet lays rows out with: `defaultRowHeight` when set, else 102/7 (about 14.57). */
+  /** Points the sheet lays rows out with: `defaultRowHeight` when set, else 102/7 (about 14.57); 0 when `zeroHeight` hides rows by default. */
   effectiveDefaultRowHeight: number;
 }
 
@@ -2005,7 +2005,7 @@ export enum ChartLineDash {
   Other = 4,
 }
 
-/** Marker symbol. Mirrors `fm_chart_marker_symbol_t`. */
+/** Marker symbol. Mirrors `fm_chart_marker_symbol_t`. `Picture` is read-only: a patch carrying it is rejected. */
 export enum ChartMarkerSymbol {
   None = 0,
   Auto = 1,
@@ -2013,7 +2013,12 @@ export enum ChartMarkerSymbol {
   Square = 3,
   Diamond = 4,
   Triangle = 5,
-  Other = 6,
+  X = 6,
+  Star = 7,
+  Plus = 8,
+  Dot = 9,
+  Dash = 10,
+  Picture = 11,
 }
 
 /** Data label position. Mirrors `fm_chart_label_position_t`. */
@@ -2581,7 +2586,10 @@ export interface ChartDataSeries {
   plotIndex: number;
   idx: number;
   name: string | null;
+  /** Number format of the values (the y values in the XY domain). */
   formatCode: string;
+  /** Number format of the x values; empty outside the XY domain. */
+  xFormatCode: string;
   filtered: boolean;
   values: Float64Array;
   states: Uint8Array;
@@ -3310,8 +3318,12 @@ export interface Workbook {
   insertChart(sheet: number, options: ChartInsertOptions): InsertChartResult;
   /** Replaces plot group `plot` with `kind`; `grouping` applies to column, bar, line and area. */
   setChartType(sheet: number, objectId: number, plot: number, kind: ChartInsertKind, grouping?: ChartGrouping): Status;
-  /** Sets the chart title text, or removes the title with `null`. */
-  setChartTitle(sheet: number, objectId: number, title: string | null): Status;
+  /** Sets the chart title text, or removes the title with `null`. A {@link ChartTitleInfo} sets that kind, so `{ kind: ChartTitleKind.Auto }` returns the title to Excel's automatic one. */
+  setChartTitle(
+    sheet: number,
+    objectId: number,
+    title: string | null | { kind: ChartTitleKind; text?: string; formula?: string },
+  ): Status;
   /** Sets the legend position (`None` removes it) and overlay; `hiddenSeries` (series `c:idx` values) replaces the hidden legend entries when given. */
   setChartLegend(
     sheet: number,

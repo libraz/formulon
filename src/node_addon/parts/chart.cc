@@ -330,6 +330,7 @@ Napi::Object DataSeriesToJs(Napi::Env env, const fm_chart_data_t* data, size_t i
   o.Set("idx", JsNumber(env, s.idx));
   o.Set("name", StringOrNull(env, s.name));
   o.Set("formatCode", JsString(env, s.format_code));
+  o.Set("xFormatCode", JsString(env, s.x_format_code));
   o.Set("filtered", JsBool(env, s.filtered));
   o.Set("values", CopyDoubles(env, pts.values, pts.count));
   o.Set("states", CopyBytes(env, pts.states, pts.count));
@@ -808,12 +809,26 @@ Napi::Value Workbook::SetChartTitle(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   const Napi::Value arg = info.Length() > 2 ? info[2] : env.Null();
-  if (!arg.IsNull() && !arg.IsString()) {
-    return MakeBindingArgumentError(env, "setChartTitle expects (sheet:number, objectId:number, title:string|null)");
+  if (!arg.IsNull() && !arg.IsString() && !arg.IsObject()) {
+    return MakeBindingArgumentError(
+        env, "setChartTitle expects (sheet:number, objectId:number, title:string|null|{kind,text?,formula?})");
   }
   std::string text;
+  std::string formula;
   fm_chart_title_t title{};
-  if (arg.IsString()) {
+  if (arg.IsObject()) {
+    // The read-back shape: an out-of-domain (absent) kind is rejected by the C ABI.
+    CheckedSpecReader reader(env);
+    const Napi::Object spec = arg.As<Napi::Object>();
+    title.kind = reader.I32(spec, "kind", -1);
+    reader.String(spec, "text", &text);
+    reader.String(spec, "formula", &formula);
+    if (!reader.ok()) {
+      return env.Undefined();
+    }
+    title.text = text.c_str();
+    title.formula = formula.c_str();
+  } else if (arg.IsString()) {
     text = arg.As<Napi::String>().Utf8Value();
     title.kind = FM_CHART_TITLE_TEXT;
     title.text = text.c_str();

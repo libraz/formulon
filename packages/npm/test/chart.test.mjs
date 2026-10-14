@@ -9,7 +9,9 @@ function must(r, what) {
 
 // Sheet1: B1:D1 names, A2:A5 text categories, B2:D5 numbers, F1:G5 scatter pairs.
 function fillGrid(wb) {
-  ['S1', 'S2', 'S3'].forEach((n, c) => wb.setText(0, 0, c + 1, n));
+  ['S1', 'S2', 'S3'].forEach((n, c) => {
+    wb.setText(0, 0, c + 1, n);
+  });
   ['a', 'b', 'c', 'd'].forEach((cat, r) => {
     wb.setText(0, r + 1, 0, cat);
     for (let c = 0; c < 3; c += 1) wb.setNumber(0, r + 1, c + 1, (r + 1) * (c + 2));
@@ -64,7 +66,7 @@ test('chart enums keep their C ordinals', async () => {
   assert.equal(mod.ChartSeriesDirection.Rows, 2);
   assert.equal(mod.ChartLegendPosition.TopRight, 5);
   assert.equal(mod.ChartLineDash.Other, 4);
-  assert.equal(mod.ChartMarkerSymbol.Other, 6);
+  assert.equal(mod.ChartMarkerSymbol.Picture, 11);
   assert.equal(mod.ChartLabelPosition.Right, 8);
 });
 
@@ -169,11 +171,16 @@ test('insertChart covers the creation kinds and omitted options', async () => {
     assert.equal(barPlot.grouping, mod.ChartGrouping.Stacked);
     assert.equal(chartOf(wb, bar).title.kind, mod.ChartTitleKind.None);
 
+    const xXf = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 2 });
+    assert.ok(xXf.status.ok, JSON.stringify(xXf.status));
+    assert.ok(wb.setRangeXfIndex(0, 1, 5, 4, 5, xXf.index).ok);
     const scatter = insert(wb, mod, { kind: mod.ChartInsertKind.Scatter, source: 'Sheet1!$F$1:$G$5' });
     const sdata = dataOf(wb, scatter);
     assert.equal(sdata.domain, 'xy');
     assert.ok(sdata.series[0].x instanceof Float64Array);
     assert.deepEqual([...sdata.series[0].x], [0, 3, 6, 9]);
+    assert.equal(sdata.series[0].xFormatCode, '0.00');
+    assert.equal(sdata.series[0].formatCode, 'General');
 
     // An omitted title is Excel's automatic one.
     const auto = insert(wb, mod);
@@ -194,6 +201,8 @@ test('typed chart edits are visible through getChart', async () => {
     assert.equal(chartOf(wb, id).title.text, 'Quarterly');
     must(wb.setChartTitle(0, id, null), 'setChartTitle null');
     assert.equal(chartOf(wb, id).title.kind, mod.ChartTitleKind.None);
+    must(wb.setChartTitle(0, id, { kind: mod.ChartTitleKind.Auto }), 'setChartTitle auto');
+    assert.equal(chartOf(wb, id).title.kind, mod.ChartTitleKind.Auto);
 
     must(wb.setChartLegend(0, id, mod.ChartLegendPosition.Bottom, true), 'setChartLegend');
     let legend = chartOf(wb, id).legend;
@@ -288,13 +297,17 @@ test('typed chart edits are visible through getChart', async () => {
     assert.deepEqual([...dataOf(wb, id).series[0].values], [4, 8, 12, 16]);
 
     // A line point takes no fill; its line carries the colour.
+    const otherPoints = chartOf(wb, id).plots[0].series[1].points.filter((point) => point.idx !== 2);
     must(wb.setChartPoint(0, id, 0, 1, 2, { line: { color: 0xff00ff00 } }), 'setChartPoint');
     const points = chartOf(wb, id).plots[0].series[1].points;
-    assert.equal(points.length, 1);
-    assert.equal(points[0].idx, 2);
-    assert.equal(points[0].line.color, 0xff00ff00);
+    assert.equal(points.length, otherPoints.length + 1);
+    assert.equal(points.find((point) => point.idx === 2).line.color, 0xff00ff00);
+    assert.deepEqual(
+      points.filter((point) => point.idx !== 2),
+      otherPoints,
+    );
     must(wb.setChartPoint(0, id, 0, 1, 2, null), 'setChartPoint remove');
-    assert.deepEqual(chartOf(wb, id).plots[0].series[1].points, []);
+    assert.deepEqual(chartOf(wb, id).plots[0].series[1].points, otherPoints);
 
     must(wb.setChartFilter(0, id, [2], [1]), 'setChartFilter');
     info = chartOf(wb, id);

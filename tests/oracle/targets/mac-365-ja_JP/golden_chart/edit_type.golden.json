@@ -10,7 +10,7 @@
  "environment": {
   "excel_version": "Microsoft Excel for Mac 16.113.4",
   "excel_locale": "",
-  "generated_at": "2026-10-14T07:48:31Z"
+  "generated_at": "2026-10-14T11:11:27Z"
  },
  "cases": [
   {
@@ -1972,7 +1972,7 @@
             "none": true,
             "color": null,
             "alpha": null,
-            "width": 25400,
+            "width": null,
             "dash": null
            },
            "marker": null,
@@ -3355,7 +3355,7 @@
             "none": false,
             "color": "FF156082",
             "alpha": null,
-            "width": 28575,
+            "width": 19050,
             "dash": null
            },
            "marker": {
@@ -3388,7 +3388,7 @@
             "none": false,
             "color": "FFE97132",
             "alpha": null,
-            "width": 28575,
+            "width": 19050,
             "dash": null
            },
            "marker": {

@@ -112,7 +112,12 @@ enum class ChartMarkerSymbol : std::int32_t {
   kSquare = 3,
   kDiamond = 4,
   kTriangle = 5,
-  kOther = 6,
+  kX = 6,
+  kStar = 7,
+  kPlus = 8,
+  kDot = 9,
+  kDash = 10,
+  kPicture = 11,  ///< Read-only: writing one needs a blip.
 };
 
 enum class ChartLabelPosition : std::int32_t {
@@ -350,7 +355,8 @@ struct ChartDataSeries {
   std::size_t plot_index = 0;
   std::uint32_t idx = 0;
   std::optional<std::string> name;  ///< Unset when the series has no name reference.
-  std::string format_code;
+  std::string format_code;          ///< Category domain: values; XY domain: y values.
+  std::string x_format_code;        ///< XY domain: x values; empty otherwise.
   bool filtered = false;
   std::vector<ChartDataPoint> points;  ///< Category domain.
   std::vector<ChartXYPoint> xy;        ///< XY domain.

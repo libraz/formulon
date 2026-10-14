@@ -39,7 +39,9 @@ static_assert(sizeof(fm_chart_axis_t) == (kWasm32 ? 112U : 136U), "fm_chart_axis
 static_assert(sizeof(fm_chart_preview_overrides) == (kWasm32 ? 44U : 48U),
               "fm_chart_preview_overrides ABI layout changed");
 static_assert(sizeof(fm_chart_data_info_t) == (kWasm32 ? 44U : 88U), "fm_chart_data_info_t ABI layout changed");
-static_assert(sizeof(fm_chart_data_series_t) == (kWasm32 ? 52U : 104U), "fm_chart_data_series_t ABI layout changed");
+static_assert(sizeof(fm_chart_data_series_t) == (kWasm32 ? 56U : 112U), "fm_chart_data_series_t ABI layout changed");
+static_assert(offsetof(fm_chart_data_series_t, x_format_code) == (kWasm32 ? 52U : 104U),
+              "fm_chart_data_series_t x_format_code offset changed");
 static_assert(sizeof(fm_chart_data_points_t) == (kWasm32 ? 20U : 40U), "fm_chart_data_points_t ABI layout changed");
 static_assert(sizeof(fm_chart_sheet_range_t) == (kWasm32 ? 20U : 24U), "fm_chart_sheet_range_t ABI layout changed");
 static_assert(sizeof(fm_chart_axis_title_text_t) == (kWasm32 ? 8U : 16U),
@@ -211,7 +213,7 @@ TEST(FormulonCApiChart, EnumOrdinals) {
   EXPECT_EQ(FM_CHART_HEADER_NO, 2);
   EXPECT_EQ(FM_CHART_LEGEND_TOP_RIGHT, 5);
   EXPECT_EQ(FM_CHART_DASH_OTHER, 4);
-  EXPECT_EQ(FM_CHART_MARKER_OTHER, 6);
+  EXPECT_EQ(FM_CHART_MARKER_PICTURE, 11);
   EXPECT_EQ(FM_CHART_LABEL_RIGHT, 8);
   EXPECT_EQ(FM_CHART_BAR_DIR_BAR, 2);
   EXPECT_EQ(FM_CHART_TRI_TRUE, 2);
@@ -327,6 +329,7 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
   EXPECT_STREQ(s.name, "S1");
   EXPECT_EQ(s.point_count, 4U);
   EXPECT_EQ(s.has_sizes, 0);
+  EXPECT_STREQ(s.x_format_code, "");
   EXPECT_EQ(s.range_count[FM_CHART_ROLE_NAME], 1U);
   EXPECT_EQ(s.range_count[FM_CHART_ROLE_VALUES], 1U);
   EXPECT_EQ(s.range_count[FM_CHART_ROLE_X], 0U);
@@ -392,6 +395,11 @@ TEST(FormulonCApiChart, ScatterDataCarriesX) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   FillGrid(wb.handle);
+  fm_cell_xf x_xf{};
+  x_xf.num_fmt_id = 2;  // built-in 0.00, on the x column only
+  uint32_t x_xf_index = 0;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, x_xf, &x_xf_index), 0);
+  ASSERT_EQ(fm_sheet_set_range_xf_index(wb.handle, 0, 1, 5, 4, 5, x_xf_index), 0);
   const uint32_t id = Insert(wb.handle, FM_CHART_INSERT_SCATTER, "Sheet1!$F$1:$G$5");
   DataGuard data;
   OpenData(wb.handle, id, &data);
@@ -402,6 +410,10 @@ TEST(FormulonCApiChart, ScatterDataCarriesX) {
   fm_chart_data_points_t p{};
   ASSERT_EQ(fm_chart_data_series_points(data.handle, 0, &p), 0);
   ASSERT_EQ(p.count, 4U);
+  fm_chart_data_series_t ds{};
+  ASSERT_EQ(fm_chart_data_series_at(data.handle, 0, &ds), 0);
+  EXPECT_STREQ(ds.x_format_code, "0.00");
+  EXPECT_STREQ(ds.format_code, "General");
   ASSERT_NE(p.x, nullptr);
   EXPECT_EQ(std::vector<double>(p.x, p.x + p.count), (std::vector<double>{0, 3, 6, 9}));
   EXPECT_EQ(std::vector<double>(p.values, p.values + p.count), (std::vector<double>{0, 1, 4, 9}));
@@ -460,6 +472,10 @@ TEST(FormulonCApiChart, TypeTitleLegendDisplayPlotEdits) {
   ASSERT_EQ(fm_sheet_set_chart_title(wb.handle, 0, id, &none), 0);
   Open(wb.handle, id, &chart);
   EXPECT_EQ(Info(chart).title.kind, FM_CHART_TITLE_NONE);
+  const fm_chart_title_t automatic{FM_CHART_TITLE_AUTO, nullptr, nullptr};
+  ASSERT_EQ(fm_sheet_set_chart_title(wb.handle, 0, id, &automatic), 0) << fm_last_error_message();
+  Open(wb.handle, id, &chart);
+  EXPECT_EQ(Info(chart).title.kind, FM_CHART_TITLE_AUTO);
   const fm_chart_title_t bad_kind{4, nullptr, nullptr};
   EXPECT_EQ(fm_sheet_set_chart_title(wb.handle, 0, id, &bad_kind), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_chart_title(wb.handle, 0, id, nullptr), kBindingNullPointer);
@@ -641,6 +657,13 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   EXPECT_EQ(s.marker.size, 7U);
   EXPECT_EQ(s.marker.fill.color, 0xFF00FF00U);
   EXPECT_EQ(s.smooth, FM_CHART_TRI_TRUE);
+
+  // A picture marker is read-only: it needs a blip a patch cannot carry.
+  fm_chart_series_patch picture{};
+  picture.marker_op = FM_CHART_PATCH_SET;
+  picture.marker.symbol_op = FM_CHART_PATCH_SET;
+  picture.marker.symbol = FM_CHART_MARKER_PICTURE;
+  EXPECT_EQ(fm_sheet_set_chart_series(wb.handle, 0, id, 0, 0, &picture), kInvalidArgument);
   ASSERT_EQ(s.has_labels, 1);
   EXPECT_EQ(s.labels.show_value, 1);
   EXPECT_EQ(s.labels.show_category, 0);
@@ -676,7 +699,7 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   patch = fm_chart_series_patch{};
   patch.marker_op = FM_CHART_PATCH_SET;
   patch.marker.symbol_op = FM_CHART_PATCH_SET;
-  patch.marker.symbol = 7;
+  patch.marker.symbol = FM_CHART_MARKER_PICTURE + 1;
   EXPECT_EQ(fm_sheet_set_chart_series(wb.handle, 0, id, 0, 0, &patch), kInvalidArgument);
   // A nested patch whose op is KEEP is not read.
   patch.marker_op = FM_CHART_PATCH_KEEP;

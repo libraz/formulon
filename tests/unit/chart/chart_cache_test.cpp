@@ -1,17 +1,20 @@
 #include "chart/chart_cache.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "../small_stack.h"
 #include "chart/chart_model.h"
 #include "drawing/drawing_xml.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml/part_dom.h"
 #include "io/ooxml_reader.h"
+#include "io/passthrough_part_index.h"
 #include "io/xlsb/reader.h"
 #include "sheet.h"
 #include "sheet_layout_edit.h"
@@ -73,6 +76,19 @@ bool Contains(const std::string& text, const std::string& needle) {
   return text.find(needle) != std::string::npos;
 }
 
+std::string DeepXml(std::size_t depth, const std::string& body) {
+  std::string xml;
+  xml.reserve(depth * 20U + body.size());
+  for (std::size_t i = 0; i < depth; ++i) {
+    xml.append("<x:deep>");
+  }
+  xml.append(body);
+  for (std::size_t i = 0; i < depth; ++i) {
+    xml.append("</x:deep>");
+  }
+  return xml;
+}
+
 std::string PartText(const Workbook& wb, const std::string& path) {
   const PassthroughPart* part = io::ooxml::find_passthrough_part(wb, path);
   EXPECT_NE(part, nullptr) << path;
@@ -89,6 +105,20 @@ std::string Text(const PassthroughPart& part) {
   return std::string(part.bytes.begin(), part.bytes.end());
 }
 
+TEST(ChartCache, PassthroughPathIndexKeepsFirstDuplicate) {
+  std::vector<PassthroughPart> parts;
+  parts.emplace_back("xl/charts/chart1.xml", "application/xml", std::vector<std::uint8_t>{'f', 'i', 'r', 's', 't'});
+  parts.emplace_back("xl/charts/chart1.xml", "application/xml",
+                     std::vector<std::uint8_t>{'s', 'e', 'c', 'o', 'n', 'd'});
+  parts.emplace_back("xl/charts/chart2.xml", "application/xml", std::vector<std::uint8_t>{'t', 'w', 'o'});
+
+  const io::PassthroughPartIndex index(parts);
+  const PassthroughPart* first = index.find("xl/charts/chart1.xml");
+  ASSERT_NE(first, nullptr);
+  EXPECT_EQ(Text(*first), "first");
+  EXPECT_EQ(index.find("xl/charts/missing.xml"), nullptr);
+}
+
 /// Path of the first chart part whose text contains `needle`.
 std::string ChartPathWith(const Workbook& wb, const std::string& needle) {
   auto refs = all_chart_parts(wb);
@@ -103,6 +133,37 @@ std::string ChartPathWith(const Workbook& wb, const std::string& needle) {
   }
   ADD_FAILURE() << "no chart part with " << needle;
   return {};
+}
+
+TEST(ChartCache, RefreshUsesFirstDuplicateChartPart) {
+  Workbook wb = LoadFixture("chart_column.xlsx");
+  const std::string path = ChartPathWith(wb, "Sheet1!$B$2:$B$5");
+  std::vector<PassthroughPart> parts = wb.passthrough_parts();
+  std::size_t position = parts.size();
+  for (std::size_t i = 0; i < parts.size(); ++i) {
+    if (parts[i].path == path) {
+      position = i;
+      break;
+    }
+  }
+  ASSERT_LT(position, parts.size());
+  wb.sheet(0).set_cell_value(1, 1, Value::number(99));
+  ASSERT_FALSE(Refreshed(wb).empty());
+  PassthroughPart duplicate = parts[position];
+  duplicate.bytes = {'n', 'o', 't', ' ', 'x', 'm', 'l'};
+  parts.insert(parts.begin() + static_cast<std::ptrdiff_t>(position), std::move(duplicate));
+  wb.set_passthrough_parts(std::move(parts));
+  auto charts = all_chart_parts(wb);
+  ASSERT_TRUE(static_cast<bool>(charts));
+  ASSERT_FALSE(charts.value().empty());
+
+  // Refresh reads the first duplicate, so its malformed bytes suppress
+  // replacement for this path; other charts still refresh.
+  bool duplicate_was_refreshed = false;
+  for (const PassthroughPart& part : Refreshed(wb)) {
+    duplicate_was_refreshed = duplicate_was_refreshed || part.path == path;
+  }
+  EXPECT_FALSE(duplicate_was_refreshed);
 }
 
 /// The refreshed part at `path`, or an empty string when it was not rewritten.
@@ -160,6 +221,31 @@ TEST(ChartCache, ChangedCellsAreCachedInExcelNotation) {
   // The rewrite is idempotent: stored back, nothing is left to refresh for that part.
   SetPart(wb, path, text);
   EXPECT_EQ(RefreshedText(wb, path), "");
+}
+
+TEST(ChartCache, DeepExtensionWalkKeepsMatchedReferenceSubtreesPruned) {
+  Workbook wb = LoadFixture("chart_column.xlsx");
+  const std::string path = ChartPathWith(wb, "Sheet1!$B$2:$B$5");
+  std::string chart = PartText(wb, path);
+
+  const std::size_t root_close = chart.rfind("</c:chartSpace>");
+  ASSERT_NE(root_close, std::string::npos);
+  chart.insert(root_close, DeepXml(10000U, "<x:leaf/>"));
+
+  const std::size_t num_ref = chart.find("<c:numRef>");
+  ASSERT_NE(num_ref, std::string::npos);
+  const std::size_t num_ref_close = chart.find("</c:numRef>", num_ref);
+  ASSERT_NE(num_ref_close, std::string::npos);
+  chart.insert(num_ref_close, "<c:ser><c:val><c:numRef><c:f>Sheet1!$Z$1:$Z$1</c:f></c:numRef></c:val></c:ser>");
+  SetPart(wb, path, chart);
+  wb.sheet(0).set_cell_value(1, 1, Value::number(50));
+  wb.sheet(0).set_cell_value(0, 25, Value::number(7777777.25));
+
+  std::string refreshed;
+  testing_support::RunOnSmallStack([&] { refreshed = RefreshedText(wb, path); });
+  ASSERT_FALSE(refreshed.empty());
+  EXPECT_TRUE(Contains(refreshed, "<c:pt idx=\"0\"><c:v>50</c:v></c:pt>"));
+  EXPECT_FALSE(Contains(refreshed, "7777777.25"));
 }
 
 // A cache gone stale is rewritten to what Excel wrote for the same cells.

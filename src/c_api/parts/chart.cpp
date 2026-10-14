@@ -311,7 +311,7 @@ formulon::ChartLinePatch read_line(PatchReader& r, const fm_chart_line_patch& p)
 
 formulon::ChartMarkerPatch read_marker(PatchReader& r, const fm_chart_marker_patch& p) {
   formulon::ChartMarkerPatch out;
-  r.enum_optional(p.symbol_op, p.symbol, formulon::ChartMarkerSymbol::kOther, out.symbol, "marker.symbol");
+  r.enum_optional(p.symbol_op, p.symbol, formulon::ChartMarkerSymbol::kDash, out.symbol, "marker.symbol");
   r.field(p.size_op, p.size, out.size, "marker.size_op");
   out.fill = read_fill(r, p.fill);
   out.line = read_line(r, p.line);
@@ -790,6 +790,7 @@ extern "C" fm_status_t fm_chart_data_series_at(const fm_chart_data_t* data, size
   out->idx = s.idx;
   out->name = opt_cstr(s.name);
   out->format_code = s.format_code.c_str();
+  out->x_format_code = s.x_format_code.c_str();
   out->filtered = s.filtered ? 1 : 0;
   out->point_count = data->points[series].values.size();
   out->has_sizes = s.sizes.empty() ? 0 : 1;

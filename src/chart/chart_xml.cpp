@@ -221,7 +221,19 @@ ChartMarkerSymbol symbol_of(std::string_view name) {
     return ChartMarkerSymbol::kDiamond;
   if (name == "triangle")
     return ChartMarkerSymbol::kTriangle;
-  return ChartMarkerSymbol::kOther;
+  if (name == "x")
+    return ChartMarkerSymbol::kX;
+  if (name == "star")
+    return ChartMarkerSymbol::kStar;
+  if (name == "plus")
+    return ChartMarkerSymbol::kPlus;
+  if (name == "dot")
+    return ChartMarkerSymbol::kDot;
+  if (name == "dash")
+    return ChartMarkerSymbol::kDash;
+  if (name == "picture")
+    return ChartMarkerSymbol::kPicture;
+  return ChartMarkerSymbol::kAuto;  // Not an ST_MarkerStyle value.
 }
 
 ChartMarker read_marker(const Workbook& wb, const xml_node& marker) {

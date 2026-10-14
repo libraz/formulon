@@ -444,6 +444,7 @@ val data_series_to_val(const fm_chart_data_t* data, size_t index, fm_status_t& r
   put(o, "idx", val(s.idx));
   put(o, "name", s.name != nullptr ? val(std::string(s.name)) : val::null());
   put(o, "formatCode", val(string_from_cstr(s.format_code)));
+  put(o, "xFormatCode", val(string_from_cstr(s.x_format_code)));
   put(o, "filtered", val(s.filtered != 0));
   put(o, "values", copy_doubles(pts.values, pts.count));
   put(o, "states", bytes_to_val(pts.states, pts.count));
@@ -855,13 +856,22 @@ JsStatus JsWorkbook::setChartTitle(uint32_t sheet, uint32_t objectId, val title)
     return error_status(kBindingInvalidHandle);
   }
   JsNarrowNumericReader reader("setChartTitle");
-  const bool has_text = js_value_present(title);
-  const std::string text = reader.string_value(title, "title");
+  fm_chart_title_t t{};
+  std::string text;
+  std::string formula;
+  if (js_value_present(title) && title.typeOf().strictlyEquals(val("object"))) {
+    // The read-back shape: an out-of-domain (absent) kind is rejected by the C ABI.
+    t.kind = reader.i32(title, "kind", -1, "kind");
+    text = reader.string(title, "text", "text");
+    formula = reader.string(title, "formula", "formula");
+    t.formula = formula.c_str();
+  } else {
+    text = reader.string_value(title, "title");
+    t.kind = js_value_present(title) ? FM_CHART_TITLE_TEXT : FM_CHART_TITLE_NONE;
+  }
   if (!reader.ok()) {
     return argument_error(reader);
   }
-  fm_chart_title_t t{};
-  t.kind = has_text ? FM_CHART_TITLE_TEXT : FM_CHART_TITLE_NONE;
   t.text = text.c_str();
   return status_from_rc(fm_sheet_set_chart_title(handle_, sheet, objectId, &t));
 }

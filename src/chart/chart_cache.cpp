@@ -15,7 +15,7 @@
 #include "drawing/drawing_xml.h"
 #include "eval/function_registry.h"
 #include "eval/text_format/display_text.h"
-#include "io/ooxml/part_dom.h"
+#include "io/passthrough_part_index.h"
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
 #include "num_fmt_locale.h"
@@ -81,17 +81,26 @@ pugi::xml_node child_named(const pugi::xml_node& parent, std::string_view name) 
 
 /// Series references: `ser/<role>/<ref>`, including `c15:ser` of filtered series.
 void collect_refs(const pugi::xml_node& node, std::vector<pugi::xml_node>& out) {
-  for (pugi::xml_node c = node.first_child(); c; c = c.next_sibling()) {
-    if (c.type() != pugi::node_element) {
-      continue;
+  for (pugi::xml_node c = node.first_child(); c && c != node;) {
+    if (c.type() == pugi::node_element) {
+      RefKind kind;
+      const pugi::xml_node role = c.parent();
+      if (ref_kind_of(local_name(c.name()), kind) && is_role(local_name(role.name())) &&
+          local_name(role.parent().name()) == "ser") {
+        out.push_back(c);
+      } else if (pugi::xml_node child = c.first_child()) {
+        c = child;
+        continue;
+      }
     }
-    RefKind kind;
-    if (ref_kind_of(local_name(c.name()), kind) && is_role(local_name(node.name())) &&
-        local_name(node.parent().name()) == "ser") {
-      out.push_back(c);
-    } else {
-      collect_refs(c, out);
+
+    while (c && c != node && !c.next_sibling()) {
+      c = c.parent();
     }
+    if (!c || c == node) {
+      break;
+    }
+    c = c.next_sibling();
   }
 }
 
@@ -544,13 +553,14 @@ bool refresh_chart_caches(const Workbook& wb, std::size_t host_sheet, pugi::xml_
 Expected<std::vector<PassthroughPart>, Error> refreshed_chart_parts(const Workbook& wb) {
   ASSIGN_OR_RETURN(std::vector<SheetChartPartRef> charts, all_chart_parts(wb));
   std::vector<PassthroughPart> out;
+  const io::PassthroughPartIndex source_index(wb.passthrough_parts());
   std::set<std::string> seen;
   for (const SheetChartPartRef& entry : charts) {
     const std::string& path = entry.ref.part_path;
     if (path.empty() || entry.ref.is_chartex || !seen.insert(path).second) {
       continue;
     }
-    const PassthroughPart* part = io::ooxml::find_passthrough_part(wb, path);
+    const PassthroughPart* part = source_index.find(path);
     pugi::xml_document doc;
     if (part == nullptr || !parse_chart_part(part->bytes, doc)) {
       continue;

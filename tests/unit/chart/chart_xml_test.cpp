@@ -978,7 +978,7 @@ TEST(ChartXml, SeriesFormatForms) {
   EXPECT_EQ(s0.line.dash_name, "sysDot");
   EXPECT_EQ(s0.line.dash, ChartLineDash::kOther);
   ASSERT_TRUE(s0.marker.has_value());
-  EXPECT_EQ(s0.marker->symbol, ChartMarkerSymbol::kOther);
+  EXPECT_EQ(s0.marker->symbol, ChartMarkerSymbol::kStar);
   EXPECT_EQ(s0.marker->symbol_name, "star");
   EXPECT_EQ(s0.marker->size, 12U);
   EXPECT_EQ(s0.smooth, Tri::kTrue);

@@ -759,6 +759,53 @@ TEST(ChartTemplateXml, ReferenceElementsFollowTheCells) {
   EXPECT_NE(xxml.value().find("<c:xVal><c:strRef><c:f>Sheet1!$A$2:$A$3</c:f>"), std::string::npos);
 }
 
+// Series past the sixth (and pie points) take the colour style's next variation, as Excel inserts them.
+TEST(ChartTemplateXml, ColoursCycleThroughVariations) {
+  pugi::xml_document style;
+  ASSERT_TRUE(style.load_string(kDefaultChartColorStyle));
+  const pugi::xml_node root = style.document_element();
+  EXPECT_EQ(chart_cycle_color(root, 0), "<a:schemeClr val=\"accent1\"/>");
+  EXPECT_EQ(chart_cycle_color(root, 6), "<a:schemeClr val=\"accent1\"><a:lumMod val=\"60000\"/></a:schemeClr>");
+  EXPECT_EQ(chart_cycle_color(root, 13),
+            "<a:schemeClr val=\"accent2\"><a:lumMod val=\"80000\"/><a:lumOff val=\"20000\"/></a:schemeClr>");
+  EXPECT_EQ(chart_cycle_color(root, 54), "<a:schemeClr val=\"accent1\"/>");
+
+  // Only colour elements are base colours; an extension list is not one.
+  pugi::xml_document extended;
+  ASSERT_TRUE(extended.load_string(
+      "<cs:colorStyle xmlns:cs=\"http://schemas.microsoft.com/office/drawing/2012/chartStyle\" "
+      "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" meth=\"cycle\" id=\"10\">"
+      "<a:schemeClr val=\"accent1\"/><a:srgbClr val=\"112233\"/><cs:variation/><cs:extLst/></cs:colorStyle>"));
+  EXPECT_EQ(chart_cycle_color(extended.document_element(), 2), "<a:schemeClr val=\"accent1\"/>");
+
+  const Workbook wb = measured_workbook();
+  ChartSplit sp;
+  for (int i = 0; i < 8; ++i) {
+    ChartSeriesRefs s;
+    s.val = "Sheet1!$B$2:$B$11";
+    sp.series.push_back(s);
+  }
+  for (const ChartInsertKind kind : {ChartInsertKind::kColumn, ChartInsertKind::kLine, ChartInsertKind::kScatter}) {
+    ChartInsertOptions o;
+    o.kind = kind;
+    ChartSplit split = sp;
+    for (ChartSeriesRefs& s : split.series) {
+      s.y = s.val;
+    }
+    const auto xml = build_chart_xml(wb, o, split);
+    ASSERT_TRUE(static_cast<bool>(xml));
+    EXPECT_NE(xml.value().find("<a:schemeClr val=\"accent2\"><a:lumMod val=\"60000\"/></a:schemeClr>"),
+              std::string::npos);
+  }
+  ChartInsertOptions pie;
+  pie.kind = ChartInsertKind::kPie;
+  const auto xml = build_chart_xml(wb, pie, ChartSplit{{sp.series[0]}});
+  ASSERT_TRUE(static_cast<bool>(xml));
+  EXPECT_NE(xml.value().find("<c:idx val=\"9\"/><c:bubble3D val=\"0\"/><c:spPr><a:solidFill><a:schemeClr "
+                             "val=\"accent4\"><a:lumMod val=\"60000\"/></a:schemeClr>"),
+            std::string::npos);
+}
+
 TEST(ChartTemplateXml, RejectsEmptySplit) {
   const Workbook wb = measured_workbook();
   const auto xml = build_chart_xml(wb, ChartInsertOptions{}, ChartSplit{});

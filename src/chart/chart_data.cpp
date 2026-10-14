@@ -19,6 +19,7 @@
 #include "style_resolve.h"
 #include "styles.h"
 #include "utils/number_text.h"
+#include "utils/resource_budget.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -51,6 +52,16 @@ struct PlotRules {
   bool connects = false;  ///< Line / scatter / radar draw across a connect point.
 };
 
+Error chart_cell_budget_error(std::uint64_t cells) {
+  return make_error(FormulonErrorCode::kSecResourceLimit, "chart: source exceeds materialization limit",
+                    "cells=" + std::to_string(cells) + " ceiling=" + std::to_string(kMaxRangeExpansionCells));
+}
+
+Error chart_point_limit_error(std::uint64_t points) {
+  return make_error(FormulonErrorCode::kSecResourceLimit, "chart: point count exceeds Excel row limit",
+                    "points=" + std::to_string(points) + " ceiling=" + std::to_string(Sheet::kMaxRows));
+}
+
 bool connects(ChartPlotType type) {
   return type == ChartPlotType::kLine || type == ChartPlotType::kScatter || type == ChartPlotType::kRadar;
 }
@@ -74,11 +85,14 @@ class Reader {
       : wb_(wb), host_sheet_(host_sheet), plot_vis_only_(plot_vis_only), pivot_(pivot) {}
 
   /// Resolves `src` from its cells, or from its literal / cache when it has no usable reference.
-  Gathered gather(const ChartDataSource& src, bool want_display, bool multi_level) const {
+  Expected<Gathered, Error> gather(const ChartDataSource& src, bool want_display, bool multi_level) const {
     Gathered out;
     if (src.kind == ChartDataSource::Kind::kLiteral) {
       out.resolved = true;
-      from_points(src.literal, {}, src.point_count, src.cache_format_code, want_display, out);
+      auto materialized = from_points(src.literal, {}, src.point_count, src.cache_format_code, want_display, out);
+      if (!materialized) {
+        return materialized.error();
+      }
       return out;
     }
     if (src.kind != ChartDataSource::Kind::kRef) {
@@ -90,23 +104,55 @@ class Reader {
     const std::string& formula = src.full_formula.empty() ? src.formula : src.full_formula;
     auto resolved = resolve_chart_source(wb_, host_sheet_, formula, eval::default_registry());
     if (!resolved) {
-      from_points(src.cache, src.cache_levels, src.point_count, src.cache_format_code, want_display, out);
+      auto materialized =
+          from_points(src.cache, src.cache_levels, src.point_count, src.cache_format_code, want_display, out);
+      if (!materialized) {
+        return materialized.error();
+      }
       return out;
     }
     out.resolved = true;
     out.ranges = resolved.value().areas;
     if (pivot_) {
-      from_points(src.cache, src.cache_levels, src.point_count, src.cache_format_code, want_display, out);
+      auto materialized =
+          from_points(src.cache, src.cache_levels, src.point_count, src.cache_format_code, want_display, out);
+      if (!materialized) {
+        return materialized.error();
+      }
       return out;
     }
     const std::vector<SheetRect>& areas = out.ranges;
     if (multi_level && areas.size() == 1 && areas[0].top != areas[0].bottom && areas[0].left != areas[0].right) {
-      gather_levels(trim(areas[0]), want_display, out);
+      const SheetRect r = trim(areas[0]);
+      if (r.top <= r.bottom && r.left <= r.right) {
+        const std::uint64_t cells =
+            (static_cast<std::uint64_t>(r.bottom) - r.top + 1U) * (static_cast<std::uint64_t>(r.right) - r.left + 1U);
+        if (cells > kMaxRangeExpansionCells) {
+          return chart_cell_budget_error(cells);
+        }
+      }
+      gather_levels(r, want_display, out);
       return out;
     }
     std::vector<Pos> positions;
+    std::vector<SheetRect> trimmed;
+    trimmed.reserve(areas.size());
+    std::uint64_t cells = 0;
     for (const SheetRect& area : areas) {
       const SheetRect r = trim(area);
+      if (r.top > r.bottom || r.left > r.right) {
+        continue;
+      }
+      const std::uint64_t area_cells =
+          (static_cast<std::uint64_t>(r.bottom) - r.top + 1U) * (static_cast<std::uint64_t>(r.right) - r.left + 1U);
+      if (area_cells > kMaxRangeExpansionCells - std::min(cells, kMaxRangeExpansionCells)) {
+        return chart_cell_budget_error(cells + area_cells);
+      }
+      cells += area_cells;
+      trimmed.push_back(r);
+    }
+    positions.reserve(static_cast<std::size_t>(cells));
+    for (const SheetRect& r : trimmed) {
       for (std::uint32_t col = r.left; col <= r.right && r.top <= r.bottom; ++col) {
         for (std::uint32_t row = r.top; row <= r.bottom; ++row) {
           positions.push_back(Pos{r.sheet, row, col});
@@ -253,16 +299,28 @@ class Reader {
   }
 
   /// Sparse literal / cache points to a dense list; missing points are blank.
-  void from_points(const std::vector<ChartValue>& points, const std::vector<std::vector<ChartValue>>& levels,
-                   std::uint32_t count, const std::string& format_code, bool want_display, Gathered& out) const {
+  Expected<void, Error> from_points(const std::vector<ChartValue>& points,
+                                    const std::vector<std::vector<ChartValue>>& levels, std::uint32_t count,
+                                    const std::string& format_code, bool want_display, Gathered& out) const {
     out.format_code = format_code;
-    const std::uint32_t used = points.empty() ? 0U : points.back().idx + 1U;
+    std::uint64_t used = 0;
+    for (const ChartValue& point : points) {
+      used = std::max(used, static_cast<std::uint64_t>(point.idx) + 1U);
+    }
     // A whole column / row cache is trimmed like its cells would be.
     const bool whole_axis = count == Sheet::kMaxRows || count == Sheet::kMaxCols;
-    const std::uint32_t n = whole_axis ? used : std::max(count, used);
+    const std::uint64_t requested = whole_axis ? used : std::max<std::uint64_t>(count, used);
+    if (requested > Sheet::kMaxRows) {
+      return chart_point_limit_error(requested);
+    }
+    const std::uint64_t cells = requested * (static_cast<std::uint64_t>(levels.size()) + 1U);
+    if (cells > kMaxRangeExpansionCells) {
+      return chart_cell_budget_error(cells);
+    }
+    const std::size_t n = static_cast<std::size_t>(requested);
     out.cells.assign(n, Pt{});
     for (const ChartValue& v : points) {
-      Pt& cell = out.cells[v.idx];
+      Pt& cell = out.cells[static_cast<std::size_t>(v.idx)];
       if (v.kind == ChartValue::Kind::kNumber) {
         cell.kind = Pt::Kind::kNumber;
         cell.number = v.number;
@@ -290,6 +348,7 @@ class Reader {
       }
       out.levels.push_back(std::move(texts));
     }
+    return Expected<void, Error>::Ok();
   }
 
   const Workbook& wb_;
@@ -350,23 +409,27 @@ void note_unresolved(ChartData& data, std::uint32_t idx, const ChartDataSource& 
   }
 }
 
-std::optional<std::string> title_text(const Workbook& wb, std::size_t host_sheet, const ChartTitle& title,
-                                      bool* unresolved) {
+Expected<std::optional<std::string>, Error> title_text(const Workbook& wb, std::size_t host_sheet,
+                                                       const ChartTitle& title, bool* unresolved) {
   if (title.kind == ChartTitleKind::kText) {
-    return title.text;
+    return std::optional<std::string>(title.text);
   }
   if (title.kind != ChartTitleKind::kRef) {
-    return std::nullopt;
+    return std::optional<std::string>{};
   }
   ChartDataSource src;
   src.kind = ChartDataSource::Kind::kRef;
   src.formula = title.ref_formula;
-  const Gathered g = Reader(wb, host_sheet, false, false).gather(src, true, false);
+  auto gathered = Reader(wb, host_sheet, false, false).gather(src, true, false);
+  if (!gathered) {
+    return gathered.error();
+  }
+  const Gathered& g = gathered.value();
   if (!g.resolved) {
     *unresolved = true;
-    return std::nullopt;
+    return std::optional<std::string>{};
   }
-  return joined_text(g);
+  return std::optional<std::string>(joined_text(g));
 }
 
 }  // namespace
@@ -410,7 +473,11 @@ Expected<ChartData, Error> resolve_chart_data(const Workbook& wb, std::size_t ho
       out.idx = s.idx;
       out.filtered = s.filtered;
 
-      const Gathered name = name_reader.gather(s.name, true, false);
+      auto name_result = name_reader.gather(s.name, true, false);
+      if (!name_result) {
+        return name_result.error();
+      }
+      const Gathered& name = name_result.value();
       note_unresolved(data, s.idx, s.name, name, "name");
       out.name_ranges = name.ranges;
       if (s.name.kind != ChartDataSource::Kind::kNone) {
@@ -419,7 +486,11 @@ Expected<ChartData, Error> resolve_chart_data(const Workbook& wb, std::size_t ho
 
       if (s.cat.kind != ChartDataSource::Kind::kNone) {
         if (&s == cat_owner) {
-          const Gathered cat = reader.gather(s.cat, true, /*multi_level=*/true);
+          auto cat_result = reader.gather(s.cat, true, /*multi_level=*/true);
+          if (!cat_result) {
+            return cat_result.error();
+          }
+          const Gathered& cat = cat_result.value();
           note_unresolved(data, s.idx, s.cat, cat, "cat");
           out.cat_ranges = cat.ranges;
           ChartDataCategories& categories = data.categories;
@@ -439,16 +510,32 @@ Expected<ChartData, Error> resolve_chart_data(const Workbook& wb, std::size_t ho
             }
           }
         } else {
-          const Gathered cat = reader.gather(s.cat, false, false);
+          auto cat_result = reader.gather(s.cat, false, false);
+          if (!cat_result) {
+            return cat_result.error();
+          }
+          const Gathered& cat = cat_result.value();
           note_unresolved(data, s.idx, s.cat, cat, "cat");
           out.cat_ranges = cat.ranges;
         }
       }
       if (is_xy(plot.type)) {
         const ChartDataSource& y_src = s.y.kind != ChartDataSource::Kind::kNone ? s.y : s.val;
-        const Gathered y = reader.gather(y_src, false, false);
-        const Gathered x = reader.gather(s.x, false, false);
-        const Gathered size = reader.gather(s.size, false, false);
+        auto y_result = reader.gather(y_src, false, false);
+        if (!y_result) {
+          return y_result.error();
+        }
+        auto x_result = reader.gather(s.x, false, false);
+        if (!x_result) {
+          return x_result.error();
+        }
+        auto size_result = reader.gather(s.size, false, false);
+        if (!size_result) {
+          return size_result.error();
+        }
+        const Gathered& y = y_result.value();
+        const Gathered& x = x_result.value();
+        const Gathered& size = size_result.value();
         note_unresolved(data, s.idx, s.x, x, "x");
         note_unresolved(data, s.idx, y_src, y, s.y.kind != ChartDataSource::Kind::kNone ? "y" : "val");
         note_unresolved(data, s.idx, s.size, size, "size");
@@ -459,6 +546,7 @@ Expected<ChartData, Error> resolve_chart_data(const Workbook& wb, std::size_t ho
         (s.y.kind != ChartDataSource::Kind::kNone ? out.y_ranges : out.val_ranges) = y.ranges;
         out.size_ranges = size.ranges;
         out.format_code = y.format_code;
+        out.x_format_code = x.format_code;
         const bool text_x = std::any_of(x.cells.begin(), x.cells.end(),
                                         [](const Pt& c) { return c.kind == Pt::Kind::kText && !c.empty_text; });
         for (std::size_t i = 0; i < y.cells.size(); ++i) {
@@ -485,7 +573,11 @@ Expected<ChartData, Error> resolve_chart_data(const Workbook& wb, std::size_t ho
         }
         longest = std::max(longest, out.xy.size());
       } else {
-        const Gathered val = reader.gather(s.val, false, false);
+        auto val_result = reader.gather(s.val, false, false);
+        if (!val_result) {
+          return val_result.error();
+        }
+        const Gathered& val = val_result.value();
         note_unresolved(data, s.idx, s.val, val, "val");
         if (val.had_cells && val.cells.empty()) {
           continue;  // Every value is hidden: Excel drops the series.
@@ -514,14 +606,22 @@ Expected<ChartData, Error> resolve_chart_data(const Workbook& wb, std::size_t ho
   data.point_count = longest;
 
   bool unresolved = false;
-  data.title_text = title_text(wb, host_sheet, model.title, &unresolved);
+  auto title_result = title_text(wb, host_sheet, model.title, &unresolved);
+  if (!title_result) {
+    return title_result.error();
+  }
+  data.title_text = std::move(title_result.value());
   if (unresolved) {
     data.unresolved.push_back(ChartUnresolved{0, "title"});
   }
   for (const ChartAxis& axis : model.axes) {
     unresolved = false;
-    if (auto text = title_text(wb, host_sheet, axis.title, &unresolved)) {
-      data.axis_title_texts.push_back(ChartAxisTitleText{axis.id, std::move(*text)});
+    auto axis_title_result = title_text(wb, host_sheet, axis.title, &unresolved);
+    if (!axis_title_result) {
+      return axis_title_result.error();
+    }
+    if (axis_title_result.value().has_value()) {
+      data.axis_title_texts.push_back(ChartAxisTitleText{axis.id, std::move(*axis_title_result.value())});
     }
     if (unresolved) {
       data.unresolved.push_back(ChartUnresolved{0, "axis_title", axis.id});

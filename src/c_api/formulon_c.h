@@ -1110,7 +1110,7 @@ FM_API fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t sheet_in
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when `wb`, `formula`, or `out` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kInvalidArgument` when `sheet_index`, `row`, or `col` is out of range;
  *         `kOutOfMemory` when the evaluation arena is exhausted.
  */
 FM_API fm_status_t fm_workbook_evaluate_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -1136,7 +1136,7 @@ FM_API fm_status_t fm_workbook_evaluate_formula(const fm_workbook_t* wb, size_t 
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when `wb`, `formula`, or `out` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kInvalidArgument` when the sheet, target cell, or anchor cell is out of range;
  *         `kOutOfMemory` when the evaluation arena is exhausted.
  */
 FM_API fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
@@ -1180,7 +1180,7 @@ FM_API fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, size
  * @return `kOk` on success;
  *         `kBindingNullPointer` when `wb`, `formula`, `out_rows`, or
  *         `out_cols` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kInvalidArgument` when `sheet_index`, `row`, or `col` is out of range;
  *         `kOutOfMemory` when the evaluation arena is exhausted (the
  *         handle's array stash is left untouched, per the "a rejected call
  *         does not refresh storage" rule above).
@@ -5491,8 +5491,10 @@ FM_API fm_status_t fm_sheet_restore_range_style(fm_workbook_t* wb, size_t sheet_
  *        default height.
  *
  * Clears the stored height and its custom flag. A row override left with
- * no other state (visible, outline level 0, no row style) is dropped. A
- * row with no height override is a no-op.
+ * no other state (visible, outline level 0, no row style) is dropped,
+ * except on a zeroHeight sheet, where a visible override is the row's
+ * exception to the hidden default and is kept. A row with no height
+ * override is a no-op.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
@@ -5512,7 +5514,8 @@ FM_API fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet_ind
  * `effective_default_col_width` (characters) and
  * `effective_default_row_height` (points) are the values the sheet actually
  * lays out with: the stated default when its `has_*` flag is set, else the
- * built-in fallback (8.43 characters, 102/7 pt). They are filled by
+ * built-in fallback (8.43 characters, 102/7 pt); the row height is 0 when
+ * the sheet's zeroHeight hides rows by default. They are filled by
  * `fm_sheet_get_format_defaults` and ignored by
  * `fm_sheet_set_format_defaults`.
  */
@@ -7401,7 +7404,12 @@ typedef enum {
   FM_CHART_MARKER_SQUARE = 3,
   FM_CHART_MARKER_DIAMOND = 4,
   FM_CHART_MARKER_TRIANGLE = 5,
-  FM_CHART_MARKER_OTHER = 6,
+  FM_CHART_MARKER_X = 6,
+  FM_CHART_MARKER_STAR = 7,
+  FM_CHART_MARKER_PLUS = 8,
+  FM_CHART_MARKER_DOT = 9,
+  FM_CHART_MARKER_DASH = 10,
+  FM_CHART_MARKER_PICTURE = 11,
 } fm_chart_marker_symbol_t;
 
 typedef enum {
@@ -7841,6 +7849,9 @@ typedef struct {
  *        reference. `point_count` is the length of the arrays
  *        `fm_chart_data_series_points` returns. `range_count[role]` counts
  *        the resolved rectangles of each `fm_chart_role_t` input.
+ *        `format_code` is the number format of the values (the y values in
+ *        the XY domain); `x_format_code` is that of the x values, empty
+ *        outside the XY domain.
  */
 typedef struct {
   size_t plot_index;
@@ -7851,6 +7862,7 @@ typedef struct {
   size_t point_count;
   int32_t has_sizes;
   size_t range_count[6];
+  const char* x_format_code;
 } fm_chart_data_series_t;
 
 /**
@@ -8070,7 +8082,8 @@ typedef struct {
   int32_t none;
 } fm_chart_line_patch;
 
-/** @brief Marker patch; `symbol` is an `fm_chart_marker_symbol_t` (`CLEAR` rejected). */
+/** @brief Marker patch; `symbol` is an `fm_chart_marker_symbol_t` other than `FM_CHART_MARKER_PICTURE` (`CLEAR`
+ * rejected). */
 typedef struct {
   int32_t symbol_op;
   int32_t symbol;

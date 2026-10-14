@@ -8,8 +8,8 @@
   "locale": "ja-JP",
   "product": "Microsoft Excel for Mac 16.113.4",
   "m365_sentinel": "ARRAYTOTEXT(1) == text '1'",
-  "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T07:48:31Z",
-  "generated_at": "2026-10-14T07:48:31Z",
+  "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T11:11:27Z",
+  "generated_at": "2026-10-14T11:11:27Z",
   "required_suites": [
     "create",
     "data",
@@ -30,32 +30,32 @@
     {
       "suite": "create",
       "case_count": 36,
-      "sha256": "d38794165517bb6d3db8bad463ff903988bb863980ffae8d79c36090a7f75af6",
-      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T07:48:31Z"
+      "sha256": "4bed1c20ebd240e78a6ef8390a9e08e8444c969f392010beca02dc4e1fd4ee56",
+      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T11:11:27Z"
     },
     {
       "suite": "data",
       "case_count": 38,
-      "sha256": "f407c6a3063ae85cddb5a127d9c3b5b8486467fcc4e7f383e5cd5740401656ae",
-      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T07:48:31Z"
+      "sha256": "94d8ec2a25b7b147484d3c7d387bf4b56454d0201ba715496dcc9e5c099c6427",
+      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T11:11:27Z"
     },
     {
       "suite": "edit_format",
       "case_count": 61,
-      "sha256": "4a1d4c64c591128f23719352f886d4ff95f935ba48051270455cf3b2e05cf7f7",
-      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T07:48:31Z"
+      "sha256": "cdd1a5594bb611e47e3e4465b0a2f72249b9499227b7737add4c024e3b53476f",
+      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T11:11:27Z"
     },
     {
       "suite": "edit_type",
       "case_count": 8,
-      "sha256": "18d4de65dbf770f993beb295383ca58ef4e9bf3e425f9def808392e8372511f7",
-      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T07:48:31Z"
+      "sha256": "1167638ce07366b75ecc82249f364d1e17a88031b6a03e857b133bbcd33470d4",
+      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T11:11:27Z"
     },
     {
       "suite": "structural",
       "case_count": 27,
-      "sha256": "123286fd0b8a8c4f01253b4da35d1ea7128b2461ba776365a8a233fcb099558f",
-      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T07:48:31Z"
+      "sha256": "d319aa0b15d88593842fab1bf5c233ee8179b1c6f15fa2b88a20c881dc971768",
+      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T11:11:27Z"
     }
   ],
   "reason": "Chart goldens captured by the manifest-selected Mac Excel 365 target.",

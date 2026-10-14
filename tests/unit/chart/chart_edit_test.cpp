@@ -729,9 +729,10 @@ TEST(ChartEdit, LineAndScatterSeriesTakeNoFill) {
   EXPECT_EQ(s.fill.alpha, std::optional<std::uint32_t>(80000U));
 }
 
-// A patched series marker with a named symbol takes the form Excel re-saves unchanged: size 5 when it has none;
-// with a fill and an outline, the outline gets 9525 EMU and the series accent.
-TEST(ChartEdit, SeriesMarkerSettlesAsExcel) {
+// A patched marker takes the form Excel re-saves unchanged: an automatic symbol becomes a concrete one, a
+// hidden marker keeps only its symbol, a shown one gets size 5 and, in a styled chart, a fill and a 9525 EMU
+// outline in the series colour where unset.
+TEST(ChartEdit, MarkerSettlesAsExcel) {
   const auto marker = [](const Workbook& wb, const Located& c) {
     const std::string text = PartText(wb, c.path);
     return Between(text, "<c:marker>", "</c:marker>");
@@ -779,12 +780,14 @@ TEST(ChartEdit, SeriesMarkerSettlesAsExcel) {
        "</a:solidFill><a:ln w=\"9525\"><a:solidFill><a:schemeClr val=\"accent1\"/></a:solidFill>"
        "<a:prstDash val=\"dash\"/></a:ln><a:effectLst/></c:spPr></c:marker>"},
       {S::kDiamond, 7, false, true, false,
-       "<c:marker><c:symbol val=\"diamond\"/><c:size val=\"7\"/><c:spPr><a:ln><a:solidFill><a:srgbClr "
-       "val=\"000000\"/></a:solidFill></a:ln><a:effectLst/></c:spPr></c:marker>"},
+       "<c:marker><c:symbol val=\"diamond\"/><c:size val=\"7\"/><c:spPr><a:solidFill><a:schemeClr "
+       "val=\"accent1\"/></a:solidFill><a:ln w=\"9525\"><a:solidFill><a:srgbClr val=\"000000\"/></a:solidFill>"
+       "</a:ln><a:effectLst/></c:spPr></c:marker>"},
       {S::kAuto, 7, true, true, false,
-       "<c:marker><c:symbol val=\"auto\"/><c:size val=\"7\"/><c:spPr><a:solidFill><a:srgbClr val=\"AA0000\"/>"
-       "</a:solidFill><a:ln><a:solidFill><a:srgbClr val=\"000000\"/></a:solidFill></a:ln><a:effectLst/></c:spPr>"
-       "</c:marker>"},
+       "<c:marker><c:symbol val=\"diamond\"/><c:size val=\"7\"/><c:spPr><a:solidFill><a:srgbClr val=\"AA0000\"/>"
+       "</a:solidFill><a:ln w=\"9525\"><a:solidFill><a:srgbClr val=\"000000\"/></a:solidFill></a:ln><a:effectLst/>"
+       "</c:spPr></c:marker>"},
+      {S::kNone, 7, true, true, false, "<c:marker><c:symbol val=\"none\"/></c:marker>"},
   };
   for (const Row& r : rows) {
     SCOPED_TRACE(r.want);
@@ -793,20 +796,229 @@ TEST(ChartEdit, SeriesMarkerSettlesAsExcel) {
     MustOk(set_chart_series(wb, c.sheet, c.id, 0, 0, patch(r.symbol, r.size, r.fill, r.line_color, r.dash)));
     EXPECT_EQ(marker(wb, c), r.want);
   }
-  // A point marker is left as written.
+  // Unstyled charts get no outline; a series past the sixth takes the colour style's next variation.
+  Workbook plain = GridBook();
+  const std::uint32_t line = Insert(plain, K::kLine);
+  MustOk(set_chart_series(plain, 0, line, 0, 0, patch(S::kDiamond, 7, true, false, true)));
+  ExpectSameForm(
+      Between(PartText(plain, Must(all_chart_parts(plain))[0].ref.part_path), "<c:marker><c:symbol val=\"diamond",
+              "</c:marker>"),
+      "<c:marker><c:symbol val=\"diamond\"/><c:size val=\"7\"/><c:spPr><a:solidFill><a:srgbClr "
+      "val=\"AA0000\"/></a:solidFill><a:ln><a:prstDash val=\"dash\"/></a:ln><a:effectLst/></c:spPr></c:marker>");
   Workbook wb = LoadFixture("chart_line.xlsx");
   const Located c = Find(wb, "xl/charts/chart1.xml");
+  ChartSeriesPatch extra;
+  extra.val = std::string("Sheet1!$B$2:$B$5");
+  std::uint32_t idx = 0;
+  while (idx < 7U) {
+    idx = Must(add_chart_series(wb, c.sheet, c.id, 0, extra));
+  }
+  MustOk(set_chart_series(wb, c.sheet, c.id, 0, 7, patch(S::kAuto, 7, true, false, true)));
+  const ChartSeries seventh = Must(get_chart(wb, c.sheet, c.id)).plots[0].series[7];
+  ASSERT_TRUE(seventh.marker.has_value());
+  EXPECT_EQ(seventh.marker->symbol, S::kDot);
+  EXPECT_NE(PartText(wb, c.path)
+                .find("<a:ln w=\"9525\"><a:solidFill><a:schemeClr val=\"accent2\"><a:lumMod "
+                      "val=\"60000\"/></a:schemeClr></a:solidFill><a:prstDash"),
+            std::string::npos);
+
+  // Points: a shown marker settles as a series one; an automatic one takes the series symbol.
   ChartPointPatch pt;
   ChartMarkerPatch mk;
   mk.symbol = S::kSquare;
   mk.fill.color = ChartPatchField<std::uint32_t>::Set(0xFFAA0000U);
   mk.line.color = ChartPatchField<std::uint32_t>::Set(0xFF000000U);
   pt.marker = ChartPatchField<ChartMarkerPatch>::Set(mk);
+  MustOk(set_chart_point(wb, c.sheet, c.id, 0, 1, 1, pt));
+  mk.symbol = S::kAuto;
+  mk.size = ChartPatchField<double>::Set(9.0);
+  pt.marker = ChartPatchField<ChartMarkerPatch>::Set(mk);
   MustOk(set_chart_point(wb, c.sheet, c.id, 0, 0, 1, pt));
-  const ChartSeries s = Must(get_chart(wb, c.sheet, c.id)).plots[0].series[0];
-  ASSERT_TRUE(s.points[0].marker.has_value());
-  EXPECT_FALSE(s.points[0].marker->size.has_value());
-  EXPECT_FALSE(s.points[0].marker->line.width_emu.has_value());
+  const ChartModel m = Must(get_chart(wb, c.sheet, c.id));
+  const ChartMarker& shown = *m.plots[0].series[1].points[0].marker;
+  EXPECT_EQ(shown.size, std::optional<std::uint32_t>(5U));
+  EXPECT_EQ(shown.line.width_emu, std::optional<std::int64_t>(9525));
+  const ChartMarker& hidden = *m.plots[0].series[0].points[0].marker;
+  EXPECT_EQ(hidden.symbol, S::kNone);
+  EXPECT_FALSE(hidden.size.has_value());
+
+  Workbook mw = LoadFixture("chart_line.xlsx");
+  const Located circles = Find(mw, "xl/charts/chart4.xml");
+  MustOk(set_chart_point(mw, circles.sheet, circles.id, 0, 0, 1, pt));
+  EXPECT_EQ(Must(get_chart(mw, circles.sheet, circles.id)).plots[0].series[0].points[0].marker->symbol, S::kCircle);
+}
+
+// Every named marker shape writes and reads back; a picture marker needs a blip and is refused.
+TEST(ChartEdit, MarkerSymbolsRoundTrip) {
+  using S = ChartMarkerSymbol;
+  Workbook wb = LoadFixture("chart_line.xlsx");
+  const Located c = Find(wb, "xl/charts/chart4.xml");
+  const std::pair<S, const char*> shapes[] = {
+      {S::kX, "x"}, {S::kStar, "star"}, {S::kPlus, "plus"}, {S::kDot, "dot"}, {S::kDash, "dash"}};
+  for (const auto& [symbol, name] : shapes) {
+    SCOPED_TRACE(name);
+    ChartMarkerPatch mk;
+    mk.symbol = symbol;
+    ChartSeriesPatch p;
+    p.marker = ChartPatchField<ChartMarkerPatch>::Set(mk);
+    MustOk(set_chart_series(wb, c.sheet, c.id, 0, 0, p));
+    const ChartSeries s = Must(get_chart(wb, c.sheet, c.id)).plots[0].series[0];
+    ASSERT_TRUE(s.marker.has_value());
+    EXPECT_EQ(s.marker->symbol, symbol);
+    EXPECT_EQ(s.marker->symbol_name, name);
+  }
+  ChartMarkerPatch picture;
+  picture.symbol = S::kPicture;
+  ChartSeriesPatch p;
+  p.marker = ChartPatchField<ChartMarkerPatch>::Set(picture);
+  ExpectCode(set_chart_series(wb, c.sheet, c.id, 0, 0, p), Code::kInvalidArgument);
+}
+
+// Points survive a type change in Excel's forms: a line or scatter point takes the series' marker and line,
+// a bar or area point keeps its fill, and one coming back from a line plot takes the series fill.
+TEST(ChartEdit, TypeChangeCarriesPoints) {
+  ChartPointPatch pt;
+  pt.fill.color = ChartPatchField<std::uint32_t>::Set(0xFF7030A0U);
+  const auto point = [](const Workbook& wb, const Located& c) {
+    return Must(get_chart(wb, c.sheet, c.id)).plots[0].series[0];
+  };
+  for (const K kind : {K::kBar, K::kArea}) {
+    Workbook wb = LoadFixture("chart_column.xlsx");
+    const Located c = Find(wb, "xl/charts/chart1.xml");
+    MustOk(set_chart_point(wb, c.sheet, c.id, 0, 0, 1, pt));
+    MustOk(set_chart_type(wb, c.sheet, c.id, 0, kind, ChartGrouping::kClustered));
+    const ChartSeries s = point(wb, c);
+    ASSERT_EQ(s.points.size(), 1U);
+    EXPECT_EQ(s.points[0].fill.color, std::optional<std::uint32_t>(0xFF7030A0U));
+    EXPECT_TRUE(s.points[0].line.none);
+    EXPECT_EQ(PartText(wb, c.path).find("<c:invertIfNegative") == std::string::npos, kind == K::kArea);
+  }
+  for (const K kind : {K::kLine, K::kScatter}) {
+    Workbook wb = LoadFixture("chart_column.xlsx");
+    const Located c = Find(wb, "xl/charts/chart1.xml");
+    MustOk(set_chart_point(wb, c.sheet, c.id, 0, 0, 1, pt));
+    MustOk(set_chart_type(wb, c.sheet, c.id, 0, kind, ChartGrouping::kClustered));
+    ChartSeries s = point(wb, c);
+    ASSERT_EQ(s.points.size(), 1U);
+    EXPECT_FALSE(s.points[0].fill.color.has_value());
+    EXPECT_EQ(s.points[0].line.width_emu, s.line.width_emu);
+    ASSERT_TRUE(s.points[0].marker.has_value() && s.marker.has_value());
+    EXPECT_EQ(s.points[0].marker->symbol, s.marker->symbol);
+    const ChartLine line = s.points[0].line;
+    MustOk(set_chart_type(wb, c.sheet, c.id, 0, K::kColumn, ChartGrouping::kClustered));
+    s = point(wb, c);
+    ASSERT_EQ(s.points.size(), 1U);
+    EXPECT_EQ(s.points[0].fill.color, s.fill.color);
+    EXPECT_EQ(s.points[0].line.width_emu, line.width_emu);
+    EXPECT_FALSE(s.points[0].marker.has_value());
+  }
+}
+
+// A bar or area series keeps the width of a hidden source line and has none otherwise; a line series from a
+// scatter plot takes 1.5 pt, and one from an area plot is smoothed.
+TEST(ChartEdit, TypeChangeSetsSeriesLineWidth) {
+  struct Row {
+    const char* file;
+    const char* part;
+    K to;
+    std::uint32_t series;
+    std::optional<std::int64_t> width;
+  };
+  const Row rows[] = {
+      {"chart_scatter.xlsx", "xl/charts/chart1.xml", K::kColumn, 0, 25400},
+      {"chart_scatter.xlsx", "xl/charts/chart1.xml", K::kArea, 0, 25400},
+      {"chart_scatter.xlsx", "xl/charts/chart2.xml", K::kColumn, 0, std::nullopt},
+      {"chart_scatter.xlsx", "xl/charts/chart1.xml", K::kLine, 0, 19050},
+      {"chart_scatter.xlsx", "xl/charts/chart2.xml", K::kLine, 1, 19050},
+      {"chart_area.xlsx", "xl/charts/chart1.xml", K::kColumn, 1, 25400},
+      {"chart_column.xlsx", "xl/charts/chart1.xml", K::kArea, 1, std::nullopt},
+      {"chart_column.xlsx", "xl/charts/chart1.xml", K::kLine, 0, 28575},
+  };
+  for (const Row& r : rows) {
+    SCOPED_TRACE(std::string(r.file) + " " + r.part + " -> " + std::to_string(static_cast<int>(r.to)));
+    Workbook wb = LoadFixture(r.file);
+    const Located c = Find(wb, r.part);
+    MustOk(set_chart_type(wb, c.sheet, c.id, 0, r.to, ChartGrouping::kClustered));
+    EXPECT_EQ(Must(get_chart(wb, c.sheet, c.id)).plots[0].series[r.series].line.width_emu, r.width);
+  }
+  Workbook wb = LoadFixture("chart_area.xlsx");
+  const Located area = Find(wb, "xl/charts/chart1.xml");
+  MustOk(set_chart_type(wb, area.sheet, area.id, 0, K::kLine, ChartGrouping::kStandard));
+  const ChartModel m = Must(get_chart(wb, area.sheet, area.id));
+  for (const ChartSeries& s : m.plots[0].series) {
+    EXPECT_EQ(s.smooth, Tri::kTrue);
+  }
+}
+
+// Measured on Mac Excel: between line and bar/area types the series colour is re-derived, an explicit outline
+// becomes the line and an explicit line the outline, minus what the automatic one would set.
+TEST(ChartEdit, TypeChangeTradesExplicitLinesAndOutlines) {
+  const auto ser = [](const std::string& xml, std::size_t n) {
+    std::size_t at = 0;
+    for (std::size_t i = 0; i <= n; ++i) {
+      at = xml.find("<c:ser>", at + 1);
+    }
+    return xml.substr(at, xml.find("</c:ser>", at) - at);
+  };
+  Workbook wb = LoadFixture("chart_format.xlsx");
+  const Located line = Find(wb, "xl/charts/chart1.xml");
+  MustOk(set_chart_type(wb, line.sheet, line.id, 0, K::kColumn, ChartGrouping::kClustered));
+  std::string s = ser(PartText(wb, line.path), 0);
+  EXPECT_NE(s.find("<c:spPr><a:solidFill><a:schemeClr val=\"accent1\"/></a:solidFill><a:ln w=\"44450\" cmpd=\"sng\" "
+                   "algn=\"ctr\"><a:solidFill><a:srgbClr val=\"FF0000\"><a:alpha val=\"70000\"/></a:srgbClr>"
+                   "</a:solidFill><a:prstDash val=\"dash\"/><a:headEnd"),
+            std::string::npos)
+      << s;
+  // A point that only carried a marker keeps no shape of its own.
+  const std::size_t dpt = s.find("<c:dPt>");
+  ASSERT_NE(dpt, std::string::npos);
+  EXPECT_EQ(s.substr(dpt, s.find("</c:dPt>", dpt) - dpt).find("<c:spPr>"), std::string::npos) << s;
+
+  const Located col = Find(wb, "xl/charts/chart2.xml");
+  MustOk(set_chart_type(wb, col.sheet, col.id, 0, K::kLine, ChartGrouping::kStandard));
+  s = ser(PartText(wb, col.path), 0);
+  EXPECT_NE(s.find("<c:spPr><a:ln w=\"25400\" cap=\"rnd\"><a:solidFill><a:srgbClr val=\"000000\"/></a:solidFill>"
+                   "<a:prstDash val=\"sysDash\"/><a:round/></a:ln>"),
+            std::string::npos)
+      << s;
+
+  // An automatic line leaves a hidden outline; an explicit colour or width survives on its own.
+  Workbook lw = LoadFixture("chart_line.xlsx");
+  const Located plain = Find(lw, "xl/charts/chart1.xml");
+  ChartSeriesPatch red;
+  red.line.color = ChartPatchField<std::uint32_t>::Set(0xFFFF0000U);
+  MustOk(set_chart_series(lw, plain.sheet, plain.id, 0, 0, red));
+  MustOk(set_chart_type(lw, plain.sheet, plain.id, 0, K::kColumn, ChartGrouping::kClustered));
+  const std::string xml = PartText(lw, plain.path);
+  EXPECT_NE(ser(xml, 0).find("<a:solidFill><a:schemeClr val=\"accent1\"/></a:solidFill><a:ln><a:solidFill><a:srgbClr "
+                             "val=\"FF0000\"/></a:solidFill></a:ln>"),
+            std::string::npos)
+      << ser(xml, 0);
+  EXPECT_NE(ser(xml, 1).find("<a:solidFill><a:schemeClr val=\"accent2\"/></a:solidFill><a:ln><a:noFill/></a:ln>"),
+            std::string::npos)
+      << ser(xml, 1);
+}
+
+// Measured on Mac Excel: a chart's automatic colours, re-derived by a type change, come from its own colour style.
+TEST(ChartEdit, TypeChangeColoursFromTheChartsColourStyle) {
+  Workbook wb = LoadFixture("chart_column.xlsx");
+  const Located c = Find(wb, "xl/charts/chart1.xml");
+  const std::string rels = PartText(wb, "xl/charts/_rels/chart1.xml.rels");
+  const std::size_t at = rels.find("colors");
+  ASSERT_NE(at, std::string::npos);
+  const std::string colors = "xl/charts/" + rels.substr(at, rels.find('"', at) - at);
+  const std::string style =
+      "<cs:colorStyle xmlns:cs=\"http://schemas.microsoft.com/office/drawing/2012/chartStyle\" "
+      "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" meth=\"cycle\" id=\"14\">"
+      "<a:schemeClr val=\"accent3\"/><a:schemeClr val=\"accent5\"/><cs:variation/></cs:colorStyle>";
+  ASSERT_TRUE(
+      static_cast<bool>(wb.replace_passthrough_part(colors, std::vector<std::uint8_t>(style.begin(), style.end()))));
+  MustOk(set_chart_type(wb, c.sheet, c.id, 0, K::kLine, ChartGrouping::kStandard));
+  const std::string xml = PartText(wb, c.path);
+  const std::size_t first = xml.find("<c:ser>");
+  const std::size_t second = xml.find("<c:ser>", first + 1);
+  EXPECT_NE(xml.substr(first, second - first).find("<a:schemeClr val=\"accent3\"/>"), std::string::npos);
+  EXPECT_NE(xml.substr(second).find("<a:schemeClr val=\"accent5\"/>"), std::string::npos);
 }
 
 // A percent-stacked change re-derives a linked value-axis format as Excel does, and a change to pie gives an

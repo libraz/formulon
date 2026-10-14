@@ -4,11 +4,14 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <unordered_map>
+#include <vector>
 
 #include "eval/a1_parse.h"
 #include "excel_profile.h"
 #include "io/xml_escape.h"
+#include "io/xml_utils.h"
 #include "parser/reference.h"
 #include "sheet.h"
 #include "style_resolve.h"
@@ -376,8 +379,8 @@ void append_source(std::string& x, const char* tag, const std::string& f, RefKin
   x += std::string("<c:ptCount val=\"0\"/></c:") + cache + "></c:" + ref + "></c:" + tag + ">";
 }
 
-void append_accent(std::string& x, std::size_t idx) {
-  x += "<a:schemeClr val=\"accent" + std::to_string(idx % 6U + 1U) + "\"/>";
+void append_accent(std::string& x, const pugi::xml_node& colors, std::size_t idx) {
+  x += chart_cycle_color(colors, idx);
 }
 
 void append_axis(std::string& x, bool category, std::uint32_t id, std::uint32_t cross, char pos, const char* tick,
@@ -551,6 +554,13 @@ Expected<ChartSplit, Error> split_chart_source(const Workbook& wb, std::size_t h
 
 Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInsertOptions& options,
                                              const ChartSplit& split) {
+  pugi::xml_document color_style;
+  color_style.load_string(kDefaultChartColorStyle);
+  return build_chart_xml(wb, options, split, color_style.document_element());
+}
+
+Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInsertOptions& options,
+                                             const ChartSplit& split, const pugi::xml_node& colors) {
   if (split.series.empty()) {
     return invalid_ref("chart has no series");
   }
@@ -612,7 +622,7 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
     }
     if (is_bar || is_area) {
       x += "<c:spPr><a:solidFill>";
-      append_accent(x, i);
+      append_accent(x, colors, i);
       x += std::string("</a:solidFill><a:ln") + (is_area && i > 0U ? " w=\"25400\"" : "") +
            "><a:noFill/></a:ln><a:effectLst/></c:spPr>";
       x += is_bar ? "<c:invertIfNegative val=\"0\"/>" : "";
@@ -620,7 +630,7 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
       x += std::string("<c:spPr><a:ln w=\"") + (is_line ? "28575" : "25400") + "\" cap=\"rnd\">";
       if (is_line) {
         x += "<a:solidFill>";
-        append_accent(x, i);
+        append_accent(x, colors, i);
         x += "</a:solidFill>";
       } else {
         x += "<a:noFill/>";
@@ -630,9 +640,9 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
         x += "<c:marker><c:symbol val=\"none\"/></c:marker>";
       } else {
         x += "<c:marker><c:symbol val=\"circle\"/><c:size val=\"5\"/><c:spPr><a:solidFill>";
-        append_accent(x, i);
+        append_accent(x, colors, i);
         x += "</a:solidFill><a:ln w=\"9525\"><a:solidFill>";
-        append_accent(x, i);
+        append_accent(x, colors, i);
         x += "</a:solidFill></a:ln><a:effectLst/></c:spPr></c:marker>";
       }
     }
@@ -640,7 +650,7 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
       const std::uint32_t points = point_count(s.val);
       for (std::uint32_t p = 0; p < points; ++p) {
         x += "<c:dPt><c:idx val=\"" + std::to_string(p) + "\"/><c:bubble3D val=\"0\"/><c:spPr><a:solidFill>";
-        append_accent(x, p);
+        append_accent(x, colors, p);
         x += "</a:solidFill><a:ln w=\"19050\"><a:solidFill><a:schemeClr val=\"lt1\"/></a:solidFill></a:ln>"
              "<a:effectLst/></c:spPr></c:dPt>";
       }
@@ -817,6 +827,58 @@ std::optional<ChartSource> derive_chart_source(const Workbook& wb, std::size_t h
     }
   }
   return std::nullopt;
+}
+
+const char* const kDefaultChartColorStyle =
+    "<cs:colorStyle xmlns:cs=\"http://schemas.microsoft.com/office/drawing/2012/chartStyle\" "
+    "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" meth=\"cycle\" id=\"10\">"
+    "<a:schemeClr val=\"accent1\"/><a:schemeClr val=\"accent2\"/><a:schemeClr val=\"accent3\"/>"
+    "<a:schemeClr val=\"accent4\"/><a:schemeClr val=\"accent5\"/><a:schemeClr val=\"accent6\"/><cs:variation/>"
+    "<cs:variation><a:lumMod val=\"60000\"/></cs:variation><cs:variation><a:lumMod val=\"80000\"/>"
+    "<a:lumOff val=\"20000\"/></cs:variation><cs:variation><a:lumMod val=\"80000\"/></cs:variation><cs:variation>"
+    "<a:lumMod val=\"60000\"/><a:lumOff val=\"40000\"/></cs:variation><cs:variation><a:lumMod val=\"50000\"/>"
+    "</cs:variation><cs:variation><a:lumMod val=\"70000\"/><a:lumOff val=\"30000\"/></cs:variation><cs:variation>"
+    "<a:lumMod val=\"70000\"/></cs:variation><cs:variation><a:lumMod val=\"50000\"/><a:lumOff val=\"50000\"/>"
+    "</cs:variation></cs:colorStyle>";
+
+std::string chart_cycle_color(const pugi::xml_node& style, std::size_t idx) {
+  std::vector<pugi::xml_node> bases;
+  std::vector<pugi::xml_node> variations;
+  // DrawingML colour choices; anything else in the part (an extension list) is neither base nor variation.
+  static constexpr std::string_view kColours[] = {"scrgbClr", "srgbClr", "hslClr", "sysClr", "schemeClr", "prstClr"};
+  for (pugi::xml_node n = style.first_child(); n; n = n.next_sibling()) {
+    if (n.type() != pugi::node_element) {
+      continue;
+    }
+    const std::string_view name = n.name();
+    const std::string_view local = name.substr(name.find(':') + 1);
+    if (local == "variation") {
+      variations.push_back(n);
+    } else if (std::find(std::begin(kColours), std::end(kColours), local) != std::end(kColours)) {
+      bases.push_back(n);
+    }
+  }
+  if (bases.empty()) {
+    return {};
+  }
+  const pugi::xml_node base = bases[idx % bases.size()];
+  std::string inner;
+  for (pugi::xml_node n = base.first_child(); n; n = n.next_sibling()) {
+    io::append_raw_xml(inner, n);
+  }
+  if (!variations.empty()) {
+    for (pugi::xml_node n = variations[(idx / bases.size()) % variations.size()].first_child(); n;
+         n = n.next_sibling()) {
+      io::append_raw_xml(inner, n);
+    }
+  }
+  std::string x = std::string("<") + base.name();
+  for (const pugi::xml_attribute& a : base.attributes()) {
+    x += std::string(" ") + a.name() + "=\"";
+    io::AppendXmlEscaped(x, a.value());
+    x += "\"";
+  }
+  return inner.empty() ? x + "/>" : x + ">" + inner + "</" + base.name() + ">";
 }
 
 std::string chart_rect_ref(const std::string& sheet_name, std::uint32_t top, std::uint32_t left, std::uint32_t bottom,
