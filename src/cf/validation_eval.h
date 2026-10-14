@@ -45,8 +45,10 @@ struct ValidationOutcome {
 /// is an already-parsed value (text such as "5" is not reinterpreted as a number); numeric
 /// types reject text, and `textLength` counts UTF-16 units of the value's General text.
 /// A blank value is valid under `allow_blank`, otherwise it is checked as 0 / empty text.
-/// `custom` formulas read the workbook as stored, so a formula that refers to the cell itself
-/// sees the stored value rather than `proposed`.
+/// Every rule formula (custom, list source, bounds) reads the target cell as `proposed`, as if it
+/// were committed, through scalar, range and indirect references alike; a spill the commit would
+/// break reads as #REF!. The workbook is unchanged, and ISFORMULA / FORMULATEXT still see the
+/// stored formula.
 ///
 /// Fails with `kInvalidArgument` when `(row, col)` is outside the grid.
 Expected<ValidationOutcome, Error> validate_value(const Workbook& wb, const Sheet& sheet, std::uint32_t row,

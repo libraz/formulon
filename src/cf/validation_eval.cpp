@@ -318,6 +318,8 @@ Expected<ValidationOutcome, Error> validate_value(const Workbook& wb, const Shee
     }
     const eval::FunctionRegistry* registry = deps.registry != nullptr ? deps.registry : &eval::default_registry();
     Evaluator ev(wb, sheet, anchor_of(dv), CellAddress{row, col}, registry);
+    const eval::CellValueOverlay overlay(sheet, row, col, &proposed);
+    ev.eval_ctx = ev.eval_ctx.with_cell_value_overlay(&overlay);
     switch (dv.type) {
       case kTypeWhole:
       case kTypeDecimal:

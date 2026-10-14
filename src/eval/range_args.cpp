@@ -599,35 +599,23 @@ bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const Functio
   // range-aware function.
   for (std::size_t s = lo; s <= hi; ++s) {
     const std::string_view sheet_name = wb->sheet(s).name();
-    const Sheet& target_sheet = wb->sheet(s);
-    std::uint32_t r_lo = 0;
-    std::uint32_t r_hi = 0;
-    std::uint32_t c_lo = 0;
-    std::uint32_t c_hi = 0;
-    if (full_col) {
-      c_lo = is_range ? std::min(cell.col, cell_end.col) : cell.col;
-      c_hi = is_range ? std::max(cell.col, cell_end.col) : cell.col;
-      const auto extent = target_sheet.populated_extent(0U, c_lo, Sheet::kMaxRows - 1U, c_hi);
-      if (!extent.has_value()) {
-        continue;
-      }
-      r_lo = 0U;
-      r_hi = extent->last_row;
-    } else if (full_row) {
-      r_lo = is_range ? std::min(cell.row, cell_end.row) : cell.row;
-      r_hi = is_range ? std::max(cell.row, cell_end.row) : cell.row;
-      const auto extent = target_sheet.populated_extent(r_lo, 0U, r_hi, Sheet::kMaxCols - 1U);
-      if (!extent.has_value()) {
-        continue;
-      }
-      c_lo = 0U;
-      c_hi = extent->last_col;
-    } else {
-      r_lo = is_range ? std::min(cell.row, cell_end.row) : cell.row;
-      r_hi = is_range ? std::max(cell.row, cell_end.row) : cell.row;
-      c_lo = is_range ? std::min(cell.col, cell_end.col) : cell.col;
-      c_hi = is_range ? std::max(cell.col, cell_end.col) : cell.col;
+    // Each sheet walks through EvalContext, so whole-axis bounds follow the 2-D extent and overlay rules.
+    parser::Reference lhs = cell;
+    parser::Reference rhs = is_range ? cell_end : cell;
+    lhs.sheet = sheet_name;
+    rhs.sheet = sheet_name;
+    const auto walked = ctx.walked_range_rect(lhs, rhs);
+    if (!walked) {
+      return false;
     }
+    if (!walked.value().has_value()) {
+      continue;
+    }
+    const DeclaredRect& rect = *walked.value();
+    const std::uint32_t r_lo = rect.row_first;
+    const std::uint32_t r_hi = rect.row_last;
+    const std::uint32_t c_lo = rect.col_first;
+    const std::uint32_t c_hi = rect.col_last;
     for (std::uint32_t r = r_lo; r <= r_hi; ++r) {
       for (std::uint32_t c = c_lo; c <= c_hi; ++c) {
         parser::Reference per_sheet{};

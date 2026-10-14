@@ -41,12 +41,12 @@ int read_mode_opt(const parser::AstNode& node, Arena& arena, const FunctionRegis
     *out_err = Value::error(coerced.error());
     return default_value;
   }
-  const int mode = static_cast<int>(std::trunc(coerced.value()));
-  if (mode < 0 || mode > 3) {
+  const double mode_d = std::trunc(coerced.value());
+  if (mode_d < 0.0 || mode_d > 3.0) {
     *out_err = Value::error(ErrorCode::Value);
     return default_value;
   }
-  return mode;
+  return static_cast<int>(mode_d);
 }
 
 // The row and column trim modes of a TRIMRANGE or `_TRO_*` call; false with
@@ -276,7 +276,7 @@ bool resolve_trim_reference(const parser::AstNode& call, Arena& arena, const Fun
   // Blankness is whether a cell holds anything, a formula included, so no
   // cell is evaluated to find the edges: a formula inside its own range
   // (`=COLUMNS(1:.1)` in row 1) is no circular read.
-  const std::optional<Sheet::PopulatedExtent> extent = target->populated_extent(top, left, bottom, right);
+  const std::optional<Sheet::PopulatedExtent> extent = ctx.populated_extent(*target, top, left, bottom, right);
   if (!extent) {
     *out_err = ErrorCode::Ref;
     return false;

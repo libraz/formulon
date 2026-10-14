@@ -84,6 +84,26 @@ struct WholeAxisExtent {
   constexpr bool any() const noexcept { return rows != 0U || cols != 0U; }
 };
 
+/// A caller-owned temporary value that shadows one worksheet cell while a
+/// formula is evaluated. The pointed-to value and this descriptor must outlive
+/// every evaluation that observes the context. This is intentionally a read
+/// overlay: it never changes the Workbook or Sheet backing the context.
+struct CellValueOverlay {
+  const Sheet* sheet = nullptr;
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  const Value* value = nullptr;
+
+  CellValueOverlay() = default;
+  CellValueOverlay(const Sheet& target_sheet, std::uint32_t target_row, std::uint32_t target_col,
+                   const Value* target_value) noexcept
+      : sheet(&target_sheet), row(target_row), col(target_col), value(target_value) {}
+
+  const Value* lookup(const Sheet& target_sheet, std::uint32_t target_row, std::uint32_t target_col) const noexcept {
+    return sheet == &target_sheet && row == target_row && col == target_col ? value : nullptr;
+  }
+};
+
 /// The shared whole-axis extent of one dispatched call, owned by the
 /// dispatch frame. It is computed on the first whole-axis expansion under
 /// the call, so a call that never expands one pays nothing for it.
@@ -247,6 +267,10 @@ class EvalContext {
   /// true top-left. A sheet with no content in range yields an empty
   /// vector. Only same-axis whole references compose; a mixed
   /// whole-column / whole-row pair degrades to `#VALUE!`.
+  /// A caller-owned `CellValueOverlay` extends a whole-axis walk to its
+  /// coordinate when that coordinate lies in the reference's bounded band,
+  /// so validation can read a proposed value outside the stored extent
+  /// without changing the sheet.
   ///
   /// When non-null, `out_rows` / `out_cols` receive the concrete *expanded*
   /// shape — the dimensions of the returned vector, `0` for an empty
@@ -298,6 +322,8 @@ class EvalContext {
   /// This is an enumeration bound, never a shape. It lets a consumer that
   /// reads a few lines of a large rectangle materialise only those lines
   /// while agreeing cell-for-cell with a full expansion.
+  /// A caller-owned `CellValueOverlay` is included in the bound when its
+  /// coordinate lies in the declared bounded band.
   /// When non-null, `out_sheet` receives the sheet the walk reads.
   Expected<std::optional<DeclaredRect>, ErrorCode> walked_range_rect(const parser::Reference& lhs,
                                                                      const parser::Reference& rhs,
@@ -325,6 +351,15 @@ class EvalContext {
   /// `sheet_name` is empty, otherwise the bound workbook's sheet of that
   /// name. `nullptr` when no workbook is bound or the sheet is missing.
   const Sheet* sheet_for_qualifier(std::string_view sheet_name) const noexcept;
+
+  /// Returns the populated content extent of `sheet` inside the rectangle.
+  /// A non-blank caller-owned overlay is included in the extent; a blank
+  /// overlay removes that coordinate's stored content from the snapshot.
+  /// Formula metadata at the coordinate remains untouched, so this helper is
+  /// for value/content interpretation such as TRIMRANGE rather than ISFORMULA.
+  std::optional<Sheet::PopulatedExtent> populated_extent(const Sheet& sheet, std::uint32_t first_row,
+                                                         std::uint32_t first_col, std::uint32_t last_row,
+                                                         std::uint32_t last_col) const noexcept;
 
   /// Returns the recursive-evaluation state this context is bound to, or
   /// `nullptr` when no state was supplied. Useful for tests that want to
@@ -533,6 +568,14 @@ class EvalContext {
   /// only the shape or position of the resolved reference.
   EvalContext without_dynamic_read_callback() const noexcept { return with_dynamic_read_callback(nullptr, nullptr); }
 
+  /// Returns a copy whose scalar and range reads shadow the one cell described
+  /// by `overlay`. The caller owns both the descriptor and its `Value`.
+  EvalContext with_cell_value_overlay(const CellValueOverlay* overlay) const noexcept {
+    EvalContext copy = *this;
+    copy.cell_value_overlay_ = overlay;
+    return copy;
+  }
+
   /// Reports a read of the values in a rectangle of `sheet` to a state
   /// observing reads (see `EvalState::observe_reads_of`); no-op otherwise.
   /// Every read of a cell's value goes through here -- `resolve_ref`, range
@@ -542,7 +585,9 @@ class EvalContext {
                         std::uint32_t last_col) const;
 
   /// `Sheet::read_spill_region_at_anchor`, reported as a read of the anchor's
-  /// value. The one way the evaluator reads a spill region's values.
+  /// value. The one way the evaluator reads a spill region's values. A
+  /// cell-value overlay at the anchor, or a non-blank one at a phantom, reads
+  /// as the spill a commit would break (false); the sheet is never mutated.
   bool read_spill_region(const Sheet& sheet, std::uint32_t row, std::uint32_t col, Arena& arena,
                          std::vector<Value>& out_cells, std::uint32_t* out_rows, std::uint32_t* out_cols) const;
 
@@ -656,6 +701,8 @@ class EvalContext {
   void* spill_release_user_data_ = nullptr;
   DynamicReadCallback dynamic_read_callback_ = nullptr;
   void* dynamic_read_user_data_ = nullptr;
+  // Temporary, caller-owned read substitution used by pre-commit validation.
+  const CellValueOverlay* cell_value_overlay_ = nullptr;
   std::uint32_t formula_row_ = kNoFormulaCell;
   std::uint32_t formula_col_ = kNoFormulaCell;
   // Non-owning pointers to caller-stack-allocated depth counters. The

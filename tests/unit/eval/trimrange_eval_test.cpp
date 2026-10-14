@@ -400,6 +400,12 @@ TEST(BuiltinsTrimRange, ModeFourRejected) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsTrimRange, HugeModeRejectedWithoutNarrowing) {
+  const Value v = EvalSrc("=TRIMRANGE({1}, 1E100)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 TEST(BuiltinsTrimRange, ModeNegativeRejected) {
   const Value v = EvalSrc("=TRIMRANGE({1}, -1)");
   ASSERT_TRUE(v.is_error());

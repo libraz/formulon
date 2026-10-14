@@ -170,11 +170,74 @@ const Sheet* EvalContext::sheet_for_qualifier(std::string_view sheet_name) const
   return workbook_->sheet_by_name(sheet_name);
 }
 
+std::optional<Sheet::PopulatedExtent> EvalContext::populated_extent(const Sheet& sheet, std::uint32_t first_row,
+                                                                    std::uint32_t first_col, std::uint32_t last_row,
+                                                                    std::uint32_t last_col) const noexcept {
+  const auto merge = [](std::optional<Sheet::PopulatedExtent>* total,
+                        const std::optional<Sheet::PopulatedExtent>& part) noexcept {
+    if (!part.has_value()) {
+      return;
+    }
+    if (!total->has_value()) {
+      *total = part;
+      return;
+    }
+    Sheet::PopulatedExtent& extent = total->value();
+    extent.first_row = std::min(extent.first_row, part->first_row);
+    extent.first_col = std::min(extent.first_col, part->first_col);
+    extent.last_row = std::max(extent.last_row, part->last_row);
+    extent.last_col = std::max(extent.last_col, part->last_col);
+  };
+
+  if (!Sheet::rect_in_grid(first_row, first_col, last_row, last_col)) {
+    return std::nullopt;
+  }
+  const CellValueOverlay* overlay = cell_value_overlay_;
+  const bool in_rect = overlay != nullptr && overlay->value != nullptr && overlay->sheet == &sheet &&
+                       overlay->row >= first_row && overlay->row <= last_row && overlay->col >= first_col &&
+                       overlay->col <= last_col;
+  if (!in_rect || !overlay->value->is_blank()) {
+    std::optional<Sheet::PopulatedExtent> extent = sheet.populated_extent(first_row, first_col, last_row, last_col);
+    if (in_rect) {
+      if (!extent.has_value()) {
+        extent = Sheet::PopulatedExtent{overlay->row, overlay->col, overlay->row, overlay->col};
+      } else {
+        extent->first_row = std::min(extent->first_row, overlay->row);
+        extent->first_col = std::min(extent->first_col, overlay->col);
+        extent->last_row = std::max(extent->last_row, overlay->row);
+        extent->last_col = std::max(extent->last_col, overlay->col);
+      }
+    }
+    return extent;
+  }
+
+  // A blank proposal hides the stored cell: query the rest of the rectangle as four disjoint pieces.
+  std::optional<Sheet::PopulatedExtent> extent;
+  if (overlay->row > first_row) {
+    merge(&extent, sheet.populated_extent(first_row, first_col, overlay->row - 1U, last_col));
+  }
+  if (overlay->row < last_row) {
+    merge(&extent, sheet.populated_extent(overlay->row + 1U, first_col, last_row, last_col));
+  }
+  if (overlay->col > first_col) {
+    merge(&extent, sheet.populated_extent(overlay->row, first_col, overlay->row, overlay->col - 1U));
+  }
+  if (overlay->col < last_col) {
+    merge(&extent, sheet.populated_extent(overlay->row, overlay->col + 1U, overlay->row, last_col));
+  }
+  return extent;
+}
+
 Value EvalContext::resolve_ref(const parser::Reference& ref) const {
   Value short_circuit = Value::blank();
   const Sheet* target = resolve_ref_target(current_sheet_, workbook_, ref, &short_circuit);
   if (target == nullptr) {
     return short_circuit;
+  }
+  if (cell_value_overlay_ != nullptr) {
+    if (const Value* replacement = cell_value_overlay_->lookup(*target, ref.row, ref.col); replacement != nullptr) {
+      return *replacement;
+    }
   }
   // Non-recursive path: a formula cell yields whatever is currently cached
   // (typically blank), which is exactly what the spill-aware read returns
@@ -197,7 +260,22 @@ bool EvalContext::read_spill_region(const Sheet& sheet, std::uint32_t row, std::
                                     std::vector<Value>& out_cells, std::uint32_t* out_rows,
                                     std::uint32_t* out_cols) const {
   note_value_reads(sheet, row, col, row, col);
-  return sheet.read_spill_region_at_anchor(row, col, arena, out_cells, out_rows, out_cols);
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  const std::size_t first_cell = out_cells.size();
+  if (!sheet.read_spill_region_at_anchor(row, col, arena, out_cells, &rows, &cols)) {
+    return false;
+  }
+  // A proposal at the anchor replaces the spilling formula and a non-blank one at a phantom blocks the spill.
+  const CellValueOverlay* overlay = cell_value_overlay_;
+  if (overlay != nullptr && overlay->value != nullptr && overlay->sheet == &sheet && overlay->row >= row &&
+      overlay->col >= col && overlay->row - row < rows && overlay->col - col < cols &&
+      ((overlay->row == row && overlay->col == col) || !overlay->value->is_blank())) {
+    out_cells.erase(out_cells.begin() + static_cast<std::ptrdiff_t>(first_cell), out_cells.end());
+    return false;
+  }
+  set_shape(out_rows, out_cols, rows, cols);
+  return true;
 }
 
 EvalContext EvalContext::without_read_observer() const noexcept {
@@ -213,6 +291,11 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
   const Sheet* target = resolve_ref_target(current_sheet_, workbook_, ref, &short_circuit);
   if (target == nullptr) {
     return short_circuit;
+  }
+  if (cell_value_overlay_ != nullptr) {
+    if (const Value* replacement = cell_value_overlay_->lookup(*target, ref.row, ref.col); replacement != nullptr) {
+      return adopt_text_into(arena, *replacement);
+    }
   }
   note_value_reads(*target, ref.row, ref.col, ref.row, ref.col);
 
@@ -341,7 +424,7 @@ struct WalkedRange {
 template <typename SharedExtent>
 Expected<WalkedRange, ErrorCode> walk_range(const parser::Reference& lhs, const parser::Reference& rhs,
                                             const Sheet* current_sheet, const Workbook* workbook,
-                                            const SharedExtent& shared_extent) {
+                                            const SharedExtent& shared_extent, const CellValueOverlay* overlay) {
   if (current_sheet == nullptr) {
     return ErrorCode::Name;
   }
@@ -407,6 +490,16 @@ Expected<WalkedRange, ErrorCode> walk_range(const parser::Reference& lhs, const 
       walk_len = std::max(walk_len, (column_span ? extent->last_row : extent->last_col) + 1U);
     }
   }
+  // A whole-axis walk reaches the overlay coordinate, blank proposals included, as positional consumers expect.
+  if (overlay != nullptr && overlay->value != nullptr && overlay->sheet == walked.sheet &&
+      overlay->row < Sheet::kMaxRows && overlay->col < Sheet::kMaxCols) {
+    const bool overlay_in_band = column_span ? (overlay->col >= rect.col_first && overlay->col <= rect.col_last)
+                                             : (overlay->row >= rect.row_first && overlay->row <= rect.row_last);
+    if (overlay_in_band) {
+      const std::uint32_t overlay_axis = column_span ? overlay->row : overlay->col;
+      walk_len = std::max(walk_len, overlay_axis + 1U);
+    }
+  }
   if (walk_len == 0U) {
     return walked;
   }
@@ -422,7 +515,8 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
                                                                   const FunctionRegistry& registry,
                                                                   std::uint32_t* out_rows,
                                                                   std::uint32_t* out_cols) const {
-  auto walked = walk_range(lhs, rhs, current_sheet_, workbook_, [this] { return shared_whole_axis_extent(); });
+  auto walked = walk_range(
+      lhs, rhs, current_sheet_, workbook_, [this] { return shared_whole_axis_extent(); }, cell_value_overlay_);
   if (!walked) {
     return walked.error();
   }
@@ -466,7 +560,18 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
   note_value_reads(*target_sheet, r_min, c_min, r_max, c_max);
   target_sheet->read_range(r_min, r_max, c_min, c_max, arena, out, formula_indices);
   const std::uint32_t width = c_max - c_min + 1U;
+  std::optional<std::size_t> overlay_index;
+  if (cell_value_overlay_ != nullptr && cell_value_overlay_->value != nullptr &&
+      cell_value_overlay_->sheet == target_sheet && cell_value_overlay_->row >= r_min &&
+      cell_value_overlay_->row <= r_max && cell_value_overlay_->col >= c_min && cell_value_overlay_->col <= c_max) {
+    overlay_index = static_cast<std::size_t>(cell_value_overlay_->row - r_min) * width +
+                    static_cast<std::size_t>(cell_value_overlay_->col - c_min);
+    out[*overlay_index] = adopt_text_into(arena, *cell_value_overlay_->value);
+  }
   for (const std::size_t index : formula_indices) {
+    if (overlay_index.has_value() && index == *overlay_index) {
+      continue;
+    }
     parser::Reference cell_ref{};
     // Propagate the effective sheet qualifier so `resolve_ref` routes
     // through the same `resolve_target_sheet` logic — this keeps the
@@ -528,7 +633,8 @@ WholeAxisExtent EvalContext::shared_whole_axis_extent() const {
 Expected<std::optional<DeclaredRect>, ErrorCode> EvalContext::walked_range_rect(const parser::Reference& lhs,
                                                                                 const parser::Reference& rhs,
                                                                                 const Sheet** out_sheet) const {
-  auto walked = walk_range(lhs, rhs, current_sheet_, workbook_, [this] { return shared_whole_axis_extent(); });
+  auto walked = walk_range(
+      lhs, rhs, current_sheet_, workbook_, [this] { return shared_whole_axis_extent(); }, cell_value_overlay_);
   if (!walked) {
     return walked.error();
   }

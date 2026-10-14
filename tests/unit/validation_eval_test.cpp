@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "sheet.h"
@@ -630,6 +632,272 @@ TEST(ValidationEval, RelativeFormulaShiftsFromSqrefAnchor) {
   EXPECT_TRUE(f.Check(Value::number(1.0), 0, 0).valid);
   EXPECT_FALSE(f.Check(Value::number(1.0), 1, 0).valid);
   EXPECT_TRUE(f.Check(Value::number(1.0), 2, 0).valid);
+}
+
+TEST(ValidationEval, CustomFormulaUsesProposedValueForScalarRangeAndFormulaReads) {
+  // A scalar self-reference is evaluated against the candidate value. The stored cell is
+  // deliberately different, and remains unchanged after both validation attempts.
+  Fixture scalar;
+  scalar.Store(Value::number(5.0));
+  scalar.AddRule(Ty::kCustom, Op::kNone, true, "A1>3");
+  EXPECT_FALSE(scalar.Check(Value::number(1.0)).valid);
+  EXPECT_TRUE(scalar.Check(Value::number(5.0)).valid);
+  EXPECT_DOUBLE_EQ(scalar.sheet().resolve_cell_value(0, 0).as_number(), 5.0);
+
+  // Range materialization substitutes the candidate before aggregate evaluation.
+  Fixture range;
+  range.Store(Value::number(5.0));
+  range.wb.set_cell_value(range.sheet_index, 0, 1, Value::number(7.0));
+  range.AddRule(Ty::kCustom, Op::kNone, true, "SUM(A1:B1)>10");
+  EXPECT_FALSE(range.Check(Value::number(1.0)).valid);
+  EXPECT_TRUE(range.Check(Value::number(5.0)).valid);
+  EXPECT_DOUBLE_EQ(range.sheet().resolve_cell_value(0, 0).as_number(), 5.0);
+
+  Fixture relative;
+  relative.wb.set_cell_value(relative.sheet_index, 1, 1, Value::number(5.0));  // B2
+  DataValidation relative_rule;
+  relative_rule.ranges.push_back(MergeRange{0, 0, 1, 1});  // A1:B2; anchor A1
+  relative_rule.type = static_cast<std::uint8_t>(Ty::kCustom);
+  relative_rule.formula1 = "A1>3";  // At B2 this shifts to B2.
+  relative.sheet().mutable_validations().push_back(relative_rule);
+  EXPECT_FALSE(relative.Check(Value::number(1.0), 1, 1).valid);
+  EXPECT_TRUE(relative.Check(Value::number(5.0), 1, 1).valid);
+
+  Fixture absolute;
+  absolute.wb.set_cell_value(absolute.sheet_index, 1, 1, Value::number(5.0));  // B2
+  absolute.AddRule(Ty::kCustom, Op::kNone, true, "$B$2>3", "", 1, 1);
+  EXPECT_FALSE(absolute.Check(Value::number(1.0), 1, 1).valid);
+  EXPECT_TRUE(absolute.Check(Value::number(5.0), 1, 1).valid);
+
+  // Formula cells must be shadowed before formula-index recursion, rather than returning
+  // their cached result. This distinguishes the overlay from a normal cached read.
+  Fixture formula;
+  ASSERT_TRUE(static_cast<bool>(formula.wb.set_cell_formula(formula.sheet_index, 0, 0, "=5")));
+  ASSERT_TRUE(static_cast<bool>(formula.wb.recalc(eval::default_registry())));
+  formula.AddRule(Ty::kCustom, Op::kNone, true, "SUM(A1:A1)>3");
+  EXPECT_FALSE(formula.Check(Value::number(1.0)).valid);
+  EXPECT_TRUE(formula.Check(Value::number(5.0)).valid);
+  EXPECT_EQ(formula.sheet().cell_at(0, 0)->formula_text, "=5");
+
+  // A qualified reference to another sheet is unaffected by the target-cell overlay.
+  Fixture other;
+  const std::size_t other_sheet = other.wb.add_sheet("T");
+  other.wb.set_cell_value(other_sheet, 0, 0, Value::number(5.0));
+  other.Store(Value::number(9.0));
+  other.AddRule(Ty::kCustom, Op::kNone, true, "T!A1>3");
+  EXPECT_TRUE(other.Check(Value::number(1.0)).valid);
+  EXPECT_DOUBLE_EQ(other.sheet().resolve_cell_value(0, 0).as_number(), 9.0);
+}
+
+TEST(ValidationEval, CustomFormulaWholeAxisIncludesProposedValue) {
+  // A populated head must not hide a proposed value below the stored extent of
+  // the same whole column. The candidate is read only through validation and
+  // the backing sheet remains unchanged.
+  Fixture sum;
+  ASSERT_TRUE(static_cast<bool>(sum.wb.set_cell_value(sum.sheet_index, 0, 0, Value::number(0.0))));
+  sum.AddRule(Ty::kCustom, Op::kNone, true, "SUM($A:$A)>0", "", 99, 0);  // A100
+  EXPECT_TRUE(sum.Check(Value::number(5.0), 99, 0).valid);
+  EXPECT_FALSE(sum.Check(Value::number(0.0), 99, 0).valid);
+  EXPECT_TRUE(sum.sheet().resolve_cell_value(99, 0).is_blank());
+  EXPECT_DOUBLE_EQ(sum.sheet().resolve_cell_value(0, 0).as_number(), 0.0);
+
+  Fixture countif;
+  ASSERT_TRUE(static_cast<bool>(countif.wb.set_cell_value(countif.sheet_index, 0, 0, Value::number(0.0))));
+  countif.AddRule(Ty::kCustom, Op::kNone, true, "COUNTIF($A:$A,5)>0", "", 99, 0);  // A100
+  EXPECT_TRUE(countif.Check(Value::number(5.0), 99, 0).valid);
+  EXPECT_FALSE(countif.Check(Value::number(4.0), 99, 0).valid);
+
+  // With no populated cells at all, the overlay itself supplies the walk's
+  // extent. This also guards the zero-length whole-axis fast path.
+  Workbook empty = Workbook::create_empty();
+  const std::size_t empty_index = empty.add_sheet("Empty");
+  Sheet& empty_sheet = empty.sheet(empty_index);
+  DataValidation empty_rule;
+  empty_rule.ranges.push_back(MergeRange{99, 0, 99, 0});  // A100
+  empty_rule.type = static_cast<std::uint8_t>(Ty::kCustom);
+  empty_rule.allow_blank = true;
+  empty_rule.formula1 = "SUM($A:$A)>0";
+  empty_sheet.mutable_validations().push_back(empty_rule);
+  auto empty_result = validate_value(empty, empty_sheet, 99, 0, Value::number(5.0));
+  ASSERT_TRUE(static_cast<bool>(empty_result));
+  EXPECT_TRUE(empty_result.value().valid);
+
+  // A proposal in an adjacent column must not extend or affect A:A.
+  Workbook adjacent = Workbook::create_empty();
+  const std::size_t adjacent_index = adjacent.add_sheet("Adjacent");
+  Sheet& adjacent_sheet = adjacent.sheet(adjacent_index);
+  ASSERT_TRUE(static_cast<bool>(adjacent.set_cell_value(adjacent_index, 0, 0, Value::number(0.0))));
+  DataValidation adjacent_rule;
+  adjacent_rule.ranges.push_back(MergeRange{99, 1, 99, 1});  // B100
+  adjacent_rule.type = static_cast<std::uint8_t>(Ty::kCustom);
+  adjacent_rule.allow_blank = true;
+  adjacent_rule.formula1 = "SUM($A:$A)>0";
+  adjacent_sheet.mutable_validations().push_back(adjacent_rule);
+  auto adjacent_result = validate_value(adjacent, adjacent_sheet, 99, 1, Value::number(5.0));
+  ASSERT_TRUE(static_cast<bool>(adjacent_result));
+  EXPECT_FALSE(adjacent_result.value().valid);
+
+  // Whole-row walking has the symmetric issue on the bounded row axis.
+  Workbook row = Workbook::create_empty();
+  const std::size_t row_index = row.add_sheet("Row");
+  Sheet& row_sheet = row.sheet(row_index);
+  ASSERT_TRUE(static_cast<bool>(row.set_cell_value(row_index, 0, 0, Value::number(0.0))));
+  DataValidation row_rule;
+  row_rule.ranges.push_back(MergeRange{0, 9, 0, 9});  // J1
+  row_rule.type = static_cast<std::uint8_t>(Ty::kCustom);
+  row_rule.allow_blank = true;
+  row_rule.formula1 = "SUM($1:$1)>0";
+  row_sheet.mutable_validations().push_back(row_rule);
+  auto row_result = validate_value(row, row_sheet, 0, 9, Value::number(5.0));
+  ASSERT_TRUE(static_cast<bool>(row_result));
+  EXPECT_TRUE(row_result.value().valid);
+}
+
+TEST(ValidationEval, CustomFormulaThreeDimensionalReadsOverlayOnTargetSheet) {
+  Workbook wb = Workbook::create_empty();
+  const std::size_t first_index = wb.add_sheet("First");
+  const std::size_t second_index = wb.add_sheet("Second");
+  Sheet& first = wb.sheet(first_index);
+  Sheet& second = wb.sheet(second_index);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(first_index, 0, 0, Value::number(0.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(second_index, 0, 0, Value::number(1.0))));
+
+  DataValidation whole;
+  whole.ranges.push_back(MergeRange{99, 0, 99, 0});  // A100
+  whole.type = static_cast<std::uint8_t>(Ty::kCustom);
+  whole.allow_blank = true;
+  whole.formula1 = "SUM(First:Second!A:A)>5";
+  first.mutable_validations().push_back(whole);
+
+  DataValidation bounded;
+  bounded.ranges.push_back(MergeRange{100, 0, 100, 0});  // A101
+  bounded.type = static_cast<std::uint8_t>(Ty::kCustom);
+  bounded.allow_blank = true;
+  bounded.formula1 = "SUM(First:Second!A1:A101)>5";
+  first.mutable_validations().push_back(bounded);
+
+  auto whole_result = validate_value(wb, first, 99, 0, Value::number(5.0));
+  ASSERT_TRUE(static_cast<bool>(whole_result));
+  EXPECT_TRUE(whole_result.value().valid);
+  whole_result = validate_value(wb, first, 99, 0, Value::number(4.0));
+  ASSERT_TRUE(static_cast<bool>(whole_result));
+  EXPECT_FALSE(whole_result.value().valid);
+
+  auto bounded_result = validate_value(wb, first, 100, 0, Value::number(5.0));
+  ASSERT_TRUE(static_cast<bool>(bounded_result));
+  EXPECT_TRUE(bounded_result.value().valid);
+  bounded_result = validate_value(wb, first, 100, 0, Value::number(4.0));
+  ASSERT_TRUE(static_cast<bool>(bounded_result));
+  EXPECT_FALSE(bounded_result.value().valid);
+
+  EXPECT_TRUE(first.resolve_cell_value(99, 0).is_blank());
+  EXPECT_TRUE(first.resolve_cell_value(100, 0).is_blank());
+  EXPECT_DOUBLE_EQ(second.resolve_cell_value(0, 0).as_number(), 1.0);
+}
+
+TEST(ValidationEval, CustomFormulaSeesAProposalInsideASpillBreakIt) {
+  // Committing a value at the anchor replaces the spilling formula, and one at
+  // a phantom blocks the spill, so `A1#` is #REF! either way. A blank at a
+  // phantom leaves the spill intact.
+  Workbook wb = Workbook::create_empty();
+  const std::size_t sheet_index = wb.add_sheet("Spill");
+  Sheet& sheet = wb.sheet(sheet_index);
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 2U, 1U, {Value::number(1.0), Value::number(2.0)}));
+
+  DataValidation anchor_rule;
+  anchor_rule.ranges.push_back(MergeRange{0, 0, 0, 0});  // A1
+  anchor_rule.type = static_cast<std::uint8_t>(Ty::kCustom);
+  anchor_rule.allow_blank = false;
+  anchor_rule.formula1 = "ISERROR(SUM(A1#))";
+  sheet.mutable_validations().push_back(anchor_rule);
+
+  DataValidation phantom_rule;
+  phantom_rule.ranges.push_back(MergeRange{1, 0, 1, 0});  // A2, a spill phantom
+  phantom_rule.type = static_cast<std::uint8_t>(Ty::kCustom);
+  phantom_rule.allow_blank = false;
+  phantom_rule.formula1 = "ISERROR(SUM($A$1#))";
+  sheet.mutable_validations().push_back(phantom_rule);
+
+  auto result = validate_value(wb, sheet, 0U, 0U, Value::number(5.0));
+  ASSERT_TRUE(static_cast<bool>(result));
+  EXPECT_TRUE(result.value().valid);
+  result = validate_value(wb, sheet, 0U, 0U, Value::blank());
+  ASSERT_TRUE(static_cast<bool>(result));
+  EXPECT_TRUE(result.value().valid);
+
+  result = validate_value(wb, sheet, 1U, 0U, Value::number(5.0));
+  ASSERT_TRUE(static_cast<bool>(result));
+  EXPECT_TRUE(result.value().valid);
+  result = validate_value(wb, sheet, 1U, 0U, Value::blank());
+  ASSERT_TRUE(static_cast<bool>(result));
+  EXPECT_FALSE(result.value().valid);
+
+  // The committed spill and its geometry are untouched.
+  EXPECT_DOUBLE_EQ(sheet.resolve_cell_value(0U, 0U).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(sheet.resolve_cell_value(1U, 0U).as_number(), 2.0);
+  const SpillRegion* region = sheet.spill_region_at_anchor(0U, 0U);
+  ASSERT_NE(region, nullptr);
+  EXPECT_EQ(region->rows, 2U);
+  EXPECT_EQ(region->cols, 1U);
+}
+
+TEST(ValidationEval, CustomFormulaTrimRangeUsesProposedContentExtent) {
+  // A non-blank proposal beyond the stored tail extends the content extent;
+  // a blank proposal at the same coordinate leaves only the stored head.
+  Workbook tail = Workbook::create_empty();
+  const std::size_t tail_index = tail.add_sheet("Tail");
+  Sheet& tail_sheet = tail.sheet(tail_index);
+  ASSERT_TRUE(static_cast<bool>(tail.set_cell_value(tail_index, 0, 0, Value::number(1.0))));
+  DataValidation tail_rule;
+  tail_rule.ranges.push_back(MergeRange{99, 0, 99, 0});  // A100
+  tail_rule.type = static_cast<std::uint8_t>(Ty::kCustom);
+  tail_rule.allow_blank = false;
+  tail_rule.formula1 = "ROWS(TRIMRANGE($A$1:$A$100))=100";
+  tail_sheet.mutable_validations().push_back(tail_rule);
+  auto result = validate_value(tail, tail_sheet, 99U, 0U, Value::number(5.0));
+  ASSERT_TRUE(static_cast<bool>(result));
+  EXPECT_TRUE(result.value().valid);
+  result = validate_value(tail, tail_sheet, 99U, 0U, Value::blank());
+  ASSERT_TRUE(static_cast<bool>(result));
+  EXPECT_FALSE(result.value().valid);
+
+  // The same merge must extend the leading edge when the stored value is at
+  // the tail and the proposal supplies the first cell.
+  Workbook head = Workbook::create_empty();
+  const std::size_t head_index = head.add_sheet("Head");
+  Sheet& head_sheet = head.sheet(head_index);
+  ASSERT_TRUE(static_cast<bool>(head.set_cell_value(head_index, 99, 0, Value::number(1.0))));
+  DataValidation head_rule;
+  head_rule.ranges.push_back(MergeRange{0, 0, 0, 0});  // A1
+  head_rule.type = static_cast<std::uint8_t>(Ty::kCustom);
+  head_rule.allow_blank = false;
+  head_rule.formula1 = "ROWS(TRIMRANGE($A$1:$A$100))=100";
+  head_sheet.mutable_validations().push_back(head_rule);
+  result = validate_value(head, head_sheet, 0U, 0U, Value::number(5.0));
+  ASSERT_TRUE(static_cast<bool>(result));
+  EXPECT_TRUE(result.value().valid);
+  result = validate_value(head, head_sheet, 0U, 0U, Value::blank());
+  ASSERT_TRUE(static_cast<bool>(result));
+  EXPECT_FALSE(result.value().valid);
+
+  // Blank has no content and yields TRIMRANGE's empty-reference error;
+  // empty text is content and therefore yields a one-cell reference.
+  Workbook empty = Workbook::create_empty();
+  const std::size_t empty_index = empty.add_sheet("Empty");
+  Sheet& empty_sheet = empty.sheet(empty_index);
+  DataValidation empty_rule;
+  empty_rule.ranges.push_back(MergeRange{49, 0, 49, 0});  // A50
+  empty_rule.type = static_cast<std::uint8_t>(Ty::kCustom);
+  empty_rule.allow_blank = false;
+  empty_rule.formula1 = "ISERROR(TRIMRANGE($A$1:$A$100))";
+  empty_sheet.mutable_validations().push_back(empty_rule);
+  result = validate_value(empty, empty_sheet, 49U, 0U, Value::blank());
+  ASSERT_TRUE(static_cast<bool>(result));
+  EXPECT_TRUE(result.value().valid);
+  result = validate_value(empty, empty_sheet, 49U, 0U, Value::text(""));
+  ASSERT_TRUE(static_cast<bool>(result));
+  EXPECT_FALSE(result.value().valid);
+  EXPECT_TRUE(empty_sheet.resolve_cell_value(49U, 0U).is_blank());
 }
 
 TEST(ValidationEval, QualifiedBuiltinCustomFormulaDoesNotPass) {
