@@ -210,7 +210,7 @@ fm_status_t check_enum_domain(std::int64_t value, std::int64_t max, const char* 
 // whole block when such an attribute holds anything else.
 fm_status_t check_guid(const char* text, const char* api, const char* field);
 
-// Returns whether `id` is a documented built-in number-format id or one
+// Returns whether `id` is a built-in number-format id in some locale or one
 // registered in `styles.num_fmts`.
 bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id);
 

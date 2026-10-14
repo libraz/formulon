@@ -273,7 +273,7 @@ std::string_view number_format_for_xf(const CellXf* xf, const EvalContext& ctx) 
   if (xf == nullptr || ctx.workbook() == nullptr) {
     return {};
   }
-  return text_format::number_format_code_for_xf(ctx.workbook()->styles(), xf);
+  return text_format::number_format_code_for_xf(ctx.workbook()->styles(), xf, ctx.workbook()->excel_profile());
 }
 
 std::string_view cell_format_code(const CellXf* xf) {

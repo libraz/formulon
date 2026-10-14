@@ -9,7 +9,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <string>
 #include <string_view>
 
@@ -51,58 +50,16 @@ std::uint64_t rounded_product(double target, std::uint64_t denominator) noexcept
   return static_cast<std::uint64_t>(rounded);
 }
 
-struct RationalCandidate {
-  std::uint64_t numerator = 0;
-  std::uint64_t denominator = 1;
-  double error = std::numeric_limits<double>::max();
-};
-
-// All arithmetic is binary64, as in Excel: a wider long double (x86-64,
-// aarch64 Linux, WASM) rounds 0.015 * 100 below 1.5 and picks other candidates.
-void consider_candidate(double target, std::uint64_t numerator, std::uint64_t denominator,
-                        RationalCandidate* best) noexcept {
-  if (denominator == 0) {
-    return;
-  }
-  const double approximation = static_cast<double>(numerator) / static_cast<double>(denominator);
-  const double error = std::fabs(target - approximation);
-  // Excel treats adjacent binary64 values at a rational midpoint as ties
-  // (17/144 with a one-digit denominator chooses 1/8, not 1/9). Use the
-  // input's precision.
-  // Scale the bound by approximation error, so an exact rational never ties
-  // with a non-exact one and tiny fractions remain distinguishable from zero.
-  const double tie_bound = 32.0 * std::numeric_limits<double>::epsilon() * std::max(error, best->error);
-  const bool tied = std::fabs(error - best->error) <= tie_bound;
-  if ((!tied && error < best->error) || (tied && (denominator < best->denominator ||
-                                                  (denominator == best->denominator && numerator < best->numerator)))) {
-    best->numerator = numerator;
-    best->denominator = denominator;
-    best->error = error;
-  }
-}
-
-// Bounded continued-fraction search. It keeps the convergents in an integer
-// denominator and jumps over large partial quotients, avoiding the linear
-// Stern-Brocot walk that made values such as 1/20000 hit its iteration cap.
+// Excel takes the last convergent of the binary64 continued-fraction expansion
+// whose denominator fits, never a semiconvergent, even a closer one: 0.5627
+// gives 4/7 rather than 5/9, and 0.6125 gives 3/5 rather than 5/8.
 void best_rational(double target, std::uint64_t max_q, std::uint64_t* out_num, std::uint64_t* out_den) noexcept {
   max_q = std::min(max_q, kMaxVariableDenominator);
   if (max_q < 1) {
     max_q = 1;
   }
-  RationalCandidate best;
-
-  auto consider_boundary = [&](std::uint64_t denominator) noexcept {
-    if (denominator > 0) {
-      consider_candidate(target, rounded_product(target, denominator), denominator, &best);
-    }
-  };
-
-  // A denominator-one endpoint is always a useful initial candidate,
-  // including tiny fractional parts whose first continued-fraction term
-  // exceeds the denominator range.
-  consider_boundary(1);
-
-  // A wider expansion would turn 1/0.1 into 9.99..., not 10, and pick another term.
+  std::uint64_t num = 0;
+  std::uint64_t den = 1;
   double x = target;
   std::uint64_t p_prev2 = 0;
   std::uint64_t p_prev1 = 1;
@@ -113,51 +70,25 @@ void best_rational(double target, std::uint64_t max_q, std::uint64_t* out_num, s
     if (a_value < 0.0) {
       break;
     }
-    if (q_prev2 > max_q) {
-      consider_boundary(max_q);
-      break;
-    }
-    const std::uint64_t quotient_limit = q_prev1 == 0 ? max_q : (max_q - q_prev2) / q_prev1;
     // Compare before casting: a_value can exceed UINT64_MAX. The limit is below 2^53, so the bound is exact.
-    if (a_value >= static_cast<double>(quotient_limit) + 1.0) {
-      // When even the first reciprocal is out of range Excel returns zero, not 1/max_q.
-      if (p_prev1 == 0 && q_prev1 == 1) {
-        break;
-      }
-      const std::uint64_t t = quotient_limit;
-      if (t > 0) {
-        consider_candidate(target, p_prev2 + p_prev1 * t, q_prev2 + q_prev1 * t, &best);
-      }
-      consider_candidate(target, p_prev1, q_prev1, &best);
-      consider_boundary(max_q);
+    if (q_prev1 != 0 && a_value > static_cast<double>((max_q - q_prev2) / q_prev1)) {
       break;
     }
     const std::uint64_t a = static_cast<std::uint64_t>(a_value);
-
-    if (a != 0 && p_prev1 > (std::numeric_limits<std::uint64_t>::max() - p_prev2) / a) {
-      consider_boundary(max_q);
-      break;
-    }
-    const std::uint64_t p = p_prev2 + p_prev1 * a;
-    const std::uint64_t q = q_prev2 + q_prev1 * a;
-    if (q > max_q || q == 0) {
-      consider_boundary(max_q);
-      break;
-    }
-    consider_candidate(target, p, q, &best);
+    num = p_prev2 + p_prev1 * a;
+    den = q_prev2 + q_prev1 * a;
     const double fractional = x - a_value;
     if (fractional == 0.0) {
       break;
     }
     p_prev2 = p_prev1;
-    p_prev1 = p;
+    p_prev1 = num;
     q_prev2 = q_prev1;
-    q_prev1 = q;
+    q_prev1 = den;
     x = 1.0 / fractional;
   }
-
-  *out_num = best.numerator;
-  *out_den = best.denominator < 1 ? 1 : best.denominator;
+  *out_num = num;
+  *out_den = den;
 }
 
 // Multiply a decimal digit string by an 18-digit-or-smaller denominator. The

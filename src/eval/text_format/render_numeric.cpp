@@ -330,6 +330,11 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
       }
       format_fixed_digits(mantissa, frac_digits, &negative, &int_digits, &frac_digits_str);
     }
+    // A zero mantissa fills every `0` / `#` integer placeholder with 0 (`##0.0E+0` -> 000.0E+0).
+    if (mantissa == 0.0) {
+      int_digits.assign(static_cast<std::size_t>(std::max(1, section.integer_zero_digits + section.integer_opt_digits)),
+                        '0');
+    }
   } else {
     format_fixed_digits(scaled, frac_digits, &negative, &int_digits, &frac_digits_str);
   }
@@ -351,19 +356,14 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
   }
 
   // Remove a redundant leading "0" for values with an integer part of zero
-  // when the format has only `#` digits in the integer part.
-  if (section.integer_zero_digits == 0 && section.integer_pad_digits == 0 && int_digits == "0") {
+  // when the format has no `0` integer placeholder; a `?` then pads a space.
+  if (section.integer_zero_digits == 0 && !section.has_scientific && int_digits == "0") {
     int_digits.clear();
   }
 
   // Fraction adjustment: the formatter produced exactly `frac_digits` chars.
-  // `?` pads the trailing zeros matching the `#` count; a `#` drops its digit
-  // when it and every later digit are zero, wherever it sits (`.##0`).
-  std::size_t frac_shown = frac_digits_str.size();
-  for (int trim = section.fraction_opt_digits; trim > 0 && frac_shown > 0 && frac_digits_str[frac_shown - 1] == '0';
-       --trim) {
-    --frac_shown;
-  }
+  // A zero at or after the last significant digit prints nothing under `#`
+  // and a space under `?`, wherever it sits (`.##0`, `0.?#`).
   const std::size_t last_nonzero = frac_digits_str.find_last_not_of('0');
   const std::size_t frac_zero_tail = last_nonzero == std::string::npos ? 0 : last_nonzero + 1;
 
@@ -524,7 +524,9 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
         } else if (past_point) {
           if (tk.kind == Tok::DigitOpt && frac_cursor >= frac_zero_tail) {
             // An insignificant trailing zero under `#` prints nothing.
-          } else if (frac_cursor < frac_shown) {
+          } else if (tk.kind == Tok::DigitPad && frac_cursor >= frac_zero_tail) {
+            result.push_back(' ');
+          } else if (frac_cursor < frac_digits_str.size()) {
             emit_frac_digit_char(frac_digits_str[frac_cursor]);
           } else if (tk.kind == Tok::DigitZero) {
             emit_frac_digit_char('0');

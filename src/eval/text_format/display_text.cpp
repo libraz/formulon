@@ -76,11 +76,11 @@ DisplayText format_value_for_display(const Value& value, std::string_view code, 
   }
 }
 
-std::string_view number_format_code_for_xf(const StylesTable& styles, const CellXf* xf) {
+std::string_view number_format_code_for_xf(const StylesTable& styles, const CellXf* xf, ExcelProfile profile) {
   if (xf == nullptr) {
     return {};
   }
-  const std::optional<std::string_view> code = effective_num_fmt(styles, xf->num_fmt_id);
+  const std::optional<std::string_view> code = effective_num_fmt(styles, xf->num_fmt_id, profile);
   return code ? *code : std::string_view{};
 }
 
@@ -94,7 +94,8 @@ DisplayText format_cell_for_display(const Workbook& workbook, const Sheet& sheet
     xf = &xfs[xf_index];
   }
   eval::ScopedEvalProfile profile_scope(workbook.excel_profile());
-  return format_value_for_display(sheet.resolve_cell_value(row, col), number_format_code_for_xf(workbook.styles(), xf),
+  return format_value_for_display(sheet.resolve_cell_value(row, col),
+                                  number_format_code_for_xf(workbook.styles(), xf, workbook.excel_profile()),
                                   workbook.date1904(), workbook.excel_profile());
 }
 

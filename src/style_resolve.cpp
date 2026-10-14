@@ -73,7 +73,7 @@ EffectiveStyle effective_style(const Workbook& wb, const Sheet& sheet, std::uint
     out.border_colors[i] =
         resolve(with_literal_fallback(sides[i]->color, sides[i]->color_argb, 0U), ColorContext::kBorder);
   }
-  const std::optional<std::string_view> code = effective_num_fmt(styles, xf.num_fmt_id);
+  const std::optional<std::string_view> code = effective_num_fmt(styles, xf.num_fmt_id, wb.excel_profile());
   out.num_fmt_code = code ? std::string(*code) : std::string("General");
   if (xf.has_protection) {
     out.locked = xf.locked;

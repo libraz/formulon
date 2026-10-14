@@ -145,7 +145,7 @@ TEST(StyleResolve, ReportsFormatProtectionAndColours) {
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_xf_index(0, 0U, 0U, 1U)));
 
   const EffectiveStyle st = effective_style(wb, wb.sheet(0), 0U, 0U);
-  EXPECT_EQ(st.num_fmt_code, "mm-dd-yy");
+  EXPECT_EQ(st.num_fmt_code, "m/d/yy");  // built-in 14 in the default en-US locale
   EXPECT_FALSE(st.locked);
   EXPECT_TRUE(st.hidden);
   EXPECT_EQ(st.font_color.argb, 0xFF000000U);

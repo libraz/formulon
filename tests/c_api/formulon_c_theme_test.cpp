@@ -548,10 +548,9 @@ TEST(FormulonCApiEffectiveStyle, ResolvesColorsFormatAndProtection) {
   }
   EXPECT_EQ(style.locked, 0);
   EXPECT_EQ(style.hidden, 1);
-  const char* date_code = nullptr;
-  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 14, &date_code), 0);
+  // Built-in 14 resolves to the default en-US locale's form, not the stored ECMA code.
   ASSERT_NE(style.num_fmt_code, nullptr);
-  EXPECT_STREQ(style.num_fmt_code, date_code);
+  EXPECT_STREQ(style.num_fmt_code, "m/d/yy");
 
   // Once the theme part exists the same font colour is exact.
   fm_theme_colors colors{};

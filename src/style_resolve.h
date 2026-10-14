@@ -50,6 +50,7 @@ struct EffectiveStyle {
   ResolvedColor fill_background;
   /// Left, right, top, bottom, diagonal.
   std::array<ResolvedColor, 5> border_colors;
+  /// Code the cell renders with; a built-in id takes the workbook locale's form.
   std::string num_fmt_code;
   bool locked = true;
   bool hidden = false;

@@ -39,6 +39,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/color_resolve_test.cpp
   unit/sheet_layout_edit_test.cpp
   unit/style_resolve_test.cpp
+  unit/num_fmt_locale_test.cpp
   unit/utils/checked_mul_test.cpp
   unit/utils/a1_column_test.cpp
   unit/utils/budget_charge_test.cpp

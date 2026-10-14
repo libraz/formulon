@@ -79,6 +79,18 @@ TEST(NumberFormatScientific, WideRequiredMantissaPaddingRemainsRenderable) {
   EXPECT_EQ(out[1], '1');
 }
 
+TEST(NumberFormatScientific, ZeroFillsEveryIntegerPlaceholder) {
+  // Mac Excel 16.113.4 TEXT().
+  EXPECT_EQ(Render(0.0, "##0.0E+0"), "000.0E+0");
+  EXPECT_EQ(Render(-0.0, "##0.0E+0"), "000.0E+0");
+  EXPECT_EQ(Render(0.0, "#0.0E+0"), "00.0E+0");
+  EXPECT_EQ(Render(0.0, "#.0E+0"), "0.0E+0");
+  EXPECT_EQ(Render(0.0, "#E+0"), "0E+0");
+  EXPECT_EQ(Render(0.0, "###0.00E+0"), "0000.00E+0");
+  EXPECT_EQ(Render(0.001, "##0.0E+0"), "1.0E-3");
+  EXPECT_EQ(Render(5.0, "##0.0E+0"), "5.0E+0");
+}
+
 TEST(NumberFormatScientific, ExcessiveEngineeringGroupOverflowLeavesOutputUntouched) {
   const std::string format = std::string(1000, '0') + "E+00";
   std::string out = "prefix";
@@ -105,6 +117,24 @@ TEST(NumberFormatIntegers, MixedHashZero) {
 TEST(NumberFormatIntegers, PadPlaceholderUsesSpace) {
   // `?` reserves a position without zero-padding it.
   EXPECT_EQ(Render(5.0, "?0"), " 5");
+}
+
+TEST(NumberFormatIntegers, PadPlaceholdersBlankInsignificantZeros) {
+  // Mac Excel 16.113.4 TEXT() and cell display agree on every row.
+  EXPECT_EQ(Render(0.0, "??"), "  ");
+  EXPECT_EQ(Render(0.0, "?0"), " 0");
+  EXPECT_EQ(Render(0.0, "\"-\"??"), "-  ");
+  EXPECT_EQ(Render(0.0, "?.?"), " . ");
+  EXPECT_EQ(Render(0.0, "?.??"), " .  ");
+  EXPECT_EQ(Render(0.4, "?.?"), " .4");
+  EXPECT_EQ(Render(0.0, "#.?"), ". ");
+  EXPECT_EQ(Render(0.0, "0.?"), "0. ");
+  EXPECT_EQ(Render(0.5, "0.??"), "0.5 ");
+  EXPECT_EQ(Render(1.0, "0.??"), "1.  ");
+  EXPECT_EQ(Render(0.5, "0.?#"), "0.5");
+  EXPECT_EQ(Render(0.5, "0.#?"), "0.5 ");
+  EXPECT_EQ(Render(1.25, "0.?0"), "1.25");
+  EXPECT_EQ(Render(1.5, "#,##0.0?"), "1.5 ");
 }
 
 TEST(NumberFormatIntegers, ThousandsSeparator) {
@@ -923,7 +953,7 @@ TEST(NumberFormatFraction, NegativeMixedFraction) {
 }
 
 TEST(NumberFormatFraction, TwoDigitNumeratorDenominator) {
-  // 0.123 with `# ??/??`. The Stern-Brocot best 2/2-digit approximation
+  // 0.123 with `# ??/??`. The last two-digit continued-fraction convergent
   // is 8/65 = 0.123076..., padded to 2-wide right-aligned with spaces.
   EXPECT_EQ(Render(0.123, "# ?\?/?\?"), "  8/65");
 }
@@ -1008,10 +1038,25 @@ TEST(NumberFormatFraction, NearEqualApproximationsPreferSmallerDenominator) {
 
 TEST(NumberFormatFraction, CandidatesUseBinary64Arithmetic) {
   // A wider long double (WASM, x86-64 Linux) keeps 0.015 * 100 below 1.5
-  // and picks 1/100, 4/1000 and 3/5 here.
+  // and picks 1/100 and 4/1000 here.
   EXPECT_EQ(Render(0.015, "?/100"), "2/100");
   EXPECT_EQ(Render(0.0045, "?/1000"), "5/1000");
-  EXPECT_EQ(Render(0.6125, "?/?"), "5/8");
+}
+
+TEST(NumberFormatFraction, TakesLastConvergentNeverSemiconvergent) {
+  // Mac Excel 16.113.4 TEXT(): the last convergent of the binary64 continued
+  // fraction that fits, even where a semiconvergent is closer (5/9, 2/9, 5/8).
+  EXPECT_EQ(Render(0.56270833333, "?/?"), "4/7");
+  EXPECT_EQ(Render(0.2360679775, "# ?/?"), " 1/4");
+  EXPECT_EQ(Render(0.6125, "?/?"), "3/5");
+  EXPECT_EQ(Render(0.7, "?/?"), "2/3");
+  EXPECT_EQ(Render(0.016, "?\?/??"), " 1/62");
+  EXPECT_EQ(Render(0.028, "?\?/??"), " 1/36");
+  EXPECT_EQ(Render(0.032, "?\?/??"), " 1/31");
+  EXPECT_EQ(Render(0.123456, "# ??\?/???"), "  10/81 ");
+  EXPECT_EQ(Render(0.5627083, "# ??\?/???"), " 507/901");
+  EXPECT_EQ(Render(45355.56270833333, "?/?"), "317489/7");
+  EXPECT_EQ(Render(45355.56270833333, "# ?/?"), "45355 4/7");
 }
 
 TEST(NumberFormatFraction, VariableDenominatorSearchCapsAtSevenDigits) {

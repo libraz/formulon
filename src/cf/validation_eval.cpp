@@ -213,8 +213,9 @@ std::string displayed_text(const Workbook& wb, const Sheet& sheet, std::uint32_t
     const std::uint32_t index = select_effective_xf(sheet, row, col).xf_index;
     xf = &xfs[index < xfs.size() ? index : 0U];
   }
-  return text_format::format_value_for_display(proposed, text_format::number_format_code_for_xf(wb.styles(), xf),
-                                               wb.date1904(), wb.excel_profile())
+  return text_format::format_value_for_display(
+             proposed, text_format::number_format_code_for_xf(wb.styles(), xf, wb.excel_profile()), wb.date1904(),
+             wb.excel_profile())
       .text;
 }
 

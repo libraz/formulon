@@ -123,6 +123,7 @@ set(FORMULON_CORE_SOURCES
   src/sbcs_codepage.cpp
   src/auto_filter.cpp
   src/styles.cpp
+  src/num_fmt_locale.cpp
   src/threaded_comment.cpp
   src/style_region.cpp
   src/style_resolve.cpp

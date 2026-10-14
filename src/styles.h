@@ -18,6 +18,7 @@
 #include <string_view>
 #include <vector>
 
+#include "excel_profile.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -356,6 +357,13 @@ const char* builtin_num_fmt(std::uint16_t id);
 /// the first valid custom record in document order. `std::nullopt` means that
 /// neither a valid custom record nor a non-empty built-in format exists.
 std::optional<std::string_view> effective_num_fmt(const formulon::StylesTable& styles, std::uint16_t id);
+
+/// Display resolution of `id` under `profile`: a valid custom record, then the
+/// code the profile's locale renders the built-in id with, then
+/// `builtin_num_fmt(id)`. The file keeps the id, so writers use the overload
+/// above.
+std::optional<std::string_view> effective_num_fmt(const formulon::StylesTable& styles, std::uint16_t id,
+                                                  ExcelProfile profile);
 
 }  // namespace formulon
 

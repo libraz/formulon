@@ -14,6 +14,8 @@
 #include <string_view>
 #include <utility>
 
+#include "num_fmt_locale.h"
+
 namespace formulon {
 namespace {
 
@@ -38,6 +40,16 @@ void copy_alignment(CellXf& to, const CellXf& from) {
   to.shrink_to_fit = from.shrink_to_fit;
   to.has_reading_order = from.has_reading_order;
   to.reading_order = from.reading_order;
+}
+
+/// The first valid custom record for `id`, in document order.
+std::optional<std::string_view> custom_num_fmt(const StylesTable& styles, std::uint16_t id) {
+  for (const NumFmtRecord& record : styles.num_fmts) {
+    if (record.id == id && record.format_string_index < styles.num_fmt_strings.size()) {
+      return styles.num_fmt_strings[record.format_string_index];
+    }
+  }
+  return std::nullopt;
 }
 
 // Built-in Excel number-format ids. The id space is sparse (Excel only
@@ -277,19 +289,35 @@ const char* builtin_num_fmt(std::uint16_t id) {
   return kBuiltinNumFmts[id];
 }
 
+namespace {
+
+std::optional<std::string_view> builtin_num_fmt_view(std::uint16_t id) {
+  const char* builtin = builtin_num_fmt(id);
+  if (builtin[0] == '\0') {
+    return std::nullopt;
+  }
+  return std::string_view(builtin);
+}
+
+}  // namespace
+
 std::optional<std::string_view> effective_num_fmt(const formulon::StylesTable& styles, std::uint16_t id) {
-  for (const formulon::NumFmtRecord& record : styles.num_fmts) {
-    if (record.id == id && record.format_string_index < styles.num_fmt_strings.size()) {
-      return styles.num_fmt_strings[record.format_string_index];
-    }
+  if (const std::optional<std::string_view> custom = custom_num_fmt(styles, id)) {
+    return custom;
   }
-  if (id < 164U) {
-    const char* builtin = formulon::builtin_num_fmt(id);
-    if (builtin != nullptr && builtin[0] != '\0') {
-      return std::string_view(builtin);
-    }
+  return builtin_num_fmt_view(id);
+}
+
+std::optional<std::string_view> effective_num_fmt(const formulon::StylesTable& styles, std::uint16_t id,
+                                                  ExcelProfile profile) {
+  if (const std::optional<std::string_view> custom = custom_num_fmt(styles, id)) {
+    return custom;
   }
-  return std::nullopt;
+  const std::string_view localized = localized_builtin_num_fmt(id, profile);
+  if (localized.empty()) {
+    return std::nullopt;
+  }
+  return localized;
 }
 
 }  // namespace formulon

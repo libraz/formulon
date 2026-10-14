@@ -15,6 +15,7 @@
 #include "c_api/formulon_c.h"
 #include "cf/cf_types.h"
 #include "eval/builtin_names.h"
+#include "num_fmt_locale.h"
 #include "sheet.h"
 #include "styles.h"
 #include "utils/arena.h"
@@ -389,11 +390,8 @@ fm_status_t validate(const fm_data_validation& v, const char* api) {
 }
 
 bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id) {
-  if (id < 164U) {
-    const char* builtin = formulon::builtin_num_fmt(id);
-    if (builtin != nullptr && builtin[0] != '\0') {
-      return true;
-    }
+  if (formulon::is_builtin_num_fmt_id(id)) {
+    return true;
   }
   for (const formulon::NumFmtRecord& record : styles.num_fmts) {
     if (record.id == id) {

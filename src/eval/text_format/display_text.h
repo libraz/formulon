@@ -50,9 +50,10 @@ struct DisplayText {
 /// locale and host formatting rules.
 DisplayText format_value_for_display(const Value& value, std::string_view code, bool date1904, ExcelProfile profile);
 
-/// Returns the number-format code of `xf` as resolved against `styles`
-/// (custom formats first, then the built-in table); empty for a null `xf`.
-std::string_view number_format_code_for_xf(const StylesTable& styles, const CellXf* xf);
+/// Returns the number-format code of `xf` as resolved against `styles`: a
+/// custom format first, then the built-in id as `profile`'s locale shows it
+/// (`effective_num_fmt` with a profile); empty for a null `xf`.
+std::string_view number_format_code_for_xf(const StylesTable& styles, const CellXf* xf, ExcelProfile profile);
 
 /// Display text of (`row`, `col`) of `sheet`, using the effective cell/row/
 /// column/default XF and the workbook's date system. A truly empty coordinate

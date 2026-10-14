@@ -175,7 +175,7 @@ export function registerThemeStyles(Module, test) {
       assert.equal(e.borders.left.resolution, RESOLUTION_AUTO_CONTEXT);
       assert.equal(e.locked, false);
       assert.equal(e.hidden, true);
-      assert.equal(e.numFmtCode, 'mm-dd-yy');
+      assert.equal(e.numFmtCode, 'm/d/yy');
 
       const plain = wb.getEffectiveStyle(0, 5, 5);
       assert.ok(plain.status.ok);
