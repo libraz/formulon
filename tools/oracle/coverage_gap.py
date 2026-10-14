@@ -53,9 +53,31 @@ import status as catalog_status  # type: ignore  # noqa: E402
 FUNCTION_CALL_RE = re.compile(r"(?<![A-Za-z0-9_])([A-Z][A-Z0-9_.]*)\s*\(")
 
 
+# Built-ins Excel accepts only as operators: files store the internal name,
+# but Mac Excel rejects it typed at entry, so cases spell the operator. Both
+# sides must be reference characters so prose like `e.g.:` never matches.
+_REF_BEFORE = r"(?<=[A-Za-z0-9$)\]])"
+_REF_AFTER = r"(?=[A-Za-z0-9$])"
+OPERATOR_FORMS: Dict[str, re.Pattern] = {
+    "_TRO_ALL": re.compile(_REF_BEFORE + r"\.:\." + _REF_AFTER),
+    "_TRO_LEADING": re.compile(_REF_BEFORE + r"\.:" + _REF_AFTER),
+    "_TRO_TRAILING": re.compile(_REF_BEFORE + r":\." + _REF_AFTER),
+}
+
+
+def function_pattern(fn: str) -> re.Pattern:
+    """Pattern matching a use of `fn`: its operator form, else a `FN(` call."""
+    form = OPERATOR_FORMS.get(fn.upper())
+    if form is not None:
+        return form
+    return re.compile(rf"(?<![A-Za-z0-9_]){re.escape(fn)}\s*\(", re.IGNORECASE)
+
+
 def extract_calls(text: str) -> Set[str]:
-    """Returns every uppercase name immediately followed by `(` in `text`."""
-    return {m.group(1) for m in FUNCTION_CALL_RE.finditer(text)}
+    """Returns every uppercase name called with `(` in `text`, plus operator-form built-ins."""
+    found = {m.group(1) for m in FUNCTION_CALL_RE.finditer(text)}
+    found.update(fn for fn, pat in OPERATOR_FORMS.items() if pat.search(text))
+    return found
 
 
 def scan_dir(directory: Path, glob: str, recursive: bool = False) -> Dict[str, Set[Path]]:

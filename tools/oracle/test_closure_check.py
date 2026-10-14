@@ -46,6 +46,21 @@ class ConditionWrapperTests(unittest.TestCase):
         ]
         self.assertEqual([c["id"] for c in closure.cases_for_function("FN", cases)], ["direct", "spaced", "nested"])
 
+    def test_trim_range_built_ins_match_their_operator_form(self) -> None:
+        # Excel rejects `_TRO_ALL(` typed at entry, so cases spell the operator.
+        cases = [
+            {"id": "both", "formula": "=ROWS(A1.:.A4)"},
+            {"id": "leading", "formula": "=ROWS(A1.:A4)"},
+            {"id": "trailing", "formula": "=SUM(A:.A)"},
+            {"id": "plain", "formula": "=SUM(A1:A4)"},
+            {"id": "prose", "formula": '="e.g.: x"'},
+        ]
+        ids = {
+            fn: [c["id"] for c in closure.cases_for_function(fn, cases)]
+            for fn in ("_TRO_ALL", "_TRO_LEADING", "_TRO_TRAILING")
+        }
+        self.assertEqual(ids, {"_TRO_ALL": ["both"], "_TRO_LEADING": ["leading"], "_TRO_TRAILING": ["trailing"]})
+
     def test_no_cases_and_no_golden_keep_their_existing_condition_results(self) -> None:
         family = closure.Family("fn", ["FN"], None, 1, "")
         ctx = _context(behaviors=[{"function": "FN", "aspect": "shape", "name": "scalar"}])

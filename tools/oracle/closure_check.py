@@ -250,10 +250,6 @@ def load_golden_ids_for_family(family: Family) -> Set[str]:
     return out
 
 
-def fn_call_re(fn: str) -> re.Pattern:
-    return re.compile(rf"(?<![A-Za-z0-9_]){re.escape(fn)}\s*\(", re.IGNORECASE)
-
-
 def behaviors_for_function(fn: str, all_behaviors: List[Dict]) -> List[Dict]:
     """A behavior is 'for FN' only when its group's `function:` field
     matches FN. Probe-based ownership is not used because formulas often
@@ -263,7 +259,7 @@ def behaviors_for_function(fn: str, all_behaviors: List[Dict]) -> List[Dict]:
 
 
 def cases_for_function(fn: str, cases: List[Dict]) -> List[Dict]:
-    pat = fn_call_re(fn)
+    pat = coverage_gap.function_pattern(fn)
     return [c for c in cases if pat.search(c.get("formula", ""))]
 
 
