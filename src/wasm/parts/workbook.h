@@ -153,9 +153,9 @@ class JsWorkbook {
   JsStatus recalc();
   /// Takes the raw JS argument so the binding can reject non-numeric,
   /// fractional, non-finite, and out-of-range values before embind's normal
-  /// unsigned-integer coercion would silently change them.
+  /// integer coercion would silently change them.
   JsParallelRecalcResult recalcParallel(emscripten::val threadCount);
-  JsStatus setIterative(bool enabled, uint32_t max_iterations, double max_change);
+  JsStatus setIterative(bool enabled, int32_t max_iterations, double max_change);
   /// The stored iterative-calculation settings as `{status, enabled,
   /// maxIterations, maxChange}`. The cap and threshold are the stored
   /// values even while `enabled` is false, so a host can render Excel's

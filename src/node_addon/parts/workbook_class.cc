@@ -619,7 +619,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SetError, 0x7ULL, 0x8ULL>("setError"),
           GuardedInstanceMethod<&Workbook::SetExcelProfileId, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setExcelProfileId"),
           GuardedInstanceMethod<&Workbook::SetFormula, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setFormula"),
-          GuardedInstanceMethod<&Workbook::SetIterative, 0x2ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setIterative"),
+          GuardedInstanceMethod<&Workbook::SetIterative, 0x0ULL, 0x2ULL, 0x0ULL, 0x4ULL>("setIterative"),
           GuardedInstanceMethod<&Workbook::SetIterativeProgress>("setIterativeProgress"),
           GuardedInstanceMethod<&Workbook::SetNumber, 0x7ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setNumber"),
           GuardedInstanceMethod<&Workbook::SetRowHeight, 0x3ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setRowHeight"),

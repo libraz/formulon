@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 from formulon import (
     AnchorEditAs,
@@ -20,6 +21,7 @@ from formulon import (
     ChartPlotType,
     ChartPointState,
     ChartSeriesDirection,
+    ChartTitleInfo,
     ChartTitleKind,
     DrawingObjectKind,
     FormulonError,
@@ -66,7 +68,7 @@ class ChartEnumTests(unittest.TestCase):
         self.assertEqual((ChartSeriesDirection.AUTO, ChartSeriesDirection.ROWS), (0, 2))
         self.assertEqual((ChartLegendPosition.NONE, ChartLegendPosition.TOP_RIGHT), (0, 5))
         self.assertEqual((ChartLineDash.SOLID, ChartLineDash.OTHER), (0, 4))
-        self.assertEqual((ChartMarkerSymbol.NONE, ChartMarkerSymbol.OTHER), (0, 6))
+        self.assertEqual((ChartMarkerSymbol.NONE, ChartMarkerSymbol.PICTURE), (0, 11))
         self.assertEqual((ChartLabelPosition.BEST_FIT, ChartLabelPosition.RIGHT), (0, 8))
 
 
@@ -163,6 +165,7 @@ class ChartReadTests(unittest.TestCase):
     def test_scatter_is_the_xy_domain(self) -> None:
         wb, oid = _chart(ChartInsertKind.SCATTER, "Sheet1!$F$1:$G$5")
         with wb:
+            wb.set_range_xf_index(0, 1, 5, 4, 5, wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=2)))
             info = wb.get_chart(0, oid)
             self.assertEqual(info.plots[0].type, ChartPlotType.SCATTER)
             data = wb.get_chart_data(0, oid)
@@ -170,6 +173,7 @@ class ChartReadTests(unittest.TestCase):
             self.assertEqual(len(data.series), 1)
             self.assertEqual(data.series[0].x, [0.0, 3.0, 6.0, 9.0])
             self.assertEqual(data.series[0].values, [0.0, 1.0, 4.0, 9.0])
+            self.assertEqual((data.series[0].x_format_code, data.series[0].format_code), ("0.00", "General"))
 
     def test_preview_applies_overrides_without_editing(self) -> None:
         wb, oid = _chart()
@@ -214,6 +218,8 @@ class ChartEditTests(unittest.TestCase):
             self.assertEqual((info.title.kind, info.title.text), (ChartTitleKind.TEXT, "Revenue"))
             wb.set_chart_title(0, oid, None)
             self.assertEqual(wb.get_chart(0, oid).title.kind, ChartTitleKind.NONE)
+            wb.set_chart_title(0, oid, ChartTitleInfo(ChartTitleKind.AUTO))
+            self.assertEqual(wb.get_chart(0, oid).title.kind, ChartTitleKind.AUTO)
             with self.assertRaises(FormulonError):
                 wb.set_chart_title(0, oid, "")
 

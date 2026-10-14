@@ -26,6 +26,8 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass, field
 from enum import IntEnum
+from functools import wraps
+from inspect import isgeneratorfunction
 from typing import (
     Dict,
     Iterator,
@@ -1228,7 +1230,7 @@ class ChartLineDash(IntEnum):
 
 
 class ChartMarkerSymbol(IntEnum):
-    """Series marker symbol (``fm_chart_marker_symbol_t``)."""
+    """Series marker symbol (``fm_chart_marker_symbol_t``); ``PICTURE`` is read-only and a patch carrying it is rejected."""
 
     NONE = 0
     AUTO = 1
@@ -1236,7 +1238,12 @@ class ChartMarkerSymbol(IntEnum):
     SQUARE = 3
     DIAMOND = 4
     TRIANGLE = 5
-    OTHER = 6
+    X = 6
+    STAR = 7
+    PLUS = 8
+    DOT = 9
+    DASH = 10
+    PICTURE = 11
 
 
 class ChartLabelPosition(IntEnum):
@@ -1462,12 +1469,15 @@ class ChartDataSeries:
 
     ``values`` is the y value in the XY domain; ``x`` is ``None`` outside it
     and ``sizes`` is ``None`` unless the series is a bubble series.
+    ``format_code`` is the number format of the values; ``x_format_code`` is
+    that of the x values, empty outside the XY domain.
     """
 
     plot_index: int
     idx: int
     name: Optional[str]
     format_code: str
+    x_format_code: str
     filtered: bool
     values: List[float]
     states: List[int]
@@ -1844,7 +1854,8 @@ class SheetFormatDefaults:
     points; each is meaningful only when its ``has_*`` flag is set.
     ``effective_default_col_width`` / ``effective_default_row_height`` are
     read-only values the sheet lays out with: the stated default, else the
-    fallback (8.43 characters, 102/7 pt). They are ignored when setting.
+    fallback (8.43 characters, 102/7 pt); the row height is 0 when
+    ``zero_height`` hides rows by default. They are ignored when setting.
     """
 
     default_col_width: float = 0.0
@@ -3151,6 +3162,7 @@ def _read_chart_data(data: int) -> ChartData:
                 idx=s["idx"],
                 name=_opt_cstr(s["name"]),
                 format_code=LIB.read_cstr(s["format_code"]),
+                x_format_code=LIB.read_cstr(s["x_format_code"]),
                 filtered=bool(s["filtered"]),
                 values=_read_chart_data_array(points["values"], n, "d", 8) or [],
                 states=_read_chart_data_array(points["states"], n, "B", 1) or [],
@@ -6183,15 +6195,26 @@ class Workbook:
             "fm_sheet_set_chart_type",
         )
 
-    def set_chart_title(self, sheet: int, object_id: int, title: Optional[str]) -> None:
-        """Set the chart title to ``title``; ``None`` removes it."""
+    def set_chart_title(self, sheet: int, object_id: int, title: Union[str, None, ChartTitleInfo]) -> None:
+        """Set the chart title to ``title``; ``None`` removes it.
+
+        A :class:`ChartTitleInfo` sets that kind, so ``ChartTitleInfo(ChartTitleKind.AUTO, "", "")``
+        returns the title to Excel's automatic one.
+        """
         h = self._require()
         owned: List[int] = []
         try:
             ptr = _alloc_struct_array(S.CHART_TITLE, 1, owned)
-            fields: Dict[str, object] = {"kind": 0 if title is None else 1}
-            if title is not None:
-                fields["text"] = _str_ptr(title, owned)
+            if isinstance(title, ChartTitleInfo):
+                fields: Dict[str, object] = {
+                    "kind": _sint(title.kind, "kind"),
+                    "text": _str_ptr(title.text, owned),
+                    "formula": _str_ptr(title.formula, owned),
+                }
+            else:
+                fields = {"kind": 0 if title is None else 1}
+                if title is not None:
+                    fields["text"] = _str_ptr(title, owned)
             S.CHART_TITLE.pack(LIB, ptr, fields)
             _check(
                 LIB.fm_sheet_set_chart_title(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), ptr),
@@ -10050,3 +10073,85 @@ class Workbook:
         """Return every external-link record in document order."""
         n = self.external_link_count()
         return [self.get_external_link_at(i) for i in range(n)]
+
+
+def _lock_workbook_method(method):
+    """Serialize one complete public operation on the shared WASM store.
+
+    A normal method can make several ABI calls while it copies borrowed
+    pointers into Python objects.  Locking only those individual calls leaves
+    the handle and borrowed memory exposed between calls.  Generators need a
+    slightly different shape: hold the lock through one ``next`` call so the
+    item is decoded before it is yielded, then release it while the consumer
+    examines the item.  Closing the underlying generator is also serialized
+    so its scratch buffers are released before another operation starts.
+    """
+
+    if isgeneratorfunction(method):
+
+        @wraps(method)
+        def locked_generator(*args, **kwargs):
+            iterator = method(*args, **kwargs)
+            try:
+                while True:
+                    with LIB.call_lock:
+                        try:
+                            item = next(iterator)
+                        except StopIteration:
+                            return
+                    yield item
+            finally:
+                with LIB.call_lock:
+                    close = getattr(iterator, "close", None)
+                    if close is not None:
+                        close()
+
+        return locked_generator
+
+    if getattr(method, "__name__", None) == "__del__":
+
+        @wraps(method)
+        def locked_finalizer(*args, **kwargs):
+            # Keep the destructor's no-raise contract even when interpreter
+            # teardown has already cleared LIB. During normal execution the
+            # same RLock also covers the nested close() call.
+            try:
+                with LIB.call_lock:
+                    return method(*args, **kwargs)
+            except Exception:  # noqa: BLE001 - finalizers must not raise
+                return None
+
+        return locked_finalizer
+
+    @wraps(method)
+    def locked(*args, **kwargs):
+        with LIB.call_lock:
+            return method(*args, **kwargs)
+
+    return locked
+
+
+def _install_workbook_locks() -> None:
+    """Wrap every Workbook operation while preserving its descriptors."""
+
+    for name, descriptor in list(Workbook.__dict__.items()):
+        if isinstance(descriptor, property):
+            setattr(
+                Workbook,
+                name,
+                property(
+                    _lock_workbook_method(descriptor.fget) if descriptor.fget is not None else None,
+                    _lock_workbook_method(descriptor.fset) if descriptor.fset is not None else None,
+                    _lock_workbook_method(descriptor.fdel) if descriptor.fdel is not None else None,
+                    descriptor.__doc__,
+                ),
+            )
+        elif isinstance(descriptor, classmethod):
+            setattr(Workbook, name, classmethod(_lock_workbook_method(descriptor.__func__)))
+        elif isinstance(descriptor, staticmethod):
+            setattr(Workbook, name, staticmethod(_lock_workbook_method(descriptor.__func__)))
+        elif callable(descriptor):
+            setattr(Workbook, name, _lock_workbook_method(descriptor))
+
+
+_install_workbook_locks()

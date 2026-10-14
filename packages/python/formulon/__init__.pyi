@@ -883,7 +883,12 @@ class ChartMarkerSymbol(IntEnum):
     SQUARE = 3
     DIAMOND = 4
     TRIANGLE = 5
-    OTHER = 6
+    X = 6
+    STAR = 7
+    PLUS = 8
+    DOT = 9
+    DASH = 10
+    PICTURE = 11
 
 class ChartLabelPosition(IntEnum):
     BEST_FIT = 0
@@ -1060,6 +1065,7 @@ class ChartDataSeries:
     idx: int
     name: Optional[str]
     format_code: str
+    x_format_code: str
     filtered: bool
     values: List[float]
     states: List[int]
@@ -2308,7 +2314,7 @@ class Workbook:
         kind: Union[ChartInsertKind, int],
         grouping: Union[ChartGrouping, int] = ...,
     ) -> None: ...
-    def set_chart_title(self, sheet: int, object_id: int, title: Optional[str]) -> None: ...
+    def set_chart_title(self, sheet: int, object_id: int, title: Union[str, None, ChartTitleInfo]) -> None: ...
     def set_chart_legend(
         self,
         sheet: int,

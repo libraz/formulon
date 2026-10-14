@@ -418,12 +418,11 @@ JsParallelRecalcResult JsWorkbook::recalcParallel(emscripten::val threadCount) {
   return r;
 }
 
-JsStatus JsWorkbook::setIterative(bool enabled, uint32_t max_iterations, double max_change) {
+JsStatus JsWorkbook::setIterative(bool enabled, int32_t max_iterations, double max_change) {
   if (handle_ == nullptr) {
     return error_status(kBindingInvalidHandle);
   }
-  fm_status_t rc =
-      fm_workbook_set_iterative(handle_, enabled ? 1 : 0, static_cast<int32_t>(max_iterations), max_change);
+  fm_status_t rc = fm_workbook_set_iterative(handle_, enabled ? 1 : 0, max_iterations, max_change);
   return status_from_rc(rc);
 }
 

@@ -1367,6 +1367,7 @@ CHART_DATA_SERIES = Struct(
         ("point_count", U32),
         ("has_sizes", I32),
         ("range_count", array(U32, 6)),
+        ("x_format_code", PTR),
     ],
 )
 

@@ -111,7 +111,7 @@ class StructLayoutTests(unittest.TestCase):
         "CHART_AXIS": 112,
         "CHART_PREVIEW_OVERRIDES": 44,
         "CHART_DATA_INFO": 44,
-        "CHART_DATA_SERIES": 52,
+        "CHART_DATA_SERIES": 56,
         "CHART_DATA_POINTS": 20,
         "CHART_SHEET_RANGE": 20,
         "CHART_AXIS_TITLE_TEXT": 8,

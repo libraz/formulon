@@ -57,6 +57,14 @@ def _fake_instance(function_name: str, function_result: int) -> tuple[_c._WasmIn
 
 
 class DiagnosticCaptureTests(unittest.TestCase):
+    def test_export_wrapper_is_cached_per_instance(self) -> None:
+        instance, _calls = _fake_instance("fm_workbook_sheet_count", 17)
+
+        first = instance.fm_workbook_sheet_count
+        second = instance.fm_workbook_sheet_count
+
+        self.assertIs(first, second)
+
     def test_non_status_nonzero_result_does_not_read_or_clear_pending(self) -> None:
         instance, calls = _fake_instance("fm_workbook_sheet_count", 17)
         instance._last_diagnostic.value = (99, "pending message", "pending context")

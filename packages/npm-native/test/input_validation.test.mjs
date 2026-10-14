@@ -113,6 +113,20 @@ test('integer positional arguments reject wrapping and non-finite values', () =>
   }
 });
 
+test('iterative caps use the signed int32 contract', () => {
+  const wb = addon.Workbook.createDefault();
+  try {
+    assert.equal(wb.setIterative(true, 2 ** 31 - 1, 0.1).ok, true);
+    assert.equal(wb.setIterative(false, -1, 0.1).ok, true);
+    assert.equal(wb.getIterative().maxIterations, 1, 'negative caps retain the native clamp');
+    for (const value of [2 ** 31, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      assert.throws(() => wb.setIterative(true, value, 0.1), RangeError, `maxIterations=${String(value)}`);
+    }
+  } finally {
+    wb.dispose();
+  }
+});
+
 test('sheet, structural, enum, and read positions reject non-number primitives', () => {
   const wb = addon.Workbook.createDefault();
   try {

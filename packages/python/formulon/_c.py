@@ -42,6 +42,9 @@ undefined per the C ABI contract.
 
 from __future__ import annotations
 
+import math
+import numbers
+import operator
 import struct
 import threading
 from enum import IntEnum
@@ -66,6 +69,24 @@ fm_value_t_size = 16
 # below observes but the C ABI itself never reported a status for -- a
 # wasmtime Trap, which aborts the call before any `fm_status_t` is returned.
 _STATUS_INTERNAL_ERROR = 8
+
+
+def _coerce_integral(value: int, name: str) -> int:
+    """Convert an integer or integral real without truncating a fraction.
+
+    A non-number raises ``TypeError``; a fractional or non-finite real raises
+    ``ValueError``.
+    """
+
+    try:
+        return operator.index(value)
+    except TypeError:
+        pass
+    if not isinstance(value, numbers.Real):
+        raise TypeError(f"formulon: {name} must be an integer, got {type(value).__name__}")
+    if not math.isfinite(value) or value != int(value):
+        raise ValueError(f"formulon: {name} must be an integer, got {value!r}")
+    return int(value)
 
 
 def _uint(value: int, name: str, bits: int = 32) -> int:
@@ -97,9 +118,11 @@ def _uint(value: int, name: str, bits: int = 32) -> int:
       ``value`` as an ``int``, unchanged.
 
     Raises:
-      ValueError: when ``value`` is negative or does not fit ``bits``.
+      TypeError: when ``value`` is not a number.
+      ValueError: when ``value`` is fractional, negative, or does not fit
+        ``bits``.
     """
-    ivalue = int(value)
+    ivalue = _coerce_integral(value, name)
     if ivalue < 0 or ivalue >= (1 << bits):
         raise ValueError(f"formulon: {name} out of range for uint{bits}: {ivalue}")
     return ivalue
@@ -114,9 +137,11 @@ def _sint(value: int, name: str, bits: int = 32) -> int:
     value is meaningful.
 
     Raises:
-      ValueError: when ``value`` does not fit a signed ``bits``-wide int.
+      TypeError: when ``value`` is not a number.
+      ValueError: when ``value`` is fractional or does not fit a signed
+        ``bits``-wide int.
     """
-    ivalue = int(value)
+    ivalue = _coerce_integral(value, name)
     limit = 1 << (bits - 1)
     if ivalue < -limit or ivalue >= limit:
         raise ValueError(f"formulon: {name} out of range for int{bits}: {ivalue}")
@@ -658,6 +683,7 @@ class _WasmInstance:
         self._instance: Optional[wasmtime.Instance] = None
         self._memory: Optional[wasmtime.Memory] = None
         self._exports: dict = {}
+        self._export_wrappers: dict = {}
         self._init_lock = threading.Lock()
         self._call_lock = threading.RLock()
         self._last_diagnostic = threading.local()
@@ -746,43 +772,56 @@ class _WasmInstance:
 
     def __getattr__(self, name: str):
         self._ensure()
-        fn = self._exports.get(name)
-        if fn is None:
-            raise AttributeError(f"WASM export '{name}' not found")
-        lock = self._call_lock
-        captures_diagnostics = name in _STATUS_RETURNING_EXPORTS
+        with self._call_lock:
+            # A few diagnostics tests construct this small wrapper with
+            # object.__new__ so they can inject fake exports. Keep the lazy
+            # default here as well as in __init__ for that supported seam.
+            wrappers = self.__dict__.setdefault("_export_wrappers", {})
+            cached = wrappers.get(name)
+            if cached is not None:
+                return cached
+            fn = self._exports.get(name)
+            if fn is None:
+                raise AttributeError(f"WASM export '{name}' not found")
+            lock = self._call_lock
+            captures_diagnostics = name in _STATUS_RETURNING_EXPORTS
 
-        # Wrap so the caller can use a ctypes-like call syntax.
-        def _wrapped(*args):
-            with lock:
-                if captures_diagnostics:
-                    # The C ABI's diagnostic buffers are thread-local in the
-                    # engine, but this WASM instance has no pthreads. Keep a
-                    # Python-side snapshot per caller and clear it before
-                    # every status-returning call so success cannot leave a
-                    # previous failure pending.
-                    self._last_diagnostic.value = None
-                result = self._call_or_poison(fn, name, *args)
-                # Only status-returning exports are allowed to populate the
-                # snapshot. Counts, indices, and pointers are all i32 in
-                # WASM and must never be mistaken for a failure status.
-                if captures_diagnostics and result != 0:
-                    message_fn = self._exports.get("fm_last_error_message")
-                    context_fn = self._exports.get("fm_last_error_context")
-                    if message_fn is not None and context_fn is not None:
-                        self._last_diagnostic.value = (
-                            result,
-                            self._read_cstr_unlocked(message_fn(self._store)),
-                            self._read_cstr_unlocked(context_fn(self._store)),
-                        )
-                return result
+            # Wrap so the caller can use a ctypes-like call syntax. Cache the
+            # wrapper: besides avoiding a closure allocation on every lookup,
+            # this makes every call share the same poison and diagnostics
+            # trampoline for the life of this module instance.
+            def _wrapped(*args):
+                with lock:
+                    if captures_diagnostics:
+                        # The C ABI's diagnostic buffers are thread-local in
+                        # the engine, but this WASM instance has no pthreads.
+                        # Keep a Python-side snapshot per caller and clear it
+                        # before every status-returning call so success cannot
+                        # leave a previous failure pending.
+                        self._last_diagnostic.value = None
+                    result = self._call_or_poison(fn, name, *args)
+                    # Only status-returning exports are allowed to populate
+                    # the snapshot. Counts, indices, and pointers are all
+                    # i32 in WASM and must never be mistaken for a failure
+                    # status.
+                    if captures_diagnostics and result != 0:
+                        message_fn = self._exports.get("fm_last_error_message")
+                        context_fn = self._exports.get("fm_last_error_context")
+                        if message_fn is not None and context_fn is not None:
+                            self._last_diagnostic.value = (
+                                result,
+                                self._read_cstr_unlocked(message_fn(self._store)),
+                                self._read_cstr_unlocked(context_fn(self._store)),
+                            )
+                    return result
 
-        # Callers that derive a FormulonError's ``op`` prefix from
-        # ``fn.__name__`` must see the C ABI entry point, not this
-        # binding-internal closure.
-        _wrapped.__name__ = name
-        _wrapped.__qualname__ = name
-        return _wrapped
+            # Callers that derive a FormulonError's ``op`` prefix from
+            # ``fn.__name__`` must see the C ABI entry point, not this
+            # binding-internal closure.
+            _wrapped.__name__ = name
+            _wrapped.__qualname__ = name
+            wrappers[name] = _wrapped
+            return _wrapped
 
     # ----- memory primitives ----------------------------------------------
     @property

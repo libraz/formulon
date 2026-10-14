@@ -10,6 +10,7 @@
 
 #include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
+#include "sheet.h"
 #include "utils/error.h"
 #include "value.h"
 
@@ -177,6 +178,17 @@ TEST(EvaluateFormula, SheetIndexOutOfRange) {
 
   fm_value_t v{};
   EXPECT_EQ(fm_workbook_evaluate_formula(wb.handle, 99, 0, 0, "=1", &v),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+}
+
+TEST(EvaluateFormula, TargetOutsideSheetIsRejected) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_value_t v{};
+  EXPECT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, formulon::Sheet::kMaxRows, 0, "=1", &v),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, formulon::Sheet::kMaxCols, "=1", &v),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
@@ -398,6 +410,18 @@ TEST(EvaluateFormulaArray, SheetIndexOutOfRange) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
+TEST(EvaluateFormulaArray, TargetOutsideSheetIsRejected) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  EXPECT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, formulon::Sheet::kMaxRows, 0, "=1", &rows, &cols),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, formulon::Sheet::kMaxCols, "=1", &rows, &cols),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+}
+
 // ---------------------------------------------------------------------------
 // Conditional-formula (CF predicate) entry point.
 // ---------------------------------------------------------------------------
@@ -452,4 +476,19 @@ TEST(EvaluateCfFormula, NullArgumentsRejected) {
   fm_value_t v{};
   EXPECT_EQ(fm_workbook_evaluate_cf_formula(wb.handle, 0, 0, 0, 0, 0, nullptr, &v),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+}
+
+TEST(EvaluateCfFormula, TargetAndAnchorOutsideSheetAreRejected) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_value_t v{};
+  EXPECT_EQ(fm_workbook_evaluate_cf_formula(wb.handle, 0, formulon::Sheet::kMaxRows, 0, 0, 0, "=1", &v),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(fm_workbook_evaluate_cf_formula(wb.handle, 0, 0, formulon::Sheet::kMaxCols, 0, 0, "=1", &v),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(fm_workbook_evaluate_cf_formula(wb.handle, 0, 0, 0, formulon::Sheet::kMaxRows, 0, "=1", &v),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(fm_workbook_evaluate_cf_formula(wb.handle, 0, 0, 0, 0, formulon::Sheet::kMaxCols, "=1", &v),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }

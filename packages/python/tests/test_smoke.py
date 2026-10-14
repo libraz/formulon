@@ -188,6 +188,68 @@ class WorkbookLifecycleTests(unittest.TestCase):
             if "main" in locals():
                 main.close()
 
+    def test_close_waits_for_real_wasm_fetch_and_decode(self) -> None:
+        """A close cannot free the handle between a native fetch and its decode."""
+        wb = Workbook.create_default()
+        wb.set_text(0, 0, 0, "borrowed")
+        decode_started = threading.Event()
+        release_decode = threading.Event()
+        close_finished = threading.Event()
+        destroyed: list[str] = []
+        result: list[Value] = []
+        errors: list[BaseException] = []
+        original_call = LIB._call_or_poison
+        original_decode = Value.__dict__["_from_wasm"]
+
+        def record_destroy(fn, name: str, *args):
+            if name == "fm_workbook_destroy":
+                destroyed.append(name)
+            return original_call(fn, name, *args)
+
+        def block_before_decode(cls, ptr: int) -> Value:
+            decode_started.set()
+            if not release_decode.wait(timeout=5):
+                raise AssertionError("test decode was not released")
+            return original_decode.__func__(cls, ptr)
+
+        def read_value() -> None:
+            try:
+                result.append(wb.get_value(0, 0, 0))
+            except BaseException as error:  # pragma: no cover - assertion aid
+                errors.append(error)
+
+        def close_workbook() -> None:
+            try:
+                wb.close()
+            finally:
+                close_finished.set()
+
+        LIB._call_or_poison = record_destroy
+        Value._from_wasm = classmethod(block_before_decode)
+        reader = threading.Thread(target=read_value)
+        closer = threading.Thread(target=close_workbook)
+        try:
+            reader.start()
+            self.assertTrue(decode_started.wait(timeout=5))
+            closer.start()
+            self.assertFalse(close_finished.wait(timeout=0.1))
+            self.assertEqual(destroyed, [])
+            release_decode.set()
+            reader.join(timeout=5)
+            closer.join(timeout=5)
+            self.assertFalse(reader.is_alive())
+            self.assertFalse(closer.is_alive())
+            self.assertEqual(errors, [])
+            self.assertEqual(result[0].text, "borrowed")
+            self.assertEqual(destroyed, ["fm_workbook_destroy"])
+        finally:
+            release_decode.set()
+            reader.join(timeout=5)
+            closer.join(timeout=5)
+            LIB._call_or_poison = original_call
+            Value._from_wasm = original_decode
+            wb.close()
+
 
 class WorkbookRoundtripTests(unittest.TestCase):
     def test_comment_enumeration_and_cf_formula_evaluation(self) -> None:

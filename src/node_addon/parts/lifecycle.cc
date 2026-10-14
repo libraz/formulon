@@ -238,9 +238,9 @@ Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   const bool enabled = ArgBool(info, 0);
-  const uint32_t max_iter = ArgU32(info, 1);
+  const int32_t max_iter = ArgI32(info, 1);
   const double max_change = ArgDouble(info, 2);
-  fm_status_t rc = fm_workbook_set_iterative(handle_, enabled ? 1 : 0, static_cast<int32_t>(max_iter), max_change);
+  fm_status_t rc = fm_workbook_set_iterative(handle_, enabled ? 1 : 0, max_iter, max_change);
   return MakeStatus(env, rc);
 }
 

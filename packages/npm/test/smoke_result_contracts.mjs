@@ -181,3 +181,18 @@ test('result envelopes keep their declared keys on failure paths', async () => {
     wb.delete();
   }
 });
+
+test('iterative caps use the signed int32 contract', async () => {
+  const Module = await getModule();
+  const wb = Module.Workbook.createDefault();
+  try {
+    assert.equal(wb.setIterative(true, 2 ** 31 - 1, 0.1).ok, true);
+    assert.equal(wb.setIterative(false, -1, 0.1).ok, true);
+    assert.equal(wb.getIterative().maxIterations, 1, 'negative caps retain the native clamp');
+    for (const value of [2 ** 31, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      assert.throws(() => wb.setIterative(true, value, 0.1), RangeError, `maxIterations=${String(value)}`);
+    }
+  } finally {
+    wb.delete();
+  }
+});

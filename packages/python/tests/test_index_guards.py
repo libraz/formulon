@@ -28,6 +28,7 @@ from pathlib import Path
 
 import formulon
 from formulon import Workbook, _structs
+from formulon._c import _sint, _uint
 
 _PKG_ROOT = Path(__file__).resolve().parent.parent
 _HEADER = _PKG_ROOT.parent.parent / "src" / "c_api" / "formulon_c.h"
@@ -404,6 +405,27 @@ class ArgumentSweepTests(unittest.TestCase):
 
 class IndexRangeTests(unittest.TestCase):
     """Out-of-range indices are rejected before any WASM call happens."""
+
+    def test_fractional_integer_arguments_are_rejected_without_truncation(self) -> None:
+        for guard in (_uint, _sint):
+            with self.subTest(guard=guard.__name__):
+                with self.assertRaises(ValueError):
+                    guard(1.5, "integer")
+                with self.assertRaises(ValueError):
+                    guard(float("nan"), "integer")
+                for not_a_number in (None, "5"):
+                    with self.assertRaises(TypeError):
+                        guard(not_a_number, "integer")
+                self.assertEqual(guard(1.0, "integer"), 1)
+
+        with Workbook.create_default() as wb:
+            with self.assertRaises(ValueError):
+                wb.get_value(0, 1.5, 0)
+            with self.assertRaises(ValueError):
+                wb.add_hyperlink(0, 1.5, 0, "https://example.test")
+            # Integral real-valued inputs remain compatible with the old
+            # ``int(value)`` conversion used by this binding.
+            wb.set_iterative(True, 100.0, 0.001)
 
     def test_wrapping_row_does_not_overwrite_the_aliased_cell(self) -> None:
         with Workbook.create_default() as wb:
