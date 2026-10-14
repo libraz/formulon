@@ -289,7 +289,7 @@ TEST(PivotCacheWriter, NumberFormatRoundTrips) {
 // lands -- and the same way Excel writes it. `%.17g` also round-trips,
 // which is why the value assertions above cannot see the difference, but
 // it renders 0.1 as "0.10000000000000001".
-TEST(PivotCacheWriter, NumbersUseTheShortestRoundTripForm) {
+TEST(PivotCacheWriter, NumbersUseTheExcelForm) {
   pivot::PivotCache cache;
   pivot::PivotCacheField nums;
   nums.name = "N";
@@ -301,8 +301,8 @@ TEST(PivotCacheWriter, NumbersUseTheShortestRoundTripForm) {
 
   const std::string xml = write_pivot_cache_definition(cache);
   EXPECT_NE(xml.find("<n v=\"0.1\"/>"), std::string::npos) << xml;
-  EXPECT_NE(xml.find("<n v=\"0.3333333333333333\"/>"), std::string::npos) << xml;
-  EXPECT_NE(xml.find("<n v=\"1E-7\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<n v=\"0.33333333333333331\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<n v=\"9.9999999999999995E-8\"/>"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<n v=\"0\"/>"), std::string::npos) << xml;
   EXPECT_EQ(xml.find("0.10000000000000001"), std::string::npos) << xml;
 }

@@ -378,5 +378,38 @@ TEST(XmlUtilsCaptureAttrs, UnbindablePrefixIsCapturedWithoutInventingABinding) {
   EXPECT_EQ(captured[0].first, "zz:thing");
 }
 
+std::string Num(double v) {
+  std::string s;
+  append_xml_number(s, v);
+  return s;
+}
+
+TEST(XmlUtilsNumber, ExcelSpelling) {
+  EXPECT_EQ(Num(0.0), "0");
+  EXPECT_EQ(Num(-0.0), "0");
+  EXPECT_EQ(Num(5E-324), "0");
+  EXPECT_EQ(Num(0.1), "0.1");
+  EXPECT_EQ(Num(1.0 / 3.0), "0.33333333333333331");
+  EXPECT_EQ(Num(1000000000000000.0), "1000000000000000");
+  EXPECT_EQ(Num(123456789012345.59), "123456789012345.59");
+  EXPECT_EQ(Num(12345.678901234567), "12345.678901234567");
+  EXPECT_EQ(Num(1428571428.5714285), "1428571428.5714285");
+  EXPECT_EQ(Num(100.0), "100");
+  EXPECT_EQ(Num(-2.5), "-2.5");
+  EXPECT_EQ(Num(0.0123), "1.23E-2");
+  EXPECT_EQ(Num(1E-3), "1E-3");
+  EXPECT_EQ(Num(1E-4), "1E-4");
+  EXPECT_EQ(Num(1E-5), "1.0000000000000001E-5");
+  EXPECT_EQ(Num(1.5E-5), "1.5E-5");
+  EXPECT_EQ(Num(1E-6), "9.9999999999999995E-7");
+  EXPECT_EQ(Num(1.2345678901234499E-4), "1.2345678901234499E-4");
+  EXPECT_EQ(Num(1E16), "1E+16");
+  EXPECT_EQ(Num(1.2345678901234568E+17), "1.2345678901234568E+17");
+  EXPECT_EQ(Num(-1E-20), "-9.9999999999999995E-21");
+  EXPECT_EQ(Num(1E-300), "1E-300");
+  EXPECT_EQ(Num(1.7976931348623157E+308), "1.7976931348623157E+308");
+  EXPECT_EQ(Num(1E21), "1E+21");
+}
+
 }  // namespace
 }  // namespace formulon::io
