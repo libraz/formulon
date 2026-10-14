@@ -222,6 +222,14 @@ TEST(BuiltinsPercentRankInc, SignificanceNegativeIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+TEST(BuiltinsPercentRankInc, SignificanceAtInt64ExclusiveBoundIsNum) {
+  // 2^63 is exactly representable as a double but cannot be narrowed to an
+  // int64_t. The domain check must reject it before the cast.
+  const Value v = EvalSource("=PERCENTRANK.INC({1;2;3;4;5}, 3, 9223372036854775808)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 // ---------------------------------------------------------------------------
 // PERCENTRANK.EXC
 // ---------------------------------------------------------------------------

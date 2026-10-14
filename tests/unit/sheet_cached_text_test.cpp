@@ -92,10 +92,37 @@ TEST(SheetCachedTextTest, OverwriteTextWithNonText) {
   ASSERT_NE(cell, nullptr);
   ASSERT_TRUE(cell->cached_value.is_number());
   EXPECT_DOUBLE_EQ(cell->cached_value.as_number(), 42.0);
-  // `cached_text_owned` is documented as harmlessly retained on the
-  // non-Text path; the new `cached_value` does not reference it. We don't
-  // assert the buffer is empty (that's an internal detail), only that the
-  // stored value reads back correctly.
+  EXPECT_EQ(cell->cached_text_owned, nullptr);
+}
+
+TEST(SheetCachedTextTest, NonTextUpdatesReleaseLargeCachedText) {
+  Sheet s("Sheet1");
+  const std::string large(1U << 20U, 'x');
+  for (const Value next : {Value::blank(), Value::error(ErrorCode::Value), Value::boolean(true)}) {
+    s.set_cell_cached_value(0U, 0U, Value::text(large));
+    s.set_cell_cached_value(0U, 0U, next);
+    const Cell* cell = s.cell_at(0U, 0U);
+    ASSERT_NE(cell, nullptr);
+    EXPECT_EQ(cell->cached_text_owned, nullptr);
+    EXPECT_EQ(cell->cached_value.kind(), next.kind());
+  }
+}
+
+TEST(SheetCachedTextTest, LiteralAndFormulaReplacementReleaseCachedText) {
+  Sheet s("Sheet1");
+  const std::string large(1U << 20U, 'x');
+  s.set_cell_cached_value(0U, 0U, Value::text(large));
+  s.set_cell_value(0U, 0U, Value::number(12.0));
+  const Cell* cell = s.cell_at(0U, 0U);
+  ASSERT_NE(cell, nullptr);
+  EXPECT_EQ(cell->cached_text_owned, nullptr);
+  EXPECT_DOUBLE_EQ(cell->cached_value.as_number(), 12.0);
+  s.set_cell_cached_value(0U, 0U, Value::text(large));
+  s.set_cell_formula(0U, 0U, "=1");
+  cell = s.cell_at(0U, 0U);
+  ASSERT_NE(cell, nullptr);
+  EXPECT_EQ(cell->cached_text_owned, nullptr);
+  EXPECT_TRUE(cell->cached_value.is_blank());
 }
 
 TEST(SheetCachedTextTest, OverwriteNonTextWithText) {

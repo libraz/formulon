@@ -288,7 +288,8 @@ Value percentrank_cell(const std::vector<double>& sorted, const Value& x_v, cons
   }
   // Significance truncates toward zero and must be at least 1.
   const double sig_d = std::trunc(sig_or.value());
-  if (!(sig_d >= 1.0) || sig_d > static_cast<double>(std::numeric_limits<std::int64_t>::max())) {
+  // Exclusive 2^63: `static_cast<double>(INT64_MAX)` rounds up to it and would admit it.
+  if (!(sig_d >= 1.0) || sig_d >= 0x1p63) {
     return Value::error(ErrorCode::Num);
   }
   const auto significance = static_cast<std::int64_t>(sig_d);

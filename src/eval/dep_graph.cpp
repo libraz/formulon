@@ -161,13 +161,9 @@ DepGraph::DependencyDelta DepGraph::replace_dependencies(DependencySource source
     }
   }
   for (const Edge& edge : stale) {
-    if (remove_dependency_source(edge.first, edge.second, source)) {
-      delta.removed.push_back(edge);
-    } else {
-      // The source bit was removed even when another source kept the
-      // adjacency pair. Preserve that source-level fact in the delta.
-      delta.removed.push_back(edge);
-    }
+    // Report the removed source even when another source retains the adjacency.
+    (void)remove_dependency_source(edge.first, edge.second, source);
+    delta.removed.push_back(edge);
   }
 
   for (const Edge& edge : wanted) {

@@ -144,6 +144,18 @@ TEST(HypothesisTTest, BadTailsIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+TEST(HypothesisTTest, HugeTailsIsNumWithoutNarrowing) {
+  const Value v = EvalSource("=T.TEST({1,2,3}, {4,5,6}, 1E100, 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(HypothesisTTest, HugeTypeIsNumWithoutNarrowing) {
+  const Value v = EvalSource("=T.TEST({1,2,3}, {4,5,6}, 2, 1E100)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 TEST(HypothesisTTest, TooFewPairsIsDiv0) {
   // Paired with only one pair -> s_d undefined (n < 2) -> #DIV/0!.
   const Value v = EvalSource("=T.TEST({1}, {2}, 2, 1)");

@@ -114,21 +114,33 @@ bool RecalcEngine::LockedMutator::has_ever_registered_formula() const noexcept {
 namespace {
 
 // Appends every populated coordinate of `range` to `out`. `extent` is the
-// rectangle's populated bounding box as reported by `Sheet::populated_extent`,
-// so the walk visits only rows that can carry content.
+// rectangle's populated bounding box as reported by `Sheet::populated_extent`.
+// Walk the stored rows when that is the smaller set, matching Sheet's range
+// scanners, so a sparse rectangle does not pay for every row in its extent.
 void collect_populated_cells(const Sheet& sheet, const CellRangeDependency& range, const Sheet::PopulatedExtent& extent,
                              std::vector<CellNodeId>& out) {
-  for (std::uint32_t row = extent.first_row; row <= extent.last_row; ++row) {
-    const auto it = sheet.rows().find(row);
-    if (it == sheet.rows().end()) {
-      continue;
-    }
-    const RowCells& cells = it->second;
+  const auto scan_row = [&](std::uint32_t row, const RowCells& cells) {
     for (const auto& [col, cell] :
          cells.entries_in(extent.first_col, static_cast<std::uint64_t>(extent.last_col) + 1U)) {
       if (!cell.formula_text.empty() || !cell.cached_value.is_blank()) {
         out.push_back(CellNodeId{range.sheet_id, row, col});
       }
+    }
+  };
+  const auto& rows = sheet.rows();
+  const std::uint64_t extent_rows = static_cast<std::uint64_t>(extent.last_row) - extent.first_row + 1U;
+  if (static_cast<std::uint64_t>(rows.size()) <= extent_rows) {
+    for (const auto& [row, cells] : rows) {
+      if (row >= extent.first_row && row <= extent.last_row) {
+        scan_row(row, cells);
+      }
+    }
+    return;
+  }
+  for (std::uint64_t row = extent.first_row; row <= extent.last_row; ++row) {
+    const auto it = rows.find(static_cast<std::uint32_t>(row));
+    if (it != rows.end()) {
+      scan_row(static_cast<std::uint32_t>(row), it->second);
     }
   }
 }
@@ -159,8 +171,9 @@ std::vector<CellNodeId> RecalcEngine::compact_range_precedents_of(CellNodeId cel
 std::vector<CellNodeId> RecalcEngine::compact_range_dependents_of(CellNodeId cell) const {
   std::lock_guard<std::mutex> guard(mutex_);
   std::vector<CellNodeId> owners;
-  range_dependencies_.for_each_owner_covering(cell, [&owners](CellNodeId owner) {
-    if (std::find(owners.begin(), owners.end(), owner) == owners.end()) {
+  std::unordered_set<CellNodeId, CellNodeIdHash> seen;
+  range_dependencies_.for_each_owner_covering(cell, [&owners, &seen](CellNodeId owner) {
+    if (seen.insert(owner).second) {
       owners.push_back(owner);
     }
   });
@@ -170,11 +183,14 @@ std::vector<CellNodeId> RecalcEngine::compact_range_dependents_of(CellNodeId cel
 std::vector<CellNodeId> RecalcEngine::LockedMutator::three_d_span_owners_covering_sheet(
     std::uint16_t edited_sheet) const {
   std::vector<CellNodeId> owners;
+  owners.reserve(engine_.three_d_span_dependencies_.size());
+  std::unordered_set<CellNodeId, CellNodeIdHash> seen;
+  seen.reserve(engine_.three_d_span_dependencies_.size());
   for (const RegisteredThreeDSpan& entry : engine_.three_d_span_dependencies_) {
     if (edited_sheet < entry.span.sheet_first || edited_sheet > entry.span.sheet_last) {
       continue;
     }
-    if (std::find(owners.begin(), owners.end(), entry.owner) == owners.end()) {
+    if (seen.insert(entry.owner).second) {
       owners.push_back(entry.owner);
     }
   }

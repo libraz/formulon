@@ -2,6 +2,7 @@
 
 #include "numeric_aggregate_kernels.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -137,6 +138,17 @@ TEST(NumericAggregateKernels, ViewGetterPassesAreSourceOrderedAndMinimal) {
   probe.calls.clear();
   ASSERT_TRUE(run_stdev(view, /*sample=*/true));
   EXPECT_EQ(probe.calls, (std::vector<std::size_t>{0U, 1U, 2U, 3U}));
+}
+
+TEST(NumericAggregateKernels, KthSelectionMatchesSortBitsForMixedSignedZeros) {
+  const std::vector<double> input = {-0.0, 7.0, 0.0, -3.0};
+  std::vector<double> expected = input;
+  std::sort(expected.begin(), expected.end());
+  for (std::size_t target = 0; target < input.size(); ++target) {
+    std::vector<double> selected = input;
+    select_kth_preserving_sort_bits(selected, target);
+    EXPECT_EQ(std::memcmp(&selected[target], &expected[target], sizeof(double)), 0) << "target=" << target;
+  }
 }
 
 TEST(NumericAggregateKernels, InsufficientOrNullGetterInputsRetainDiv0Errors) {

@@ -128,6 +128,12 @@ struct ValueRun {
 /// `src/eval/builtins/stats.cpp` so both apply the same first-occurrence grouping.
 std::vector<ValueRun> group_equal_values(const std::vector<double>& xs);
 
+/// Rearranges `xs` so `xs[target]` holds the value a full ascending sort puts
+/// there, bit for bit, with a partial selection where that is enough. Input
+/// with non-finite values or both signed zeros is fully sorted, since only
+/// there can equal values differ in bits.
+void select_kth_preserving_sort_bits(std::vector<double>& xs, std::size_t target);
+
 }  // namespace numeric_aggregate_kernels
 }  // namespace formulon
 

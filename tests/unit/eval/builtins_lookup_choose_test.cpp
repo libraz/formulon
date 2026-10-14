@@ -40,6 +40,12 @@ TEST(BuiltinsChoose, OutOfRangeTooLargeIsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsChoose, HugeIndexIsValueWithoutNarrowing) {
+  const Value v = EvalSource("=CHOOSE(1E100, \"a\", \"b\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 TEST(BuiltinsChoose, IndexErrorPropagates) {
   const Value v = EvalSource("=CHOOSE(#DIV/0!, \"a\", \"b\")");
   ASSERT_TRUE(v.is_error());
@@ -273,6 +279,13 @@ TEST(BuiltinsChoose, ChooseOutOfRangeIndexIsValueError) {
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
   wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
   const Value v = EvalSourceIn("=SUM(CHOOSE(5, A1:A2, A1:A3))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsChoose, HugeRangeIndexIsValueWithoutNarrowing) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=SUM(CHOOSE(1E100, A1:A2, A1:A3))", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }

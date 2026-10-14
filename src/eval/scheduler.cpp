@@ -77,13 +77,12 @@ struct SccIndex {
 };
 
 // Builds the inter-SCC condensed graph adjacency restricted to the dirty
-// component set. `predecessors[i]` holds the dirty-SCC indices whose
-// members are read by some member of SCC `i`; `successors[i]` is the
-// transpose. Self-loops (a cell inside SCC `i` reading another member of
-// the same SCC) are NOT recorded — those are interior to the cycle and
-// handled by the iterative solver.
+// component set. `successors[i]` holds the SCCs that read a member of SCC
+// `i`; `in_degree` counts the dirty dependencies that must finish first.
+// Self-loops (a cell inside SCC `i` reading another member of the same SCC)
+// are NOT recorded — those are interior to the cycle and handled by the
+// iterative solver.
 struct CondensedGraph {
-  std::vector<std::vector<std::size_t>> predecessors;
   std::vector<std::vector<std::size_t>> successors;
   std::vector<std::size_t> in_degree;
 };
@@ -91,7 +90,6 @@ struct CondensedGraph {
 CondensedGraph build_condensed_graph(const SccIndex& idx, const DepGraph& graph) {
   CondensedGraph out;
   const std::size_t n = idx.components.size();
-  out.predecessors.resize(n);
   out.successors.resize(n);
   out.in_degree.assign(n, 0U);
 
@@ -111,7 +109,6 @@ CondensedGraph build_condensed_graph(const SccIndex& idx, const DepGraph& graph)
           continue;  // Internal SCC edge — solver concern, not scheduler concern.
         }
         if (seen_preds.insert(j).second) {
-          out.predecessors[i].push_back(j);
           out.successors[j].push_back(i);
           ++out.in_degree[i];
         }
@@ -681,13 +678,12 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     // Assign condensed-graph indices. Every emitted component is dirty by
     // construction, so no filtering pass is needed.
     SccIndex idx;
-    idx.components.reserve(dirty_sccs.size());
-    for (const std::vector<CellNodeId>& comp : dirty_sccs) {
-      const std::size_t scc_id = idx.components.size();
-      for (CellNodeId c : comp) {
+    idx.components = std::move(dirty_sccs);
+    idx.cell_to_scc.reserve(dirty_nodes.size());
+    for (std::size_t scc_id = 0U; scc_id < idx.components.size(); ++scc_id) {
+      for (CellNodeId c : idx.components[scc_id]) {
         idx.cell_to_scc.emplace(c, scc_id);
       }
-      idx.components.push_back(comp);
     }
 
     const CondensedGraph cg = build_condensed_graph(idx, engine.graph_);

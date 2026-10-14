@@ -148,9 +148,9 @@ static Value large_small(const Value* args, std::uint32_t arity, bool want_large
   if (xs.empty() || k_raw.value() < 1.0 || k > n) {
     return Value::error(ErrorCode::Num);
   }
-  std::sort(xs.begin(), xs.end());
   const double idx_d = want_large ? std::trunc(n + 1.0 - k) : std::trunc(k);
   const auto idx = static_cast<std::size_t>(idx_d);
+  numeric_aggregate_kernels::select_kth_preserving_sort_bits(xs, idx - 1u);
   return Value::number(xs[idx - 1u]);
 }
 

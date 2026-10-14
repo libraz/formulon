@@ -104,6 +104,12 @@ TEST(BuiltinsAreas, ChooseSelectsSingleReferenceBranch) {
   EXPECT_EQ(v.as_number(), 1.0);
 }
 
+TEST(BuiltinsAreas, HugeChooseSelectorIsValueWithoutNarrowing) {
+  const Value v = EvalSource("=AREAS(CHOOSE(1E100,A1,B1))");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 TEST(BuiltinsAreas, IfTrueSelectsUnionBranch) {
   const Value v = EvalSource("=AREAS(IF(TRUE,(A1,B2),C3:D4))");
   ASSERT_TRUE(v.is_number());
@@ -386,6 +392,15 @@ TEST(BuiltinsNetworkdaysIntl, AllWeekendMaskCountsZero) {
 TEST(BuiltinsNetworkdaysIntl, InvalidSelectorIsNum) {
   // 8 is not a valid paired-weekend code; 11..17 reserved for singles.
   const Value v = EvalSource("=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,14),8)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsNetworkdaysIntl, HugeSelectorIsNumWithoutNarrowing) {
+  // The selector is checked in double form before the weekend-table index is
+  // narrowed. A finite value outside both Excel selector windows remains
+  // #NUM! and must not invoke a floating-to-int overflow conversion.
+  const Value v = EvalSource("=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,14),1E100)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }

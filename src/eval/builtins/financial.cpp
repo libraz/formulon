@@ -24,6 +24,7 @@
 
 #include "eval/builtins/financial.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <utility>
@@ -160,8 +161,10 @@ Expected<std::pair<std::int64_t, std::int64_t>, ErrorCode> cum_period_bounds(dou
   }
   // Mac Excel 365 rounds `start` UP (ceil) and `end` DOWN (floor) before
   // iterating; see CUMIPMT / CUMPRINC oracle fixtures.
-  const auto start_i = static_cast<std::int64_t>(std::ceil(start));
-  const auto end_i = static_cast<std::int64_t>(std::floor(end));
+  // Clamped to 2^53 so a huge finite bound narrows without overflow.
+  constexpr double kMaxExactPeriod = 9007199254740992.0;
+  const auto start_i = static_cast<std::int64_t>(std::ceil(std::min(start, kMaxExactPeriod)));
+  const auto end_i = static_cast<std::int64_t>(std::floor(std::min(end, kMaxExactPeriod)));
   if (start_i > end_i) {
     return ErrorCode::Num;
   }

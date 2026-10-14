@@ -82,6 +82,10 @@ bool parse_weekend_arg(const Value& arg_val, bool reject_all_weekend, std::uint8
     // TRUE is selector 1; FALSE and a blank cell are selector 0, which no pattern matches.
     const double selector = arg_val.is_number() ? arg_val.as_number() : (arg_val.is_boolean() && arg_val.as_boolean());
     const double trunc = std::trunc(selector);
+    if (!std::isfinite(trunc)) {
+      *out_err = ErrorCode::Num;
+      return false;
+    }
     // The table below expands to Excel's documented encoding:
     //   paired:  1 Sat+Sun, 2 Sun+Mon, 3 Mon+Tue, 4 Tue+Wed,
     //            5 Wed+Thu, 6 Thu+Fri, 7 Fri+Sat
@@ -89,12 +93,13 @@ bool parse_weekend_arg(const Value& arg_val, bool reject_all_weekend, std::uint8
     //           15 Thu only, 16 Fri only, 17 Sat only
     static constexpr std::uint8_t kPaired[8] = {0U, 0x60U, 0x41U, 0x03U, 0x06U, 0x0CU, 0x18U, 0x30U};
     static constexpr std::uint8_t kSingle[8] = {0U, 0x40U, 0x01U, 0x02U, 0x04U, 0x08U, 0x10U, 0x20U};
-    const int n = static_cast<int>(trunc);
-    if (n >= 1 && n <= 7) {
+    if (trunc >= 1.0 && trunc <= 7.0) {
+      const int n = static_cast<int>(trunc);
       *out_mask = kPaired[n];
       return true;
     }
-    if (n >= 11 && n <= 17) {
+    if (trunc >= 11.0 && trunc <= 17.0) {
+      const int n = static_cast<int>(trunc);
       *out_mask = kSingle[n - 10];
       return true;
     }

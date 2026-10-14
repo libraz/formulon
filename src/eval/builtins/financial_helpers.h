@@ -95,7 +95,7 @@ inline Expected<int, ErrorCode> read_day_count_basis(const Value* args, std::uin
   if (!raw) {
     return std::move(raw.error());
   }
-  const int basis = static_cast<int>(std::trunc(raw.value()));
+  const int basis = truncate_saturated_int(raw.value());
   if (basis < 0 || basis > 4) {
     return ErrorCode::Num;
   }
@@ -109,7 +109,7 @@ inline Expected<int, ErrorCode> read_coupon_frequency(const Value* args, std::ui
   if (!raw) {
     return std::move(raw.error());
   }
-  const int frequency = static_cast<int>(std::trunc(raw.value()));
+  const int frequency = truncate_saturated_int(raw.value());
   if (frequency != 1 && frequency != 2 && frequency != 4) {
     return ErrorCode::Num;
   }

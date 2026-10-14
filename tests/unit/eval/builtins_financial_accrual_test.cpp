@@ -384,6 +384,25 @@ TEST(FinancialAmordegrc, ExcessivePeriodIsNumNotAHang) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+TEST(FinancialAmordegrc, TinyPositiveRateKeepsUnboundedLifeInDoubleDomain) {
+  // 1 / 1E-20 exceeds int64_t even though it remains finite. The requested
+  // period is still within the capped schedule, so this is a valid numeric
+  // calculation rather than an asset-life rejection; the tiny charge rounds
+  // to zero.
+  const Value v = EvalSource("=AMORDEGRC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 1E-20, 1)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(FinancialArgs, HugeBasisAndFrequencyAreNum) {
+  for (const char* src : {"=YEARFRAC(1, 2, 1E100)", "=YEARFRAC(1, 2, -1E100)",
+                          "=COUPDAYS(DATE(2008,1,25), DATE(2008,11,15), 1E100, 1)"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << src;
+  }
+}
+
 TEST(FinancialAmordegrc, NonPositiveRateIsNum) {
   const Value v = EvalSource("=AMORDEGRC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0, 1)");
   ASSERT_TRUE(v.is_error());

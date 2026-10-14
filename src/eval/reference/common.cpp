@@ -300,11 +300,14 @@ bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
       return false;
     }
     const double d = coerced.value();
-    int truncated = static_cast<int>(std::trunc(d));
-    if (truncated == 0 && d != 0.0) {
-      truncated = (d > 0.0) ? 1 : -1;
+    double truncated = std::trunc(d);
+    if (truncated == 0.0 && d != 0.0) {
+      truncated = (d > 0.0) ? 1.0 : -1.0;
     }
-    *out_val = truncated;
+    // Saturate past the grid axis so the bounds check below rejects it after both dimensions are evaluated.
+    const double limit =
+        (idx == 3U ? static_cast<double>(Sheet::kMaxRows) : static_cast<double>(Sheet::kMaxCols)) + 1.0;
+    *out_val = static_cast<int>(std::clamp(truncated, -limit, limit));
     return true;
   };
 

@@ -331,6 +331,12 @@ TEST(BuiltinsText3TextBefore, PositiveInstanceOutOfRangeIsNotFound) {
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
+TEST(BuiltinsText3TextBefore, HugeInstanceUsesNotFoundFallback) {
+  const Value v = EvalSource("=TEXTBEFORE(\"a-b\", \"-\", 1E100, 0, 0, \"fallback\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "fallback");
+}
+
 TEST(BuiltinsText3TextBefore, MinimumNegativeInstanceDoesNotOverflow) {
   const Value v = EvalSource("=TEXTBEFORE(\"abc\", \"-\", -2147483648)");
   ASSERT_TRUE(v.is_error());
@@ -445,6 +451,12 @@ TEST(BuiltinsText3TextAfter, NotFoundDefaultIsNA) {
   const Value v = EvalSource("=TEXTAFTER(\"abc\", \"-\")");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsText3TextAfter, HugeNegativeInstanceUsesNotFoundFallback) {
+  const Value v = EvalSource("=TEXTAFTER(\"a-b\", \"-\", -1E100, 0, 0, \"fallback\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "fallback");
 }
 
 TEST(BuiltinsText3TextAfter, IfNotFoundCustom) {

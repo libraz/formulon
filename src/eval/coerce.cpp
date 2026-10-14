@@ -192,7 +192,8 @@ Expected<int, ErrorCode> coerce_to_truncated_int(const Value& v) {
   if (!number) {
     return std::move(number.error());
   }
-  return static_cast<int>(number.value());
+  // `coerce_to_index_number` yields a finite number; saturating keeps the narrowing defined.
+  return truncate_saturated_int(number.value());
 }
 
 std::string_view clip_to_text_cap(std::string_view text) noexcept {

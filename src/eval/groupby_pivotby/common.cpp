@@ -117,7 +117,7 @@ bool read_int(const parser::AstNode& node, Arena& arena, const FunctionRegistry&
     *out_err = Value::error(ErrorCode::Value);
     return false;
   }
-  *out = static_cast<int>(std::trunc(n));
+  *out = truncate_saturated_int(n);
   return true;
 }
 

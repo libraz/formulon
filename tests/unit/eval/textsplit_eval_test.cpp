@@ -290,6 +290,12 @@ TEST(BuiltinsTextSplit, InvalidMatchModeRejected) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsTextSplit, HugeMatchModeRejectedWithoutNarrowing) {
+  const Value v = EvalSrc("=TEXTSPLIT(\"a,b\", \",\", , , 1E100)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 // ---------------------------------------------------------------------------
 // ignore_empty in 2D grids
 // ---------------------------------------------------------------------------

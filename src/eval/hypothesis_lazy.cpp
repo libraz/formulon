@@ -173,14 +173,16 @@ Value eval_t_test_lazy(const parser::AstNode& call, Arena& arena, const Function
   }
   // Excel truncates (not rounds) `tails` and `type` toward zero before
   // the domain check, matching the documented behaviour.
-  const int tails = static_cast<int>(tails_v.as_number());
-  const int type = static_cast<int>(type_v.as_number());
-  if (tails != 1 && tails != 2) {
+  const double tails_d = std::trunc(tails_v.as_number());
+  const double type_d = std::trunc(type_v.as_number());
+  if (!std::isfinite(tails_d) || (tails_d != 1.0 && tails_d != 2.0)) {
     return Value::error(ErrorCode::Num);
   }
-  if (type != 1 && type != 2 && type != 3) {
+  if (!std::isfinite(type_d) || (type_d != 1.0 && type_d != 2.0 && type_d != 3.0)) {
     return Value::error(ErrorCode::Num);
   }
+  const int tails = static_cast<int>(tails_d);
+  const int type = static_cast<int>(type_d);
 
   double t = 0.0;
   double df = 0.0;

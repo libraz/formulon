@@ -75,6 +75,12 @@ TEST(BuiltinsAddress, RowAndColumnOutOfRange) {
   EXPECT_TRUE(EvalSource("=ADDRESS(1,16385)").is_error());
 }
 
+TEST(BuiltinsAddress, HugeOptionalModeIsValueWithoutNarrowing) {
+  const Value v = EvalSource("=ADDRESS(1,1,1E100)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 TEST(BuiltinsAddress, R1C1AbsoluteStyle) {
   // a1 = FALSE, abs_num = 1 -> R1C1
   const Value v = EvalSource("=ADDRESS(1,1,1,FALSE)");

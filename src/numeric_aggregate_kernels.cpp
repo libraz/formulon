@@ -282,6 +282,28 @@ std::vector<ValueRun> group_equal_values(const std::vector<double>& xs) {
   return runs;
 }
 
+void select_kth_preserving_sort_bits(std::vector<double>& xs, std::size_t target) {
+  if (xs.empty() || target >= xs.size()) {
+    return;
+  }
+  bool has_nonfinite = false;
+  bool has_negative_zero = false;
+  bool has_positive_zero = false;
+  for (const double value : xs) {
+    has_nonfinite = has_nonfinite || !std::isfinite(value);
+    if (value == 0.0) {
+      has_negative_zero = has_negative_zero || std::signbit(value);
+      has_positive_zero = has_positive_zero || !std::signbit(value);
+    }
+  }
+  if (has_nonfinite || (has_negative_zero && has_positive_zero)) {
+    // Non-finite values or mixed signed zeros: a full sort, whose tie order fixes which bits are picked.
+    std::sort(xs.begin(), xs.end());
+    return;
+  }
+  std::nth_element(xs.begin(), xs.begin() + static_cast<std::ptrdiff_t>(target), xs.end());
+}
+
 Expected<double, ErrorCode> mode_first_occurrence(const std::vector<double>& xs) {
   if (xs.empty()) {
     return ErrorCode::NA;

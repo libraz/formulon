@@ -178,6 +178,9 @@ void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
   Cell& slot = row_cells.ensure(col);
   reset_to_literal(slot);
   slot.cached_value = v;
+  if (!v.is_text()) {
+    slot.cached_text_owned.reset();
+  }
   index_formula_cell_locked(row, col, false);
   cell_enumeration_revision_.bump();
 }
@@ -216,6 +219,7 @@ void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string f
   slot.phonetic_runs.clear();
   slot.phonetic_props = PhoneticProperties{};
   slot.cached_value = Value::blank();
+  slot.cached_text_owned.reset();
   index_formula_cell_locked(row, col, !slot.formula_text.empty());
   cell_enumeration_revision_.bump();
 }
@@ -276,12 +280,8 @@ void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v)
     slot.cached_text_owned = std::move(owned);
     slot.cached_value = Value::text(view);
   } else {
-    // Non-Text path: keep the trivial assignment. The previous
-    // `cached_text_owned` (if any) is intentionally retained: the new
-    // `cached_value` does not reference it, and freeing it eagerly would
-    // produce no visible win. The next Text write replaces the pointer
-    // unconditionally.
     slot.cached_value = v;
+    slot.cached_text_owned.reset();
   }
   cell_enumeration_revision_.bump();
 }

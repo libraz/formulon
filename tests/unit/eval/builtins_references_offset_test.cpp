@@ -28,6 +28,27 @@ TEST(BuiltinsOffset, OffsetOutOfGridIsRef) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
+TEST(BuiltinsOffset, HugeHeightIsRefWithoutNarrowing) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=OFFSET(A1,0,0,1E100,1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(BuiltinsOffset, HugeNegativeHeightIsRefWithoutIntMinNegation) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=OFFSET(A1,0,0,-1E100,1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(BuiltinsOffset, HugeHeightKeepsAWidthErrorFirst) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=OFFSET(A1,0,0,2000000,NA())", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
 TEST(BuiltinsOffset, NegativeHeightEndsAtAnchor) {
   // Excel allows negative height: the rectangle extends upward and the
   // base cell is the bottom edge. `OFFSET(A1, 0, 0, -1, 1)` yields a

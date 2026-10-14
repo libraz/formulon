@@ -178,7 +178,8 @@ Expected<TextBeforeAfterOpts, ErrorCode> read_tba_opts(const Value* args, std::u
     if (std::isnan(d) || std::isinf(d)) {
       return ErrorCode::Num;
     }
-    opts.instance_num = static_cast<int>(std::floor(snap_near_integer(d)));
+    // Saturated: find_text_instance treats an out-of-range instance as not found.
+    opts.instance_num = truncate_saturated_int(std::floor(snap_near_integer(d)));
   }
   auto match_mode = text_detail::read_optional_int_arg(args, arity, 3u, 0);
   if (!match_mode) {

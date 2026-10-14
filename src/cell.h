@@ -53,7 +53,8 @@ struct CellAddress {
 ///   * Values committed via `Sheet::set_cell_value` keep the caller-owns
 ///     contract: the OOXML reader, for example, points the `string_view` at
 ///     the workbook-scoped shared string table and that storage outlives
-///     the cell. `cached_text_owned` is left untouched on this path.
+///     the cell. Non-Text writes release `cached_text_owned`; Text writes
+///     retain it in case the supplied view borrows the cell's current text.
 ///
 /// `cached_text_owned` is a `unique_ptr<std::string>` rather than a bare
 /// `std::string` so the bytes live at a heap-stable address that survives

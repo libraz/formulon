@@ -19,6 +19,7 @@
 
 #include "eval/areas_lazy.h"
 
+#include <cmath>
 #include <cstdint>
 #include <string_view>
 
@@ -125,9 +126,11 @@ std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionR
         if (!idx_e) {
           return kAreasInvalid;
         }
-        const std::int64_t idx = static_cast<std::int64_t>(idx_e.value());
-        if (idx >= 1 && idx <= static_cast<std::int64_t>(fn_arity - 1U)) {
-          return count_areas(n.as_call_arg(static_cast<std::uint32_t>(idx)), arena, registry, ctx, propagated);
+        const double idx_d = std::trunc(idx_e.value());
+        const double max_idx = static_cast<double>(fn_arity - 1U);
+        if (idx_d >= 1.0 && idx_d <= max_idx) {
+          const auto idx = static_cast<std::uint32_t>(idx_d);
+          return count_areas(n.as_call_arg(idx), arena, registry, ctx, propagated);
         }
       }
       return kAreasInvalid;

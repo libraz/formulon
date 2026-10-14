@@ -175,7 +175,8 @@ int read_int_opt(const parser::AstNode& node, Arena& arena, const FunctionRegist
     *out_err = Value::error(coerced.error());
     return default_value;
   }
-  return static_cast<int>(coerced.value());
+  // Saturated before the caller's whitelist check, so a huge argument narrows defined.
+  return truncate_saturated_int(coerced.value());
 }
 
 bool read_bool_opt(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,

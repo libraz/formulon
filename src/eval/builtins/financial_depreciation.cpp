@@ -579,17 +579,19 @@ Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
   // Integer estimate of the asset's life (in periods) used by the
   // two-step end-of-schedule rule. Excel rounds life to the nearest
   // integer for this calculation.
-  const auto life_int = static_cast<std::int64_t>(std::floor(life + 0.5));
+  // Kept in double: a tiny rate makes 1/rate exceed int64_t, and the schedule is capped anyway.
+  const double rounded_life = std::floor(life + 0.5);
   // Each period's depreciation is rounded to the nearest integer (Excel's
   // observed AMORDEGRC behaviour).
   return finalize(run_amor_schedule(cost, salvage, period, [&](std::int64_t i, double book) {
     // End-of-schedule rule: the penultimate full period depreciates
     // half of the remaining book value; the last period finishes the
-    // remainder. life_int here is a conservative integer proxy.
-    if (i == life_int - 1) {
+    // remainder. rounded_life here is a conservative period proxy.
+    const double period_index = static_cast<double>(i);
+    if (period_index == rounded_life - 1.0) {
       return std::floor(book * 0.5 + 0.5);
     }
-    if (i >= life_int) {
+    if (period_index >= rounded_life) {
       return book;
     }
     if (i == 0) {

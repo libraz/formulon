@@ -106,7 +106,8 @@ inline double snap_near_integer(double value) noexcept {
 Expected<double, ErrorCode> coerce_to_index_number(const Value& v);
 
 /// Coerces `v` to a finite number, truncates toward zero, and narrows it to
-/// `int`. Callers must ensure the truncated number is representable as `int`.
+/// `int`, saturating at the integer bounds. Callers retain their own domain
+/// checks and error codes for values outside their accepted range.
 Expected<int, ErrorCode> coerce_to_truncated_int(const Value& v);
 
 /// Excel's text-cell limit in UTF-16 units. A result over it is `#VALUE!`

@@ -235,6 +235,29 @@ TEST(RecalcEngine, LargeRangeAggregateRecalcsWhenAnInteriorLiteralChanges) {
   EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 6.0);
 }
 
+TEST(RecalcEngine, SparseFullColumnRangeUsesStoredRowsForContentTrace) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, Sheet::kMaxRows - 1U, 0U, Value::number(2.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SUM(A1:A1048576)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 3.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, Sheet::kMaxRows - 1U, 0U, Value::number(5.0))));
+  auto stats = wb.recalc(default_registry());
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().cells_evaluated, 1U);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 6.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 499U, 0U, Value::number(3.0))));
+  const std::vector<CellNodeId> trace = wb.recalc_engine().compact_range_precedents_of(CellNodeId{0U, 0U, 1U}, wb);
+  ASSERT_EQ(trace.size(), 3U);
+  EXPECT_EQ(trace[0].row, 0U);
+  EXPECT_EQ(trace[1].row, 499U);
+  EXPECT_EQ(trace[2].row, Sheet::kMaxRows - 1U);
+}
+
 TEST(RecalcEngine, LargeRangeAggregateOrdersAgainstInteriorFormulaInBothRegistrationOrders) {
   AssertLargeRangeOrdering(/*aggregate_first=*/true);
   AssertLargeRangeOrdering(/*aggregate_first=*/false);

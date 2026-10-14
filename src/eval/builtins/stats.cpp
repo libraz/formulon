@@ -112,12 +112,8 @@ Expected<std::vector<double>, ErrorCode> collect_direct_stats(const Value* args,
 }
 
 Expected<std::vector<double>, ErrorCode> collect_a(const Value* args, std::uint32_t count) {
-  NumericCollectPolicy policy;
-  policy.include_bool = true;                  // Direct Bool -> 1 / 0.
-  policy.include_text_numeric_literal = true;  // Direct Text -> strict coerce.
-  policy.error_on_text = true;                 // "Hola" -> #VALUE!.
-  policy.blank_as_zero = true;                 // Direct Blank -> 0 ("A"-family rule).
-  return eval::collect_numerics(args, count, policy);
+  // The one policy the A-family and direct dispersion collectors share.
+  return collect_direct_stats(args, count);
 }
 
 MeanSS compute_mean_ss(const std::vector<double>& xs) {
