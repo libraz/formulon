@@ -19,7 +19,7 @@ namespace formulon {
 ///
 /// Codes are partitioned by module in 1000-wide bands so a decimal digit of
 /// the code identifies its origin. The exact catalog is the single source of
-/// truth for the C API (`fm_error_t::code`) and the WASM / Python bindings.
+/// truth for the C API (`fm_status_t`) and the WASM / Python bindings.
 enum class FormulonErrorCode : int32_t {
   // ===== 0-999: General =====
   kOk = 0,

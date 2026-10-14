@@ -78,7 +78,8 @@
 #       reason: "..."
 #       mode: skip-oracle | tolerance      # default: tolerance
 #       cause: excel-no-value | harness-cannot-capture
-#              | accepted-divergence | engine-gap | unclassified
+#              | accepted-divergence | engine-gap | non-identifiable
+#              | unclassified
 #                                          # REQUIRED when mode is
 #                                          # skip-oracle; see above
 #       tolerance: { abs: 1e-10, rel: 0 }
