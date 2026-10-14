@@ -8176,15 +8176,17 @@ typedef struct {
  *
  * `visible`, `major_gridlines` and `reversed` are 0/1 and `crosses` an
  * `fm_chart_axis_crosses_t` (`CLEAR` rejected on these four); `crosses_at`
- * is read when `crosses` is `FM_CHART_CROSSES_AT`. `CLEAR` on `title`
- * removes the axis title, on `log_base` makes the axis linear, and on
- * `tick_label_pos` (`nextTo`, `low`, `high`, `none`) restores the default.
+ * is read when `crosses` is `FM_CHART_CROSSES_AT`. `title` takes the
+ * kinds of `fm_sheet_set_chart_title` (`NONE` removes the axis title, `AUTO`
+ * leaves the text to the viewer). `CLEAR` on `title` removes the axis
+ * title, on `log_base` makes the axis linear, and on `tick_label_pos`
+ * (`nextTo`, `low`, `high`, `none`) restores the default.
  */
 typedef struct {
   int32_t visible_op;
   int32_t visible;
   int32_t title_op;
-  const char* title;
+  fm_chart_title_t title;
   int32_t min_op;
   double min;
   int32_t max_op;

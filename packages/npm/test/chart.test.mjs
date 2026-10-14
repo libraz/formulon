@@ -252,6 +252,14 @@ test('typed chart edits are visible through getChart', async () => {
     assert.equal(axis.numberFormat, '0.0');
     assert.equal(axis.majorGridlines, false);
     assert.equal(axis.reversed, true);
+    // The axis title takes the setChartTitle forms; Auto leaves the text to the viewer.
+    must(wb.setChartAxis(0, id, valueAxis.id, { title: { kind: mod.ChartTitleKind.Auto } }), 'setChartAxis auto');
+    assert.equal(chartOf(wb, id).axes.find((a) => a.id === valueAxis.id).title.kind, mod.ChartTitleKind.Auto);
+    must(
+      wb.setChartAxis(0, id, valueAxis.id, { title: { kind: mod.ChartTitleKind.Ref, formula: 'Sheet1!$A$1' } }),
+      'setChartAxis ref',
+    );
+    assert.equal(chartOf(wb, id).axes.find((a) => a.id === valueAxis.id).title.formula, 'Sheet1!$A$1');
     // null clears a bound.
     must(wb.setChartAxis(0, id, valueAxis.id, { max: null }), 'setChartAxis clear');
     assert.equal(chartOf(wb, id).axes.find((a) => a.id === valueAxis.id).max, null);

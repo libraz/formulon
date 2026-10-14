@@ -1660,13 +1660,8 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
   return ok();
 }
 
-Expected<void, Error> patch_title(const Workbook& wb, const Chart& c, const ChartTitle& title) {
-  xml_node chart = c.chart();
-  if (title.kind == ChartTitleKind::kNone) {
-    drop(chart, "title");
-    put_val(chart, "c:autoTitleDeleted", kChartOrder, "1");
-    return ok();
-  }
+/// Checks a title that is not kNone and returns the template text it needs: the text for kText, else unset.
+Expected<std::optional<std::string>, Error> title_text(const Workbook& wb, const Chart& c, const ChartTitle& title) {
   if (title.kind == ChartTitleKind::kRef) {
     if (title.ref_formula.empty()) {
       return bad_arg("chart: a reference title needs a formula");
@@ -1679,19 +1674,21 @@ Expected<void, Error> patch_title(const Workbook& wb, const Chart& c, const Char
   } else if (title.kind != ChartTitleKind::kText && title.kind != ChartTitleKind::kAuto) {
     return bad_arg("chart: unknown title kind");
   }
-  const bool text = title.kind == ChartTitleKind::kText;
-  pugi::xml_document t;
-  RETURN_IF_ERROR(template_doc(wb, c, ChartInsertKind::kColumn, ChartGrouping::kClustered,
-                               text ? std::optional<std::string>(title.text) : std::nullopt,
-                               ChartLegendPosition::kRight, {}, t));
-  const xml_node from = child_local(template_chart(t), "title");
-  xml_node node = child_local(chart, "title");
+  return title.kind == ChartTitleKind::kText ? std::optional<std::string>(title.text) : std::nullopt;
+}
+
+/// Writes `title` into the `c:title` of `host`, creating it from template title `from`. An existing title keeps
+/// its own formatting; `c:txPr` follows the template.
+void put_title(xml_node host, Order order, const xml_node& from, const ChartTitle& title) {
+  xml_node node = child_local(host, "title");
   if (!node) {
-    node = copy_at(chart, from, kChartOrder);
+    node = copy_at(host, from, order);
   }
   drop(node, "tx");
-  if (text) {
+  if (title.kind == ChartTitleKind::kText) {
     copy_at(node, child_local(from, "tx"), kTitleOrder);
+  }
+  if (!child_local(from, "txPr")) {
     drop(node, "txPr");
   } else if (!child_local(node, "txPr")) {
     copy_at(node, child_local(from, "txPr"), kTitleOrder);
@@ -1703,6 +1700,20 @@ Expected<void, Error> patch_title(const Workbook& wb, const Chart& c, const Char
     pugi::xml_document frag;
     copy_at(node, fragment(frag, x), kTitleOrder);
   }
+}
+
+Expected<void, Error> patch_title(const Workbook& wb, const Chart& c, const ChartTitle& title) {
+  xml_node chart = c.chart();
+  if (title.kind == ChartTitleKind::kNone) {
+    drop(chart, "title");
+    put_val(chart, "c:autoTitleDeleted", kChartOrder, "1");
+    return ok();
+  }
+  ASSIGN_OR_RETURN(std::optional<std::string> text, title_text(wb, c, title));
+  pugi::xml_document t;
+  RETURN_IF_ERROR(template_doc(wb, c, ChartInsertKind::kColumn, ChartGrouping::kClustered, text,
+                               ChartLegendPosition::kRight, {}, t));
+  put_title(chart, kChartOrder, child_local(template_chart(t), "title"), title);
   put_val(chart, "c:autoTitleDeleted", kChartOrder, "0");
   return ok();
 }
@@ -1904,25 +1915,13 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
   if (patch.visible.has_value()) {
     put_val(ax, "c:delete", kAxisOrder, *patch.visible ? "0" : "1");
   }
-  if (patch.title.is_clear()) {
+  if (patch.title.is_clear() || (patch.title.is_set() && patch.title.value.kind == ChartTitleKind::kNone)) {
     drop(ax, "title");
   } else if (patch.title.is_set()) {
-    if (patch.title.value.empty()) {
-      return bad_arg("chart: an axis title needs text");
-    }
-    pugi::xml_document t;
-    RETURN_IF_ERROR(template_doc(wb, c, ChartInsertKind::kColumn, ChartGrouping::kClustered, patch.title.value,
-                                 ChartLegendPosition::kRight, {}, t));
-    drop(ax, "title");
-    xml_node title = copy_at(ax, child_local(template_chart(t), "title"), kAxisOrder);
-    const xml_node rich = child_local(child_local(title, "tx"), "rich");
-    for (const xml_node& p : kids(rich, "p")) {
-      set_attr(child_local(child_local(p, "pPr"), "defRPr"), "sz", "1000");
-    }
+    ASSIGN_OR_RETURN(std::optional<std::string> text, title_text(wb, c, patch.title.value));
     const std::string_view pos = child_local(ax, "axPos").attribute("val").value();
-    if (pos == "l" || pos == "r") {
-      set_attr(child_local(rich, "bodyPr"), "rot", "-5400000");
-    }
+    pugi::xml_document t;
+    put_title(ax, kAxisOrder, fragment(t, build_axis_title_xml(wb, text, pos == "l" || pos == "r")), patch.title.value);
   }
   const auto scaling = [&] { return ensure(ax, "c:scaling", kAxisOrder); };
   const ChartPatchField<double>* bounds[] = {&patch.min, &patch.max};

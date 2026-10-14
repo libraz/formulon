@@ -57,6 +57,9 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
 /// candidate rectangles; unset when the references do not come from one.
 std::optional<ChartSource> derive_chart_source(const Workbook& wb, std::size_t host_sheet, const ChartModel& model);
 
+/// The `c:title` Excel gives an axis: `text` as rich text, else the automatic title, turned for a vertical axis.
+std::string build_axis_title_xml(const Workbook& wb, const std::optional<std::string>& text, bool vertical);
+
 /// The colour style part (`cs:colorStyle`, cycle method) Excel gives a new chart, and falls back to for a
 /// styled chart without one.
 extern const char* const kDefaultChartColorStyle;

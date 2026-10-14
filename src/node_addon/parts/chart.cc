@@ -513,6 +513,26 @@ void ReadStringOp(CheckedSpecReader& r, const Napi::Object& owner, const char* k
   }
 }
 
+/// A title given as its text, or in the read-back shape `{ kind, text, formula }`. An out-of-domain (absent)
+/// kind is left for the C ABI to reject.
+fm_chart_title_t ReadTitle(CheckedSpecReader& r, const Napi::Value& v, const char* key, Arena& arena) {
+  fm_chart_title_t t{};
+  std::string text;
+  if (v.IsObject()) {
+    const Napi::Object spec = v.As<Napi::Object>();
+    std::string formula;
+    t.kind = r.I32(spec, "kind", -1);
+    r.String(spec, "text", &text);
+    r.String(spec, "formula", &formula);
+    t.formula = Intern(arena, std::move(formula));
+  } else {
+    t.kind = FM_CHART_TITLE_TEXT;
+    r.String(v, key, &text);
+  }
+  t.text = Intern(arena, std::move(text));
+  return t;
+}
+
 /// A series reference: absent keeps (`NULL`), `null` or "" removes, a string replaces.
 void ReadRef(CheckedSpecReader& r, const Napi::Object& owner, const char* key, Arena& arena, const char*& out) {
   const Field f = Probe(r, owner, key);
@@ -813,27 +833,15 @@ Napi::Value Workbook::SetChartTitle(const Napi::CallbackInfo& info) {
     return MakeBindingArgumentError(
         env, "setChartTitle expects (sheet:number, objectId:number, title:string|null|{kind,text?,formula?})");
   }
-  std::string text;
-  std::string formula;
+  CheckedSpecReader reader(env);
+  Arena arena;
   fm_chart_title_t title{};
-  if (arg.IsObject()) {
-    // The read-back shape: an out-of-domain (absent) kind is rejected by the C ABI.
-    CheckedSpecReader reader(env);
-    const Napi::Object spec = arg.As<Napi::Object>();
-    title.kind = reader.I32(spec, "kind", -1);
-    reader.String(spec, "text", &text);
-    reader.String(spec, "formula", &formula);
-    if (!reader.ok()) {
-      return env.Undefined();
-    }
-    title.text = text.c_str();
-    title.formula = formula.c_str();
-  } else if (arg.IsString()) {
-    text = arg.As<Napi::String>().Utf8Value();
-    title.kind = FM_CHART_TITLE_TEXT;
-    title.text = text.c_str();
-  } else {
-    title.kind = FM_CHART_TITLE_NONE;
+  title.kind = FM_CHART_TITLE_NONE;
+  if (!arg.IsNull()) {
+    title = ReadTitle(reader, arg, "title", arena);
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
   }
   return MakeStatus(env, fm_sheet_set_chart_title(handle_, ArgU32(info, 0), ArgU32(info, 1), &title));
 }
@@ -873,7 +881,11 @@ Napi::Value Workbook::SetChartAxis(const Napi::CallbackInfo& info) {
   Arena arena;
   fm_chart_axis_patch patch{};
   ReadBoolOp(reader, spec, "visible", patch.visible_op, patch.visible);
-  ReadStringOp(reader, spec, "title", arena, patch.title_op, patch.title);
+  const Field title = Probe(reader, spec, "title");
+  patch.title_op = title.op;
+  if (title.op == FM_CHART_PATCH_SET) {
+    patch.title = ReadTitle(reader, title.value, "title", arena);
+  }
   ReadDoubleOp(reader, spec, "min", patch.min_op, patch.min);
   ReadDoubleOp(reader, spec, "max", patch.max_op, patch.max);
   ReadDoubleOp(reader, spec, "majorUnit", patch.major_unit_op, patch.major_unit);

@@ -1983,11 +1983,12 @@ export interface ChartPlotPatch {
   holeSize?: number;
 }
 
-/** `crossesAt` is read when `crosses` is `At`. `null` on `logBase` makes the axis linear and on `tickLabelPosition`
- *  (`nextTo`, `low`, `high`, `none`) restores the default. */
+/** `crossesAt` is read when `crosses` is `At`. `title` takes the forms of `setChartTitle`, so
+ *  `{ kind: ChartTitleKind.Auto }` gives the axis Excel's automatic title; `null` removes it. `null` on `logBase` makes
+ *  the axis linear and on `tickLabelPosition` (`nextTo`, `low`, `high`, `none`) restores the default. */
 export interface ChartAxisPatch {
   visible?: boolean;
-  title?: string | null;
+  title?: string | null | { kind: ChartTitleKind; text?: string; formula?: string };
   min?: number | null;
   max?: number | null;
   majorUnit?: number | null;

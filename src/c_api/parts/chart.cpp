@@ -209,6 +209,12 @@ std::unique_ptr<fm_chart_data_t> make_data_handle(formulon::ChartData data) {
 // C patches -> model
 // ---------------------------------------------------------------------------
 
+/// A C title as the model's; `NULL` strings read as empty.
+formulon::ChartTitle title_of(const fm_chart_title_t& t) {
+  return formulon::ChartTitle{static_cast<formulon::ChartTitleKind>(t.kind), t.text != nullptr ? t.text : "",
+                              t.formula != nullptr ? t.formula : ""};
+}
+
 /// Translates patch fields, keeping the first validation failure.
 class PatchReader {
  public:
@@ -954,11 +960,7 @@ extern "C" fm_status_t fm_sheet_set_chart_title(fm_workbook_t* wb, size_t sheet_
   if (auto rc = check_enum_domain(title->kind, FM_CHART_TITLE_AUTO, kApi, "kind"); rc != 0) {
     return rc;
   }
-  formulon::ChartTitle model;
-  model.kind = static_cast<formulon::ChartTitleKind>(title->kind);
-  model.text = title->text != nullptr ? title->text : "";
-  model.ref_formula = title->formula != nullptr ? title->formula : "";
-  return finish(formulon::set_chart_title(wb->workbook(), sheet_index, object_id, model));
+  return finish(formulon::set_chart_title(wb->workbook(), sheet_index, object_id, title_of(*title)));
 }
 
 extern "C" fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
@@ -995,7 +997,10 @@ extern "C" fm_status_t fm_sheet_set_chart_axis(fm_workbook_t* wb, size_t sheet_i
   PatchReader r(kApi);
   formulon::ChartAxisPatch model;
   r.flag(patch->visible_op, patch->visible, model.visible, "visible_op");
-  r.text_field(patch->title_op, patch->title, model.title, "title_op");
+  if (patch->title_op == FM_CHART_PATCH_SET) {
+    r.enum_ok(patch->title.kind, formulon::ChartTitleKind::kAuto, "title.kind");
+  }
+  r.field(patch->title_op, title_of(patch->title), model.title, "title_op");
   r.field(patch->min_op, patch->min, model.min, "min_op");
   r.field(patch->max_op, patch->max, model.max, "max_op");
   r.field(patch->major_unit_op, patch->major_unit, model.major_unit, "major_unit_op");

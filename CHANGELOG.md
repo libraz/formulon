@@ -31,7 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `kIoChartInvalidReference` (5026) and `kIoChartUnsupportedKind` (5027).
   `setChartTitle` also takes a title object (`{ kind, text?, formula? }`;
   `ChartTitleInfo` in Python), so `ChartTitleKind.Auto` returns the title to
-  Excel's automatic one, and each `getChartData` series carries `xFormatCode`
+  Excel's automatic one. The `title` of a `setChartAxis` patch takes the same
+  forms (`fm_chart_axis_patch.title` is an `fm_chart_title_t`). Each
+  `getChartData` series carries `xFormatCode`
   (`x_format_code`, `fm_chart_data_series_t.x_format_code`), the number format
   of its x values.
 

@@ -1522,7 +1522,7 @@ CHART_AXIS_PATCH = Struct(
         ("visible_op", I32),
         ("visible", I32),
         ("title_op", I32),
-        ("title", PTR),
+        ("title", nested(CHART_TITLE)),
         ("min_op", I32),
         ("min", F64),
         ("max_op", I32),

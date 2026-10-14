@@ -348,23 +348,33 @@ void append_tx_pr(std::string& x, const char* rot, const char* sz, bool title, c
   x += "</a:pPr><a:endParaRPr lang=\"" + lang + "\"/></a:p></c:txPr>";
 }
 
-void append_title(std::string& x, const std::optional<std::string>& text, const std::string& lang) {
+// A chart title is 14 pt and drops `c:txPr` once it has text; an axis title is 10 pt and keeps it.
+void append_title(std::string& x, const std::optional<std::string>& text, const std::string& lang, bool axis,
+                  const char* rot) {
+  const char* sz = axis ? "1000" : "1400";
   x += "<c:title>";
   if (text.has_value()) {
     x += "<c:tx><c:rich>";
-    append_body_pr(x, "0");
+    append_body_pr(x, rot);
     x += "<a:p><a:pPr>";
-    append_def_rpr(x, "1400", true);
+    append_def_rpr(x, sz, !axis);
     x += "</a:pPr><a:r><a:rPr lang=\"" + lang + "\"/><a:t>";
     io::AppendXmlEscaped(x, *text);
     x += "</a:t></a:r></a:p></c:rich></c:tx>";
   }
   x += "<c:overlay val=\"0\"/>";
   x += kNoFillSpPr;
-  if (!text.has_value()) {
-    append_tx_pr(x, "0", "1400", true, lang);
+  if (axis || !text.has_value()) {
+    append_tx_pr(x, rot, sz, !axis, lang);
   }
   x += "</c:title>";
+}
+
+std::string chart_lang(const Workbook& wb) {
+  std::string lang = excel_profile_id(wb.excel_profile());
+  lang.erase(0, lang.rfind('-') + 1U);
+  std::replace(lang.begin(), lang.end(), '_', '-');
+  return lang;
 }
 
 enum class RefKind : std::uint8_t { kStr, kNum, kMulti };
@@ -577,16 +587,14 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
   const bool stacked = grouping == ChartGrouping::kStacked || grouping == ChartGrouping::kPercentStacked;
   const bool percent = grouping == ChartGrouping::kPercentStacked;
 
-  std::string lang = excel_profile_id(wb.excel_profile());
-  lang.erase(0, lang.rfind('-') + 1U);
-  std::replace(lang.begin(), lang.end(), '_', '-');
+  const std::string lang = chart_lang(wb);
 
   std::string x = kRoot;
   x += std::string("<c:date1904 val=\"") + (wb.date1904() ? "1" : "0") + "\"/><c:lang val=\"" + lang +
        "\"/><c:roundedCorners val=\"0\"/>" + kStyleAlt + "<c:chart>";
   const bool no_title = options.title.has_value() && options.title->empty();
   if (!no_title) {
-    append_title(x, options.title, lang);
+    append_title(x, options.title, lang, false, "0");
   }
   x += no_title ? "<c:autoTitleDeleted val=\"1\"/>" : "<c:autoTitleDeleted val=\"0\"/>";
   x += "<c:plotArea><c:layout/>";
@@ -840,6 +848,12 @@ const char* const kDefaultChartColorStyle =
     "</cs:variation><cs:variation><a:lumMod val=\"70000\"/><a:lumOff val=\"30000\"/></cs:variation><cs:variation>"
     "<a:lumMod val=\"70000\"/></cs:variation><cs:variation><a:lumMod val=\"50000\"/><a:lumOff val=\"50000\"/>"
     "</cs:variation></cs:colorStyle>";
+
+std::string build_axis_title_xml(const Workbook& wb, const std::optional<std::string>& text, bool vertical) {
+  std::string x;
+  append_title(x, text, chart_lang(wb), true, vertical ? "-5400000" : "0");
+  return x;
+}
 
 std::string chart_cycle_color(const pugi::xml_node& style, std::size_t idx) {
   std::vector<pugi::xml_node> bases;

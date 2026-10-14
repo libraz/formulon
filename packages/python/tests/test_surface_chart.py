@@ -279,6 +279,10 @@ class ChartEditTests(unittest.TestCase):
             self.assertEqual(axis.title.kind, ChartTitleKind.NONE)
             self.assertEqual((axis.reversed, axis.log_base, axis.tick_label_position), (True, 10.0, "low"))
 
+            wb.set_chart_axis(0, oid, val_id, {"title": ChartTitleInfo(ChartTitleKind.AUTO, "", "")})
+            axis = next(a for a in wb.get_chart(0, oid).axes if a.id == val_id)
+            self.assertEqual(axis.title.kind, ChartTitleKind.AUTO)
+
             wb.set_chart_axis(0, oid, val_id, {"crosses": ChartAxisCrosses.AT, "crosses_at": 5.0})
             axis = next(a for a in wb.get_chart(0, oid).axes if a.id == val_id)
             self.assertEqual((axis.crosses, axis.crosses_at), (ChartAxisCrosses.AT, 5.0))

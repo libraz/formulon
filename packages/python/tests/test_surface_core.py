@@ -124,7 +124,7 @@ class StructLayoutTests(unittest.TestCase):
         "CHART_SERIES_PATCH": 320,
         "CHART_POINT_PATCH": 192,
         "CHART_PLOT_PATCH": 40,
-        "CHART_AXIS_PATCH": 128,
+        "CHART_AXIS_PATCH": 136,
         "CHART_LEGEND_PATCH": 20,
     }
 

@@ -1613,13 +1613,16 @@ class ChartPlotPatch(TypedDict, total=False):
 class ChartAxisPatch(TypedDict, total=False):
     """Axis patch.
 
-    ``None`` on ``title`` removes the axis title, on ``log_base`` makes the axis
-    linear and on ``tick_label_position`` (``nextTo``, ``low``, ``high``, ``none``)
-    restores the default. ``crosses_at`` is read when ``crosses`` is ``AT``.
+    ``title`` takes the forms of :meth:`Workbook.set_chart_title`: text, or a
+    :class:`ChartTitleInfo` (``AUTO`` leaves the text to the viewer, ``NONE``
+    removes the title). ``None`` on ``title`` removes the axis title, on
+    ``log_base`` makes the axis linear and on ``tick_label_position``
+    (``nextTo``, ``low``, ``high``, ``none``) restores the default.
+    ``crosses_at`` is read when ``crosses`` is ``AT``.
     """
 
     visible: bool
-    title: Optional[str]
+    title: Union[str, ChartTitleInfo, None]
     min: Optional[float]
     max: Optional[float]
     major_unit: Optional[float]
@@ -2883,7 +2886,7 @@ _PLOT_PATCH_SPEC = (
 )
 _AXIS_PATCH_SPEC = (
     ("visible", "visible", "bool"),
-    ("title", "title", "str"),
+    ("title", "title", "title"),
     ("min", "min", "f64"),
     ("max", "max", "f64"),
     ("major_unit", "major_unit", "f64"),
@@ -3207,6 +3210,17 @@ def _str_ptr(value: str, owned: List[int]) -> int:
     return ptr
 
 
+def _title_fields(title: Union[str, ChartTitleInfo], owned: List[int]) -> Dict[str, object]:
+    """Encode a title given as its text or as a :class:`ChartTitleInfo` (``fm_chart_title_t``)."""
+    if isinstance(title, ChartTitleInfo):
+        return {
+            "kind": _sint(title.kind, "kind"),
+            "text": _str_ptr(title.text, owned),
+            "formula": _str_ptr(title.formula, owned),
+        }
+    return {"kind": 1, "text": _str_ptr(title, owned)}
+
+
 def _patch_scalar(kind: str, value, key: str, owned: List[int]):
     if kind == "u32":
         return _uint(value, key)
@@ -3216,6 +3230,8 @@ def _patch_scalar(kind: str, value, key: str, owned: List[int]):
         return 1 if value else 0
     if kind == "f64":
         return float(value)
+    if kind == "title":
+        return _title_fields(value, owned)
     return _str_ptr(value, owned)
 
 
@@ -6205,16 +6221,7 @@ class Workbook:
         owned: List[int] = []
         try:
             ptr = _alloc_struct_array(S.CHART_TITLE, 1, owned)
-            if isinstance(title, ChartTitleInfo):
-                fields: Dict[str, object] = {
-                    "kind": _sint(title.kind, "kind"),
-                    "text": _str_ptr(title.text, owned),
-                    "formula": _str_ptr(title.formula, owned),
-                }
-            else:
-                fields = {"kind": 0 if title is None else 1}
-                if title is not None:
-                    fields["text"] = _str_ptr(title, owned)
+            fields = {"kind": 0} if title is None else _title_fields(title, owned)
             S.CHART_TITLE.pack(LIB, ptr, fields)
             _check(
                 LIB.fm_sheet_set_chart_title(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), ptr),

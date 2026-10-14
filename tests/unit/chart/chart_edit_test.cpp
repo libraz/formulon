@@ -516,7 +516,7 @@ TEST(ChartEdit, AxisRoundTrip) {
   const std::uint32_t val = m.axes[1].id;
   ChartAxisPatch p;
   p.visible = false;
-  p.title = ChartPatchField<std::string>::Set("Amount");
+  p.title = ChartPatchField<ChartTitle>::Set({ChartTitleKind::kText, "Amount", ""});
   p.min = ChartPatchField<double>::Set(-2.5);
   p.max = ChartPatchField<double>::Set(40.0);
   p.major_unit = ChartPatchField<double>::Set(0.5);
@@ -548,7 +548,7 @@ TEST(ChartEdit, AxisRoundTrip) {
 
   ChartAxisPatch undo;
   undo.visible = true;
-  undo.title = ChartPatchField<std::string>::Clear();
+  undo.title = ChartPatchField<ChartTitle>::Clear();
   undo.min = ChartPatchField<double>::Clear();
   undo.max = ChartPatchField<double>::Clear();
   undo.major_unit = ChartPatchField<double>::Clear();
@@ -571,12 +571,65 @@ TEST(ChartEdit, AxisRoundTrip) {
   EXPECT_EQ(m.axes[1].tick_label_pos, "nextTo");
 
   ChartAxisPatch cp;
-  cp.title = ChartPatchField<std::string>::Set("Item");
+  cp.title = ChartPatchField<ChartTitle>::Set({ChartTitleKind::kText, "Item", ""});
   cp.major_gridlines = true;
   MustOk(set_chart_axis(wb, 0, id, cat, cp));
   m = Must(get_chart(wb, 0, id));
   EXPECT_EQ(m.axes[0].title.text, "Item");
   EXPECT_TRUE(m.axes[0].major_gridlines);
+}
+
+// An automatic axis title is the one Excel 16.113 writes when it adds an axis title: no `c:tx`, 10 pt text,
+// turned on a vertical axis. A reference title keeps that formatting.
+TEST(ChartEdit, AxisTitleKindsMatchExcel) {
+  Workbook wb = LoadFixture("chart_bar.xlsx");
+  const Located c = Find(wb, "xl/charts/chart1.xml");
+  const ChartModel m = Must(get_chart(wb, c.sheet, c.id));
+  ChartAxisPatch p;
+  p.title = ChartPatchField<ChartTitle>::Set({ChartTitleKind::kAuto, "", ""});
+  for (const ChartAxis& a : m.axes) {
+    MustOk(set_chart_axis(wb, c.sheet, c.id, a.id, p));
+  }
+  std::string part = PartText(wb, c.path);
+  ExpectSameForm(
+      Between(Between(part, "<c:catAx>", "</c:catAx>"), "<c:title>", "</c:title>"),
+      "<c:title><c:overlay "
+      "val=\"0\"/><c:spPr><a:noFill/><a:ln><a:noFill/></a:ln><a:effectLst/></c:spPr><c:txPr><a:bodyPr rot=\"-5400000\" "
+      "spcFirstLastPara=\"1\" vertOverflow=\"ellipsis\" vert=\"horz\" wrap=\"square\" anchor=\"ctr\" "
+      "anchorCtr=\"1\"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz=\"1000\" b=\"0\" i=\"0\" u=\"none\" strike=\"noStrike\" "
+      "kern=\"1200\" baseline=\"0\"><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"65000\"/><a:lumOff "
+      "val=\"35000\"/></a:schemeClr></a:solidFill><a:latin typeface=\"+mn-lt\"/><a:ea typeface=\"+mn-ea\"/><a:cs "
+      "typeface=\"+mn-cs\"/></a:defRPr></a:pPr><a:endParaRPr lang=\"ja-JP\"/></a:p></c:txPr></c:title>");
+  ExpectSameForm(
+      Between(Between(part, "<c:valAx>", "</c:valAx>"), "<c:title>", "</c:title>"),
+      "<c:title><c:overlay "
+      "val=\"0\"/><c:spPr><a:noFill/><a:ln><a:noFill/></a:ln><a:effectLst/></c:spPr><c:txPr><a:bodyPr rot=\"0\" "
+      "spcFirstLastPara=\"1\" vertOverflow=\"ellipsis\" vert=\"horz\" wrap=\"square\" anchor=\"ctr\" "
+      "anchorCtr=\"1\"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz=\"1000\" b=\"0\" i=\"0\" u=\"none\" strike=\"noStrike\" "
+      "kern=\"1200\" baseline=\"0\"><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"65000\"/><a:lumOff "
+      "val=\"35000\"/></a:schemeClr></a:solidFill><a:latin typeface=\"+mn-lt\"/><a:ea typeface=\"+mn-ea\"/><a:cs "
+      "typeface=\"+mn-cs\"/></a:defRPr></a:pPr><a:endParaRPr lang=\"ja-JP\"/></a:p></c:txPr></c:title>");
+  for (const ChartAxis& a : Must(get_chart(wb, c.sheet, c.id)).axes) {
+    EXPECT_EQ(a.title.kind, ChartTitleKind::kAuto);
+  }
+
+  const std::uint32_t val = m.axes[1].id;
+  const std::string tx_pr = Between(Between(part, "<c:valAx>", "</c:valAx>"), "<c:txPr>", "</c:txPr>");
+  p.title = ChartPatchField<ChartTitle>::Set({ChartTitleKind::kRef, "", "Sheet1!$A$1"});
+  MustOk(set_chart_axis(wb, c.sheet, c.id, val, p));
+  ChartModel got = Must(get_chart(wb, c.sheet, c.id));
+  EXPECT_EQ(got.axes[1].title.kind, ChartTitleKind::kRef);
+  EXPECT_EQ(got.axes[1].title.ref_formula, "Sheet1!$A$1");
+  part = PartText(wb, c.path);
+  ExpectSameForm(Between(Between(part, "<c:valAx>", "</c:valAx>"), "<c:txPr>", "</c:txPr>"), tx_pr);
+
+  p.title = ChartPatchField<ChartTitle>::Set({ChartTitleKind::kNone, "", ""});
+  MustOk(set_chart_axis(wb, c.sheet, c.id, val, p));
+  EXPECT_EQ(Must(get_chart(wb, c.sheet, c.id)).axes[1].title.kind, ChartTitleKind::kNone);
+  p.title = ChartPatchField<ChartTitle>::Set({ChartTitleKind::kRef, "", ""});
+  ExpectCode(set_chart_axis(wb, c.sheet, c.id, val, p), Code::kInvalidArgument);
+  p.title = ChartPatchField<ChartTitle>::Set({ChartTitleKind::kText, "", ""});
+  ExpectCode(set_chart_axis(wb, c.sheet, c.id, val, p), Code::kInvalidArgument);
 }
 
 // Excel re-saves an axis on the far side when it crosses at the maximum, swapped while the crossing axis is

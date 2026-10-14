@@ -551,7 +551,7 @@ val open_chart_data_val(fm_status_t rc, fm_chart_data_t* raw) {
 
 // ---- Patch input ----------------------------------------------------
 
-enum class Wr : uint8_t { kU32, kI32, kF64, kBool, kStr, kRef, kPlainF64, kObj, kObjOp };
+enum class Wr : uint8_t { kU32, kI32, kF64, kBool, kStr, kTitle, kRef, kPlainF64, kObj, kObjOp };
 
 /// One input property: the `_op` and value slots in the C patch struct. A `kObj` nests without an op,
 /// a `kObjOp` carries one.
@@ -640,7 +640,7 @@ constexpr WrField kPlotWr[] = {
 
 constexpr WrField kAxisWr[] = {
     WR("visible", fm_chart_axis_patch, kBool, visible_op, visible),
-    WR("title", fm_chart_axis_patch, kStr, title_op, title),
+    WR("title", fm_chart_axis_patch, kTitle, title_op, title),
     WR("min", fm_chart_axis_patch, kF64, min_op, min),
     WR("max", fm_chart_axis_patch, kF64, max_op, max),
     WR("majorUnit", fm_chart_axis_patch, kF64, major_unit_op, major_unit),
@@ -656,6 +656,24 @@ constexpr WrField kAxisWr[] = {
 
 /// Keeps the bytes behind the `const char*` fields of a patch alive.
 using Arena = std::deque<std::string>;
+
+/// A title given as its text, or in the read-back shape `{ kind, text, formula }`. An out-of-domain (absent)
+/// kind is left for the C ABI to reject.
+fm_chart_title_t read_title(JsNarrowNumericReader& r, Arena& arena, const val& v, const char* field) {
+  fm_chart_title_t t{};
+  if (v.typeOf().strictlyEquals(val("object"))) {
+    t.kind = r.i32(v, "kind", -1, "kind");
+    arena.push_back(r.string(v, "text", "text"));
+    t.text = arena.back().c_str();
+    arena.push_back(r.string(v, "formula", "formula"));
+    t.formula = arena.back().c_str();
+  } else {
+    t.kind = FM_CHART_TITLE_TEXT;
+    arena.push_back(r.string_value(v, field));
+    t.text = arena.back().c_str();
+  }
+  return t;
+}
 
 /// Fills the zeroed patch struct at `base` from the properties of `owner`.
 void read_patch(JsNarrowNumericReader& r, Arena& arena, const val& owner, void* base, const WrField* f) {
@@ -705,6 +723,9 @@ void read_patch(JsNarrowNumericReader& r, Arena& arena, const val& owner, void* 
             break;
           case Wr::kBool:
             store(base, f->value, static_cast<int32_t>(r.boolean_value(v, false, f->key)));
+            break;
+          case Wr::kTitle:
+            store(base, f->value, read_title(r, arena, v, f->key));
             break;
           default:
             arena.push_back(r.string_value(v, f->key));
@@ -856,23 +877,15 @@ JsStatus JsWorkbook::setChartTitle(uint32_t sheet, uint32_t objectId, val title)
     return error_status(kBindingInvalidHandle);
   }
   JsNarrowNumericReader reader("setChartTitle");
+  Arena arena;
   fm_chart_title_t t{};
-  std::string text;
-  std::string formula;
-  if (js_value_present(title) && title.typeOf().strictlyEquals(val("object"))) {
-    // The read-back shape: an out-of-domain (absent) kind is rejected by the C ABI.
-    t.kind = reader.i32(title, "kind", -1, "kind");
-    text = reader.string(title, "text", "text");
-    formula = reader.string(title, "formula", "formula");
-    t.formula = formula.c_str();
-  } else {
-    text = reader.string_value(title, "title");
-    t.kind = js_value_present(title) ? FM_CHART_TITLE_TEXT : FM_CHART_TITLE_NONE;
+  t.kind = FM_CHART_TITLE_NONE;
+  if (js_value_present(title)) {
+    t = read_title(reader, arena, title, "title");
   }
   if (!reader.ok()) {
     return argument_error(reader);
   }
-  t.text = text.c_str();
   return status_from_rc(fm_sheet_set_chart_title(handle_, sheet, objectId, &t));
 }
 

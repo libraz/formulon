@@ -990,6 +990,11 @@ Expected<std::string, Error> as_text(const JsonValue& v) {
   return v.as_string();
 }
 
+Expected<ChartTitle, Error> as_text_title(const JsonValue& v) {
+  ASSIGN_OR_RETURN(std::string text, as_text(v));
+  return ChartTitle{ChartTitleKind::kText, std::move(text), ""};
+}
+
 Expected<ChartLineDash, Error> dash_of(const JsonValue& v) {
   static const char* const kNames[] = {"solid", "dash", "dot", "dashDot"};
   for (std::size_t i = 0; i < 4; ++i) {
@@ -1124,7 +1129,7 @@ Expected<void, Error> apply_axis_edit(Workbook& wb, std::size_t sheet, std::uint
   if (const JsonValue* v = member(e, "visible"); v != nullptr) {
     p.visible = v->as_bool();
   }
-  RETURN_IF_ERROR(patch_field(e, "title", p.title, as_text));
+  RETURN_IF_ERROR(patch_field(e, "title", p.title, as_text_title));
   RETURN_IF_ERROR(patch_field(e, "min", p.min, as_double));
   RETURN_IF_ERROR(patch_field(e, "max", p.max, as_double));
   RETURN_IF_ERROR(patch_field(e, "major_unit", p.major_unit, as_double));

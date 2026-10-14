@@ -55,7 +55,7 @@ static_assert(sizeof(fm_chart_labels_patch) == (kWasm32 ? 88U : 104U), "fm_chart
 static_assert(sizeof(fm_chart_series_patch) == (kWasm32 ? 320U : 360U), "fm_chart_series_patch ABI layout changed");
 static_assert(sizeof(fm_chart_point_patch) == 192U, "fm_chart_point_patch ABI layout changed");
 static_assert(sizeof(fm_chart_plot_patch) == 40U, "fm_chart_plot_patch ABI layout changed");
-static_assert(sizeof(fm_chart_axis_patch) == (kWasm32 ? 128U : 152U), "fm_chart_axis_patch ABI layout changed");
+static_assert(sizeof(fm_chart_axis_patch) == (kWasm32 ? 136U : 168U), "fm_chart_axis_patch ABI layout changed");
 static_assert(sizeof(fm_chart_legend_patch) == (kWasm32 ? 20U : 32U), "fm_chart_legend_patch ABI layout changed");
 
 constexpr fm_status_t Code(formulon::FormulonErrorCode c) {
@@ -374,7 +374,7 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
   Open(wb.handle, id, &chart);
   fm_chart_axis_patch axis{};
   axis.title_op = FM_CHART_PATCH_SET;
-  axis.title = "Amount";
+  axis.title = fm_chart_title_t{FM_CHART_TITLE_TEXT, "Amount", nullptr};
   const uint32_t val_id = AxisId(chart, FM_CHART_AXIS_VALUE);
   ASSERT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, val_id, &axis), 0) << fm_last_error_message();
   OpenData(wb.handle, id, &data);
@@ -542,7 +542,7 @@ TEST(FormulonCApiChart, AxisEdits) {
   patch.number_format_op = FM_CHART_PATCH_SET;
   patch.number_format = "0.0";
   patch.title_op = FM_CHART_PATCH_SET;
-  patch.title = "Amount";
+  patch.title = fm_chart_title_t{FM_CHART_TITLE_TEXT, "Amount", nullptr};
   patch.major_gridlines_op = FM_CHART_PATCH_SET;
   patch.major_gridlines = 0;
   patch.reversed_op = FM_CHART_PATCH_SET;
@@ -581,6 +581,16 @@ TEST(FormulonCApiChart, AxisEdits) {
   EXPECT_TRUE(std::isnan(a.log_base));
   EXPECT_EQ(a.title.kind, FM_CHART_TITLE_NONE);
   EXPECT_EQ(a.deleted, 1);
+
+  // The axis title takes the chart title kinds; AUTO leaves the text to the viewer.
+  patch = fm_chart_axis_patch{};
+  patch.title_op = FM_CHART_PATCH_SET;
+  patch.title = fm_chart_title_t{FM_CHART_TITLE_AUTO, nullptr, nullptr};
+  ASSERT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, val_id, &patch), 0) << fm_last_error_message();
+  Open(wb.handle, id, &chart);
+  EXPECT_EQ(Axis(chart, val_id).title.kind, FM_CHART_TITLE_AUTO);
+  patch.title.kind = FM_CHART_TITLE_AUTO + 1;
+  EXPECT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, val_id, &patch), kInvalidArgument);
 
   // The crossing point is written on the cross axis.
   patch = fm_chart_axis_patch{};

@@ -1158,7 +1158,7 @@ class ChartPlotPatch(TypedDict, total=False):
 
 class ChartAxisPatch(TypedDict, total=False):
     visible: bool
-    title: Optional[str]
+    title: Union[str, ChartTitleInfo, None]
     min: Optional[float]
     max: Optional[float]
     major_unit: Optional[float]

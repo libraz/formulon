@@ -520,7 +520,7 @@ struct ChartPlotPatch {
 
 struct ChartAxisPatch {
   std::optional<bool> visible;
-  ChartPatchField<std::string> title;  ///< Clear removes the axis title.
+  ChartPatchField<ChartTitle> title;  ///< Clear, or a kNone title, removes the axis title.
   ChartPatchField<double> min;
   ChartPatchField<double> max;
   ChartPatchField<double> major_unit;
