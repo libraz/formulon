@@ -50,11 +50,13 @@ void set_column_style_span(SheetLayout& layout, std::uint32_t first, std::uint32
 
 /// Gives every row in `[first, last]` the row style `xf_index`, creating row
 /// entries as needed and keeping height, hidden and outline state.
-void set_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t last, std::uint32_t xf_index);
+void set_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t last, std::uint32_t xf_index,
+                        bool default_hidden);
 
 /// Removes the row style from every row in `[first, last]`; an entry left
-/// with no other state is dropped.
-void clear_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t last);
+/// with no other state is dropped, except an existing visible row under
+/// `zeroHeight`, whose presence itself is a visibility override.
+void clear_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t last, bool default_hidden);
 
 /// Every xf some cell of `rect` resolves to, ascending: the xfs of its owning
 /// cells, then the row, column or default (0) style of any cell left over.

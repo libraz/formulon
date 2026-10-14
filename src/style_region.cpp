@@ -110,24 +110,81 @@ struct RowDecision {
 };
 using RowDecide = RowDecision (*)(void* ctx, std::uint32_t row, RowDecision current);
 
-// Rewrites the row styles of `[first, last]` in one ordered pass; `decide` is
-// called for every row in ascending order. Entries left empty are dropped.
-void rewrite_row_styles(SheetLayout& layout, std::uint32_t first, std::uint32_t last, RowDecide decide, void* ctx) {
+// Rewrites every row of `[first, last]`; use for operations that really do
+// materialize a style on every row. New entries inherit the sheet's default
+// visibility, and pre-existing visible exceptions survive a style clear.
+void rewrite_row_styles(SheetLayout& layout, std::uint32_t first, std::uint32_t last, bool default_hidden,
+                        RowDecide decide, void* ctx) {
   std::vector<RowLayout>& rows = layout.row_overrides;
   std::vector<RowLayout> out;
   out.reserve(rows.size());
-  std::size_t next = static_cast<std::size_t>(row_override_lower_bound(layout, first) - rows.cbegin());
+  std::size_t next = static_cast<std::size_t>(row_override_lower_bound(layout, first) - rows.begin());
   out.insert(out.end(), rows.begin(), rows.begin() + static_cast<std::ptrdiff_t>(next));
   for (std::uint64_t row = first; row <= last; ++row) {
     RowLayout entry;
     entry.row = static_cast<std::uint32_t>(row);
+    bool existed_before = false;
     if (next < rows.size() && rows[next].row == row) {
       entry = rows[next++];
+      existed_before = true;
+    } else {
+      entry.hidden = default_hidden;
     }
     const RowDecision decision = decide(ctx, entry.row, {entry.has_style, entry.style_xf});
     entry.has_style = decision.styled;
     entry.style_xf = decision.styled ? decision.xf : 0U;
-    if (!row_override_is_empty(entry)) {
+    if (!should_erase_row_override(entry, default_hidden, existed_before)) {
+      out.push_back(entry);
+    }
+  }
+  out.insert(out.end(), rows.begin() + static_cast<std::ptrdiff_t>(next), rows.end());
+  rows = std::move(out);
+}
+
+// Rewrites only existing row overrides and any explicit rows supplied by a
+// capture. The two ordered inputs are merged into one pass; absent rows are
+// materialized only when the callback assigns them state.
+void rewrite_sparse_row_styles(SheetLayout& layout, std::uint32_t first, std::uint32_t last, bool default_hidden,
+                               RowDecide decide, void* ctx, const std::vector<RowStyle>* additional_rows = nullptr) {
+  std::vector<RowLayout>& rows = layout.row_overrides;
+  std::vector<RowLayout> out;
+  out.reserve(rows.size() + (additional_rows == nullptr ? 0U : additional_rows->size()));
+  std::size_t next = static_cast<std::size_t>(row_override_lower_bound(layout, first) - rows.begin());
+  out.insert(out.end(), rows.begin(), rows.begin() + static_cast<std::ptrdiff_t>(next));
+  std::size_t extra = 0U;
+  if (additional_rows != nullptr) {
+    extra = static_cast<std::size_t>(
+        std::lower_bound(additional_rows->begin(), additional_rows->end(), first,
+                         [](const RowStyle& entry, std::uint32_t key) { return entry.row < key; }) -
+        additional_rows->begin());
+  }
+
+  while (true) {
+    const bool has_existing = next < rows.size() && rows[next].row <= last;
+    const bool has_additional =
+        additional_rows != nullptr && extra < additional_rows->size() && (*additional_rows)[extra].row <= last;
+    if (!has_existing && !has_additional) {
+      break;
+    }
+    const std::uint32_t row = !has_additional || (has_existing && rows[next].row < (*additional_rows)[extra].row)
+                                  ? rows[next].row
+                                  : (*additional_rows)[extra].row;
+    RowLayout entry;
+    entry.row = row;
+    bool existed_before = false;
+    if (has_existing && rows[next].row == row) {
+      entry = rows[next++];
+      existed_before = true;
+    } else {
+      entry.hidden = default_hidden;
+    }
+    if (has_additional && (*additional_rows)[extra].row == row) {
+      ++extra;
+    }
+    const RowDecision decision = decide(ctx, row, {entry.has_style, entry.style_xf});
+    entry.has_style = decision.styled;
+    entry.style_xf = decision.styled ? decision.xf : 0U;
+    if (!should_erase_row_override(entry, default_hidden, existed_before)) {
       out.push_back(entry);
     }
   }
@@ -193,15 +250,17 @@ void set_column_style_span(SheetLayout& layout, std::uint32_t first, std::uint32
   }
 }
 
-void set_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t last, std::uint32_t xf_index) {
+void set_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t last, std::uint32_t xf_index,
+                        bool default_hidden) {
   rewrite_row_styles(
-      layout, first, last,
+      layout, first, last, default_hidden,
       [](void* ctx, std::uint32_t, RowDecision) { return RowDecision{true, *static_cast<std::uint32_t*>(ctx)}; },
       &xf_index);
 }
 
-void clear_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t last) {
-  rewrite_row_styles(layout, first, last, [](void*, std::uint32_t, RowDecision) { return RowDecision{}; }, nullptr);
+void clear_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t last, bool default_hidden) {
+  rewrite_sparse_row_styles(
+      layout, first, last, default_hidden, [](void*, std::uint32_t, RowDecision) { return RowDecision{}; }, nullptr);
 }
 
 std::vector<std::uint32_t> range_style_bases(const Sheet& sheet, const StyleRect& rect) {
@@ -248,6 +307,7 @@ Expected<void, Error> remap_range_style(Sheet& sheet, const StyleRect& rect, con
                                         std::uint64_t cell_limit) {
   const bool all_rows = covers_all_rows(rect);
   const bool all_cols = covers_all_cols(rect);
+  const bool default_hidden = sheet.format_defaults().zero_height;
   const std::uint32_t mapped_default = apply_map(map, 0U);
   const SheetLayout& layout = sheet.layout();
   const std::vector<ColumnSegment> pre_cols = column_segments(layout, rect.first_col, rect.last_col);
@@ -261,6 +321,11 @@ Expected<void, Error> remap_range_style(Sheet& sheet, const StyleRect& rect, con
     }
   }
   const bool style_bare_rows = all_cols && !all_rows && mapped_default != 0U;
+  // A row band leaves column styles in place, so bare rows under a remapped column need cell writes.
+  const bool bare_rows_cross_remapped_cols =
+      all_cols && !all_rows && std::any_of(pre_cols.begin(), pre_cols.end(), [&map](const ColumnSegment& seg) {
+        return seg.styled && apply_map(map, seg.xf) != seg.xf;
+      });
 
   // Cell writes are runs `(row, first, last, xf)` of column segments. A plain
   // range writes every segment; an axis selection only those where the
@@ -298,8 +363,8 @@ Expected<void, Error> remap_range_style(Sheet& sheet, const StyleRect& rect, con
                              (static_cast<std::uint64_t>(rect.last_col - rect.first_col) + 1U);
   if (!all_rows && !all_cols && area > cell_limit) {
     written = area;
-  } else if (all_rows && !all_cols) {
-    // Unstyled rows resolve through the remapped columns already.
+  } else if ((all_rows || all_cols) && !style_bare_rows && !bare_rows_cross_remapped_cols) {
+    // Only styled row overrides can require cell writes.
     for (std::size_t i = 0; i < pre_rows.size() && written <= cell_limit; ++i) {
       plan_row(pre_rows[i].row, &pre_rows[i]);
     }
@@ -328,16 +393,18 @@ Expected<void, Error> remap_range_style(Sheet& sheet, const StyleRect& rect, con
   }
   if (all_cols) {
     RemapRows ctx{&map, style_bare_rows, mapped_default};
-    rewrite_row_styles(
-        mutable_layout, rect.first_row, rect.last_row,
-        [](void* raw, std::uint32_t, RowDecision current) {
-          const auto* remap = static_cast<RemapRows*>(raw);
-          if (current.styled) {
-            return RowDecision{true, apply_map(*remap->map, current.xf)};
-          }
-          return RowDecision{remap->style_bare, remap->mapped_default};
-        },
-        &ctx);
+    const RowDecide remap_row = [](void* raw, std::uint32_t, RowDecision current) {
+      const auto* remap = static_cast<RemapRows*>(raw);
+      if (current.styled) {
+        return RowDecision{true, apply_map(*remap->map, current.xf)};
+      }
+      return RowDecision{remap->style_bare, remap->mapped_default};
+    };
+    if (style_bare_rows) {
+      rewrite_row_styles(mutable_layout, rect.first_row, rect.last_row, default_hidden, remap_row, &ctx);
+    } else {
+      rewrite_sparse_row_styles(mutable_layout, rect.first_row, rect.last_row, default_hidden, remap_row, &ctx);
+    }
   }
   for (const CellRun& run : runs) {
     for (std::uint64_t col = run.first; col <= run.last; ++col) {
@@ -410,7 +477,8 @@ namespace {
 bool parse_capture(const std::uint8_t* bytes, std::size_t len, std::size_t xf_count, StyleRect& rect,
                    std::uint8_t& flags, std::vector<ColumnSegment>& cols, std::vector<RowStyle>& rows,
                    std::vector<CapturedCell>& cells) {
-  if (len < sizeof(kSnapshotMagic) || !std::equal(std::begin(kSnapshotMagic), std::end(kSnapshotMagic), bytes)) {
+  if (bytes == nullptr || len < sizeof(kSnapshotMagic) ||
+      !std::equal(std::begin(kSnapshotMagic), std::end(kSnapshotMagic), bytes)) {
     return false;
   }
   ByteReader in(bytes + sizeof(kSnapshotMagic), len - sizeof(kSnapshotMagic));
@@ -487,8 +555,8 @@ Expected<void, Error> restore_range_style(Sheet& sheet, const std::uint8_t* byte
   }
   if ((flags & kCapturesRows) != 0U) {
     RestoreRows ctx{&rows, 0U};
-    rewrite_row_styles(
-        layout, rect.first_row, rect.last_row,
+    rewrite_sparse_row_styles(
+        layout, rect.first_row, rect.last_row, sheet.format_defaults().zero_height,
         [](void* raw, std::uint32_t row, RowDecision) {
           auto* restore = static_cast<RestoreRows*>(raw);
           if (restore->next < restore->rows->size() && (*restore->rows)[restore->next].row == row) {
@@ -496,7 +564,7 @@ Expected<void, Error> restore_range_style(Sheet& sheet, const std::uint8_t* byte
           }
           return RowDecision{};
         },
-        &ctx);
+        &ctx, &rows);
   }
   // Clear every stored cell, then put the captured ones back.
   for (const CapturedCell& cell : stored_cells(sheet, rect)) {

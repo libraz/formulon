@@ -240,7 +240,9 @@ extern "C" fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_finite_non_negative(height, "fm_sheet_set_row_height", "height"); rc != 0) {
     return rc;
   }
-  formulon::RowLayout* entry = &formulon::upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
+  formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  formulon::RowLayout* entry =
+      &formulon::upsert_row_override(sheet.mutable_layout(), row, sheet.format_defaults().zero_height);
   entry->height = height;
   entry->has_height = true;
   entry->custom_height = true;
@@ -255,17 +257,20 @@ extern "C" fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_row_index(row, "fm_sheet_set_row_hidden"); rc != 0) {
     return rc;
   }
-  formulon::RowLayout* entry = &formulon::upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
+  formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  const bool default_hidden = sheet.format_defaults().zero_height;
+  const formulon::RowLayout* previous = formulon::find_row_override(sheet.layout(), row);
+  const bool was_hidden = previous == nullptr ? default_hidden : previous->hidden;
+  formulon::RowLayout* entry = &formulon::upsert_row_override(sheet.mutable_layout(), row, default_hidden);
   const bool next_hidden = (hidden != 0);
-  if (entry->hidden == next_hidden) {
-    return 0;
-  }
   entry->hidden = next_hidden;
   // SUBTOTAL(101..111, ...) and AGGREGATE's hidden-row-skipping option read
   // this row's hidden state without that state appearing anywhere in the
   // dep graph's cell/range edges, so the ordinary dirty propagation a
   // cell-value write triggers cannot reach them.
-  wb->workbook().mark_row_visibility_dependents_dirty();
+  if (was_hidden != next_hidden) {
+    wb->workbook().mark_row_visibility_dependents_dirty();
+  }
   return 0;
 }
 
@@ -277,7 +282,9 @@ extern "C" fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_
   if (auto rc = check_row_index(row, "fm_sheet_set_row_outline"); rc != 0) {
     return rc;
   }
-  formulon::RowLayout* entry = &formulon::upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
+  formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  formulon::RowLayout* entry =
+      &formulon::upsert_row_override(sheet.mutable_layout(), row, sheet.format_defaults().zero_height);
   entry->outline_level = level;
   return 0;
 }
@@ -292,7 +299,8 @@ extern "C" fm_status_t fm_sheet_set_row_style(fm_workbook_t* wb, size_t sheet_in
   if (auto rc = check_cell_xf_index(wb, xf_index, kFn); rc != 0) {
     return rc;
   }
-  formulon::set_row_style_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last, xf_index);
+  formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  formulon::set_row_style_span(sheet.mutable_layout(), first, last, xf_index, sheet.format_defaults().zero_height);
   return 0;
 }
 
@@ -302,7 +310,8 @@ extern "C" fm_status_t fm_sheet_clear_row_style(fm_workbook_t* wb, size_t sheet_
   if (auto rc = check_sheet_row_span(wb, sheet_index, first, last, kFn); rc != 0) {
     return rc;
   }
-  formulon::clear_row_style_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last);
+  formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  formulon::clear_row_style_span(sheet.mutable_layout(), first, last, sheet.format_defaults().zero_height);
   return 0;
 }
 
@@ -423,18 +432,17 @@ extern "C" fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet
   if (auto rc = check_row_index(row, "fm_sheet_clear_row_height"); rc != 0) {
     return rc;
   }
-  auto& overrides = wb->workbook().sheet(sheet_index).mutable_layout().row_overrides;
-  for (auto it = overrides.begin(); it != overrides.end(); ++it) {
-    if (it->row != row) {
-      continue;
-    }
+  formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  formulon::SheetLayout& layout = sheet.mutable_layout();
+  auto& overrides = layout.row_overrides;
+  const auto it = formulon::row_override_lower_bound(layout, row);
+  if (it != overrides.end() && it->row == row) {
     it->height = 0.0;
     it->has_height = false;
     it->custom_height = false;
-    if (row_override_is_empty(*it)) {
+    if (formulon::should_erase_row_override(*it, sheet.format_defaults().zero_height, true)) {
       overrides.erase(it);
     }
-    break;
   }
   return 0;
 }
@@ -640,7 +648,7 @@ extern "C" fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, siz
   out->has_default_row_height = defaults.has_default_row_height ? 1 : 0;
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   out->effective_default_col_width = formulon::print::default_column_width_chars(sheet);
-  out->effective_default_row_height = formulon::print::default_row_height_pt(sheet);
+  out->effective_default_row_height = defaults.zero_height ? 0.0 : formulon::print::default_row_height_pt(sheet);
   return 0;
 }
 

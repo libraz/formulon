@@ -450,6 +450,37 @@ TEST(PaginationTest, HiddenRowsAreExcludedFromPaginationExtent) {
   EXPECT_EQ(result.value().page_count, 1U);
 }
 
+TEST(PaginationTest, DefaultHiddenRowsDoNotConsumePaginationHeight) {
+  const auto make_workbook = [](bool zero_height) {
+    Workbook wb = Workbook::create();
+    Sheet& sheet = wb.sheet(0);
+    sheet.mutable_format_defaults().zero_height = zero_height;
+    for (std::uint32_t row = 0; row < 100U; ++row) {
+      sheet.set_cell_value(row, 0U, Value::number(1.0));
+    }
+    if (zero_height) {
+      // An explicit visible row without `ht` uses the nominal default while
+      // the other rows retain the sheet's implicit zero-height baseline.
+      RowLayout visible;
+      visible.row = 99U;
+      visible.hidden = false;
+      visible.has_height = false;
+      sheet.mutable_layout().row_overrides.push_back(visible);
+    }
+    wb.set_defined_names({PrintArea("Sheet1!$A$1:$A$100", 0)});
+    return wb;
+  };
+
+  Workbook normal = make_workbook(false);
+  Workbook hidden = make_workbook(true);
+  auto normal_result = paginate(normal, 0U);
+  auto hidden_result = paginate(hidden, 0U);
+  ASSERT_TRUE(static_cast<bool>(normal_result)) << normal_result.error().message;
+  ASSERT_TRUE(static_cast<bool>(hidden_result)) << hidden_result.error().message;
+  EXPECT_GT(normal_result.value().page_count, 1U);
+  EXPECT_EQ(hidden_result.value().page_count, 1U);
+}
+
 TEST(PaginationTest, HiddenWidthlessColumnDoesNotConsumeFitToPageWidth) {
   // fit_to_width=1 makes the total column width set the scale factor, and
   // the scale then decides how many rows fit per page. A hidden column

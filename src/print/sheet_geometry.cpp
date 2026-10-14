@@ -224,6 +224,14 @@ double default_row_height_pt(const Sheet& sheet) {
   return defaults.has_default_row_height ? defaults.default_row_height : ooxml_defaults::kStandardRowHeightPt;
 }
 
+/// The nominal default remains available to callers that need the stored
+/// height (for example, an explicitly visible row without its own `ht`). The
+/// implicit extent is zero when `<sheetFormatPr zeroHeight="1">` hides rows by
+/// default.
+double implicit_row_height_pt(const Sheet& sheet) {
+  return sheet.format_defaults().zero_height ? 0.0 : default_row_height_pt(sheet);
+}
+
 double effective_column_width_chars(const Sheet& sheet, std::uint32_t col) {
   const double default_width = default_column_width_chars(sheet);
   for (const ColumnLayout& span : sheet.layout().columns) {
@@ -243,7 +251,7 @@ double effective_row_height_pt(const Sheet& sheet, std::uint32_t row) {
       return OverrideRowHeight(override_row, default_height);
     }
   }
-  return default_height;
+  return implicit_row_height_pt(sheet);
 }
 
 std::vector<double> column_widths_chars(const Sheet& sheet, std::uint32_t first, std::uint32_t last) {
@@ -267,7 +275,7 @@ std::vector<double> column_widths_chars(const Sheet& sheet, std::uint32_t first,
 
 std::vector<double> row_heights_pt(const Sheet& sheet, std::uint32_t first, std::uint32_t last) {
   const double default_height = default_row_height_pt(sheet);
-  std::vector<double> heights(static_cast<std::size_t>(last - first) + 1U, default_height);
+  std::vector<double> heights(static_cast<std::size_t>(last - first) + 1U, implicit_row_height_pt(sheet));
   std::vector<bool> assigned(heights.size(), false);
   for (const RowLayout& layout : sheet.layout().row_overrides) {
     if (layout.row < first || layout.row > last) {
@@ -302,7 +310,8 @@ double row_offset_pt(const Sheet& sheet, std::uint32_t row) {
   // Rows are numerous (up to 2^20), so adjust the default-height run by the
   // overrides instead of materialising every row.
   const double default_height = default_row_height_pt(sheet);
-  double offset = default_height * static_cast<double>(row);
+  const double implicit_height = implicit_row_height_pt(sheet);
+  double offset = implicit_height * static_cast<double>(row);
   if (row == 0U) {
     return offset;
   }
@@ -316,7 +325,7 @@ double row_offset_pt(const Sheet& sheet, std::uint32_t row) {
       if (layout.row >= row) {
         break;
       }
-      offset += OverrideRowHeight(layout, default_height) - default_height;
+      offset += OverrideRowHeight(layout, default_height) - implicit_height;
     }
     return offset;
   }
@@ -331,7 +340,7 @@ double row_offset_pt(const Sheet& sheet, std::uint32_t row) {
     if (!seen.insert(layout.row).second) {
       continue;
     }
-    offset += OverrideRowHeight(layout, default_height) - default_height;
+    offset += OverrideRowHeight(layout, default_height) - implicit_height;
   }
   return offset;
 }

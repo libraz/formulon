@@ -8,6 +8,7 @@
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -433,6 +434,37 @@ Expected<void, Error> RegisterArraySpills(Workbook& wb, std::size_t sheet_index,
                                "xlsb");
 }
 
+/// Materialises row visibility after all worksheet records have been read.
+///
+/// A complete BrtRowHdr is an explicit visible-row record when BrtWsFmtInfo's
+/// fDyZero says rows are hidden by default. When that default is clear, a
+/// header with no row flags is only the structural prefix for its cells and
+/// must not become a model override. Deferring this decision also handles
+/// producers that place BrtWsFmtInfo after the row stream. For duplicate row
+/// headers, the first effective header wins, matching insert_row_override's
+/// reader contract; a structural header only wins when the sheet default
+/// makes its visibility explicit.
+void ApplyDecodedRowHeaders(Sheet& sheet, const std::vector<SheetDecodeState::DecodedRowHeader>& headers) {
+  const bool default_hidden = sheet.format_defaults().zero_height;
+  std::unordered_set<std::uint32_t> seen_rows;
+  seen_rows.reserve(headers.size());
+  for (const SheetDecodeState::DecodedRowHeader& header : headers) {
+    if (!header.has_override && !default_hidden) {
+      continue;
+    }
+    if (!seen_rows.insert(header.layout.row).second) {
+      continue;
+    }
+    if (header.has_override) {
+      insert_row_override(sheet.mutable_layout(), header.layout);
+      continue;
+    }
+    RowLayout visible;
+    visible.row = header.layout.row;
+    insert_row_override(sheet.mutable_layout(), visible);
+  }
+}
+
 /// Classifies and decodes one worksheet record.
 ///
 /// The switch below has no fall-through exit: every arm ends in a
@@ -574,20 +606,19 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
         // Mirrors the OOXML reader, where the override follows `ht`
         // presence rather than the `customHeight` attribute.
         const bool has_height = (flags & 0x20U) != 0U;
-        if (has_height || (flags & 0x10U) != 0U || (flags & 0x07U) != 0U || has_style) {
-          RowLayout layout;
-          layout.row = state.current_row;
-          if (has_height) {
-            layout.height = static_cast<double>(height_or.value()) / 20.0;
-            layout.has_height = true;
-            layout.custom_height = true;
-          }
-          layout.hidden = (flags & 0x10U) != 0U;
-          layout.outline_level = static_cast<std::uint8_t>(flags & 0x07U);
-          layout.has_style = has_style;
-          layout.style_xf = has_style ? row_style_xf_or.value() : 0U;
-          insert_row_override(wb.sheet(sheet_index).mutable_layout(), layout);
+        RowLayout layout;
+        layout.row = state.current_row;
+        if (has_height) {
+          layout.height = static_cast<double>(height_or.value()) / 20.0;
+          layout.has_height = true;
+          layout.custom_height = true;
         }
+        layout.hidden = (flags & 0x10U) != 0U;
+        layout.outline_level = static_cast<std::uint8_t>(flags & 0x07U);
+        layout.has_style = has_style;
+        layout.style_xf = has_style ? row_style_xf_or.value() : 0U;
+        state.row_headers.push_back(SheetDecodeState::DecodedRowHeader{
+            layout, has_height || layout.hidden || layout.outline_level != 0U || has_style});
       }
       return RecordDisposition::kModelled;
     }
@@ -1001,6 +1032,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
       state.merges_seen = true;
     }
   }
+  ApplyDecodedRowHeaders(wb.sheet(sheet_index), state.row_headers);
   auto spills = RegisterArraySpills(wb, sheet_index, state.array_anchors);
   if (!spills) {
     return std::move(spills.error());

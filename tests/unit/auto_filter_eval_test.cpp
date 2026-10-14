@@ -57,7 +57,7 @@ bool RowHidden(const Sheet& sheet, std::uint32_t row) {
 }
 
 void SetRowHidden(Sheet& sheet, std::uint32_t row, bool hidden) {
-  upsert_row_override(sheet.mutable_layout(), row).hidden = hidden;
+  upsert_row_override(sheet.mutable_layout(), row, sheet.format_defaults().zero_height).hidden = hidden;
 }
 
 // Every sheet of this workbook was filtered and then saved by Excel, so its
@@ -137,6 +137,133 @@ TEST(AutoFilterEval, IconFilterMatchesConditionalFormatIconsAcrossVisibleRows) {
   ASSERT_TRUE(static_cast<bool>(visible));
   ASSERT_EQ(visible.value().size(), values.size());
   EXPECT_EQ(visible.value(), (std::vector<bool>{false, false, false, true, true}));
+}
+
+TEST(AutoFilterEval, Top10UsesNthElementAndKeepsCutoffTies) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::text("header"));
+  std::uint32_t row = 1U;
+  for (const double value : {5.0, 5.0, 4.0, 1.0}) {
+    sheet.set_cell_value(row++, 0, Value::number(value));
+  }
+
+  AutoFilter filter;
+  filter.range = MergeRange{0, 0, 4, 0};
+  FilterColumn column;
+  column.kind = FilterKind::kTop10;
+  column.top10.top = true;
+  column.top10.val = 2.0;
+  filter.columns.push_back(column);
+  auto visible = evaluate_auto_filter(wb, sheet, filter);
+  ASSERT_TRUE(static_cast<bool>(visible));
+  EXPECT_EQ(visible.value(), (std::vector<bool>{true, true, false, false}));
+
+  filter.columns[0].top10.top = false;
+  visible = evaluate_auto_filter(wb, sheet, filter);
+  ASSERT_TRUE(static_cast<bool>(visible));
+  EXPECT_EQ(visible.value(), (std::vector<bool>{false, false, true, true}));
+
+  filter.columns[0].top10.top = true;
+  filter.columns[0].top10.percent = true;
+  filter.columns[0].top10.val = 50.0;
+  visible = evaluate_auto_filter(wb, sheet, filter);
+  ASSERT_TRUE(static_cast<bool>(visible));
+  EXPECT_EQ(visible.value(), (std::vector<bool>{true, true, false, false}));
+}
+
+TEST(AutoFilterEval, ApplyMergesRowsAndPreservesMetadata) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::text("header"));
+  std::uint32_t row = 1U;
+  for (const char* value : {"keep", "drop", "keep", "drop"}) {
+    sheet.set_cell_value(row++, 0, Value::text(value));
+  }
+
+  RowLayout before;
+  before.row = 0U;
+  before.outline_level = 2U;
+  before.has_style = true;
+  before.style_xf = 4U;
+  sheet.mutable_layout().row_overrides.push_back(before);
+  RowLayout first_body;
+  first_body.row = 1U;
+  first_body.hidden = true;
+  first_body.height = 22.0;
+  first_body.has_height = true;
+  first_body.custom_height = true;
+  first_body.has_style = true;
+  first_body.style_xf = 7U;
+  sheet.mutable_layout().row_overrides.push_back(first_body);
+  RowLayout third_body;
+  third_body.row = 3U;
+  third_body.outline_level = 1U;
+  third_body.hidden = false;
+  sheet.mutable_layout().row_overrides.push_back(third_body);
+  RowLayout after;
+  after.row = 5U;
+  after.hidden = true;
+  sheet.mutable_layout().row_overrides.push_back(after);
+
+  AutoFilter filter;
+  filter.range = MergeRange{0, 0, 4, 0};
+  FilterColumn column;
+  column.kind = FilterKind::kValues;
+  column.values.values.push_back("keep");
+  filter.columns.push_back(column);
+  ASSERT_TRUE(static_cast<bool>(apply_auto_filter(wb, 0, filter)));
+
+  ASSERT_EQ(sheet.layout().row_overrides.size(), 6U);
+  EXPECT_EQ(sheet.layout().row_overrides[0].row, 0U);
+  EXPECT_EQ(sheet.layout().row_overrides[0].style_xf, 4U);
+  const RowLayout* row1 = find_row_override(sheet.layout(), 1U);
+  ASSERT_NE(row1, nullptr);
+  EXPECT_FALSE(row1->hidden);
+  EXPECT_DOUBLE_EQ(row1->height, 22.0);
+  EXPECT_TRUE(row1->custom_height);
+  EXPECT_EQ(row1->style_xf, 7U);
+  const RowLayout* row2 = find_row_override(sheet.layout(), 2U);
+  ASSERT_NE(row2, nullptr);
+  EXPECT_TRUE(row2->hidden);
+  const RowLayout* row3 = find_row_override(sheet.layout(), 3U);
+  ASSERT_NE(row3, nullptr);
+  EXPECT_FALSE(row3->hidden);
+  EXPECT_EQ(row3->outline_level, 1U);
+  const RowLayout* row4 = find_row_override(sheet.layout(), 4U);
+  ASSERT_NE(row4, nullptr);
+  EXPECT_TRUE(row4->hidden);
+  const RowLayout* row5 = find_row_override(sheet.layout(), 5U);
+  ASSERT_NE(row5, nullptr);
+  EXPECT_TRUE(row5->hidden);
+}
+
+TEST(AutoFilterEval, ApplyFilterMakesMatchingRowsExplicitlyVisibleWithZeroHeightDefault) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.mutable_format_defaults().zero_height = true;
+  sheet.set_cell_value(0, 0, Value::text("header"));
+  sheet.set_cell_value(1, 0, Value::text("keep"));
+  sheet.set_cell_value(2, 0, Value::text("drop"));
+  AutoFilter filter;
+  filter.range = MergeRange{0, 0, 2, 0};
+  FilterColumn column;
+  column.kind = FilterKind::kValues;
+  column.values.values.push_back("keep");
+  filter.columns.push_back(column);
+
+  ASSERT_TRUE(static_cast<bool>(apply_auto_filter(wb, 0, filter)));
+  const RowLayout* matching = find_row_override(sheet.layout(), 1U);
+  ASSERT_NE(matching, nullptr);
+  EXPECT_FALSE(matching->hidden);
+  const RowLayout* non_matching = find_row_override(sheet.layout(), 2U);
+  ASSERT_NE(non_matching, nullptr);
+  EXPECT_TRUE(non_matching->hidden);
+
+  // The explicit hidden state must survive if the sheet later stops using a
+  // hidden default; otherwise clearing zeroHeight would reveal filtered rows.
+  sheet.mutable_format_defaults().zero_height = false;
+  EXPECT_TRUE(RowHidden(sheet, 2U));
 }
 
 // Reapplying re-derives every body row: a matching row hidden by hand is shown

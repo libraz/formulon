@@ -405,10 +405,12 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
 // Appends OOXML-conformant `<row>` start-tag attributes derived from a
 // `RowLayout` override. Caller has already emitted `<row r="N"`. Each
 // override field is emitted only when it differs from the OOXML
-// default (height -> none, hidden -> "0", outlineLevel -> 0). Excel
+// default (height -> none, hidden -> "0", outlineLevel -> 0). A visible
+// row must carry `hidden="0"` when the sheet default is `zeroHeight="1"`;
+// otherwise the inherited default hides the row again on reload. Excel
 // emits `customHeight="1"` only for an explicit override, so an auto
 // height stays auto across a save.
-void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
+void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout, bool default_zero_height) {
   if (layout.has_height || layout.height > 0.0) {
     out.append(" ht=\"");
     // Shortest round-trip spelling, the same one cell values use: a
@@ -422,6 +424,8 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
   }
   if (layout.hidden) {
     out.append(" hidden=\"1\"");
+  } else if (default_zero_height) {
+    out.append(" hidden=\"0\"");
   }
   if (layout.outline_level != 0U) {
     append_xml_attr_uint(out, "outlineLevel", layout.outline_level);
@@ -574,7 +578,7 @@ std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_st
     std::string override_attrs;
     auto override_it = overrides_by_row.find(row);
     if (override_it != overrides_by_row.end()) {
-      AppendRowOverrideAttrs(override_attrs, *override_it->second);
+      AppendRowOverrideAttrs(override_attrs, *override_it->second, sheet.format_defaults().zero_height);
     }
     auto cells_it = rows_map.find(row);
     const RowCells& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;

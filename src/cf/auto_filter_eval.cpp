@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
@@ -203,7 +204,7 @@ bool match_custom(const CustomFilters& f, const Value& v, const Run& run, std::u
 /// The value a cell must reach to be in the top / bottom set: the k-th
 /// number in rank order, so every tie with it is kept. Percent counts round
 /// down and keep at least one item.
-std::optional<double> top10_threshold(const Top10Filter& f, std::vector<double> numbers) {
+std::optional<double> top10_threshold(const Top10Filter& f, std::vector<double>& numbers) {
   if (numbers.empty() || !(f.val > 0.0)) {
     return std::nullopt;
   }
@@ -211,8 +212,10 @@ std::optional<double> top10_threshold(const Top10Filter& f, std::vector<double> 
   double count = f.percent ? std::floor(n * f.val / 100.0) : std::floor(f.val);
   count = std::max(1.0, std::min(count, n));
   const auto k = static_cast<std::size_t>(count);
-  std::sort(numbers.begin(), numbers.end());
-  return f.top ? numbers[numbers.size() - k] : numbers[k - 1U];
+  const std::size_t index = f.top ? numbers.size() - k : k - 1U;
+  std::nth_element(numbers.begin(), numbers.begin() + static_cast<std::vector<double>::difference_type>(index),
+                   numbers.end());
+  return numbers[index];
 }
 
 /// Half-open serial interval `[lo, hi)` of a calendar-relative filter.
@@ -543,19 +546,42 @@ Expected<void, Error> apply_auto_filter(Workbook& wb, std::size_t sheet_index, c
   }
   const std::uint32_t first = filter.range.first_row + 1U;
   SheetLayout& layout = sheet.mutable_layout();
+  const bool default_hidden = sheet.format_defaults().zero_height;
+  const std::vector<bool>& matches = visible.value();
+  std::vector<RowLayout> merged;
+  merged.reserve(layout.row_overrides.size() + matches.size());
+
+  // Body rows and overrides are both ordered, so one linear merge rebuilds the overrides.
+  std::size_t existing = 0;
+  while (existing < layout.row_overrides.size() && layout.row_overrides[existing].row < first) {
+    merged.push_back(layout.row_overrides[existing++]);
+  }
+
   bool changed = false;
-  for (std::uint32_t i = 0; i < visible.value().size(); ++i) {
-    const std::uint32_t row = first + i;
-    const bool hide = !visible.value()[i];
-    if (find_row_override(layout, row) == nullptr && !hide) {
-      continue;
-    }
-    RowLayout& entry = upsert_row_override(layout, row);
-    if (entry.hidden != hide) {
+  for (std::size_t i = 0; i < matches.size(); ++i) {
+    const std::uint32_t row = first + static_cast<std::uint32_t>(i);
+    const bool hide = !matches[i];
+    if (existing < layout.row_overrides.size() && layout.row_overrides[existing].row == row) {
+      RowLayout entry = layout.row_overrides[existing++];
+      if (entry.hidden != hide) {
+        entry.hidden = hide;
+        changed = true;
+      }
+      merged.push_back(std::move(entry));
+    } else if (hide || default_hidden) {
+      RowLayout entry;
+      entry.row = row;
       entry.hidden = hide;
-      changed = true;
+      merged.push_back(entry);
+      // A hidden row under a hidden default keeps the filter state without changing visibility.
+      changed = changed || hide != default_hidden;
     }
   }
+
+  while (existing < layout.row_overrides.size()) {
+    merged.push_back(layout.row_overrides[existing++]);
+  }
+  layout.row_overrides = std::move(merged);
   if (changed) {
     wb.mark_row_visibility_dependents_dirty();
   }

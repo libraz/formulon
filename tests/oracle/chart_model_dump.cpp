@@ -205,7 +205,8 @@ const char* dash_name(ChartLineDash d) {
 }
 
 const char* marker_name(ChartMarkerSymbol s) {
-  static const char* const kNames[] = {"none", "auto", "circle", "square", "diamond", "triangle", "other"};
+  static const char* const kNames[] = {"none", "auto", "circle", "square", "diamond", "triangle",
+                                       "x",    "star", "plus",   "dot",    "dash",    "picture"};
   return kNames[static_cast<std::size_t>(s)];
 }
 
@@ -411,7 +412,7 @@ void write_marker(Json& j, const std::optional<ChartMarker>& m) {
   }
   j.open('{');
   j.key("symbol");
-  j.str(m->symbol == ChartMarkerSymbol::kOther ? m->symbol_name : marker_name(m->symbol));
+  j.str(marker_name(m->symbol));
   j.key("size");
   j.opt_num(m->size);
   j.key("fill");
@@ -751,9 +752,10 @@ Expected<void, Error> apply_visibility(Workbook& wb, const JsonValue& spec) {
   for (const JsonValue& sh : member(spec, "sheets")->as_array()) {
     ASSIGN_OR_RETURN(const std::size_t index, sheet_index(wb, str_or(sh, "name", "")));
     SheetLayout& layout = wb.sheet(index).mutable_layout();
+    const bool default_hidden = wb.sheet(index).format_defaults().zero_height;
     if (const JsonValue* rows = member(sh, "hidden_rows"); rows != nullptr) {
       for (const JsonValue& r : rows->as_array()) {
-        upsert_row_override(layout, static_cast<std::uint32_t>(r.as_number()) - 1U).hidden = true;
+        upsert_row_override(layout, static_cast<std::uint32_t>(r.as_number()) - 1U, default_hidden).hidden = true;
       }
       wb.mark_row_visibility_dependents_dirty();
     }
@@ -1034,7 +1036,7 @@ Expected<ChartMarkerPatch, Error> marker_patch(const JsonValue& obj) {
   ChartMarkerPatch p;
   if (const JsonValue* sym = member(obj, "symbol"); sym != nullptr) {
     bool found = false;
-    for (std::size_t i = 0; i < 6; ++i) {
+    for (std::size_t i = 0; i < 12; ++i) {
       if (sym->as_string() == marker_name(static_cast<ChartMarkerSymbol>(i))) {
         p.symbol = static_cast<ChartMarkerSymbol>(i);
         found = true;

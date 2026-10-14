@@ -180,14 +180,15 @@ void append_visibility(const parser::AstNode& node, const EvalContext& ctx, Hidd
   // One pass over the sheet's overrides rather than a lookup per row: the
   // override list holds only rows that differ from the sheet default, so it
   // is short even on a large range.
-  std::vector<bool> hidden_row(rows, false);
+  const bool default_hidden = sheet->format_defaults().zero_height;
+  std::vector<bool> hidden_row(rows, default_hidden);
   for (const RowLayout& row : sheet->layout().row_overrides) {
-    if (!row.hidden || row.row < top) {
+    if (row.row < top) {
       continue;
     }
     const std::uint32_t offset = row.row - top;
     if (offset < rows) {
-      hidden_row[offset] = true;
+      hidden_row[offset] = row.hidden;
     }
   }
   out_hidden->reserve(out_hidden->size() + count);
@@ -532,7 +533,8 @@ Value run_large_small(std::vector<double> xs, double k_raw, bool want_large) {
     return Value::error(ErrorCode::Num);
   }
   const auto k = static_cast<std::size_t>(k_trunc);
-  std::sort(xs.begin(), xs.end());
+  const auto target = want_large ? xs.size() - k : k - 1U;
+  numeric_aggregate_kernels::select_kth_preserving_sort_bits(xs, target);
   // LARGE: k-th largest = xs[n - k]. SMALL: k-th smallest = xs[k - 1].
   const double picked = want_large ? xs[xs.size() - k] : xs[k - 1];
   return to_finite_value(picked);
@@ -656,19 +658,21 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
   if (!fn_raw_or) {
     return Value::error(fn_raw_or.error());
   }
-  const int code = static_cast<int>(std::trunc(fn_raw_or.value()));
-  if (code < kFnMin || code > kFnMax) {
+  const double code_d = std::trunc(fn_raw_or.value());
+  if (code_d < static_cast<double>(kFnMin) || code_d > static_cast<double>(kFnMax)) {
     return Value::error(ErrorCode::Value);
   }
+  const int code = static_cast<int>(code_d);
 
   auto opts_raw_or = read_scalar(call.as_call_arg(1), arena, registry, ctx);
   if (!opts_raw_or) {
     return Value::error(opts_raw_or.error());
   }
-  const int options = static_cast<int>(std::trunc(opts_raw_or.value()));
-  if (options < 0 || options > 7) {
+  const double options_d = std::trunc(opts_raw_or.value());
+  if (options_d < 0.0 || options_d > 7.0) {
     return Value::error(ErrorCode::Value);
   }
+  const int options = static_cast<int>(options_d);
   // Bit 0 (mask 1) is the hidden-row bit and bit 1 (mask 2) the error-ignore
   // bit. Bit 2 set (options 4..7) keeps nested SUBTOTAL / AGGREGATE cells.
   const bool ignore_hidden = (options & 1) != 0;

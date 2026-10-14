@@ -147,6 +147,39 @@ TEST(SheetGeometry, SheetDefaultsOverrideStandards) {
   EXPECT_DOUBLE_EQ(effective_row_height_pt(sheet, 5), 20.0);
 }
 
+TEST(SheetGeometry, DefaultHiddenRowsHaveZeroImplicitExtent) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.mutable_format_defaults().zero_height = true;
+
+  EXPECT_DOUBLE_EQ(default_row_height_pt(sheet), kStandardRowPt);
+  EXPECT_DOUBLE_EQ(effective_row_height_pt(sheet, 0), 0.0);
+  EXPECT_DOUBLE_EQ(row_offset_pt(sheet, 4), 0.0);
+
+  RowLayout visible;
+  visible.row = 1U;
+  visible.hidden = false;
+  visible.has_height = false;  // Explicitly visible, using the nominal default.
+  sheet.mutable_layout().row_overrides.push_back(visible);
+  AddRow(&sheet, 2U, 25.0, false);
+  AddRow(&sheet, 3U, 0.0, true);
+
+  EXPECT_DOUBLE_EQ(effective_row_height_pt(sheet, 0), 0.0);
+  EXPECT_DOUBLE_EQ(effective_row_height_pt(sheet, 1), kStandardRowPt);
+  EXPECT_DOUBLE_EQ(effective_row_height_pt(sheet, 2), 25.0);
+  EXPECT_DOUBLE_EQ(effective_row_height_pt(sheet, 3), 0.0);
+  EXPECT_DOUBLE_EQ(effective_row_height_pt(sheet, 4), 0.0);
+
+  const std::vector<double> heights = row_heights_pt(sheet, 0, 4);
+  ASSERT_EQ(heights.size(), 5U);
+  EXPECT_DOUBLE_EQ(heights[0], 0.0);
+  EXPECT_DOUBLE_EQ(heights[1], kStandardRowPt);
+  EXPECT_DOUBLE_EQ(heights[2], 25.0);
+  EXPECT_DOUBLE_EQ(heights[3], 0.0);
+  EXPECT_DOUBLE_EQ(heights[4], 0.0);
+  EXPECT_DOUBLE_EQ(row_offset_pt(sheet, 4), kStandardRowPt + 25.0);
+}
+
 TEST(SheetGeometry, OverridesAndHiddenTracksShapeEffectiveSizes) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);

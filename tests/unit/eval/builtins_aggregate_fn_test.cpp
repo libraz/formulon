@@ -24,6 +24,7 @@
 #include <string>
 #include <string_view>
 
+#include "auto_filter.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
@@ -33,6 +34,7 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
+#include "style_region.h"
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -360,9 +362,23 @@ TEST(BuiltinsAggregateFn, OutOfRangeFunctionNumRejected) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsAggregateFn, HugeFunctionNumRejectedWithoutNarrowing) {
+  Workbook wb = MakeOneToFive();
+  const Value v = EvalSourceIn("=AGGREGATE(1E100,0,A1:A5)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 TEST(BuiltinsAggregateFn, OutOfRangeOptionsRejected) {
   Workbook wb = MakeOneToFive();
   const Value v = EvalSourceIn("=AGGREGATE(9,8,A1:A5)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsAggregateFn, HugeOptionsRejectedWithoutNarrowing) {
+  Workbook wb = MakeOneToFive();
+  const Value v = EvalSourceIn("=AGGREGATE(9,1E100,A1:A5)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
@@ -558,6 +574,66 @@ TEST(BuiltinsAggregateFn, HiddenRowBitIsIndependentOfNestedCallBit) {
     ASSERT_TRUE(v.is_number()) << c.source;
     EXPECT_DOUBLE_EQ(v.as_number(), c.expected) << c.source;
   }
+}
+
+TEST(BuiltinsAggregateFn, ZeroHeightRowsAffectOnlyScopesThatSkipAllHiddenRows) {
+  Workbook wb = MakeOneToFive();
+  wb.sheet(0).mutable_format_defaults().zero_height = true;
+  RowLayout visible;
+  visible.row = 1U;
+  visible.hidden = false;
+  RowLayout hidden;
+  hidden.row = 3U;
+  hidden.hidden = true;
+  wb.sheet(0).mutable_layout().row_overrides = {visible, hidden};
+
+  const Value all_rows = EvalSourceIn("=AGGREGATE(9,0,A1:A5)", wb, wb.sheet(0));
+  const Value visible_rows = EvalSourceIn("=AGGREGATE(9,1,A1:A5)", wb, wb.sheet(0));
+  const Value all_hidden_rows_subtotal = EvalSourceIn("=SUBTOTAL(109,A1:A5)", wb, wb.sheet(0));
+  const Value filter_only_subtotal = EvalSourceIn("=SUBTOTAL(9,A1:A5)", wb, wb.sheet(0));
+  ASSERT_TRUE(all_rows.is_number());
+  ASSERT_TRUE(visible_rows.is_number());
+  ASSERT_TRUE(all_hidden_rows_subtotal.is_number());
+  ASSERT_TRUE(filter_only_subtotal.is_number());
+  EXPECT_DOUBLE_EQ(all_rows.as_number(), 15.0);
+  EXPECT_DOUBLE_EQ(visible_rows.as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(all_hidden_rows_subtotal.as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(filter_only_subtotal.as_number(), 15.0);
+}
+
+TEST(BuiltinsAggregateFn, FilteredSubtotalKeepsZeroHeightAfterStyleMaterialization) {
+  Workbook wb = MakeOneToFive();
+  Sheet& sheet = wb.sheet(0);
+  sheet.mutable_format_defaults().zero_height = true;
+
+  AutoFilter filter;
+  filter.range = MergeRange{0U, 0U, 4U, 0U};
+  FilterColumn criterion;
+  criterion.kind = FilterKind::kValues;
+  criterion.values.values.push_back("1");
+  filter.columns.push_back(criterion);
+  sheet.set_auto_filter(filter);
+  ASSERT_TRUE(sheet_has_filter_criteria(&wb, sheet));
+
+  const Value before_style = EvalSourceIn("=SUBTOTAL(9,A1:A5)", wb, sheet);
+  ASSERT_TRUE(before_style.is_number());
+  EXPECT_DOUBLE_EQ(before_style.as_number(), 0.0);
+
+  // A style-only row override inherits the hidden default and must not make
+  // the other implicit rows look visible to the filter-only SUBTOTAL scope.
+  set_row_style_span(sheet.mutable_layout(), 0U, 0U, 1U, true);
+  ASSERT_EQ(sheet.layout().row_overrides.size(), 1U);
+  EXPECT_TRUE(sheet.layout().row_overrides[0].hidden);
+  const Value after_style = EvalSourceIn("=SUBTOTAL(9,A1:A5)", wb, sheet);
+  ASSERT_TRUE(after_style.is_number());
+  EXPECT_DOUBLE_EQ(after_style.as_number(), 0.0);
+
+  RowLayout visible;
+  visible.row = 1U;
+  sheet.mutable_layout().row_overrides.push_back(visible);
+  const Value after_visible_override = EvalSourceIn("=SUBTOTAL(9,A1:A5)", wb, sheet);
+  ASSERT_TRUE(after_visible_override.is_number());
+  EXPECT_DOUBLE_EQ(after_visible_override.as_number(), 2.0);
 }
 
 TEST(BuiltinsAggregateFn, HiddenErrorCellDroppedWithoutErrorBit) {

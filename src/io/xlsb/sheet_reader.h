@@ -32,9 +32,19 @@ namespace xlsb {
 /// updates `current_row` whenever it sees a `BrtRowHdr`. Cell records
 /// then resolve `(current_row, col)` to the absolute cell address.
 struct SheetDecodeState {
+  /// A complete BrtRowHdr carries a row visibility value even when no other
+  /// row-layout flag is set. Keep those headers until BrtWsFmtInfo has been
+  /// decoded: the worksheet stream can place the default row visibility
+  /// record after sheet data.
+  struct DecodedRowHeader {
+    RowLayout layout;
+    bool has_override = false;
+  };
+
   std::uint32_t current_row = 0;
   bool row_seen = false;
   std::uint32_t cells_decoded = 0;
+  std::vector<DecodedRowHeader> row_headers;
   /// Dynamic-array anchors recorded while walking `BrtArrFmla` records.
   /// Registered as spill regions in a second pass after the whole sheet
   /// has been decoded (see `RegisterArraySpills`'s doc comment for why

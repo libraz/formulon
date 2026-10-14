@@ -13,6 +13,8 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -71,6 +73,19 @@ struct BufferGuard {
   BufferGuard(const BufferGuard&) = delete;
   BufferGuard& operator=(const BufferGuard&) = delete;
 };
+
+fm_row_layout_t RowOverride(const WorkbookGuard& wb, std::uint32_t row) {
+  size_t count = 0;
+  EXPECT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
+  for (size_t i = 0; i < count; ++i) {
+    fm_row_layout_t entry{};
+    EXPECT_EQ(fm_sheet_get_row_override(wb.handle, 0, i, &entry), 0);
+    if (entry.row == row) {
+      return entry;
+    }
+  }
+  return {};
+}
 
 }  // namespace
 
@@ -479,21 +494,11 @@ TEST(FormulonCApiSheetLayout, RowOverridesUpsert) {
   // ABI's row setters upsert by row index.
   EXPECT_EQ(count, 2U);
 
+  // Row overrides are listed in row order.
   fm_row_layout_t row4{};
   fm_row_layout_t row9{};
-  // Iteration order is implementation-defined (insertion order for
-  // upsert on missing row); inspect both entries by content.
-  fm_row_layout_t entry0{};
-  fm_row_layout_t entry1{};
-  ASSERT_EQ(fm_sheet_get_row_override(wb.handle, 0, 0, &entry0), 0);
-  ASSERT_EQ(fm_sheet_get_row_override(wb.handle, 0, 1, &entry1), 0);
-  if (entry0.row == 4U) {
-    row4 = entry0;
-    row9 = entry1;
-  } else {
-    row4 = entry1;
-    row9 = entry0;
-  }
+  ASSERT_EQ(fm_sheet_get_row_override(wb.handle, 0, 0, &row4), 0);
+  ASSERT_EQ(fm_sheet_get_row_override(wb.handle, 0, 1, &row9), 0);
   EXPECT_EQ(row4.row, 4U);
   EXPECT_DOUBLE_EQ(row4.height, 22.0);
   EXPECT_EQ(row4.outline_level, 3U);
@@ -528,6 +533,67 @@ TEST(FormulonCApiSheetLayout, RowHiddenDirtiesSubtotalOverTheRow) {
   ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 2, 0, &v), 0);
   ASSERT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 20.0) << "A1's row is now hidden; SUBTOTAL(109,...) must exclude it";
+}
+
+TEST(FormulonCApiSheetLayout, ZeroHeightSettersAndClearsPreserveEffectiveVisibility) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  wb.handle->workbook().mutable_styles().cell_xfs.resize(2U);
+  wb.handle->workbook().sheet(0).mutable_format_defaults().zero_height = true;
+
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 22.0), 0);
+  EXPECT_EQ(RowOverride(wb, 3U).hidden, 1);
+  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 4U, 2U), 0);
+  EXPECT_EQ(RowOverride(wb, 4U).hidden, 1);
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 5U, 5U, 1U), 0);
+  EXPECT_EQ(RowOverride(wb, 5U).hidden, 1);
+
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 7U, 0), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 7U, 30.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 7U, 7U, 1U), 0);
+  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 7U), 0);
+  ASSERT_EQ(fm_sheet_clear_row_style(wb.handle, 0, 7U, 7U), 0);
+
+  const fm_row_layout_t visible = RowOverride(wb, 7U);
+  EXPECT_EQ(visible.row, 7U);
+  EXPECT_EQ(visible.hidden, 0);
+  EXPECT_EQ(visible.has_height, 0);
+  EXPECT_EQ(visible.has_style, 0);
+}
+
+TEST(FormulonCApiSheetLayout, ZeroHeightVisibilitySetterDirtiesOnlyEffectiveTransitions) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  wb.handle->workbook().sheet(0).mutable_format_defaults().zero_height = true;
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0U, 0U, 10.0), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 1U, 0U, 20.0), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 2U, 0U, "=SUBTOTAL(109,A1:A2)"), 0);
+
+  auto initial = wb.handle->workbook().recalc(formulon::eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(initial));
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 2U, 0U, &value), 0);
+  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 0.0);
+
+  // Row 0 is already effectively hidden through zeroHeight.
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 0U, 1), 0);
+  auto unchanged = wb.handle->workbook().recalc(formulon::eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(unchanged));
+  EXPECT_EQ(unchanged.value().cells_evaluated, 0U);
+
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 0U, 0), 0);
+  auto changed = wb.handle->workbook().recalc(formulon::eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(changed));
+  EXPECT_GT(changed.value().cells_evaluated, 0U);
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 2U, 0U, &value), 0);
+  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 10.0);
+
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 0U, 0), 0);
+  unchanged = wb.handle->workbook().recalc(formulon::eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(unchanged));
+  EXPECT_EQ(unchanged.value().cells_evaluated, 0U);
 }
 
 TEST(FormulonCApiSheetLayout, InvalidSheetIndexRejected) {
@@ -1086,6 +1152,13 @@ TEST(FormulonCApiSheetLayout, EffectiveFormatDefaultsFollowTheStatedValues) {
   EXPECT_EQ(d.has_default_col_width, 0);
   EXPECT_DOUBLE_EQ(d.effective_default_col_width, 8.43);
   EXPECT_DOUBLE_EQ(d.effective_default_row_height, 102.0 / 7.0);
+
+  // zeroHeight hides rows without an explicit override, so the effective
+  // layout baseline is zero even though the nominal default is retained.
+  wb.handle->workbook().sheet(0).mutable_format_defaults().zero_height = true;
+  ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &d), 0);
+  EXPECT_DOUBLE_EQ(d.effective_default_row_height, 0.0);
+  wb.handle->workbook().sheet(0).mutable_format_defaults().zero_height = false;
 
   fm_sheet_format_defaults next{};
   next.has_default_col_width = 1;

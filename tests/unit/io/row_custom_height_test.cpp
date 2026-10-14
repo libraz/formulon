@@ -132,6 +132,34 @@ TEST(RowCustomHeight, HtWithoutCustomHeightStaysAuto) {
   EXPECT_FALSE(autoh->custom_height);
 }
 
+TEST(RowCustomHeight, ExplicitVisibleRowOverridesZeroHeightDefault) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.sheet(0).mutable_format_defaults().zero_height = true;
+  RowLayout visible;
+  visible.row = 0;
+  wb.sheet(0).mutable_layout().row_overrides.push_back(visible);
+
+  auto saved = io::write_ooxml(wb);
+  ASSERT_TRUE(saved.has_value());
+  std::string xml;
+  ASSERT_TRUE(test::extract_part(test::span_of(saved.value()), kSheetPart, &xml));
+  EXPECT_NE(xml.find("zeroHeight=\"1\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<row r=\"1\" hidden=\"0\"/>"), std::string::npos) << xml;
+
+  Workbook back = Workbook::create_empty();
+  ASSERT_TRUE(ThroughXlsx(wb, &back));
+  const RowLayout* row = FindRow(back, 0);
+  ASSERT_NE(row, nullptr);
+  EXPECT_FALSE(row->hidden);
+
+  Workbook twice = Workbook::create_empty();
+  ASSERT_TRUE(ThroughXlsx(back, &twice));
+  const RowLayout* second = FindRow(twice, 0);
+  ASSERT_NE(second, nullptr);
+  EXPECT_FALSE(second->hidden);
+}
+
 TEST(RowCustomHeight, XlsbUnsyncedRoundTrips) {
   Workbook wb = MakeWorkbook();
   Workbook back = Workbook::create_empty();

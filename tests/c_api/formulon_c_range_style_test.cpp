@@ -107,6 +107,21 @@ TEST(FormulonCApiRangeStyle, RowSelectionCrossesStyledColumns) {
   EXPECT_EQ(rows, 3U);
 }
 
+TEST(FormulonCApiRangeStyle, RowSelectionRemapsColumnStyleWhenNormalIsUnchanged) {
+  WorkbookGuard wb;
+  MakeWorkbook(wb);
+  ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 2U, 2U, 2U), 0);
+  const std::uint32_t from[] = {2U};
+  const std::uint32_t to[] = {7U};
+
+  ASSERT_EQ(fm_sheet_remap_range_style(wb.handle, 0, 2U, 0U, 4U, kLastCol, from, to, 1U), 0);
+
+  for (std::uint32_t row = 2U; row <= 4U; ++row) {
+    EXPECT_EQ(Effective(wb, row, 2U), Eff(kSourceCell, 7U)) << row;
+  }
+  EXPECT_EQ(Effective(wb, 5U, 2U), Eff(kSourceColumn, 2U));
+}
+
 TEST(FormulonCApiRangeStyle, RangeSelectionMaterialisesEveryCell) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
@@ -254,6 +269,43 @@ TEST(FormulonCApiRangeStyle, SnapshotRestoresPriorInheritance) {
   }
 }
 
+TEST(FormulonCApiRangeStyle, SparseWholeSheetOperationsPreserveVisibleRows) {
+  WorkbookGuard wb;
+  MakeWorkbook(wb);
+  wb.handle->workbook().sheet(0).mutable_format_defaults().zero_height = true;
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 100U, 0), 0);
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 200U, 200U, 1U), 0);
+
+  BufferGuard capture;
+  ASSERT_EQ(fm_sheet_snapshot_range_style(wb.handle, 0, 0U, 0U, kLastRow, kLastCol, &capture.data, &capture.len), 0);
+  ASSERT_EQ(Remap(wb, 0U, 0U, kLastRow, kLastCol), 0);
+
+  auto& rows = wb.handle->workbook().sheet(0).layout().row_overrides;
+  ASSERT_EQ(rows.size(), 2U);
+  EXPECT_EQ(rows[0].row, 100U);
+  EXPECT_FALSE(rows[0].hidden);
+  EXPECT_EQ(rows[1].row, 200U);
+  EXPECT_TRUE(rows[1].hidden);
+  EXPECT_EQ(rows[1].style_xf, 6U);
+
+  ASSERT_EQ(fm_sheet_restore_range_style(wb.handle, 0, capture.data, capture.len), 0);
+  ASSERT_EQ(rows.size(), 2U);
+  EXPECT_EQ(rows[0].row, 100U);
+  EXPECT_FALSE(rows[0].hidden);
+  EXPECT_EQ(rows[1].row, 200U);
+  EXPECT_TRUE(rows[1].hidden);
+  EXPECT_EQ(rows[1].style_xf, 1U);
+
+  ASSERT_EQ(fm_sheet_clear_row_style(wb.handle, 0, 0U, kLastRow), 0);
+  ASSERT_EQ(rows.size(), 2U);
+  EXPECT_EQ(rows[0].row, 100U);
+  EXPECT_FALSE(rows[0].hidden);
+  EXPECT_FALSE(rows[0].has_style);
+  EXPECT_EQ(rows[1].row, 200U);
+  EXPECT_TRUE(rows[1].hidden);
+  EXPECT_FALSE(rows[1].has_style);
+}
+
 TEST(FormulonCApiRangeStyle, ResultSurvivesSaveLoad) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
@@ -302,6 +354,15 @@ TEST(FormulonCApiRangeStyle, RestoreRejectsMalformedCaptures) {
   ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0U, 0U, 9U), 0);
   BufferGuard capture;
   ASSERT_EQ(fm_sheet_snapshot_range_style(wb.handle, 0, 0U, 0U, 1U, 1U, &capture.data, &capture.len), 0);
+
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 2U, 2U, 1U), 0);
+  const Eff cell_style_before = Effective(wb, 0U, 0U);
+  const auto row_count_before = wb.handle->workbook().sheet(0).layout().row_overrides.size();
+  EXPECT_EQ(fm_sheet_restore_range_style(wb.handle, 0, nullptr, 0U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_restore_range_style(wb.handle, 0, nullptr, 4U),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(Effective(wb, 0U, 0U), cell_style_before);
+  EXPECT_EQ(wb.handle->workbook().sheet(0).layout().row_overrides.size(), row_count_before);
 
   EXPECT_EQ(fm_sheet_restore_range_style(wb.handle, 0, capture.data, capture.len - 1U), kInvalidArgument);
   const std::uint8_t junk[] = {'X', 'Y', 'Z', 'W', 1U};

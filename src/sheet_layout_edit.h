@@ -140,6 +140,18 @@ inline bool row_override_is_empty(const RowLayout& entry) {
   return !entry.has_height && !entry.custom_height && !entry.hidden && entry.outline_level == 0U && !entry.has_style;
 }
 
+// Intrinsic emptiness does not account for zeroHeight: an existing empty row
+// with hidden=false is an explicit visible exception to the sheet default.
+// Keep that exception when an operation removes its last unrelated field.
+inline bool should_erase_row_override(const RowLayout& entry, bool default_hidden, bool existed_before) {
+  return row_override_is_empty(entry) && (!default_hidden || !existed_before);
+}
+
+inline std::vector<RowLayout>::iterator row_override_lower_bound(SheetLayout& layout, std::uint32_t row) {
+  return std::lower_bound(layout.row_overrides.begin(), layout.row_overrides.end(), row,
+                          [](const RowLayout& entry, std::uint32_t key) { return entry.row < key; });
+}
+
 inline std::vector<RowLayout>::const_iterator row_override_lower_bound(const SheetLayout& layout, std::uint32_t row) {
   return std::lower_bound(layout.row_overrides.begin(), layout.row_overrides.end(), row,
                           [](const RowLayout& entry, std::uint32_t key) { return entry.row < key; });
@@ -165,14 +177,16 @@ inline void insert_row_override(SheetLayout& layout, const RowLayout& entry) {
   }
 }
 
-/// The entry for `row`, inserted in order as an empty override when absent.
-/// The reference is valid until the next change to `row_overrides`.
-inline RowLayout& upsert_row_override(SheetLayout& layout, std::uint32_t row) {
+/// The entry for `row`, inserted in order when absent with no state but the
+/// sheet's default visibility `initial_hidden`. The reference is valid until
+/// the next change to `row_overrides`.
+inline RowLayout& upsert_row_override(SheetLayout& layout, std::uint32_t row, bool initial_hidden) {
   RowLayout fresh;
   fresh.row = row;
+  fresh.hidden = initial_hidden;
   insert_row_override(layout, fresh);
   auto& rows = layout.row_overrides;
-  return rows[static_cast<std::size_t>(row_override_lower_bound(layout, row) - rows.cbegin())];
+  return rows[static_cast<std::size_t>(row_override_lower_bound(layout, row) - rows.begin())];
 }
 
 }  // namespace formulon

@@ -77,6 +77,23 @@ TEST(XlsbReader, DecodesWorksheetFormatDefaults) {
   EXPECT_TRUE(defaults.has_default_row_height);
   EXPECT_DOUBLE_EQ(defaults.default_row_height, 18.75);
 }
+TEST(XlsbReader, KeepsVisibleRowsWhenWorksheetFormatFollowsRows) {
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinVisibleRowBeforeWorksheetFormat()});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  auto result = read_xlsb(SpanOf(BuildZip(parts)));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
+  const Sheet& sheet = result.value().workbook.sheet(0);
+  ASSERT_TRUE(sheet.format_defaults().zero_height);
+  ASSERT_EQ(sheet.layout().row_overrides.size(), 1U);
+  EXPECT_EQ(sheet.layout().row_overrides[0].row, 4U);
+  EXPECT_FALSE(sheet.layout().row_overrides[0].hidden);
+}
 TEST(XlsbReader, DecodesAbsentAndExcelCompatibleWorksheetFormatDefaults) {
   const auto read_defaults = [](const std::vector<std::uint8_t>& payload) {
     std::vector<PartFile> parts;

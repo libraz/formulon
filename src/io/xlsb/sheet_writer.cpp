@@ -62,7 +62,7 @@ bool IsEmptySlot(const Cell& cell) {
 /// contains one.  Excel repairs a stream that claims `ccolspan == 0` while
 /// following it with cells, even though our own permissive reader can decode
 /// it.  An empty layout-only row legitimately has no spans.
-void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowLayout* layout,
+void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowLayout* layout, bool default_hidden,
                    const std::map<std::uint32_t, std::pair<std::uint32_t, std::uint32_t>>& spans) {
   std::vector<std::uint8_t> p;
   emit_u32(p, row);
@@ -72,7 +72,8 @@ void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowL
   emit_u16(p, static_cast<std::uint16_t>(std::clamp(twips, 0.0, 65535.0)));  // miyRw
   emit_u8(p, 0);                                                             // flags1
   std::uint8_t flags2 = layout == nullptr ? 0U : static_cast<std::uint8_t>(layout->outline_level & 0x07U);
-  if (layout != nullptr && layout->hidden) {
+  // Every header states visibility, so a row without an override carries the sheet default.
+  if (layout != nullptr ? layout->hidden : default_hidden) {
     flags2 |= 0x10U;  // fDyZero
   }
   if (layout != nullptr && layout->custom_height) {
@@ -486,7 +487,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
       }
     }
 
-    EmitRowHeader(body, row, row_layout, spans);
+    EmitRowHeader(body, row, row_layout, sheet.format_defaults().zero_height, spans);
     // Ascending merge of stored entries and phantoms; a column in both takes the entry path unless it is style-only.
     RowCells::const_iterator entry_it = row_cells != nullptr ? row_cells->begin() : RowCells::const_iterator();
     const RowCells::const_iterator entry_end = row_cells != nullptr ? row_cells->end() : RowCells::const_iterator();

@@ -255,6 +255,30 @@ inline std::vector<std::uint8_t> SheetBinWorksheetFormat(const std::vector<std::
   return body;
 }
 
+/// Builds a sheet whose complete visible BrtRowHdr precedes BrtWsFmtInfo.
+/// The ordering exercises the reader's deferred zeroHeight decision.
+inline std::vector<std::uint8_t> SheetBinVisibleRowBeforeWorksheetFormat() {
+  std::vector<std::uint8_t> body;
+  AppendRecord(body, 129, {});  // BrtBeginSheet
+  AppendRecord(body, 145, {});  // BrtBeginSheetData
+  {
+    std::vector<std::uint8_t> p;
+    AppendU32(p, 4U);  // rw
+    AppendU32(p, 0U);  // iStyleRef
+    AppendU8(p, 0U);
+    AppendU8(p, 0U);           // miyRw
+    AppendU8(p, 0U);           // flags1
+    AppendU8(p, 0U);           // flags2: visible, default row height
+    AppendU8(p, 0U);           // fPhShow
+    AppendU32(p, 0U);          // ccolspan
+    AppendRecord(body, 0, p);  // BrtRowHdr
+  }
+  AppendRecord(body, 485, WorksheetFormatPayload(0xFFFFFFFFU, 8U, 300U, 2U));  // zeroHeight
+  AppendRecord(body, 146, {});                                                 // BrtEndSheetData
+  AppendRecord(body, 130, {});                                                 // BrtEndSheet
+  return body;
+}
+
 /// Builds a layout-only sheet carrying three BrtRowHdr records: explicit
 /// style 0, explicit style 1, and ixfe 1 without fGhostDirty. The last one
 /// is the negative control proving that ixfe is ignored unless the flag says

@@ -90,6 +90,49 @@ TEST(XlsbWriter, RowAndColumnLayoutSurviveRoundTrip) {
   EXPECT_EQ(layout.row_overrides[0].outline_level, 3U);
 }
 
+TEST(XlsbWriter, ZeroHeightVisibleRowsSurviveSaveLoadSave) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.sheet(wb.add_sheet("ZeroHeight"));
+  sheet.mutable_format_defaults().zero_height = true;
+  sheet.set_cell_value(2U, 0U, Value::number(7.0));
+  RowLayout visible;
+  visible.row = 4U;
+  sheet.mutable_layout().row_overrides.push_back(visible);
+
+  const auto find_row = [](const Sheet& candidate, std::uint32_t row) -> const RowLayout* {
+    for (const RowLayout& layout : candidate.layout().row_overrides) {
+      if (layout.row == row) {
+        return &layout;
+      }
+    }
+    return nullptr;
+  };
+  const auto assert_loaded = [&find_row](const Workbook& candidate) {
+    const Sheet& loaded = candidate.sheet(0);
+    ASSERT_TRUE(loaded.format_defaults().zero_height);
+    // A row with cells but no override inherits the hidden default.
+    const RowLayout* stored_row = find_row(loaded, 2U);
+    ASSERT_NE(stored_row, nullptr);
+    EXPECT_TRUE(stored_row->hidden);
+    const RowLayout* explicit_row = find_row(loaded, 4U);
+    ASSERT_NE(explicit_row, nullptr);
+    EXPECT_FALSE(explicit_row->hidden);
+    EXPECT_EQ(find_row(loaded, 5U), nullptr);
+  };
+
+  auto first_write = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(first_write)) << first_write.error().message;
+  auto first_read = read_xlsb(SpanOf(first_write.value()));
+  ASSERT_TRUE(static_cast<bool>(first_read)) << first_read.error().message;
+  assert_loaded(first_read.value().workbook);
+
+  auto second_write = write_xlsb(first_read.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(second_write)) << second_write.error().message;
+  auto second_read = read_xlsb(SpanOf(second_write.value()));
+  ASSERT_TRUE(static_cast<bool>(second_read)) << second_read.error().message;
+  assert_loaded(second_read.value().workbook);
+}
+
 TEST(XlsbWriter, RowStyleFlagCarriesExplicitZeroAndNonZeroStyles) {
   Workbook wb = Workbook::create_empty();
   Sheet& sheet = wb.sheet(wb.add_sheet("RowStyles"));
