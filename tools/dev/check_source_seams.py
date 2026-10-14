@@ -106,8 +106,13 @@ LAYER_ALLOWED: dict[str, frozenset[str]] = {
     "cf": frozenset({"utils", "value", "parser", "model", "eval", "cf"}),
     "print": frozenset({"utils", "value", "model", "print"}),
     "io": frozenset({"utils", "value", "parser", "model", "pivot", "io"}),
-    "facade": frozenset({"utils", "value", "parser", "model", "pivot", "eval", "cf", "print", "io", "facade"}),
-    "app": frozenset({"utils", "value", "parser", "model", "pivot", "eval", "cf", "print", "io", "facade", "app"}),
+    "drawing": frozenset({"utils", "value", "model", "print", "io", "drawing"}),
+    "facade": frozenset(
+        {"utils", "value", "parser", "model", "pivot", "eval", "cf", "print", "io", "drawing", "facade"}
+    ),
+    "app": frozenset(
+        {"utils", "value", "parser", "model", "pivot", "eval", "cf", "print", "io", "drawing", "facade", "app"}
+    ),
 }
 
 # Groups in which the `io::` namespace token is banned outside comments.
