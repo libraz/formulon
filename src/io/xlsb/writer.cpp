@@ -33,6 +33,7 @@
 #include "io/ooxml/workbook_xml_builder.h"
 #include "io/ooxml/zip_part_writer.h"
 #include "io/ooxml_defs.h"
+#include "io/passthrough_part_index.h"
 #include "io/xlsb/external_link_writer.h"
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/protection_records.h"
@@ -853,6 +854,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // 7. Passthrough parts. Chart caches are refreshed into replacement bytes;
   // the model is untouched.
   ASSIGN_OR_RETURN(auto refreshed, refreshed_chart_parts(workbook));
+  const io::PassthroughPartIndex refreshed_index(refreshed);
   for (const PassthroughPart* part : plan.passthrough_kept) {
     // Never emit a traversal-shaped part name, even if one reached the model
     // through a path other than the reader (which already rejects them).
@@ -864,9 +866,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     if (auto fresh = CheckRetainedPartFreshness(workbook, *part); !fresh) {
       return std::move(fresh.error());
     }
-    const auto replacement = std::find_if(refreshed.begin(), refreshed.end(),
-                                          [part](const PassthroughPart& r) { return r.path == part->path; });
-    const auto& part_bytes = replacement != refreshed.end() ? replacement->bytes : part->bytes;
+    const PassthroughPart* replacement = refreshed_index.find(part->path);
+    const auto& part_bytes = replacement != nullptr ? replacement->bytes : part->bytes;
     if (auto r = AddPartBytes(writer.get(), part->path, part_bytes); !r) {
       return std::move(r.error());
     }

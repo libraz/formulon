@@ -77,6 +77,7 @@ void emit_phonetic_tail(std::vector<std::uint8_t>& payload, const std::vector<Ph
 
 std::uint32_t SstBuilder::intern(std::string_view text, const std::vector<PhoneticRun>& phonetic,
                                  PhoneticProperties phonetic_props) {
+  ++total_count_;
   std::string key = SharedStringKey(text, phonetic, phonetic_props);
   if (auto it = index_.find(key); it != index_.end()) {
     return it->second;
@@ -96,12 +97,10 @@ Expected<std::vector<std::uint8_t>, Error> emit_sst(const SstBuilder& sst) {
   // small reallocations on workbooks with many strings.
   body.reserve(32U + sst.size() * 16U);
 
-  // BrtBeginSst payload: (u32 cstTotal, u32 cstUnique). We don't
-  // separately track multiplicity (the interner has already deduped
-  // every text cell to a single index), so cstTotal == cstUnique.
+  // BrtBeginSst payload: (u32 cstTotal, u32 cstUnique), cell references then distinct strings.
   {
     std::vector<std::uint8_t> p;
-    emit_u32(p, sst.size());
+    emit_u32(p, sst.total_count());
     emit_u32(p, sst.size());
     emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSst), p);
   }

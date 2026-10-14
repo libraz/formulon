@@ -55,7 +55,7 @@ std::string SharedStringKey(std::string_view text, const std::vector<PhoneticRun
 std::uint32_t SharedStrings::intern(std::string_view text, const std::vector<PhoneticRun>& phonetic,
                                     PhoneticProperties phonetic_props) {
   ++total_count_;
-  const std::string key = SharedStringKey(text, phonetic, phonetic_props);
+  std::string key = SharedStringKey(text, phonetic, phonetic_props);
   const auto found = index_.find(key);
   if (found != index_.end()) {
     return found->second;

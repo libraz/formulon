@@ -62,8 +62,12 @@ class SstBuilder {
                        PhoneticProperties phonetic_props);
 
   /// Number of distinct payloads interned so far. Equals
-  /// `entries().size()`.
+  /// `entries().size()` and is the `cstUnique` value in `BrtBeginSst`.
   std::uint32_t size() const noexcept { return static_cast<std::uint32_t>(entries_.size()); }
+
+  /// Number of cell references passed to `intern`, including references that
+  /// reused an existing entry. This is the `cstTotal` value in `BrtBeginSst`.
+  std::uint32_t total_count() const noexcept { return total_count_; }
 
   /// Returns `true` when nothing has been interned yet. Callers
   /// (notably `write_xlsb`) gate emission of the SST part on this
@@ -76,6 +80,7 @@ class SstBuilder {
   const std::vector<SstEntry>& entries() const noexcept { return entries_; }
 
  private:
+  std::uint32_t total_count_ = 0;
   std::vector<SstEntry> entries_;
   std::unordered_map<std::string, std::uint32_t> index_;
 };
@@ -83,11 +88,9 @@ class SstBuilder {
 /// Serialises `sst` as the body of `xl/sharedStrings.bin`.
 ///
 /// Layout:
-///   * `BrtBeginSst` payload — `(u32 cstTotal, u32 cstUnique)`. We
-///     emit `cstTotal == cstUnique == sst.size()` because the writer
-///     does not track multiplicity (every cell that referenced the
-///     same payload was redirected to the same SST index by the
-///     interner).
+///   * `BrtBeginSst` payload — `(u32 cstTotal, u32 cstUnique)`. `cstTotal`
+///     counts every cell reference passed through `intern`, while
+///     `cstUnique` is the number of distinct entries in `sst`.
 ///   * One `BrtSSTItem` per entry: `(u8 flags, XLWideString)`, followed
 ///     by the phonetic tail when the entry carries a guide.
 ///   * `BrtEndSst` (empty payload).
@@ -97,10 +100,11 @@ class SstBuilder {
 /// cchMom)` per run: where this run's kana starts inside the
 /// concatenation, which surface-text offset it reads, and how many
 /// surface characters it covers. A run's kana ends where the next one's
-/// starts. The closing `(u16 ifnt, u16 flags)` is the phonetic font and
-/// the annotation type / alignment — emitted as font 0 with Excel's own
-/// defaults, since `PhoneticRun` models the reading rather than how it
-/// is rendered, and the OOXML writer likewise emits no `<phoneticPr>`.
+/// starts. The closing `(u16 ifnt, u16 flags)` carries the phonetic font
+/// and the annotation type / alignment from `PhoneticProperties`;
+/// `PhoneticRun` supplies the reading spans while those properties carry
+/// their rendering metadata. The OOXML writer emits the corresponding
+/// `<phoneticPr>` beside non-empty run lists.
 ///
 /// The returned bytes are a complete XLSB part body ready to be
 /// stored as `xl/sharedStrings.bin`. Returns no errors today; the

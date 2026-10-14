@@ -252,6 +252,30 @@ TEST(XlsbSstBuilder, BeginRecordCarriesCountFields) {
   EXPECT_EQ(unique.value(), 2U);
 }
 
+TEST(XlsbSstBuilder, BeginRecordSeparatesRepeatedReferencesFromUniqueEntries) {
+  SstBuilder sst;
+  EXPECT_EQ(sst.intern("same", kNoPhonetic, kDefaultProps), 0U);
+  EXPECT_EQ(sst.intern("other", kNoPhonetic, kDefaultProps), 1U);
+  EXPECT_EQ(sst.intern("same", kNoPhonetic, kDefaultProps), 0U);
+  EXPECT_EQ(sst.total_count(), 3U);
+  EXPECT_EQ(sst.size(), 2U);
+
+  auto body_or = emit_sst(sst);
+  ASSERT_TRUE(static_cast<bool>(body_or));
+  ByteSpan cursor = SpanOf(body_or.value());
+  auto rec = read_record(cursor);
+  ASSERT_TRUE(static_cast<bool>(rec));
+  ASSERT_EQ(rec.value().type, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSst));
+  ByteSpan payload = rec.value().payload;
+  auto total = read_u32(payload);
+  auto unique = read_u32(payload);
+  ASSERT_TRUE(static_cast<bool>(total));
+  ASSERT_TRUE(static_cast<bool>(unique));
+  EXPECT_EQ(total.value(), 3U);
+  EXPECT_EQ(unique.value(), 2U);
+  EXPECT_EQ(DecodeSstStream(body_or.value()), (std::vector<std::string>{"same", "other"}));
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io

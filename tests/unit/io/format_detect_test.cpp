@@ -88,6 +88,19 @@ TEST(FormatDetect, XlsmContentTypeIsNotMisdetectedAsXlsb) {
   EXPECT_NE(detect_workbook_format(SpanOf(archive)), WorkbookFormat::Xlsb);
 }
 
+TEST(FormatDetect, ContentTypeTokenInCommentOrOtherAttributeIsIgnored) {
+  // The fallback must inspect only parsed Override ContentType values. A
+  // token in a comment or an unrelated attribute is not a workbook type.
+  const std::vector<std::uint8_t> archive = BuildZip({
+      {"[Content_Types].xml",
+       "<Types><!-- application/vnd.ms-excel.sheet.binary.macroEnabled.main -->"
+       "<Override PartName=\"/xl/wb.xml\" ContentType=\"application/xml\" "
+       "Description=\"application/vnd.ms-excel.sheet.macroEnabled.main\"/></Types>"},
+      {"xl/wb.xml", "<workbook/>"},
+  });
+  EXPECT_NE(detect_workbook_format(SpanOf(archive)), WorkbookFormat::Xlsb);
+}
+
 TEST(FormatDetect, ContentTypeFallbackResolvesXlsbAltSpelling) {
   // The "alt" xlsb content-type spelling still matches when it is the
   // exact (quote-delimited) attribute value.
@@ -98,6 +111,29 @@ TEST(FormatDetect, ContentTypeFallbackResolvesXlsbAltSpelling) {
       {"xl/wb.bin", std::string("\x00", 1)},
   });
   EXPECT_EQ(detect_workbook_format(SpanOf(archive)), WorkbookFormat::Xlsb);
+}
+
+TEST(FormatDetect, ContentTypeFallbackResolvesXlsbDefaultBin) {
+  const auto detect_default = [](std::string_view content_type) {
+    const std::vector<std::uint8_t> archive = BuildZip({
+        {"[Content_Types].xml",
+         "<Types><Default Extension=\"bin\" ContentType=\"" + std::string(content_type) + "\"/></Types>"},
+        {"xl/wb.bin", std::string("\x00", 1)},
+    });
+    return detect_workbook_format(SpanOf(archive));
+  };
+
+  EXPECT_EQ(detect_default("application/vnd.ms-excel.sheet.binary.macroEnabled.main"), WorkbookFormat::Xlsb);
+  EXPECT_EQ(detect_default("application/vnd.ms-excel.sheet.macroEnabled.main"), WorkbookFormat::Xlsb);
+}
+
+TEST(FormatDetect, MalformedDefaultContentTypeCannotTriggerXlsb) {
+  const std::vector<std::uint8_t> archive = BuildZip({
+      {"[Content_Types].xml",
+       "<Types><Default Extension=\"bin\" ContentType=\"application/vnd.ms-excel.sheet.binary.macroEnabled.main\""},
+      {"xl/wb.bin", std::string("\x00", 1)},
+  });
+  EXPECT_NE(detect_workbook_format(SpanOf(archive)), WorkbookFormat::Xlsb);
 }
 
 TEST(FormatDetect, NonZipIsUnknown) {

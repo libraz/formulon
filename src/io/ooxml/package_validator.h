@@ -5,10 +5,10 @@
 // `relationship_ref_id`, `extension_of_part`) that the OOXML reader, the
 // OOXML writer and the XLSB reader/writer all share.
 //
-// Zip-Slip hardening: `resolve_relative_path` refuses any input that
-// escapes the package root via excessive `..` segments or that begins
-// with an absolute-path slash. Callers must propagate the error and
-// refuse to open the package.
+// Zip-Slip hardening: `resolve_relative_path` treats a leading slash as a
+// package-root-relative target, then refuses any input whose `..` segments
+// escape that root. Callers must propagate the error and refuse to open the
+// package.
 //
 // Internal helper for the OOXML reader. Not exposed beyond `src/io/`.
 
@@ -104,10 +104,9 @@ Expected<std::string, Error> resolve_office_document_path(const std::vector<std:
 /// segments so `worksheets/sheet1.xml` resolved against `xl/` yields
 /// `xl/worksheets/sheet1.xml`.
 ///
-/// Path-traversal hardening: refuses any input whose `..` segments
-/// outnumber the prefix directories (would escape the package root)
-/// and refuses absolute-path targets that begin with `/`. Both cases
-/// surface `kIoZipSlip`.
+/// Path-traversal hardening: a leading `/` is package-root-relative, while
+/// any `..` segments that outnumber the prefix directories (and would escape
+/// the package root) surface `kIoZipSlip`.
 Expected<std::string, Error> resolve_relative_path(std::string_view base_dir, std::string_view target);
 
 /// Returns true when `part_name` is a safe, canonical OPC part name that

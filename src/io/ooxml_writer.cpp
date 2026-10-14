@@ -46,6 +46,7 @@
 #include "io/ooxml/workbook_xml_builder.h"
 #include "io/ooxml/zip_part_writer.h"
 #include "io/ooxml_defs.h"
+#include "io/passthrough_part_index.h"
 #include "io/pivot_cache_writer.h"
 #include "io/pivot_table_writer.h"
 #include "io/styles_writer.h"
@@ -269,15 +270,13 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
                             std::to_string(table.sheet_index) + " sheet_count=" + std::to_string(sheet_count));
     }
   }
+  const PassthroughPartIndex source_index(wb.passthrough_parts());
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const Sheet& sheet = wb.sheet(i);
     if (!sheet.is_opaque_ooxml_sheet()) {
       continue;
     }
-    const auto it =
-        std::find_if(wb.passthrough_parts().begin(), wb.passthrough_parts().end(),
-                     [&sheet](const PassthroughPart& part) { return part.path == sheet.opaque_ooxml_part_path(); });
-    if (it == wb.passthrough_parts().end()) {
+    if (source_index.find(sheet.opaque_ooxml_part_path()) == nullptr) {
       return make_error(FormulonErrorCode::kIoWriteFailed, "opaque sheet has no passthrough payload",
                         "context=write_ooxml sheet=" + sheet.name() + " part=" + sheet.opaque_ooxml_part_path());
     }
@@ -290,9 +289,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // part without one leaves `cm=` off, as does a workbook with no such
   // formula.
   std::uint32_t dynamic_array_cm_index = FindDynamicArrayCellMetadataIndex(wb.passthrough_parts());
-  const bool retained_metadata =
-      std::any_of(wb.passthrough_parts().begin(), wb.passthrough_parts().end(),
-                  [](const PassthroughPart& part) { return part.path == "xl/metadata.xml"; });
+  const bool retained_metadata = source_index.find("xl/metadata.xml") != nullptr;
   if (!retained_metadata && has_dynamic_array_formula(wb)) {
     plan.generated_dynamic_metadata = true;
     dynamic_array_cm_index = 1U;
@@ -585,6 +582,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     return std::move(refreshed_or.error());
   }
   const std::vector<PassthroughPart>& refreshed = refreshed_or.value();
+  const PassthroughPartIndex refreshed_index(refreshed);
   for (const PassthroughPart* part : plan.passthrough_kept) {
     // Never emit a traversal-shaped part name, even if one reached the model
     // through a path other than the reader (which already rejects them).
@@ -592,9 +590,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
       return make_error(FormulonErrorCode::kIoZipSlip, "passthrough part name escapes package root; refusing to write",
                         "context=write_ooxml part=" + part->path);
     }
-    const auto replacement = std::find_if(refreshed.begin(), refreshed.end(),
-                                          [part](const PassthroughPart& r) { return r.path == part->path; });
-    const auto& bytes = replacement != refreshed.end() ? replacement->bytes : part->bytes;
+    const PassthroughPart* replacement = refreshed_index.find(part->path);
+    const auto& bytes = replacement != nullptr ? replacement->bytes : part->bytes;
     auto result = AddPartBytes(writer.get(), part->path, bytes, &written_paths);
     if (!result) {
       return std::move(result.error());
