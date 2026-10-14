@@ -123,5 +123,18 @@ class WriteEnvironmentMdTest(unittest.TestCase):
             self.assertNotIn("`tests/oracle/targets/mac-365-ja_JP/golden/`", body)
 
 
+class DisplayPathTest(unittest.TestCase):
+    def test_repo_path_is_relative(self) -> None:
+        path = oracle_gen.REPO_ROOT / "tests" / "oracle" / "golden" / "x.json"
+        self.assertEqual(oracle_gen._display_path(path), "tests/oracle/golden/x.json")
+
+    def test_path_outside_the_repo_is_absolute(self) -> None:
+        # A re-probe writes to `--golden-dir /tmp/...`; reporting that path
+        # must not raise after the golden is already on disk.
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "x.json"
+            self.assertEqual(oracle_gen._display_path(path), path.as_posix())
+
+
 if __name__ == "__main__":
     unittest.main()

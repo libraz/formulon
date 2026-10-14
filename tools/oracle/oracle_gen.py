@@ -563,16 +563,21 @@ def _tree_wide_excel_version(golden_dir: Path, fallback: str) -> str:
     return min(versions, key=lambda pair: pair[0])[1]
 
 
+def _display_path(path: Path) -> str:
+    """Repo-relative POSIX path when `path` is inside the repo, else absolute."""
+    try:
+        return path.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
 def _write_environment_md(
     path: Path, env: EnvironmentInfo, iso_now: str, *, excel_version: str, golden_dir: Path
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     # Name the directory this file actually documents: each target keeps its
     # own ENVIRONMENT.md next to its own goldens.
-    try:
-        documented_dir = golden_dir.relative_to(REPO_ROOT).as_posix()
-    except ValueError:
-        documented_dir = golden_dir.as_posix()
+    documented_dir = _display_path(golden_dir)
     body = (
         "# Oracle Environment\n\n"
         "This file records the oldest Excel version any committed suite\n"
@@ -920,7 +925,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     observed=observed,
                     reused=reused,
                 )
-                print(f"  -> {out_path.relative_to(REPO_ROOT)}")
+                print(f"  -> {_display_path(out_path)}")
             except Exception as exc:
                 exit_code = 1
                 print(f"  ! failed: {exc}")
