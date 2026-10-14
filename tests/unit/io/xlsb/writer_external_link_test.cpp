@@ -418,6 +418,17 @@ TEST(XlsbWriterExternalLink, AnEnteredLinkSurvivesReloadAndReadsRef) {
   EXPECT_EQ(value.as_error(), ErrorCode::Ref);
 }
 
+TEST(XlsbWriterExternalLink, NonAsciiSheetCaseVariantsShareOneXti) {
+  Workbook wb = Host();
+  SetFormula(wb, 0, "=[Book.xlsx]\xC3\x84rea!A1");
+  SetFormula(wb, 1, "=[Book.xlsx]\xC3\xA4rea!A2");
+  Workbook reloaded = Load(Save(wb));
+  ASSERT_EQ(reloaded.external_links().size(), 1U);
+  EXPECT_EQ(reloaded.external_links()[0].book.sheet_names, std::vector<std::string>{"\xC3\x84rea"});
+  // The xti stores the index, so the reload spells the cached sheet name.
+  EXPECT_EQ(FormulaAt(reloaded, 0, 1, 0), "=[Book.xlsx]\xC3\x84rea!A2");
+}
+
 TEST(XlsbWriterExternalLink, EveryRecordIsWrittenInIndexOrderWithoutGaps) {
   Workbook wb = Host();
   std::vector<ExternalLinkRecord> links(2);

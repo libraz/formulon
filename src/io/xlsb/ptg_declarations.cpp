@@ -18,6 +18,7 @@
 #include "io/xlsb/ptg_writer.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
+#include "sheet_name.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -313,7 +314,7 @@ std::uint32_t external_link_position(const SheetRangeTable& table, const parser:
 
 int external_sheet_index(const XlsbLinkTables& link, std::string_view sheet) {
   for (std::size_t i = 0; i < link.sheet_names.size(); ++i) {
-    if (strings::case_insensitive_eq(link.sheet_names[i], sheet)) {
+    if (sheet_names::equal(link.sheet_names[i], sheet)) {
       return static_cast<int>(i);
     }
   }

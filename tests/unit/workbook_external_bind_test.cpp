@@ -95,6 +95,20 @@ TEST(WorkbookExternalBind, ANewSheetOnALoadedLinkMarksTheBodyStale) {
   EXPECT_FALSE(wb.external_links()[0].book.sheet_has_data(1));
 }
 
+TEST(WorkbookExternalBind, UnicodeSheetIdentityDoesNotAppendDuplicate) {
+  Workbook wb = OneSheet();
+  std::vector<ExternalLinkRecord> links;
+  links.push_back(LoadedLink(1U, "Src.xlsx", ""));
+  links[0].book.sheet_names = {"\xC3\x84rea"};
+  links[0].book.sheet_data = {true};
+  wb.set_external_links(std::move(links));
+
+  SetFormula(wb, 0U, 0U, "=[Src.xlsx]\xC3\xA4rea!A1");
+  ASSERT_EQ(wb.external_links().size(), 1U);
+  ASSERT_EQ(wb.external_links()[0].book.sheet_names.size(), 1U);
+  EXPECT_EQ(wb.external_links()[0].book.sheet_names[0], "\xC3\x84rea");
+}
+
 TEST(WorkbookExternalBind, NewLinksAppendWithoutRenumbering) {
   Workbook wb = OneSheet();
   std::vector<ExternalLinkRecord> links;

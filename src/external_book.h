@@ -108,8 +108,9 @@ struct ExternalBook {
   /// column; the writers emit cached cells in this order.
   std::vector<std::uint64_t> sorted_cell_keys() const;
 
-  /// Returns the 0-based index of `sheet` in `sheet_names` under ASCII
-  /// case folding, as Excel matches sheet names, or `kNoSheet` when absent.
+  /// Returns the 0-based index of `sheet` in `sheet_names` under Unicode
+  /// simple case folding, the same worksheet identity used by this workbook,
+  /// or `kNoSheet` when absent. Expanding folds do not match.
   std::uint32_t sheet_index(std::string_view sheet) const noexcept;
 
   /// Whether `sheet` has a cached `<sheetData>`. A sheet without one -- a

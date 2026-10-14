@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string_view>
 
+#include "sheet_name.h"
 #include "utils/index_sort.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -23,7 +24,7 @@ std::vector<std::uint64_t> ExternalBook::sorted_cell_keys() const {
 
 std::uint32_t ExternalBook::sheet_index(std::string_view sheet) const noexcept {
   for (std::size_t i = 0; i < sheet_names.size(); ++i) {
-    if (strings::case_insensitive_eq(sheet_names[i], sheet)) {
+    if (::formulon::sheet_names::equal(sheet_names[i], sheet)) {
       return static_cast<std::uint32_t>(i);
     }
   }
