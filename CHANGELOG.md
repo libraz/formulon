@@ -29,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fm_sheet_add_chart_series` / `fm_sheet_remove_chart_series` entry per
   edit, with the status codes `kIoChartUnparseable` (5025),
   `kIoChartInvalidReference` (5026) and `kIoChartUnsupportedKind` (5027).
+  `setChartTitle` also takes a title object (`{ kind, text?, formula? }`;
+  `ChartTitleInfo` in Python), so `ChartTitleKind.Auto` returns the title to
+  Excel's automatic one, and each `getChartData` series carries `xFormatCode`
+  (`x_format_code`, `fm_chart_data_series_t.x_format_code`), the number format
+  of its x values.
 
 ### Changed
 
@@ -36,6 +41,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   them: fixed notation with 15 significant digits when that round-trips
   (else 17) for magnitudes from 0.01 up to 1E+16, and 17-digit exponential
   form outside it.
+
+### Fixed
+
+- Python integer parameters reject a fractional or non-finite number with
+  `ValueError` and a non-number (including a numeric string) with `TypeError`
+  instead of truncating or converting it.
+- Ad-hoc formula evaluation (`fm_workbook_evaluate_formula`, its array form
+  and `fm_workbook_evaluate_cf_formula`, in every binding) rejects an
+  out-of-grid target or anchor with `kInvalidArgument`.
+- Both JavaScript bindings reject an iterative-calculation cap above 2^31-1
+  with `RangeError` instead of wrapping it to a negative value.
+- Data validation evaluates its formulas as if the proposed value were in the
+  cell, so a rule that refers to the cell it validates (for example
+  `=COUNTIF($A:$A,A1)=1`) checks the new value rather than the stored one.
+- On a sheet whose rows are hidden by default (`zeroHeight`), `SUBTOTAL`,
+  `AGGREGATE`, print geometry and AutoFilter treat rows without their own
+  visibility as hidden, row style, height and outline edits keep a row's
+  visibility, an XLSB save keeps those rows hidden, and
+  `effective_default_row_height` is 0.
+- `SUBTOTAL` and `AGGREGATE` reached through a defined name recalculate when
+  row visibility changes.
+- An external reference matches a cached sheet name case-insensitively
+  beyond ASCII (`[Book.xlsx]ärea!A1` finds `Ärea`), in evaluation and in an
+  XLSB save.
+- Format detection reads the parsed `[Content_Types].xml` declarations, so
+  incidental text in that part no longer routes a package to the XLSB reader.
+- A drawing edit fails with `kPreconditionFailed` when no drawing object id
+  is left, instead of writing a wrapped id.
+- Malformed UTF-8 is rejected the same way by every code-point consumer and
+  by sheet-name validation.
 
 ### Removed
 

@@ -40,11 +40,10 @@ target the wrong install.
 Formulon's 1-bit compatibility is anchored to one primary oracle per
 track: **Mac Excel 365 ja-JP** for formula and conditional-formatting
 results, and **Windows Excel 365 ja-JP** for pivot tables and print
-layout, which need Windows COM automation. Six more Mac locales
-(en-US, de-DE, fr-FR, zh-CN, ko-KR, th-TH) are captured by the
-maintainers and gate CI. Windows profiles other than ja-JP are
-estimated from the Mac capture of the locale plus the known host
-differences. Several Excel function families
+layout, which need Windows COM automation. The maintainers capture all
+fourteen supported Mac locales, and their formula oracles gate CI.
+Windows profiles other than ja-JP are estimated from the Mac capture of
+the locale plus the known host differences. Several Excel function families
 behave differently across locales and across the Mac/Windows ports, in
 ways no amount of code review can paper over:
 
@@ -79,8 +78,10 @@ The maintainer team can't reproduce these from a single install:
    update from blocking the project.
 
 Formulon already ships a runtime profile switch: `excel_profile_id`
-selects one of 14 profiles, `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}`
-(default `win-365-en_US`), and it is wired through the C ABI, WASM, the
+selects one of 28 profiles across fourteen locales. Profile IDs follow
+`{mac,win}-365-<locale>`; the complete set is in
+[`tools/oracle/targets.yaml`](tools/oracle/targets.yaml). The default is
+`win-365-en_US`. The switch is available through the C ABI, WASM, the
 native Node addon, and Python. `win-365-ja_JP` is measured on Windows;
 the other `win-*` profiles are estimates. Goldens captured on a real
 Windows install in one of those locales replace the estimate with a
@@ -97,7 +98,7 @@ tagged with one of:
 | status | meaning |
 |---|---|
 | `primary` | the 1-bit reference; maintained by the core team. |
-| `scaffolded` | wired up with goldens. The seven Mac formula targets (`mac-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}`) gate CI; `win-365-ja_JP` covers the workbook track. |
+| `scaffolded` | wired up with goldens. The thirteen non-primary Mac formula targets gate CI alongside the primary; `win-365-ja_JP` covers the workbook track. |
 | `wanted` | reserved slot, no goldens yet. **These are exactly what we'd love to receive from you.** |
 
 Run `make oracle-contribute-list` for the current set. It reads
@@ -105,7 +106,7 @@ Run `make oracle-contribute-list` for the current set. It reads
 alongside the subset your host can actually drive, so it never drifts
 out of step with the file above.
 
-The `wanted` slots are the six Windows targets `win-365-{en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH}`.
+The `wanted` slots are the thirteen Windows targets other than `win-365-ja_JP`.
 Each pairs with the maintainer-captured Mac target of the same locale to
 pin the Mac/Windows difference on a real install.
 
