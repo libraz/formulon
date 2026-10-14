@@ -6,7 +6,35 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from tools.oracle.drivers import _locale, base, macos_excel, windows_excel
+from tools.oracle.drivers import _locale, base, cell_result, macos_excel, windows_excel
+
+
+class CellObservationTests(unittest.TestCase):
+    def test_classifier_reads_each_bridge_property_once(self) -> None:
+        for raw, displayed, expected in (
+            (3.0, "3", "number"),
+            (None, "", "blank"),
+            ("hello", "hello", "text"),
+            (None, "#VALUE!", "error"),
+        ):
+            with self.subTest(raw=raw, displayed=displayed):
+                reads = {"value": 0, "text": 0}
+
+                class Cell:
+                    @property
+                    def value(self):
+                        reads["value"] += 1
+                        if reads["value"] != 1:
+                            raise AssertionError("cell value read more than once")
+                        return raw
+
+                def text(_cell):
+                    reads["text"] += 1
+                    return displayed
+
+                result = cell_result.classify_value(Cell(), None, text)
+                self.assertEqual(result.kind, expected)
+                self.assertEqual(reads, {"value": 1, "text": 1})
 
 
 class _FakeCell:

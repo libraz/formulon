@@ -76,7 +76,10 @@ def error_display_from_cell(cell, displayed_text: DisplayedText, evaluate: Optio
     error cell must not be recorded as blank, so this raises.
     """
 
-    raw = cell.value
+    return _error_display_from_value(cell.value, cell, displayed_text, evaluate)
+
+
+def _error_display_from_value(raw, cell, displayed_text: DisplayedText, evaluate: Optional[Evaluate]) -> Optional[str]:
     try:
         from xlwings.utils import CVErr  # type: ignore
 
@@ -108,10 +111,6 @@ def error_display_from_cell(cell, displayed_text: DisplayedText, evaluate: Optio
         canon = normalise_error_token(text)
         if canon is not None:
             return canon
-    if text and text.startswith("#") and (text.endswith("!") or text.endswith("?") or text == "#N/A"):
-        for name in _ERR_DISPLAY_NAMES:
-            if text == name:
-                return name
     # A value too wide for its column renders as a run of '#' (a long localized
     # TRUE such as VERDADEIRO); the bridge still read the value itself.
     if text and set(text) == {"#"} and raw is not None and not isinstance(raw, str):
@@ -129,18 +128,19 @@ def error_display_from_cell(cell, displayed_text: DisplayedText, evaluate: Optio
 def classify_value(cell, evaluate, displayed_text: DisplayedText) -> CaseResult:
     """Converts an xlwings cell observation into a CaseResult.
 
-    The ``cell.value`` read happens once up front; subsequent checks may
-    consult the COM ``.Text`` fallback for edge cases (error cells,
-    pre-1900 serials) where the Python-side value is lossy. ``evaluate`` is
+    The ``cell.value`` read happens once up front; error cells may consult
+    the COM ``.Text`` fallback where the Python-side value is lossy.
+    Pre-1900 serials come back as ``None`` and are recorded blank: no
+    displayed-text parse exists for them. ``evaluate`` is
     the Application.Evaluate adapter that resolves an empty read-back into
     ``""`` or blank; without it (``None``) an empty read-back stays blank.
     """
 
-    err = error_display_from_cell(cell, displayed_text, evaluate)
+    v = cell.value
+    err = _error_display_from_value(v, cell, displayed_text, evaluate)
     if err is not None:
         return CaseResult(id="", kind="error", error_code=err)
 
-    v = cell.value
     # The classifier has no workbook epoch metadata, so datetimes use the
     # shared 1900-system conversion; 1904 cases should expose date values
     # through a numeric/boolean formula such as N(DATE()).
@@ -156,11 +156,6 @@ def classify_value(cell, evaluate, displayed_text: DisplayedText) -> CaseResult:
         return CaseResult(id="", kind="number", value=float(v))
 
     if v is None or v == "":
-        # Pre-1900 serials come back as None (no datetime representation);
-        # a displayed-text parse was never implemented, so they stay blank.
-        text = displayed_text(cell)
-        if text and text.strip():
-            pass
         if evaluate is not None and is_empty_text_result(evaluate, cell):
             return CaseResult(id="", kind="text", value="")
         return CaseResult(id="", kind="blank")
