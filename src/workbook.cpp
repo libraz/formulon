@@ -870,7 +870,7 @@ Expected<void, Error> Workbook::set_sheet_auto_filter(std::size_t sheet_index, A
   }
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   reindex_formulas_referencing_name(sheets_, mutator, *this, kFilterDatabaseName);
-  mark_row_visibility_dependents_dirty_locked(sheets_, mutator);
+  mark_row_visibility_dependents_dirty_locked(sheets_, mutator, defined_names_);
   return Expected<void, Error>::Ok();
 }
 
@@ -882,7 +882,7 @@ Expected<void, Error> Workbook::remove_sheet_auto_filter(std::size_t sheet_index
   if (erase_filter_database_name(defined_names_, sheet_index)) {
     reindex_formulas_referencing_name(sheets_, mutator, *this, kFilterDatabaseName);
   }
-  mark_row_visibility_dependents_dirty_locked(sheets_, mutator);
+  mark_row_visibility_dependents_dirty_locked(sheets_, mutator, defined_names_);
   return Expected<void, Error>::Ok();
 }
 
@@ -897,7 +897,7 @@ Expected<void, Error> Workbook::set_sheet_auto_filter_xml(std::size_t sheet_inde
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   RETURN_IF_ERROR(check_sheet_index("set_sheet_auto_filter_xml", sheet_index, sheets_.size()));
   sheets_[sheet_index].set_auto_filter(io::auto_filter_from_xml(xml));
-  mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator());
+  mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator(), defined_names_);
   return Expected<void, Error>::Ok();
 }
 
@@ -906,7 +906,7 @@ Expected<void, Error> Workbook::set_table_auto_filter(std::size_t table_index, A
   RETURN_IF_ERROR(check_table_index("set_table_auto_filter", table_index, tables_.size()));
   RETURN_IF_ERROR(validate_auto_filter(filter));
   tables_[table_index].auto_filter_xml.set(std::move(filter));
-  mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator());
+  mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator(), defined_names_);
   return Expected<void, Error>::Ok();
 }
 
@@ -914,7 +914,7 @@ Expected<void, Error> Workbook::remove_table_auto_filter(std::size_t table_index
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   RETURN_IF_ERROR(check_table_index("remove_table_auto_filter", table_index, tables_.size()));
   tables_[table_index].auto_filter_xml.reset();
-  mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator());
+  mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator(), defined_names_);
   return Expected<void, Error>::Ok();
 }
 
@@ -1739,7 +1739,7 @@ void Workbook::set_iterative_progress(eval::IterativeProgressCb cb, void* user_d
 
 void Workbook::mark_row_visibility_dependents_dirty() {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator());
+  mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator(), defined_names_);
 }
 
 void Workbook::mark_all_formulas_dirty() {

@@ -435,7 +435,7 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
     names_changed = true;
   }
   if (filters_after != filters_before) {
-    mark_row_visibility_dependents_dirty_locked(sheets, mutator);
+    mark_row_visibility_dependents_dirty_locked(sheets, mutator, defined_names);
   }
   // Re-index only after the physical move. Formula text is rewritten while
   // cells still occupy their pre-edit coordinates, so rebuilding the graph

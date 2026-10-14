@@ -33,6 +33,46 @@ Value StoredValue(const Workbook& wb, std::size_t sheet_index, std::uint32_t row
   return Value::blank();
 }
 
+TEST(WorkbookRecalc, RowVisibilityInvalidatesNamedAggregatesAndAliases) {
+  for (const std::string aggregate : {"SUBTOTAL(109,$A$1:$A$2)", "AGGREGATE(9,5,$A$1:$A$2)"}) {
+    SCOPED_TRACE(aggregate);
+    Workbook wb = Workbook::create();
+    ASSERT_TRUE(wb.set_cell_value(0U, 0U, 0U, Value::number(10.0)));
+    ASSERT_TRUE(wb.set_cell_value(0U, 1U, 0U, Value::number(20.0)));
+    ASSERT_TRUE(wb.set_defined_name("NamedTotal", "=" + aggregate));
+    ASSERT_TRUE(wb.set_defined_name("TotalAlias", "=NamedTotal"));
+    ASSERT_TRUE(wb.set_defined_name("NamedFunction", "=LAMBDA(" + aggregate + ")"));
+    ASSERT_TRUE(wb.set_cell_formula(0U, 0U, 1U, "=NamedTotal"));
+    ASSERT_TRUE(wb.set_cell_formula(0U, 1U, 1U, "=TotalAlias"));
+    ASSERT_TRUE(wb.set_cell_formula(0U, 2U, 1U, "=NamedFunction()"));
+    ASSERT_TRUE(wb.recalc(eval::default_registry()));
+    for (std::uint32_t row = 0U; row < 3U; ++row) {
+      const Value value = StoredValue(wb, 0U, row, 1U);
+      ASSERT_TRUE(value.is_number());
+      EXPECT_DOUBLE_EQ(value.as_number(), 30.0);
+    }
+    RowLayout layout;
+    layout.row = 0U;
+    layout.hidden = true;
+    wb.sheet(0U).mutable_layout().row_overrides.push_back(layout);
+    wb.mark_row_visibility_dependents_dirty();
+    ASSERT_TRUE(wb.recalc(eval::default_registry()));
+    for (std::uint32_t row = 0U; row < 3U; ++row) {
+      const Value value = StoredValue(wb, 0U, row, 1U);
+      ASSERT_TRUE(value.is_number());
+      EXPECT_DOUBLE_EQ(value.as_number(), 20.0);
+    }
+    wb.sheet(0U).mutable_layout().row_overrides.clear();
+    wb.mark_row_visibility_dependents_dirty();
+    ASSERT_TRUE(wb.recalc(eval::default_registry()));
+    for (std::uint32_t row = 0U; row < 3U; ++row) {
+      const Value value = StoredValue(wb, 0U, row, 1U);
+      ASSERT_TRUE(value.is_number());
+      EXPECT_DOUBLE_EQ(value.as_number(), 30.0);
+    }
+  }
+}
+
 TEST(WorkbookRecalc, SmallChainEndToEnd) {
   // A simple linear chain: A1 = 10, A2 = =A1*2, A3 = =A2+5.
   //

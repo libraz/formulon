@@ -247,7 +247,22 @@ void reindex_formulas_referencing_sheet(std::vector<Sheet>& sheets, const eval::
 /// Body of `Workbook::mark_row_visibility_dependents_dirty`; the caller
 /// holds the engine mutex.
 void mark_row_visibility_dependents_dirty_locked(const std::vector<Sheet>& sheets,
-                                                 const eval::RecalcEngine::LockedMutator& mutator) {
+                                                 const eval::RecalcEngine::LockedMutator& mutator,
+                                                 const std::vector<DefinedName>& defined_names) {
+  const auto visibility_sensitive = [](std::string_view formula) {
+    return strings::case_insensitive_contains(formula, "SUBTOTAL") ||
+           strings::case_insensitive_contains(formula, "AGGREGATE");
+  };
+  std::vector<std::string> affected_names;
+  for (const DefinedName& name : defined_names) {
+    if (visibility_sensitive(name.formula)) {
+      affected_names.push_back(name.name);
+    }
+  }
+  if (!affected_names.empty()) {
+    affected_names = close_affected_names(defined_names, std::move(affected_names));
+  }
+  Arena parser_arena;
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     const Sheet& sheet = sheets[sheet_idx];
     for (const auto& [row, cells] : sheet.rows()) {
@@ -255,13 +270,17 @@ void mark_row_visibility_dependents_dirty_locked(const std::vector<Sheet>& sheet
         if (cell.formula_text.empty()) {
           continue;
         }
-        // SUBTOTAL/AGGREGATE can only be called by literally spelling one
-        // of these names, so this text scan has no false negatives; a
-        // string literal that happens to contain one costs a harmless
-        // extra dirty mark rather than reparsing every formula in the
-        // workbook to test more precisely.
-        if (strings::case_insensitive_contains(cell.formula_text, "SUBTOTAL") ||
-            strings::case_insensitive_contains(cell.formula_text, "AGGREGATE")) {
+        // A call must spell its name, so text scans miss nothing; a string literal costs a spare dirty mark.
+        bool affected = visibility_sensitive(cell.formula_text);
+        const std::string_view text = cell.formula_text;
+        const auto spells_name = [text](const std::string& name) {
+          return strings::case_insensitive_contains(text, name);
+        };
+        if (!affected && std::any_of(affected_names.begin(), affected_names.end(), spells_name)) {
+          const parser::AstNode* root = parse_stored_formula(cell.formula_text, parser_arena);
+          affected = root != nullptr && references_any_name(*root, affected_names);
+        }
+        if (affected) {
           mutator.mark_dirty(
               eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)});
         }
