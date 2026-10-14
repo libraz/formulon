@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string_view>
 #include <utility>
 
@@ -94,12 +95,12 @@ class Geometry {
 
 template <typename Fn>
 void for_each_element(const pugi::xml_node& node, const Fn& fn) {
-  for (pugi::xml_node child = node.first_child(); child; child = child.next_sibling()) {
+  node.find_node([&fn](const pugi::xml_node& child) {
     if (child.type() == pugi::node_element) {
       fn(child);
-      for_each_element(child, fn);
     }
-  }
+    return false;
+  });
 }
 
 bool has_retained_drawing(const Sheet& sheet) {
@@ -144,14 +145,18 @@ Expected<std::string, Error> load_object_drawing(const Workbook& wb, std::size_t
 }
 
 // The id for a new object: one past the largest `cNvPr/@id` in `doc`, and at
-// least 2 (Excel numbers drawing objects from 2).
-std::uint32_t next_object_id(const pugi::xml_document& doc) {
+// least 2 (Excel numbers drawing objects from 2). `kPreconditionFailed` once
+// the largest id is UINT32_MAX.
+Expected<std::uint32_t, Error> next_object_id(const pugi::xml_document& doc) {
   std::uint32_t id = 0;
   for_each_element(doc, [&id](const pugi::xml_node& node) {
     if (local_name(node) == "cNvPr") {
       id = std::max(id, node.attribute("id").as_uint());
     }
   });
+  if (id == std::numeric_limits<std::uint32_t>::max()) {
+    return make_error(FormulonErrorCode::kPreconditionFailed, "drawing: object id space exhausted");
+  }
   return std::max(id, 1U) + 1U;
 }
 
@@ -996,7 +1001,7 @@ Expected<std::uint32_t, Error> insert_image(Workbook& wb, std::size_t sheet, con
   pugi::xml_document doc;
   RETURN_IF_ERROR(prepare_drawing(wb, path, doc));
   ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_part_rels(wb, path));
-  const std::uint32_t id = next_object_id(doc);
+  ASSIGN_OR_RETURN(const std::uint32_t id, next_object_id(doc));
   const std::string rid = next_rel_id(rels);
   const std::string media_path = unused_part_path(wb, "xl/media/image", image_extension(info.format));
   const std::string xml =
@@ -1034,7 +1039,7 @@ Expected<std::uint32_t, Error> insert_graphic_frame(Workbook& wb, std::size_t sh
   pugi::xml_document doc;
   RETURN_IF_ERROR(prepare_drawing(wb, path, doc));
   ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_part_rels(wb, path));
-  const std::uint32_t id = next_object_id(doc);
+  ASSIGN_OR_RETURN(const std::uint32_t id, next_object_id(doc));
   const std::string rid = next_rel_id(rels);
   std::string data(graphic_data_xml);
   for (std::size_t at = data.find("{rId}"); at != std::string::npos; at = data.find("{rId}", at + rid.size())) {
@@ -1350,7 +1355,7 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
 
   pugi::xml_node replaced;
   if (new_id) {
-    const std::uint32_t next = next_object_id(doc);
+    ASSIGN_OR_RETURN(const std::uint32_t next, next_object_id(doc));
     const std::uint32_t old_id = id;
     for_each_element(fragment, [old_id, next](const pugi::xml_node& node) {
       if (local_name(node) == "cNvPr" && node.attribute("id").as_uint() == old_id) {

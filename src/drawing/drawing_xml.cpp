@@ -75,18 +75,8 @@ pugi::xml_attribute attr_local(const pugi::xml_node& node, std::string_view name
 }
 
 pugi::xml_node find_descendant(const pugi::xml_node& node, std::string_view name) {
-  for (pugi::xml_node child = node.first_child(); child; child = child.next_sibling()) {
-    if (child.type() != pugi::node_element) {
-      continue;
-    }
-    if (local_name(child) == name) {
-      return child;
-    }
-    if (pugi::xml_node found = find_descendant(child, name)) {
-      return found;
-    }
-  }
-  return {};
+  return node.find_node(
+      [name](const pugi::xml_node& child) { return child.type() == pugi::node_element && local_name(child) == name; });
 }
 
 // The `c:chart` / `cx:chart` element of a chart frame, looking through an

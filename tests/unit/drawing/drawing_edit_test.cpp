@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "../small_stack.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
@@ -123,6 +124,92 @@ Workbook WithDrawing(const std::string& drawing, const std::string& rels, const 
   wb.set_default_content_types({{"png", "image/png"}});
   wb.sheet(0).set_drawing_rel_target(kDrawingPath);
   return wb;
+}
+
+Workbook WithMaximumObjectId() {
+  const std::uint32_t max_id = std::numeric_limits<std::uint32_t>::max();
+  const std::string drawing = std::string(kWsDrOpen) + "<xdr:twoCellAnchor>" + Marker("from", 0, 0, 0, 0) +
+                              Marker("to", 0, 0, 1, 0) + Pic(max_id, "rId1") + "</xdr:twoCellAnchor></xdr:wsDr>";
+  const std::string rels = std::string(kRelsOpen) + Rel("rId1", kImageRel, "../media/image1.png") + "</Relationships>";
+  return WithDrawing(drawing, rels, {"xl/media/image1.png"});
+}
+
+std::string DeepXml(std::size_t depth, const std::string& body) {
+  std::string xml;
+  xml.reserve(depth * 20U + body.size());
+  for (std::size_t i = 0; i < depth; ++i) {
+    xml.append("<x:deep>");
+  }
+  xml.append(body);
+  for (std::size_t i = 0; i < depth; ++i) {
+    xml.append("</x:deep>");
+  }
+  return xml;
+}
+
+TEST(DrawingEdit, DeepExtensionIsWalkedByDrawingApis) {
+  std::string picture = Pic(2, "rId1");
+  const std::string blip =
+      "<a:blip xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" r:embed=\"rId1\"/>";
+  const std::size_t at = picture.find(blip);
+  ASSERT_NE(at, std::string::npos);
+  picture.replace(at, blip.size(), DeepXml(10000U, "<xdr:cNvPr id=\"41\"/>" + blip));
+  const std::string drawing = std::string(kWsDrOpen) + "<xdr:twoCellAnchor>" + Marker("from", 0, 0, 0, 0) +
+                              Marker("to", 0, 0, 1, 0) + picture + "</xdr:twoCellAnchor></xdr:wsDr>";
+  const std::string rels = std::string(kRelsOpen) + Rel("rId1", kImageRel, "../media/image1.png") + "</Relationships>";
+  Workbook wb = WithDrawing(drawing, rels, {"xl/media/image1.png"});
+
+  testing_support::RunOnSmallStack([&] {
+    const std::vector<DrawingObject> objects = List(wb);
+    ASSERT_EQ(objects.size(), 1U);
+    EXPECT_EQ(objects[0].object_id, 2U);
+    EXPECT_EQ(objects[0].image_rel_id, "rId1");
+
+    const Bytes png = Png(1, 1);
+    auto inserted = insert_image(wb, 0, png.data(), png.size(), ImageInsertOptions{});
+    ASSERT_TRUE(static_cast<bool>(inserted));
+    EXPECT_EQ(inserted.value(), 42U);
+
+    auto snapshot = snapshot_drawing(wb, 0, 2U);
+    ASSERT_TRUE(static_cast<bool>(snapshot));
+    EXPECT_FALSE(snapshot.value().empty());
+  });
+}
+
+TEST(DrawingEdit, ExhaustedObjectIdRejectsMutationsWithoutChangingPackage) {
+  Workbook wb = WithMaximumObjectId();
+  const std::uint32_t max_id = std::numeric_limits<std::uint32_t>::max();
+  auto snapshot = snapshot_drawing(wb, 0, max_id);
+  ASSERT_TRUE(static_cast<bool>(snapshot));
+  auto original = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(original));
+
+  const Bytes png = Png(1, 1);
+  auto image = insert_image(wb, 0, png.data(), png.size(), ImageInsertOptions{});
+  ASSERT_FALSE(static_cast<bool>(image));
+  EXPECT_EQ(image.error().code, FormulonErrorCode::kPreconditionFailed);
+  auto after_image = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(after_image));
+  EXPECT_EQ(after_image.value(), original.value());
+
+  ImageInsertOptions placement;
+  placement.width_emu = 100000;
+  placement.height_emu = 100000;
+  auto frame = insert_graphic_frame(
+      wb, 0, placement, "<a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"/>",
+      "xl/charts/chart1.xml", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart");
+  ASSERT_FALSE(static_cast<bool>(frame));
+  EXPECT_EQ(frame.error().code, FormulonErrorCode::kPreconditionFailed);
+  auto after_frame = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(after_frame));
+  EXPECT_EQ(after_frame.value(), original.value());
+
+  auto restored = restore_drawing(wb, 0, snapshot.value().data(), snapshot.value().size(), kDrawingRestoreNewId);
+  ASSERT_FALSE(static_cast<bool>(restored));
+  EXPECT_EQ(restored.error().code, FormulonErrorCode::kPreconditionFailed);
+  auto after_restore = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(after_restore));
+  EXPECT_EQ(after_restore.value(), original.value());
 }
 
 // Three 30 x 60 pt pictures at B5, D5 and F5 on 18 pt rows: move and size

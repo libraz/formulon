@@ -152,6 +152,24 @@ TEST(DrawingXml, ReadsEveryObjectKindAndAnchor) {
   EXPECT_EQ(objects[5].to.row, 12U);
 }
 
+TEST(DrawingXml, DescendantLookupKeepsDepthFirstFirstMatchOrder) {
+  const std::string drawing =
+      "<xdr:wsDr xmlns:xdr=\"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing\" "
+      "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><xdr:twoCellAnchor>"
+      "<xdr:pic><xdr:nvPicPr><xdr:cNvPr id=\"2\" name=\"first\"/></xdr:nvPicPr>"
+      "<x:first><a:blip xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" "
+      "r:embed=\"rId2\"/></x:first><x:second><a:blip "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" r:embed=\"rId1\"/>"
+      "</x:second></xdr:pic></xdr:twoCellAnchor></xdr:wsDr>";
+  const auto rels = io::ooxml::parse_part_rels(ToBytes(kRels), "xl/drawings");
+  ASSERT_TRUE(static_cast<bool>(rels));
+
+  const std::vector<DrawingObject> objects = ReadObjects(drawing, rels.value());
+  ASSERT_EQ(objects.size(), 1U);
+  EXPECT_EQ(objects[0].image_rel_id, "rId2");
+  EXPECT_EQ(objects[0].media_path, "xl/media/image1.png");
+}
+
 TEST(DrawingXml, FallbackAnchorsAreIncludedOnlyOnRequest) {
   pugi::xml_document doc;
   ASSERT_TRUE(static_cast<bool>(parse_drawing_part(ToBytes(kDrawing), doc)));

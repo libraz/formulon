@@ -50,14 +50,14 @@ constexpr const char* kX14Ns = "http://schemas.microsoft.com/office/spreadsheetm
 /// `ext_lst`, at any nesting depth, so a rebuilt entry can be recognised
 /// as a duplicate no matter which `<ext>` block holds the original.
 void CollectClaimedRuleIds(const pugi::xml_node& node, std::unordered_set<std::string>* out) {
-  for (pugi::xml_node child = node.first_child(); child; child = child.next_sibling()) {
-    if (std::string_view(child.name()) == "x14:cfRule") {
+  node.find_node([out](const pugi::xml_node& child) {
+    if (child.type() == pugi::node_element && std::string_view(child.name()) == "x14:cfRule") {
       if (const char* id = child.attribute("id").value(); id[0] != '\0') {
         out->insert(id);
       }
     }
-    CollectClaimedRuleIds(child, out);
-  }
+    return false;
+  });
 }
 
 /// Attributes and colour children of `<x14:dataBar>` the model owns.

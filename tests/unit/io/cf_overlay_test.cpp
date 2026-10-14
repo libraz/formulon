@@ -8,11 +8,13 @@
 
 #include "io/cf_overlay.h"
 
+#include <cstddef>
 #include <initializer_list>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "../small_stack.h"
 #include "cf/cf_types.h"
 #include "gtest/gtest.h"
 
@@ -42,6 +44,19 @@ std::string OverlayWithRules(std::initializer_list<const char*> ids) {
          "<x14:conditionalFormattings>"
          "<x14:conditionalFormatting xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\">" +
          rules + "<xm:sqref>A1:A10</xm:sqref></x14:conditionalFormatting></x14:conditionalFormattings></ext></extLst>";
+}
+
+std::string DeepXml(std::size_t depth, const std::string& body) {
+  std::string xml;
+  xml.reserve(depth * 20U + body.size());
+  for (std::size_t i = 0; i < depth; ++i) {
+    xml.append("<x:deep>");
+  }
+  xml.append(body);
+  for (std::size_t i = 0; i < depth; ++i) {
+    xml.append("</x:deep>");
+  }
+  return xml;
 }
 
 /// Builds a single-block CF model holding one dataBar rule per id.
@@ -82,6 +97,15 @@ TEST(CfOverlay, RemovedRuleIsStrippedSurvivorKept) {
 TEST(CfOverlay, UntouchedOverlayRoundTripsByteForByte) {
   const std::string overlay = OverlayWithRules({kIdA, kIdB});
   EXPECT_EQ(reconcile_x14_cf_overlay(overlay, ModelWithIds({kIdA, kIdB})), overlay);
+}
+
+TEST(CfOverlay, DeeplyClaimedRuleDoesNotRecurseOrDuplicate) {
+  const std::string overlay =
+      "<extLst><ext xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">" +
+      DeepXml(10000U, "<x14:cfRule id=\"" + std::string(kIdA) + "\"/>") + "</ext></extLst>";
+  std::string merged;
+  testing_support::RunOnSmallStack([&] { merged = merge_x14_cf_entries(overlay, ModelWithIds({kIdA})); });
+  EXPECT_EQ(merged, overlay);
 }
 
 TEST(CfOverlay, ClearAllEmptiesOverlay) {
