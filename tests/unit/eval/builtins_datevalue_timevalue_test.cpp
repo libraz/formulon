@@ -205,11 +205,15 @@ TEST(Datevalue, MixedAsciiSeparatorsAccepted) {
   EXPECT_EQ(v.as_number(), 45366.0);
 }
 
-TEST(Datevalue, TimeOnlyInputIsValueError) {
-  // DATEVALUE with a time-only string has no date component to return.
+TEST(Datevalue, TimeOnlyInputIsWholeDays) {
+  // DATEVALUE is the integer part of the recognised value, so a time-only
+  // string counts whole days from 0.
   const Value v = EvalSource("=DATEVALUE(\"13:30\")");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+  const Value overflow = EvalSource("=DATEVALUE(\"25:00\")");
+  ASSERT_TRUE(overflow.is_number());
+  EXPECT_EQ(overflow.as_number(), 1.0);
 }
 
 TEST(Datevalue, BooleanCoercesAndFails) {
@@ -400,11 +404,12 @@ TEST(Timevalue, AmPmWithHourAbove12IsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(Timevalue, DateOnlyInputIsValueError) {
-  // TIMEVALUE with a date-only string: must have an explicit time.
+TEST(Timevalue, DateOnlyInputIsZero) {
+  // TIMEVALUE is the fractional part of the recognised value; a date-only
+  // string has none.
   const Value v = EvalSource("=TIMEVALUE(\"2024-03-15\")");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
 }
 
 TEST(Timevalue, BooleanCoercesAndFails) {
@@ -764,6 +769,220 @@ TEST(DateTextLenientShapes, BlanksAroundTimeSeparator) {
   const Value v = EvalSource("=TIMEVALUE(\"4 : 35\")");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 0.1909722222222222, 1e-15);
+}
+
+// ---------------------------------------------------------------------------
+// Mac Excel ja-JP recogniser, clock pinned to 2026-10-15: a non-leap year,
+// which decides `Feb 29` and `29/2`. Expected values are Excel's.
+// ---------------------------------------------------------------------------
+
+constexpr date_time::CivilTime kPinnedJaNow{{2026, 10U, 15U}, {12U, 0U, 0U}};
+
+struct JaNumberCase {
+  const char* formula;
+  double expected;
+};
+
+void ExpectJaNumbers(const JaNumberCase* cases, std::size_t count) {
+  for (std::size_t i = 0; i < count; ++i) {
+    const Value v = EvalSourcePinned(cases[i].formula, kPinnedJaNow, mac_365_ja_jp_profile());
+    ASSERT_TRUE(v.is_number()) << cases[i].formula;
+    EXPECT_EQ(v.as_number(), cases[i].expected) << cases[i].formula;
+  }
+}
+
+void ExpectJaValueErrors(const char* const* formulas, std::size_t count) {
+  for (std::size_t i = 0; i < count; ++i) {
+    const Value v = EvalSourcePinned(formulas[i], kPinnedJaNow, mac_365_ja_jp_profile());
+    ASSERT_TRUE(v.is_error()) << formulas[i];
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formulas[i];
+  }
+}
+
+TEST(DateTextJaJp, MonthNameForms) {
+  const JaNumberCase cases[] = {
+      {"=VALUE(\"Sept 1\")", 46266.0},  {"=VALUE(\"Jan1\")", 46023.0},       {"=VALUE(\"1-Jan\")", 46023.0},
+      {"=VALUE(\"Jan - 1\")", 46023.0}, {"=VALUE(\"Jan 32\")", 11689.0},     {"=VALUE(\"Feb 29\")", 47150.0},
+      {"=VALUE(\"Jan 0\")", 36526.0},   {"=VALUE(\"Jan 2026\")", 46023.0},   {"=VALUE(\"Jan 1 , 2026\")", 46023.0},
+      {"=VALUE(\"1 Jan 1\")", 36892.0}, {"=VALUE(\"1-Jan/2026\")", 46023.0}, {"=VALUE(\"1Jan2026\")", 46023.0},
+  };
+  ExpectJaNumbers(cases, sizeof(cases) / sizeof(cases[0]));
+  const char* const rejected[] = {
+      "=VALUE(\"Ma 1\")",       "=VALUE(\"Jan.1\")",    "=VALUE(\"Jan 100\")",     "=VALUE(\"Jan 1 2026\")",
+      "=VALUE(\"Jan 1,2026\")", "=VALUE(\"32 Jan\")",   "=VALUE(\"29 Feb\")",      "=VALUE(\"Mon Jan 1\")",
+      "=VALUE(\"Junee 1\")",    "=VALUE(\"2026 Jan\")", "=VALUE(\"1 Jan, 2026\")",
+  };
+  ExpectJaValueErrors(rejected, sizeof(rejected) / sizeof(rejected[0]));
+}
+
+TEST(DateTextJaJp, NumericPairsAndTriples) {
+  const JaNumberCase cases[] = {
+      {"=VALUE(\"13/1\")", 46035.0},   {"=VALUE(\"31/4\")", 11414.0},   {"=VALUE(\"32/1\")", 11689.0},
+      {"=VALUE(\"29/2\")", 47150.0},   {"=VALUE(\"2026/1\")", 46023.0}, {"=VALUE(\"1 / 2\")", 46024.0},
+      {"=VALUE(\"29/1/1\")", 47119.0}, {"=VALUE(\"30/1/1\")", 10959.0}, {"=VALUE(\"1900/2/29\")", 60.0},
+      {"=VALUE(\"1 -1/2\")", 36893.0},
+  };
+  ExpectJaNumbers(cases, sizeof(cases) / sizeof(cases[0]));
+  const char* const rejected[] = {
+      "=VALUE(\"1/2026\")", "=VALUE(\"0/1\")",      "=VALUE(\"2/29\")", "=VALUE(\"2026/1/001\")",
+      "=VALUE(\"123/1\")",  "=VALUE(\"1/2/0026\")", "=VALUE(\"1/2-\")", "=VALUE(\"2026.1.1\")",
+  };
+  ExpectJaValueErrors(rejected, sizeof(rejected) / sizeof(rejected[0]));
+}
+
+TEST(DateTextJaJp, KanjiAndEraForms) {
+  const JaNumberCase cases[] = {
+      {"=VALUE(\"2026\xE5\xB9\xB4"
+       "1\xE6\x9C\x88\")",
+       46023.0},
+      {"=VALUE(\"026\xE5\xB9\xB4"
+       "001\xE6\x9C\x88"
+       "0001\xE6\x97\xA5\")",
+       46023.0},
+      {"=VALUE(\"R8/1/1\")", 46023.0},
+      {"=VALUE(\"R0008.01.001\")", 46023.0},
+      {"=VALUE(\"\xEF\xBD\x88"
+       "30.1.1\")",
+       43101.0},
+      {"=VALUE(\"001\xE6\x99\x82"
+       "030\xE5\x88\x86"
+       "005\xE7\xA7\x92\")",
+       0.062557870370370375},
+  };
+  ExpectJaNumbers(cases, sizeof(cases) / sizeof(cases[0]));
+  const char* const rejected[] = {
+      "=VALUE(\"\xE4\xBB\xA4\xE5\x92\x8C"
+      "8\xE5\xB9\xB4"
+      "1\xE6\x9C\x88\")",
+      "=VALUE(\"\xE6\x98\x8E\xE6\xB2\xBB"
+      "6\xE5\xB9\xB4"
+      "1\xE6\x9C\x88"
+      "1\xE6\x97\xA5\")",
+      "=VALUE(\"R100.1.1\")",
+      "=VALUE(\"M6.1.1\")",
+      "=VALUE(\"R8.1.1 1:30\")",
+      "=VALUE(\"2026\xE5\xB9\xB4"
+      "1\xE6\x9C\x88"
+      "1\xE6\x97\xA5 1:30\")",
+      "=VALUE(\"1/1 1\xE6\x99\x82"
+      "30\xE5\x88\x86\")",
+      "=VALUE(\"24\xE6\x99\x82"
+      "00\xE5\x88\x86\")",
+  };
+  ExpectJaValueErrors(rejected, sizeof(rejected) / sizeof(rejected[0]));
+}
+
+TEST(DateTextJaJp, TimeForms) {
+  const JaNumberCase cases[] = {
+      {"=VALUE(\"1:\")", 0.041666666666666664},
+      {"=VALUE(\"1:30.5\")", 0.0010474537037037037},
+      {"=VALUE(\"1:30:00.0005\")", 0.062500011574074074},
+      {"=VALUE(\"1:30:00.0004\")", 0.0625},
+      {"=VALUE(\"1:30:00.0035\")", 0.062500046296296297},
+      {"=VALUE(\"23:59:59.9995\")", 1.0},
+      {"=VALUE(\"1:99\")", 0.11041666666666666},
+      {"=VALUE(\"9999:59\")", 416.66597222222219},
+      {"=VALUE(\"0100:0\")", 4.166666666666667},
+      {"=VALUE(\"1:30-\")", 0.0625},
+      {"=VALUE(\"1:30 PM -\")", 0.5625},
+      {"=VALUE(\"1:30:00 .5\")", 0.062505787037037033},
+      {"=VALUE(\"1:30.5:00\")", 0.062563657407407408},
+      {"=VALUE(\"1:30.5 PM\")", 0.50104745370370374},
+  };
+  ExpectJaNumbers(cases, sizeof(cases) / sizeof(cases[0]));
+  const char* const rejected[] = {
+      "=VALUE(\"99:99\")", "=VALUE(\"001:30\")",     "=VALUE(\"1:000\")",     "=VALUE(\"10000:0\")",
+      "=VALUE(\"24:60\")", "=VALUE(\"12:60 PM\")",   "=VALUE(\"1:30 P.M.\")", "=VALUE(\"1:30--\")",
+      "=VALUE(\"1 P.-\")", "=VALUE(\"1:30:00.5.\")", "=VALUE(\"1:30PM\")",    "=VALUE(\"1:30,5\")",
+  };
+  ExpectJaValueErrors(rejected, sizeof(rejected) / sizeof(rejected[0]));
+}
+
+TEST(DateTextJaJp, DateAndTimeComposition) {
+  const JaNumberCase cases[] = {
+      {"=VALUE(\"Jan 1 1:30 PM\")", 46023.5625},           {"=VALUE(\"1:30 Aug 1\")", 46235.0625},
+      {"=VALUE(\"1 Jan 1:30 2025\")", 46023.0625},         {"=VALUE(\"2026/1/1 1:30 1/2\")", 46023.0625},
+      {"=VALUE(\"2026/1/1 1:30-1-\")", 46023.0625},        {"=VALUE(\"2026/1/1 1:30 1-1-1-1\")", 46023.0625},
+      {"=VALUE(\"1:30 - 2026/1/1\")", 46023.0625},         {"=VALUE(\"2026/1/1 1:30:00.9999\")", 46023.062511574077},
+      {"=VALUE(\"9999/12/31 23:59:59.9995\")", 2958466.0},
+  };
+  ExpectJaNumbers(cases, sizeof(cases) / sizeof(cases[0]));
+  const char* const rejected[] = {
+      "=VALUE(\"2026/1/1 1:30 12345\")",
+      "=VALUE(\"2026/1/1 1:30 1 2 3 4 5\")",
+      "=VALUE(\"1:30 2026/1/1 1\")",
+      "=VALUE(\"2026/1/1 1\")",
+      "=VALUE(\"1:30 1\")",
+      "=VALUE(\"2026/1/1 1:30 1 PM\")",
+  };
+  ExpectJaValueErrors(rejected, sizeof(rejected) / sizeof(rejected[0]));
+}
+
+TEST(DateTextJaJp, PreProcessing) {
+  const JaNumberCase cases[] = {
+      {"=VALUE(\"\xEF\xBC\x92\xEF\xBC\x90\xEF\xBC\x92\xEF\xBC\x96\xEF\xBC\x8F\xEF\xBC\x91\xEF\xBC\x8F\xEF\xBC\x91"
+       "\xE3\x80\x80\xEF\xBC\x91\xEF\xBC\x9A\xEF\xBC\x93\xEF\xBC\x90\")",
+       46023.0625},
+      {"=VALUE(\"\xEF\xBC\xAA\xEF\xBD\x81\xEF\xBD\x8E 1, 2026\")", 46023.0},
+      {"=VALUE(\"1/2\xE3\x80\x80\")", 46024.0},
+      {"=VALUE(\" 1/2\")", 46024.0},
+      {"=VALUE(\"1:30\"&REPT(\" \",251))", 0.0625},
+  };
+  ExpectJaNumbers(cases, sizeof(cases) / sizeof(cases[0]));
+  const char* const rejected[] = {
+      "=VALUE(\"\u30001/2\")",
+      "=VALUE(CHAR(9)&\"1/2\")",
+      "=VALUE(\"1/2\"&UNICHAR(160))",
+      "=VALUE(\"1:30\"&REPT(\" \",252))",
+  };
+  ExpectJaValueErrors(rejected, sizeof(rejected) / sizeof(rejected[0]));
+}
+
+TEST(DateTextJaJp, DatevalueAndTimevalueSplitOneValue) {
+  const JaNumberCase cases[] = {
+      {"=DATEVALUE(\"1:30 PM\")", 0.0},
+      {"=DATEVALUE(\"9999:59\")", 416.0},
+      {"=DATEVALUE(\"2026/1/1 23:59:59.9999\")", 46024.0},
+      {"=TIMEVALUE(\"2026/1/1\")", 0.0},
+      {"=TIMEVALUE(\"2026/1/1 23:59:59.9999\")", 0.0},
+      {"=TIMEVALUE(\"25:00\")", 1.0416666666666667 - 1.0},
+  };
+  ExpectJaNumbers(cases, sizeof(cases) / sizeof(cases[0]));
+  const char* const rejected[] = {"=DATEVALUE(\"46023\")", "=TIMEVALUE(\"0.5\")", "=DATEVALUE(46023.5)",
+                                  "=DATEVALUE(\"1 1/2\")"};
+  ExpectJaValueErrors(rejected, sizeof(rejected) / sizeof(rejected[0]));
+}
+
+TEST(DateTextJaJp, ImplicitCoercionKeepsALeadingBlank) {
+  // Coercion reads the host clock's year, so the year-less forms are
+  // compared against DATE(YEAR(TODAY()), ...) on the same clock.
+  const Value pair = EvalSourceWithProfile("=\"13/1\"+0-DATE(YEAR(TODAY()),1,13)", mac_365_ja_jp_profile());
+  ASSERT_TRUE(pair.is_number());
+  EXPECT_EQ(pair.as_number(), 0.0);
+  const Value trailing = EvalSourceWithProfile("=\"1/2 \"+0-DATE(YEAR(TODAY()),1,2)", mac_365_ja_jp_profile());
+  ASSERT_TRUE(trailing.is_number());
+  EXPECT_EQ(trailing.as_number(), 0.0);
+  const Value leading = EvalSourceWithProfile("=\" 1/2\"+0", mac_365_ja_jp_profile());
+  ASSERT_TRUE(leading.is_error());
+  EXPECT_EQ(leading.as_error(), ErrorCode::Value);
+}
+
+TEST(DateTextJaJp, MixedFractions) {
+  const JaNumberCase cases[] = {
+      {"=VALUE(\"1 1/2\")", 1.5},
+      {"=VALUE(\"2026 1/1\")", 2027.0},
+      {"=VALUE(\"-1 1/2\")", -1.5},
+      {"=VALUE(\"(1 1/2)%\")", -0.015},
+      {"=VALUE(\"1 1/2%\")", 0.015},
+      {"=VALUE(\"1,000 1/2\")", 1000.5},
+      {"=VALUE(\"1 12345/1\")", 12346.0},
+      {"=VALUE(\"\xEF\xBC\x91\xE3\x80\x80\xEF\xBC\x91\xEF\xBC\x8F\xEF\xBC\x92\")", 1.5},
+      {"=\"1 1/2\"+0", 1.5},
+  };
+  ExpectJaNumbers(cases, sizeof(cases) / sizeof(cases[0]));
+  const char* const rejected[] = {"=VALUE(\"1 1/0\")",      "=VALUE(\"1  1/2\")", "=VALUE(\"1.5 1/2\")",
+                                  "=VALUE(\"1 1/2 1:30\")", "=VALUE(\"1 1 /2\")", "=VALUE(\"1 1/2e1\")"};
+  ExpectJaValueErrors(rejected, sizeof(rejected) / sizeof(rejected[0]));
 }
 
 }  // namespace

@@ -51,10 +51,12 @@ ExcelProfile mac_profile(ExcelLocale locale) {
 }
 
 bool parse_date(std::string_view text, double* serial, int current_year = 0) {
-  double frac = 0.0;
-  bool has_date = false;
-  bool has_time = false;
-  return date_parse::parse_date_time_text(text, serial, &frac, &has_date, &has_time, current_year);
+  date_parse::DateTimeText parsed{};
+  if (!date_parse::parse_date_time_text(text, date_parse::TextEdges::kTrim, current_year, &parsed)) {
+    return false;
+  }
+  *serial = parsed.value;
+  return true;
 }
 
 TEST(LocaleNumberInput, DecimalAndGroupFollowTheProfile) {

@@ -16,6 +16,7 @@
 #include "eval/jp_fold.h"
 #include "eval/wildcard.h"
 #include "excel_locale.h"
+#include "utils/date_time.h"
 #include "utils/strings.h"
 #include "utils/text_ops.h"
 #include "value.h"
@@ -108,18 +109,12 @@ bool probe_bool(std::string_view rhs, bool* out_bool) {
 // long-standing behaviour where COUNTIFS / SUMIFS / AVERAGEIFS treat
 // date-string criteria as numeric date comparisons.
 bool probe_date(std::string_view rhs, double* out_number) {
-  double date_serial = 0.0;
-  double time_frac = 0.0;
-  bool has_date = false;
-  bool has_time = false;
-  const std::string_view trimmed = date_parse::trim_date_text(rhs);
-  if (!date_parse::parse_date_time_text(trimmed, &date_serial, &time_frac, &has_date, &has_time)) {
+  date_parse::DateTimeText parsed{};
+  if (!date_parse::parse_date_time_text(rhs, date_parse::TextEdges::kTrim, date_time::host_civil_time().date.y,
+                                        &parsed)) {
     return false;
   }
-  if (!has_date && !has_time) {
-    return false;
-  }
-  *out_number = date_serial + time_frac;
+  *out_number = parsed.value;
   return true;
 }
 

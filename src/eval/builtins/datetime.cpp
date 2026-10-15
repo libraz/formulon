@@ -101,11 +101,11 @@ Expected<CoercedDateArg, ErrorCode> coerce_date_arg(const Value& v, bool date190
     return out;
   }
 
-  double parsed_serial = 0.0;
-  double parsed_frac = 0.0;
-  bool has_date = false;
-  bool has_time = false;
-  if (!date_parse::parse_date_time_text(v.as_text(), &parsed_serial, &parsed_frac, &has_date, &has_time) || !has_date) {
+  // Same reading as `coerce_to_number`, which has no clock but the host's.
+  date_parse::DateTimeText parsed{};
+  if (!date_parse::parse_date_time_text(v.as_text(), date_parse::TextEdges::kKeepLead,
+                                        date_time::host_civil_time().date.y, &parsed) ||
+      !parsed.has_date) {
     return out;
   }
 
@@ -113,7 +113,9 @@ Expected<CoercedDateArg, ErrorCode> coerce_date_arg(const Value& v, bool date190
   // the canonical normal serial is explicit (including serial 60's ghost
   // spelling), then use the 1904 conversion only to reject dates before the
   // workbook epoch. The time fraction survives the rebasing unchanged.
-  const date_time::YMD ymd = date_time::ymd_from_serial(std::floor(parsed_serial), /*date1904=*/false);
+  const double parsed_day = std::floor(parsed.value);
+  const double parsed_frac = parsed.value - parsed_day;
+  const date_time::YMD ymd = date_time::ymd_from_serial(parsed_day, /*date1904=*/false);
   const double workbook_serial = date_time::serial_from_ymd(ymd.y, ymd.m, ymd.d, /*date1904=*/true);
   if (!std::isfinite(workbook_serial) || workbook_serial < 0.0) {
     return ErrorCode::Value;
@@ -993,61 +995,40 @@ Value Today_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/, b
 // Excel-level argument-shape rules on top of that shared parser.
 // ---------------------------------------------------------------------------
 
-struct ParsedDateTimeText {
-  double serial;
-  double frac;
-  bool has_date;
-  bool has_time;
-};
-
-// `current_year` enables the year-less `M/D` / `M月D日` date form (used by
-// DATEVALUE, per Microsoft's documented "uses the current year" rule); `0`
-// (the default, used by TIMEVALUE) disables it, matching the pre-existing
-// year-required behaviour.
-Expected<ParsedDateTimeText, ErrorCode> parse_date_time_arg(const Value& arg, int current_year = 0) {
+// Reads the argument as text and runs the shared recogniser. `current_year`
+// supplies the year of a year-less date_text ("3/15", "3月15日").
+Expected<date_parse::DateTimeText, ErrorCode> parse_date_time_arg(const Value& arg, int current_year) {
   auto text = coerce_to_text(arg);
   if (!text) {
     return std::move(text.error());
   }
-  const std::string_view trimmed = date_parse::trim_date_text(text.value());
-  if (trimmed.empty()) {
-    return ErrorCode::Value;
-  }
-  ParsedDateTimeText parsed{0.0, 0.0, false, false};
-  if (!date_parse::parse_date_time_text(trimmed, &parsed.serial, &parsed.frac, &parsed.has_date, &parsed.has_time,
-                                        current_year)) {
+  date_parse::DateTimeText parsed{};
+  if (!date_parse::parse_date_time_text(text.value(), date_parse::TextEdges::kTrim, current_year, &parsed)) {
     return ErrorCode::Value;
   }
   return parsed;
 }
 
-/// DATEVALUE(text). Parses `text` as a date string and returns the Excel
-/// serial for the date part (integer). Embedded time components are
-/// accepted and ignored — a string like "2024-03-15 13:30" returns the
-/// serial for 2024-03-15. Booleans / numbers coerce to text first, so
-/// `DATEVALUE(TRUE)` tries to parse the literal "TRUE" and fails with
-/// `#VALUE!`. A year-less date_text ("3/15", "3月15日") uses `now`'s year,
-/// matching Microsoft's documented DATEVALUE rule.
+/// DATEVALUE(text). The integer part of the recognised value: the date, with
+/// hours past 24 and the millisecond rounding carried in; a time-only text
+/// counts whole days from 0 (`DATEVALUE("1:30")` is 0, `DATEVALUE("25:00")`
+/// is 1). Booleans / numbers coerce to text first, so `DATEVALUE(TRUE)` and
+/// `DATEVALUE(46023)` are `#VALUE!`. A year-less date_text uses `now`'s year.
 Value Datevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904,
                  const date_time::CivilTime& now) {
   auto parsed = parse_date_time_arg(args[0], now.date.y);
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  if (!parsed.value().has_date) {
-    // DATEVALUE requires an explicit date component; time-only input is
-    // rejected as #VALUE!.
-    return Value::error(ErrorCode::Value);
+  const double day = std::floor(parsed.value().value);
+  // The recogniser yields a 1900-system serial. Under the 1904 date system
+  // the same calendar date has a serial 1462 days smaller, so round-trip
+  // through the calendar fields with the workbook's epoch. A date before
+  // 1904-01-01 is unrepresentable in the 1904 system and surfaces `#VALUE!`.
+  if (!date1904 || !parsed.value().has_date) {
+    return Value::number(day);
   }
-  // `parse_date_time_text` always yields a 1900-system serial. Under the 1904
-  // date system the same calendar date has a serial 1462 days smaller, so
-  // round-trip through the calendar fields with the workbook's epoch. A date
-  // before 1904-01-01 is unrepresentable in the 1904 system and surfaces
-  // `#VALUE!`.
-  if (!date1904) {
-    return Value::number(parsed.value().serial);
-  }
-  const date_time::YMD ymd = date_time::ymd_from_serial(std::floor(parsed.value().serial), /*date1904=*/false);
+  const date_time::YMD ymd = date_time::ymd_from_serial(day, /*date1904=*/false);
   const double serial = date_time::serial_from_ymd(ymd.y, ymd.m, ymd.d, /*date1904=*/true);
   if (serial < 0.0) {
     return Value::error(ErrorCode::Value);
@@ -1064,29 +1045,16 @@ Value DatevalueHostClock_(const Value* args, std::uint32_t arity, Arena& arena, 
   return Datevalue_(args, arity, arena, date1904, date_time::host_civil_time());
 }
 
-/// TIMEVALUE(text). Parses `text` as a time string and returns the
-/// fractional-day value. Embedded date components are accepted and ignored —
-/// a string like "2024-03-15 13:30" returns 0.5625. Hour values exceeding 24
-/// wrap around the day (`TIMEVALUE("25:00")` returns `1/24` after modular
-/// reduction).
+/// TIMEVALUE(text). The time part less its whole days: a date-only text is 0
+/// and `TIMEVALUE("25:00")` is `1.0416666666666667 - 1`. TIMEVALUE is eager,
+/// so a year-less date_text reads the host clock's year.
 Value Timevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto parsed = parse_date_time_arg(args[0]);
+  auto parsed = parse_date_time_arg(args[0], date_time::host_civil_time().date.y);
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  if (!parsed.value().has_time) {
-    // TIMEVALUE requires an explicit time component; a date-only input
-    // returns `#VALUE!` (matches Excel's behaviour for "2024-03-15" as an
-    // argument to TIMEVALUE).
-    return Value::error(ErrorCode::Value);
-  }
-  // Normalise the fractional day modulo a full day so TIMEVALUE("25:00")
-  // returns the same value as TIMEVALUE("1:00") = 1/24.
-  double out = std::fmod(parsed.value().frac, 1.0);
-  if (out < 0.0) {
-    out += 1.0;
-  }
-  return Value::number(out);
+  const double time = parsed.value().time;
+  return Value::number(time - std::floor(time));
 }
 
 }  // namespace

@@ -14,6 +14,7 @@
 #include "eval/number_parse.h"
 #include "eval/x87_arith.h"
 #include "excel_locale.h"
+#include "utils/date_time.h"
 #include "utils/double_parse.h"
 #include "utils/expected.h"
 #include "utils/strings.h"
@@ -109,8 +110,8 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* f
   // implicit coercion and the VALUE() builtin share one code path and agree
   // exactly (Excel accepts a currency marker on the leading OR trailing side
   // but not both; yen is Japanese-profile-only). The date fallback
-  // runs against the raw, untrimmed text so padded date strings stay #VALUE!
-  // (see WhitespacePaddedDate rejection test).
+  // keeps a leading blank, so `" 2024-01-10"` stays #VALUE! (see the
+  // WhitespacePaddedDate rejection test).
   double parsed = 0.0;
   // The invariant fast path reads `.` as the decimal point, so it only
   // stands in for the locale parse where that is the profile's separator.
@@ -139,25 +140,18 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* f
   // Mac Excel 365 accepts date / datetime text wherever a number is
   // expected: e.g. `=FLOOR(10, "2024-01-10")` coerces the second
   // argument to its serial (45301). Reuse the shared DATEVALUE /
-  // TIMEVALUE / VALUE parser; only fires after the numeric fallbacks
+  // TIMEVALUE / VALUE recogniser; only fires after the numeric fallbacks
   // have rejected the input so plain numerics keep their fast path.
-  // The raw, un-trimmed text is passed: implicit numeric coercion is
-  // strict about whitespace around date strings (`=FLOOR(10,
-  // " 2024-01-10 ")` -> #VALUE!), even though the decimal parser and
-  // DATEVALUE both tolerate it.
-  double serial = 0.0;
-  double frac = 0.0;
-  bool has_date = false;
-  bool has_time = false;
-  if (date_parse::parse_date_time_text(text, &serial, &frac, &has_date, &has_time)) {
-    const double combined = serial + frac;
-    if (std::isnan(combined) || std::isinf(combined)) {
-      return ErrorCode::Num;
-    }
+  // Unlike VALUE, a leading blank makes the text no date (`" 1/2"+0` is
+  // #VALUE!) while trailing ones are fine. There is no evaluation clock
+  // here, so a year-less date ("1/2") takes the host clock's year.
+  date_parse::DateTimeText date_text{};
+  if (date_parse::parse_date_time_text(text, date_parse::TextEdges::kKeepLead, date_time::host_civil_time().date.y,
+                                       &date_text)) {
     if (from_date_text != nullptr) {
-      *from_date_text = has_date;
+      *from_date_text = date_text.has_date;
     }
-    return combined;
+    return date_text.value;
   }
   return ErrorCode::Value;
 }

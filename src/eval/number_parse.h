@@ -23,7 +23,9 @@ namespace eval {
 /// every later group 3+ digits; pass `'\0'` to disable grouping.
 /// Accepted around the digits: a sign, the profile's currency symbols on one
 /// side only (a trailing Euro included), and accounting parentheses
-/// (negative), in the orders Excel takes them. `percent_count` is the number
+/// (negative), in the orders Excel takes them. A mixed fraction `N a/b` (an
+/// integer, one blank, then digits `/` digits, each at most 32767, `b > 0`) is
+/// `N + a/b`. `percent_count` is the number
 /// of `%` signs already taken out by `normalize_locale_numeric`; currency
 /// combined with a percent is not a number. The value follows
 /// `excel_text_number`. Returns true and writes the value into `*out` on

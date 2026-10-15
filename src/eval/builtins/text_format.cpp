@@ -311,23 +311,11 @@ bool text_to_number(std::string_view raw, int current_year, double* out) {
       parse_numeric(normalized, facts.decimal_separator, facts.group_separator, percent_count, out)) {
     return true;
   }
-  // Leading whitespace is trimmed (the date/time parser rejects leading
-  // U+3000, so only ASCII is stripped). Only the digit scripts are folded: the
-  // date parser has its own ja-JP / kanji handling and must not see a
-  // normalised form.
-  const std::string folded = fold_script_digits(raw);
-  const std::string_view trimmed = date_parse::trim_date_text(folded);
-  if (trimmed.empty()) {
+  date_parse::DateTimeText parsed{};
+  if (!date_parse::parse_date_time_text(raw, date_parse::TextEdges::kTrim, current_year, &parsed)) {
     return false;
   }
-  double date_serial = 0.0;
-  double time_frac = 0.0;
-  bool has_date = false;
-  bool has_time = false;
-  if (!date_parse::parse_date_time_text(trimmed, &date_serial, &time_frac, &has_date, &has_time, current_year)) {
-    return false;
-  }
-  *out = date_serial + time_frac;
+  *out = parsed.value;
   return true;
 }
 

@@ -1,19 +1,24 @@
 //
-// Implementation of the shared date / time text parser declared in
-// `date_text_parse.h`. The logic matches the grammar previously embedded in
-// `src/eval/builtins/datetime.cpp`; it is extracted here so DATEVALUE,
-// TIMEVALUE, and VALUE all call into the same code path.
+// Implementation of the date / time text recogniser declared in
+// `date_text_parse.h`.
+//
+// The text is folded once (digit scripts, full-width ASCII, the ideographic
+// space), then read as a date, a date followed by a time and an ignored
+// numeric tail, a time, or a time followed by a date. Each date reader
+// returns every reading of the head of the text, longest first, so the
+// composition can back off from `1 Jan 1` to `1 Jan` when a time follows.
+// Kanji, era and kanji-time forms stand alone and never compose.
 
 #include "eval/date_text_parse.h"
 
 #include <array>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
 
 #include "eval/eval_profile_scope.h"
+#include "eval/number_parse.h"
 #include "excel_locale.h"
 #include "utils/date_time.h"
 #include "utils/strings.h"
@@ -46,22 +51,44 @@ constexpr char kEraShowa[7] = {'\xE6', '\x98', '\xAD', '\xE5', '\x92', '\x8C', '
 constexpr char kEraTaisho[7] = {'\xE5', '\xA4', '\xA7', '\xE6', '\xAD', '\xA3', '\0'};  // 大正
 constexpr char kEraMeiji[7] = {'\xE6', '\x98', '\x8E', '\xE6', '\xB2', '\xBB', '\0'};   // 明治
 
-// Returns true iff `s` begins with the given 3-byte UTF-8 sequence.
+constexpr std::string_view kEnglishMonths[12] = {
+    "January", "February", "March",     "April",   "May",      "June",
+    "July",    "August",   "September", "October", "November", "December",
+};
+
+bool is_digit(char c) noexcept {
+  return c >= '0' && c <= '9';
+}
+
+bool is_ascii_alpha(char c) noexcept {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
+char ascii_upper(char c) noexcept {
+  return c >= 'a' && c <= 'z' ? static_cast<char>(c - ('a' - 'A')) : c;
+}
+
+// Skips U+0020 blanks; true when at least one was skipped.
+bool skip_blanks(std::string_view* s) noexcept {
+  std::size_t n = 0;
+  while (n < s->size() && (*s)[n] == ' ') {
+    ++n;
+  }
+  s->remove_prefix(n);
+  return n > 0;
+}
+
 // Consumes a date/time separator, accepting blanks on either side of it.
 // Leaves `s` untouched and returns false when the separator is absent.
 template <typename IsSep>
 bool consume_spaced_sep(std::string_view* s, IsSep is_sep) noexcept {
   std::string_view t = *s;
-  while (!t.empty() && t[0] == ' ') {
-    t.remove_prefix(1);
-  }
+  skip_blanks(&t);
   if (t.empty() || !is_sep(t[0])) {
     return false;
   }
   t.remove_prefix(1);
-  while (!t.empty() && t[0] == ' ') {
-    t.remove_prefix(1);
-  }
+  skip_blanks(&t);
   *s = t;
   return true;
 }
@@ -74,46 +101,37 @@ bool is_time_sep(char c) noexcept {
   return c == ':';
 }
 
+// Returns true iff `s` begins with the given 3-byte UTF-8 sequence.
 bool starts_with_utf8(std::string_view s, const char (&expected)[4]) noexcept {
   return s.size() >= 3 && s[0] == expected[0] && s[1] == expected[1] && s[2] == expected[2];
 }
 
-// Folds full-width Arabic digits (U+FF10..U+FF19, encoded as `EF BC 90`..
-// `EF BC 99` in UTF-8) into ASCII `0`..`9` when the active locale accepts
-// full-width numeric text. All other bytes — including the multi-byte kanji
-// terminators `年/月/日/時/分/秒` and era characters — are passed through
-// unchanged. Returns the folded string (or `s` itself when no full-width digit
-// is present, to avoid an unnecessary copy).
-std::string fold_fullwidth_digits(std::string_view s) {
-  if (!locale_facts(current_eval_profile()).fullwidth_numeric_text) {
-    return std::string(s);
-  }
-  // Quick scan: if no full-width digit is present, return the input as-is.
-  bool needs_fold = false;
-  for (std::size_t i = 0; i + 2 < s.size(); ++i) {
-    if (static_cast<unsigned char>(s[i]) == 0xEF && static_cast<unsigned char>(s[i + 1]) == 0xBC) {
-      const unsigned char b2 = static_cast<unsigned char>(s[i + 2]);
-      if (b2 >= 0x90 && b2 <= 0x99) {
-        needs_fold = true;
-        break;
-      }
-    }
-  }
-  if (!needs_fold) {
-    return std::string(s);
-  }
+// Folds what the recogniser reads as ASCII: the decimal digit scripts VALUE
+// reads, the ideographic space (a blank) and, where the profile takes
+// full-width numeric text, the full-width ASCII forms U+FF01..U+FF5E.
+std::string fold_date_text(std::string_view s) {
+  const std::string scripts = fold_script_digits(s);
+  const bool fold_fullwidth = locale_facts(current_eval_profile()).fullwidth_numeric_text;
   std::string out;
-  out.reserve(s.size());
-  for (std::size_t i = 0; i < s.size();) {
-    if (i + 2 < s.size() && static_cast<unsigned char>(s[i]) == 0xEF && static_cast<unsigned char>(s[i + 1]) == 0xBC) {
-      const unsigned char b2 = static_cast<unsigned char>(s[i + 2]);
-      if (b2 >= 0x90 && b2 <= 0x99) {
-        out.push_back(static_cast<char>('0' + (b2 - 0x90)));
+  out.reserve(scripts.size());
+  for (std::size_t i = 0; i < scripts.size();) {
+    if (i + 2 < scripts.size()) {
+      const auto b0 = static_cast<unsigned char>(scripts[i]);
+      const auto b1 = static_cast<unsigned char>(scripts[i + 1]);
+      const auto b2 = static_cast<unsigned char>(scripts[i + 2]);
+      if (b0 == 0xE3 && b1 == 0x80 && b2 == 0x80) {
+        out.push_back(' ');
+        i += 3;
+        continue;
+      }
+      if (fold_fullwidth && b0 == 0xEF && ((b1 == 0xBC && b2 >= 0x81) || (b1 == 0xBD && b2 <= 0x9E))) {
+        const unsigned cp = 0xF000u | ((b1 & 0x3Fu) << 6) | (b2 & 0x3Fu);
+        out.push_back(static_cast<char>(cp - 0xFEE0u));
         i += 3;
         continue;
       }
     }
-    out.push_back(s[i]);
+    out.push_back(scripts[i]);
     ++i;
   }
   return out;
@@ -127,7 +145,7 @@ std::size_t scan_digits(std::string_view& s, int max_digits, int* out) noexcept 
   int value = 0;
   while (i < s.size() && i < static_cast<std::size_t>(max_digits)) {
     const char c = s[i];
-    if (c < '0' || c > '9') {
+    if (!is_digit(c)) {
       break;
     }
     value = value * 10 + (c - '0');
@@ -139,6 +157,29 @@ std::size_t scan_digits(std::string_view& s, int max_digits, int* out) noexcept 
   *out = value;
   s.remove_prefix(i);
   return i;
+}
+
+// A whole run of digits; the value saturates so any length stays representable.
+struct DigitRun {
+  int value;
+  std::size_t digits;
+};
+
+constexpr int kRunCap = 1000000;
+
+bool scan_run(std::string_view* s, DigitRun* out) noexcept {
+  std::size_t i = 0;
+  int value = 0;
+  while (i < s->size() && is_digit((*s)[i])) {
+    value = value < kRunCap ? value * 10 + ((*s)[i] - '0') : kRunCap;
+    ++i;
+  }
+  if (i == 0) {
+    return false;
+  }
+  *out = DigitRun{value, i};
+  s->remove_prefix(i);
+  return true;
 }
 
 // Excel's two-digit-year pivot for DATEVALUE: 00..29 -> 2000..2029,
@@ -175,159 +216,60 @@ bool serial_from_parsed_ymd(int year, std::size_t year_digits, int month, int da
   return true;
 }
 
-// Consumes a case-insensitive month name from the head of `s` and advances
-// `s` past it. On success writes the 1..12 month index into `*out_month` and
-// returns true. Full names are tried before the abbreviations so "June" is
-// not cut to "Jun" + "e"; within each tier the locale spelling comes first.
-bool parse_mmm_month(std::string_view& s, int* out_month, bool hyphenated) noexcept {
-  static constexpr std::string_view kFullNames[12] = {
-      "January", "February", "March",     "April",   "May",      "June",
-      "July",    "August",   "September", "October", "November", "December",
-  };
-  static constexpr std::string_view kShortNames[12] = {
-      "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-  };
-  const LocaleFacts& facts = locale_facts(current_eval_profile());
-  const bool english = facts.english_month_names;
-  for (int tier = 0; tier < 2; ++tier) {
-    const bool english_tier = english || (hyphenated && tier == 1 && facts.hyphen_english_months);
-    const auto& local_names = tier == 0 ? facts.month_long : facts.month_short;
-    const auto* english_names = tier == 0 ? kFullNames : kShortNames;
-    for (std::size_t i = 0; i < 12; ++i) {
-      const std::string_view candidates[2] = {local_names[i], english_tier ? english_names[i] : std::string_view()};
-      for (const std::string_view name : candidates) {
-        if (!name.empty() && strings::case_insensitive_starts_with(s, name)) {
-          s.remove_prefix(name.size());
-          *out_month = static_cast<int>(i) + 1;
-          return true;
-        }
-      }
-    }
-  }
-  return false;
+// A written year: one or two digits take the two-digit window, four digits
+// are the year itself; three or five and more are no year.
+bool written_year_serial(DigitRun year, int month, int day, double* out) noexcept {
+  return year.digits <= 4 && serial_from_parsed_ymd(year.value, year.digits, month, day, out);
 }
 
-// Parses numeric three-component dates and the Japanese kanji form. Numeric
-// dates with a 3+ digit leading component are always YMD. With a 1-2 digit
-// leading component, the active locale's date order decides whether the first
-// component is year or month. The tri-state result prevents an invalid,
-// already-recognised date from being retried as another shape.
-enum class NumericDateParseResult : std::uint8_t { kNoMatch, kInvalid, kSuccess };
+bool current_year_serial(int current_year, int month, int day, double* out) noexcept {
+  return current_year > 0 && serial_from_parsed_ymd(current_year, 4, month, day, out);
+}
 
-NumericDateParseResult parse_ymd_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept;
+// Every reading of the head of a text as a date, longest first.
+struct DateCandidate {
+  double serial;
+  std::string_view rest;
+  // Kanji and era dates never take a time.
+  bool standalone;
+};
 
-// Parses the year-less `M/D` / `M-D` / `M月D日` shapes against
-// `current_year`. See the definition below for the full contract.
-bool parse_md_text(std::string_view s, int current_year, double* out_serial, std::string_view* rest) noexcept;
+struct DateCandidates {
+  std::array<DateCandidate, 4> items{};
+  std::size_t count = 0;
 
-// Parses the alternate `d-mmm-yyyy` / `d mmm yyyy` / `d/mmm/yyyy` shapes,
-// where the month is an English word (3-letter abbreviation or full name).
-// The separator must be one of `-`, `/`, ` `, and must match on both sides of
-// the month token (no mixing). Purely-numeric d-m-yyyy is intentionally not
-// accepted here.
-bool parse_dmy_mmm_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept;
+  void add(double serial, std::string_view rest, bool standalone = false) noexcept {
+    if (count < items.size()) {
+      items[count++] = DateCandidate{serial, rest, standalone};
+    }
+  }
+};
 
-// Parses the US-style `MMM D, YYYY` and `MMMM D, YYYY` shapes (e.g. `Jan 1,
-// 2024` or `January 1, 2024`). One or more ASCII spaces are accepted after
-// the month word; the comma after the day is mandatory and must be followed
-// by at least one space before the year. Mac Excel ja-JP accepts these
-// English-locale forms even though the workbook locale is ja-JP.
-bool parse_mmm_d_yyyy_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept;
+// ---------------------------------------------------------------------------
+// Year-Month-Day profiles
+// ---------------------------------------------------------------------------
+
+enum class ShapeMatch : std::uint8_t { kNoMatch, kInvalid, kSuccess };
 
 // Era ID; values matter only as enumerators within this translation unit.
 enum class Era { Reiwa, Heisei, Showa, Taisho, Meiji };
 
-// Returns the Gregorian year of era year 1 for the given era. Mac Excel
-// linearly extrapolates outside the era's actual historical window — for
-// example `平成32年4月30日` is accepted as 1989 + (32-1) = 2020-04-30, even
-// though Heisei ended at year 31. We mirror that lenient behaviour here.
+// Gregorian year of era year 1. Excel extrapolates past an era's end
+// (`平成32年4月30日` is 2020-04-30).
 int era_year_anchor(Era e) noexcept {
   switch (e) {
     case Era::Reiwa:
-      return 2019;  // 令和 1 = 2019
+      return 2019;
     case Era::Heisei:
-      return 1989;  // 平成 1 = 1989
+      return 1989;
     case Era::Showa:
-      return 1926;  // 昭和 1 = 1926
+      return 1926;
     case Era::Taisho:
-      return 1912;  // 大正 1 = 1912
+      return 1912;
     case Era::Meiji:
-      return 1868;  // 明治 1 = 1868
+      return 1868;
   }
   return 1900;  // unreachable
-}
-
-// Validates an era-relative (year, month, day) against the Gregorian
-// calendar and writes its serial.
-bool serial_from_era_ymd(Era era, int era_year, int month, int day, double* out_serial) noexcept {
-  if (month < 1 || month > 12) {
-    return false;
-  }
-  const int gy = era_year - 1 + era_year_anchor(era);
-  const unsigned dim = days_in_month(gy, static_cast<unsigned>(month));
-  if (day < 1 || static_cast<unsigned>(day) > dim) {
-    return false;
-  }
-  *out_serial = date_time::serial_from_ymd(gy, static_cast<unsigned>(month), static_cast<unsigned>(day));
-  return true;
-}
-
-// Separators that follow the era year, month and day. An empty `day` means
-// the day digits end the token.
-struct EraTailSeparators {
-  std::string_view year;
-  std::string_view month;
-  std::string_view day;
-};
-
-// Mac Excel rejects 元 (gannen) and dot/slash separators when a *full-name*
-// era prefix is used, so the full-name form takes only the kanji separators.
-constexpr EraTailSeparators kEraKanjiSeparators = {std::string_view(kKanjiNen, 3), std::string_view(kKanjiGatsu, 3),
-                                                   std::string_view(kKanjiNichi, 3)};
-// Single-letter abbreviations (`R6.4.1`) take dots with no day terminator.
-constexpr EraTailSeparators kEraDotSeparators = {".", ".", ""};
-
-bool consume_sep(std::string_view* s, std::string_view sep) noexcept {
-  if (s->substr(0, sep.size()) != sep) {
-    return false;
-  }
-  s->remove_prefix(sep.size());
-  return true;
-}
-
-// After an era prefix has been consumed, parses the
-// `<digits><year-sep><digits><month-sep><digits><day-sep>` tail.
-bool parse_era_ymd_tail(Era era, std::string_view s, const EraTailSeparators& seps, double* out_serial,
-                        std::string_view* rest) noexcept {
-  int era_year = 0;
-  if (scan_digits(s, 4, &era_year) == 0) {
-    return false;
-  }
-  if (era_year <= 0) {
-    return false;
-  }
-  if (!consume_sep(&s, seps.year)) {
-    return false;
-  }
-  int month = 0;
-  if (scan_digits(s, 2, &month) == 0) {
-    return false;
-  }
-  if (!consume_sep(&s, seps.month)) {
-    return false;
-  }
-  int day = 0;
-  if (scan_digits(s, 2, &day) == 0) {
-    return false;
-  }
-  if (!consume_sep(&s, seps.day)) {
-    return false;
-  }
-  if (!serial_from_era_ymd(era, era_year, month, day, out_serial)) {
-    return false;
-  }
-  *rest = s;
-  return true;
 }
 
 struct EraName {
@@ -342,156 +284,352 @@ constexpr EraName kEraNames[] = {
     {std::string_view(kEraMeiji, 6), 'M', Era::Meiji},
 };
 
-// Recognises `<full-era-name><digits>年<digits>月<digits>日` and
-// `<single-letter-era>.<digits>.<digits>.<digits>`. Returns false if the
-// input does not start with one of the five recognised eras; in that case
-// the caller falls back to the regular Gregorian date forms.
-bool parse_era_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
-  if (!locale_facts(current_eval_profile()).japanese_era) {
+// Scans a digit run (any number of leading zeros) closed by the kanji `unit`.
+bool scan_run_with_unit(std::string_view* s, const char (&unit)[4], DigitRun* out) noexcept {
+  if (!scan_run(s, out) || !starts_with_utf8(*s, unit)) {
     return false;
   }
+  s->remove_prefix(3);
+  return true;
+}
+
+// Era years run 1..99, and a date before 1900 is no date (most of Meiji).
+bool era_serial(Era era, DigitRun year, DigitRun month, DigitRun day, double* out) noexcept {
+  if (year.value < 1 || year.value > 99) {
+    return false;
+  }
+  return serial_from_parsed_ymd(era_year_anchor(era) + year.value - 1, 4, month.value, day.value, out);
+}
+
+// `<era name>Y年M月D日` and `<letter>Y.M.D` (`.`, `/` or `-`). Every field
+// takes any number of leading zeros; no blanks inside.
+ShapeMatch parse_era_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
+  DigitRun year{};
+  DigitRun month{};
+  DigitRun day{};
   for (const EraName& name : kEraNames) {
     if (s.substr(0, name.kanji.size()) == name.kanji) {
-      return parse_era_ymd_tail(name.era, s.substr(name.kanji.size()), kEraKanjiSeparators, out_serial, rest);
+      s.remove_prefix(name.kanji.size());
+      if (!scan_run_with_unit(&s, kKanjiNen, &year) || !scan_run_with_unit(&s, kKanjiGatsu, &month) ||
+          !scan_run_with_unit(&s, kKanjiNichi, &day) || !era_serial(name.era, year, month, day, out_serial)) {
+        return ShapeMatch::kInvalid;
+      }
+      *rest = s;
+      return ShapeMatch::kSuccess;
     }
   }
   // A digit must follow the letter so `Mar` etc. don't get hijacked.
-  if (s.size() >= 2 && s[1] >= '0' && s[1] <= '9') {
-    for (const EraName& name : kEraNames) {
-      if (s[0] == name.letter || s[0] == name.letter + ('a' - 'A')) {
-        return parse_era_ymd_tail(name.era, s.substr(1), kEraDotSeparators, out_serial, rest);
+  if (s.size() < 2 || !is_digit(s[1])) {
+    return ShapeMatch::kNoMatch;
+  }
+  for (const EraName& name : kEraNames) {
+    if (ascii_upper(s[0]) != name.letter) {
+      continue;
+    }
+    s.remove_prefix(1);
+    const auto take_sep = [&s] {
+      if (s.empty() || (s[0] != '.' && !is_date_sep(s[0]))) {
+        return false;
+      }
+      s.remove_prefix(1);
+      return true;
+    };
+    if (!scan_run(&s, &year) || !take_sep() || !scan_run(&s, &month) || !take_sep() || !scan_run(&s, &day) ||
+        !era_serial(name.era, year, month, day, out_serial)) {
+      return ShapeMatch::kInvalid;
+    }
+    *rest = s;
+    return ShapeMatch::kSuccess;
+  }
+  return ShapeMatch::kNoMatch;
+}
+
+// `Y年M月D日`, `Y年M月` (the 1st) and `M月D日` (the current year), `first`
+// already scanned. Fields take any number of leading zeros; the year is read
+// by value, so `026年` is 2026.
+bool parse_kanji_date(DigitRun first, std::string_view s, int current_year, double* out_serial,
+                      std::string_view* rest) noexcept {
+  DigitRun month{};
+  DigitRun day{};
+  if (starts_with_utf8(s, kKanjiNen)) {
+    s.remove_prefix(3);
+    if (!scan_run_with_unit(&s, kKanjiGatsu, &month)) {
+      return false;
+    }
+    const std::size_t year_digits = first.value <= 99 ? 2 : 4;
+    if (s.empty() || !is_digit(s[0])) {
+      *rest = s;
+      return serial_from_parsed_ymd(first.value, year_digits, month.value, 1, out_serial);
+    }
+    if (!scan_run_with_unit(&s, kKanjiNichi, &day)) {
+      return false;
+    }
+    *rest = s;
+    return serial_from_parsed_ymd(first.value, year_digits, month.value, day.value, out_serial);
+  }
+  s.remove_prefix(3);
+  if (!scan_run_with_unit(&s, kKanjiNichi, &day)) {
+    return false;
+  }
+  *rest = s;
+  return current_year_serial(current_year, first.value, day.value, out_serial);
+}
+
+// Finishes the `<y>년 <m>월 <d>일` form after the year unit; blanks may follow
+// the year and month units.
+bool finish_hangul_ymd(std::string_view s, DigitRun year, double* out_serial, std::string_view* rest) noexcept {
+  skip_blanks(&s);
+  int month = 0;
+  if (scan_digits(s, 2, &month) == 0 || !starts_with_utf8(s, kHangulWol)) {
+    return false;
+  }
+  s.remove_prefix(3);
+  skip_blanks(&s);
+  int day = 0;
+  if (scan_digits(s, 2, &day) == 0 || !starts_with_utf8(s, kHangulIl)) {
+    return false;
+  }
+  s.remove_prefix(3);
+  if (!written_year_serial(year, month, day, out_serial)) {
+    return false;
+  }
+  *rest = s;
+  return true;
+}
+
+// A month pair resolves m/d against the current year when the first number
+// is at most 12, d/m when it is at most 31 (falling back to y/m when that is
+// no day), and y/m above that or for a four-digit first number.
+bool pair_serial(DigitRun a, DigitRun b, int current_year, double* out) noexcept {
+  if (a.digits == 4) {
+    return serial_from_parsed_ymd(a.value, 4, b.value, 1, out);
+  }
+  if (a.digits > 2) {
+    return false;
+  }
+  if (a.value <= 12) {
+    return current_year_serial(current_year, a.value, b.value, out);
+  }
+  if (a.value <= 31 && current_year_serial(current_year, b.value, a.value, out)) {
+    return true;
+  }
+  return serial_from_parsed_ymd(a.value, 2, b.value, 1, out);
+}
+
+// `Y/M/D` and the pairs above, `first` already scanned. `/` and `-` mix
+// freely (and `.` where the profile writes dotted dates), with blanks around
+// each; month and day take one or two digits.
+void numeric_date_candidates(DigitRun first, std::string_view s, int current_year, DateCandidates* out) noexcept {
+  const bool dotted = locale_facts(current_eval_profile()).dotted_date;
+  const auto is_sep = [dotted](char c) { return is_date_sep(c) || (dotted && c == '.'); };
+  DigitRun second{};
+  if (!consume_spaced_sep(&s, is_sep) || !scan_run(&s, &second) || second.digits > 2) {
+    return;
+  }
+  double serial = 0.0;
+  std::string_view t = s;
+  DigitRun third{};
+  if (consume_spaced_sep(&t, is_sep) && scan_run(&t, &third)) {
+    if (third.digits <= 2 && written_year_serial(first, second.value, third.value, &serial)) {
+      out->add(serial, t);
+    }
+    return;
+  }
+  if (pair_serial(first, second, current_year, &serial)) {
+    out->add(serial, s);
+  }
+}
+
+// Reads an English month name: the letters up to the next non-letter, at
+// least three of them, beginning the full name in any case (`Sept`, `Janu`).
+bool scan_month_word(std::string_view* s, int* month) noexcept {
+  std::size_t n = 0;
+  while (n < s->size() && is_ascii_alpha((*s)[n])) {
+    ++n;
+  }
+  if (n < 3) {
+    return false;
+  }
+  for (std::size_t i = 0; i < 12; ++i) {
+    if (n <= kEnglishMonths[i].size() &&
+        strings::case_insensitive_eq(s->substr(0, n), kEnglishMonths[i].substr(0, n))) {
+      *month = static_cast<int>(i) + 1;
+      s->remove_prefix(n);
+      return true;
+    }
+  }
+  return false;
+}
+
+// Between a month name and a number: nothing, blanks, or one `-` / `/` with
+// blanks around it.
+void skip_name_gap(std::string_view* s) noexcept {
+  skip_blanks(s);
+  if (!s->empty() && is_date_sep((*s)[0])) {
+    s->remove_prefix(1);
+    skip_blanks(s);
+  }
+}
+
+// `D MMM [Y]`, `first` already scanned. The day must exist; there is no
+// fallback to a year.
+void day_first_name_candidates(DigitRun day, std::string_view s, int current_year, DateCandidates* out) noexcept {
+  int month = 0;
+  if (day.digits > 2) {
+    return;
+  }
+  skip_name_gap(&s);
+  if (!scan_month_word(&s, &month)) {
+    return;
+  }
+  double serial = 0.0;
+  std::string_view t = s;
+  skip_name_gap(&t);
+  DigitRun year{};
+  if (scan_run(&t, &year) && written_year_serial(year, month, day.value, &serial)) {
+    out->add(serial, t);
+  }
+  if (current_year_serial(current_year, month, day.value, &serial)) {
+    out->add(serial, s);
+  }
+}
+
+// `MMM D, Y`, `MMM D` and `MMM Y`. A one- or two-digit number that is no day
+// of the month in the current year is a two-digit year (`Jan 32` is
+// 1932-01-01); four digits are a year.
+void month_first_candidates(std::string_view s, int current_year, DateCandidates* out) noexcept {
+  int month = 0;
+  if (!scan_month_word(&s, &month)) {
+    return;
+  }
+  skip_name_gap(&s);
+  DigitRun number{};
+  if (!scan_run(&s, &number)) {
+    return;
+  }
+  double serial = 0.0;
+  std::string_view t = s;
+  skip_blanks(&t);
+  DigitRun year{};
+  if (number.digits <= 2 && !t.empty() && t[0] == ',') {
+    t.remove_prefix(1);
+    if (skip_blanks(&t) && scan_run(&t, &year) && written_year_serial(year, month, number.value, &serial)) {
+      out->add(serial, t);
+    }
+  }
+  if (number.digits <= 2) {
+    if (current_year_serial(current_year, month, number.value, &serial) ||
+        serial_from_parsed_ymd(number.value, 2, month, 1, &serial)) {
+      out->add(serial, s);
+    }
+  } else if (number.digits == 4 && serial_from_parsed_ymd(number.value, 4, month, 1, &serial)) {
+    out->add(serial, s);
+  }
+}
+
+void ymd_date_candidates(std::string_view s, int current_year, DateCandidates* out) noexcept {
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  double serial = 0.0;
+  std::string_view rest;
+  if (facts.japanese_era) {
+    const ShapeMatch era = parse_era_text(s, &serial, &rest);
+    if (era == ShapeMatch::kSuccess) {
+      out->add(serial, rest, true);
+    }
+    if (era != ShapeMatch::kNoMatch) {
+      return;
+    }
+  }
+  if (s.empty()) {
+    return;
+  }
+  if (is_ascii_alpha(s[0])) {
+    if (facts.english_month_names) {
+      month_first_candidates(s, current_year, out);
+    }
+    return;
+  }
+  DigitRun first{};
+  if (!scan_run(&s, &first)) {
+    return;
+  }
+  if (starts_with_utf8(s, kKanjiNen) || starts_with_utf8(s, kKanjiGatsu)) {
+    if (facts.kanji_ymd_text && parse_kanji_date(first, s, current_year, &serial, &rest)) {
+      out->add(serial, rest, true);
+    }
+    return;
+  }
+  if (starts_with_utf8(s, kHangulNyeon)) {
+    if (facts.hangul_ymd_text && finish_hangul_ymd(s.substr(3), first, &serial, &rest)) {
+      out->add(serial, rest);
+    }
+    return;
+  }
+  numeric_date_candidates(first, s, current_year, out);
+  if (facts.english_month_names) {
+    day_first_name_candidates(first, s, current_year, out);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Month-Day-Year and Day-Month-Year profiles
+// ---------------------------------------------------------------------------
+
+// Consumes a case-insensitive month name from the head of `s` and advances
+// `s` past it. On success writes the 1..12 month index into `*out_month` and
+// returns true. Full names are tried before the abbreviations so "June" is
+// not cut to "Jun" + "e"; within each tier the locale spelling comes first.
+bool parse_mmm_month(std::string_view& s, int* out_month, bool hyphenated) noexcept {
+  static constexpr std::string_view kShortNames[12] = {
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  };
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  const bool english = facts.english_month_names;
+  for (int tier = 0; tier < 2; ++tier) {
+    const bool english_tier = english || (hyphenated && tier == 1 && facts.hyphen_english_months);
+    const auto& local_names = tier == 0 ? facts.month_long : facts.month_short;
+    const auto* english_names = tier == 0 ? kEnglishMonths : kShortNames;
+    for (std::size_t i = 0; i < 12; ++i) {
+      const std::string_view candidates[2] = {local_names[i], english_tier ? english_names[i] : std::string_view()};
+      for (const std::string_view name : candidates) {
+        if (!name.empty() && strings::case_insensitive_starts_with(s, name)) {
+          s.remove_prefix(name.size());
+          *out_month = static_cast<int>(i) + 1;
+          return true;
+        }
       }
     }
   }
   return false;
 }
 
-// Parses a leading date token. See `parse_date_time_text` for the grammar.
-// `current_year` is forwarded to `parse_md_text` only, the sole year-less
-// form; every other branch requires an explicit year and ignores it.
-bool parse_date_text(std::string_view s, int current_year, double* out_serial, std::string_view* rest) noexcept {
-  if (parse_era_text(s, out_serial, rest)) {
-    return true;
-  }
-  const NumericDateParseResult numeric_result = parse_ymd_text(s, out_serial, rest);
-  if (numeric_result == NumericDateParseResult::kSuccess) {
-    return true;
-  }
-  if (numeric_result == NumericDateParseResult::kInvalid) {
-    return false;
-  }
-  if (parse_dmy_mmm_text(s, out_serial, rest)) {
-    return true;
-  }
-  if (parse_mmm_d_yyyy_text(s, out_serial, rest)) {
-    return true;
-  }
-  return parse_md_text(s, current_year, out_serial, rest);
-}
-
-// Scans the trailing 1..4 digit year token and resolves the date.
-bool finish_with_year_token(std::string_view s, int month, int day, double* out_serial,
-                            std::string_view* rest) noexcept {
-  int year = 0;
-  const std::size_t year_digits = scan_digits(s, 4, &year);
-  if (year_digits == 0) {
-    return false;
-  }
-  if (!serial_from_parsed_ymd(year, year_digits, month, day, out_serial)) {
-    return false;
-  }
-  *rest = s;
-  return true;
-}
-
-// Scans the 1..2 day digits and, in the kanji form, the closing 日.
-bool scan_day_tail(std::string_view* s, bool kanji_form, int* day) noexcept {
-  if (scan_digits(*s, 2, day) == 0) {
-    return false;
-  }
-  if (kanji_form) {
-    if (!starts_with_utf8(*s, kKanjiNichi)) {
-      return false;
-    }
-    s->remove_prefix(3);
-  }
-  return true;
-}
-
-// Finishes the `<y>年<m>月<d>日` / `<y>년 <m>월 <d>일` form after the year unit;
-// `blank_after_unit` lets blanks follow the year and month units.
-NumericDateParseResult finish_unit_ymd(std::string_view s, int year, std::size_t year_digits,
-                                       const char (&month_unit)[4], const char (&day_unit)[4], bool blank_after_unit,
-                                       double* out_serial, std::string_view* rest) noexcept {
-  const auto skip_blanks = [&s, blank_after_unit] {
-    while (blank_after_unit && !s.empty() && s[0] == ' ') {
-      s.remove_prefix(1);
-    }
-  };
-  skip_blanks();
-  int month = 0;
-  if (scan_digits(s, 2, &month) == 0 || !starts_with_utf8(s, month_unit)) {
-    return NumericDateParseResult::kInvalid;
-  }
-  s.remove_prefix(3);
-  skip_blanks();
-  int day = 0;
-  if (scan_digits(s, 2, &day) == 0 || !starts_with_utf8(s, day_unit)) {
-    return NumericDateParseResult::kInvalid;
-  }
-  s.remove_prefix(3);
-  if (!serial_from_parsed_ymd(year, year_digits, month, day, out_serial)) {
-    return NumericDateParseResult::kInvalid;
-  }
-  *rest = s;
-  return NumericDateParseResult::kSuccess;
-}
-
-NumericDateParseResult parse_ymd_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
-  const bool japanese_date = locale_facts(current_eval_profile()).kanji_ymd_text;
+// Parses numeric three-component dates. A 3+ digit leading component is
+// always the year; otherwise the locale's date order places it. The
+// tri-state result prevents an invalid, already-recognised date from being
+// retried as another shape.
+ShapeMatch parse_ordered_ymd_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
   int first = 0;
   const std::size_t first_digits = scan_digits(s, 4, &first);
   if (first_digits == 0) {
-    return NumericDateParseResult::kNoMatch;
+    return ShapeMatch::kNoMatch;
   }
-
-  // The explicit Japanese form is always year-first and is available only in
-  // the Japanese locale. An English profile must leave the kanji token
-  // untouched so it cannot be mistaken for a numeric date.
-  if (starts_with_utf8(s, kKanjiNen)) {
-    if (!japanese_date) {
-      return NumericDateParseResult::kNoMatch;
-    }
-    s.remove_prefix(3);
-    return finish_unit_ymd(s, first, first_digits, kKanjiGatsu, kKanjiNichi, false, out_serial, rest);
-  }
-  if (starts_with_utf8(s, kHangulNyeon)) {
-    if (!locale_facts(current_eval_profile()).hangul_ymd_text) {
-      return NumericDateParseResult::kNoMatch;
-    }
-    s.remove_prefix(3);
-    return finish_unit_ymd(s, first, first_digits, kHangulWol, kHangulIl, true, out_serial, rest);
-  }
-
-  // The separators are intentionally interchangeable, preserving the
-  // existing leniency for mixed forms such as `2024-03/15`.
   const LocaleFacts& facts = locale_facts(current_eval_profile());
   const auto is_sep = [dotted = facts.dotted_date](char c) { return is_date_sep(c) || (dotted && c == '.'); };
   if (!consume_spaced_sep(&s, is_sep)) {
-    return NumericDateParseResult::kNoMatch;
+    return ShapeMatch::kNoMatch;
   }
   int second = 0;
   if (scan_digits(s, 2, &second) == 0) {
-    return NumericDateParseResult::kNoMatch;
+    return ShapeMatch::kNoMatch;
   }
   if (!consume_spaced_sep(&s, is_sep)) {
     // This is the year-less M/D shape; let parse_md_text handle it.
-    return NumericDateParseResult::kNoMatch;
+    return ShapeMatch::kNoMatch;
   }
   int third = 0;
   const std::size_t third_digits = scan_digits(s, 4, &third);
   if (third_digits == 0) {
-    return NumericDateParseResult::kInvalid;
+    return ShapeMatch::kInvalid;
   }
 
   int year = 0;
@@ -499,12 +637,6 @@ NumericDateParseResult parse_ymd_text(std::string_view s, double* out_serial, st
   int day = 0;
   std::size_t year_digits = 0;
   if (first_digits >= 3) {
-    // An unambiguously long leading component is a year in every profile.
-    year = first;
-    year_digits = first_digits;
-    month = second;
-    day = third;
-  } else if (facts.date_order == DateOrder::kYMD) {
     year = first;
     year_digits = first_digits;
     month = second;
@@ -521,50 +653,38 @@ NumericDateParseResult parse_ymd_text(std::string_view s, double* out_serial, st
     day = second;
   }
   if (!serial_from_parsed_ymd(year, year_digits, month, day, out_serial)) {
-    return NumericDateParseResult::kInvalid;
+    return ShapeMatch::kInvalid;
   }
   *rest = s;
-  return NumericDateParseResult::kSuccess;
+  return ShapeMatch::kSuccess;
 }
 
-// Parses the year-less `M/D` / `M-D` / `M月D日` shapes, using `current_year`
-// as the year (Microsoft's documented DATEVALUE rule: "If the year portion
-// of the date_text argument is omitted, DATEVALUE uses the current year").
-// `current_year <= 0` means no fallback year is available, so this form is
-// never matched (the caller's default -- see the header doc). Reached only
-// after `parse_ymd_text` has already failed, so a genuine 3-component date
-// like `2024/3/15` is never reinterpreted as month/day.
+// Parses the year-less `M/D` / `M-D` shapes (`D/M` in day-first locales),
+// using `current_year` as the year. Reached only after
+// `parse_ordered_ymd_text` has failed, so a genuine 3-component date is never
+// reinterpreted as month/day.
 bool parse_md_text(std::string_view s, int current_year, double* out_serial, std::string_view* rest) noexcept {
   const LocaleFacts& facts = locale_facts(current_eval_profile());
   int first = 0;
   if (scan_digits(s, 2, &first) == 0) {
     return false;
   }
-  bool kanji_form = false;
   bool dotted_form = false;
-  if (!s.empty() && (s[0] == '-' || s[0] == '/')) {
+  if (!s.empty() && is_date_sep(s[0])) {
     s.remove_prefix(1);
   } else if (facts.dotted_date && !s.empty() && s[0] == '.') {
     s.remove_prefix(1);
     dotted_form = true;
-  } else if (starts_with_utf8(s, kKanjiGatsu)) {
-    if (!facts.kanji_ymd_text) {
-      return false;
-    }
-    s.remove_prefix(3);
-    kanji_form = true;
   } else {
     return false;
   }
-  const bool day_first = facts.date_order == DateOrder::kDMY && !kanji_form;
+  const bool day_first = facts.date_order == DateOrder::kDMY;
   const std::string_view after_sep = s;
   int second = 0;
-  if (scan_day_tail(&s, kanji_form, &second)) {
+  if (scan_digits(s, 2, &second) > 0) {
     const int month = day_first ? second : first;
     const int day = day_first ? first : second;
-    // `year_digits = 4` bypasses the two-digit pivot unconditionally: a
-    // caller-supplied current year is already a real four-digit year.
-    if (current_year > 0 && serial_from_parsed_ymd(current_year, 4, month, day, out_serial)) {
+    if (current_year_serial(current_year, month, day, out_serial)) {
       *rest = s;
       return true;
     }
@@ -582,17 +702,27 @@ bool parse_md_text(std::string_view s, int current_year, double* out_serial, std
   return false;
 }
 
-bool parse_dmy_mmm_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
-  // Leading day token: exactly one or two ASCII digits.
-  int day = 0;
-  const std::size_t day_digits = scan_digits(s, 2, &day);
-  if (day_digits == 0) {
+// Scans the trailing 1..4 digit year token and resolves the date.
+bool finish_with_year_token(std::string_view s, int month, int day, double* out_serial,
+                            std::string_view* rest) noexcept {
+  int year = 0;
+  const std::size_t year_digits = scan_digits(s, 4, &year);
+  if (year_digits == 0) {
     return false;
   }
-  // Separator before the month word: '-', '/', or a single ASCII space. The
-  // chosen separator is remembered and required again after the month word,
-  // so inputs like "29-Feb/1900" are rejected.
-  if (s.empty()) {
+  if (!serial_from_parsed_ymd(year, year_digits, month, day, out_serial)) {
+    return false;
+  }
+  *rest = s;
+  return true;
+}
+
+// Parses the `d-mmm-yyyy` / `d mmm yyyy` / `d/mmm/yyyy` shapes. The separator
+// must match on both sides of the month word; purely numeric d-m-yyyy is not
+// accepted here.
+bool parse_dmy_mmm_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
+  int day = 0;
+  if (scan_digits(s, 2, &day) == 0 || s.empty()) {
     return false;
   }
   // A dotted-date locale also writes `15. März 2024`: a dot after the day,
@@ -604,222 +734,241 @@ bool parse_dmy_mmm_text(std::string_view s, double* out_serial, std::string_view
   }
   const char sep = dot_form ? ' ' : lead;
   s.remove_prefix(1);
-  while (dot_form && !s.empty() && s[0] == ' ') {
-    s.remove_prefix(1);
+  if (dot_form) {
+    skip_blanks(&s);
   }
-  // Month word: case-insensitive 3-letter abbreviation or full English name.
   int month = 0;
   if (!parse_mmm_month(s, &month, lead == '-')) {
     return false;
   }
-  // Trailing separator must match the leading one exactly.
   if (s.empty() || s[0] != sep) {
     return false;
   }
   s.remove_prefix(1);
-  // Year token: 1..4 ASCII digits. Two-digit values go through the same
-  // Excel 1900/2000 pivot as the yyyy-first path.
   return finish_with_year_token(s, month, day, out_serial, rest);
 }
 
+// Parses `MMM D, YYYY`: blanks after the month word, a mandatory comma after
+// the day, then at least one blank before the year.
 bool parse_mmm_d_yyyy_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
   // The month-first spelling is not a day-first locale's form.
   if (locale_facts(current_eval_profile()).date_order == DateOrder::kDMY) {
     return false;
   }
-  // Leading month word: case-insensitive 3-letter abbreviation or full
-  // English name. Mac Excel accepts both forms in the workbook's ja-JP
-  // locale (verified against the oracle).
   int month = 0;
-  if (!parse_mmm_month(s, &month, /*hyphenated=*/false)) {
+  if (!parse_mmm_month(s, &month, /*hyphenated=*/false) || !skip_blanks(&s)) {
     return false;
   }
-  // At least one ASCII space between the month word and the day. Mac Excel
-  // does not accept `Jan1,2024` or tab-separated forms.
-  if (s.empty() || s[0] != ' ') {
-    return false;
-  }
-  while (!s.empty() && s[0] == ' ') {
-    s.remove_prefix(1);
-  }
-  // Day: 1..2 ASCII digits.
   int day = 0;
-  if (scan_digits(s, 2, &day) == 0) {
-    return false;
-  }
-  // Mandatory comma after the day.
-  if (s.empty() || s[0] != ',') {
+  if (scan_digits(s, 2, &day) == 0 || s.empty() || s[0] != ',') {
     return false;
   }
   s.remove_prefix(1);
-  // At least one ASCII space between the comma and the year.
-  if (s.empty() || s[0] != ' ') {
+  if (!skip_blanks(&s)) {
     return false;
   }
-  while (!s.empty() && s[0] == ' ') {
-    s.remove_prefix(1);
-  }
-  // Year: 1..4 ASCII digits.
   return finish_with_year_token(s, month, day, out_serial, rest);
 }
 
-// Scans up to `max_digits` digits followed by the kanji unit `unit`.
-bool scan_digits_with_unit(std::string_view* s, int max_digits, const char (&unit)[4], int* out) noexcept {
-  if (scan_digits(*s, max_digits, out) == 0) {
+void ordered_date_candidates(std::string_view s, int current_year, DateCandidates* out) noexcept {
+  double serial = 0.0;
+  std::string_view rest;
+  const ShapeMatch numeric = parse_ordered_ymd_text(s, &serial, &rest);
+  if (numeric == ShapeMatch::kSuccess) {
+    out->add(serial, rest);
+    return;
+  }
+  if (numeric == ShapeMatch::kInvalid) {
+    return;
+  }
+  if (parse_dmy_mmm_text(s, &serial, &rest) || parse_mmm_d_yyyy_text(s, &serial, &rest) ||
+      parse_md_text(s, current_year, &serial, &rest)) {
+    out->add(serial, rest);
+  }
+}
+
+void date_candidates(std::string_view s, int current_year, DateCandidates* out) noexcept {
+  if (locale_facts(current_eval_profile()).date_order == DateOrder::kYMD) {
+    ymd_date_candidates(s, current_year, out);
+  } else {
+    ordered_date_candidates(s, current_year, out);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Time
+// ---------------------------------------------------------------------------
+
+// One time field: up to two digits, or three / four digits worth at least 100.
+bool scan_time_field(std::string_view* s, int* out) noexcept {
+  DigitRun run{};
+  if (!scan_run(s, &run) || run.digits > 4 || (run.digits > 2 && run.value < 100)) {
     return false;
   }
-  if (!starts_with_utf8(*s, unit)) {
-    return false;
-  }
-  s->remove_prefix(3);
+  *out = run.value;
   return true;
 }
 
-// Parses the kanji time form `<digits>時<digits>分[<digits>秒]`. The `分`
-// segment is required (Mac Excel rejects bare `8時` as #VALUE!), and `秒`,
-// when present, must follow `分`. Returns false if the input does not
-// match this exact shape; on success advances `*rest` past the `分` or
-// `秒` terminator.
-bool parse_kanji_time_text(std::string_view s, double* out_frac, std::string_view* rest) noexcept {
-  if (!locale_facts(current_eval_profile()).kanji_time_text) {
+// Milliseconds of a fraction's digits, rounded half up on the decimal digits
+// (`.9995` is 1000).
+int round_millis(std::string_view digits) noexcept {
+  int millis = 0;
+  for (std::size_t i = 0; i < 3; ++i) {
+    millis = millis * 10 + (i < digits.size() ? digits[i] - '0' : 0);
+  }
+  return digits.size() > 3 && digits[3] >= '5' ? millis + 1 : millis;
+}
+
+// Parses the kanji time form `H時M分[S秒]` (h <= 23, m <= 59, s <= 59). It
+// takes no fraction, marker or trailing separator.
+bool parse_kanji_time_text(std::string_view s, double* out_days, std::string_view* rest) noexcept {
+  DigitRun hour{};
+  DigitRun minute{};
+  DigitRun second{0, 0};
+  if (!scan_run_with_unit(&s, kKanjiJi, &hour) || !scan_run_with_unit(&s, kKanjiFun, &minute)) {
     return false;
   }
-  int hour = 0;
-  if (!scan_digits_with_unit(&s, 3, kKanjiJi, &hour)) {
+  if (!s.empty() && is_digit(s[0]) && !scan_run_with_unit(&s, kKanjiByou, &second)) {
     return false;
   }
-  int minute = 0;
-  if (!scan_digits_with_unit(&s, 3, kKanjiFun, &minute)) {
+  if (hour.value > 23 || minute.value > 59 || second.value > 59) {
     return false;
   }
-  int second = 0;
-  if (!s.empty() && s[0] >= '0' && s[0] <= '9') {
-    if (!scan_digits_with_unit(&s, 3, kKanjiByou, &second)) {
-      return false;
-    }
-  }
-  if (hour < 0 || minute < 0 || second < 0) {
-    return false;
-  }
-  const double total_seconds =
-      static_cast<double>(hour) * 3600.0 + static_cast<double>(minute) * 60.0 + static_cast<double>(second);
-  *out_frac = total_seconds / static_cast<double>(date_time::kSecondsPerDay);
+  const double seconds = hour.value * 3600.0 + minute.value * 60.0 + second.value;
+  *out_days = seconds / static_cast<double>(date_time::kSecondsPerDay);
   *rest = s;
   return true;
 }
 
-// Consumes a 12-hour marker -- A, P, AM, PM or the locale spelling, any case, after at least one space -- and an
-// optional trailing "." (attached or after a space, as the locale allows). A lone letter must end the word, so
-// "10:00 Apr 5" does not read "A" as a marker.
+// Consumes a 12-hour marker after at least one blank: `A`, `P`, `AM` or `PM`
+// in any case as a whole word, or the locale's own spelling.
 bool scan_meridiem(std::string_view* s, bool* pm) noexcept {
   std::string_view tail = *s;
-  std::size_t space_count = 0;
-  while (!tail.empty() && (tail[0] == ' ' || tail[0] == '\t')) {
-    tail.remove_prefix(1);
-    ++space_count;
-  }
-  if (space_count == 0 || tail.empty()) {
+  if (!skip_blanks(&tail) || tail.empty()) {
     return false;
   }
-  const auto upper = [](char c) { return static_cast<char>(c >= 'a' && c <= 'z' ? c - ('a' - 'A') : c); };
   const LocaleFacts& facts = locale_facts(current_eval_profile());
-  // A localized marker (`a.m.`) is taken whole, ending the word.
   for (const bool is_pm : {false, true}) {
     const std::string_view name = is_pm ? facts.pm_name : facts.am_name;
     if (name == (is_pm ? "PM" : "AM") || tail.size() < name.size()) {
       continue;
     }
-    bool same = true;
-    for (std::size_t k = 0; k < name.size() && same; ++k) {
-      same = upper(tail[k]) == upper(name[k]);
-    }
-    if (same && (tail.size() == name.size() || tail[name.size()] == ' ' || tail[name.size()] == '\t')) {
+    if (strings::case_insensitive_eq(tail.substr(0, name.size()), name) &&
+        (tail.size() == name.size() || tail[name.size()] == ' ')) {
       *pm = is_pm;
       *s = tail.substr(name.size());
       return true;
     }
   }
-  const char c0 = upper(tail[0]);
-  if (c0 != 'A' && c0 != 'P') {
+  std::size_t letters = 0;
+  while (letters < tail.size() && is_ascii_alpha(tail[letters])) {
+    ++letters;
+  }
+  const char c0 = ascii_upper(tail[0]);
+  if ((c0 != 'A' && c0 != 'P') || (letters != 1 && (letters != 2 || ascii_upper(tail[1]) != 'M'))) {
     return false;
-  }
-  if (tail.size() >= 2 && upper(tail[1]) == 'M') {
-    tail.remove_prefix(2);
-  } else if (tail.size() == 1 || tail[1] == ' ' || tail[1] == '\t' || tail[1] == '.') {
-    tail.remove_prefix(1);
-  } else {
-    return false;
-  }
-  std::string_view dotted = tail;
-  while (!dotted.empty() && (dotted[0] == ' ' || dotted[0] == '\t')) {
-    dotted.remove_prefix(1);
-  }
-  const bool spaced = dotted.size() != tail.size();
-  if (!dotted.empty() && dotted[0] == '.' && (spaced ? facts.meridiem_dot_spaced : facts.meridiem_dot_attached)) {
-    dotted.remove_prefix(1);
-    tail = dotted;
   }
   *pm = c0 == 'P';
-  *s = tail;
+  *s = tail.substr(letters);
   return true;
 }
 
-// Parses a leading time token. See `parse_date_time_text` for the grammar.
-bool parse_time_text(std::string_view s, double* out_frac, std::string_view* rest) noexcept {
-  // Probe for the kanji form `H時M分[S秒]` first: scan past the leading
-  // digit run and check for 時. If that matches, the entire token must
-  // parse via the kanji branch — there is no ambiguity with `H:M:S`.
-  {
-    std::string_view probe = s;
-    int dummy = 0;
-    const std::size_t leading_digits = scan_digits(probe, 3, &dummy);
-    if (leading_digits > 0 && starts_with_utf8(probe, kKanjiJi)) {
-      return parse_kanji_time_text(s, out_frac, rest);
-    }
-  }
-  int hour = 0;
-  if (scan_digits(s, 3, &hour) == 0) {
+// Parses `h`, `h:m`, `h:m:s`, `h:m:s.f`, `m:s.f`, `h:` and `h:m.F:x` (F read
+// as the seconds, its fraction kept, x ignored), then an optional 12-hour
+// marker and one trailing `-`, `/`, `:` or `.`. Blanks may surround every
+// separator. A field is at most two digits, or three or four worth at least
+// 100; at most one field may pass its nominal range (23, 59, 59), none with a
+// marker. `*rest` starts after the token.
+bool parse_time_text(std::string_view s, double* out_days, std::string_view* rest) noexcept {
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  int fields[3] = {0, 0, 0};
+  std::size_t count = 0;
+  if (!scan_time_field(&s, &fields[0])) {
     return false;
   }
-  // `H` alone is a time only with a 12-hour marker ("6 PM").
-  const bool hour_only = !consume_spaced_sep(&s, is_time_sep);
-  int minute = 0;
-  int second = 0;
-  double sub_seconds = 0.0;
-  if (!hour_only) {
-    if (scan_digits(s, 3, &minute) == 0 || minute < 0) {
+  count = 1;
+  while (count < 3) {
+    std::string_view t = s;
+    if (!consume_spaced_sep(&t, is_time_sep) || t.empty() || !is_digit(t[0])) {
+      break;
+    }
+    if (!scan_time_field(&t, &fields[count])) {
       return false;
     }
-    bool has_seconds = false;
-    if (consume_spaced_sep(&s, is_time_sep)) {
-      if (scan_digits(s, 3, &second) == 0 || second < 0) {
-        return false;
+    s = t;
+    ++count;
+  }
+  int millis = 0;
+  bool fraction = false;
+  // A separator already closed the token.
+  bool closed = false;
+  if (count >= 2 && facts.fractional_seconds) {
+    std::string_view t = s;
+    skip_blanks(&t);
+    if (!t.empty() && t[0] == facts.decimal_separator) {
+      t.remove_prefix(1);
+      std::string_view u = t;
+      skip_blanks(&u);
+      std::size_t n = 0;
+      while (n < u.size() && is_digit(u[n])) {
+        ++n;
       }
-      has_seconds = true;
-    }
-    const LocaleFacts& facts = locale_facts(current_eval_profile());
-    if (has_seconds && facts.fractional_seconds && !s.empty() && s[0] == facts.decimal_separator) {
-      s.remove_prefix(1);
-      double scale = 0.1;
-      bool any = false;
-      while (!s.empty() && s[0] >= '0' && s[0] <= '9') {
-        sub_seconds += (s[0] - '0') * scale;
-        scale *= 0.1;
-        s.remove_prefix(1);
-        any = true;
-      }
-      if (!any) {
-        return false;
+      if (n > 0) {
+        const std::string_view digits = u.substr(0, n);
+        u.remove_prefix(n);
+        millis = round_millis(digits);
+        fraction = true;
+        if (count == 2) {
+          std::string_view x = u;
+          int ignored = 0;
+          if (consume_spaced_sep(&x, is_time_sep) && !x.empty() && is_digit(x[0])) {
+            std::string_view f = digits;
+            if (!scan_time_field(&f, &fields[2]) || !scan_time_field(&x, &ignored)) {
+              return false;
+            }
+            u = x;
+          } else {
+            fields[2] = fields[1];
+            fields[1] = fields[0];
+            fields[0] = 0;
+          }
+          count = 3;
+        }
+        s = u;
+      } else if (facts.decimal_separator == '.') {
+        // A bare `.` is the trailing separator.
+        s = t;
+        closed = true;
       }
     }
   }
   bool pm = false;
-  const bool have_ampm = scan_meridiem(&s, &pm);
-  if (hour_only && !have_ampm) {
+  const bool marker = !closed && scan_meridiem(&s, &pm);
+  bool trailing_colon = false;
+  if (!closed) {
+    std::string_view t = s;
+    const bool spaced = skip_blanks(&t);
+    if (!t.empty()) {
+      const char c = t[0];
+      bool allowed = c == '-' || c == '/' || c == ':';
+      if (c == '.') {
+        allowed = marker ? (spaced ? facts.meridiem_dot_spaced : facts.meridiem_dot_attached) : !fraction;
+      }
+      if (allowed) {
+        s = t.substr(1);
+        trailing_colon = c == ':';
+      }
+    }
+  }
+  // A bare hour needs a marker or a colon (`6 PM`, `1:`).
+  if (count == 1 && !marker && !trailing_colon) {
     return false;
   }
-  if (have_ampm) {
-    if (hour > 12) {
+  int hour = fields[0];
+  const int minute = fields[1];
+  const int second = fields[2];
+  if (marker) {
+    if (hour > 12 || minute > 59 || second > 59) {
       return false;
     }
     if (hour == 12 && !pm) {
@@ -827,113 +976,117 @@ bool parse_time_text(std::string_view s, double* out_frac, std::string_view* res
     } else if (pm && hour < 12) {
       hour += 12;
     }
-  }
-  const double total_seconds = static_cast<double>(hour) * 3600.0 + static_cast<double>(minute) * 60.0 +
-                               static_cast<double>(second) + sub_seconds;
-  if (total_seconds < 0.0) {
+  } else if ((hour > 23 ? 1 : 0) + (minute > 59 ? 1 : 0) + (second > 59 ? 1 : 0) > 1) {
     return false;
   }
-  *out_frac = total_seconds / static_cast<double>(date_time::kSecondsPerDay);
+  const double seconds = hour * 3600.0 + minute * 60.0 + second + millis / 1000.0;
+  *out_days = seconds / static_cast<double>(date_time::kSecondsPerDay);
   *rest = s;
   return true;
 }
 
-}  // namespace
-
-std::string_view trim_date_text(std::string_view s) noexcept {
-  auto is_ascii_ws = [](char c) {
-    const unsigned char uc = static_cast<unsigned char>(c);
-    return uc == ' ' || uc == '\t' || uc == '\n' || uc == '\r' || uc == '\v' || uc == '\f';
+// The numeric tail Excel ignores after a date-first date+time: one to four
+// runs of at most four digits, separated (and optionally led and closed) by
+// blanks or a single `/` / `-` with blanks around it.
+bool numeric_tail_ok(std::string_view s) noexcept {
+  const auto take_gap = [&s] {
+    const std::size_t before = s.size();
+    skip_blanks(&s);
+    if (!s.empty() && is_date_sep(s[0])) {
+      s.remove_prefix(1);
+      skip_blanks(&s);
+    }
+    return s.size() != before;
   };
-  while (!s.empty() && is_ascii_ws(s.front())) {
-    s.remove_prefix(1);
+  take_gap();
+  for (int runs = 1; runs <= 4; ++runs) {
+    DigitRun run{};
+    if (!scan_run(&s, &run) || run.digits > 4) {
+      return false;
+    }
+    if (s.empty() || (take_gap() && s.empty())) {
+      return true;
+    }
   }
-  while (!s.empty() && is_ascii_ws(s.back())) {
-    s.remove_suffix(1);
-  }
-  return s;
+  return false;
 }
 
-bool parse_date_time_text(std::string_view s, double* out_date_serial, double* out_time_frac, bool* out_has_date,
-                          bool* out_has_time, int current_year) noexcept {
-  // Fold `０..９` (U+FF10..U+FF19) to ASCII before tokenisation when the
-  // active locale accepts full-width numeric text; the surrounding kanji
-  // terminators / era characters / punctuation pass through unchanged.
-  // `folded` owns the storage when a copy was needed.
-  const std::string folded = fold_fullwidth_digits(s);
-  std::string_view rest(folded);
-  double serial = 0.0;
-  double frac = 0.0;
-  bool has_date = false;
-  bool has_time = false;
-  if (parse_date_text(rest, current_year, &serial, &rest)) {
-    has_date = true;
-    std::size_t space_count = 0;
-    while (!rest.empty() && (rest[0] == ' ' || rest[0] == '\t')) {
-      rest.remove_prefix(1);
-      ++space_count;
-    }
-    if (space_count >= 1 && !rest.empty()) {
-      std::string_view after = rest;
-      double f = 0.0;
-      if (parse_time_text(rest, &f, &after)) {
-        // An hour of 24 or more rolls the date forward; only the day
-        // fraction stays in `frac`, so the serial + fraction sum is unchanged.
-        const double whole_days = std::floor(f);
-        serial += whole_days;
-        frac = f - whole_days;
-        has_time = true;
-        rest = after;
+bool recognise(std::string_view s, int current_year, DateTimeText* out) noexcept {
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  {
+    std::string_view probe = s;
+    DigitRun hour{};
+    if (facts.kanji_time_text && scan_run(&probe, &hour) && starts_with_utf8(probe, kKanjiJi)) {
+      double days = 0.0;
+      std::string_view rest;
+      if (!parse_kanji_time_text(s, &days, &rest) || !rest.empty()) {
+        return false;
       }
-    }
-  } else {
-    std::string_view after = rest;
-    double f = 0.0;
-    if (parse_time_text(rest, &f, &after)) {
-      frac = f;
-      has_time = true;
-      rest = after;
-      // A date may follow the time after whitespace ("6 PM 2026/7/7").
-      std::string_view date_rest = rest;
-      std::size_t space_count = 0;
-      while (!date_rest.empty() && (date_rest[0] == ' ' || date_rest[0] == '\t')) {
-        date_rest.remove_prefix(1);
-        ++space_count;
-      }
-      double date_serial = 0.0;
-      if (space_count >= 1 && parse_date_text(date_rest, current_year, &date_serial, &date_rest)) {
-        serial = date_serial;
-        has_date = true;
-        rest = date_rest;
-      }
+      *out = DateTimeText{days, days, false};
+      return true;
     }
   }
-  if (!has_date && !has_time) {
-    return false;
-  }
-  // Tail cleanup: Mac Excel is lenient about trailing whitespace after a
-  // successfully tokenised date/time, including U+3000.
-  while (!rest.empty()) {
-    const unsigned char uc = static_cast<unsigned char>(rest.front());
-    if (uc == ' ' || uc == '\t' || uc == '\n' || uc == '\r' || uc == '\v' || uc == '\f') {
-      rest.remove_prefix(1);
+  DateCandidates dates;
+  date_candidates(s, current_year, &dates);
+  for (std::size_t i = 0; i < dates.count; ++i) {
+    const DateCandidate& date = dates.items[i];
+    if (date.rest.empty()) {
+      *out = DateTimeText{date.serial, 0.0, true};
+      return true;
+    }
+    std::string_view rest = date.rest;
+    double days = 0.0;
+    std::string_view tail;
+    if (date.standalone || !skip_blanks(&rest) || !parse_time_text(rest, &days, &tail) ||
+        (!tail.empty() && !numeric_tail_ok(tail))) {
       continue;
     }
-    if (rest.size() >= 3 && static_cast<unsigned char>(rest[0]) == 0xE3 &&
-        static_cast<unsigned char>(rest[1]) == 0x80 && static_cast<unsigned char>(rest[2]) == 0x80) {
-      rest.remove_prefix(3);
-      continue;
-    }
-    break;
+    *out = DateTimeText{date.serial + days, days, true};
+    return true;
   }
-  if (!rest.empty()) {
+  double days = 0.0;
+  std::string_view rest;
+  if (!parse_time_text(s, &days, &rest)) {
     return false;
   }
-  *out_date_serial = serial;
-  *out_time_frac = frac;
-  *out_has_date = has_date;
-  *out_has_time = has_time;
-  return true;
+  if (rest.empty()) {
+    *out = DateTimeText{days, days, false};
+    return true;
+  }
+  if (!skip_blanks(&rest)) {
+    return false;
+  }
+  DateCandidates after;
+  date_candidates(rest, current_year, &after);
+  for (std::size_t i = 0; i < after.count; ++i) {
+    if (after.items[i].rest.empty() && !after.items[i].standalone) {
+      *out = DateTimeText{after.items[i].serial + days, days, true};
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
+bool parse_date_time_text(std::string_view text, TextEdges edges, int current_year, DateTimeText* out) noexcept {
+  if (numeric_text_too_long(text)) {
+    return false;
+  }
+  if (edges == TextEdges::kTrim) {
+    while (!text.empty() && text.front() == ' ') {
+      text.remove_prefix(1);
+    }
+  }
+  const std::string folded = fold_date_text(text);
+  std::string_view s(folded);
+  while (!s.empty() && s.back() == ' ') {
+    s.remove_suffix(1);
+  }
+  if (s.empty() || s.front() == ' ') {
+    return false;
+  }
+  return recognise(s, current_year, out);
 }
 
 }  // namespace date_parse

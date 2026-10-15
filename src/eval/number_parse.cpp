@@ -102,6 +102,92 @@ std::string_view strip_trailing_euro(std::string_view s) noexcept {
   return trim_ascii(s);
 }
 
+// Assembles a canonical C-locale numeric string (digits, one optional `.`,
+// optional exponent `e[+/-]digits`), rejecting any other byte. Grouping: the
+// first group is 1+ digits not starting with `0`, every later one 3+.
+bool canonical_number(std::string_view s, char decimal_sep, char group_sep, std::string* out) {
+  std::string& canonical = *out;
+  canonical.reserve(s.size());
+  bool seen_digit = false;
+  bool seen_point = false;
+  bool seen_exp = false;
+  bool seen_group_sep = false;
+  int digits_in_current_group = 0;
+  bool group_starts_with_zero = false;
+  const auto group_ok = [&]() {
+    return seen_group_sep ? digits_in_current_group >= 3 : !group_starts_with_zero && digits_in_current_group >= 1;
+  };
+  for (std::size_t i = 0; i < s.size(); ++i) {
+    const char c = s[i];
+    if (c >= '0' && c <= '9') {
+      canonical.push_back(c);
+      seen_digit = true;
+      if (!seen_point && !seen_exp) {
+        group_starts_with_zero =
+            group_starts_with_zero || (digits_in_current_group == 0 && c == '0' && !seen_group_sep);
+        ++digits_in_current_group;
+      }
+      continue;
+    }
+    const bool in_integer = !seen_point && !seen_exp;
+    if (c == decimal_sep && in_integer) {
+      if (seen_group_sep && !group_ok()) {
+        return false;
+      }
+      canonical.push_back('.');
+      seen_point = true;
+      continue;
+    }
+    if (group_sep != '\0' && c == group_sep && in_integer) {
+      if (!group_ok()) {
+        return false;
+      }
+      seen_group_sep = true;
+      digits_in_current_group = 0;
+      continue;
+    }
+    if ((c == 'e' || c == 'E') && seen_digit && !seen_exp) {
+      if (in_integer && seen_group_sep && !group_ok()) {
+        return false;
+      }
+      canonical.push_back('e');
+      seen_exp = true;
+      if (i + 1 < s.size() && (s[i + 1] == '+' || s[i + 1] == '-')) {
+        canonical.push_back(s[i + 1]);
+        ++i;
+      }
+      continue;
+    }
+    return false;
+  }
+  return seen_digit && !(seen_group_sep && !seen_point && !seen_exp && !group_ok());
+}
+
+// The `a/b` of a mixed fraction: plain digits, each part at most 32767, and a
+// non-zero denominator.
+bool parse_fraction(std::string_view s, int* numerator, int* denominator) noexcept {
+  const std::size_t slash = s.find('/');
+  const auto part = [](std::string_view digits, int* value) {
+    if (digits.empty()) {
+      return false;
+    }
+    int v = 0;
+    for (const char c : digits) {
+      if (c < '0' || c > '9') {
+        return false;
+      }
+      v = v * 10 + (c - '0');
+      if (v > 32767) {
+        return false;
+      }
+    }
+    *value = v;
+    return true;
+  };
+  return slash != std::string_view::npos && part(s.substr(0, slash), numerator) &&
+         part(s.substr(slash + 1), denominator) && *denominator > 0;
+}
+
 }  // namespace
 
 bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, int percent_count, double* out) noexcept {
@@ -180,68 +266,29 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, int per
   if (s.empty() || (currency && percent_count > 0)) {
     return false;
   }
-  // Assemble a canonical C-locale numeric string (digits, one optional `.`,
-  // optional exponent `e[+/-]digits`), rejecting any other byte. Grouping: the
-  // first group is 1+ digits not starting with `0`, every later one 3+.
+  // A mixed fraction `N a/b`: a whole number, one blank, then a fraction.
+  const std::size_t blank = s.rfind(' ');
+  if (blank != std::string_view::npos && s.substr(blank).find('/') != std::string_view::npos) {
+    int numerator = 0;
+    int denominator = 0;
+    std::string whole_text;
+    double whole = 0.0;
+    if (!parse_fraction(s.substr(blank + 1), &numerator, &denominator) ||
+        !canonical_number(s.substr(0, blank), decimal_sep, group_sep, &whole_text) ||
+        whole_text.find_first_of(".e") != std::string::npos || !excel_text_number(whole_text, false, 0, &whole)) {
+      return false;
+    }
+    double value = whole + static_cast<double>(numerator) / static_cast<double>(denominator);
+    for (int k = 0; k < percent_count; ++k) {
+      value /= 100.0;
+    }
+    *out = negative != paren && value != 0.0 ? -value : value;
+    return true;
+  }
   std::string canonical;
-  canonical.reserve(s.size());
-  bool seen_digit = false;
-  bool seen_point = false;
-  bool seen_exp = false;
-  bool seen_group_sep = false;
-  int digits_in_current_group = 0;
-  bool group_starts_with_zero = false;
-  const auto group_ok = [&]() {
-    return seen_group_sep ? digits_in_current_group >= 3 : !group_starts_with_zero && digits_in_current_group >= 1;
-  };
-  for (std::size_t i = 0; i < s.size(); ++i) {
-    const char c = s[i];
-    if (c >= '0' && c <= '9') {
-      canonical.push_back(c);
-      seen_digit = true;
-      if (!seen_point && !seen_exp) {
-        group_starts_with_zero =
-            group_starts_with_zero || (digits_in_current_group == 0 && c == '0' && !seen_group_sep);
-        ++digits_in_current_group;
-      }
-      continue;
-    }
-    const bool in_integer = !seen_point && !seen_exp;
-    if (c == decimal_sep && in_integer) {
-      if (seen_group_sep && !group_ok()) {
-        return false;
-      }
-      canonical.push_back('.');
-      seen_point = true;
-      continue;
-    }
-    if (group_sep != '\0' && c == group_sep && in_integer) {
-      if (!group_ok()) {
-        return false;
-      }
-      seen_group_sep = true;
-      digits_in_current_group = 0;
-      continue;
-    }
-    if ((c == 'e' || c == 'E') && seen_digit && !seen_exp) {
-      if (in_integer && seen_group_sep && !group_ok()) {
-        return false;
-      }
-      canonical.push_back('e');
-      seen_exp = true;
-      if (i + 1 < s.size() && (s[i + 1] == '+' || s[i + 1] == '-')) {
-        canonical.push_back(s[i + 1]);
-        ++i;
-      }
-      continue;
-    }
-    return false;
-  }
-  if (!seen_digit || (seen_group_sep && !seen_point && !seen_exp && !group_ok())) {
-    return false;
-  }
   double parsed = 0.0;
-  return parse_double_exact(canonical, &parsed) && excel_text_number(canonical, negative != paren, percent_count, out);
+  return canonical_number(s, decimal_sep, group_sep, &canonical) && parse_double_exact(canonical, &parsed) &&
+         excel_text_number(canonical, negative != paren, percent_count, out);
 }
 
 std::string normalize_locale_numeric(std::string_view raw, int* percent_count) {
@@ -263,6 +310,8 @@ std::string normalize_locale_numeric(std::string_view raw, int* percent_count) {
         ascii = '.';
       } else if (cp == 0xFF0Cu) {
         ascii = ',';
+      } else if (cp == 0xFF0Fu) {
+        ascii = '/';
       } else if (cp == 0xFF05u) {
         ascii = '%';
       } else if (cp == 0xFF0Bu) {

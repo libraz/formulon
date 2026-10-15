@@ -1,0 +1,187 @@
+suite: value_date_text_recogniser
+description: >
+  VALUE / DATEVALUE / TIMEVALUE / implicit coercion of date and time text:
+  month-name forms, numeric pair fallbacks (m/d -> d/m -> y/m), two-digit
+  year window, time field limits and millisecond rounding, trailing
+  separators, date+time order, fullwidth folding, kanji and era forms.
+  Year-less forms are anchored to DATE(YEAR(TODAY()),m,d) so goldens do not
+  depend on the capture year (no Feb-29 shapes, whose fallback is leap-dependent).
+tolerance: { abs: 1.0e-10, rel: 1.0e-10 }
+locale: ja-JP
+cases:
+  # -- month-name, year-less (current year) ---------------------------------
+  - id: mmm_space_day
+    formula: "=VALUE(\"Jan 1\")-DATE(YEAR(TODAY()),1,1)"
+  - id: mmm_attached_day
+    formula: "=VALUE(\"Jan1\")-DATE(YEAR(TODAY()),1,1)"
+  - id: mmm_full_name
+    formula: "=VALUE(\"January 31\")-DATE(YEAR(TODAY()),1,31)"
+  - id: mmm_prefix_four_letters
+    formula: "=VALUE(\"Sept 1\")-DATE(YEAR(TODAY()),9,1)"
+  - id: mmm_two_letter_prefix_rejected
+    formula: "=VALUE(\"Ma 1\")"
+  - id: mmm_hyphen_day
+    formula: "=VALUE(\"Jan-1\")-DATE(YEAR(TODAY()),1,1)"
+  - id: day_mmm
+    formula: "=VALUE(\"1 Jan\")-DATE(YEAR(TODAY()),1,1)"
+  - id: day_hyphen_mmm
+    formula: "=VALUE(\"26-Jan\")-DATE(YEAR(TODAY()),1,26)"
+  - id: day_mmm_invalid_day_rejected
+    formula: "=VALUE(\"32 Jan\")"
+  # -- month-name + year, month-year fallback --------------------------------
+  - id: mmm_day_beyond_month_is_year
+    description: "32 is not a January day, so it becomes a two-digit year"
+    formula: "=VALUE(\"Jan 32\")"
+  - id: mmm_zero_is_year_2000
+    formula: "=VALUE(\"Jan 0\")"
+  - id: mmm_four_digit_year
+    formula: "=VALUE(\"Jan 2026\")"
+  - id: mmm_three_digit_rejected
+    formula: "=VALUE(\"Jan 100\")"
+  - id: mmm_day_comma_year
+    formula: "=VALUE(\"Jan 1, 2026\")"
+  - id: mmm_day_blank_comma_year
+    formula: "=VALUE(\"Jan 1 , 2026\")"
+  - id: mmm_attached_day_comma_year
+    formula: "=VALUE(\"Jan1, 2026\")"
+  - id: mmm_day_comma_no_blank_rejected
+    formula: "=VALUE(\"Jan 1,2026\")"
+  - id: mmm_day_year_no_comma_rejected
+    formula: "=VALUE(\"Jan 1 2026\")"
+  - id: mmm_day_comma_two_digit_year
+    formula: "=VALUE(\"Jan 1, 29\")"
+  - id: day_mmm_year_mixed_separators
+    formula: "=VALUE(\"1-Jan 2026\")"
+  - id: day_mmm_dot_rejected
+    formula: "=VALUE(\"1.Jan.2026\")"
+  # -- numeric pairs --------------------------------------------------------
+  - id: pair_month_day
+    formula: "=VALUE(\"1/13\")-DATE(YEAR(TODAY()),1,13)"
+  - id: pair_day_month_when_first_exceeds_12
+    formula: "=VALUE(\"13/1\")-DATE(YEAR(TODAY()),1,13)"
+  - id: pair_year_month_when_first_exceeds_31
+    formula: "=VALUE(\"32/1\")"
+  - id: pair_year_month_after_invalid_day_month
+    description: "31/4: April has no 31st, so 31 becomes the year 1931"
+    formula: "=VALUE(\"31/4\")"
+  - id: pair_four_digit_year_month
+    formula: "=VALUE(\"2026/1\")"
+  - id: pair_month_year_rejected
+    formula: "=VALUE(\"1/2026\")"
+  - id: pair_zero_month_rejected
+    formula: "=VALUE(\"0/1\")"
+  - id: pair_blanks_around_separator
+    formula: "=VALUE(\"1 / 2\")-DATE(YEAR(TODAY()),1,2)"
+  - id: pair_trailing_separator_rejected
+    formula: "=VALUE(\"1/2-\")"
+  # -- numeric triples ------------------------------------------------------
+  - id: triple_two_digit_year_29
+    formula: "=VALUE(\"29/1/1\")"
+  - id: triple_two_digit_year_30
+    formula: "=VALUE(\"30/1/1\")"
+  - id: triple_mdy_rejected
+    formula: "=VALUE(\"1/2/2026\")"
+  - id: triple_three_digit_day_rejected
+    formula: "=VALUE(\"2026/1/001\")"
+  - id: triple_leading_zero_year_rejected
+    formula: "=VALUE(\"1/2/0026\")"
+  # -- time -----------------------------------------------------------------
+  - id: time_hour_colon_only
+    formula: "=VALUE(\"1:\")"
+  - id: time_minute_second_fraction
+    formula: "=VALUE(\"1:30.5\")"
+  - id: time_fraction_rounds_to_ms_half_up
+    formula: "=VALUE(\"1:30:00.0005\")"
+  - id: time_fraction_below_half_ms_drops
+    formula: "=VALUE(\"1:30:00.0004\")"
+  - id: time_fraction_decimal_half_up_0035
+    formula: "=VALUE(\"1:30:00.0035\")"
+  - id: time_fraction_carries_to_next_day
+    formula: "=VALUE(\"23:59:59.9995\")"
+  - id: time_one_overflow_minute
+    formula: "=VALUE(\"1:99\")"
+  - id: time_one_overflow_hour_9999
+    formula: "=VALUE(\"9999:59\")"
+  - id: time_hour_10000_rejected
+    formula: "=VALUE(\"10000:0\")"
+  - id: time_two_overflows_rejected
+    formula: "=VALUE(\"99:99\")"
+  - id: time_three_digit_field_below_100_rejected
+    formula: "=VALUE(\"001:30\")"
+  - id: time_four_digit_field_at_least_100
+    formula: "=VALUE(\"0100:0\")"
+  - id: time_trailing_separator
+    formula: "=VALUE(\"1:30-\")"
+  - id: time_trailing_separator_after_blank
+    formula: "=VALUE(\"1:30 -\")"
+  - id: time_trailing_dot_after_fraction_rejected
+    formula: "=VALUE(\"1:30:00.5.\")"
+  - id: time_marker_p_m_rejected
+    formula: "=VALUE(\"1:30 P.M.\")"
+  - id: time_marker_overflow_rejected
+    formula: "=VALUE(\"12:60 PM\")"
+  - id: time_kanji_hour_24_rejected
+    formula: "=VALUE(\"24時00分\")"
+  - id: time_odd_fraction_then_colon
+    description: "1:30.5:00 reads the fraction digits as the seconds field too"
+    formula: "=VALUE(\"1:30.5:00\")"
+  # -- date + time ----------------------------------------------------------
+  - id: datetime_mmm_time
+    formula: "=VALUE(\"Jan 1 1:30 PM\")-DATE(YEAR(TODAY()),1,1)"
+  - id: datetime_time_then_mmm
+    formula: "=VALUE(\"1:30 Aug 1\")-DATE(YEAR(TODAY()),8,1)"
+  - id: datetime_pair_year_month_time
+    formula: "=VALUE(\"2026/1 1:30\")"
+  - id: datetime_ideographic_blank
+    formula: "=VALUE(\"2026/1/1　1:30\")"
+  - id: datetime_tab_rejected
+    formula: "=VALUE(\"2026/1/1\"&CHAR(9)&\"1:30\")"
+  - id: datetime_kanji_date_time_rejected
+    formula: "=VALUE(\"2026年1月1日 1:30\")"
+  - id: datetime_era_time_rejected
+    formula: "=VALUE(\"R8.1.1 1:30\")"
+  - id: datetime_trailing_separator
+    formula: "=VALUE(\"2026/1/1 1:30-\")"
+  - id: datetime_ignored_numeric_tail
+    formula: "=VALUE(\"2026/1/1 1:30 1/2\")"
+  # -- pre-processing: fullwidth, whitespace, length ------------------------
+  - id: fullwidth_separators
+    formula: "=VALUE(\"２０２６／１／１　１：３０\")"
+  - id: fullwidth_month_name
+    formula: "=VALUE(\"Ｊａｎ １, ２０２６\")"
+  - id: fullwidth_pm
+    formula: "=VALUE(\"１：３０　ＰＭ\")"
+  - id: leading_ideographic_blank_rejected
+    formula: "=VALUE(\"　1/2\")"
+  - id: length_255_accepted
+    formula: "=VALUE(\"1:30\"&REPT(\" \",251))"
+  - id: length_256_rejected
+    formula: "=VALUE(\"1:30\"&REPT(\" \",252))"
+  # -- era --------------------------------------------------------------------
+  - id: era_letter_slash
+    formula: "=VALUE(\"R8/1/1\")"
+  - id: era_year_above_99_rejected
+    formula: "=VALUE(\"R100.1.1\")"
+  - id: era_meiji_rejected
+    formula: "=VALUE(\"M6.1.1\")"
+  - id: kanji_day_leading_zeros
+    formula: "=VALUE(\"2026年001月0001日\")"
+  # -- DATEVALUE / TIMEVALUE / coercion --------------------------------------
+  - id: datevalue_time_only_is_zero
+    formula: "=DATEVALUE(\"1:30 PM\")"
+  - id: datevalue_overflow_hours_integer_part
+    formula: "=DATEVALUE(\"9999:59\")"
+  - id: datevalue_rounded_time_carries
+    formula: "=DATEVALUE(\"2026/1/1 23:59:59.9999\")"
+  - id: timevalue_date_only_is_zero
+    formula: "=TIMEVALUE(\"2026/1/1\")"
+  - id: timevalue_overflow_fraction_part
+    formula: "=TIMEVALUE(\"25:00\")"
+  - id: coerce_year_less_pair
+    formula: "=\"13/1\"+0-DATE(YEAR(TODAY()),1,13)"
+  - id: coerce_trailing_blank
+    formula: "=\"1/2 \"+0-DATE(YEAR(TODAY()),1,2)"
+  - id: coerce_leading_blank_rejected
+    formula: "=\" 1/2\"+0"
+  - id: coerce_mixed_fraction
+    formula: "=\"1 1/2\"+0"
