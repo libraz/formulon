@@ -638,7 +638,7 @@ Value snap_array_result(const Value& out, const Value& lhs, const Value& rhs, Ar
       const std::optional<double> a = broadcast_operand_number(lhs, r, c);
       const std::optional<double> b = broadcast_operand_number(rhs, r, c);
       if (a && b) {
-        cells[i] = Value::number(snap_cancellation(*a, *b, cells[i].as_number()));
+        cells[i] = Value::number(snap_cancellation(*a, cells[i].as_number()));
       }
     }
   }
@@ -675,7 +675,7 @@ Shaped eval_binary_op(const parser::AstNode& node, Arena& arena, const FunctionR
     const std::optional<double> a = broadcast_operand_number(lhs.value, 0U, 0U);
     const std::optional<double> b = broadcast_operand_number(rhs.value, 0U, 0U);
     if (a && b) {
-      out.value = Value::number(snap_cancellation(*a, *b, out.value.as_number()));
+      out.value = Value::number(snap_cancellation(*a, out.value.as_number()));
     }
   }
   return out;

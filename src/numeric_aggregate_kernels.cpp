@@ -52,10 +52,11 @@ std::vector<double> materialize(const NumericInputView& view) {
 }  // namespace
 
 Expected<double, ErrorCode> run_sum(const std::vector<double>& xs) {
-  double total = 0.0;
+  FinalStepSnapSum sum;
   for (double x : xs) {
-    total = snapped_add(total, x);
+    sum.add(x);
   }
+  const double total = sum.result();
   if (!std::isfinite(total)) {
     return ErrorCode::Num;
   }
@@ -82,19 +83,19 @@ Expected<double, ErrorCode> run_average(const NumericInputView& values) {
     return ErrorCode::Div0;
   }
   std::size_t count = 0;
-  double total = 0.0;
+  FinalStepSnapSum sum;
   for (std::size_t i = 0; i < values.size; ++i) {
     const std::optional<double> value = values.get(values.context, i);
     if (!value.has_value()) {
       continue;
     }
-    total = snapped_add(total, *value);
+    sum.add(*value);
     ++count;
   }
   if (count == 0U) {
     return ErrorCode::Div0;
   }
-  const double avg = total / static_cast<double>(count);
+  const double avg = sum.result() / static_cast<double>(count);
   if (!std::isfinite(avg)) {
     return ErrorCode::Num;
   }
@@ -105,11 +106,11 @@ Expected<double, ErrorCode> run_average(const std::vector<double>& xs) {
   if (xs.empty()) {
     return ErrorCode::Div0;
   }
-  double total = 0.0;
+  FinalStepSnapSum sum;
   for (double x : xs) {
-    total = snapped_add(total, x);
+    sum.add(x);
   }
-  const double avg = total / static_cast<double>(xs.size());
+  const double avg = sum.result() / static_cast<double>(xs.size());
   if (!std::isfinite(avg)) {
     return ErrorCode::Num;
   }

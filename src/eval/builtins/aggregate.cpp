@@ -43,15 +43,15 @@ using builtins_detail::to_finite_value;
 // Excel's SUM coerces each argument to a number; non-coercible text yields
 // #VALUE! and any error among the inputs propagates left-to-right.
 Value Sum(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  double total = 0.0;
+  FinalStepSnapSum sum;
   for (std::uint32_t i = 0; i < arity; ++i) {
     auto coerced = coerce_to_number(args[i]);
     if (!coerced) {
       return Value::error(coerced.error());
     }
-    total = snapped_add(total, coerced.value());
+    sum.add(coerced.value());
   }
-  return to_finite_value(total);
+  return to_finite_value(sum.result());
 }
 
 // CONCAT(value, ...) / CONCATENATE(value, ...) ---------------------------
@@ -154,15 +154,15 @@ Value Average(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (arity == 0) {
     return Value::error(ErrorCode::Div0);
   }
-  double total = 0.0;
+  FinalStepSnapSum sum;
   for (std::uint32_t i = 0; i < arity; ++i) {
     auto coerced = coerce_to_number(args[i]);
     if (!coerced) {
       return Value::error(coerced.error());
     }
-    total = snapped_add(total, coerced.value());
+    sum.add(coerced.value());
   }
-  const double r = total / static_cast<double>(arity);
+  const double r = sum.result() / static_cast<double>(arity);
   return to_finite_value(r);
 }
 

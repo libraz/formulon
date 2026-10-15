@@ -364,11 +364,11 @@ static Value AverageA(const Value* args, std::uint32_t arity, Arena& /*arena*/) 
   if (xs.empty()) {
     return Value::error(ErrorCode::Div0);
   }
-  double total = 0.0;
+  FinalStepSnapSum sum;
   for (double x : xs) {
-    total = snapped_add(total, x);
+    sum.add(x);
   }
-  const double r = total / static_cast<double>(xs.size());
+  const double r = sum.result() / static_cast<double>(xs.size());
   return finite_number_result(r);
 }
 

@@ -1,0 +1,134 @@
+suite: cancellation_snap_rule
+description: 'The cancellation snap threshold (8 ulps of the left operand) and its single application to the final addition of SUM-style aggregates'
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: root_sub_7ulp
+    formula: "=(1+7*2^-52)-1"
+  - id: root_sub_8ulp
+    formula: "=(1+8*2^-52)-1"
+  - id: root_sub_8ulp_negative
+    formula: "=1-(1+8*2^-52)"
+  - id: root_sub_7ulp_high_mantissa
+    formula: "=(1.99+7*2^-52)-1.99"
+  - id: root_sub_8ulp_high_mantissa
+    formula: "=(1.99+8*2^-52)-1.99"
+  - id: root_left_in_lower_binade
+    formula: "=(2-2^-51)-(2+5*2^-51)"
+  - id: root_left_in_upper_binade
+    formula: "=(2+5*2^-51)-(2-2^-51)"
+  - id: root_add_left_in_upper_binade
+    formula: "=-(2+5*2^-51)+(2-2^-51)"
+  - id: root_exactly_8ulp_kept
+    formula: "=(2-2^-51)-(2+3*2^-51)"
+  - id: root_left_binade_four
+    formula: "=(4-2^-50)-(4+5*2^-50)"
+  - id: root_left_binade_four_swapped
+    formula: "=(4+5*2^-50)-(4-2^-50)"
+  - id: root_left_binade_half
+    formula: "=(0.5-2^-53)-(0.5+5*2^-53)"
+  - id: root_left_binade_half_swapped
+    formula: "=(0.5+5*2^-53)-(0.5-2^-53)"
+  - id: root_tiny_scale_8ulp
+    formula: "=(1E-290+8*2^-1016)-1E-290"
+  - id: root_tiny_scale_7ulp
+    formula: "=(1E-290+7*2^-1016)-1E-290"
+  - id: root_chain_snaps
+    formula: "=1E16+1.3-1E16"
+  - id: parenthesised_root_keeps
+    formula: "=(1.3+1E16-1E16)"
+  - id: negated_root_keeps
+    formula: "=-(1E16+1.3-1E16)"
+  - id: if_wrapped_keeps
+    formula: "=IF(TRUE,1E16+1.3-1E16)"
+  - id: chain_final_zero_keeps
+    formula: "=1.3+1E16-1E16+0"
+  - id: chain_leading_zero_snaps
+    formula: "=0+1.3+1E16-1E16"
+  - id: sum_no_per_step_snap
+    formula: "=SUM(2^53,12,-(2^53),100)"
+  - id: sum_twice_cancelled
+    formula: "=SUM(2^53,12,-(2^53),2^53,12,-(2^53))"
+  - id: sum_final_step_snaps
+    formula: "=SUM(1.3,1E16,-1E16)"
+  - id: sum_trailing_zero_keeps
+    formula: "=SUM(1.3,1E16,-1E16,0)"
+  - id: sum_trailing_false_keeps
+    formula: "=SUM(1.3,1E16,-1E16,FALSE)"
+  - id: sum_trailing_true
+    formula: "=SUM(1.3,1E16,-1E16,TRUE)"
+  - id: sum_array_final_step_snaps
+    formula: "=SUM({1.3,1E16,-1E16})"
+  - id: sum_array_trailing_zero_keeps
+    formula: "=SUM({1.3,1E16,-1E16,0})"
+  - id: sum_partial_in_lower_binade
+    formula: "=SUM(2-2^-51,-(2+5*2^-51))"
+  - id: sum_partial_in_upper_binade
+    formula: "=SUM(-(2+5*2^-51),2-2^-51)"
+  - id: sum_residue_then_addend
+    formula: "=SUM(0.5,-0.4,-0.1,1E-15)"
+  - id: average_residue_then_addend
+    formula: "=AVERAGE(0.5,-0.4,-0.1,1E-15)"
+  - id: sum_mid_cancel_then_addend
+    formula: "=SUM(1,6*2^-52,-1,2^-50)"
+  - id: sum_large_cancel_then_half
+    formula: "=SUM(1E16,2,-1E16,0.5)"
+  - id: sum_large_cancel_then_tiny
+    formula: "=SUM(2,1E16,-1E16,1E-15)"
+  - id: sum_7ulp_of_partial
+    formula: "=SUM(2^53,7*2,-(2^53))"
+  - id: sum_8ulp_of_partial
+    formula: "=SUM(2^53,8*2,-(2^53))"
+  - id: sum_range_trailing_blank_snaps
+    formula: "=SUM(A1:A4)"
+    setup: { A1: 1.3, A2: 10000000000000000, A3: -10000000000000000, A4: "" }
+  - id: sum_range_trailing_text_snaps
+    formula: "=SUM(A1:A4)"
+    setup: { A1: 1.3, A2: 10000000000000000, A3: -10000000000000000, A4: "x" }
+  - id: sum_range_trailing_zero_keeps
+    formula: "=SUM(A1:A4)"
+    setup: { A1: 1.3, A2: 10000000000000000, A3: -10000000000000000, A4: 0 }
+  - id: sum_range_blank_second_arg_snaps
+    formula: "=SUM(A1:A3,B1:B3)"
+    setup: { A1: 1.3, A2: 10000000000000000, A3: -10000000000000000 }
+  - id: sumif_never_snaps
+    formula: "=SUMIF(A1:A3,\"<>x\")"
+    setup: { A1: 1.3, A2: 10000000000000000, A3: -10000000000000000 }
+  - id: sumproduct_never_snaps
+    formula: "=SUMPRODUCT(A1:A3)"
+    setup: { A1: 1.3, A2: 10000000000000000, A3: -10000000000000000 }
+  - id: subtotal_final_step_snaps
+    formula: "=SUBTOTAL(9,A1:A3)"
+    setup: { A1: 1.3, A2: 10000000000000000, A3: -10000000000000000 }
+  - id: aggregate_final_step_snaps
+    formula: "=AGGREGATE(9,6,A1:A3)"
+    setup: { A1: 1.3, A2: 10000000000000000, A3: -10000000000000000 }
+  - id: averagea_final_step_snaps
+    formula: "=AVERAGEA(A1:A3)"
+    setup: { A1: 1.3, A2: 10000000000000000, A3: -10000000000000000 }
+  - id: sum_2d_range_row_major_a
+    formula: "=SUM(A1:B3)"
+    setup: { A1: 0.3, B1: 0.6, A2: -0.1, B2: 0.3, A3: 1.0e-16, B3: 0.3 }
+  - id: sum_2d_range_row_major_b
+    formula: "=SUM(A1:C2)"
+    setup: { A1: 0.5, B1: 0.1, C1: 0.1, A2: 0.3, B2: 0.7, C2: 0.2 }
+  - id: sum_2d_range_row_major_c
+    formula: "=SUM(A1:B2)"
+    setup: { A1: 0.5, B1: -0.1, A2: -0.3, B2: -0.4 }
+  - id: sum_left_to_right_ieee
+    formula: "=SUM(A1:A8)"
+    setup: { A1: 0.25, A2: 10000000000000000, A3: 1, A4: 0.1, A5: -10000000000000000, A6: -0.4, A7: -0.3, A8: -0.1 }
+  - id: sumsq_small_first
+    formula: "=SUMSQ(1,1,1,1E8)"
+  - id: sumsq_large_first
+    formula: "=SUMSQ(1E8,1,1,1)"
+  - id: root_snap_at_threshold_floor
+    formula: "=2^-973*(1+2^-50)-2^-973"
+  - id: root_snap_threshold_flushed
+    formula: "=(2^-974*(1+2^-50)-2^-974)*2^600*2^474"
+  - id: root_subnormal_difference_kept
+    formula: "=(1E-300*(1+2^-50)-1E-300)*2^600*2^474"
+  - id: root_normal_magnitude_snaps
+    formula: "=1E-200*(1+2^-50)-1E-200"
+  - id: parenthesised_normal_magnitude_keeps
+    formula: "=(1E-200*(1+2^-50)-1E-200)"
