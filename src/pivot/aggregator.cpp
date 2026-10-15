@@ -1,6 +1,7 @@
 
 #include "pivot/aggregator.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -11,6 +12,7 @@
 #include "numeric_aggregate_kernels.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
+#include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pivot/record_access.h"
 #include "utils/cancellation_snap.h"
@@ -152,7 +154,7 @@ Value aggregate_sum(const ValueInputView& values) {
       return value;
     }
     if (const std::optional<double> number = numeric_aggregate_value(value); number.has_value()) {
-      sum = snapped_add(sum, *number);
+      sum = snapped_add(*number, sum);
     }
   }
   return finite_number(sum);
@@ -192,7 +194,7 @@ Value aggregate_average(const ValueInputView& values) {
       return value;
     }
     if (const std::optional<double> number = numeric_aggregate_value(value); number.has_value()) {
-      sum = snapped_add(sum, *number);
+      sum = snapped_add(*number, sum);
       ++count;
     }
   }
@@ -412,6 +414,153 @@ Value aggregate_records_or_blank(Aggregation aggregation, const PivotCache& cach
                                  const std::vector<std::size_t>& records, std::uint32_t field_index,
                                  PivotResult& result) {
   return aggregate_records_or_blank(aggregation, cache, RecordIndexView(records), field_index, result);
+}
+
+namespace {
+
+/// Running total of rendered cells: cancellation-snapped, or a plain IEEE sum.
+class CellSum {
+ public:
+  explicit CellSum(bool snap) : snap_(snap) {}
+
+  void add(const Value& cell) {
+    if (cell.is_blank()) {
+      return;
+    }
+    if (!cell.is_number()) {
+      non_numeric_ = true;
+      return;
+    }
+    const double x = cell.as_number();
+    total_ = any_ ? (snap_ ? snapped_add(x, total_) : total_ + x) : x;
+    any_ = true;
+  }
+
+  /// Leaves `slot` alone when no cell contributed or a cell was not a number.
+  void store(Value& slot) const {
+    if (any_ && !non_numeric_) {
+      slot = Value::number(total_);
+    }
+  }
+
+ private:
+  bool snap_;
+  bool any_ = false;
+  bool non_numeric_ = false;
+  double total_ = 0.0;
+};
+
+}  // namespace
+
+void recompute_sum_totals_from_cells(const PivotTable& table, PivotResult& result,
+                                     const std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
+                                     const std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets) {
+  const std::size_t row_count = result.values.size();
+  const std::size_t col_count = row_count == 0U ? 0U : result.values[0].size();
+  const bool has_rows = !table.row_field_order().empty();
+  const bool has_cols = !table.col_field_order().empty();
+  const std::size_t col_subtotal_count = std::min(result.col_subtotals.size(), col_subtotal_leaf_sets.size());
+  const std::size_t row_subtotal_count = std::min(result.row_subtotals.size(), row_subtotal_leaf_sets.size());
+
+  for (std::size_t df = 0; df < table.data_fields().size(); ++df) {
+    if (table.data_fields()[df].aggregation != Aggregation::Sum) {
+      continue;
+    }
+    auto is_sum = [](const std::optional<Aggregation>& spec) {
+      return spec.value_or(Aggregation::Sum) == Aggregation::Sum;
+    };
+    auto cell = [&](std::size_t r, std::size_t c) -> const Value& { return result.values[r][c][df]; };
+
+    if (result.row_leaf_totals.size() == row_count) {
+      for (std::size_t r = 0; r < row_count; ++r) {
+        CellSum sum(/*snap=*/true);
+        for (std::size_t c = 0; c < col_count; ++c) {
+          sum.add(cell(r, c));
+        }
+        sum.store(result.row_leaf_totals[r][df]);
+      }
+    }
+    if (result.col_leaf_totals.size() == col_count) {
+      for (std::size_t c = 0; c < col_count; ++c) {
+        CellSum sum(/*snap=*/true);
+        for (std::size_t r = 0; r < row_count; ++r) {
+          sum.add(cell(r, c));
+        }
+        sum.store(result.col_leaf_totals[c][df]);
+      }
+    }
+
+    for (std::size_t cs = 0; cs < col_subtotal_count; ++cs) {
+      ColSubtotal& col_subtotal = result.col_subtotals[cs];
+      if (!is_sum(col_subtotal.aggregation) || col_subtotal.values.size() != row_count) {
+        continue;
+      }
+      CellSum total(/*snap=*/false);
+      for (std::size_t r = 0; r < row_count; ++r) {
+        CellSum sum(/*snap=*/true);
+        for (const std::size_t c : col_subtotal_leaf_sets[cs]) {
+          sum.add(cell(r, c));
+        }
+        sum.store(col_subtotal.values[r][df]);
+        total.add(col_subtotal.values[r][df]);
+      }
+      total.store(col_subtotal.total[df]);
+    }
+
+    for (std::size_t rs = 0; rs < row_subtotal_count; ++rs) {
+      RowSubtotal& row_subtotal = result.row_subtotals[rs];
+      if (!is_sum(row_subtotal.aggregation)) {
+        continue;
+      }
+      const std::vector<std::size_t>& rows = row_subtotal_leaf_sets[rs];
+      for (std::size_t c = 0; c < row_subtotal.col_values.size() && c < col_count; ++c) {
+        CellSum sum(/*snap=*/true);
+        for (const std::size_t r : rows) {
+          sum.add(cell(r, c));
+        }
+        sum.store(row_subtotal.col_values[c][df]);
+      }
+      // Without a column field the subtotal sits on a single leaf column.
+      CellSum sum(/*snap=*/!has_cols);
+      for (const std::size_t r : rows) {
+        sum.add(has_cols ? result.row_leaf_totals[r][df] : cell(r, 0));
+      }
+      sum.store(row_subtotal.values[df]);
+      if (rs < result.subtotals.size()) {
+        result.subtotals[rs][df] = row_subtotal.values[df];
+      }
+      for (std::size_t cs = 0; cs < row_subtotal.col_subtotal_values.size() && cs < col_subtotal_count; ++cs) {
+        const ColSubtotal& col_subtotal = result.col_subtotals[cs];
+        if (!is_sum(col_subtotal.aggregation)) {
+          continue;
+        }
+        CellSum both(/*snap=*/false);
+        for (const std::size_t r : rows) {
+          both.add(col_subtotal.values[r][df]);
+        }
+        both.store(row_subtotal.col_subtotal_values[cs][df]);
+      }
+    }
+
+    if (df < result.grand_totals.size()) {
+      CellSum total(/*snap=*/!(has_rows && has_cols));
+      if (has_rows && has_cols) {
+        for (std::size_t r = 0; r < row_count; ++r) {
+          total.add(result.row_leaf_totals[r][df]);
+        }
+      } else {
+        for (std::size_t r = 0; r < row_count; ++r) {
+          for (std::size_t c = 0; c < col_count; ++c) {
+            total.add(cell(r, c));
+          }
+        }
+      }
+      total.store(result.grand_totals[df]);
+    }
+  }
+  if (!result.grand_totals.empty()) {
+    result.grand_total = result.grand_totals[0];
+  }
 }
 
 }  // namespace formulon::pivot

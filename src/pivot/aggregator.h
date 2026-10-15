@@ -29,6 +29,7 @@ namespace formulon::pivot {
 /// `cache.records()`.
 using RecordBuckets = std::vector<std::vector<std::vector<std::size_t>>>;
 
+class PivotTable;
 struct PivotResult;
 
 /// One borrowed run of record indices. `cumulative_end` is the exclusive
@@ -98,8 +99,7 @@ Value apply_record_aggregation(Aggregation agg, const PivotCache& cache, const s
 std::optional<double> numeric_aggregate_value(const Value& v);
 
 /// Builds a borrowed concatenation of `buckets[row][col]` in column-major
-/// order (column leaves outer, row leaves inner), the order Excel sums a
-/// two-axis grand total in. `spans` owns only the
+/// order (column leaves outer, row leaves inner). `spans` owns only the
 /// span descriptors and must outlive the returned view and every aggregation
 /// using it. Out-of-range leaves and empty buckets are skipped.
 RecordIndexView make_leaf_set_record_view(const RecordBuckets& buckets, const std::vector<std::size_t>& row_leaves,
@@ -113,6 +113,16 @@ RecordIndexView make_leaf_set_record_view(const RecordBuckets& buckets, std::siz
                                           std::vector<RecordIndexSpan>& spans);
 RecordIndexView make_leaf_set_record_view(const RecordBuckets& buckets, const std::vector<std::size_t>& row_leaves,
                                           std::size_t col_leaf, std::vector<RecordIndexSpan>& spans);
+
+/// Rebuilds every total of a Sum data field from the rendered leaf cells in
+/// `result.values`, the way Excel does: a total with one axis on a leaf is a
+/// running cancellation-snapped sum of the leaf cells beneath it, a total on
+/// both axes a plain running sum of the row leaves' one-axis totals. Totals
+/// of other aggregations, and custom subtotal functions other than Sum, are
+/// left as they are. The leaf sets are in `result.values` position space.
+void recompute_sum_totals_from_cells(const PivotTable& table, PivotResult& result,
+                                     const std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
+                                     const std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets);
 
 /// Aggregates cache records while preserving the sparse-intersection rule:
 /// no record positions means a blank result, whereas one or more positions

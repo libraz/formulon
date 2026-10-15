@@ -186,6 +186,9 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
       subtotal.total[df_idx] = aggregate_records_or_blank(aggregation, cache, total_records, df.field_index, result);
     }
   }
+
+  // Sum totals are cell-based; the surviving cells are `result.values`.
+  recompute_sum_totals_from_cells(table, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
 }
 
 // Original-`buckets`-space indices of the row/col leaves still standing,

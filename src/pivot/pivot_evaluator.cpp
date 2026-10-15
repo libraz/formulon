@@ -655,6 +655,9 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     }
   }
 
+  // Sum totals are running sums of the rendered cells, not of the records.
+  recompute_sum_totals_from_cells(table, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
+
   // 7. Value-axis filters (Top-N, GreaterThan, Between).
   apply_value_filters(table, cache, buckets, row_leaf_count, col_leaf_count, result, row_subtotal_leaf_sets,
                       col_subtotal_leaf_sets);
