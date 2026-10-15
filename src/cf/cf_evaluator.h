@@ -128,9 +128,10 @@ struct ColorScalePopulation;
 /// pointer through `CFEvalContext`.
 struct DuplicateValuePopulation;
 
-/// Per-prepared-evaluator cache of parsed CF formula roots. The roots live in
-/// the host arena; only parsing is shared, while every target still receives
-/// its own relative-reference shift and evaluation.
+/// Per-prepared-evaluator cache of parsed CF formula roots. Private persistent
+/// and reusable scratch arenas are budgeted from the caller arena's remaining
+/// capacity; every target still receives its own relative-reference shift and
+/// evaluation.
 struct PreparedCfFormulaCache;
 
 /// Returns `true` when `rule` matches the cell carrying `cell_value`.
@@ -213,8 +214,9 @@ CFMatch make_match(const CFRule& rule);
 /// `cached_duplicates` carries the analogous per-block count cache for
 /// DuplicateValues / UniqueValues.
 /// `formula_cache` is an internal per-prepared-walk cache of parsed formula
-/// roots. Relative references are still shifted and evaluated for each target
-/// cell; callers outside the prepared evaluator leave it null.
+/// roots and private scratch storage. Relative references are still shifted
+/// and evaluated for each target cell; callers outside the prepared evaluator
+/// leave it null.
 struct CFEvalContext {
   CellAddress anchor{};
   CellAddress target{};
@@ -284,8 +286,13 @@ class PreparedCfEvaluator {
   PreparedCfEvaluator& operator=(PreparedCfEvaluator&&) noexcept;
 
   /// Evaluates the prepared rule chain for one target cell. The plan's
-  /// priority order and per-block caches are reused across calls.
+  /// priority order and per-block caches are reused across calls. A
+  /// formula-resource failure yields no matches, for this and every later call.
   std::vector<CFMatch> evaluate(CellAddress target);
+
+  /// Checked variant used by range and AutoFilter walkers. Formula-resource
+  /// failures abort the whole walk instead of appearing as missing matches.
+  Expected<std::vector<CFMatch>, Error> evaluate_checked(CellAddress target);
 
  private:
   struct Impl;
@@ -309,7 +316,7 @@ class PreparedCfEvaluator {
 ///
 /// `host.arena` / `host.registry` / `host.eval_ctx` are required;
 /// `host.today_serial` is forwarded to `TimePeriod` rules and may be
-/// `nullopt`.
+/// `nullopt`. A formula-resource failure yields an empty list.
 std::vector<CFMatch> evaluate_cf_at(const Sheet& sheet, CellAddress target, const CFHost& host);
 
 /// One cell's CF result inside a viewport-range evaluation. `cell` is
@@ -339,7 +346,9 @@ inline constexpr std::uint64_t kCfMaxViewportCells = 1048576U;  // 2^20
 /// appear. Order is row-major over `range`.
 ///
 /// A `range` wider than `kCfMaxViewportCells` cells is rejected with
-/// `kSecResourceLimit` before any cell is visited.
+/// `kSecResourceLimit` before any cell is visited. Formula evaluation that
+/// exhausts the prepared walk's arena budget also returns `kSecResourceLimit`
+/// and discards all matches accumulated by the range walk.
 ///
 /// The walk is driven by the sheet's CF blocks, not by `range`: each
 /// block's sqref is intersected with `range` and only the resulting

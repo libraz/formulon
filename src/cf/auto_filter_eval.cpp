@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "cf/cf_evaluator.h"
@@ -335,7 +336,7 @@ struct CellColors {
   std::optional<cf::IconRender> icon;
 };
 
-CellColors cell_colors(const Run& run, std::uint32_t row, std::uint32_t col) {
+Expected<CellColors, Error> cell_colors(const Run& run, std::uint32_t row, std::uint32_t col) {
   CellColors out;
   const EffectiveStyle style = effective_style(run.wb, run.sheet, row, col);
   out.has_fill = style.fill_pattern != 0U;
@@ -347,7 +348,11 @@ CellColors cell_colors(const Run& run, std::uint32_t row, std::uint32_t col) {
   bool fill_set = false;
   bool font_set = false;
   const auto& dxfs = run.wb.styles().dxfs;
-  for (const cf::CFMatch& m : run.cf_evaluator->evaluate(CellAddress{row, col})) {
+  auto evaluated = run.cf_evaluator->evaluate_checked(CellAddress{row, col});
+  if (!evaluated) {
+    return std::move(evaluated.error());
+  }
+  for (const cf::CFMatch& m : evaluated.value()) {
     if (m.icon_render.has_value() && !out.icon.has_value()) {
       out.icon = m.icon_render;
     }
@@ -380,8 +385,12 @@ CellColors cell_colors(const Run& run, std::uint32_t row, std::uint32_t col) {
 /// Colour filters name a dxf. A fill filter whose dxf has no solid fill
 /// selects unfilled cells. Excel stores a font-colour filter's colour as the
 /// dxf's fill foreground, so a dxf font colour is used only when present.
-bool match_color(const ColorFilter& f, const Run& run, std::uint32_t row, std::uint32_t col) {
-  const CellColors colors = cell_colors(run, row, col);
+Expected<bool, Error> match_color(const ColorFilter& f, const Run& run, std::uint32_t row, std::uint32_t col) {
+  auto evaluated_colors = cell_colors(run, row, col);
+  if (!evaluated_colors) {
+    return std::move(evaluated_colors.error());
+  }
+  const CellColors& colors = evaluated_colors.value();
   const auto& dxfs = run.wb.styles().dxfs;
   const DifferentialFormat* dxf = (f.dxf_id.has_value() && *f.dxf_id < dxfs.size()) ? &dxfs[*f.dxf_id] : nullptr;
   if (f.cell_color) {
@@ -399,8 +408,12 @@ bool match_color(const ColorFilter& f, const Run& run, std::uint32_t row, std::u
   return colors.font_rgb == want;
 }
 
-bool match_icon(const IconFilter& f, const Run& run, std::uint32_t row, std::uint32_t col) {
-  const CellColors colors = cell_colors(run, row, col);
+Expected<bool, Error> match_icon(const IconFilter& f, const Run& run, std::uint32_t row, std::uint32_t col) {
+  auto evaluated_colors = cell_colors(run, row, col);
+  if (!evaluated_colors) {
+    return std::move(evaluated_colors.error());
+  }
+  const CellColors& colors = evaluated_colors.value();
   if (!f.icon_id.has_value()) {
     return !colors.icon.has_value();
   }
@@ -410,9 +423,10 @@ bool match_icon(const IconFilter& f, const Run& run, std::uint32_t row, std::uin
 // --- Column driver ----------------------------------------------------------
 
 /// ANDs one filter column's matches into `visible`.
-void apply_column(const FilterColumn& column, const Run& run, std::uint32_t col, std::vector<bool>& visible) {
+Expected<void, Error> apply_column(const FilterColumn& column, const Run& run, std::uint32_t col,
+                                   std::vector<bool>& visible) {
   if (column.kind == FilterKind::kNone) {
-    return;
+    return {};
   }
   const bool needs_values = column.kind == FilterKind::kValues || column.kind == FilterKind::kCustom ||
                             column.kind == FilterKind::kTop10 || column.kind == FilterKind::kDynamic;
@@ -464,16 +478,25 @@ void apply_column(const FilterColumn& column, const Run& run, std::uint32_t col,
         match = match_dynamic(column.dynamic, *value, run, average);
         break;
       case FilterKind::kColor:
-        match = match_color(column.color, run, row, col);
+        if (auto color_match = match_color(column.color, run, row, col); !color_match) {
+          return std::move(color_match.error());
+        } else {
+          match = color_match.value();
+        }
         break;
       case FilterKind::kIcon:
-        match = match_icon(column.icon, run, row, col);
+        if (auto icon_match = match_icon(column.icon, run, row, col); !icon_match) {
+          return std::move(icon_match.error());
+        } else {
+          match = icon_match.value();
+        }
         break;
       case FilterKind::kNone:
         break;
     }
     visible[i] = match;
   }
+  return {};
 }
 
 double today_serial(const eval::EvalContext& ctx, bool date1904) {
@@ -528,7 +551,9 @@ Expected<std::vector<bool>, Error> evaluate_auto_filter(const Workbook& wb, cons
   Run run{wb, sheet, today, range.first_row + 1U, body_rows, cf_evaluator.has_value() ? &*cf_evaluator : nullptr};
   std::vector<bool> visible(body_rows, true);
   for (const FilterColumn& column : filter.columns) {
-    apply_column(column, run, range.first_col + column.col_id, visible);
+    if (auto applied = apply_column(column, run, range.first_col + column.col_id, visible); !applied) {
+      return std::move(applied.error());
+    }
   }
   return visible;
 }

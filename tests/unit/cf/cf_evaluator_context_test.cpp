@@ -4,6 +4,7 @@
 
 #include "cell.h"
 #include "cf/cf_evaluator.h"
+#include "cf/cf_helpers.h"
 #include "cf/cf_types.h"
 #include "cf_evaluator_fixtures.h"
 #include "eval/eval_context.h"
@@ -134,6 +135,23 @@ TEST(CFEvaluator, ExpressionRuleRelativeReferenceShiftsToTargetColumn) {
   CFRule r = MakeRule(RuleType::Expression);
   r.formula1 = "A1>10";
   EXPECT_TRUE(match_rule(r, Value::number(0.0), harness.context(At(0, 0), At(0, 2))));
+}
+
+TEST(CFEvaluator, UncachedFormulaHelperKeepsTextResultInCallerArena) {
+  CFEvalHarness harness;
+  CFEvalContext ctx = harness.context(At(0U, 0U), At(0U, 0U));
+
+  Value text = helpers::parse_shift_evaluate("\"hello\"&\" world\"", ctx);
+  ASSERT_TRUE(text.is_text());
+  EXPECT_EQ(text.as_text(), "hello world");
+  EXPECT_GT(harness.arena.bytes_used(), 0U);
+
+  const std::size_t used_after_text = harness.arena.bytes_used();
+  Value number = helpers::parse_shift_evaluate("1+2", ctx);
+  ASSERT_TRUE(number.is_number());
+  EXPECT_DOUBLE_EQ(number.as_number(), 3.0);
+  EXPECT_GE(harness.arena.bytes_used(), used_after_text);
+  EXPECT_EQ(text.as_text(), "hello world");
 }
 
 TEST(CFEvaluator, ExpressionRuleAbsoluteReferenceLocksAtAnchor) {

@@ -1,9 +1,11 @@
 // Conditional-format evaluator tests: population predicates.
 
 #include <cstdint>
+#include <initializer_list>
 #include <vector>
 
 #include "cf/cf_evaluator.h"
+#include "cf/cf_helpers.h"
 #include "cf/cf_types.h"
 #include "cf_evaluator_fixtures.h"
 #include "gtest/gtest.h"
@@ -279,6 +281,111 @@ TEST(CFEvaluator, AboveAverageBooleansAndTextExcludedFromPopulation) {
   EXPECT_TRUE(match_rule(r, Value::number(50.0), ctx));
   EXPECT_FALSE(match_rule(r, Value::number(30.0), ctx));
   EXPECT_FALSE(match_rule(r, Value::number(20.0), ctx));
+}
+
+TEST(CFEvaluator, AboveAveragePreparedPopulationMatchesSingleCellPathAtStdDevThresholds) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(1.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(3.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(5.0));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 2, 0)};
+
+  const ColorScalePopulation population = helpers::gather_population(sqref, harness.sheet);
+  ASSERT_EQ(population.sorted.size(), 3U);
+  EXPECT_DOUBLE_EQ(population.mean, 3.0);
+  EXPECT_DOUBLE_EQ(population.sample_stddev, 2.0);
+
+  const CFEvalContext single_cell_ctx = SqrefContext(harness, sqref);
+  CFEvalContext prepared_ctx = single_cell_ctx;
+  prepared_ctx.cached_population = &population;
+
+  for (bool equal_average : {false, true}) {
+    CFRule above = MakeRule(RuleType::AboveAverage);
+    above.above_average = true;
+    above.equal_average = equal_average;
+    above.std_dev = 1.0;
+    for (double value : {4.0, 5.0, 6.0}) {
+      const bool single = match_rule(above, Value::number(value), single_cell_ctx);
+      const bool prepared = match_rule(above, Value::number(value), prepared_ctx);
+      EXPECT_EQ(prepared, single) << "above value=" << value << " equal_average=" << equal_average;
+      if (value == 5.0) {
+        EXPECT_EQ(prepared, equal_average);
+      }
+    }
+
+    CFRule below = MakeRule(RuleType::AboveAverage);
+    below.above_average = false;
+    below.equal_average = equal_average;
+    below.std_dev = 1.0;
+    for (double value : {0.0, 1.0, 2.0}) {
+      const bool single = match_rule(below, Value::number(value), single_cell_ctx);
+      const bool prepared = match_rule(below, Value::number(value), prepared_ctx);
+      EXPECT_EQ(prepared, single) << "below value=" << value << " equal_average=" << equal_average;
+      if (value == 1.0) {
+        EXPECT_EQ(prepared, equal_average);
+      }
+    }
+  }
+}
+
+TEST(CFEvaluator, PopulationStatisticsUseSortedOrderAndHandleEmptyAndSingleton) {
+  CFEvalHarness harness;
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 2, 0)};
+  ColorScalePopulation population = helpers::gather_population(sqref, harness.sheet);
+  EXPECT_TRUE(population.sorted.empty());
+  EXPECT_DOUBLE_EQ(population.mean, 0.0);
+  EXPECT_DOUBLE_EQ(population.sample_stddev, 0.0);
+
+  harness.sheet.set_cell_value(0, 0, Value::number(1.0e16));
+  harness.sheet.set_cell_value(1, 0, Value::number(-1.0e16));
+  harness.sheet.set_cell_value(2, 0, Value::number(1.0));
+  population = helpers::gather_population(sqref, harness.sheet);
+  ASSERT_EQ(population.sorted.size(), 3U);
+  EXPECT_DOUBLE_EQ(population.sorted[0], -1.0e16);
+  EXPECT_DOUBLE_EQ(population.sorted[1], 1.0);
+  EXPECT_DOUBLE_EQ(population.sorted[2], 1.0e16);
+  // Cancellation-sensitive: the mean differs unless reduced over the sorted values.
+  EXPECT_DOUBLE_EQ(population.mean, 0.0);
+  EXPECT_DOUBLE_EQ(population.mean, helpers::mean_of(population.sorted));
+  EXPECT_DOUBLE_EQ(population.sample_stddev, helpers::sample_stddev(population.sorted, population.mean));
+
+  harness.sheet.set_cell_value(0, 0, Value::number(7.0));
+  harness.sheet.set_cell_value(1, 0, Value::blank());
+  harness.sheet.set_cell_value(2, 0, Value::blank());
+  population = helpers::gather_population(sqref, harness.sheet);
+  ASSERT_EQ(population.sorted.size(), 1U);
+  EXPECT_DOUBLE_EQ(population.mean, 7.0);
+  EXPECT_DOUBLE_EQ(population.sample_stddev, 0.0);
+}
+
+TEST(CFEvaluator, OversizedSparsePopulationPreservesSpillsFormulaValuesAndOverlapMultiplicity) {
+  CFEvalHarness harness;
+  constexpr std::uint32_t kLastRow = 255U;
+  constexpr std::uint32_t kLastCol = 256U;
+  harness.sheet.set_cell_value(0U, 0U, Value::number(10.0));
+  harness.sheet.set_cell_value(kLastRow, kLastCol, Value::number(90.0));
+  harness.sheet.set_cell_formula(10U, 10U, "=1+1");
+  harness.sheet.set_cell_cached_value(10U, 10U, Value::number(15.0));
+  ASSERT_TRUE(harness.sheet.commit_spill(
+      128U, 128U, 2U, 2U, {Value::number(20.0), Value::text("20"), Value::boolean(true), Value::number(30.0)}));
+
+  // 65,792 cells takes the oversized-range path while keeping the previous
+  // dense workload bounded. The nested sqref deliberately counts each
+  // spill value twice, matching the range-union multiplicity contract.
+  const std::vector<CFCellRange> sqref{MakeRange(0U, 0U, kLastRow, kLastCol), MakeRange(128U, 128U, 129U, 129U)};
+  const std::vector<double> values = helpers::collect_numeric_values(sqref, harness.sheet);
+  const std::vector<double> expected{10.0, 15.0, 20.0, 30.0, 90.0, 20.0, 30.0};
+  ASSERT_EQ(values.size(), expected.size());
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_DOUBLE_EQ(values[i], expected[i]) << "index=" << i;
+  }
+
+  EXPECT_EQ(helpers::count_matches_in_sqref(Value::number(20.0), sqref, harness.sheet), 2U);
+  const DuplicateValuePopulation duplicates =
+      helpers::gather_duplicate_population(sqref, harness.sheet, default_excel_profile());
+  EXPECT_EQ(helpers::count_matches_in_population(Value::number(20.0), duplicates), 2U);
+  EXPECT_EQ(helpers::count_matches_in_population(Value::text("20"), duplicates), 2U);
+  EXPECT_EQ(helpers::count_matches_in_population(Value::boolean(true), duplicates), 2U);
 }
 
 TEST(CFEvaluator, AboveAverageValueOnlyOverloadStillReturnsFalse) {

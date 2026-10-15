@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -20,6 +21,7 @@
 #include "eval/collation.h"
 #include "eval/eval_context.h"
 #include "eval/eval_profile_scope.h"
+#include "eval/eval_state.h"
 #include "eval/scalar_ops.h"
 #include "eval/tree_walker.h"
 #include "eval/value_identity.h"
@@ -31,6 +33,35 @@
 #include "utils/rect_iterator.h"
 #include "utils/strings.h"
 #include "value.h"
+
+namespace formulon::cf {
+
+void PreparedCfFormulaCache::initialize(const Arena& caller_arena) {
+  if (persistent_arena.has_value()) {
+    return;
+  }
+  initial_chunk_bytes = caller_arena.initial_chunk_bytes();
+  const std::size_t allocated = caller_arena.bytes_allocated();
+  available_bytes = caller_arena.max_bytes() > allocated ? caller_arena.max_bytes() - allocated : 0U;
+  const std::size_t initial = std::min(initial_chunk_bytes, available_bytes);
+  persistent_arena.emplace(initial == 0U ? initial_chunk_bytes : initial, available_bytes);
+}
+
+void PreparedCfFormulaCache::create_scratch() {
+  scratch_arena.reset();
+  const std::size_t persistent_bytes = persistent_arena.has_value() ? persistent_arena->bytes_allocated() : 0U;
+  const std::size_t remaining = available_bytes > persistent_bytes ? available_bytes - persistent_bytes : 0U;
+  const std::size_t initial = std::min(initial_chunk_bytes, remaining);
+  scratch_arena.emplace(initial == 0U ? initial_chunk_bytes : initial, remaining);
+}
+
+void PreparedCfFormulaCache::capture_resource_failure(bool state_out_of_memory) noexcept {
+  resource_failure = resource_failure || state_out_of_memory ||
+                     (persistent_arena.has_value() && persistent_arena->exhausted()) ||
+                     (scratch_arena.has_value() && scratch_arena->exhausted());
+}
+
+}  // namespace formulon::cf
 
 namespace formulon::cf::helpers {
 
@@ -174,14 +205,39 @@ Value parse_shift_evaluate(const std::string& source, const CFEvalContext& ctx) 
 
   // The model holds CF formulas in canonical formula-bar spelling (the
   // readers strip Excel's storage prefixes on load), without a leading `=`.
-  // Prepared walkers cache only the parse; shifting and evaluation stay per cell.
+  // Prepared walks keep roots in a private persistent arena and build each
+  // shifted tree / evaluation result in a reusable scratch arena. The
+  // caller-owned arena remains untouched by this path.
   const parser::AstNode* root = nullptr;
+  Arena* formula_arena = ctx.arena;
   if (ctx.formula_cache != nullptr) {
-    auto [it, inserted] = ctx.formula_cache->indices.try_emplace(source, ctx.formula_cache->roots.size());
-    if (inserted) {
-      ctx.formula_cache->roots.push_back(eval::parse_formula_entry(source, *ctx.arena));
+    PreparedCfFormulaCache& cache = *ctx.formula_cache;
+    cache.initialize(*ctx.arena);
+    if (cache.resource_failure) {
+      return Value::error(ErrorCode::Name);
     }
-    root = ctx.formula_cache->roots[it->second];
+
+    auto it = cache.indices.find(source);
+    if (it == cache.indices.end()) {
+      // Give persistent roots the full private budget while a new root is
+      // parsed, then hand only the remaining capacity to scratch.
+      cache.scratch_arena.reset();
+      const std::size_t root_index = cache.roots.size();
+      cache.indices.emplace(source, root_index);
+      cache.roots.push_back(nullptr);
+      root = eval::parse_formula_entry(source, *cache.persistent_arena);
+      cache.roots[root_index] = root;
+      cache.capture_resource_failure();
+      cache.create_scratch();
+    } else {
+      if (!cache.scratch_arena.has_value()) {
+        cache.create_scratch();
+      } else {
+        cache.scratch_arena->reset();
+      }
+      root = cache.roots[it->second];
+    }
+    formula_arena = &*cache.scratch_arena;
   } else {
     root = eval::parse_formula_entry(source, *ctx.arena);
   }
@@ -192,13 +248,29 @@ Value parse_shift_evaluate(const std::string& source, const CFEvalContext& ctx) 
   const std::int32_t row_delta = static_cast<std::int32_t>(ctx.target.row) - static_cast<std::int32_t>(ctx.anchor.row);
   const std::int32_t col_delta = static_cast<std::int32_t>(ctx.target.col) - static_cast<std::int32_t>(ctx.anchor.col);
 
-  const parser::AstNode* shifted = parser::shift_relative_refs(*root, *ctx.arena, row_delta, col_delta);
+  const parser::AstNode* shifted = parser::shift_relative_refs(*root, *formula_arena, row_delta, col_delta);
   if (shifted == nullptr) {
+    if (ctx.formula_cache != nullptr) {
+      ctx.formula_cache->capture_resource_failure();
+    }
     return Value::error(ErrorCode::Name);
   }
 
   const eval::EvalContext target_ctx = ctx.eval_ctx->with_formula_cell(ctx.target.row, ctx.target.col);
-  return eval::evaluate_first_element(*shifted, *ctx.arena, *ctx.registry, target_ctx);
+  eval::EvalState* const caller_state = ctx.eval_ctx->state();
+  if (ctx.formula_cache != nullptr && caller_state != nullptr && !caller_state->observing_reads()) {
+    // Scratch-backed results must not enter the caller's memo; read observers keep the caller state.
+    eval::EvalState local_state;
+    const eval::EvalContext local_ctx = target_ctx.with_state(local_state);
+    Value result = eval::evaluate_first_element(*shifted, *formula_arena, *ctx.registry, local_ctx);
+    ctx.formula_cache->capture_resource_failure(local_state.out_of_memory());
+    return result;
+  }
+  Value result = eval::evaluate_first_element(*shifted, *formula_arena, *ctx.registry, target_ctx);
+  if (ctx.formula_cache != nullptr) {
+    ctx.formula_cache->capture_resource_failure();
+  }
+  return result;
 }
 
 std::optional<LiteralOperand> cell_is_operand(const std::string& source, const CFEvalContext& ctx) {
@@ -230,57 +302,58 @@ bool cf_values_equal(const Value& lhs, const Value& rhs) {
 
 namespace {
 
-// Rectangles at or below this cell count are iterated as-is; larger ones are
-// clamped to the sheet's populated extent first. The threshold keeps the
-// per-call extent scan (O(populated rows)) off the hot path for the small
-// rects that dominate real workbooks while still catching every oversized
-// sqref — a whole column alone is `Sheet::kMaxRows` cells, far above it.
-constexpr std::uint64_t kSqrefClampThresholdCells = 65536U;
-
-// Resolves a sqref range to concrete inclusive iteration bounds, clamping
-// every oversized rectangle — whole-column / whole-row sqrefs as well as
-// explicit coordinate-form giants such as `A1:XFD1048576` — to the sheet's
-// populated extent so no scan ever walks the full
-// `Sheet::kMaxRows * Sheet::kMaxCols` grid. Cells beyond the populated
-// extent resolve to blank and can neither match a target value nor
-// contribute a numeric sample, so the clamp preserves scan results.
-// Returns false when the clamped range is empty (no content in range).
-bool resolve_sqref_rect(const CFCellRange& range, const Sheet& sheet, std::uint32_t* r0, std::uint32_t* c0,
-                        std::uint32_t* r1, std::uint32_t* c1) {
-  *r0 = range.first.row;
-  *c0 = range.first.col;
-  *r1 = range.last.row;
-  *c1 = range.last.col;
-  if (utils::RectRange(*r0, *c0, *r1, *c1).size() <= kSqrefClampThresholdCells) {
-    return true;
-  }
-  const auto extent = sheet.populated_extent(*r0, *c0, *r1, *c1);
-  if (!extent.has_value()) {
-    return false;
-  }
-  *r1 = std::min(*r1, extent->last_row);
-  *c1 = std::min(*c1, extent->last_col);
-  return *r0 <= *r1 && *c0 <= *c1;
-}
+// Small rectangles avoid the callback machinery and retain the direct path
+// that dominates ordinary CF sqrefs. Larger rectangles walk populated cells
+// through `Sheet::cells_in_range`, so two distant populated corners do not
+// turn their entire bounding rectangle into work.
+constexpr std::uint64_t kSqrefDenseThresholdCells = 65536U;
 
 // Keep the lightweight grid constants in `cf_types.h` in sync with the
 // canonical `Sheet` extents used everywhere else.
 static_assert(kCfMaxRows == Sheet::kMaxRows, "kCfMaxRows must match Sheet::kMaxRows");
 static_assert(kCfMaxCols == Sheet::kMaxCols, "kCfMaxCols must match Sheet::kMaxCols");
 
-// Calls `visit` with the resolved value of every in-grid cell of `sqref`.
+// Calls `visit` with the effective values relevant to population rules in
+// `sqref`. Blank cells never contribute to numeric populations or duplicate
+// counts, so oversized ranges can visit populated cells only. Each range is
+// traversed independently to preserve multiplicity for overlapping sqrefs.
 template <typename Visit>
 void for_each_sqref_value(const std::vector<CFCellRange>& sqref, const Sheet& sheet, Visit visit) {
   for (const CFCellRange& range : sqref) {
-    std::uint32_t r0 = 0;
-    std::uint32_t c0 = 0;
-    std::uint32_t r1 = 0;
-    std::uint32_t c1 = 0;
-    if (!resolve_sqref_rect(range, sheet, &r0, &c0, &r1, &c1)) {
+    const std::uint32_t r0 = range.first.row;
+    const std::uint32_t c0 = range.first.col;
+    const std::uint32_t r1 = std::min(range.last.row, kCfMaxRows - 1U);
+    const std::uint32_t c1 = std::min(range.last.col, kCfMaxCols - 1U);
+    if (r0 > r1 || c0 > c1 || r0 >= kCfMaxRows || c0 >= kCfMaxCols) {
       continue;
     }
-    for (auto [row, col] : utils::RectRange(r0, c0, r1, c1)) {
-      visit(sheet.resolve_cell_value(row, col));
+
+    if (utils::RectRange(r0, c0, r1, c1).size() <= kSqrefDenseThresholdCells) {
+      for (auto [row, col] : utils::RectRange(r0, c0, r1, c1)) {
+        visit(sheet.resolve_cell_value(row, col));
+      }
+      continue;
+    }
+
+    struct VisitContext {
+      Visit* visit;
+    } visit_context{&visit};
+    const auto visit_populated_cell = [](const Sheet::RangeCell& cell, void* opaque) {
+      auto* context = static_cast<VisitContext*>(opaque);
+      (*context->visit)(cell.value);
+    };
+
+    // A spill in the rectangle makes `cells_in_range` probe every row, so bound it first.
+    const auto extent = sheet.populated_extent(r0, c0, r1, c1);
+    if (!extent.has_value()) {
+      continue;
+    }
+    const std::uint32_t walk_r1 = std::min(r1, extent->last_row);
+    const std::uint32_t walk_c1 = std::min(c1, extent->last_col);
+    std::uint64_t cursor = 0;
+    while (cursor != Sheet::kCellCursorEnd) {
+      cursor = sheet.cells_in_range(r0, c0, walk_r1, walk_c1, cursor, std::numeric_limits<std::uint32_t>::max(),
+                                    visit_populated_cell, &visit_context);
     }
   }
 }
@@ -334,6 +407,9 @@ ColorScalePopulation gather_population(const std::vector<CFCellRange>& sqref, co
   if (!values.empty()) {
     pop.min = values.front();
     pop.max = values.back();
+    // Reduced once in ascending order; AboveAverage reads these per cell.
+    pop.mean = mean_of(values);
+    pop.sample_stddev = sample_stddev(values, pop.mean);
   }
   pop.sorted = std::move(values);
   return pop;

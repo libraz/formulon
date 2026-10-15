@@ -16,6 +16,7 @@
 #include "sheet.h"
 #include "sheet_layout_edit.h"
 #include "util/test_eval_helpers.h"
+#include "utils/arena.h"
 #include "utils/date_time.h"
 #include "value.h"
 #include "workbook.h"
@@ -137,6 +138,44 @@ TEST(AutoFilterEval, IconFilterMatchesConditionalFormatIconsAcrossVisibleRows) {
   ASSERT_TRUE(static_cast<bool>(visible));
   ASSERT_EQ(visible.value().size(), values.size());
   EXPECT_EQ(visible.value(), (std::vector<bool>{false, false, false, true, true}));
+}
+
+TEST(AutoFilterEval, ConditionalFormatResourceFailureLeavesRowVisibilityUnchanged) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0U, 0U, Value::text("header"));
+  sheet.set_cell_value(1U, 0U, Value::number(1.0));
+  sheet.set_cell_value(2U, 0U, Value::number(2.0));
+  SetRowHidden(sheet, 1U, true);
+  SetRowHidden(sheet, 2U, false);
+
+  cf::CFRule expression;
+  expression.type = cf::RuleType::Expression;
+  expression.priority = 1;
+  expression.id = "resource-limited-expression";
+  expression.formula1 = "A1>0";
+  cf::ConditionalFormat block;
+  block.sqref.push_back(cf::CFCellRange{CellAddress{1U, 0U}, CellAddress{2U, 0U}});
+  block.rules.push_back(std::move(expression));
+  sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  AutoFilter filter;
+  filter.range = MergeRange{0U, 0U, 2U, 0U};
+  FilterColumn column;
+  column.kind = FilterKind::kColor;
+  filter.columns.push_back(std::move(column));
+
+  Arena arena(512U, 0U);
+  AutoFilterEvalDeps deps;
+  deps.arena = &arena;
+  const auto result = apply_auto_filter(wb, 0U, filter, deps);
+
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecResourceLimit);
+  EXPECT_NE(result.error().context.find("cell="), std::string::npos);
+  EXPECT_NE(result.error().context.find("ceiling="), std::string::npos);
+  EXPECT_TRUE(RowHidden(sheet, 1U));
+  EXPECT_FALSE(RowHidden(sheet, 2U));
 }
 
 TEST(AutoFilterEval, Top10UsesNthElementAndKeepsCutoffTies) {

@@ -324,13 +324,10 @@ bool match_above_average(const CFRule& rule, const Value& cell_value, const CFEv
   if (pop == nullptr) {
     return false;
   }
-  const double mean = helpers::mean_of(pop->sorted);
-
-  double threshold = mean;
+  double threshold = pop->mean;
   if (rule.std_dev.has_value() && *rule.std_dev > 0.0) {
-    const double sigma = helpers::sample_stddev(pop->sorted, mean);
-    const double offset = *rule.std_dev * sigma;
-    threshold = rule.above_average ? mean + offset : mean - offset;
+    const double offset = *rule.std_dev * pop->sample_stddev;
+    threshold = rule.above_average ? pop->mean + offset : pop->mean - offset;
   }
 
   const double cell = cell_value.as_number();

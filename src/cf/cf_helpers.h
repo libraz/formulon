@@ -23,6 +23,7 @@
 #include "cf/cf_evaluator.h"
 #include "cf/cf_types.h"
 #include "excel_profile.h"
+#include "utils/arena.h"
 #include "value.h"
 
 namespace formulon {
@@ -43,6 +44,8 @@ struct ColorScalePopulation {
   std::vector<double> sorted;  // ascending
   double min = 0.0;
   double max = 0.0;
+  double mean = 0.0;           // computed from `sorted` in ascending order
+  double sample_stddev = 0.0;  // Bessel-corrected; 0 for fewer than two samples
 };
 
 /// Per-block counts for DuplicateValues / UniqueValues. Keys use the shared
@@ -55,11 +58,27 @@ struct DuplicateValuePopulation {
 
 /// Parsed roots reused by one prepared CF walk. A null value records a parse
 /// failure so malformed sources do not consume arena space again for each
-/// target cell. The map owns only source keys; AST nodes remain in the host
-/// arena for the lifetime of the prepared walk.
+/// target cell. The map owns source keys and indices; AST nodes remain in the
+/// private persistent arena, while shifted trees and evaluation results use
+/// the reusable scratch arena.
 struct PreparedCfFormulaCache {
   std::unordered_map<std::string, std::size_t> indices;
   std::vector<const parser::AstNode*> roots;
+  std::optional<Arena> persistent_arena;
+  std::optional<Arena> scratch_arena;
+  std::size_t available_bytes = 0;
+  std::size_t initial_chunk_bytes = 4096;
+  bool resource_failure = false;
+
+  /// Creates the private root arena from the caller's remaining capacity.
+  /// The caller arena itself is never used for prepared formula allocations.
+  void initialize(const Arena& caller_arena);
+
+  /// Recreates scratch with only the capacity left after persistent roots.
+  void create_scratch();
+
+  /// Latches exhaustion before scratch is reset or destroyed.
+  void capture_resource_failure(bool state_out_of_memory = false) noexcept;
 };
 
 namespace helpers {

@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "cf/cf_helpers.h"
@@ -26,6 +27,7 @@
 #include "eval/eval_context.h"
 #include "eval/eval_profile_scope.h"
 #include "sheet.h"
+#include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/index_sort.h"
 #include "utils/rect_iterator.h"
@@ -166,6 +168,7 @@ struct PreparedCfEvaluator::Impl {
     if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
       return;
     }
+    formula_cache.initialize(*host.arena);
     const std::vector<ConditionalFormat>& blocks = sheet.conditional_formats();
     populations.resize(blocks.size());
     duplicates.resize(blocks.size());
@@ -182,10 +185,19 @@ struct PreparedCfEvaluator::Impl {
     });
   }
 
-  std::vector<CFMatch> evaluate(CellAddress target) {
+  Error resource_error(CellAddress target) const {
+    return make_error(
+        FormulonErrorCode::kSecResourceLimit, "conditional-format formula evaluation exhausted its arena budget",
+        "cell=" + a1::encode_a1(target.row, target.col) + " ceiling=" + std::to_string(formula_cache.available_bytes));
+  }
+
+  Expected<std::vector<CFMatch>, Error> evaluate(CellAddress target) {
     std::vector<CFMatch> matches;
     if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
       return matches;
+    }
+    if (formula_cache.resource_failure) {
+      return resource_error(target);
     }
     const eval::ScopedEvalProfile profile_scope(host.eval_ctx->excel_profile());
     const Value cell_value = sheet.resolve_cell_value(target.row, target.col);
@@ -221,10 +233,26 @@ struct PreparedCfEvaluator::Impl {
         ctx.cached_duplicates = &*slot;
       }
 
-      if (!match_rule(rule, cell_value, ctx)) {
+      const bool matched = match_rule(rule, cell_value, ctx);
+      formula_cache.capture_resource_failure();
+      if (formula_cache.resource_failure) {
+        return resource_error(target);
+      }
+      if (!matched) {
+        if (formula_cache.scratch_arena.has_value()) {
+          formula_cache.scratch_arena->reset();
+        }
         continue;
       }
-      matches.push_back(make_match(rule, cell_value, ctx));
+      CFMatch match = make_match(rule, cell_value, ctx);
+      formula_cache.capture_resource_failure();
+      if (formula_cache.resource_failure) {
+        return resource_error(target);
+      }
+      matches.push_back(std::move(match));
+      if (formula_cache.scratch_arena.has_value()) {
+        formula_cache.scratch_arena->reset();
+      }
       if (rule.stop_if_true) {
         break;
       }
@@ -243,6 +271,17 @@ PreparedCfEvaluator::PreparedCfEvaluator(PreparedCfEvaluator&&) noexcept = defau
 PreparedCfEvaluator& PreparedCfEvaluator::operator=(PreparedCfEvaluator&&) noexcept = default;
 
 std::vector<CFMatch> PreparedCfEvaluator::evaluate(CellAddress target) {
+  auto result = evaluate_checked(target);
+  if (!result) {
+    return {};
+  }
+  return result.take();
+}
+
+Expected<std::vector<CFMatch>, Error> PreparedCfEvaluator::evaluate_checked(CellAddress target) {
+  if (impl_ == nullptr) {
+    return std::vector<CFMatch>{};
+  }
   return impl_->evaluate(target);
 }
 
@@ -313,13 +352,16 @@ Expected<std::vector<CFRangeCellMatches>, Error> evaluate_cf_for_range(const She
           CellAddress cell{};
           cell.row = row;
           cell.col = col;
-          std::vector<CFMatch> matches = prepared.evaluate(cell);
-          if (matches.empty()) {
+          auto matches = prepared.evaluate_checked(cell);
+          if (!matches) {
+            return std::move(matches.error());
+          }
+          if (matches.value().empty()) {
             continue;
           }
           CFRangeCellMatches entry;
           entry.cell = cell;
-          entry.matches = std::move(matches);
+          entry.matches = matches.take();
           results.push_back(std::move(entry));
         }
       }
