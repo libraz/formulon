@@ -20,6 +20,7 @@
 #include "eval/text_format/render_fraction.h"
 #include "eval/text_format/rounding.h"
 #include "excel_locale.h"
+#include "utils/double_parse.h"
 #include "utils/number_text.h"
 
 namespace formulon {
@@ -34,6 +35,25 @@ namespace {
 // is always at least `"0"`).
 //
 // This helper does not handle scientific notation; see `render_scientific`.
+// Returns `v / 10^exponent` as the double nearest the exact quotient. Shifting the exponent of the 17-digit decimal
+// text keeps the scaling to one rounding; a loop of 219 multiplications drifts by an ULP.
+double shift_decimal_exponent(double v, int exponent) {
+  char buf[48];
+  const int n = format_exponential(buf, sizeof(buf), v, 16);
+  const std::string_view text(buf, n > 0 ? static_cast<std::size_t>(n) : 0U);
+  const std::size_t e = text.find('e');
+  if (e == std::string_view::npos) {
+    return v;
+  }
+  const ParsedDouble parsed = parse_double_prefix(text.substr(e + 1U));
+  std::string shifted(text.substr(0, e + 1U));
+  char exp_buf[16];
+  const int m = format_signed(exp_buf, sizeof(exp_buf), static_cast<long long>(parsed.value) - exponent);
+  shifted.append(exp_buf, m > 0 ? static_cast<std::size_t>(m) : 0U);
+  double out = v;
+  return parse_double_exact(shifted, &out) ? out : v;
+}
+
 void format_fixed_digits(double v, int decimals, bool* negative, std::string* int_digits, std::string* frac_digits) {
   // Use strict `< 0.0` rather than `signbit` so that `-0.0` rounds to "0" with
   // no sign byte. Mac Excel's two-section formats (`#,##0_);(#,##0)`) expect
@@ -304,15 +324,7 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
         --quotient;
       }
       exponent = quotient * integer_group;
-      if (exponent > 0) {
-        for (int i = 0; i < exponent; ++i) {
-          mantissa /= 10.0;
-        }
-      } else if (exponent < 0) {
-        for (int i = 0; i > exponent; --i) {
-          mantissa *= 10.0;
-        }
-      }
+      mantissa = shift_decimal_exponent(scaled, exponent);
       if (!std::isfinite(mantissa)) {
         return FormatStatus::kOverflow;
       }
@@ -321,10 +333,8 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
 
     // Rounding can carry into a new group (99.999 -> 100.00); renormalize and format again.
     if (mantissa != 0.0 && static_cast<int>(int_digits.size()) > integer_group) {
-      for (int i = 0; i < integer_group; ++i) {
-        mantissa /= 10.0;
-      }
       exponent += integer_group;
+      mantissa = shift_decimal_exponent(scaled, exponent);
       if (!std::isfinite(mantissa)) {
         return FormatStatus::kOverflow;
       }
