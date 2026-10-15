@@ -29,6 +29,7 @@
 #include "utils/cancellation_snap.h"
 #include "utils/error.h"
 #include "utils/strings.h"
+#include "utils/subnormal_flush.h"
 #include "utils/utf8_length.h"
 #include "value.h"
 
@@ -181,7 +182,8 @@ Value Product(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     if (!coerced) {
       return Value::error(coerced.error());
     }
-    total *= coerced.value();
+    // Excel starts from the first value, so a lone subnormal is not flushed.
+    total = any ? flush_subnormal(total * coerced.value()) : coerced.value();
     any = true;
   }
   if (!any) {

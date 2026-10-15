@@ -1,0 +1,56 @@
+suite: subnormal_flush
+description: Multiply, divide, PRODUCT and the BESSELK recurrence flush a subnormal result to 0; add, subtract, SUM and EXP keep it
+tolerance: { abs: 0.0, rel: 1.0e-14 }
+locale: ja-JP
+cases:
+  - id: mul_literals
+    description: "1E-300*1E-10 is flushed"
+    formula: "=SQRT(ABS(1E-300*1E-10))*1E200"
+  - id: mul_by_one
+    description: "a subnormal times 1 is flushed"
+    formula: "=SQRT(ABS(EXP(-720)*1))*1E200"
+  - id: mul_by_minus_one
+    description: "a subnormal times -1 is flushed"
+    formula: "=SQRT(ABS(EXP(-720)*-1))*1E200"
+  - id: div_by_one
+    description: "a subnormal over 1 is flushed"
+    formula: "=SQRT(ABS(EXP(-720)/1))*1E200"
+  - id: div_to_subnormal
+    description: "1E-300/1E10 is flushed"
+    formula: "=SQRT(ABS(1E-300/1E10))*1E200"
+  - id: mul_of_normals
+    description: "EXP(-700)*EXP(-20) is flushed"
+    formula: "=SQRT(ABS(EXP(-700)*EXP(-20)))*1E200"
+  - id: product_args
+    description: "PRODUCT(1E-300,1E-10) is flushed"
+    formula: "=SQRT(ABS(PRODUCT(1E-300,1E-10)))*1E200"
+  - id: product_single_subnormal
+    description: "PRODUCT of one subnormal is flushed"
+    formula: "=SQRT(ABS(PRODUCT(EXP(-720))))*1E200"
+  - id: add_keeps
+    description: "addition keeps a subnormal"
+    formula: "=SQRT(ABS(EXP(-720)+EXP(-720)))*1E200"
+  - id: sub_keeps
+    description: "subtraction keeps a subnormal"
+    formula: "=SQRT(ABS(2.5E-308-2.4E-308))*1E200"
+  - id: exp_keeps
+    description: "EXP keeps a subnormal"
+    formula: "=SQRT(ABS(EXP(-709.5)))*1E200"
+  - id: negate_keeps
+    description: "unary minus keeps a subnormal"
+    formula: "=SQRT(ABS(-(-EXP(-720))))*1E200"
+  - id: sum_keeps
+    description: "SUM keeps a subnormal"
+    formula: "=SQRT(ABS(SUM(EXP(-720),EXP(-720))))*1E200"
+  - id: mul_back_to_normal
+    description: "a subnormal scaled back into range survives"
+    formula: "=SQRT(ABS(EXP(-720)*2^60))*1E200"
+  - id: besselk_recurrence_flush
+    description: "BESSELK(700,2) equals BESSELK(700,0)"
+    formula: "=IF(BESSELK(700,2)=BESSELK(700,0),1,2)"
+  - id: besselk_700_5
+    description: "BESSELK(700,5) with flushed recurrence"
+    formula: "=BESSELK(700,5)*1E300"
+  - id: besselk_700_100
+    description: "BESSELK(700,100) with flushed recurrence"
+    formula: "=BESSELK(700,100)*1E300"

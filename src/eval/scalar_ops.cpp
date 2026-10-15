@@ -25,6 +25,7 @@
 #include "utils/arena.h"
 #include "utils/expected.h"  // FM_CHECK
 #include "utils/strings.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -220,14 +221,14 @@ Value apply_arithmetic(parser::BinOp op, double lhs, double rhs) {
     case parser::BinOp::Sub:
       return finalize_arithmetic(win ? x87_sub(lhs, rhs) : lhs - rhs);
     case parser::BinOp::Mul:
-      return finalize_arithmetic(win ? x87_mul(lhs, rhs) : lhs * rhs);
+      return finalize_arithmetic(flush_subnormal(win ? x87_mul(lhs, rhs) : lhs * rhs));
     case parser::BinOp::Div:
       // Excel reports #DIV/0! for any division whose divisor is exactly
       // zero, including 0/0 (no #NUM! tie-break).
       if (rhs == 0.0) {
         return Value::error(ErrorCode::Div0);
       }
-      return finalize_arithmetic(win ? x87_div(lhs, rhs) : lhs / rhs);
+      return finalize_arithmetic(flush_subnormal(win ? x87_div(lhs, rhs) : lhs / rhs));
     case parser::BinOp::Pow: {
       // Delegates to the shared `apply_pow` helper so the `^` operator and
       // the `POWER()` builtin cannot drift apart on edge cases.

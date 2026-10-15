@@ -15,6 +15,7 @@
 #include "utils/cancellation_snap.h"
 #include "utils/expected.h"
 #include "utils/index_sort.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -65,9 +66,10 @@ Expected<double, ErrorCode> run_product(const std::vector<double>& xs) {
   if (xs.empty()) {
     return 0.0;
   }
-  double total = 1.0;
-  for (double x : xs) {
-    total *= x;
+  // Excel starts from the first value, so a lone subnormal is not flushed.
+  double total = xs.front();
+  for (std::size_t i = 1; i < xs.size(); ++i) {
+    total = flush_subnormal(total * xs[i]);
   }
   if (!std::isfinite(total)) {
     return ErrorCode::Num;
