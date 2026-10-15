@@ -11,9 +11,15 @@
 
 namespace formulon {
 
-/// Magnitudes below this (DBL_MIN / 16) are zero to sign tests, truthiness and
-/// unary minus.
+/// Nonnegative values below this (DBL_MIN / 16) are zero to sign tests,
+/// truthiness, unary minus and number-format section selection.
 constexpr double kZeroTestThreshold = 0x1p-1026;
+
+/// Excel's zero test is one-sided: `0 <= x < 2^-1026` is zero, while every
+/// negative value, however small, is nonzero (`SIGN(0-EXP(-720))` is -1).
+inline bool tests_as_zero(double x) noexcept {
+  return x >= 0.0 && x < kZeroTestThreshold;
+}
 
 /// Returns 0 for a nonzero `r` below DBL_MIN in magnitude; otherwise `r`.
 inline double flush_subnormal(double r) noexcept {

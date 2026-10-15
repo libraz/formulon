@@ -22,6 +22,7 @@
 #include "excel_locale.h"
 #include "utils/double_parse.h"
 #include "utils/number_text.h"
+#include "utils/subnormal_flush.h"
 
 namespace formulon {
 namespace text_format {
@@ -150,7 +151,7 @@ std::size_t trimmed_fraction_length(std::string_view s) {
 // emits the magnitude. The sign prefix (if any) is owned by the outer
 // `render_numeric` routine.
 void format_general(std::string& out, double v) {
-  if (v == 0.0) {
+  if (flush_subnormal(v) == 0.0) {
     out.push_back('0');
     return;
   }
@@ -308,6 +309,7 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
   std::string frac_digits_str;
 
   int exponent = 0;
+  bool subnormal = false;
   if (section.has_scientific) {
     // Engineering groups span all integer placeholders; required `0`/`?` still set minimum padding.
     // A grouped mantissa spans at least four digits (`0,0E+00` -> 1,235E+00, locale_tokens.text_sci_comma).
@@ -315,7 +317,12 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
         std::max(1, section.integer_zero_digits + section.integer_opt_digits + section.integer_pad_digits);
     const int integer_group = section.thousands_separator ? std::max(placeholder_group, 4) : placeholder_group;
     double mantissa = scaled;
-    if (mantissa != 0.0) {
+    // A subnormal renders as a zero mantissa at exponent -1 that keeps its sign (`-0.00E-01`).
+    subnormal = mantissa != 0.0 && flush_subnormal(mantissa) == 0.0;
+    if (subnormal) {
+      exponent = -1;
+      mantissa = 0.0;
+    } else if (mantissa != 0.0) {
       const double abs_m = std::fabs(mantissa);
       const int raw_exponent = static_cast<int>(std::floor(std::log10(abs_m)));
       // Floor division keeps values in (-1, 0) in the preceding group.
@@ -342,6 +349,9 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
     }
     // A zero mantissa fills every `0` / `#` integer placeholder with 0 (`##0.0E+0` -> 000.0E+0), and a grouped
     // one keeps the four-digit floor (`0,00E+00` -> 0,000E+00).
+    if (subnormal) {
+      negative = scaled < 0.0;
+    }
     if (mantissa == 0.0) {
       const int fill = std::max(1, section.integer_zero_digits + section.integer_opt_digits);
       int_digits.assign(static_cast<std::size_t>(section.thousands_separator ? std::max(fill, 4) : fill), '0');
@@ -355,7 +365,7 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
   // placeholder pass above: e.g. TEXT(-1/3, "General") is -0.333333333,
   // not 0.333333333.
   if (section.has_general) {
-    negative = scaled < 0.0;
+    negative = flush_subnormal(scaled) < 0.0;
   }
 
   // An integer part of zero is insignificant: each `0` placeholder prints its own 0 and a `?` pads a space
@@ -479,7 +489,7 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
   // zero. Mac Excel's single-section formats (`"0"`, `"00-00-00-00"`, etc.)
   // render `TEXT(-1/3, "0")` as `"0"`, not `"-0"`: once the rounding has
   // crushed the magnitude below the displayable precision, no sign leaks out.
-  if (negative && !section.has_general) {
+  if (negative && !section.has_general && !subnormal) {
     if (decimal_digits_all_zero(int_digits) && decimal_digits_all_zero(frac_digits_str)) {
       negative = false;
     }

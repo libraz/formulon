@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-15T07:34:52Z"
+    "generated_at": "2026-10-15T08:41:05Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -380,6 +380,78 @@
       "expect": {
         "kind": "error",
         "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "sign_negative_below_threshold",
+      "formula": "=SIGN(0-EXP(-720))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "sign_negative_ulp",
+      "formula": "=SIGN(2^-1022-2^-1022*(1+2^-52))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "if_negative_below_threshold",
+      "formula": "=IF(0-EXP(-720),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "not_negative_below_threshold",
+      "formula": "=NOT(0-EXP(-720))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "negation_of_negative_below_threshold",
+      "formula": "=-(0-EXP(-720))*2^600",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.432773354194498e-133
+      }
+    },
+    {
+      "id": "compare_negative_below_threshold",
+      "formula": "=IF((0-EXP(-720))<0,1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "compare_positive_below_threshold",
+      "formula": "=IF(EXP(-720)>0,1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "compare_equal_zero_below_threshold",
+      "formula": "=IF(EXP(-720)=0,1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
       }
     }
   ]

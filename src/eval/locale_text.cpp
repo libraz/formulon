@@ -5,11 +5,16 @@
 #include "eval/eval_profile_scope.h"
 #include "excel_locale.h"
 #include "utils/double_format.h"
+#include "utils/subnormal_flush.h"
 
 namespace formulon {
 namespace eval {
 
 std::string locale_number_text(double value) {
+  // A subnormal reads as a signed zero.
+  if (value != 0.0 && flush_subnormal(value) == 0.0) {
+    return value < 0.0 ? "-0" : "0";
+  }
   std::string out;
   format_double(out, value);
   const char separator = locale_facts(current_eval_profile()).decimal_separator;

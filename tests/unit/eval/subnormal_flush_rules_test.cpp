@@ -1,8 +1,9 @@
 //
 // Mac Excel 365 reports a nonzero result below DBL_MIN as 0 for multiply,
 // divide, POWER, `%`, per-product and per-square accumulation and the final
-// division of AVERAGE, while + - SUM and comparisons keep it. Subnormals are
-// read back by scaling with powers of two, which is lossless.
+// division of AVERAGE, while + - SUM and comparisons keep it; as text a
+// subnormal reads as a zero. Subnormals are read back by scaling with powers
+// of two, which is lossless.
 
 #include <string>
 
@@ -33,6 +34,12 @@ void ExpectBool(const std::string& formula, bool expected) {
   const Value v = EvalSource(formula);
   ASSERT_TRUE(v.is_boolean()) << formula << " kind=" << static_cast<int>(v.kind());
   EXPECT_EQ(v.as_boolean(), expected) << formula;
+}
+
+void ExpectText(const std::string& formula, const std::string& expected) {
+  const Value v = EvalSource(formula);
+  ASSERT_TRUE(v.is_text()) << formula << " kind=" << static_cast<int>(v.kind());
+  EXPECT_EQ(v.as_text(), expected) << formula;
 }
 
 TEST(SubnormalFlushPower, SubnormalResultIsZero) {
@@ -94,6 +101,14 @@ TEST(SubnormalFlushZeroTest, SignAndTruthiness) {
   ExpectBool("=NOT(EXP(-720))", true);
 }
 
+TEST(SubnormalFlushZeroTest, EveryNegativeValueIsNonzero) {
+  ExpectNum("=SIGN(0-EXP(-720))", -1.0);
+  ExpectNum("=SIGN(2^-1022-2^-1022*(1+2^-52))", -1.0);
+  ExpectNum("=IF(0-EXP(-720),1,0)", 1.0);
+  ExpectBool("=NOT(0-EXP(-720))", false);
+  ExpectNum("=-(0-EXP(-720))*2^600", 8.4327733541944975e-133);
+}
+
 TEST(SubnormalFlushZeroTest, UnaryMinusDropsSignBelowThreshold) {
   ExpectNum("=-EXP(-720)*2^600", 8.4327733541944975e-133);
   ExpectNum("=(0-EXP(-720))*2^600", -8.4327733541944975e-133);
@@ -110,6 +125,29 @@ TEST(SubnormalFlushMod, SubnormalRemainderAndDivisor) {
 
 TEST(SubnormalFlushControls, BinarySubtractionKeepsSubnormal) {
   ExpectNum("=(1E-300*1.000000000001-1E-300)*2^600*2^474", 202433888256.0);
+}
+
+TEST(SubnormalText, ConcatenationReadsAsSignedZero) {
+  ExpectText("=EXP(-720)&\"\"", "0");
+  ExpectText("=(0-EXP(-720))&\"\"", "-0");
+  ExpectNum("=VALUE(EXP(-720)&\"\")", 0.0);
+}
+
+TEST(SubnormalText, GeneralFormatDropsTheSign) {
+  ExpectText("=TEXT(2^-1022-2^-1022*1.25,\"General\")", "0");
+}
+
+TEST(SubnormalText, ScientificIsZeroMantissaAtExponentMinusOne) {
+  ExpectText("=TEXT(2^-1022*1.0625-2^-1022,\"0.00E+00\")", "0.00E-01");
+  ExpectText("=TEXT(2^-1022*(1.0625-2^-52)-2^-1022,\"0.00E+00\")", "0.00E+00");
+  ExpectText("=TEXT(0-EXP(-720),\"0E+0\")", "-0E-1");
+}
+
+TEST(SubnormalText, SectionChoiceUsesTheOneSidedZeroTest) {
+  ExpectText("=TEXT(2^-1022*1.0625-2^-1022,\"0;(0);\"\"z\"\"\")", "0");
+  ExpectText("=TEXT(EXP(-720),\"0;(0);\"\"z\"\"\")", "z");
+  ExpectText("=TEXT(0-EXP(-720),\"0;(0);\"\"z\"\"\")", "(0)");
+  ExpectText("=TEXT(EXP(-720),\"[>0]\"\"p\"\";\"\"z\"\"\")", "z");
 }
 
 }  // namespace

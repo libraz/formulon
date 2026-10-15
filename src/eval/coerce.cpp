@@ -402,7 +402,7 @@ Expected<bool, ErrorCode> coerce_to_bool(const Value& v) {
       if (std::isnan(d) || std::isinf(d)) {
         return ErrorCode::Num;
       }
-      return std::fabs(d) >= kZeroTestThreshold;
+      return !tests_as_zero(d);
     }
     case ValueKind::Blank:
       return false;

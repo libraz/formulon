@@ -47,7 +47,7 @@ Value Sign(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(coerced.error());
   }
   const double x = coerced.value();
-  if (std::fabs(x) < kZeroTestThreshold) {
+  if (tests_as_zero(x)) {
     return Value::number(0.0);
   }
   return Value::number(x > 0.0 ? 1.0 : -1.0);

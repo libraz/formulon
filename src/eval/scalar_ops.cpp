@@ -202,8 +202,8 @@ Value apply_unary(parser::UnaryOp op, const Value& operand) {
   // re-enter this switch deliberately rather than fall through silently.
   switch (op) {
     case parser::UnaryOp::Minus:
-      // Negation drops the sign of a value below the zero-test threshold.
-      return finalize_arithmetic(std::fabs(x) < kZeroTestThreshold ? x : -x);
+      // Negation leaves a value that tests as zero unchanged.
+      return finalize_arithmetic(tests_as_zero(x) ? x : -x);
     case parser::UnaryOp::Percent:
       return finalize_arithmetic(
           flush_subnormal(current_eval_profile().host == ExcelHost::kWin365 ? x87_div(x, 100.0) : x / 100.0));

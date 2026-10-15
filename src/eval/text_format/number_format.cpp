@@ -26,6 +26,7 @@
 #include "eval/text_format/render_numeric.h"
 #include "excel_locale.h"
 #include "utils/date_time.h"
+#include "utils/subnormal_flush.h"
 
 namespace formulon {
 namespace text_format {
@@ -84,6 +85,10 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
                           FormatDialect dialect) {
   if (format.empty()) {
     return FormatStatus::kOk;
+  }
+  // Section choice and predicates use Excel's one-sided zero test.
+  if (tests_as_zero(value)) {
+    value = 0.0;
   }
   ParsedFormat parsed;
   parse_format(format, dialect, parsed);

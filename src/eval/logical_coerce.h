@@ -7,7 +7,7 @@
 // IF / IFERROR / NOT and accepts numeric strings like "0" / "1"):
 //
 //   * A bare Bool is returned as-is.
-//   * A Number coerces as `|d| >= kZeroTestThreshold` (NaN / Inf -> `#NUM!`).
+//   * A Number coerces as `!tests_as_zero(d)` (NaN / Inf -> `#NUM!`).
 //   * Blank is Skip for AND / OR / XOR (the per-arg loop skips it).
 //     Callers that want "Blank is FALSE" (IFS) treat Skip as false.
 //   * Text (trimmed, ASCII case-insensitive):
@@ -68,7 +68,7 @@ inline LogicalCoerce logical_coerce(const Value& v, bool* out_bool, ErrorCode* o
         *out_err = ErrorCode::Num;
         return LogicalCoerce::Error;
       }
-      *out_bool = std::fabs(d) >= kZeroTestThreshold;
+      *out_bool = !tests_as_zero(d);
       return LogicalCoerce::HasValue;
     }
     case ValueKind::Blank:
