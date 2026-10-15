@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-15T06:36:07Z"
+    "generated_at": "2026-10-15T09:15:35Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -403,6 +403,222 @@
     {
       "id": "besselj_134217730_1",
       "formula": "=BESSELJ(134217730,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_134217727p7_0",
+      "formula": "=BESSELJ(134217727.7,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.574804505332463e-05
+      }
+    },
+    {
+      "id": "besselj_134217729p3_1",
+      "formula": "=BESSELJ(134217729.3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.387189777331845e-05
+      }
+    },
+    {
+      "id": "besselj_m134217729_1",
+      "formula": "=BESSELJ(-134217729,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.1896665584849795e-05
+      }
+    },
+    {
+      "id": "besselj_134217727p5_2",
+      "formula": "=BESSELJ(134217727.5,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.7925127019616966e-05
+      }
+    },
+    {
+      "id": "besselj_134217727p7_2",
+      "formula": "=BESSELJ(134217727.7,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.5748044101488518e-05
+      }
+    },
+    {
+      "id": "besselj_134217727p5_10",
+      "formula": "=BESSELJ(134217727.5,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.792510646029881e-05
+      }
+    },
+    {
+      "id": "besselj_100000000_0",
+      "formula": "=BESSELJ(100000000,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.206029583928179e-05
+      }
+    },
+    {
+      "id": "besselj_m100000000_1",
+      "formula": "=BESSELJ(-100000000,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -7.306391160326758e-05
+      }
+    },
+    {
+      "id": "besselj_134217728_0",
+      "formula": "=BESSELJ(134217728,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_134217729p4_1",
+      "formula": "=BESSELJ(134217729.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_m134217730_1",
+      "formula": "=BESSELJ(-134217730,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_134217727p9_2",
+      "formula": "=BESSELJ(134217727.9,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_134217728_2",
+      "formula": "=BESSELJ(134217728,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_134217729_3",
+      "formula": "=BESSELJ(134217729,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_2147483647_0",
+      "formula": "=BESSELJ(2147483647,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_2147483648_0",
+      "formula": "=BESSELJ(2147483648,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_2147483648_1",
+      "formula": "=BESSELJ(2147483648,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_2147483648p5_0",
+      "formula": "=BESSELJ(2147483648.5,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_4294967296_1",
+      "formula": "=BESSELJ(4294967296,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_6442450944_0",
+      "formula": "=BESSELJ(6442450944,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_m2147483649_0",
+      "formula": "=BESSELJ(-2147483649,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_4294967296_10",
+      "formula": "=BESSELJ(4294967296,10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_1E300_0",
+      "formula": "=BESSELJ(1E+300,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_m1E300_3",
+      "formula": "=BESSELJ(-1E+300,3)",
       "setup": {},
       "expect": {
         "kind": "error",

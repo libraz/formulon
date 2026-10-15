@@ -135,3 +135,51 @@ cases:
   - id: besselj_134217730_1
     description: "BESSELJ(134217730,1): J1 phase beyond the limit is #NUM!"
     formula: "=BESSELJ(134217730,1)"
+  - id: besselj_134217727p7_0
+    formula: "=BESSELJ(134217727.7,0)"
+  - id: besselj_134217729p3_1
+    formula: "=BESSELJ(134217729.3,1)"
+  - id: besselj_m134217729_1
+    formula: "=BESSELJ(-134217729,1)"
+  - id: besselj_134217727p5_2
+    formula: "=BESSELJ(134217727.5,2)"
+  - id: besselj_134217727p7_2
+    formula: "=BESSELJ(134217727.7,2)"
+  - id: besselj_134217727p5_10
+    formula: "=BESSELJ(134217727.5,10)"
+  - id: besselj_100000000_0
+    formula: "=BESSELJ(100000000,0)"
+  - id: besselj_m100000000_1
+    formula: "=BESSELJ(-100000000,1)"
+  - id: besselj_134217728_0
+    formula: "=BESSELJ(134217728,0)"
+  - id: besselj_134217729p4_1
+    formula: "=BESSELJ(134217729.4,1)"
+  - id: besselj_m134217730_1
+    formula: "=BESSELJ(-134217730,1)"
+  - id: besselj_134217727p9_2
+    formula: "=BESSELJ(134217727.9,2)"
+  - id: besselj_134217728_2
+    formula: "=BESSELJ(134217728,2)"
+  - id: besselj_134217729_3
+    formula: "=BESSELJ(134217729,3)"
+  - id: besselj_2147483647_0
+    formula: "=BESSELJ(2147483647,0)"
+  - id: besselj_2147483648_0
+    formula: "=BESSELJ(2147483648,0)"
+  - id: besselj_2147483648_1
+    formula: "=BESSELJ(2147483648,1)"
+  - id: besselj_2147483648p5_0
+    formula: "=BESSELJ(2147483648.5,0)"
+  - id: besselj_4294967296_1
+    formula: "=BESSELJ(4294967296,1)"
+  - id: besselj_6442450944_0
+    formula: "=BESSELJ(6442450944,0)"
+  - id: besselj_m2147483649_0
+    formula: "=BESSELJ(-2147483649,0)"
+  - id: besselj_4294967296_10
+    formula: "=BESSELJ(4294967296,10)"
+  - id: besselj_1E300_0
+    formula: "=BESSELJ(1E+300,0)"
+  - id: besselj_m1E300_3
+    formula: "=BESSELJ(-1E+300,3)"
