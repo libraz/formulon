@@ -13,6 +13,11 @@
 #ifndef FORMULON_NODE_ADDON_PARTS_WORKBOOK_CLASS_H_
 #define FORMULON_NODE_ADDON_PARTS_WORKBOOK_CLASS_H_
 
+#include <algorithm>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+
 #include "node_addon/parts/addon_common.h"
 
 namespace formulon_node {
@@ -458,6 +463,108 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   /// `info[idx]` when it is an object, else a fresh empty object.
   static Napi::Object ArgObjectOrEmpty(const Napi::CallbackInfo& info, size_t idx);
 
+  /// Bool argument as the C ABI's `int32_t` flag.
+  static int32_t ArgFlag(const Napi::CallbackInfo& info, size_t idx) { return ArgBool(info, idx) ? 1 : 0; }
+
+  /// `info[idx]` converted to the C parameter type `T`: `double` and `int32_t`
+  /// read as numbers, `uint8_t` saturates at 255, other integers read as u32.
+  template <typename T>
+  static T ArgAs(const Napi::CallbackInfo& info, size_t idx) {
+    if constexpr (std::is_same_v<T, double>) {
+      return ArgDouble(info, idx);
+    } else if constexpr (std::is_same_v<T, int32_t>) {
+      return ArgI32(info, idx);
+    } else if constexpr (std::is_same_v<T, uint8_t>) {
+      return static_cast<uint8_t>(std::min(ArgU32(info, idx), 255U));
+    } else {
+      return static_cast<T>(ArgU32(info, idx));
+    }
+  }
+
+  /// Runs `call(handle_)` and returns its status envelope, or the
+  /// destroyed-handle envelope when the wrapper no longer owns a workbook.
+  template <typename Call>
+  Napi::Value StatusCall(const Napi::CallbackInfo& info, Call&& call) {
+    if (handle_ == nullptr) {
+      return NullHandleError(info.Env());
+    }
+    return MakeStatus(info.Env(), call(handle_));
+  }
+
+  /// Status entry for a C function `(wb, lead, args...)`: `info[0]` is the
+  /// leading index (sheet or cache id) and `info[1...]` convert through
+  /// `ArgAs` to the parameter types.
+  template <typename Lead, typename... Args>
+  Napi::Value InvokeSheetCall(const Napi::CallbackInfo& info, fm_status_t (*fn)(fm_workbook_t*, Lead, Args...)) {
+    return InvokeSheetCallImpl(info, fn, std::index_sequence_for<Args...>{});
+  }
+
+  /// Status entry for `(sheet, spec:object)`. A missing or non-object spec
+  /// throws a `TypeError` carrying `usage`; `pull(reader, spec)` fills the
+  /// caller's record, and `apply(handle_)` runs only if every field read.
+  template <typename Pull, typename Apply>
+  Napi::Value InvokeSheetSpec(const Napi::CallbackInfo& info, const char* usage, Pull&& pull, Apply&& apply) {
+    Napi::Env env = info.Env();
+    if (handle_ == nullptr) {
+      return NullHandleError(env);
+    }
+    if (info.Length() < 2 || !info[1].IsObject()) {
+      Napi::TypeError::New(env, usage).ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    const Napi::Object spec = info[1].As<Napi::Object>();
+    CheckedSpecReader reader(env);
+    pull(reader, spec);
+    if (!reader.ok()) {
+      // A malformed field left a pending JS exception: stop before the C ABI
+      // call commits a default value for it.
+      return env.Undefined();
+    }
+    return MakeStatus(env, apply(handle_));
+  }
+
+  /// `{status, index}` entry adding a style-pool record: `pull(reader, record)`
+  /// fills the caller's record from `info[0]` (an empty object when absent),
+  /// and `add(handle_, &index)` stores it.
+  template <typename Pull, typename Add>
+  Napi::Value AddStyleRecord(const Napi::CallbackInfo& info, Pull&& pull, Add&& add) {
+    Napi::Env env = info.Env();
+    if (handle_ == nullptr) {
+      return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
+    }
+    const Napi::Object record = ArgObjectOrEmpty(info, 0);
+    CheckedSpecReader reader(env);
+    pull(reader, record);
+    if (!reader.ok()) {
+      // A malformed field left a pending JS exception: stop before the C ABI
+      // call commits a default value for it.
+      return env.Undefined();
+    }
+    uint32_t idx = 0;
+    const fm_status_t rc = add(handle_, &idx);
+    return MakeNumberFieldResult(env, rc, "index", idx);
+  }
+
+  /// Object result `{status, ...}` for a getter: `call(handle_)` fills the
+  /// captured out-params, and `fill(out)` adds the payload on success only.
+  template <typename Call, typename Fill>
+  Napi::Value StatusObject(const Napi::CallbackInfo& info, Call&& call, Fill&& fill) {
+    Napi::Env env = info.Env();
+    Napi::Object out = Napi::Object::New(env);
+    if (handle_ == nullptr) {
+      out.Set("status", NullHandleError(env));
+      return out;
+    }
+    const fm_status_t rc = call(handle_);
+    if (rc != 0) {
+      out.Set("status", MakeErrorStatus(env, rc));
+      return out;
+    }
+    out.Set("status", MakeOkStatus(env));
+    fill(out);
+    return out;
+  }
+
   using RowColEditFn = fm_status_t (*)(fm_workbook_t*, uint32_t, uint32_t, uint32_t);
   Napi::Value InvokeRowColEdit(const Napi::CallbackInfo& info, RowColEditFn fn);
 
@@ -478,6 +585,18 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Object NullHandleError(Napi::Env env) const { return MakeErrorStatus(env, kBindingInvalidHandle); }
 
  private:
+  template <typename Lead, typename... Args, size_t... I>
+  Napi::Value InvokeSheetCallImpl(const Napi::CallbackInfo& info, fm_status_t (*fn)(fm_workbook_t*, Lead, Args...),
+                                  std::index_sequence<I...>) {
+    return StatusCall(info, [&](fm_workbook_t* handle) {
+      const Lead lead = static_cast<Lead>(ArgU32(info, 0));
+      // Braced init evaluates left to right, matching the JS argument order.
+      const std::tuple<Args...> args{ArgAs<Args>(info, I + 1)...};
+      (void)args;
+      return fn(handle, lead, std::get<I>(args)...);
+    });
+  }
+
   using CreateFn = fm_status_t (*)(fm_workbook_t**);
   /// Shared body of the `createDefault` / `createEmpty` factories.
   static Napi::Value CreateWith(const Napi::CallbackInfo& info, CreateFn create);

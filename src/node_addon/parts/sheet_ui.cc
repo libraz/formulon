@@ -44,32 +44,8 @@ Napi::Value SheetListResult(const Napi::CallbackInfo& info, fm_workbook_t* handl
   return FinishListResult(env, arr, 0);
 }
 
-// Shared bodies of the per-sheet Status entries taking `(sheet)`,
-// `(sheet, index)` and `(sheet, range)`.
-using SheetOpFn = fm_status_t (*)(fm_workbook_t*, uint32_t);
-using SheetIndexOpFn = fm_status_t (*)(fm_workbook_t*, uint32_t, uint32_t);
+// Shared body of the per-sheet merge add / remove entries taking `(sheet, range)`.
 using MergeEditFn = fm_status_t (*)(fm_workbook_t*, uint32_t, fm_merge_range);
-
-Napi::Value InvokeSheetOp(const Napi::CallbackInfo& info, fm_workbook_t* handle, SheetOpFn fn) {
-  Napi::Env env = info.Env();
-  if (handle == nullptr) {
-    return MakeErrorStatus(env, kBindingInvalidHandle);
-  }
-  const uint32_t sheet = Workbook::ArgU32(info, 0);
-  fm_status_t rc = fn(handle, sheet);
-  return MakeStatus(env, rc);
-}
-
-Napi::Value InvokeSheetIndexOp(const Napi::CallbackInfo& info, fm_workbook_t* handle, SheetIndexOpFn fn) {
-  Napi::Env env = info.Env();
-  if (handle == nullptr) {
-    return MakeErrorStatus(env, kBindingInvalidHandle);
-  }
-  const uint32_t sheet = Workbook::ArgU32(info, 0);
-  const uint32_t index = Workbook::ArgU32(info, 1);
-  fm_status_t rc = fn(handle, sheet, index);
-  return MakeStatus(env, rc);
-}
 
 Napi::Value InvokeMergeEdit(const Napi::CallbackInfo& info, fm_workbook_t* handle, MergeEditFn fn) {
   Napi::Env env = info.Env();
@@ -97,11 +73,11 @@ Napi::Value Workbook::RemoveMerge(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::RemoveMergeAt(const Napi::CallbackInfo& info) {
-  return InvokeSheetIndexOp(info, handle_, &fm_sheet_remove_merge_at);
+  return InvokeSheetCall(info, &fm_sheet_remove_merge_at);
 }
 
 Napi::Value Workbook::ClearMerges(const Napi::CallbackInfo& info) {
-  return InvokeSheetOp(info, handle_, &fm_sheet_clear_merges);
+  return InvokeSheetCall(info, &fm_sheet_clear_merges);
 }
 
 Napi::Value Workbook::GetMerges(const Napi::CallbackInfo& info) {
@@ -300,23 +276,15 @@ Napi::Value Workbook::GetHyperlinks(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::RemoveHyperlink(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t row = ArgU32(info, 1);
-  const uint32_t col = ArgU32(info, 2);
-  fm_status_t rc = fm_sheet_remove_hyperlink(handle_, sheet, row, col);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_sheet_remove_hyperlink);
 }
 
 Napi::Value Workbook::RemoveHyperlinkAt(const Napi::CallbackInfo& info) {
-  return InvokeSheetIndexOp(info, handle_, &fm_sheet_remove_hyperlink_at);
+  return InvokeSheetCall(info, &fm_sheet_remove_hyperlink_at);
 }
 
 Napi::Value Workbook::ClearHyperlinks(const Napi::CallbackInfo& info) {
-  return InvokeSheetOp(info, handle_, &fm_sheet_clear_hyperlinks);
+  return InvokeSheetCall(info, &fm_sheet_clear_hyperlinks);
 }
 
 // ---- Validations ----------------------------------------------------
@@ -426,11 +394,11 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::RemoveValidationAt(const Napi::CallbackInfo& info) {
-  return InvokeSheetIndexOp(info, handle_, &fm_sheet_remove_validation_at);
+  return InvokeSheetCall(info, &fm_sheet_remove_validation_at);
 }
 
 Napi::Value Workbook::ClearValidations(const Napi::CallbackInfo& info) {
-  return InvokeSheetOp(info, handle_, &fm_sheet_clear_validations);
+  return InvokeSheetCall(info, &fm_sheet_clear_validations);
 }
 
 // ---- Threaded comments and persons ----------------------------------
@@ -580,22 +548,17 @@ Napi::Value Workbook::EditThreadedComment(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetThreadResolved(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::string thread_id = ArgString(info, 1);
-  return MakeStatus(
-      env, fm_sheet_set_thread_resolved(handle_, ArgU32(info, 0), thread_id.c_str(), ArgBool(info, 2) ? 1 : 0));
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string thread_id = ArgString(info, 1);
+    return fm_sheet_set_thread_resolved(handle, ArgU32(info, 0), thread_id.c_str(), ArgFlag(info, 2));
+  });
 }
 
 Napi::Value Workbook::RemoveThreadedComment(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::string id = ArgString(info, 1);
-  return MakeStatus(env, fm_sheet_remove_threaded_comment(handle_, ArgU32(info, 0), id.c_str()));
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string id = ArgString(info, 1);
+    return fm_sheet_remove_threaded_comment(handle, ArgU32(info, 0), id.c_str());
+  });
 }
 
 Napi::Value Workbook::GetPersons(const Napi::CallbackInfo& info) {
@@ -652,12 +615,10 @@ Napi::Value Workbook::AddPerson(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::RemovePerson(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::string id = ArgString(info, 0);
-  return MakeStatus(env, fm_workbook_remove_person(handle_, id.c_str()));
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string id = ArgString(info, 0);
+    return fm_workbook_remove_person(handle, id.c_str());
+  });
 }
 
 }  // namespace formulon_node

@@ -274,33 +274,15 @@ Napi::Value Workbook::GetCellXfIndex(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetCellXfIndex(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t row = ArgU32(info, 1);
-  const uint32_t col = ArgU32(info, 2);
-  const uint32_t xf = ArgU32(info, 3);
-  fm_status_t rc = fm_cell_set_xf_index(handle_, sheet, row, col, xf);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_cell_set_xf_index);
 }
 
 Napi::Value Workbook::ClearCellXfIndex(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  return MakeStatus(env, fm_cell_clear_xf_index(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2)));
+  return InvokeSheetCall(info, &fm_cell_clear_xf_index);
 }
 
 Napi::Value Workbook::SetRangeXfIndex(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  return MakeStatus(env, fm_sheet_set_range_xf_index(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2),
-                                                     ArgU32(info, 3), ArgU32(info, 4), ArgU32(info, 5)));
+  return InvokeSheetCall(info, &fm_sheet_set_range_xf_index);
 }
 
 // ---- Style getters --------------------------------------------------
@@ -414,24 +396,11 @@ Napi::Value Workbook::GetDxf(const Napi::CallbackInfo& info) {
 // ---- Style adders ---------------------------------------------------
 
 Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
-  }
-  Napi::Object record = ArgObjectOrEmpty(info, 0);
-  CheckedSpecReader reader(env);
   std::string name;
   fm_font_record fr{};
-  PullFontRecord(reader, record, &name, &fr);
-  if (!reader.ok()) {
-    // A malformed field left a pending JS exception: stop before the C ABI
-    // call commits a default value for it. The exception surfaces to JS on
-    // return.
-    return env.Undefined();
-  }
-  uint32_t idx = 0;
-  fm_status_t rc = fm_styles_add_font(handle_, fr, &idx);
-  return MakeNumberFieldResult(env, rc, "index", idx);
+  return AddStyleRecord(
+      info, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullFontRecord(reader, record, &name, &fr); },
+      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_styles_add_font(handle, fr, idx); });
 }
 
 Napi::Value Workbook::SetFont(const Napi::CallbackInfo& info) {
@@ -470,39 +439,17 @@ Napi::Value Workbook::SetDefaultFont(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
-  }
-  Napi::Object record = ArgObjectOrEmpty(info, 0);
-  CheckedSpecReader reader(env);
-  const fm_fill_record fr = PullFillRecord(reader, record);
-  if (!reader.ok()) {
-    // See the matching guard in AddFont. The return value is discarded
-    // in favor of the pending exception either way.
-    return env.Undefined();
-  }
-  uint32_t idx = 0;
-  fm_status_t rc = fm_styles_add_fill(handle_, fr, &idx);
-  return MakeNumberFieldResult(env, rc, "index", idx);
+  fm_fill_record fr{};
+  return AddStyleRecord(
+      info, [&](CheckedSpecReader& reader, const Napi::Object& record) { fr = PullFillRecord(reader, record); },
+      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_styles_add_fill(handle, fr, idx); });
 }
 
 Napi::Value Workbook::AddBorder(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
-  }
-  Napi::Object record = ArgObjectOrEmpty(info, 0);
-  CheckedSpecReader reader(env);
-  const fm_border_record br = PullBorderRecord(reader, record);
-  if (!reader.ok()) {
-    // See the matching guard in AddFont. The return value is discarded
-    // in favor of the pending exception either way.
-    return env.Undefined();
-  }
-  uint32_t idx = 0;
-  fm_status_t rc = fm_styles_add_border(handle_, br, &idx);
-  return MakeNumberFieldResult(env, rc, "index", idx);
+  fm_border_record br{};
+  return AddStyleRecord(
+      info, [&](CheckedSpecReader& reader, const Napi::Object& record) { br = PullBorderRecord(reader, record); },
+      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_styles_add_border(handle, br, idx); });
 }
 
 Napi::Value Workbook::AddNumFmt(const Napi::CallbackInfo& info) {
@@ -517,146 +464,126 @@ Napi::Value Workbook::AddNumFmt(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
-  }
-  Napi::Object record = ArgObjectOrEmpty(info, 0);
-  CheckedSpecReader reader(env);
   fm_cell_xf xf{};
-  xf.font_index = reader.U32(record, "fontIndex", 0U);
-  xf.fill_index = reader.U32(record, "fillIndex", 0U);
-  xf.border_index = reader.U32(record, "borderIndex", 0U);
-  xf.num_fmt_id = reader.U16(record, "numFmtId", 0U);
-  bool horizontal_align_present = false;
-  bool vertical_align_present = false;
-  bool wrap_text_present = false;
-  bool justify_last_line_present = false;
-  xf.horizontal_align = reader.U8(record, "horizontalAlign", 0U, &horizontal_align_present);
-  xf.vertical_align = reader.U8(record, "verticalAlign", 2U, &vertical_align_present);
-  xf.wrap_text = reader.Bool(record, "wrapText", false, &wrap_text_present) ? 1 : 0;
-  xf.justify_last_line = reader.Bool(record, "justifyLastLine", false, &justify_last_line_present) ? 1 : 0;
-  xf.xf_id = reader.U32(record, "xfId", 0U);
-  bool has_horizontal_align_present = false;
-  bool has_vertical_align_present = false;
-  bool has_wrap_text_present = false;
-  bool has_justify_last_line_present = false;
-  const bool has_horizontal_align_value =
-      reader.Bool(record, "hasHorizontalAlign", false, &has_horizontal_align_present);
-  const bool has_vertical_align_value = reader.Bool(record, "hasVerticalAlign", false, &has_vertical_align_present);
-  const bool has_wrap_text_value = reader.Bool(record, "hasWrapText", false, &has_wrap_text_present);
-  const bool has_justify_last_line_value =
-      reader.Bool(record, "hasJustifyLastLine", false, &has_justify_last_line_present);
-  xf.has_horizontal_align =
-      has_horizontal_align_present ? (has_horizontal_align_value ? 1 : 0) : (horizontal_align_present ? 1 : 0);
-  xf.has_vertical_align =
-      has_vertical_align_present ? (has_vertical_align_value ? 1 : 0) : (vertical_align_present ? 1 : 0);
-  xf.has_wrap_text = has_wrap_text_present ? (has_wrap_text_value ? 1 : 0) : (wrap_text_present ? 1 : 0);
-  xf.has_justify_last_line =
-      has_justify_last_line_present ? (has_justify_last_line_value ? 1 : 0) : (justify_last_line_present ? 1 : 0);
-  bool has_alignment_present = false;
-  const bool has_alignment_value = reader.Bool(record, "hasAlignment", false, &has_alignment_present);
-  bool text_rotation_present = false;
-  bool indent_present = false;
-  bool relative_indent_present = false;
-  bool shrink_to_fit_present = false;
-  bool reading_order_present = false;
-  xf.text_rotation = reader.U32(record, "textRotation", 0U, &text_rotation_present);
-  xf.indent = reader.U32(record, "indent", 0U, &indent_present);
-  xf.relative_indent = reader.I32(record, "relativeIndent", 0, &relative_indent_present);
-  xf.shrink_to_fit = reader.Bool(record, "shrinkToFit", false, &shrink_to_fit_present) ? 1 : 0;
-  xf.reading_order = reader.U32(record, "readingOrder", 0U, &reading_order_present);
-  xf.has_text_rotation = text_rotation_present ? 1 : 0;
-  xf.has_indent = indent_present ? 1 : 0;
-  xf.has_relative_indent = relative_indent_present ? 1 : 0;
-  xf.has_shrink_to_fit = shrink_to_fit_present ? 1 : 0;
-  xf.has_reading_order = reading_order_present ? 1 : 0;
-  const bool has_supplied_alignment = horizontal_align_present || vertical_align_present || wrap_text_present ||
-                                      justify_last_line_present || text_rotation_present || indent_present ||
-                                      relative_indent_present || shrink_to_fit_present || reading_order_present ||
-                                      has_horizontal_align_present || has_vertical_align_present ||
-                                      has_wrap_text_present || has_justify_last_line_present;
-  xf.has_alignment = has_alignment_present ? (has_alignment_value ? 1 : 0) : (has_supplied_alignment ? 1 : 0);
-  xf.apply_number_format = reader.Bool(record, "applyNumberFormat", false) ? 1 : 0;
-  xf.apply_font = reader.Bool(record, "applyFont", false) ? 1 : 0;
-  xf.apply_fill = reader.Bool(record, "applyFill", false) ? 1 : 0;
-  xf.apply_border = reader.Bool(record, "applyBorder", false) ? 1 : 0;
-  xf.apply_alignment = reader.Bool(record, "applyAlignment", false) ? 1 : 0;
-  xf.apply_protection = reader.Bool(record, "applyProtection", false) ? 1 : 0;
-  xf.quote_prefix = reader.Bool(record, "quotePrefix", false) ? 1 : 0;
-  bool has_protection_present = false;
-  bool locked_present = false;
-  bool hidden_present = false;
-  const bool has_protection_value = reader.Bool(record, "hasProtection", false, &has_protection_present);
-  const bool locked_value = reader.Bool(record, "locked", true, &locked_present);
-  const bool hidden_value = reader.Bool(record, "hidden", false, &hidden_present);
-  xf.has_protection =
-      has_protection_present ? (has_protection_value ? 1 : 0) : ((locked_present || hidden_present) ? 1 : 0);
-  xf.locked = locked_value ? 1 : 0;
-  xf.hidden = hidden_value ? 1 : 0;
-  if (!reader.ok()) {
-    // See the matching guard in AddFont. The return value is discarded
-    // in favor of the pending exception either way.
-    return env.Undefined();
-  }
-  uint32_t idx = 0;
-  fm_status_t rc = fm_styles_add_cell_xf(handle_, xf, &idx);
-  return MakeNumberFieldResult(env, rc, "index", idx);
+  return AddStyleRecord(
+      info,
+      [&](CheckedSpecReader& reader, const Napi::Object& record) {
+        xf.font_index = reader.U32(record, "fontIndex", 0U);
+        xf.fill_index = reader.U32(record, "fillIndex", 0U);
+        xf.border_index = reader.U32(record, "borderIndex", 0U);
+        xf.num_fmt_id = reader.U16(record, "numFmtId", 0U);
+        bool horizontal_align_present = false;
+        bool vertical_align_present = false;
+        bool wrap_text_present = false;
+        bool justify_last_line_present = false;
+        xf.horizontal_align = reader.U8(record, "horizontalAlign", 0U, &horizontal_align_present);
+        xf.vertical_align = reader.U8(record, "verticalAlign", 2U, &vertical_align_present);
+        xf.wrap_text = reader.Bool(record, "wrapText", false, &wrap_text_present) ? 1 : 0;
+        xf.justify_last_line = reader.Bool(record, "justifyLastLine", false, &justify_last_line_present) ? 1 : 0;
+        xf.xf_id = reader.U32(record, "xfId", 0U);
+        bool has_horizontal_align_present = false;
+        bool has_vertical_align_present = false;
+        bool has_wrap_text_present = false;
+        bool has_justify_last_line_present = false;
+        const bool has_horizontal_align_value =
+            reader.Bool(record, "hasHorizontalAlign", false, &has_horizontal_align_present);
+        const bool has_vertical_align_value =
+            reader.Bool(record, "hasVerticalAlign", false, &has_vertical_align_present);
+        const bool has_wrap_text_value = reader.Bool(record, "hasWrapText", false, &has_wrap_text_present);
+        const bool has_justify_last_line_value =
+            reader.Bool(record, "hasJustifyLastLine", false, &has_justify_last_line_present);
+        xf.has_horizontal_align =
+            has_horizontal_align_present ? (has_horizontal_align_value ? 1 : 0) : (horizontal_align_present ? 1 : 0);
+        xf.has_vertical_align =
+            has_vertical_align_present ? (has_vertical_align_value ? 1 : 0) : (vertical_align_present ? 1 : 0);
+        xf.has_wrap_text = has_wrap_text_present ? (has_wrap_text_value ? 1 : 0) : (wrap_text_present ? 1 : 0);
+        xf.has_justify_last_line =
+            has_justify_last_line_present ? (has_justify_last_line_value ? 1 : 0) : (justify_last_line_present ? 1 : 0);
+        bool has_alignment_present = false;
+        const bool has_alignment_value = reader.Bool(record, "hasAlignment", false, &has_alignment_present);
+        bool text_rotation_present = false;
+        bool indent_present = false;
+        bool relative_indent_present = false;
+        bool shrink_to_fit_present = false;
+        bool reading_order_present = false;
+        xf.text_rotation = reader.U32(record, "textRotation", 0U, &text_rotation_present);
+        xf.indent = reader.U32(record, "indent", 0U, &indent_present);
+        xf.relative_indent = reader.I32(record, "relativeIndent", 0, &relative_indent_present);
+        xf.shrink_to_fit = reader.Bool(record, "shrinkToFit", false, &shrink_to_fit_present) ? 1 : 0;
+        xf.reading_order = reader.U32(record, "readingOrder", 0U, &reading_order_present);
+        xf.has_text_rotation = text_rotation_present ? 1 : 0;
+        xf.has_indent = indent_present ? 1 : 0;
+        xf.has_relative_indent = relative_indent_present ? 1 : 0;
+        xf.has_shrink_to_fit = shrink_to_fit_present ? 1 : 0;
+        xf.has_reading_order = reading_order_present ? 1 : 0;
+        const bool has_supplied_alignment = horizontal_align_present || vertical_align_present || wrap_text_present ||
+                                            justify_last_line_present || text_rotation_present || indent_present ||
+                                            relative_indent_present || shrink_to_fit_present || reading_order_present ||
+                                            has_horizontal_align_present || has_vertical_align_present ||
+                                            has_wrap_text_present || has_justify_last_line_present;
+        xf.has_alignment = has_alignment_present ? (has_alignment_value ? 1 : 0) : (has_supplied_alignment ? 1 : 0);
+        xf.apply_number_format = reader.Bool(record, "applyNumberFormat", false) ? 1 : 0;
+        xf.apply_font = reader.Bool(record, "applyFont", false) ? 1 : 0;
+        xf.apply_fill = reader.Bool(record, "applyFill", false) ? 1 : 0;
+        xf.apply_border = reader.Bool(record, "applyBorder", false) ? 1 : 0;
+        xf.apply_alignment = reader.Bool(record, "applyAlignment", false) ? 1 : 0;
+        xf.apply_protection = reader.Bool(record, "applyProtection", false) ? 1 : 0;
+        xf.quote_prefix = reader.Bool(record, "quotePrefix", false) ? 1 : 0;
+        bool has_protection_present = false;
+        bool locked_present = false;
+        bool hidden_present = false;
+        const bool has_protection_value = reader.Bool(record, "hasProtection", false, &has_protection_present);
+        const bool locked_value = reader.Bool(record, "locked", true, &locked_present);
+        const bool hidden_value = reader.Bool(record, "hidden", false, &hidden_present);
+        xf.has_protection =
+            has_protection_present ? (has_protection_value ? 1 : 0) : ((locked_present || hidden_present) ? 1 : 0);
+        xf.locked = locked_value ? 1 : 0;
+        xf.hidden = hidden_value ? 1 : 0;
+      },
+      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_styles_add_cell_xf(handle, xf, idx); });
 }
 
 Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
-  }
-  Napi::Object record = ArgObjectOrEmpty(info, 0);
-
   std::string font_name;
   std::string num_fmt_code;
   std::string alignment_xml;
   std::string protection_xml;
   fm_dxf_record dxf{};
-  CheckedSpecReader reader(env);
+  return AddStyleRecord(
+      info,
+      [&](CheckedSpecReader& reader, const Napi::Object& record) {
+        Napi::Object font;
+        if (reader.Object(record, "font", &font)) {
+          dxf.font_engaged = 1;
+          PullFontRecord(reader, font, &font_name, &dxf.font);
+        }
 
-  Napi::Object font;
-  if (reader.Object(record, "font", &font)) {
-    dxf.font_engaged = 1;
-    PullFontRecord(reader, font, &font_name, &dxf.font);
-  }
+        Napi::Object fill;
+        if (reader.Object(record, "fill", &fill)) {
+          dxf.fill_engaged = 1;
+          dxf.fill = PullFillRecord(reader, fill);
+        }
 
-  Napi::Object fill;
-  if (reader.Object(record, "fill", &fill)) {
-    dxf.fill_engaged = 1;
-    dxf.fill = PullFillRecord(reader, fill);
-  }
+        Napi::Object border;
+        if (reader.Object(record, "border", &border)) {
+          dxf.border_engaged = 1;
+          dxf.border = PullBorderRecord(reader, border);
+        }
 
-  Napi::Object border;
-  if (reader.Object(record, "border", &border)) {
-    dxf.border_engaged = 1;
-    dxf.border = PullBorderRecord(reader, border);
-  }
+        Napi::Object num_fmt;
+        if (reader.Object(record, "numFmt", &num_fmt)) {
+          dxf.num_fmt_engaged = 1;
+          dxf.num_fmt_id = reader.U16(num_fmt, "numFmtId", 0U);
+          reader.String(num_fmt, "formatCode", &num_fmt_code);
+          dxf.num_fmt_code = num_fmt_code.c_str();
+        }
 
-  Napi::Object num_fmt;
-  if (reader.Object(record, "numFmt", &num_fmt)) {
-    dxf.num_fmt_engaged = 1;
-    dxf.num_fmt_id = reader.U16(num_fmt, "numFmtId", 0U);
-    reader.String(num_fmt, "formatCode", &num_fmt_code);
-    dxf.num_fmt_code = num_fmt_code.c_str();
-  }
-
-  reader.String(record, "alignmentXml", &alignment_xml);
-  reader.String(record, "protectionXml", &protection_xml);
-  dxf.alignment_xml = alignment_xml.c_str();
-  dxf.protection_xml = protection_xml.c_str();
-
-  if (!reader.ok()) {
-    // See the matching guard in AddFont. The return value is discarded
-    // in favor of the pending exception either way.
-    return env.Undefined();
-  }
-  uint32_t idx = 0;
-  fm_status_t rc = fm_styles_add_dxf(handle_, dxf, &idx);
-  return MakeNumberFieldResult(env, rc, "index", idx);
+        reader.String(record, "alignmentXml", &alignment_xml);
+        reader.String(record, "protectionXml", &protection_xml);
+        dxf.alignment_xml = alignment_xml.c_str();
+        dxf.protection_xml = protection_xml.c_str();
+      },
+      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_styles_add_dxf(handle, dxf, idx); });
 }
 
 // ---- Style pool counts ----------------------------------------------

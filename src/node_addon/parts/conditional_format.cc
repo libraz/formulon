@@ -483,14 +483,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::RemoveConditionalFormatAt(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::size_t index = static_cast<std::size_t>(ArgU32(info, 1));
-  fm_status_t rc = fm_sheet_cf_remove_at(handle_, sheet, index);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_sheet_cf_remove_at);
 }
 
 Napi::Value Workbook::ClearConditionalFormats(const Napi::CallbackInfo& info) {

@@ -234,7 +234,14 @@ class CheckedSpecReader final {
                    const char* range_name, bool* present = nullptr);
   bool ReadInteger(const Napi::Value& value, const char* key, double* out, double min_value, double max_value,
                    const char* range_name);
+  template <typename T>
+  T ReadIntegral(const Napi::Object& owner, const char* key, T dflt, const char* range_name, bool* present = nullptr);
+  template <typename T>
+  T ReadIntegral(const Napi::Value& value, const char* key, T dflt, const char* range_name);
+  int64_t NarrowI64(double number, const char* key, int64_t dflt);
   void ObservePending();
+  template <typename ErrorType>
+  void ReportFailure(const std::string& message);
   void ReportType(const char* key, const char* expected);
   void ReportRange(const char* key, const char* range_name);
 

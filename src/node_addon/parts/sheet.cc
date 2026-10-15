@@ -13,45 +13,26 @@ namespace formulon_node {
 // ---- Sheet operations -----------------------------------------------
 
 Napi::Value Workbook::AddSheet(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::string name = ArgString(info, 0);
-  fm_status_t rc = fm_workbook_add_sheet(handle_, name.c_str());
-  return MakeStatus(env, rc);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string name = ArgString(info, 0);
+    return fm_workbook_add_sheet(handle, name.c_str());
+  });
 }
 
 Napi::Value Workbook::RemoveSheet(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t idx = ArgU32(info, 0);
-  fm_status_t rc = fm_workbook_remove_sheet(handle_, idx);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_workbook_remove_sheet);
 }
 
 Napi::Value Workbook::RenameSheet(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t idx = ArgU32(info, 0);
-  const std::string name = ArgString(info, 1);
-  fm_status_t rc = fm_workbook_rename_sheet(handle_, idx, name.c_str());
-  return MakeStatus(env, rc);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const uint32_t idx = ArgU32(info, 0);
+    const std::string name = ArgString(info, 1);
+    return fm_workbook_rename_sheet(handle, idx, name.c_str());
+  });
 }
 
 Napi::Value Workbook::MoveSheet(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t from_idx = ArgU32(info, 0);
-  const uint32_t to_idx = ArgU32(info, 1);
-  fm_status_t rc = fm_workbook_move_sheet(handle_, from_idx, to_idx);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_workbook_move_sheet);
 }
 
 // `Workbook::SheetCount` is now emitted by the binding codegen (see
@@ -94,100 +75,77 @@ Napi::Value Workbook::DeleteCols(const Napi::CallbackInfo& info) {
 // `src/node_addon/generated/sheet_counts.cc`).
 
 Napi::Value Workbook::CellAt(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 1));
   uint32_t row = 0;
   uint32_t col = 0;
   const char* formula = nullptr;
   fm_value_t v{};
-  fm_status_t rc = fm_workbook_cell_at(handle_, sheet, idx, &row, &col, &formula, &v);
-  if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
-  }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("row", Napi::Number::New(env, row));
-  out.Set("col", Napi::Number::New(env, col));
-  if (formula != nullptr) {
-    out.Set("formula", Napi::String::New(env, formula));
-  } else {
-    out.Set("formula", env.Null());
-  }
-  out.Set("value", TranslateValue(env, v));
-  return out;
+  return StatusObject(
+      info,
+      [&](fm_workbook_t* handle) {
+        const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+        const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 1));
+        return fm_workbook_cell_at(handle, sheet, idx, &row, &col, &formula, &v);
+      },
+      [&](Napi::Object& out) {
+        Napi::Env env = info.Env();
+        out.Set("row", Napi::Number::New(env, row));
+        out.Set("col", Napi::Number::New(env, col));
+        if (formula != nullptr) {
+          out.Set("formula", Napi::String::New(env, formula));
+        } else {
+          out.Set("formula", env.Null());
+        }
+        out.Set("value", TranslateValue(env, v));
+      });
 }
 
 Napi::Value Workbook::DefinedNameAt(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
-  const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
   const char* name = nullptr;
   const char* formula = nullptr;
   int32_t local_sheet_id = -1;
-  fm_status_t rc = fm_workbook_defined_name_at(handle_, idx, &name, &formula, &local_sheet_id);
-  if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
-  }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("name", JsString(env, name));
-  out.Set("formula", JsString(env, formula));
-  out.Set("localSheetId", Napi::Number::New(env, local_sheet_id));
-  return out;
+  return StatusObject(
+      info,
+      [&](fm_workbook_t* handle) {
+        const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
+        return fm_workbook_defined_name_at(handle, idx, &name, &formula, &local_sheet_id);
+      },
+      [&](Napi::Object& out) {
+        Napi::Env env = info.Env();
+        out.Set("name", JsString(env, name));
+        out.Set("formula", JsString(env, formula));
+        out.Set("localSheetId", Napi::Number::New(env, local_sheet_id));
+      });
 }
 
 Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
-  const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
   const char* name = nullptr;
   const char* display = nullptr;
   const char* ref = nullptr;
   std::size_t sheet_index = 0;
-  fm_status_t rc = fm_workbook_table_at(handle_, idx, &name, &display, &ref, &sheet_index);
-  if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
-  }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("name", JsString(env, name));
-  out.Set("displayName", JsString(env, display));
-  out.Set("ref", JsString(env, ref));
-  out.Set("sheetIndex", Napi::Number::New(env, static_cast<double>(sheet_index)));
-  return out;
+  return StatusObject(
+      info,
+      [&](fm_workbook_t* handle) {
+        const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
+        return fm_workbook_table_at(handle, idx, &name, &display, &ref, &sheet_index);
+      },
+      [&](Napi::Object& out) {
+        Napi::Env env = info.Env();
+        out.Set("name", JsString(env, name));
+        out.Set("displayName", JsString(env, display));
+        out.Set("ref", JsString(env, ref));
+        out.Set("sheetIndex", Napi::Number::New(env, static_cast<double>(sheet_index)));
+      });
 }
 
 Napi::Value Workbook::PassthroughAt(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
-  const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
   const char* path = nullptr;
-  fm_status_t rc = fm_workbook_passthrough_at(handle_, idx, &path);
-  if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
-  }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("path", JsString(env, path));
-  return out;
+  return StatusObject(
+      info,
+      [&](fm_workbook_t* handle) {
+        const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
+        return fm_workbook_passthrough_at(handle, idx, &path);
+      },
+      [&](Napi::Object& out) { out.Set("path", JsString(info.Env(), path)); });
 }
 
 Napi::Value Workbook::PivotLayout(const Napi::CallbackInfo& info) {
@@ -244,26 +202,20 @@ Napi::Value Workbook::PivotLayout(const Napi::CallbackInfo& info) {
 // ---- Defined names --------------------------------------------------
 
 Napi::Value Workbook::SetDefinedName(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::string name = ArgString(info, 0);
-  const std::string formula = ArgString(info, 1);
-  fm_status_t rc = fm_workbook_set_defined_name(handle_, name.c_str(), formula.c_str());
-  return MakeStatus(env, rc);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string name = ArgString(info, 0);
+    const std::string formula = ArgString(info, 1);
+    return fm_workbook_set_defined_name(handle, name.c_str(), formula.c_str());
+  });
 }
 
 Napi::Value Workbook::SetDefinedNameScoped(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::string name = ArgString(info, 0);
-  const std::string formula = ArgString(info, 1);
-  const int32_t local_sheet_id = info.Length() > 2 ? info[2].As<Napi::Number>().Int32Value() : -1;
-  fm_status_t rc = fm_workbook_set_defined_name_scoped(handle_, name.c_str(), formula.c_str(), local_sheet_id);
-  return MakeStatus(env, rc);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string name = ArgString(info, 0);
+    const std::string formula = ArgString(info, 1);
+    const int32_t local_sheet_id = info.Length() > 2 ? info[2].As<Napi::Number>().Int32Value() : -1;
+    return fm_workbook_set_defined_name_scoped(handle, name.c_str(), formula.c_str(), local_sheet_id);
+  });
 }
 
 }  // namespace formulon_node

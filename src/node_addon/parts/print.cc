@@ -48,25 +48,15 @@ void PullOptionalBool(CheckedSpecReader& reader, const Napi::Object& spec, const
   engaged = present ? 1 : 0;
 }
 
-// Shared bodies of the row / column page-break add and remove entries.
+// Shared body of the row / column page-break add entries.
 using BreakAddFn = fm_status_t (*)(fm_workbook_t*, size_t, uint32_t, int32_t);
-using BreakRemoveFn = fm_status_t (*)(fm_workbook_t*, size_t, uint32_t);
 
-Napi::Value InvokeBreakAdd(const Napi::CallbackInfo& info, fm_workbook_t* handle, BreakAddFn fn) {
-  Napi::Env env = info.Env();
-  if (handle == nullptr) {
-    return MakeErrorStatus(env, kBindingInvalidHandle);
-  }
-  return MakeStatus(
-      env, fn(handle, Workbook::ArgU32(info, 0), Workbook::ArgU32(info, 1), Workbook::ArgBool(info, 2) ? 1 : 0));
-}
-
-Napi::Value InvokeBreakRemove(const Napi::CallbackInfo& info, fm_workbook_t* handle, BreakRemoveFn fn) {
-  Napi::Env env = info.Env();
-  if (handle == nullptr) {
-    return MakeErrorStatus(env, kBindingInvalidHandle);
-  }
-  return MakeStatus(env, fn(handle, Workbook::ArgU32(info, 0), Workbook::ArgU32(info, 1)));
+Napi::Value InvokeBreakAdd(Workbook& wb, const Napi::CallbackInfo& info, BreakAddFn fn) {
+  return wb.StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
+    const uint32_t index = Workbook::ArgU32(info, 1);
+    return fn(handle, sheet, index, Workbook::ArgFlag(info, 2));
+  });
 }
 
 }  // namespace
@@ -82,12 +72,10 @@ Napi::Value Workbook::SheetStringGetter(const Napi::CallbackInfo& info, SheetStr
 }
 
 Napi::Value Workbook::SheetStringSetter(const Napi::CallbackInfo& info, SheetStringSetFn setter) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::string text = ArgString(info, 1);
-  return MakeStatus(env, setter(handle_, ArgU32(info, 0), text.c_str()));
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string text = ArgString(info, 1);
+    return setter(handle, ArgU32(info, 0), text.c_str());
+  });
 }
 
 Napi::Value Workbook::GetSheetPageSetupXml(const Napi::CallbackInfo& info) {
@@ -131,11 +119,8 @@ Napi::Value Workbook::SetSheetSheetPrXml(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetSheetFitToPage(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  return MakeStatus(env, fm_sheet_set_fit_to_page(handle_, ArgU32(info, 0), ArgBool(info, 1) ? 1 : 0));
+  return StatusCall(
+      info, [&](fm_workbook_t* handle) { return fm_sheet_set_fit_to_page(handle, ArgU32(info, 0), ArgFlag(info, 1)); });
 }
 
 Napi::Value Workbook::GetSheetPrintArea(const Napi::CallbackInfo& info) {
@@ -164,29 +149,27 @@ Napi::Value Workbook::GetSheetPrintTitles(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetSheetPrintTitles(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::string rows = ArgString(info, 1);
-  const std::string cols = ArgString(info, 2);
-  return MakeStatus(env, fm_sheet_set_print_titles(handle_, ArgU32(info, 0), rows.c_str(), cols.c_str()));
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string rows = ArgString(info, 1);
+    const std::string cols = ArgString(info, 2);
+    return fm_sheet_set_print_titles(handle, ArgU32(info, 0), rows.c_str(), cols.c_str());
+  });
 }
 
 Napi::Value Workbook::AddSheetRowBreak(const Napi::CallbackInfo& info) {
-  return InvokeBreakAdd(info, handle_, &fm_sheet_add_row_break);
+  return InvokeBreakAdd(*this, info, &fm_sheet_add_row_break);
 }
 
 Napi::Value Workbook::AddSheetColBreak(const Napi::CallbackInfo& info) {
-  return InvokeBreakAdd(info, handle_, &fm_sheet_add_col_break);
+  return InvokeBreakAdd(*this, info, &fm_sheet_add_col_break);
 }
 
 Napi::Value Workbook::RemoveSheetRowBreak(const Napi::CallbackInfo& info) {
-  return InvokeBreakRemove(info, handle_, &fm_sheet_remove_row_break);
+  return InvokeSheetCall(info, &fm_sheet_remove_row_break);
 }
 
 Napi::Value Workbook::RemoveSheetColBreak(const Napi::CallbackInfo& info) {
-  return InvokeBreakRemove(info, handle_, &fm_sheet_remove_col_break);
+  return InvokeSheetCall(info, &fm_sheet_remove_col_break);
 }
 
 Napi::Value Workbook::ClearSheetBreaks(const Napi::CallbackInfo& info) {
@@ -231,93 +214,50 @@ Napi::Value Workbook::GetSheetColBreaks(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetSheetPageSetup(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  if (info.Length() < 2 || !info[1].IsObject()) {
-    Napi::TypeError::New(env, "setSheetPageSetup expects (sheet:number, setup:object)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  const Napi::Object spec = info[1].As<Napi::Object>();
-  CheckedSpecReader reader(env);
   fm_page_setup_t out{};
-  PullOptionalU32(reader, spec, "orientation", 0U, out.orientation, out.orientation_engaged);
-  PullOptionalU32(reader, spec, "paperSize", 0U, out.paper_size, out.paper_size_engaged);
-  PullOptionalU32(reader, spec, "scale", 0U, out.scale, out.scale_engaged);
-  PullOptionalU32(reader, spec, "fitToWidth", 0U, out.fit_to_width, out.fit_to_width_engaged);
-  PullOptionalU32(reader, spec, "fitToHeight", 0U, out.fit_to_height, out.fit_to_height_engaged);
-  PullOptionalBool(reader, spec, "fitToPage", false, out.fit_to_page, out.fit_to_page_engaged);
-  if (!reader.ok()) {
-    // A malformed field left a pending JS exception:
-    // stop before the C ABI call commits a default value for it.
-    return env.Undefined();
-  }
-  return MakeStatus(env, fm_sheet_set_page_setup(handle_, ArgU32(info, 0), &out));
+  return InvokeSheetSpec(
+      info, "setSheetPageSetup expects (sheet:number, setup:object)",
+      [&](CheckedSpecReader& reader, const Napi::Object& spec) {
+        PullOptionalU32(reader, spec, "orientation", 0U, out.orientation, out.orientation_engaged);
+        PullOptionalU32(reader, spec, "paperSize", 0U, out.paper_size, out.paper_size_engaged);
+        PullOptionalU32(reader, spec, "scale", 0U, out.scale, out.scale_engaged);
+        PullOptionalU32(reader, spec, "fitToWidth", 0U, out.fit_to_width, out.fit_to_width_engaged);
+        PullOptionalU32(reader, spec, "fitToHeight", 0U, out.fit_to_height, out.fit_to_height_engaged);
+        PullOptionalBool(reader, spec, "fitToPage", false, out.fit_to_page, out.fit_to_page_engaged);
+      },
+      [&](fm_workbook_t* handle) { return fm_sheet_set_page_setup(handle, ArgU32(info, 0), &out); });
 }
 
 Napi::Value Workbook::SetSheetPageMargins(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  if (info.Length() < 2 || !info[1].IsObject()) {
-    Napi::TypeError::New(env, "setSheetPageMargins expects (sheet:number, margins:object)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  const Napi::Object spec = info[1].As<Napi::Object>();
-  CheckedSpecReader reader(env);
   fm_page_margins_t out{};
-  PullOptionalDouble(reader, spec, "left", 0.0, out.left, out.left_engaged);
-  PullOptionalDouble(reader, spec, "right", 0.0, out.right, out.right_engaged);
-  PullOptionalDouble(reader, spec, "top", 0.0, out.top, out.top_engaged);
-  PullOptionalDouble(reader, spec, "bottom", 0.0, out.bottom, out.bottom_engaged);
-  PullOptionalDouble(reader, spec, "header", 0.0, out.header, out.header_engaged);
-  PullOptionalDouble(reader, spec, "footer", 0.0, out.footer, out.footer_engaged);
-  if (!reader.ok()) {
-    // A malformed field left a pending JS exception:
-    // stop before the C ABI call commits a default value for it.
-    return env.Undefined();
-  }
-  return MakeStatus(env, fm_sheet_set_page_margins(handle_, ArgU32(info, 0), &out));
+  return InvokeSheetSpec(
+      info, "setSheetPageMargins expects (sheet:number, margins:object)",
+      [&](CheckedSpecReader& reader, const Napi::Object& spec) {
+        PullOptionalDouble(reader, spec, "left", 0.0, out.left, out.left_engaged);
+        PullOptionalDouble(reader, spec, "right", 0.0, out.right, out.right_engaged);
+        PullOptionalDouble(reader, spec, "top", 0.0, out.top, out.top_engaged);
+        PullOptionalDouble(reader, spec, "bottom", 0.0, out.bottom, out.bottom_engaged);
+        PullOptionalDouble(reader, spec, "header", 0.0, out.header, out.header_engaged);
+        PullOptionalDouble(reader, spec, "footer", 0.0, out.footer, out.footer_engaged);
+      },
+      [&](fm_workbook_t* handle) { return fm_sheet_set_page_margins(handle, ArgU32(info, 0), &out); });
 }
 
 Napi::Value Workbook::SetSheetPrintOptions(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  if (info.Length() < 2 || !info[1].IsObject()) {
-    Napi::TypeError::New(env, "setSheetPrintOptions expects (sheet:number, options:object)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  const Napi::Object spec = info[1].As<Napi::Object>();
-  CheckedSpecReader reader(env);
   fm_print_options_t out{};
-  PullOptionalBool(reader, spec, "gridLines", false, out.grid_lines, out.grid_lines_engaged);
-  PullOptionalBool(reader, spec, "headings", false, out.headings, out.headings_engaged);
-  PullOptionalBool(reader, spec, "horizontalCentered", false, out.horizontal_centered, out.horizontal_centered_engaged);
-  PullOptionalBool(reader, spec, "verticalCentered", false, out.vertical_centered, out.vertical_centered_engaged);
-  if (!reader.ok()) {
-    return env.Undefined();
-  }
-  return MakeStatus(env, fm_sheet_set_print_options(handle_, ArgU32(info, 0), &out));
+  return InvokeSheetSpec(
+      info, "setSheetPrintOptions expects (sheet:number, options:object)",
+      [&](CheckedSpecReader& reader, const Napi::Object& spec) {
+        PullOptionalBool(reader, spec, "gridLines", false, out.grid_lines, out.grid_lines_engaged);
+        PullOptionalBool(reader, spec, "headings", false, out.headings, out.headings_engaged);
+        PullOptionalBool(reader, spec, "horizontalCentered", false, out.horizontal_centered,
+                         out.horizontal_centered_engaged);
+        PullOptionalBool(reader, spec, "verticalCentered", false, out.vertical_centered, out.vertical_centered_engaged);
+      },
+      [&](fm_workbook_t* handle) { return fm_sheet_set_print_options(handle, ArgU32(info, 0), &out); });
 }
 
 Napi::Value Workbook::SetSheetHeaderFooter(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  if (info.Length() < 2 || !info[1].IsObject()) {
-    Napi::TypeError::New(env, "setSheetHeaderFooter expects (sheet:number, headerFooter:object)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  const Napi::Object spec = info[1].As<Napi::Object>();
-  CheckedSpecReader reader(env);
   // The six section strings are borrowed by the C struct, so their
   // storage has to outlive the call.
   std::string odd_header;
@@ -327,20 +267,23 @@ Napi::Value Workbook::SetSheetHeaderFooter(const Napi::CallbackInfo& info) {
   std::string first_header;
   std::string first_footer;
   fm_header_footer_t out{};
-  out.odd_header = PullOptionalString(reader, spec, "oddHeader", odd_header);
-  out.odd_footer = PullOptionalString(reader, spec, "oddFooter", odd_footer);
-  out.even_header = PullOptionalString(reader, spec, "evenHeader", even_header);
-  out.even_footer = PullOptionalString(reader, spec, "evenFooter", even_footer);
-  out.first_header = PullOptionalString(reader, spec, "firstHeader", first_header);
-  out.first_footer = PullOptionalString(reader, spec, "firstFooter", first_footer);
-  PullOptionalBool(reader, spec, "differentOddEven", false, out.different_odd_even, out.different_odd_even_engaged);
-  PullOptionalBool(reader, spec, "differentFirst", false, out.different_first, out.different_first_engaged);
-  PullOptionalBool(reader, spec, "scaleWithDoc", false, out.scale_with_doc, out.scale_with_doc_engaged);
-  PullOptionalBool(reader, spec, "alignWithMargins", false, out.align_with_margins, out.align_with_margins_engaged);
-  if (!reader.ok()) {
-    return env.Undefined();
-  }
-  return MakeStatus(env, fm_sheet_set_header_footer(handle_, ArgU32(info, 0), &out));
+  return InvokeSheetSpec(
+      info, "setSheetHeaderFooter expects (sheet:number, headerFooter:object)",
+      [&](CheckedSpecReader& reader, const Napi::Object& spec) {
+        out.odd_header = PullOptionalString(reader, spec, "oddHeader", odd_header);
+        out.odd_footer = PullOptionalString(reader, spec, "oddFooter", odd_footer);
+        out.even_header = PullOptionalString(reader, spec, "evenHeader", even_header);
+        out.even_footer = PullOptionalString(reader, spec, "evenFooter", even_footer);
+        out.first_header = PullOptionalString(reader, spec, "firstHeader", first_header);
+        out.first_footer = PullOptionalString(reader, spec, "firstFooter", first_footer);
+        PullOptionalBool(reader, spec, "differentOddEven", false, out.different_odd_even,
+                         out.different_odd_even_engaged);
+        PullOptionalBool(reader, spec, "differentFirst", false, out.different_first, out.different_first_engaged);
+        PullOptionalBool(reader, spec, "scaleWithDoc", false, out.scale_with_doc, out.scale_with_doc_engaged);
+        PullOptionalBool(reader, spec, "alignWithMargins", false, out.align_with_margins,
+                         out.align_with_margins_engaged);
+      },
+      [&](fm_workbook_t* handle) { return fm_sheet_set_header_footer(handle, ArgU32(info, 0), &out); });
 }
 
 // Both typed getters below emit their whole declared payload on every exit

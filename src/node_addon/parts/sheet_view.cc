@@ -35,18 +35,73 @@ Napi::Object DefaultSheetView(Napi::Env env) {
   return view;
 }
 
+// Enumerates a per-sheet layout list into `{ status, <field>: [...] }`,
+// skipping entries the C getter cannot read.
+template <typename Entry>
+Napi::Value SheetLayoutList(const Napi::CallbackInfo& info, const fm_workbook_t* handle, const char* field,
+                            fm_status_t (*count_fn)(const fm_workbook_t*, size_t, size_t*),
+                            fm_status_t (*at_fn)(const fm_workbook_t*, size_t, size_t, Entry*),
+                            Napi::Object (*to_js)(Napi::Env, const Entry&)) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return MakeFieldResult(env, MakeErrorStatus(env, kBindingInvalidHandle), field, Napi::Array::New(env));
+  }
+  const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
+  std::size_t count = 0;
+  fm_status_t rc = count_fn(handle, sheet, &count);
+  if (rc != 0) {
+    return MakeFieldResult(env, MakeErrorStatus(env, rc), field, Napi::Array::New(env));
+  }
+  Napi::Array arr = Napi::Array::New(env, count);
+  std::size_t emitted = 0;
+  for (std::size_t i = 0; i < count; ++i) {
+    Entry entry{};
+    if (at_fn(handle, sheet, i, &entry) != 0) {
+      continue;
+    }
+    arr.Set(static_cast<uint32_t>(emitted), to_js(env, entry));
+    ++emitted;
+  }
+  return MakeFieldResult(env, MakeOkStatus(env), field, arr);
+}
+
+Napi::Object ColumnLayoutToJs(Napi::Env env, const fm_column_layout_t& entry) {
+  Napi::Object col = Napi::Object::New(env);
+  col.Set("first", Napi::Number::New(env, entry.first));
+  col.Set("last", Napi::Number::New(env, entry.last));
+  col.Set("width", Napi::Number::New(env, entry.width));
+  col.Set("hidden", Napi::Number::New(env, entry.hidden));
+  col.Set("outlineLevel", Napi::Number::New(env, static_cast<int32_t>(entry.outline_level)));
+  // The C getter reports logical presence, including legacy aggregate
+  // layouts with a non-zero width but a clear raw presence bit. Keep the
+  // binding defensive in case an older ABI implementation is loaded.
+  col.Set("hasWidth", Napi::Number::New(env, entry.has_width || entry.width != 0.0));
+  col.Set("hasStyle", Napi::Number::New(env, entry.has_style));
+  col.Set("styleXf", Napi::Number::New(env, entry.style_xf));
+  return col;
+}
+
+Napi::Object RowLayoutToJs(Napi::Env env, const fm_row_layout_t& entry) {
+  Napi::Object row = Napi::Object::New(env);
+  row.Set("row", Napi::Number::New(env, entry.row));
+  row.Set("height", Napi::Number::New(env, entry.height));
+  row.Set("hasHeight", Napi::Number::New(env, entry.has_height));
+  row.Set("customHeight", Napi::Number::New(env, entry.custom_height));
+  row.Set("hidden", Napi::Number::New(env, entry.hidden));
+  row.Set("outlineLevel", Napi::Number::New(env, static_cast<int32_t>(entry.outline_level)));
+  row.Set("hasStyle", Napi::Number::New(env, entry.has_style));
+  row.Set("styleXf", Napi::Number::New(env, entry.style_xf));
+  return row;
+}
+
 // Shared body of the per-sheet boolean view setters.
 using SheetFlagFn = fm_status_t (*)(fm_workbook_t*, size_t, int32_t);
 
-Napi::Value InvokeSheetFlag(const Napi::CallbackInfo& info, fm_workbook_t* handle, SheetFlagFn fn) {
-  Napi::Env env = info.Env();
-  if (handle == nullptr) {
-    return MakeErrorStatus(env, kBindingInvalidHandle);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
-  const bool flag = Workbook::ArgBool(info, 1);
-  fm_status_t rc = fn(handle, sheet, flag ? 1 : 0);
-  return MakeStatus(env, rc);
+Napi::Value InvokeSheetFlag(Workbook& wb, const Napi::CallbackInfo& info, SheetFlagFn fn) {
+  return wb.StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
+    return fn(handle, sheet, Workbook::ArgFlag(info, 1));
+  });
 }
 
 // Shared body of the column width unit converters (chars <-> points).
@@ -187,237 +242,95 @@ Napi::Value Workbook::SetSheetProtection(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetSheetZoom(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const uint32_t zoom = ArgU32(info, 1);
-  fm_status_t rc = fm_sheet_set_zoom(handle_, sheet, zoom);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_sheet_set_zoom);
 }
 
 Napi::Value Workbook::SetSheetFreeze(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const uint32_t freeze_rows = ArgU32(info, 1);
-  const uint32_t freeze_cols = ArgU32(info, 2);
-  fm_status_t rc = fm_sheet_set_freeze(handle_, sheet, freeze_rows, freeze_cols);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_sheet_set_freeze);
 }
 
 Napi::Value Workbook::SetSheetTabHidden(const Napi::CallbackInfo& info) {
-  return InvokeSheetFlag(info, handle_, &fm_sheet_set_tab_hidden);
+  return InvokeSheetFlag(*this, info, &fm_sheet_set_tab_hidden);
 }
 
 Napi::Value Workbook::SetSheetVisibility(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   // Raw ordinal: the C ABI rejects an unknown value, so coercing it to a
   // narrower type here would turn a caller's mistake into a silent state.
-  const std::int32_t visibility = ArgI32(info, 1);
-  fm_status_t rc = fm_sheet_set_visibility(handle_, sheet, visibility);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_sheet_set_visibility);
 }
 
 Napi::Value Workbook::SetSheetShowGridLines(const Napi::CallbackInfo& info) {
-  return InvokeSheetFlag(info, handle_, &fm_sheet_set_show_grid_lines);
+  return InvokeSheetFlag(*this, info, &fm_sheet_set_show_grid_lines);
 }
 
 Napi::Value Workbook::SetSheetShowRowColHeaders(const Napi::CallbackInfo& info) {
-  return InvokeSheetFlag(info, handle_, &fm_sheet_set_show_row_col_headers);
+  return InvokeSheetFlag(*this, info, &fm_sheet_set_show_row_col_headers);
 }
 
 Napi::Value Workbook::SetSheetShowZeros(const Napi::CallbackInfo& info) {
-  return InvokeSheetFlag(info, handle_, &fm_sheet_set_show_zeros);
+  return InvokeSheetFlag(*this, info, &fm_sheet_set_show_zeros);
 }
 
 Napi::Value Workbook::SetSheetRightToLeft(const Napi::CallbackInfo& info) {
-  return InvokeSheetFlag(info, handle_, &fm_sheet_set_right_to_left);
+  return InvokeSheetFlag(*this, info, &fm_sheet_set_right_to_left);
 }
 
 Napi::Value Workbook::SetSheetTabSelected(const Napi::CallbackInfo& info) {
-  return InvokeSheetFlag(info, handle_, &fm_sheet_set_tab_selected);
+  return InvokeSheetFlag(*this, info, &fm_sheet_set_tab_selected);
 }
 
 Napi::Value Workbook::SetSheetViewMode(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::string mode = ArgString(info, 1);
-  fm_status_t rc = fm_sheet_set_view_mode(handle_, sheet, mode.c_str());
-  return MakeStatus(env, rc);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+    const std::string mode = ArgString(info, 1);
+    return fm_sheet_set_view_mode(handle, sheet, mode.c_str());
+  });
 }
 
 Napi::Value Workbook::GetSheetColumns(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeFieldResult(env, NullHandleError(env), "columns", Napi::Array::New(env));
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  std::size_t count = 0;
-  fm_status_t rc = fm_sheet_get_column_count(handle_, sheet, &count);
-  if (rc != 0) {
-    return MakeFieldResult(env, MakeErrorStatus(env, rc), "columns", Napi::Array::New(env));
-  }
-  Napi::Array arr = Napi::Array::New(env, count);
-  std::size_t emitted = 0;
-  for (std::size_t i = 0; i < count; ++i) {
-    fm_column_layout_t entry{};
-    if (fm_sheet_get_column(handle_, sheet, i, &entry) != 0) {
-      continue;
-    }
-    Napi::Object col = Napi::Object::New(env);
-    col.Set("first", Napi::Number::New(env, entry.first));
-    col.Set("last", Napi::Number::New(env, entry.last));
-    col.Set("width", Napi::Number::New(env, entry.width));
-    col.Set("hidden", Napi::Number::New(env, entry.hidden));
-    col.Set("outlineLevel", Napi::Number::New(env, static_cast<int32_t>(entry.outline_level)));
-    // The C getter reports logical presence, including legacy aggregate
-    // layouts with a non-zero width but a clear raw presence bit. Keep the
-    // binding defensive in case an older ABI implementation is loaded.
-    col.Set("hasWidth", Napi::Number::New(env, entry.has_width || entry.width != 0.0));
-    col.Set("hasStyle", Napi::Number::New(env, entry.has_style));
-    col.Set("styleXf", Napi::Number::New(env, entry.style_xf));
-    arr.Set(static_cast<uint32_t>(emitted), col);
-    ++emitted;
-  }
-  return MakeFieldResult(env, MakeOkStatus(env), "columns", arr);
+  return SheetLayoutList(info, handle_, "columns", &fm_sheet_get_column_count, &fm_sheet_get_column, &ColumnLayoutToJs);
 }
 
 Napi::Value Workbook::SetColumnWidth(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const uint32_t first = ArgU32(info, 1);
-  const uint32_t last = ArgU32(info, 2);
-  const double width = ArgDouble(info, 3);
-  fm_status_t rc = fm_sheet_set_column_width(handle_, sheet, first, last, width);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_sheet_set_column_width);
 }
 
 Napi::Value Workbook::SetColumnHidden(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const uint32_t first = ArgU32(info, 1);
-  const uint32_t last = ArgU32(info, 2);
-  const bool hidden = ArgBool(info, 3);
-  fm_status_t rc = fm_sheet_set_column_hidden(handle_, sheet, first, last, hidden ? 1 : 0);
-  return MakeStatus(env, rc);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+    const uint32_t first = ArgU32(info, 1);
+    const uint32_t last = ArgU32(info, 2);
+    return fm_sheet_set_column_hidden(handle, sheet, first, last, ArgFlag(info, 3));
+  });
 }
 
 Napi::Value Workbook::SetColumnOutline(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const uint32_t first = ArgU32(info, 1);
-  const uint32_t last = ArgU32(info, 2);
-  uint32_t level = ArgU32(info, 3);
-  if (level > 255U) {
-    level = 255U;
-  }
-  fm_status_t rc = fm_sheet_set_column_outline(handle_, sheet, first, last, static_cast<uint8_t>(level));
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_sheet_set_column_outline);
 }
 
 Napi::Value Workbook::SetColumnStyle(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const uint32_t first = ArgU32(info, 1);
-  const uint32_t last = ArgU32(info, 2);
-  const uint32_t xf_index = ArgU32(info, 3);
-  fm_status_t rc = fm_sheet_set_column_style(handle_, sheet, first, last, xf_index);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_sheet_set_column_style);
 }
 
 Napi::Value Workbook::GetSheetRowOverrides(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeFieldResult(env, NullHandleError(env), "rows", Napi::Array::New(env));
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  std::size_t count = 0;
-  fm_status_t rc = fm_sheet_get_row_override_count(handle_, sheet, &count);
-  if (rc != 0) {
-    return MakeFieldResult(env, MakeErrorStatus(env, rc), "rows", Napi::Array::New(env));
-  }
-  Napi::Array arr = Napi::Array::New(env, count);
-  std::size_t emitted = 0;
-  for (std::size_t i = 0; i < count; ++i) {
-    fm_row_layout_t entry{};
-    if (fm_sheet_get_row_override(handle_, sheet, i, &entry) != 0) {
-      continue;
-    }
-    Napi::Object row = Napi::Object::New(env);
-    row.Set("row", Napi::Number::New(env, entry.row));
-    row.Set("height", Napi::Number::New(env, entry.height));
-    row.Set("hasHeight", Napi::Number::New(env, entry.has_height));
-    row.Set("customHeight", Napi::Number::New(env, entry.custom_height));
-    row.Set("hidden", Napi::Number::New(env, entry.hidden));
-    row.Set("outlineLevel", Napi::Number::New(env, static_cast<int32_t>(entry.outline_level)));
-    row.Set("hasStyle", Napi::Number::New(env, entry.has_style));
-    row.Set("styleXf", Napi::Number::New(env, entry.style_xf));
-    arr.Set(static_cast<uint32_t>(emitted), row);
-    ++emitted;
-  }
-  return MakeFieldResult(env, MakeOkStatus(env), "rows", arr);
+  return SheetLayoutList(info, handle_, "rows", &fm_sheet_get_row_override_count, &fm_sheet_get_row_override,
+                         &RowLayoutToJs);
 }
 
 Napi::Value Workbook::SetRowHeight(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const uint32_t row = ArgU32(info, 1);
-  const double height = ArgDouble(info, 2);
-  fm_status_t rc = fm_sheet_set_row_height(handle_, sheet, row, height);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_sheet_set_row_height);
 }
 
 Napi::Value Workbook::ClearRowHeight(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  return MakeStatus(env, fm_sheet_clear_row_height(handle_, sheet, ArgU32(info, 1)));
+  return InvokeSheetCall(info, &fm_sheet_clear_row_height);
 }
 
 Napi::Value Workbook::ClearColumnWidth(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  return MakeStatus(env, fm_sheet_clear_column_width(handle_, sheet, ArgU32(info, 1), ArgU32(info, 2)));
+  return InvokeSheetCall(info, &fm_sheet_clear_column_width);
 }
 
 Napi::Value Workbook::ClearColumnStyle(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  return MakeStatus(env, fm_sheet_clear_column_style(handle_, sheet, ArgU32(info, 1), ArgU32(info, 2)));
+  return InvokeSheetCall(info, &fm_sheet_clear_column_style);
 }
 
 Napi::Value Workbook::GetSheetFormatDefaults(const Napi::CallbackInfo& info) {
@@ -548,52 +461,23 @@ Napi::Value Workbook::ColumnPtToChars(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetRowHidden(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const uint32_t row = ArgU32(info, 1);
-  const bool hidden = ArgBool(info, 2);
-  fm_status_t rc = fm_sheet_set_row_hidden(handle_, sheet, row, hidden ? 1 : 0);
-  return MakeStatus(env, rc);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+    const uint32_t row = ArgU32(info, 1);
+    return fm_sheet_set_row_hidden(handle, sheet, row, ArgFlag(info, 2));
+  });
 }
 
 Napi::Value Workbook::SetRowOutline(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const uint32_t row = ArgU32(info, 1);
-  uint32_t level = ArgU32(info, 2);
-  if (level > 255U) {
-    level = 255U;
-  }
-  fm_status_t rc = fm_sheet_set_row_outline(handle_, sheet, row, static_cast<uint8_t>(level));
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_sheet_set_row_outline);
 }
 
 Napi::Value Workbook::SetRowStyle(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const uint32_t first = ArgU32(info, 1);
-  const uint32_t last = ArgU32(info, 2);
-  const uint32_t xf_index = ArgU32(info, 3);
-  fm_status_t rc = fm_sheet_set_row_style(handle_, sheet, first, last, xf_index);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_sheet_set_row_style);
 }
 
 Napi::Value Workbook::ClearRowStyle(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  return MakeStatus(env, fm_sheet_clear_row_style(handle_, sheet, ArgU32(info, 1), ArgU32(info, 2)));
+  return InvokeSheetCall(info, &fm_sheet_clear_row_style);
 }
 
 Napi::Value Workbook::RangeStyleBases(const Napi::CallbackInfo& info) {

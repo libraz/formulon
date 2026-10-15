@@ -44,22 +44,22 @@ void CheckedSpecReader::ObservePending() {
   }
 }
 
-void CheckedSpecReader::ReportType(const char* key, const char* expected) {
+template <typename ErrorType>
+void CheckedSpecReader::ReportFailure(const std::string& message) {
   if (failed_ || env_.IsExceptionPending()) {
     failed_ = true;
     return;
   }
-  Napi::TypeError::New(env_, std::string(key) + " must be a " + expected).ThrowAsJavaScriptException();
+  ErrorType::New(env_, message).ThrowAsJavaScriptException();
   failed_ = true;
 }
 
+void CheckedSpecReader::ReportType(const char* key, const char* expected) {
+  ReportFailure<Napi::TypeError>(std::string(key) + " must be a " + expected);
+}
+
 void CheckedSpecReader::ReportRange(const char* key, const char* range_name) {
-  if (failed_ || env_.IsExceptionPending()) {
-    failed_ = true;
-    return;
-  }
-  Napi::RangeError::New(env_, std::string(key) + " is outside " + range_name + " range").ThrowAsJavaScriptException();
-  failed_ = true;
+  ReportFailure<Napi::RangeError>(std::string(key) + " is outside " + range_name + " range");
 }
 
 bool CheckedSpecReader::ReadOptional(const Napi::Object& owner, const char* key, Napi::Value* out, bool* present) {
@@ -270,73 +270,68 @@ double CheckedSpecReader::Double(const Napi::Value& value, const char* key, doub
   return result;
 }
 
-uint8_t CheckedSpecReader::U8(const Napi::Object& owner, const char* key, uint8_t dflt, bool* present) {
+template <typename T>
+T CheckedSpecReader::ReadIntegral(const Napi::Object& owner, const char* key, T dflt, const char* range_name,
+                                  bool* present) {
   double value = static_cast<double>(dflt);
-  if (!ReadInteger(owner, key, &value, 0.0, static_cast<double>(std::numeric_limits<uint8_t>::max()), "uint8",
-                   present)) {
+  if (!ReadInteger(owner, key, &value, static_cast<double>(std::numeric_limits<T>::min()),
+                   static_cast<double>(std::numeric_limits<T>::max()), range_name, present)) {
     return dflt;
   }
-  return static_cast<uint8_t>(value);
+  return static_cast<T>(value);
+}
+
+template <typename T>
+T CheckedSpecReader::ReadIntegral(const Napi::Value& value, const char* key, T dflt, const char* range_name) {
+  double result = static_cast<double>(dflt);
+  if (!ReadInteger(value, key, &result, static_cast<double>(std::numeric_limits<T>::min()),
+                   static_cast<double>(std::numeric_limits<T>::max()), range_name)) {
+    return dflt;
+  }
+  return static_cast<T>(result);
+}
+
+uint8_t CheckedSpecReader::U8(const Napi::Object& owner, const char* key, uint8_t dflt, bool* present) {
+  return ReadIntegral<uint8_t>(owner, key, dflt, "uint8", present);
 }
 
 uint8_t CheckedSpecReader::U8(const Napi::Value& value, const char* key, uint8_t dflt) {
-  double result = static_cast<double>(dflt);
-  if (!ReadInteger(value, key, &result, 0.0, static_cast<double>(std::numeric_limits<uint8_t>::max()), "uint8")) {
-    return dflt;
-  }
-  return static_cast<uint8_t>(result);
+  return ReadIntegral<uint8_t>(value, key, dflt, "uint8");
 }
 
 uint16_t CheckedSpecReader::U16(const Napi::Object& owner, const char* key, uint16_t dflt, bool* present) {
-  double value = static_cast<double>(dflt);
-  if (!ReadInteger(owner, key, &value, 0.0, static_cast<double>(std::numeric_limits<uint16_t>::max()), "uint16",
-                   present)) {
-    return dflt;
-  }
-  return static_cast<uint16_t>(value);
+  return ReadIntegral<uint16_t>(owner, key, dflt, "uint16", present);
 }
 
 uint16_t CheckedSpecReader::U16(const Napi::Value& value, const char* key, uint16_t dflt) {
-  double result = static_cast<double>(dflt);
-  if (!ReadInteger(value, key, &result, 0.0, static_cast<double>(std::numeric_limits<uint16_t>::max()), "uint16")) {
-    return dflt;
-  }
-  return static_cast<uint16_t>(result);
+  return ReadIntegral<uint16_t>(value, key, dflt, "uint16");
 }
 
 uint32_t CheckedSpecReader::U32(const Napi::Object& owner, const char* key, uint32_t dflt, bool* present) {
-  double value = static_cast<double>(dflt);
-  if (!ReadInteger(owner, key, &value, 0.0, static_cast<double>(std::numeric_limits<uint32_t>::max()), "uint32",
-                   present)) {
-    return dflt;
-  }
-  return static_cast<uint32_t>(value);
+  return ReadIntegral<uint32_t>(owner, key, dflt, "uint32", present);
 }
 
 uint32_t CheckedSpecReader::U32(const Napi::Value& value, const char* key, uint32_t dflt) {
-  double result = static_cast<double>(dflt);
-  if (!ReadInteger(value, key, &result, 0.0, static_cast<double>(std::numeric_limits<uint32_t>::max()), "uint32")) {
-    return dflt;
-  }
-  return static_cast<uint32_t>(result);
+  return ReadIntegral<uint32_t>(value, key, dflt, "uint32");
 }
 
 int32_t CheckedSpecReader::I32(const Napi::Object& owner, const char* key, int32_t dflt, bool* present) {
-  double value = static_cast<double>(dflt);
-  if (!ReadInteger(owner, key, &value, static_cast<double>(std::numeric_limits<int32_t>::min()),
-                   static_cast<double>(std::numeric_limits<int32_t>::max()), "int32", present)) {
-    return dflt;
-  }
-  return static_cast<int32_t>(value);
+  return ReadIntegral<int32_t>(owner, key, dflt, "int32", present);
 }
 
 int32_t CheckedSpecReader::I32(const Napi::Value& value, const char* key, int32_t dflt) {
-  double result = static_cast<double>(dflt);
-  if (!ReadInteger(value, key, &result, static_cast<double>(std::numeric_limits<int32_t>::min()),
-                   static_cast<double>(std::numeric_limits<int32_t>::max()), "int32")) {
+  return ReadIntegral<int32_t>(value, key, dflt, "int32");
+}
+
+int64_t CheckedSpecReader::NarrowI64(double number, const char* key, int64_t dflt) {
+  if (!std::isfinite(number) || std::trunc(number) != number || number < -0x1p63 || number >= 0x1p63) {
+    ReportRange(key, "int64");
     return dflt;
   }
-  return static_cast<int32_t>(result);
+  if (number == -0x1p63) {
+    return std::numeric_limits<int64_t>::min();
+  }
+  return static_cast<int64_t>(number);
 }
 
 int64_t CheckedSpecReader::I64(const Napi::Object& owner, const char* key, int64_t dflt, bool* present) {
@@ -344,14 +339,7 @@ int64_t CheckedSpecReader::I64(const Napi::Object& owner, const char* key, int64
   if (!ReadNumber(owner, key, &value, present)) {
     return dflt;
   }
-  if (!std::isfinite(value) || std::trunc(value) != value || value < -0x1p63 || value >= 0x1p63) {
-    ReportRange(key, "int64");
-    return dflt;
-  }
-  if (value == -0x1p63) {
-    return std::numeric_limits<int64_t>::min();
-  }
-  return static_cast<int64_t>(value);
+  return NarrowI64(value, key, dflt);
 }
 
 int64_t CheckedSpecReader::I64(const Napi::Value& value, const char* key, int64_t dflt) {
@@ -368,14 +356,7 @@ int64_t CheckedSpecReader::I64(const Napi::Value& value, const char* key, int64_
   if (!ok()) {
     return dflt;
   }
-  if (!std::isfinite(number) || std::trunc(number) != number || number < -0x1p63 || number >= 0x1p63) {
-    ReportRange(key, "int64");
-    return dflt;
-  }
-  if (number == -0x1p63) {
-    return std::numeric_limits<int64_t>::min();
-  }
-  return static_cast<int64_t>(number);
+  return NarrowI64(number, key, dflt);
 }
 
 Napi::Object MakeOkStatus(Napi::Env env) {

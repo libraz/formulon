@@ -52,28 +52,14 @@ Napi::Object EmptyFormulaArrayResult(Napi::Env env, Napi::Object status) {
 // ---- Cell mutation --------------------------------------------------
 
 Napi::Value Workbook::SetNumber(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const CellAddressArgs address = ReadCellAddress(info);
-  const double value = ArgDouble(info, 3);
-  fm_status_t rc = fm_workbook_set_number(handle_, address.sheet, address.row, address.col, value);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_workbook_set_number);
 }
 
 Napi::Value Workbook::SetBool(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const CellAddressArgs address = ReadCellAddress(info);
-  bool value = false;
-  if (info.Length() > 3) {
-    value = info[3].ToBoolean().Value();
-  }
-  fm_status_t rc = fm_workbook_set_bool(handle_, address.sheet, address.row, address.col, value ? 1 : 0);
-  return MakeStatus(env, rc);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const CellAddressArgs address = ReadCellAddress(info);
+    return fm_workbook_set_bool(handle, address.sheet, address.row, address.col, ArgFlag(info, 3));
+  });
 }
 
 Napi::Value Workbook::SetError(const Napi::CallbackInfo& info) {
@@ -190,13 +176,7 @@ Napi::Value Workbook::SetCellPhoneticProperties(const Napi::CallbackInfo& info) 
 }
 
 Napi::Value Workbook::SetBlank(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const CellAddressArgs address = ReadCellAddress(info);
-  fm_status_t rc = fm_workbook_set_blank(handle_, address.sheet, address.row, address.col);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_workbook_set_blank);
 }
 
 Napi::Value Workbook::SetFormula(const Napi::CallbackInfo& info) {

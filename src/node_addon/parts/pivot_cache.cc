@@ -42,32 +42,6 @@ Napi::Value CacheCountResult(const Napi::CallbackInfo& info, const fm_workbook_t
   return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
-// Shared bodies for the Status entries that take `(cache)` and
-// `(cache, field)`.
-using CacheOpFn = fm_status_t (*)(fm_workbook_t*, uint32_t);
-using CacheFieldOpFn = fm_status_t (*)(fm_workbook_t*, uint32_t, size_t);
-
-Napi::Value InvokeCacheOp(const Napi::CallbackInfo& info, fm_workbook_t* handle, CacheOpFn fn) {
-  Napi::Env env = info.Env();
-  if (handle == nullptr) {
-    return MakeErrorStatus(env, kBindingInvalidHandle);
-  }
-  const uint32_t cache_id = Workbook::ArgU32(info, 0);
-  fm_status_t rc = fn(handle, cache_id);
-  return MakeStatus(env, rc);
-}
-
-Napi::Value InvokeCacheFieldOp(const Napi::CallbackInfo& info, fm_workbook_t* handle, CacheFieldOpFn fn) {
-  Napi::Env env = info.Env();
-  if (handle == nullptr) {
-    return MakeErrorStatus(env, kBindingInvalidHandle);
-  }
-  const uint32_t cache_id = Workbook::ArgU32(info, 0);
-  const std::size_t field_idx = static_cast<std::size_t>(Workbook::ArgU32(info, 1));
-  fm_status_t rc = fn(handle, cache_id, field_idx);
-  return MakeStatus(env, rc);
-}
-
 }  // namespace
 
 Napi::Value Workbook::PivotCacheCount(const Napi::CallbackInfo& info) {
@@ -103,7 +77,7 @@ Napi::Value Workbook::PivotCacheCreate(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::PivotCacheRemove(const Napi::CallbackInfo& info) {
-  return InvokeCacheOp(info, handle_, &fm_workbook_pivot_cache_remove);
+  return InvokeSheetCall(info, &fm_workbook_pivot_cache_remove);
 }
 
 Napi::Value Workbook::PivotCacheGetWorksheetSource(const Napi::CallbackInfo& info) {
@@ -186,7 +160,7 @@ Napi::Value Workbook::PivotCacheFieldAdd(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::PivotCacheFieldClear(const Napi::CallbackInfo& info) {
-  return InvokeCacheOp(info, handle_, &fm_workbook_pivot_cache_field_clear);
+  return InvokeSheetCall(info, &fm_workbook_pivot_cache_field_clear);
 }
 
 Napi::Value Workbook::PivotCacheFieldSharedItemCount(const Napi::CallbackInfo& info) {
@@ -202,59 +176,41 @@ Napi::Value Workbook::PivotCacheFieldSharedItemCount(const Napi::CallbackInfo& i
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemNumber(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t cache_id = ArgU32(info, 0);
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const double value = ArgDouble(info, 2);
-  fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_number(handle_, cache_id, field_idx, value);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_workbook_pivot_cache_field_add_shared_item_number);
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemText(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t cache_id = ArgU32(info, 0);
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::string utf8 = ArgString(info, 2);
-  fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_text(handle_, cache_id, field_idx, utf8.c_str());
-  return MakeStatus(env, rc);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const uint32_t cache_id = ArgU32(info, 0);
+    const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+    const std::string utf8 = ArgString(info, 2);
+    return fm_workbook_pivot_cache_field_add_shared_item_text(handle, cache_id, field_idx, utf8.c_str());
+  });
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemBool(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t cache_id = ArgU32(info, 0);
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const bool value = ArgBool(info, 2);
-  fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_bool(handle_, cache_id, field_idx, value ? 1 : 0);
-  return MakeStatus(env, rc);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const uint32_t cache_id = ArgU32(info, 0);
+    const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+    return fm_workbook_pivot_cache_field_add_shared_item_bool(handle, cache_id, field_idx, ArgFlag(info, 2));
+  });
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemBlank(const Napi::CallbackInfo& info) {
-  return InvokeCacheFieldOp(info, handle_, &fm_workbook_pivot_cache_field_add_shared_item_blank);
+  return InvokeSheetCall(info, &fm_workbook_pivot_cache_field_add_shared_item_blank);
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemError(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t cache_id = ArgU32(info, 0);
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const fm_error_code_t error = static_cast<fm_error_code_t>(info[2].As<Napi::Number>().Int32Value());
-  fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_error(handle_, cache_id, field_idx, error);
-  return MakeStatus(env, rc);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const uint32_t cache_id = ArgU32(info, 0);
+    const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+    const fm_error_code_t error = static_cast<fm_error_code_t>(info[2].As<Napi::Number>().Int32Value());
+    return fm_workbook_pivot_cache_field_add_shared_item_error(handle, cache_id, field_idx, error);
+  });
 }
 
 Napi::Value Workbook::PivotCacheFieldClearSharedItems(const Napi::CallbackInfo& info) {
-  return InvokeCacheFieldOp(info, handle_, &fm_workbook_pivot_cache_field_clear_shared_items);
+  return InvokeSheetCall(info, &fm_workbook_pivot_cache_field_clear_shared_items);
 }
 
 Napi::Value Workbook::PivotCacheRecordCount(const Napi::CallbackInfo& info) {
@@ -273,66 +229,41 @@ Napi::Value Workbook::PivotCacheRecordAdd(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::PivotCacheRecordClear(const Napi::CallbackInfo& info) {
-  return InvokeCacheOp(info, handle_, &fm_workbook_pivot_cache_record_clear);
+  return InvokeSheetCall(info, &fm_workbook_pivot_cache_record_clear);
 }
 
 Napi::Value Workbook::PivotCacheRecordSetNumber(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const CacheRecordArgs record = ReadCacheRecord(info);
-  const double value = ArgDouble(info, 3);
-  fm_status_t rc =
-      fm_workbook_pivot_cache_record_set_number(handle_, record.cache_id, record.record_idx, record.field_idx, value);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_workbook_pivot_cache_record_set_number);
 }
 
 Napi::Value Workbook::PivotCacheRecordSetText(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const CacheRecordArgs record = ReadCacheRecord(info);
-  const std::string utf8 = ArgString(info, 3);
-  fm_status_t rc = fm_workbook_pivot_cache_record_set_text(handle_, record.cache_id, record.record_idx,
-                                                           record.field_idx, utf8.c_str());
-  return MakeStatus(env, rc);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const CacheRecordArgs record = ReadCacheRecord(info);
+    const std::string utf8 = ArgString(info, 3);
+    return fm_workbook_pivot_cache_record_set_text(handle, record.cache_id, record.record_idx, record.field_idx,
+                                                   utf8.c_str());
+  });
 }
 
 Napi::Value Workbook::PivotCacheRecordSetBool(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const CacheRecordArgs record = ReadCacheRecord(info);
-  const bool value = ArgBool(info, 3);
-  fm_status_t rc = fm_workbook_pivot_cache_record_set_bool(handle_, record.cache_id, record.record_idx,
-                                                           record.field_idx, value ? 1 : 0);
-  return MakeStatus(env, rc);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const CacheRecordArgs record = ReadCacheRecord(info);
+    return fm_workbook_pivot_cache_record_set_bool(handle, record.cache_id, record.record_idx, record.field_idx,
+                                                   ArgFlag(info, 3));
+  });
 }
 
 Napi::Value Workbook::PivotCacheRecordSetBlank(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const CacheRecordArgs record = ReadCacheRecord(info);
-  fm_status_t rc =
-      fm_workbook_pivot_cache_record_set_blank(handle_, record.cache_id, record.record_idx, record.field_idx);
-  return MakeStatus(env, rc);
+  return InvokeSheetCall(info, &fm_workbook_pivot_cache_record_set_blank);
 }
 
 Napi::Value Workbook::PivotCacheRecordSetError(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const CacheRecordArgs record = ReadCacheRecord(info);
-  const int32_t error_code = info.Length() > 3 ? info[3].As<Napi::Number>().Int32Value() : 0;
-  fm_status_t rc = fm_workbook_pivot_cache_record_set_error(handle_, record.cache_id, record.record_idx,
-                                                            record.field_idx, static_cast<fm_error_code_t>(error_code));
-  return MakeStatus(env, rc);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const CacheRecordArgs record = ReadCacheRecord(info);
+    const int32_t error_code = info.Length() > 3 ? info[3].As<Napi::Number>().Int32Value() : 0;
+    return fm_workbook_pivot_cache_record_set_error(handle, record.cache_id, record.record_idx, record.field_idx,
+                                                    static_cast<fm_error_code_t>(error_code));
+  });
 }
 
 }  // namespace formulon_node
