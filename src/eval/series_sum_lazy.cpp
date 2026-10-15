@@ -19,6 +19,7 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -147,7 +148,7 @@ Value eval_series_sum_lazy(const parser::AstNode& call, Arena& arena, const Func
     if (!term) {
       return Value::error(term.error());
     }
-    total += v.as_number() * term.value();
+    total += flush_subnormal(v.as_number() * term.value());
   }
   return to_finite_value(total);
 }

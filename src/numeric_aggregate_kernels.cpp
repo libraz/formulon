@@ -95,7 +95,7 @@ Expected<double, ErrorCode> run_average(const NumericInputView& values) {
   if (count == 0U) {
     return ErrorCode::Div0;
   }
-  const double avg = sum.result() / static_cast<double>(count);
+  const double avg = flush_subnormal(sum.result() / static_cast<double>(count));
   if (!std::isfinite(avg)) {
     return ErrorCode::Num;
   }
@@ -110,7 +110,7 @@ Expected<double, ErrorCode> run_average(const std::vector<double>& xs) {
   for (double x : xs) {
     sum.add(x);
   }
-  const double avg = sum.result() / static_cast<double>(xs.size());
+  const double avg = flush_subnormal(sum.result() / static_cast<double>(xs.size()));
   if (!std::isfinite(avg)) {
     return ErrorCode::Num;
   }
@@ -171,7 +171,7 @@ Expected<double, ErrorCode> run_variance(const std::vector<double>& xs, bool sam
   double sq = 0.0;
   for (double x : xs) {
     const double d = x - mean;
-    sq += d * d;
+    sq += flush_subnormal(d * d);
   }
   const double denom = sample ? static_cast<double>(n - 1) : static_cast<double>(n);
   const double var = sq / denom;

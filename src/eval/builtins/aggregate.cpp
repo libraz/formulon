@@ -162,7 +162,7 @@ Value Average(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     }
     sum.add(coerced.value());
   }
-  const double r = sum.result() / static_cast<double>(arity);
+  const double r = flush_subnormal(sum.result() / static_cast<double>(arity));
   return to_finite_value(r);
 }
 
@@ -206,7 +206,7 @@ Value SumSq(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
       return Value::error(coerced.error());
     }
     const double x = coerced.value();
-    total += x * x;
+    total += flush_subnormal(x * x);
   }
   return to_finite_value(total);
 }

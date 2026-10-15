@@ -34,6 +34,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/strings.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -572,11 +573,14 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
   head_cols = std::min(head_cols, ref_cols);
 
   const auto product_at = [&all_args](std::uint32_t r, std::uint32_t c) {
+    // The first factor is taken as is; each further multiply flushes a subnormal product.
     double product = 1.0;
+    bool first = true;
     for (const ArgArray& a : all_args) {
       const Value& v =
           a.tail != nullptr ? tail_array_at(*a.tail, r, c) : a.cells[static_cast<std::size_t>(r) * a.cols + c];
-      product *= sumproduct_coerce(v);
+      product = first ? sumproduct_coerce(v) : flush_subnormal(product * sumproduct_coerce(v));
+      first = false;
     }
     return product;
   };

@@ -202,9 +202,11 @@ Value apply_unary(parser::UnaryOp op, const Value& operand) {
   // re-enter this switch deliberately rather than fall through silently.
   switch (op) {
     case parser::UnaryOp::Minus:
-      return finalize_arithmetic(-x);
+      // Negation drops the sign of a value below the zero-test threshold.
+      return finalize_arithmetic(std::fabs(x) < kZeroTestThreshold ? x : -x);
     case parser::UnaryOp::Percent:
-      return finalize_arithmetic(current_eval_profile().host == ExcelHost::kWin365 ? x87_div(x, 100.0) : x / 100.0);
+      return finalize_arithmetic(
+          flush_subnormal(current_eval_profile().host == ExcelHost::kWin365 ? x87_div(x, 100.0) : x / 100.0));
     case parser::UnaryOp::Plus:
       // Unreachable — handled by the early return above. Kept here so
       // the compiler's exhaustiveness check still covers every enum.
@@ -232,7 +234,7 @@ Value apply_arithmetic(parser::BinOp op, double lhs, double rhs) {
     case parser::BinOp::Pow: {
       // Delegates to the shared `apply_pow` helper so the `^` operator and
       // the `POWER()` builtin cannot drift apart on edge cases.
-      auto r = apply_pow(lhs, rhs);
+      auto r = apply_pow(lhs, rhs, /*operator_form=*/true);
       if (!r) {
         return Value::error(r.error());
       }

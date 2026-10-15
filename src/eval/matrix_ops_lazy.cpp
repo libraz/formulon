@@ -31,6 +31,7 @@
 #include "utils/arena.h"
 #include "utils/checked_mul.h"
 #include "utils/error.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -130,7 +131,8 @@ Value eval_mmult_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     for (std::uint32_t j = 0; j < out_cols; ++j) {
       double s = 0.0;
       for (std::uint32_t k = 0; k < inner; ++k) {
-        s += ad[static_cast<std::size_t>(i) * inner + k] * bd[static_cast<std::size_t>(k) * out_cols + j];
+        s += flush_subnormal(ad[static_cast<std::size_t>(i) * inner + k] *
+                             bd[static_cast<std::size_t>(k) * out_cols + j]);
       }
       if (std::isnan(s) || std::isinf(s)) {
         return Value::error(ErrorCode::Num);

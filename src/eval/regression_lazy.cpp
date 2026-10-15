@@ -39,6 +39,7 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -213,12 +214,12 @@ Value eval_pair_stat(const parser::AstNode& call, Arena& arena, const FunctionRe
       double total = 0.0;
       for (std::size_t i = 0; i < x.size(); ++i) {
         if (kind == PairStat::SumX2PY2) {
-          total += x[i] * x[i] + y[i] * y[i];
+          total += flush_subnormal(x[i] * x[i]) + flush_subnormal(y[i] * y[i]);
         } else if (kind == PairStat::SumX2MY2) {
-          total += x[i] * x[i] - y[i] * y[i];
+          total += flush_subnormal(x[i] * x[i]) - flush_subnormal(y[i] * y[i]);
         } else {
           const double d = x[i] - y[i];
-          total += d * d;
+          total += flush_subnormal(d * d);
         }
       }
       return to_finite_value(total);

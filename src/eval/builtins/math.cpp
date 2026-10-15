@@ -7,6 +7,7 @@
 
 #include "eval/builtins/math.h"
 
+#include <cfloat>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -17,6 +18,7 @@
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -45,13 +47,10 @@ Value Sign(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(coerced.error());
   }
   const double x = coerced.value();
-  if (x > 0.0) {
-    return Value::number(1.0);
+  if (std::fabs(x) < kZeroTestThreshold) {
+    return Value::number(0.0);
   }
-  if (x < 0.0) {
-    return Value::number(-1.0);
-  }
-  return Value::number(0.0);
+  return Value::number(x > 0.0 ? 1.0 : -1.0);
 }
 
 // INT(value) - floor toward negative infinity. Excel's documented behavior:
@@ -188,10 +187,14 @@ Value Mod(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(operands.error());
   }
   const auto& pair = operands.value();
-  if (pair.second == 0.0) {
+  // A subnormal divisor counts as zero, and a subnormal remainder is #NUM!.
+  if (std::fabs(pair.second) < DBL_MIN) {
     return Value::error(ErrorCode::Div0);
   }
   const double r = pair.first - pair.second * std::floor(pair.first / pair.second);
+  if (r != 0.0 && std::fabs(r) < DBL_MIN) {
+    return Value::error(ErrorCode::Num);
+  }
   return to_finite_value(r);
 }
 
@@ -419,6 +422,9 @@ Value MRound(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double rounded_quotient = integer_quotient + (round_up ? 1.0 : 0.0);
   // Restore the sign only after choosing the nearest magnitude quotient.
   const double r = signum(n) * rounded_quotient * abs_m;
+  if (r != 0.0 && std::fabs(r) < DBL_MIN) {
+    return Value::error(ErrorCode::Num);
+  }
   return to_finite_value(r);
 }
 

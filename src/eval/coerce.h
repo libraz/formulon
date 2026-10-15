@@ -156,7 +156,10 @@ Expected<bool, ErrorCode> coerce_to_bool(const Value& v);
 ///   zero divisor. IEEE-754 `std::pow` would return `+Inf` here.
 /// * Negative base with a non-integer exponent yields `#NUM!` (NaN from pow).
 /// * Overflow / underflow to Inf yields `#NUM!`.
-Expected<double, ErrorCode> apply_pow(double base, double exp);
+///
+/// `operator_form` marks the `^` operator, which alone returns `x * x`
+/// unflushed for an exponent of 2.
+Expected<double, ErrorCode> apply_pow(double base, double exp, bool operator_form = false);
 
 // ---------------------------------------------------------------------------
 // Matrix-strict numeric coercion

@@ -11,6 +11,10 @@
 
 namespace formulon {
 
+/// Magnitudes below this (DBL_MIN / 16) are zero to sign tests, truthiness and
+/// unary minus.
+constexpr double kZeroTestThreshold = 0x1p-1026;
+
 /// Returns 0 for a nonzero `r` below DBL_MIN in magnitude; otherwise `r`.
 inline double flush_subnormal(double r) noexcept {
   return r != 0.0 && std::fabs(r) < DBL_MIN ? 0.0 : r;

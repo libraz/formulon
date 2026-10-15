@@ -44,6 +44,7 @@
 #include "utils/arena.h"
 #include "utils/cancellation_snap.h"
 #include "utils/index_sort.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -128,7 +129,7 @@ MeanSS compute_mean_ss(const std::vector<double>& xs) {
   double ss = 0.0;
   for (double x : xs) {
     const double d = x - mean;
-    ss += d * d;
+    ss += flush_subnormal(d * d);
   }
   return {mean, ss};
 }
@@ -368,7 +369,7 @@ static Value AverageA(const Value* args, std::uint32_t arity, Arena& /*arena*/) 
   for (double x : xs) {
     sum.add(x);
   }
-  const double r = sum.result() / static_cast<double>(xs.size());
+  const double r = flush_subnormal(sum.result() / static_cast<double>(xs.size()));
   return finite_number_result(r);
 }
 

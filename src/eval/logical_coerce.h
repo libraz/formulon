@@ -7,7 +7,7 @@
 // IF / IFERROR / NOT and accepts numeric strings like "0" / "1"):
 //
 //   * A bare Bool is returned as-is.
-//   * A Number coerces as `d != 0` (NaN / Inf -> `#NUM!`).
+//   * A Number coerces as `|d| >= kZeroTestThreshold` (NaN / Inf -> `#NUM!`).
 //   * Blank is Skip for AND / OR / XOR (the per-arg loop skips it).
 //     Callers that want "Blank is FALSE" (IFS) treat Skip as false.
 //   * Text (trimmed, ASCII case-insensitive):
@@ -42,6 +42,7 @@
 #include "eval/eval_profile_scope.h"
 #include "excel_locale.h"
 #include "utils/strings.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -67,7 +68,7 @@ inline LogicalCoerce logical_coerce(const Value& v, bool* out_bool, ErrorCode* o
         *out_err = ErrorCode::Num;
         return LogicalCoerce::Error;
       }
-      *out_bool = d != 0.0;
+      *out_bool = std::fabs(d) >= kZeroTestThreshold;
       return LogicalCoerce::HasValue;
     }
     case ValueKind::Blank:

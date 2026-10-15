@@ -31,6 +31,7 @@
 #include "utils/a1_ref.h"
 #include "utils/double_parse.h"
 #include "utils/strings.h"
+#include "utils/subnormal_flush.h"
 #include "utils/text_ops.h"
 
 namespace formulon {
@@ -975,6 +976,8 @@ void Tokenizer::scan_number() {
     record_error(LexerErrorCode::InvalidNumberLiteral, start);
     return;
   }
+  // A literal below DBL_MIN is stored as 0.
+  value = flush_subnormal(value);
   // A magnitude that overflows the double range (`1E309`) comes back from
   // the parser as ±infinity. Excel surfaces such a literal as `#NUM!` rather
   // than propagating a non-finite Number value, so emit the error literal

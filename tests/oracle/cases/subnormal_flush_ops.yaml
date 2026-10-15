@@ -1,0 +1,87 @@
+suite: subnormal_flush_ops
+description: 'Where Excel flushes a subnormal result: POWER and ^, unary % and minus, per-product sums, the AVERAGE division, SIGN and truthiness, MOD; read back exactly by scaling'
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: pow_negative_integer_divides_and_flushes
+    formula: "=SQRT(ABS(2^-1023))*1E200"
+  - id: pow_negative_overflowing_magnitude_is_zero
+    formula: "=2^-1060.5"
+  - id: pow_negative_underflowing_magnitude_div0
+    formula: "=(1E-200)^-2"
+  - id: pow_negative_square_has_no_exception
+    formula: "=(1E-160)^-2"
+  - id: caret_square_is_raw
+    formula: "=(2^-530)^2*2^600*2^474"
+  - id: power_square_flushes
+    formula: "=POWER(2^-530,2)*2^600*2^474"
+  - id: caret_square_by_value
+    formula: "=(2^-530)^(1+1)*2^600*2^474"
+  - id: integer_power_loop_flushes
+    formula: "=(2^-354)^3*2^600*2^474"
+  - id: integer_power_dbl_min_kept
+    formula: "=0.5^1022*2^600*2^474"
+  - id: integer_power_below_dbl_min_flushed
+    formula: "=SQRT(ABS(0.5^1023))*1E200"
+  - id: fractional_power_keeps_subnormal
+    formula: "=(2^-530)^2.0000001*2^600*2^474"
+  - id: integer_power_loop_limit
+    formula: "=IF(EXP(-720/4294967294)^4294967294>0,1,0)"
+  - id: integer_power_beyond_loop_limit
+    formula: "=IF(EXP(-720/4294967295)^4294967295>0,1,0)"
+  - id: integer_power_loop_normal_result
+    formula: "=(1-2^-30)^(2^31)"
+  - id: power_beyond_loop_normal_result
+    formula: "=(1-2^-30)^(2^32)"
+  - id: sumproduct_flushes_each_product
+    formula: "=SUMPRODUCT({1.5E-154,1.5E-154},{1.1E-154,1.1E-154})"
+  - id: sumproduct_control
+    formula: "=SUMPRODUCT({1.6E-154,1.6E-154},{1.6E-154,1.6E-154})"
+  - id: sumproduct_left_to_right_flush
+    formula: "=SUMPRODUCT({1E-200},{1E-110},{1E180})"
+  - id: sumproduct_left_to_right_kept
+    formula: "=SUMPRODUCT({1E180},{1E-200},{1E-110})"
+  - id: mmult_flushes_each_product
+    formula: "=MMULT({1.5E-154,1.5E-154},{1.1E-154;1.1E-154})"
+  - id: sumsq_flushes_each_square
+    formula: "=SUMSQ(1.3E-154,1.3E-154)"
+  - id: sumsq_control
+    formula: "=SUMSQ(1.6E-154,1.6E-154)"
+  - id: sumxmy2_flushes_each_square
+    formula: "=SUMXMY2({1.3E-154,1.3E-154},{0,0})"
+  - id: devsq_flushes_each_square
+    formula: "=DEVSQ(1.3E-154,-1.3E-154)"
+  - id: seriessum_uses_flushing_power
+    formula: "=SQRT(ABS(SERIESSUM(2^-530,2,0,{1})))*1E200"
+  - id: average_division_flushes
+    formula: "=SQRT(ABS(AVERAGE(EXP(-720),EXP(-720))))*1E200"
+  - id: percent_flushes
+    formula: "=SQRT(ABS((1E-307)%))*1E200"
+  - id: percent_normal
+    formula: "=(1E-300)%"
+  - id: sign_below_threshold
+    formula: "=SIGN(EXP(-720))"
+  - id: sign_at_threshold
+    formula: "=SIGN(2^-1022*(1+2^-4)-2^-1022)"
+  - id: if_below_threshold_is_false
+    formula: "=IF(EXP(-720),1,0)"
+  - id: comparison_stays_exact
+    formula: "=IF(EXP(-720)<>0,1,0)"
+  - id: not_below_threshold
+    formula: "=NOT(EXP(-720))"
+  - id: negation_drops_sign_below_threshold
+    formula: "=-EXP(-720)*2^600"
+  - id: subtraction_keeps_sign
+    formula: "=(0-EXP(-720))*2^600"
+  - id: negation_keeps_sign_at_threshold
+    formula: "=-(2^-1022*(1+2^-4)-2^-1022)*2^600"
+  - id: subtraction_keeps_subnormal_result
+    formula: "=(1E-300*1.000000000001-1E-300)*2^600*2^474"
+  - id: mod_subnormal_remainder_num
+    formula: "=MOD(5E-308,3E-308)"
+  - id: mod_normal_remainder
+    formula: "=MOD(9E-308,3.3E-308)"
+  - id: mod_subnormal_dividend_num
+    formula: "=MOD(EXP(-720),1)"
+  - id: mod_subnormal_divisor_div0
+    formula: "=MOD(1,EXP(-720))"

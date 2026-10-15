@@ -17,6 +17,7 @@
 #include "utils/double_parse.h"
 #include "utils/expected.h"
 #include "utils/strings.h"
+#include "utils/subnormal_flush.h"
 #include "utils/text_ops.h"
 #include "utils/utf8_length.h"
 #include "value.h"
@@ -26,35 +27,51 @@ namespace eval {
 
 namespace {
 
-// Excel's power for a non-negative base, measured bit-exact on Mac Excel 365:
-// a negative exponent is the reciprocal of the positive power, an integer
-// exponent is right-to-left square-and-multiply, 0.5 is sqrt, and any other
+// Largest integer exponent Excel evaluates by square-and-multiply; beyond it
+// the power is exp(log(x) * y).
+constexpr double kMaxSquaringExponent = 4294967294.0;
+
+// Excel's power for a non-negative exponent, measured bit-exact on Mac Excel
+// 365: an integer exponent up to `kMaxSquaringExponent` is right-to-left
+// square-and-multiply with flushing multiplies, 0.5 is sqrt, and any other
 // exponent is exp(log(x) * y) rather than a correctly rounded pow. `x87`
 // selects the Windows evaluation, where each step rounds through a 64-bit
-// significand first.
+// significand first. A negative base reaches only the integer branches.
 double excel_magnitude_pow(double base, double exp, bool x87) {
-  if (exp < 0.0) {
-    const double positive = excel_magnitude_pow(base, -exp, x87);
-    if (std::isinf(positive)) {
-      return x87 ? x87_exp(x87_mul(x87_ln(base), exp)) : std::exp(std::log(base) * exp);
-    }
-    return x87 ? x87_div(1.0, positive) : 1.0 / positive;
-  }
-  if (exp == std::floor(exp) && exp <= 9007199254740992.0) {
+  if (exp == std::floor(exp) && exp <= kMaxSquaringExponent) {
     double result = 1.0;
     double square = base;
     for (auto n = static_cast<std::uint64_t>(exp); n != 0U; n >>= 1U) {
       if ((n & 1U) != 0U) {
-        result = x87 ? x87_mul(result, square) : result * square;
+        result = flush_subnormal(x87 ? x87_mul(result, square) : result * square);
       }
-      square = x87 ? x87_mul(square, square) : square * square;
+      square = flush_subnormal(x87 ? x87_mul(square, square) : square * square);
     }
     return result;
   }
   if (exp == 0.5) {
     return std::sqrt(base);
   }
-  return x87 ? x87_exp(x87_mul(x87_ln(base), exp)) : std::exp(std::log(base) * exp);
+  const double magnitude = std::fabs(base);
+  const double r = x87 ? x87_exp(x87_mul(x87_ln(magnitude), exp)) : std::exp(std::log(magnitude) * exp);
+  return base < 0.0 && std::fmod(exp, 2.0) == 1.0 ? -r : r;
+}
+
+// Power with the sign of the exponent resolved: a negative exponent is the
+// flushed reciprocal of the positive power, `#DIV/0!` when that power is zero
+// and 0 when it overflows.
+Expected<double, ErrorCode> signed_exponent_pow(double base, double exp, bool x87) {
+  if (exp >= 0.0) {
+    return excel_magnitude_pow(base, exp, x87);
+  }
+  const double positive = excel_magnitude_pow(base, -exp, x87);
+  if (positive == 0.0) {
+    return ErrorCode::Div0;
+  }
+  if (std::isinf(positive)) {
+    return 0.0;
+  }
+  return flush_subnormal(x87 ? x87_div(1.0, positive) : 1.0 / positive);
 }
 
 }  // namespace
@@ -224,7 +241,7 @@ Expected<std::string, ErrorCode> coerce_to_text(const Value& v) {
   return ErrorCode::Value;
 }
 
-Expected<double, ErrorCode> apply_pow(double base, double exp) {
+Expected<double, ErrorCode> apply_pow(double base, double exp, bool operator_form) {
   const bool x87 = current_eval_profile().host == ExcelHost::kWin365;
   // Excel treats 0^0 as indeterminate and reports #NUM!, diverging from the
   // IEEE-754 pow convention of 1. Guarded explicitly before the std::pow
@@ -251,14 +268,27 @@ Expected<double, ErrorCode> apply_pow(double base, double exp) {
         std::fabs(root - k) > 0.5 * std::pow(10.0, std::floor(std::log10(std::fabs(k))) - 14.0)) {
       return ErrorCode::Num;
     }
-    const double odd_root = -excel_magnitude_pow(-base, exp, x87);
-    if (std::isnan(odd_root) || std::isinf(odd_root)) {
+    auto odd_root = signed_exponent_pow(-base, exp, x87);
+    if (!odd_root) {
+      return odd_root.error();
+    }
+    if (std::isnan(odd_root.value()) || std::isinf(odd_root.value())) {
       return ErrorCode::Num;
     }
-    return odd_root;
+    return -odd_root.value();
+  }
+  // The `^` operator squares a subnormal-producing base without flushing.
+  double r = 0.0;
+  if (operator_form && exp == 2.0) {
+    r = x87 ? x87_mul(base, base) : base * base;
+  } else {
+    auto p = signed_exponent_pow(base, exp, x87);
+    if (!p) {
+      return p.error();
+    }
+    r = p.value();
   }
   // Overflow / underflow to Inf is #NUM!.
-  const double r = excel_magnitude_pow(base, exp, x87);
   if (std::isnan(r) || std::isinf(r)) {
     return ErrorCode::Num;
   }
@@ -377,7 +407,7 @@ Expected<bool, ErrorCode> coerce_to_bool(const Value& v) {
       if (std::isnan(d) || std::isinf(d)) {
         return ErrorCode::Num;
       }
-      return d != 0.0;
+      return std::fabs(d) >= kZeroTestThreshold;
     }
     case ValueKind::Blank:
       return false;
