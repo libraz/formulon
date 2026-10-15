@@ -401,15 +401,11 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
 // cannot disagree on a fractional mode. Returns true when the coerced value
 // was accepted; on rejection leaves `*out` untouched.
 bool coerce_mode_int(const Value& v, const int* allowed, std::size_t n_allowed, int* out) {
-  auto num = coerce_to_index_number(v);
+  const auto num = coerce_to_truncated_int(v);
   if (!num) {
     return false;
   }
-  const double raw = num.value();
-  const int as_int = static_cast<int>(raw);
-  if (static_cast<double>(as_int) != raw) {
-    return false;
-  }
+  const int as_int = num.value();
   for (std::size_t i = 0; i < n_allowed; ++i) {
     if (allowed[i] == as_int) {
       *out = as_int;

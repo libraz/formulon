@@ -375,7 +375,7 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
                     : read_table_block(table, table.declared.row_first, table.declared.row_first, walked.col_first,
                                        walked.col_last, arena, registry, ctx);
     if (!line) {
-      return Value::error(line.error());
+      return fail_lookup(lookup, arena, Value::error(line.error()));
     }
     scan_line = std::move(line.value());
     scan_cells = &scan_line;
@@ -421,8 +421,6 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
   }
   return fetch(off);
 }
-
-}  // namespace
 
 Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int match_type, ExcelProfile profile) {
   if (lookup.is_error()) {
@@ -566,6 +564,8 @@ Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int
   }
   return Value::number(static_cast<double>(best_pos));
 }
+
+}  // namespace
 
 // MATCH(lookup_value, lookup_array, [match_type])
 //
