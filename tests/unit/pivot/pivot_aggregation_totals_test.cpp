@@ -10,6 +10,7 @@
 #include "gtest/gtest.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
+#include "pivot/pivot_layout.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -1568,6 +1569,55 @@ TEST(PivotAggregationTotals, SumBlankRowOnly) {
       {"GT", "", Exp::number(3.0)},
   };
   check_case(records, Aggregation::Sum, false, expected);
+}
+
+/// Evaluates and lays out the E4 shape: R3 holds blank records only, R1 and R2 hold numbers and text.
+PivotCells layout_e4(Aggregation aggregation, PivotCache& cache_out) {
+  cache_out = build_cache({
+      {"R1", "P1", Cell::blank()},
+      {"R1", "P2", Cell::number(1.0)},
+      {"R2", "P1", Cell::number(2.0)},
+      {"R2", "P2", Cell::blank()},
+      {"R2", "P2", Cell::text("t")},
+      {"R3", "P1", Cell::blank()},
+      {"R3", "P2", Cell::blank()},
+  });
+  PivotTable table = build_sum_amount_table({0}, {1});
+  table.mutable_data_fields()[0].aggregation = aggregation;
+  table.set_grand_totals(/*rows=*/true, /*cols=*/true);
+  auto result_or = evaluate(table, cache_out);
+  EXPECT_TRUE(static_cast<bool>(result_or));
+  auto cells_or = layout(table, result_or.value());
+  EXPECT_TRUE(static_cast<bool>(cells_or));
+  return std::move(cells_or).value();
+}
+
+/// No rendered cell in the row labelled `label` is a number (a blank total renders blank or not at all).
+void expect_row_without_numbers(const PivotCells& cells, const std::string& label) {
+  std::uint32_t row = 0;
+  bool found = false;
+  for (const PivotCell& cell : cells.cells) {
+    if (cell.value.is_text() && cell.value.as_text() == label) {
+      row = cell.row;
+      found = true;
+    }
+  }
+  ASSERT_TRUE(found);
+  for (const PivotCell& cell : cells.cells) {
+    if (cell.row == row && cell.kind == PivotCellKind::GrandTotal) {
+      EXPECT_FALSE(cell.value.is_number()) << cell.col;
+    }
+  }
+}
+
+// The row total of an all-blank row is blank for every function, not the 0 a sum over blank cells would give.
+TEST(PivotAggregationTotals, BlankRowTotalRendersBlank) {
+  for (const Aggregation aggregation :
+       {Aggregation::Sum, Aggregation::Count, Aggregation::CountNumbers, Aggregation::Max, Aggregation::Average}) {
+    PivotCache cache;
+    const PivotCells cells = layout_e4(aggregation, cache);
+    expect_row_without_numbers(cells, "R3");
+  }
 }
 
 }  // namespace

@@ -919,6 +919,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         // reports blank rather than leaving a hole in the total column.
         double sum = 0.0;
         bool summable = true;
+        bool any_number = false;
         const Value* source_error = nullptr;
         for (std::size_t c_leaf = 0; c_leaf < col_leaves.size(); ++c_leaf) {
           const Value& v = result.values[leaf][c_leaf][df];
@@ -928,6 +929,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
           }
           if (v.is_number()) {
             sum += v.as_number();
+            any_number = true;
           } else if (!v.is_blank()) {
             summable = false;
           }
@@ -935,7 +937,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         Value total = Value::blank();
         if (source_error != nullptr) {
           total = reify_value(cells, *source_error);
-        } else if (summable) {
+        } else if (summable && any_number) {
           total = Value::number(sum);
         }
         append_cell(cells, row, col, total, PivotCellKind::GrandTotal, 0, data_field_name(table, df),
@@ -986,6 +988,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
       const PivotCellKind kind = col_subtotal ? PivotCellKind::ColSubtotal : PivotCellKind::GrandTotal;
       double sum = 0.0;
       bool numeric = true;
+      bool any_number = false;
       for (std::size_t r_leaf = 0; r_leaf < row_leaves.size(); ++r_leaf) {
         const Value* value = nullptr;
         if (col_subtotal) {
@@ -1007,11 +1010,12 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         }
         if (value->is_number()) {
           sum += value->as_number();
+          any_number = true;
         } else if (!value->is_blank()) {
           numeric = false;
         }
       }
-      if (numeric) {
+      if (numeric && any_number) {
         append_cell(cells, total_row, col, Value::number(sum), kind, 0, data_field_name(table, df),
                     data_field_format(table, df));
       }
@@ -1026,17 +1030,19 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
       } else {
         double sum = 0.0;
         bool numeric = true;
+        bool any_number = false;
         for (std::size_t r_leaf = 0; r_leaf < row_leaves.size(); ++r_leaf) {
           for (std::size_t c_leaf = 0; c_leaf < col_leaves.size(); ++c_leaf) {
             const Value& cell = result.values[r_leaf][c_leaf][df];
             if (cell.is_number()) {
               sum += cell.as_number();
+              any_number = true;
             } else if (!cell.is_blank()) {
               numeric = false;
             }
           }
         }
-        if (numeric) {
+        if (numeric && any_number) {
           v = Value::number(sum);
         }
       }
