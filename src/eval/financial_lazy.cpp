@@ -577,9 +577,8 @@ bool collect_xpairs(XFinKind which, const parser::AstNode& values_arg, const par
     }
   }
   // Mac Excel requires the first date in an XNPV schedule to be the
-  // earliest. XIRR is order-agnostic because it root-finds, but XNPV
-  // anchors all discount factors at dates[0] and rejects any later
-  // entry that precedes it.
+  // earliest and rejects any later entry that precedes it. XIRR accepts
+  // earlier dates after the first one.
   if (which == XFinKind::Xnpv && !pairs.empty()) {
     const double anchor = pairs.front().first;
     for (std::size_t i = 1; i < pairs.size(); ++i) {
@@ -589,11 +588,14 @@ bool collect_xpairs(XFinKind which, const parser::AstNode& values_arg, const par
       }
     }
   }
-  // Sort by date ascending. Stable-sort keeps the original row order
-  // for same-day entries, which matches Excel's behaviour when two
-  // cash flows share a serial.
-  sort_by_index(
-      pairs, [](const std::pair<double, double>& a, const std::pair<double, double>& b) { return a.first < b.first; });
+  // XNPV sorts by date ascending (stable, so same-day entries keep their row
+  // order). XIRR keeps the listed order: Excel anchors it at the first listed
+  // pair, earlier dates discounting with negative exponents.
+  if (which == XFinKind::Xnpv) {
+    sort_by_index(pairs, [](const std::pair<double, double>& a, const std::pair<double, double>& b) {
+      return a.first < b.first;
+    });
+  }
   out_values->clear();
   out_dates->clear();
   out_values->reserve(pairs.size());
@@ -619,29 +621,42 @@ double xnpv_sum(const std::vector<double>& values, const std::vector<double>& da
   return total;
 }
 
-// XIRR bracket test: a zero endpoint brackets a root, a NaN one does not.
-bool xirr_brackets(double f_a, double f_b) noexcept {
-  return (f_a <= 0.0 && f_b >= 0.0) || (f_a >= 0.0 && f_b <= 0.0);
+// XIRR's net present value: the later flows in listed order, then the first
+// flow added last (Mac Excel's evaluation order, visible in tail bits).
+double xirr_npv(const std::vector<double>& values, const std::vector<double>& dates, double rate) noexcept {
+  const double base = 1.0 + rate;
+  double later = 0.0;
+  for (std::size_t i = 1; i < values.size(); ++i) {
+    later += values[i] / std::pow(base, (dates[i] - dates[0]) / 365.0);
+  }
+  return values[0] + later;
 }
 
-// Bisects [lo, hi] as Mac Excel's XIRR does: the midpoint is taken from `hi`,
-// and the first midpoint within 5e-9 + 1e-8|m| of the previous one whose
-// residual is below 2e-8 of the largest cash flow is the result.
+// The side of the root `f` lies on: a schedule opening with a payment
+// (v0 < 0) has f > 0 below its root, any other one f < 0.
+bool xirr_below_root(double first_value, double f) noexcept {
+  return first_value < 0.0 ? f > 0.0 : f < 0.0;
+}
+
+// Bisects [lo, hi] as Mac Excel's XIRR does: the midpoint is taken from `hi`
+// and a zero or NaN midpoint moves `hi`. The result is the first midpoint
+// within 5e-9 + 1e-8|m| of the previous one that also passes the residual
+// test |f| < 2e-8 |v0|, when `check_residual` asks for it.
 double xirr_bisect(const std::vector<double>& values, const std::vector<double>& dates, double lo, double hi,
-                   double max_abs_value) noexcept {
+                   bool check_residual) noexcept {
   constexpr int kMaxIter = 2200;
-  double f_lo = xnpv_sum(values, dates, lo);
+  const double first_value = values[0];
   double prev = std::numeric_limits<double>::quiet_NaN();
   for (int iter = 0; iter < kMaxIter; ++iter) {
     const double mid = hi - (hi - lo) / 2.0;
-    const double f_mid = xnpv_sum(values, dates, mid);
-    if (std::fabs(mid - prev) < 5.0e-9 + 1.0e-8 * std::fabs(mid) && std::fabs(f_mid) / max_abs_value < 2.0e-8) {
+    const double f_mid = xirr_npv(values, dates, mid);
+    if (std::fabs(mid - prev) < 5.0e-9 + 1.0e-8 * std::fabs(mid) &&
+        (!check_residual || std::fabs(f_mid) / std::fabs(first_value) < 2.0e-8)) {
       return mid;
     }
     prev = mid;
-    if (f_mid * f_lo > 0.0) {
+    if (xirr_below_root(first_value, f_mid)) {
       lo = mid;
-      f_lo = f_mid;
     } else {
       hi = mid;
     }
@@ -650,46 +665,32 @@ double xirr_bisect(const std::vector<double>& values, const std::vector<double>&
 }
 
 // Mac Excel's XIRR search from step `s` (the guess, or 1e-5 for a zero
-// guess): [0, 2s] doubled until it brackets a root, then, when s < 1,
-// [-s, 0] (a zero f(-s) does not count) and [-1, -s]. NaN when no bracket
-// is found.
+// guess). The positive side runs only when the later flows cover |v0|:
+// [0, 2s] doubled while f stays below the root, bisected with no residual
+// test. Otherwise [-s, 0] when f(-s) is finite and strictly opposite to f(0),
+// then [-1, -s] when s < 1, both with the residual test. NaN when none applies.
 double xirr_solve(const std::vector<double>& values, const std::vector<double>& dates, double s) noexcept {
-  double max_abs_value = 0.0;
-  for (double v : values) {
-    max_abs_value = std::max(max_abs_value, std::fabs(v));
+  const double first_value = values[0];
+  double later_sum = 0.0;
+  for (std::size_t i = 1; i < values.size(); ++i) {
+    later_sum += values[i];
   }
-  const double f_zero = xnpv_sum(values, dates, 0.0);
-  double hi = 2.0 * s;
-  double f_hi = xnpv_sum(values, dates, hi);
-  while (std::isfinite(hi)) {
-    if (xirr_brackets(f_zero, f_hi)) {
-      return xirr_bisect(values, dates, 0.0, hi, max_abs_value);
+  if (std::fabs(later_sum) >= std::fabs(first_value)) {
+    double hi = 2.0 * s;
+    while (std::isfinite(hi) && xirr_below_root(first_value, xirr_npv(values, dates, hi))) {
+      hi *= 2.0;
     }
-    const double next = 2.0 * hi;
-    const double f_next = xnpv_sum(values, dates, next);
-    // The sum has settled on its asymptote, so no wider bracket can help.
-    if (f_next == f_hi) {
-      break;
+    if (std::isfinite(hi)) {
+      return xirr_bisect(values, dates, 0.0, hi, /*check_residual=*/false);
     }
-    hi = next;
-    f_hi = f_next;
+  }
+  const double f_zero = xirr_npv(values, dates, 0.0);
+  const double f_neg_step = xirr_npv(values, dates, -s);
+  if (std::isfinite(f_neg_step) && ((f_neg_step < 0.0 && f_zero > 0.0) || (f_neg_step > 0.0 && f_zero < 0.0))) {
+    return xirr_bisect(values, dates, -s, 0.0, /*check_residual=*/true);
   }
   if (s < 1.0) {
-    const double f_neg_step = xnpv_sum(values, dates, -s);
-    if ((f_neg_step < 0.0 && f_zero > 0.0) || (f_neg_step > 0.0 && f_zero < 0.0)) {
-      return xirr_bisect(values, dates, -s, 0.0, max_abs_value);
-    }
-    // Later flows of both signs make f(-1) inf - inf; the bracket then starts
-    // one step above -1.
-    double lo = -1.0;
-    double f_lo = xnpv_sum(values, dates, lo);
-    if (std::isnan(f_lo)) {
-      lo = std::nextafter(-1.0, 0.0);
-      f_lo = xnpv_sum(values, dates, lo);
-    }
-    if (xirr_brackets(f_lo, f_neg_step)) {
-      return xirr_bisect(values, dates, lo, -s, max_abs_value);
-    }
+    return xirr_bisect(values, dates, -1.0, -s, /*check_residual=*/true);
   }
   return std::numeric_limits<double>::quiet_NaN();
 }

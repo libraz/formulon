@@ -1,8 +1,9 @@
 //
 // XIRR reproduces Mac Excel 365's bracket-and-bisect search bit for bit:
-// the doubling bracket [0, 2s], the negative brackets [-1, -s] and [-s, 0],
-// the midpoint taken from the upper end, and the stop rule. Every expected
-// value below is the full double Excel returned for the same formula.
+// the coverage gate on the positive side, the doubling bracket [0, 2s], the
+// negative brackets [-s, 0] and [-1, -s], the midpoint taken from the upper
+// end, and the stop rules. Every expected value below is the full double
+// Excel returned for the same formula.
 
 #include <string>
 
@@ -56,9 +57,37 @@ TEST(XirrSearch, NegativeRootAboveMinusGuessUsesTheUpperBracket) {
   ExpectBits("=XIRR({-1,0.8},{39448,39848},0.3)", -0x1.794bb9cccccccp-3);
 }
 
-TEST(XirrSearch, NanAtMinusOneStartsTheLowerBracketOneStepAbove) {
+TEST(XirrSearch, LowerBracketStartsAtMinusOneWithoutEvaluatingIt) {
   // Later flows of both signs make f(-1) inf - inf.
   ExpectBits("=XIRR({-100;-20;60},{40000;40100;40200},0.1)", -0x1.82041f799999ap-1);
+  ExpectBits("=XIRR({230000000,-6030000,0.0275},{39448,64923,74785},0)", -0x1.a06fd49812839p-5);
+}
+
+TEST(XirrSearch, PositiveSideNeedsLaterFlowsCoveringTheFirst) {
+  ExpectBits("=XIRR({-2.5,-4,1.5},{40000,40365,40730},0.1)", 0x1.999999999999ap-29);
+  ExpectBits("=XIRR({-2.55,-4,1.5},{40000,40365,40730},0.1)", -0x1.5fe91e8666668p-1);
+  const Value v = EvalSource("=XIRR({1,-2.63,1.695},{40000,40365,40730},0.1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(XirrSearch, DoublingRunsWhileTheValueStaysBelowTheRoot) {
+  ExpectBits("=XIRR({3.85,-124,3340,-0.00297},{40000,42848,61195,74036},0.1)", 0x1.1ef849cccccccp-1);
+}
+
+TEST(XirrSearch, NegativeSideResidualIsScaledByTheFirstFlow) {
+  ExpectBits("=XIRR({-10,-60,68},{40000,40300,40711},0.1)", -0x1.79d1c80000000p-6);
+}
+
+TEST(XirrSearch, FirstFlowIsAddedAfterTheLaterOnes) {
+  ExpectBits("=XIRR({1,-2.1,1.08},{40000,40365,40730},0.2)", 0x1.999998ccccccdp-3);
+}
+
+TEST(XirrSearch, ListedOrderAnchorsTheSchedule) {
+  ExpectBits("=XIRR({-1,2,-0.3},{40365,40730,40000},0.1)", 0x1.a0456b9999998p-2);
+  const Value v = EvalSource("=XIRR({2,-1},{40365,40000},0.1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(XirrSearch, NegativeRootIsNumWhenGuessIsAtLeastOne) {
