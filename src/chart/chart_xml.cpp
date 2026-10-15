@@ -11,6 +11,7 @@
 
 #include "color_resolve.h"
 #include "drawing/drawing_xml.h"
+#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "utils/a1_ref.h"
 #include "utils/double_parse.h"
@@ -332,7 +333,13 @@ void read_points(const xml_node& cache, bool numeric, bool direct_text, std::vec
   }
   out.clear();
   for (const xml_node& pt : kids(cache, "pt")) {
-    ChartValue value = make_value(direct_text ? pt.child_value() : kid(pt, "v").child_value(), numeric);
+    const std::string_view raw_text =
+        direct_text ? std::string_view(pt.child_value()) : std::string_view(kid(pt, "v").child_value());
+    std::string decoded;
+    if (!direct_text) {
+      io::AppendOoxmlTextUnescaped(decoded, raw_text);
+    }
+    ChartValue value = make_value(direct_text ? raw_text : std::string_view(decoded), numeric);
     value.idx = pt.attribute("idx").as_uint();
     value.format_code = pt.attribute("formatCode").value();
     out.push_back(std::move(value));
@@ -395,7 +402,9 @@ ChartDataSource read_data_source(const xml_node& holder) {
     src.cache_format_code = kid(body, "formatCode").child_value();
   } else if (kind == "v") {
     src.kind = ChartDataSource::Kind::kLiteral;
-    src.literal.push_back(make_value(body.child_value(), false));
+    std::string decoded;
+    io::AppendOoxmlTextUnescaped(decoded, body.child_value());
+    src.literal.push_back(make_value(decoded, false));
     src.point_count = 1;
   }
   return src;

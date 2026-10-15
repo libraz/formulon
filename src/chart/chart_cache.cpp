@@ -10,12 +10,14 @@
 #include <vector>
 
 #include "chart/chart_model.h"
+#include "chart/chart_ns.h"
 #include "chart/chart_source.h"
 #include "chart/chart_xml.h"
 #include "drawing/drawing_xml.h"
 #include "eval/function_registry.h"
 #include "eval/text_format/display_text.h"
 #include "io/passthrough_part_index.h"
+#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
 #include "num_fmt_locale.h"
@@ -370,7 +372,7 @@ std::vector<CachePt> read_points(const pugi::xml_node& parent) {
       CachePt pt;
       pt.idx = io::parse_xml_u32_attr(c.attribute("idx"), 0);
       pt.format_code = c.attribute("formatCode").value();
-      pt.text = child_named(c, "v").text().get();
+      io::AppendOoxmlTextUnescaped(pt.text, child_named(c, "v").text().get());
       pts.push_back(std::move(pt));
     }
   }
@@ -465,7 +467,13 @@ void write_points(pugi::xml_node parent, const std::string& prefix, const std::v
     if (!pt.format_code.empty()) {
       node.append_attribute("formatCode") = pt.format_code.c_str();
     }
-    node.append_child((prefix + "v").c_str()).append_child(pugi::node_pcdata).set_value(number_or_text(pt).c_str());
+    std::string value = number_or_text(pt);
+    if (!pt.numeric) {
+      std::string encoded;
+      io::AppendOoxmlTextEscaped(encoded, value);
+      value = std::move(encoded);
+    }
+    node.append_child((prefix + "v").c_str()).append_child(pugi::node_pcdata).set_value(value.c_str());
   }
 }
 
@@ -508,7 +516,11 @@ void write_cache(pugi::xml_node ref, const std::string& prefix, RefKind kind, co
 
 bool refresh_chart_caches(const Workbook& wb, std::size_t host_sheet, pugi::xml_document& doc) {
   const pugi::xml_node root = doc.document_element();
-  if (local_name(root.name()) != "chartSpace" || std::strncmp(root.name(), "cx:", 3) == 0 ||
+  const std::string_view root_name = root.name();
+  const std::size_t root_colon = root_name.find(':');
+  const std::string_view root_prefix =
+      root_colon == std::string_view::npos ? std::string_view() : root_name.substr(0, root_colon);
+  if (local_name(root.name()) != "chartSpace" || io::find_namespace_binding(root, root_prefix) == chart_ns::kNsCx ||
       child_named(root, "pivotSource")) {
     return false;
   }

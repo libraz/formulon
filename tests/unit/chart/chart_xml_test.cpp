@@ -24,6 +24,9 @@
 namespace formulon {
 namespace {
 
+std::string Wrap(const std::string& chart_children, const std::string& space_children);
+ChartModel Read(const std::string& xml, const Workbook& wb);
+
 // ---------------------------------------------------------------------------
 // Loading and describing
 // ---------------------------------------------------------------------------
@@ -643,6 +646,62 @@ TEST(ChartXml, CacheFixtureReadsNamesLiteralsAndFormatCodes) {
        bar("11 no_cat", "strRef Sheet1!$K$1 n=1 0:NV", "absent",
            "numRef Sheet1!$K$2:$K$5 fc=General n=4 0:2 1:7 2:1 3:8"),
        bar("12 lit_vals", "lit n=1 0:L", "lit n=2 0:p 1:q", "lit n=2 0:1 1:2")});
+}
+
+TEST(ChartXml, LegacyStringValuesDecodeOnceWhilePlainTextStaysRaw) {
+  const Workbook wb = Workbook::create();
+  const std::string encoded_value = "literal _x0041_ _x005F_x0041_ &amp; &lt;猫&gt; _x000D__x0001_";
+  const std::string chart =
+      "<c:title><c:tx><c:rich><a:p><a:r><a:t>plain _x0041_ _x005F_x0041_ &amp; &lt;猫&gt;&#13;</a:t>"
+      "</a:r></a:p></c:rich></c:tx></c:title>"
+      "<c:plotArea><c:barChart><c:barDir val=\"col\"/><c:ser><c:idx val=\"0\"/><c:order val=\"0\"/>"
+      "<c:tx><c:v>" +
+      encoded_value +
+      "</c:v></c:tx>"
+      "<c:cat><c:strRef><c:f>_x0041_!$A$1:$A$2</c:f><c:strCache><c:ptCount val=\"2\"/>"
+      "<c:pt idx=\"0\"><c:v>_x0041_</c:v></c:pt>"
+      "<c:pt idx=\"1\"><c:v>_x005F_x0041_</c:v></c:pt>"
+      "</c:strCache></c:strRef></c:cat>"
+      "<c:val><c:numRef><c:f>_x0041_!$B$1:$B$2</c:f><c:numCache><c:ptCount val=\"0\"/>"
+      "</c:numCache></c:numRef></c:val></c:ser></c:barChart></c:plotArea>";
+  const ChartModel model = Read(Wrap(chart, ""), wb);
+
+  ASSERT_EQ(model.title.kind, ChartTitleKind::kText);
+  EXPECT_EQ(model.title.text, "plain _x0041_ _x005F_x0041_ & <猫>\r");
+  ASSERT_EQ(model.plots.size(), 1U);
+  ASSERT_EQ(model.plots[0].series.size(), 1U);
+  const ChartSeries& series = model.plots[0].series[0];
+  ASSERT_EQ(series.name.kind, ChartDataSource::Kind::kLiteral);
+  ASSERT_EQ(series.name.literal.size(), 1U);
+  EXPECT_EQ(series.name.literal[0].text, "literal A _x0041_ & <猫> \r\x01");
+  EXPECT_EQ(series.cat.formula, "_x0041_!$A$1:$A$2");
+  ASSERT_EQ(series.cat.cache.size(), 2U);
+  EXPECT_EQ(series.cat.cache[0].text, "A");
+  EXPECT_EQ(series.cat.cache[1].text, "_x0041_");
+}
+
+TEST(ChartXml, ChartexPlainTextAndPointsKeepOoxmlLookingSpellings) {
+  const Workbook wb = Workbook::create();
+  const std::string raw =
+      "<cx:chartSpace xmlns:cx=\"http://schemas.microsoft.com/office/drawing/2014/chartex\">"
+      "<cx:chartData><cx:data id=\"1\"><cx:strDim type=\"cat\"><cx:f>_x0041_!$A$1</cx:f>"
+      "<cx:lvl><cx:pt idx=\"0\">_x0041_</cx:pt></cx:lvl></cx:strDim></cx:data></cx:chartData>"
+      "<cx:chart><cx:title><cx:tx><cx:txData><cx:v>title _x0041_ &amp; _x005F_x0041_</cx:v>"
+      "</cx:txData></cx:tx></cx:title><cx:plotArea><cx:plotAreaRegion><cx:series layoutId=\"line\">"
+      "<cx:dataId val=\"1\"/><cx:tx><cx:txData><cx:v>name _x0041_ &amp; _x005F_x0041_</cx:v>"
+      "</cx:txData></cx:tx></cx:series></cx:plotAreaRegion></cx:plotArea></cx:chart></cx:chartSpace>";
+  const ChartModel model = Read(raw, wb);
+
+  ASSERT_TRUE(model.is_chartex);
+  EXPECT_EQ(model.title.text, "title _x0041_ & _x005F_x0041_");
+  ASSERT_EQ(model.plots.size(), 1U);
+  ASSERT_EQ(model.plots[0].series.size(), 1U);
+  const ChartSeries& series = model.plots[0].series[0];
+  ASSERT_EQ(series.name.literal.size(), 1U);
+  EXPECT_EQ(series.name.literal[0].text, "name _x0041_ & _x005F_x0041_");
+  EXPECT_EQ(series.cat.formula, "_x0041_!$A$1");
+  ASSERT_EQ(series.cat.cache.size(), 1U);
+  EXPECT_EQ(series.cat.cache[0].text, "_x0041_");
 }
 
 TEST(ChartXml, RefsFixtureReadsNamesUnionsAndWholeColumns) {

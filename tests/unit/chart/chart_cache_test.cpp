@@ -352,6 +352,33 @@ TEST(ChartCache, NumericCategoryWithTextBecomesStringReference) {
   EXPECT_TRUE(Contains(text, "<c:pt idx=\"0\"><c:v>10</c:v></c:pt>"));
 }
 
+TEST(ChartCache, LegacyStringCacheEscapesOoxmlNotationOnceAcrossMutation) {
+  Workbook wb = LoadFixture("chart_cache.xlsx");
+  const std::string path = ChartPathWith(wb, "<c:f>Sheet1!$J$2:$J$5</c:f>");
+  const std::string first_value = "literal _x0041_ _x005F_x0041_ & <猫>\r\x01";
+  wb.sheet(0).set_cell_value(2, 9, Value::text(first_value));
+
+  const std::string first = RefreshedText(wb, path);
+  ASSERT_FALSE(first.empty());
+  EXPECT_TRUE(Contains(first,
+                       "<c:v>literal _x005F_x0041_ _x005F_x005F_x005F_x0041_ &amp; &lt;猫&gt;"
+                       "_x000D__x0001_</c:v>"));
+  EXPECT_FALSE(Contains(first, "&amp;amp;"));
+  SetPart(wb, path, first);
+  EXPECT_TRUE(RefreshedText(wb, path).empty());
+
+  const std::string changed_value = "changed _x0041_ _x005F_x0041_ & <魚>\r\x02";
+  wb.sheet(0).set_cell_value(2, 9, Value::text(changed_value));
+  const std::string second = RefreshedText(wb, path);
+  ASSERT_FALSE(second.empty());
+  EXPECT_TRUE(Contains(second,
+                       "<c:v>changed _x005F_x0041_ _x005F_x005F_x005F_x0041_ &amp; &lt;魚&gt;"
+                       "_x000D__x0002_</c:v>"));
+  EXPECT_FALSE(Contains(second, "&amp;amp;"));
+  SetPart(wb, path, second);
+  EXPECT_TRUE(RefreshedText(wb, path).empty());
+}
+
 // A formula's "" in a value range is a 0 point; in a category it is no point.
 TEST(ChartCache, EmptyStringIsZeroInValuesAndAbsentInCategories) {
   Workbook wb = LoadFixture("chart_column.xlsx");
