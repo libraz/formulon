@@ -160,14 +160,25 @@ bool resolve_offset_base(const parser::AstNode& raw_arg, Arena& arena, const Fun
     return true;
   }
   if (k == parser::NodeKind::RangeOp) {
-    const parser::AstNode& lhs_ast = arg.as_range_lhs();
-    const parser::AstNode& rhs_ast = arg.as_range_rhs();
-    if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
+    // A chained `:` (`A1:B2:C3`) folds to its bounding box's endpoint pair.
+    parser::Reference lhs{};
+    parser::Reference rhs{};
+    if (!declared_rect_endpoint_pair(arg, &lhs, &rhs)) {
       *out_err = ErrorCode::Ref;
       return false;
     }
-    const parser::Reference& lhs = lhs_ast.as_ref();
-    const parser::Reference& rhs = rhs_ast.as_ref();
+    // Sheet agreement precedes the whole-axis branches; mirrors `expand_range`.
+    if (!lhs.sheet.empty() && !rhs.sheet.empty()) {
+      if (!sheet_names::equal(lhs.sheet, rhs.sheet)) {
+        *out_err = ErrorCode::Ref;
+        return false;
+      }
+      out->sheet = lhs.sheet;
+    } else if (!lhs.sheet.empty()) {
+      out->sheet = lhs.sheet;
+    } else if (!rhs.sheet.empty()) {
+      out->sheet = rhs.sheet;
+    }
     // Multi-column (`A:C`) / multi-row (`1:3`) whole references: the
     // parser produces a RangeOp over two whole-column / whole-row Refs.
     // The bounded axis (columns for `A:C`, rows for `1:3`) is the pair's
@@ -178,7 +189,6 @@ bool resolve_offset_base(const parser::AstNode& raw_arg, Arena& arena, const Fun
         *out_err = ErrorCode::Ref;
         return false;
       }
-      out->sheet = !lhs.sheet.empty() ? lhs.sheet : rhs.sheet;
       out->row = 0U;
       out->rows = Sheet::kMaxRows;
       out->col = std::min(lhs.col, rhs.col);
@@ -190,25 +200,11 @@ bool resolve_offset_base(const parser::AstNode& raw_arg, Arena& arena, const Fun
         *out_err = ErrorCode::Ref;
         return false;
       }
-      out->sheet = !lhs.sheet.empty() ? lhs.sheet : rhs.sheet;
       out->col = 0U;
       out->cols = Sheet::kMaxCols;
       out->row = std::min(lhs.row, rhs.row);
       out->rows = std::max(lhs.row, rhs.row) - out->row + 1U;
       return true;
-    }
-    // The effective sheet qualifier mirrors `expand_range`: whichever
-    // endpoint carries it wins, and mismatched qualifiers are `#REF!`.
-    if (!lhs.sheet.empty() && !rhs.sheet.empty()) {
-      if (!sheet_names::equal(lhs.sheet, rhs.sheet)) {
-        *out_err = ErrorCode::Ref;
-        return false;
-      }
-      out->sheet = lhs.sheet;
-    } else if (!lhs.sheet.empty()) {
-      out->sheet = lhs.sheet;
-    } else if (!rhs.sheet.empty()) {
-      out->sheet = rhs.sheet;
     }
     const std::uint32_t r_lo = std::min(lhs.row, rhs.row);
     const std::uint32_t r_hi = std::max(lhs.row, rhs.row);

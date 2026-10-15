@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "builtins_references_test_helpers.h"
+#include "eval/reference/common.h"
 
 namespace formulon {
 namespace eval {
@@ -26,6 +27,81 @@ TEST(BuiltinsOffset, OffsetOutOfGridIsRef) {
   const Value v = EvalSourceIn("=OFFSET(A1,-1,0)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(BuiltinsOffset, WholeAxisRangeBaseValidatesMismatchedSheetQualifiers) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  EvalState state;
+  const EvalContext ctx = test::workbook_context(wb, wb.sheet(0), state);
+  Arena ast_arena;
+  Arena work_arena;
+
+  for (const bool full_col : {true, false}) {
+    parser::Reference lhs{};
+    parser::Reference rhs{};
+    lhs.sheet = "Sheet1";
+    rhs.sheet = "Sheet2";
+    lhs.is_full_col = full_col;
+    rhs.is_full_col = full_col;
+    lhs.is_full_row = !full_col;
+    rhs.is_full_row = !full_col;
+    if (full_col) {
+      lhs.col = 0U;
+      rhs.col = 1U;
+    } else {
+      lhs.row = 0U;
+      rhs.row = 1U;
+    }
+    parser::AstNode* lhs_node = parser::make_ref(ast_arena, lhs);
+    parser::AstNode* rhs_node = parser::make_ref(ast_arena, rhs);
+    ASSERT_NE(lhs_node, nullptr);
+    ASSERT_NE(rhs_node, nullptr);
+    parser::AstNode* range = parser::make_range_op(ast_arena, lhs_node, rhs_node);
+    ASSERT_NE(range, nullptr);
+
+    refs_internal::OffsetBase base{};
+    ErrorCode err = ErrorCode::Value;
+    EXPECT_FALSE(refs_internal::resolve_offset_base(*range, work_arena, default_registry(), ctx, &base, &err));
+    EXPECT_EQ(err, ErrorCode::Ref);
+  }
+}
+
+TEST(BuiltinsOffset, WholeAxisRangeBaseAcceptsCaseInsensitiveMatchingQualifiers) {
+  Workbook wb = Workbook::create();
+  EvalState state;
+  const EvalContext ctx = test::workbook_context(wb, wb.sheet(0), state);
+  Arena ast_arena;
+  Arena work_arena;
+
+  for (const bool full_col : {true, false}) {
+    parser::Reference lhs{};
+    parser::Reference rhs{};
+    lhs.sheet = "Sheet1";
+    rhs.sheet = "sheet1";
+    lhs.is_full_col = full_col;
+    rhs.is_full_col = full_col;
+    lhs.is_full_row = !full_col;
+    rhs.is_full_row = !full_col;
+    if (full_col) {
+      lhs.col = 0U;
+      rhs.col = 1U;
+    } else {
+      lhs.row = 0U;
+      rhs.row = 1U;
+    }
+    parser::AstNode* lhs_node = parser::make_ref(ast_arena, lhs);
+    parser::AstNode* rhs_node = parser::make_ref(ast_arena, rhs);
+    ASSERT_NE(lhs_node, nullptr);
+    ASSERT_NE(rhs_node, nullptr);
+    parser::AstNode* range = parser::make_range_op(ast_arena, lhs_node, rhs_node);
+    ASSERT_NE(range, nullptr);
+
+    refs_internal::OffsetBase base{};
+    ErrorCode err = ErrorCode::Value;
+    ASSERT_TRUE(refs_internal::resolve_offset_base(*range, work_arena, default_registry(), ctx, &base, &err));
+    EXPECT_EQ(base.sheet, "Sheet1");
+  }
 }
 
 TEST(BuiltinsOffset, HugeHeightIsRefWithoutNarrowing) {
@@ -370,6 +446,20 @@ TEST(BuiltinsOffset, ScalarRowsCols) {
   const Value v = EvalSourceIn("=OFFSET(A1,1,2)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 99.0);
+}
+
+TEST(BuiltinsOffset, ChainedRangeBaseIsItsBoundingBox) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(3, 3, Value::number(7.0));  // D4
+  const Value rows = EvalSourceIn("=ROWS(OFFSET(A1:B2:C3,0,0))", wb, wb.sheet(0));
+  ASSERT_TRUE(rows.is_number());
+  EXPECT_DOUBLE_EQ(rows.as_number(), 3.0);
+  const Value cols = EvalSourceIn("=COLUMNS(OFFSET(A:C:E:G,0,0))", wb, wb.sheet(0));
+  ASSERT_TRUE(cols.is_number());
+  EXPECT_DOUBLE_EQ(cols.as_number(), 7.0);
+  const Value sum = EvalSourceIn("=SUM(OFFSET(A1:B2:C3,1,1))", wb, wb.sheet(0));
+  ASSERT_TRUE(sum.is_number());
+  EXPECT_DOUBLE_EQ(sum.as_number(), 7.0);
 }
 
 TEST(BuiltinsOffset, ZeroOffsetReturnsBase) {
