@@ -259,6 +259,72 @@ TEST(OoxmlExternalLinkWriter, GeneratedBodyReadsBackToTheSameCache) {
   EXPECT_EQ(rec.book.cached_cell(0, 1, 1).as_error(), ErrorCode::NA);
 }
 
+TEST(OoxmlExternalLinkWriter, CachedCellsKeepSheetAndRowMajorOrder) {
+  Workbook wb = HostBook();
+  ExternalLinkRecord rec = NewLink(1, "Book.xlsx");
+  rec.book.sheet_names = {"First", "Empty", "Unrefreshed", "Last"};
+  rec.book.sheet_data = {true, true, false, true};
+  const auto add_number = [&rec](std::uint32_t sheet, std::uint32_t row, std::uint32_t col, double number) {
+    ExternalCell cell;
+    cell.value = Value::number(number);
+    rec.book.cells[ExternalBook::cell_key(sheet, row, col)] = std::move(cell);
+  };
+  // Insert in reverse sheet and row/column order so the XML ordering comes
+  // from the packed-key sort rather than the unordered map's iteration.
+  add_number(3U, 1U, 0U, 30.0);
+  add_number(2U, 0U, 0U, 20.0);  // Cached values are hidden when sheet_data is false.
+  add_number(0U, 8U, 2U, 9.0);
+  add_number(0U, 0U, 4U, 5.0);
+  add_number(0U, 2U, 0U, 3.0);
+  add_number(0U, 0U, 1U, 2.0);
+  wb.set_external_links({std::move(rec)});
+
+  const std::string body = Part(Save(wb), "xl/externalLinks/externalLink1.xml");
+  pugi::xml_document doc;
+  ASSERT_TRUE(test::parse_xml(body, &doc));
+  const pugi::xml_node book = doc.child("externalLink").child("externalBook");
+  const pugi::xml_node set = book.child("sheetDataSet");
+  std::vector<std::string> sheet_ids;
+  std::vector<std::vector<std::string>> cell_refs_by_sheet;
+  std::vector<std::vector<std::string>> row_refs_by_sheet;
+  for (pugi::xml_node sheet = set.child("sheetData"); sheet; sheet = sheet.next_sibling("sheetData")) {
+    sheet_ids.emplace_back(sheet.attribute("sheetId").value());
+    std::vector<std::string> rows;
+    std::vector<std::string> cells;
+    for (pugi::xml_node row = sheet.child("row"); row; row = row.next_sibling("row")) {
+      rows.emplace_back(row.attribute("r").value());
+      for (pugi::xml_node cell = row.child("cell"); cell; cell = cell.next_sibling("cell")) {
+        cells.emplace_back(cell.attribute("r").value());
+      }
+    }
+    row_refs_by_sheet.push_back(std::move(rows));
+    cell_refs_by_sheet.push_back(std::move(cells));
+  }
+
+  EXPECT_EQ(sheet_ids, (std::vector<std::string>{"0", "1", "3"}));
+  EXPECT_EQ(row_refs_by_sheet, (std::vector<std::vector<std::string>>{{"1", "3", "9"}, {}, {"2"}}));
+  EXPECT_EQ(cell_refs_by_sheet, (std::vector<std::vector<std::string>>{{"B1", "E1", "A3", "C9"}, {}, {"A2"}}));
+}
+
+TEST(OoxmlExternalLinkWriter, CachedTextSurvivesTwoOoxmlCycles) {
+  const std::string payload = "literal _x0041_ & <猫> \rcontrol \x01 🙂";
+  Workbook current = HostBook();
+  ExternalLinkRecord rec = NewLink(1, "Book.xlsx");
+  rec.book.sheet_names = {"Data"};
+  rec.book.sheet_data = {true};
+  ExternalCell cached_text;
+  cached_text.value = Value::text({});
+  cached_text.text = payload;
+  rec.book.cells[ExternalBook::cell_key(0, 0, 0)] = std::move(cached_text);
+  current.set_external_links({std::move(rec)});
+
+  for (int cycle = 0; cycle < 2; ++cycle) {
+    current = Load(Save(current));
+    ASSERT_EQ(current.external_links().size(), 1U);
+    EXPECT_EQ(current.external_links()[0].book.cached_cell(0, 0, 0).as_text(), payload);
+  }
+}
+
 TEST(OoxmlExternalLinkWriter, EveryWrittenLinkHasAllItsPackageFaces) {
   Workbook wb = HostBook();
   wb.set_external_links({NewLink(1, "A.xlsx"), NewLink(2, "B.xlsx")});

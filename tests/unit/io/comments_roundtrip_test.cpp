@@ -82,6 +82,22 @@ TEST(CommentsRoundTrip, XmlEntityEscaping) {
   EXPECT_EQ(out_or.value()[0].text, "Use &amp; and \"quotes\" plus <tags>");
 }
 
+TEST(CommentsRoundTrip, AuthorAndTextSurviveTwoOoxmlCycles) {
+  const std::string payload = "literal _x0041_ & <猫> \rcontrol \x01 🙂";
+  std::vector<CellComment> current = {CellComment(0, 0, payload, payload)};
+
+  for (int cycle = 0; cycle < 2; ++cycle) {
+    const std::string xml = write_comments(current);
+    auto decoded = read_comments(AsBytes(xml));
+    ASSERT_TRUE(static_cast<bool>(decoded)) << decoded.error().message;
+    ASSERT_EQ(decoded.value().size(), 1U);
+    current = std::move(decoded.value());
+  }
+
+  EXPECT_EQ(current[0].author, payload);
+  EXPECT_EQ(current[0].text, payload);
+}
+
 TEST(CommentsRoundTrip, MultiRunRichTextConcatenated) {
   // Reader-only test: rich text with multiple runs collapses into a
   // single concatenated plain-text payload.

@@ -245,6 +245,13 @@ TEST(CellParser, FormulaStripsLeadingEquals) {
   EXPECT_EQ(parsed.formula, "A2+1");
 }
 
+TEST(CellParser, FormulaTextDecodesOoxmlEscapes) {
+  pugi::xml_document doc;
+  std::deque<std::string> storage;
+  ASSERT_PARSE_OK(parsed, "<c r=\"A1\"><f>SUM(&quot;_x005F_x0041_ &amp; &lt;猫&gt;&quot;)</f></c>", doc, storage);
+  EXPECT_EQ(parsed.formula, "SUM(\"_x0041_ & <猫>\")");
+}
+
 TEST(CellParser, EmptyCellIsBlank) {
   pugi::xml_document doc;
   std::deque<std::string> storage;
@@ -359,6 +366,17 @@ TEST(CellParser, LegacyStrTypeIsTextFromValue) {
   EXPECT_EQ(parsed.formula, "UPPER(\"hi\")");
   ASSERT_TRUE(parsed.value.is_text());
   EXPECT_EQ(parsed.value.as_text(), "HI");
+}
+
+TEST(CellParser, LegacyStrValueDecodesOoxmlEscapes) {
+  pugi::xml_document doc;
+  std::deque<std::string> storage;
+  ASSERT_PARSE_OK(parsed,
+                  "<c r=\"A1\" t=\"str\"><f>UPPER(\"x\")</f>"
+                  "<v>literal _x005F_x0041_ &amp; &lt;猫&gt; _x000D_control _x0001_ 🙂</v></c>",
+                  doc, storage);
+  ASSERT_TRUE(parsed.value.is_text());
+  EXPECT_EQ(parsed.value.as_text(), "literal _x0041_ & <猫> \rcontrol \x01 🙂");
 }
 
 // ---------------------------------------------------------------------------

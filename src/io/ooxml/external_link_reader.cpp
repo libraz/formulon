@@ -12,6 +12,7 @@
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/workbook_rels_reader.h"
 #include "io/ooxml_defs.h"
+#include "io/xml_escape.h"
 #include "io/zip_reader.h"
 #include "pugixml.hpp"
 #include "utils/a1_ref.h"
@@ -141,7 +142,7 @@ void DecodeExternalBook(const pugi::xml_node& book_node, ExternalBook* out) {
         ExternalCell out_cell;
         if (type == "str") {
           out_cell.value = Value::text({});
-          out_cell.text = raw;
+          AppendOoxmlTextUnescaped(out_cell.text, raw);
         } else if (type == "b") {
           out_cell.value = Value::boolean(raw == "1");
         } else if (type == "e") {

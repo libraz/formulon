@@ -162,6 +162,25 @@ TEST(TablesReader, CalculatedColumnFormulaWithXmlEscapesPreserved) {
   EXPECT_EQ(table_or.value().columns[0].calculated_column_formula, "IF(A1<5,\"x\",\"y\")&\"!\"");
 }
 
+TEST(TablesReader, CalculatedColumnFormulaDecodesOoxmlTextEscapes) {
+  std::string xml(kXmlDecl);
+  xml.append(
+      "<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" id=\"8\" name=\"EscTbl\" "
+      "displayName=\"EscTbl\" ref=\"A1:B2\">");
+  xml.append("  <tableColumns count=\"1\">");
+  xml.append(
+      "    <tableColumn id=\"1\" name=\"E\"><calculatedColumnFormula>"
+      "literal _x005F_x0041_ &amp; &lt;猫&gt; _x000D_control _x0001_ 🙂"
+      "</calculatedColumnFormula></tableColumn>");
+  xml.append("  </tableColumns>");
+  xml.append("</table>");
+
+  auto table_or = read_table(Bytes(xml), 0U);
+  ASSERT_TRUE(static_cast<bool>(table_or));
+  ASSERT_EQ(table_or.value().columns.size(), 1U);
+  EXPECT_EQ(table_or.value().columns[0].calculated_column_formula, "literal _x0041_ & <猫> \rcontrol \x01 🙂");
+}
+
 TEST(TablesReader, CalculatedColumnFormulaWithOoxmlControlCharacterEscapeDecoded) {
   // `_x0001_` is the OOXML notation for a control character XML 1.0
   // cannot carry literally (ooxml_writer.cpp's AppendXmlEscaped emits it

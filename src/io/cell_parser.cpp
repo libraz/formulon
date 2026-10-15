@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "io/iso_date.h"
+#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
 #include "io/xsd_int.h"
@@ -319,7 +320,7 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   std::string formula;
   pugi::xml_node f_node = node.child("f");
   if (f_node) {
-    formula = f_node.text().get();
+    AppendOoxmlTextUnescaped(formula, f_node.text().get());
     if (!formula.empty() && formula.front() == '=') {
       formula.erase(0, 1);
     }
@@ -331,6 +332,7 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   pugi::xml_node v_node = node.child("v");
   pugi::xml_node is_node = node.child("is");
   std::string inline_concat;
+  std::string ooxml_text;
   std::string_view v_text;
   bool value_present = false;
   bool is_inline = false;
@@ -342,6 +344,12 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   } else if (v_node) {
     value_present = true;
     v_text = v_node.text().get();
+  }
+
+  // `str` caches still carry `_xHHHH_` escapes here; the SAX path decodes them before this point.
+  if (t == "str" && v_node && !is_inline) {
+    AppendOoxmlTextUnescaped(ooxml_text, v_text);
+    v_text = ooxml_text;
   }
 
   auto payload_or = decode_cell_payload(t, v_text, value_present, is_inline, text_storage);

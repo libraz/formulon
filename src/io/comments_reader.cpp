@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "io/cell_parser.h"
+#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -36,7 +37,9 @@ Expected<std::vector<CellComment>, Error> read_comments(const std::vector<std::u
   std::vector<std::string> authors;
   if (pugi::xml_node a = root.child("authors"); a) {
     for (pugi::xml_node au = a.child("author"); au; au = au.next_sibling("author")) {
-      authors.emplace_back(au.text().get());
+      std::string author;
+      AppendOoxmlTextUnescaped(author, au.text().get());
+      authors.push_back(std::move(author));
     }
   }
 

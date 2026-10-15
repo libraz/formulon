@@ -27,8 +27,10 @@
 
 #include "cell.h"
 #include "gtest/gtest.h"
+#include "io/ooxml_writer_cell.h"
 #include "io/sheet_layout_reader.h"
 #include "io/sheet_reader.h"
+#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -58,6 +60,7 @@ struct LoadResult {
   FormulonErrorCode code = FormulonErrorCode::kUnknownError;
   std::vector<CellSnapshot> cells;
   std::vector<RowLayout> rows;
+  std::string serialized;
 };
 
 void SnapshotSheet(const Sheet& sheet, LoadResult* out) {
@@ -102,6 +105,13 @@ Workbook MakeStylelessHost(bool date1904 = false) {
   return wb;
 }
 
+std::string SerializeSheet(const Sheet& sheet) {
+  std::string out = "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">";
+  out.append(BuildSheetDataXml(sheet));
+  out.append("</worksheet>");
+  return out;
+}
+
 LoadResult LoadDom(std::string_view sheet_xml, bool date1904 = false) {
   LoadResult result;
   pugi::xml_document doc;
@@ -129,6 +139,7 @@ LoadResult LoadDom(std::string_view sheet_xml, bool date1904 = false) {
   }
   result.ok = true;
   SnapshotSheet(wb.sheet(0), &result);
+  result.serialized = SerializeSheet(wb.sheet(0));
   return result;
 }
 
@@ -147,6 +158,7 @@ LoadResult LoadSax(std::string_view sheet_xml, bool date1904 = false) {
   }
   result.ok = true;
   SnapshotSheet(wb.sheet(0), &result);
+  result.serialized = SerializeSheet(wb.sheet(0));
   return result;
 }
 
@@ -263,6 +275,34 @@ TEST(SheetReaderLexingParity, EntityDecodedFormulaAndRowAttributesAgree) {
   EXPECT_DOUBLE_EQ(dom.rows[0].height, 20.0);
   EXPECT_TRUE(dom.rows[0].hidden);
   EXPECT_EQ(dom.rows[0].outline_level, 2U);
+}
+
+TEST(SheetReaderLexingParity, OoxmlTextEscapesSurviveDomAndSaxTwoCycles) {
+  const std::string formula = "=N(\"literal _x0041_ & <猫> 🙂\")";
+  const std::string cached_text = "literal _x0041_ & <猫> \rcontrol \x01 🙂";
+  std::string encoded_formula;
+  std::string encoded_cached_text;
+  AppendXmlEscaped(encoded_formula, std::string_view(formula).substr(1U));
+  AppendXmlEscaped(encoded_cached_text, cached_text);
+  std::string xml = WrapSheet(std::string("<row r=\"1\"><c r=\"A1\" t=\"str\"><f>")
+                                  .append(encoded_formula)
+                                  .append("</f><v>")
+                                  .append(encoded_cached_text)
+                                  .append("</v></c></row>"));
+
+  for (int cycle = 0; cycle < 2; ++cycle) {
+    const LoadResult dom = LoadDom(xml);
+    const LoadResult sax = LoadSax(xml);
+    ASSERT_TRUE(dom.ok);
+    ASSERT_TRUE(sax.ok);
+    EXPECT_TRUE(SameOutcome(dom, sax));
+    EXPECT_EQ(dom.serialized, sax.serialized);
+    ASSERT_EQ(dom.cells.size(), 1U);
+    EXPECT_EQ(dom.cells[0].formula, formula);
+    ASSERT_EQ(dom.cells[0].kind, ValueKind::Text);
+    EXPECT_EQ(dom.cells[0].text, cached_text);
+    xml = dom.serialized;
+  }
 }
 
 TEST(SheetReaderLexingParity, EntityDecodedMalformedValuesKeepDispositions) {

@@ -371,7 +371,9 @@ std::string ReadX14RuleId(const pugi::xml_node& rule) {
   for (pugi::xml_node ext_lst = rule.child("extLst"); ext_lst; ext_lst = ext_lst.next_sibling("extLst")) {
     for (pugi::xml_node ext = ext_lst.child("ext"); ext; ext = ext.next_sibling("ext")) {
       if (const pugi::xml_node id = ext.child("x14:id"); id) {
-        if (const std::string text(id.child_value()); !text.empty()) {
+        std::string text;
+        AppendOoxmlTextUnescaped(text, id.child_value());
+        if (!text.empty()) {
           return text;
         }
       }

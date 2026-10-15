@@ -324,6 +324,42 @@ TEST(CFReader, DataBarX14OverlayAppliesNegativeAxisAndGradient) {
   EXPECT_EQ(r.data_bar->max_length_pct, 100);
 }
 
+TEST(CFReader, X14RuleIdDecodesOoxmlTextEscapesBeforeOverlayLookup) {
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="A1">
+        <cfRule type="dataBar" priority="1">
+          <dataBar>
+            <cfvo type="min"/>
+            <cfvo type="max"/>
+            <color rgb="FF638EC6"/>
+          </dataBar>
+          <extLst><ext><x14:id>_x005F_x0041_</x14:id></ext></extLst>
+        </cfRule>
+      </conditionalFormatting>
+      <extLst>
+        <ext>
+          <x14:conditionalFormattings>
+            <x14:conditionalFormatting>
+              <x14:cfRule type="dataBar" id="_x0041_">
+                <x14:dataBar><x14:negativeFillColor rgb="FFFF0000"/></x14:dataBar>
+              </x14:cfRule>
+            </x14:conditionalFormatting>
+          </x14:conditionalFormattings>
+        </ext>
+      </extLst>
+    </worksheet>)");
+
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  ASSERT_EQ(cfs.value().size(), 1U);
+  ASSERT_EQ(cfs.value()[0].rules.size(), 1U);
+  const cf::CFRule& rule = cfs.value()[0].rules[0];
+  EXPECT_EQ(rule.id, "_x0041_");
+  ASSERT_TRUE(rule.data_bar.has_value());
+  EXPECT_EQ(rule.data_bar->negative_fill, cf::Color({0xFF, 0x00, 0x00, 255}));
+}
+
 // The `id` attribute on the legacy `<cfRule>` is accepted as a lenient
 // fallback for hand-written files. Excel neither writes it nor keeps it
 // (re-saving strips the attribute and drops the orphaned overlay), so

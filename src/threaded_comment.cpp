@@ -46,6 +46,17 @@ bool HasPerson(const std::vector<Person>& persons, std::string_view id) noexcept
   return false;
 }
 
+std::string BeginStubText(const ThreadedComment& root) {
+  std::string out(kStubPreamble);
+  out.append(root.text);
+  return out;
+}
+
+void AppendStubReply(std::string& out, const ThreadedComment& reply) {
+  out.append("\nReply:\n    ");
+  out.append(reply.text);
+}
+
 Expected<void, Error> ValidateText(std::string_view text, const std::vector<Mention>& mentions,
                                    const std::vector<Person>& persons) {
   const std::uint64_t units = utf16_units_in(text);
@@ -118,13 +129,20 @@ std::size_t find_thread_at(const std::vector<ThreadedComment>& list, std::uint32
 }
 
 std::string threaded_comment_stub_text(const std::vector<ThreadedComment>& list, std::size_t root) {
-  std::string out(kStubPreamble);
-  out.append(list[root].text);
-  for (const ThreadedComment& c : list) {
-    if (c.parent_id == list[root].id) {
-      out.append("\nReply:\n    ");
-      out.append(c.text);
+  std::vector<std::size_t> reply_indices;
+  for (std::size_t i = 0; i < list.size(); ++i) {
+    if (list[i].parent_id == list[root].id) {
+      reply_indices.push_back(i);
     }
+  }
+  return threaded_comment_stub_text(list, root, reply_indices);
+}
+
+std::string threaded_comment_stub_text(const std::vector<ThreadedComment>& list, std::size_t root,
+                                       const std::vector<std::size_t>& reply_indices) {
+  std::string out = BeginStubText(list[root]);
+  for (const std::size_t index : reply_indices) {
+    AppendStubReply(out, list[index]);
   }
   return out;
 }

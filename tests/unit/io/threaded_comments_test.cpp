@@ -222,6 +222,22 @@ TEST(ThreadedComments, RoundTripRepliesMentions) {
   EXPECT_EQ(reloaded.sheet(0).comments()[0].text, "Plain note");
 }
 
+TEST(ThreadedComments, TextSurvivesTwoOoxmlCycles) {
+  const std::string payload = "literal _x0041_ & <猫> \rcontrol \x01 🙂";
+  std::vector<ThreadedComment> current = {Comment(kThread, 0, 0, kAlice, payload)};
+
+  for (int cycle = 0; cycle < 2; ++cycle) {
+    const std::string xml = io::write_threaded_comments(current);
+    std::vector<std::uint8_t> bytes(xml.begin(), xml.end());
+    auto decoded = io::read_threaded_comments(bytes);
+    ASSERT_TRUE(static_cast<bool>(decoded)) << decoded.error().message;
+    ASSERT_EQ(decoded.value().size(), 1U);
+    current = std::move(decoded.value());
+  }
+
+  EXPECT_EQ(current[0].text, payload);
+}
+
 TEST(ThreadedComments, StubNotListedAsNote) {
   Workbook wb = Load(ExcelFixture());
   ASSERT_EQ(wb.sheet(0).comments().size(), 1U);
@@ -246,6 +262,57 @@ TEST(ThreadedComments, TcAuthorWithoutThreadStaysNote) {
   std::vector<ThreadedComment> elsewhere = {Comment(kThread, 5, 5, kAlice, "x")};
   io::drop_thread_stubs(notes, elsewhere);
   EXPECT_EQ(notes.size(), 1U);
+}
+
+TEST(ThreadedComments, BatchStubIndexesPreserveFirstMatchesAndSourceOrder) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  std::vector<ThreadedComment>& threads = sheet.mutable_threaded_comments();
+  threads = {Comment("duplicate", 1U, 1U, kAlice, "first root"),
+             Comment("reply-a", 9U, 9U, kBob, "reply one", "duplicate"),
+             Comment("duplicate", 2U, 2U, kAlice, "second root"),
+             Comment("unique", 3U, 3U, kBob, "unique root"),
+             Comment("reply-b", 8U, 8U, kBob, "reply two", "duplicate"),
+             Comment("reply-unique", 3U, 3U, kAlice, "unique reply", "unique"),
+             Comment("", 10U, 10U, kAlice, "empty-id root")};
+  sheet.mutable_comments() = {
+      CellComment(1U, 1U, "Carol", "root collision one"),   CellComment(2U, 2U, "Carol", "root collision two"),
+      CellComment(3U, 3U, "Carol", "root collision three"), CellComment(10U, 10U, "Carol", "empty-id collision"),
+      CellComment(4U, 4U, "tc=missing", "unknown stub"),    CellComment(9U, 9U, "Carol", "reply-cell note"),
+      CellComment(5U, 5U, "Carol", "ordinary note")};
+
+  const std::vector<CellComment> generated = io::legacy_comments_with_stubs(sheet);
+  ASSERT_EQ(generated.size(), 7U);
+  EXPECT_EQ(generated[0].text, "unknown stub");
+  EXPECT_EQ(generated[1].text, "reply-cell note");
+  EXPECT_EQ(generated[2].text, "ordinary note");
+  EXPECT_EQ(generated[3].author, "tc=duplicate");
+  EXPECT_EQ(generated[4].author, "tc=duplicate");
+  EXPECT_EQ(generated[5].author, "tc=unique");
+  EXPECT_EQ(generated[6].author, "tc=");
+  EXPECT_EQ(generated[3].text, threaded_comment_stub_text(threads, 0U));
+  EXPECT_EQ(generated[4].text, threaded_comment_stub_text(threads, 2U));
+  EXPECT_EQ(generated[5].text, threaded_comment_stub_text(threads, 3U));
+  EXPECT_EQ(generated[6].text, threaded_comment_stub_text(threads, 6U));
+  const std::size_t first_reply = generated[3].text.find("Reply:\n    reply one");
+  const std::size_t second_reply = generated[3].text.find("Reply:\n    reply two");
+  EXPECT_NE(first_reply, std::string::npos);
+  EXPECT_NE(second_reply, std::string::npos);
+  EXPECT_LT(first_reply, second_reply);
+
+  std::vector<CellComment> notes = {CellComment(1U, 1U, "tc=duplicate", "first stub"),
+                                    CellComment(2U, 2U, "tc=duplicate", "duplicate id at later root"),
+                                    CellComment(3U, 3U, "tc=unique", "unique stub"),
+                                    CellComment(10U, 10U, "tc=", "empty id stub"),
+                                    CellComment(9U, 9U, "tc=reply-a", "reply is not a root"),
+                                    CellComment(4U, 4U, "tc=missing", "unknown stub"),
+                                    CellComment(5U, 5U, "Carol", "plain note")};
+  io::drop_thread_stubs(notes, threads);
+  ASSERT_EQ(notes.size(), 4U);
+  EXPECT_EQ(notes[0].text, "duplicate id at later root");
+  EXPECT_EQ(notes[1].text, "reply is not a root");
+  EXPECT_EQ(notes[2].text, "unknown stub");
+  EXPECT_EQ(notes[3].text, "plain note");
 }
 
 TEST(ThreadedComments, LegacyNoteUidPreserved) {

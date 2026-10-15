@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -34,6 +36,28 @@ void AppendRootOpen(std::string& out, std::string_view root) {
   out.append(">\n");
 }
 
+std::uint64_t CellCoordinateKey(std::uint32_t row, std::uint32_t col) noexcept {
+  return (static_cast<std::uint64_t>(row) << 32U) | col;
+}
+
+struct LegacyStubIndexes {
+  std::unordered_set<std::uint64_t> root_coordinates;
+  std::unordered_map<std::string_view, std::vector<std::size_t>> replies_by_parent_id;
+
+  explicit LegacyStubIndexes(const std::vector<ThreadedComment>& threads) {
+    root_coordinates.reserve(threads.size());
+    replies_by_parent_id.reserve(threads.size());
+    for (std::size_t i = 0; i < threads.size(); ++i) {
+      const ThreadedComment& thread = threads[i];
+      if (thread.parent_id.empty()) {
+        root_coordinates.insert(CellCoordinateKey(thread.row, thread.col));
+      }
+      // Empty parent ids are indexed too, matching parent ids verbatim like the per-root scan.
+      replies_by_parent_id[std::string_view(thread.parent_id)].push_back(i);
+    }
+  }
+};
+
 }  // namespace
 
 Expected<std::vector<ThreadedComment>, Error> read_threaded_comments(const std::vector<std::uint8_t>& bytes) {
@@ -59,7 +83,7 @@ Expected<std::vector<ThreadedComment>, Error> read_threaded_comments(const std::
     c.created = node.attribute("dT").value();
     c.parent_id = node.attribute("parentId").value();
     c.done = attr_bool(node, "done");
-    c.text = node.child("text").text().get();
+    AppendOoxmlTextUnescaped(c.text, node.child("text").text().get());
     for (pugi::xml_node m = node.child("mentions").child("mention"); m; m = m.next_sibling("mention")) {
       Mention mention;
       mention.person_id = m.attribute("mentionpersonId").value();
@@ -161,13 +185,20 @@ void drop_thread_stubs(std::vector<CellComment>& notes, const std::vector<Thread
   }
   std::vector<CellComment> kept;
   kept.reserve(notes.size());
+  std::unordered_map<std::string_view, std::size_t> first_index_by_id;
+  first_index_by_id.reserve(threads.size());
+  for (std::size_t i = 0; i < threads.size(); ++i) {
+    first_index_by_id.try_emplace(std::string_view(threads[i].id), i);
+  }
   for (CellComment& note : notes) {
     const std::string_view author(note.author);
     bool stub = false;
     if (author.substr(0, kStubAuthorPrefix.size()) == kStubAuthorPrefix) {
-      const std::size_t root = find_threaded_comment(threads, author.substr(kStubAuthorPrefix.size()));
-      stub = root < threads.size() && threads[root].parent_id.empty() && threads[root].row == note.row &&
-             threads[root].col == note.col;
+      const auto found = first_index_by_id.find(author.substr(kStubAuthorPrefix.size()));
+      if (found != first_index_by_id.end()) {
+        const ThreadedComment& root = threads[found->second];
+        stub = root.parent_id.empty() && root.row == note.row && root.col == note.col;
+      }
     }
     if (!stub) {
       kept.push_back(std::move(note));
@@ -180,16 +211,21 @@ std::vector<CellComment> legacy_comments_with_stubs(const Sheet& sheet) {
   const std::vector<ThreadedComment>& threads = sheet.threaded_comments();
   std::vector<CellComment> out;
   out.reserve(sheet.comments().size() + threads.size());
+  const LegacyStubIndexes indexes(threads);
   for (const CellComment& note : sheet.comments()) {
-    if (find_thread_at(threads, note.row, note.col) == threads.size()) {
+    if (indexes.root_coordinates.find(CellCoordinateKey(note.row, note.col)) == indexes.root_coordinates.end()) {
       out.push_back(note);
     }
   }
   for (std::size_t i = 0; i < threads.size(); ++i) {
     const ThreadedComment& t = threads[i];
     if (t.parent_id.empty()) {
-      out.emplace_back(t.row, t.col, std::string(kStubAuthorPrefix) + t.id, threaded_comment_stub_text(threads, i),
-                       t.id);
+      const auto replies = indexes.replies_by_parent_id.find(std::string_view(t.id));
+      const std::vector<std::size_t> no_replies;
+      const std::vector<std::size_t>& reply_indices =
+          replies == indexes.replies_by_parent_id.end() ? no_replies : replies->second;
+      out.emplace_back(t.row, t.col, std::string(kStubAuthorPrefix) + t.id,
+                       threaded_comment_stub_text(threads, i, reply_indices), t.id);
     }
   }
   return out;

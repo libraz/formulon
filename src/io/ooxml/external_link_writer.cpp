@@ -79,34 +79,28 @@ std::string RefersTo(const ExternalBook& book, const ExternalBookName& name) {
   return out;
 }
 
-struct CachedCell {
-  std::uint32_t row;
-  std::uint32_t col;
-  const ExternalCell* cell;
-};
+constexpr unsigned kExternalColBits = 14U;
+constexpr unsigned kExternalRowBits = 21U;
 
-/// Cached cells of `sheet` in row-major order. Unpacks the key layout
-/// `ExternalBook::cell_key` documents (16-bit sheet, 21-bit row, 14-bit column).
-std::vector<CachedCell> CellsOfSheet(const ExternalBook& book, std::uint32_t sheet) {
-  constexpr unsigned kColBits = 14U;
-  constexpr unsigned kRowBits = 21U;
-  std::vector<CachedCell> out;
-  for (const std::uint64_t key : book.sorted_cell_keys()) {
-    if (static_cast<std::uint32_t>(key >> (kColBits + kRowBits)) != sheet) {
-      continue;
-    }
-    const auto row = static_cast<std::uint32_t>((key >> kColBits) & ((std::uint64_t{1} << kRowBits) - 1U));
-    const auto col = static_cast<std::uint32_t>(key & ((std::uint64_t{1} << kColBits) - 1U));
-    FM_CHECK(ExternalBook::cell_key(sheet, row, col) == key, "external cell key layout changed");
-    out.push_back(CachedCell{row, col, &book.cells.at(key)});
-  }
-  return out;
+std::uint32_t CachedCellSheet(std::uint64_t key) {
+  return static_cast<std::uint32_t>(key >> (kExternalColBits + kExternalRowBits));
 }
 
-void AppendCachedCell(std::string& out, const CachedCell& c) {
-  const Value value = c.cell->resolved();
+std::uint32_t CachedCellRow(std::uint64_t key) {
+  return static_cast<std::uint32_t>((key >> kExternalColBits) & ((std::uint64_t{1} << kExternalRowBits) - 1U));
+}
+
+std::uint32_t CachedCellColumn(std::uint64_t key) {
+  return static_cast<std::uint32_t>(key & ((std::uint64_t{1} << kExternalColBits) - 1U));
+}
+
+void AppendCachedCell(std::string& out, const ExternalBook& book, std::uint32_t sheet, std::uint64_t key) {
+  const std::uint32_t row = CachedCellRow(key);
+  const std::uint32_t col = CachedCellColumn(key);
+  FM_CHECK(ExternalBook::cell_key(sheet, row, col) == key, "external cell key layout changed");
+  const Value value = book.cells.at(key).resolved();
   out.append("<cell r=\"");
-  out.append(a1::encode_a1(c.row, c.col));
+  out.append(a1::encode_a1(row, col));
   out.push_back('"');
   if (value.is_blank()) {
     out.append("/>");
@@ -128,18 +122,18 @@ void AppendCachedCell(std::string& out, const CachedCell& c) {
   out.append("</v></cell>");
 }
 
-void AppendSheetData(std::string& out, const ExternalBook& book, std::uint32_t sheet) {
+void AppendSheetData(std::string& out, const ExternalBook& book, std::uint32_t sheet,
+                     const std::vector<std::uint64_t>& sorted_keys, std::size_t begin, std::size_t end) {
   out.append("<sheetData sheetId=\"");
   out.append(std::to_string(sheet));
   out.append("\">");
-  const std::vector<CachedCell> cells = CellsOfSheet(book, sheet);
-  for (std::size_t i = 0; i < cells.size();) {
-    const std::uint32_t row = cells[i].row;
+  for (std::size_t i = begin; i < end;) {
+    const std::uint32_t row = CachedCellRow(sorted_keys[i]);
     out.append("<row r=\"");
     out.append(std::to_string(row + 1U));
     out.append("\">");
-    for (; i < cells.size() && cells[i].row == row; ++i) {
-      AppendCachedCell(out, cells[i]);
+    for (; i < end && CachedCellRow(sorted_keys[i]) == row; ++i) {
+      AppendCachedCell(out, book, sheet, sorted_keys[i]);
     }
     out.append("</row>");
   }
@@ -233,7 +227,26 @@ std::string BuildExternalLinkXml(const ExternalLinkRecord& rec) {
     out.append("</definedNames>");
   }
   bool any_data = false;
+  std::vector<std::uint64_t> sorted_cell_keys;
+  bool has_cached_sheet = false;
   for (std::uint32_t s = 0; s < static_cast<std::uint32_t>(book.sheet_names.size()); ++s) {
+    if (book.sheet_has_data(s)) {
+      has_cached_sheet = true;
+      break;
+    }
+  }
+  if (has_cached_sheet && !book.cells.empty()) {
+    sorted_cell_keys = book.sorted_cell_keys();
+  }
+  std::size_t next_key = 0U;
+  for (std::uint32_t s = 0; s < static_cast<std::uint32_t>(book.sheet_names.size()); ++s) {
+    while (next_key < sorted_cell_keys.size() && CachedCellSheet(sorted_cell_keys[next_key]) < s) {
+      ++next_key;
+    }
+    const std::size_t begin = next_key;
+    while (next_key < sorted_cell_keys.size() && CachedCellSheet(sorted_cell_keys[next_key]) == s) {
+      ++next_key;
+    }
     if (!book.sheet_has_data(s)) {
       continue;
     }
@@ -241,7 +254,7 @@ std::string BuildExternalLinkXml(const ExternalLinkRecord& rec) {
       out.append("<sheetDataSet>");
       any_data = true;
     }
-    AppendSheetData(out, book, s);
+    AppendSheetData(out, book, s, sorted_cell_keys, begin, next_key);
   }
   if (any_data) {
     out.append("</sheetDataSet>");

@@ -69,6 +69,11 @@ std::size_t find_thread_at(const std::vector<ThreadedComment>& list, std::uint32
 /// reply in list order.
 std::string threaded_comment_stub_text(const std::vector<ThreadedComment>& list, std::size_t root);
 
+/// Same text using a caller-precomputed, source-ordered list of reply indices.
+/// Batch serializers can reuse one parent-id index across every root.
+std::string threaded_comment_stub_text(const std::vector<ThreadedComment>& list, std::size_t root,
+                                       const std::vector<std::size_t>& reply_indices);
+
 }  // namespace formulon
 
 #endif  // FORMULON_THREADED_COMMENT_H_

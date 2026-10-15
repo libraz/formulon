@@ -7,6 +7,8 @@
 //   * Scratch buffers are reused across rows/cells: the scanner only
 //     allocates when a text node needs entity decoding / XML normalization
 //     (`&amp;`, CRLF, etc.) or
+//     OOXML escape decoding (`_xHHHH_`) for formula text and legacy `t="str"`
+//     cached values, or
 //     when the inline-string body contains nested `<r>` runs whose
 //     concatenation cannot be expressed as a single byte slice. Plain
 //     `<v>123</v>` and `<t>hello</t>` payloads are returned as
@@ -497,9 +499,10 @@ bool ScanTextContent(const char* begin, const char* end, const char** p, std::st
   return false;
 }
 
-/// `ScanTextContent` plus entity / `_xHHHH_` decoding: `*text` is the element's
-/// character data, a view into the source when it needs no processing and into
-/// `*decoded` otherwise.
+/// `ScanTextContent` plus XML entity and line-ending normalization: `*text` is
+/// the element's character data, a view into the source when it needs no
+/// processing and into `*decoded` otherwise. OOXML `_xHHHH_` decoding is
+/// semantic-slot-specific and happens after this function where needed.
 bool ReadElementText(const char* begin, const char* end, const char** p, std::string_view tag_name,
                      std::string* decoded, std::string_view* text, Error* err) {
   bool needs_processing = false;
@@ -512,6 +515,18 @@ bool ReadElementText(const char* begin, const char* end, const char** p, std::st
     *text = std::string_view(*decoded);
   }
   return true;
+}
+
+/// Decodes OOXML escapes without invalidating `text` when it currently views
+/// the XML-decoded scratch buffer. The scratch buffer is needed only for slots
+/// whose text actually contains an escape introducer.
+void DecodeOoxmlTextIfPresent(std::string_view* text, std::string* decoded) {
+  if (text->find("_x") == std::string_view::npos) {
+    return;
+  }
+  decoded->clear();
+  AppendOoxmlTextUnescaped(*decoded, *text);
+  *text = std::string_view(*decoded);
 }
 
 /// Encodes a Unicode code point into UTF-8 bytes and appends them to
@@ -795,20 +810,25 @@ bool ReadChildOrClose(const char* begin, const char* end, const char** p, std::s
 }
 
 /// State carried across the per-cell scan so allocations amortise:
-///   * `decoded_value`  - holds entity-decoded / normalized `<v>` body.
+///   * `decoded_value`  - holds XML-decoded / normalized `<v>` body.
 ///   * `inline_string`  - holds the concatenation of `<is><t>` /
 ///                        `<is><r><t>` payloads.
-///   * `decoded_formula` - holds the entity-decoded / normalized `<f>` body
+///   * `decoded_formula` - holds the XML-decoded / normalized `<f>` body
 ///                         when processing is required. Kept distinct from
 ///                         the others so `record->formula` and
 ///                         `record->value` can coexist for the rare
 ///                         well-formed input that has both (e.g. a
 ///                         hand-rolled `t="inlineStr"` cell with an
 ///                         `<f>` child).
+///   * `ooxml_formula` and `ooxml_value` - hold the OOXML-decoded versions of
+///     their slots when an `_xHHHH_` escape is present, keeping the original
+///     XML-decoded views valid until conversion is complete.
 struct CellScratch {
   std::string decoded_value;
   std::string inline_string;
   std::string decoded_formula;
+  std::string ooxml_value;
+  std::string ooxml_formula;
   /// One run per `<rPh>` block encountered while scanning an `<is>`
   /// body, each carrying the surface-text span its kana covers. Cleared
   /// at the start of each `ScanInlineString` call.
@@ -1009,7 +1029,8 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       if (!ReadElementText(begin, end, p, "f", &scratch->decoded_formula, &body, err)) {
         return false;
       }
-      // Strip the leading '=' after decoding, so `&#61;1+1` is handled too.
+      DecodeOoxmlTextIfPresent(&body, &scratch->ooxml_formula);
+      // Strip '=' only after both decodings, so `&#61;1+1` and `_x003D_1+1` match.
       if (!body.empty() && body.front() == '=') {
         body.remove_prefix(1);
       }
@@ -1020,6 +1041,10 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       }
       if (!ReadElementText(begin, end, p, "v", &scratch->decoded_value, &record->value, err)) {
         return false;
+      }
+      // Only `str` caches carry text escapes; other tokens must reach the lexer verbatim.
+      if (record->t == "str") {
+        DecodeOoxmlTextIfPresent(&record->value, &scratch->ooxml_value);
       }
     } else if (child.name == "is") {
       if (child.self_closing) {
