@@ -87,13 +87,18 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
     return;
   }
 
+  // A total across both axes combines row partials; a one-axis layout chains its records.
+  const bool both_axes = !table.row_field_order().empty() && !table.col_field_order().empty();
+
   std::vector<RecordIndexSpan> grand_total_spans;
   const RecordIndexView grand_total_records =
       make_leaf_set_record_view(buckets, surviving_row_leaves, surviving_col_leaves, grand_total_spans);
   for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < result.grand_totals.size(); ++df_idx) {
     const PivotDataField& df = table.data_fields()[df_idx];
     result.grand_totals[df_idx] =
-        aggregate_records_or_blank(df.aggregation, cache, grand_total_records, df.field_index, result);
+        both_axes ? aggregate_row_partials_or_blank(df.aggregation, cache, buckets, surviving_row_leaves,
+                                                    surviving_col_leaves, df.field_index, result)
+                  : aggregate_records_or_blank(df.aggregation, cache, grand_total_records, df.field_index, result);
   }
   if (!result.grand_totals.empty()) {
     result.grand_total = result.grand_totals[0];
@@ -135,8 +140,11 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
     }
     for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.values.size(); ++df_idx) {
       const PivotDataField& df = table.data_fields()[df_idx];
-      subtotal.values[df_idx] = aggregate_records_or_blank(subtotal.aggregation.value_or(df.aggregation), cache,
-                                                           subtotal_records, df.field_index, result);
+      const Aggregation aggregation = subtotal.aggregation.value_or(df.aggregation);
+      subtotal.values[df_idx] =
+          both_axes ? aggregate_row_partials_or_blank(aggregation, cache, buckets, rows, surviving_col_leaves,
+                                                      df.field_index, result)
+                    : aggregate_records_or_blank(aggregation, cache, subtotal_records, df.field_index, result);
     }
     for (std::size_t c = 0; c < subtotal.col_values.size() && c < surviving_col_leaves.size(); ++c) {
       for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.col_values[c].size(); ++df_idx) {
@@ -148,15 +156,13 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
     for (std::size_t cs = 0; cs < subtotal.col_subtotal_values.size() && cs < col_subtotal_leaf_sets.size(); ++cs) {
       const std::vector<std::size_t> cols = ToOriginalLeaves(col_subtotal_leaf_sets[cs], surviving_col_leaves);
       const ColSubtotal& col_subtotal = result.col_subtotals[cs];
-      std::vector<RecordIndexSpan> spans;
-      const RecordIndexView records = make_leaf_set_record_view(buckets, rows, cols, spans);
       for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.col_subtotal_values[cs].size();
            ++df_idx) {
         const PivotDataField& df = table.data_fields()[df_idx];
         const Aggregation aggregation =
             col_subtotal.aggregation.has_value() ? *col_subtotal.aggregation : df.aggregation;
         subtotal.col_subtotal_values[cs][df_idx] =
-            aggregate_records_or_blank(aggregation, cache, records, df.field_index, result);
+            aggregate_row_partials_or_blank(aggregation, cache, buckets, rows, cols, df.field_index, result);
       }
     }
   }
@@ -183,7 +189,10 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
     for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.total.size(); ++df_idx) {
       const PivotDataField& df = table.data_fields()[df_idx];
       const Aggregation aggregation = subtotal.aggregation.has_value() ? *subtotal.aggregation : df.aggregation;
-      subtotal.total[df_idx] = aggregate_records_or_blank(aggregation, cache, total_records, df.field_index, result);
+      subtotal.total[df_idx] =
+          both_axes ? aggregate_row_partials_or_blank(aggregation, cache, buckets, surviving_row_leaves, cols,
+                                                      df.field_index, result)
+                    : aggregate_records_or_blank(aggregation, cache, total_records, df.field_index, result);
     }
   }
 

@@ -9,7 +9,6 @@
 #include <optional>
 #include <vector>
 
-#include "numeric_aggregate_kernels.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
@@ -65,6 +64,140 @@ std::size_t RecordIndexView::record_at(std::size_t position) const {
 
 namespace {
 
+// A non-finite aggregate is #NUM!, as Excel reports it.
+Value finite_number(double value);
+
+/// Accumulator behind every non-Sum aggregation. A leaf adds its records in
+/// source order with Excel's per-step snap; a total across both axes combines
+/// the per-row states raw (no snap, no flush).
+class AggregateState {
+ public:
+  explicit AggregateState(Aggregation aggregation) : aggregation_(aggregation) {}
+
+  void add(const Value& value) {
+    if (value.is_blank()) {
+      return;
+    }
+    ++non_blank_;
+    if (value.is_error()) {
+      if (!error_.is_error()) {
+        error_ = value;
+      }
+      return;
+    }
+    if (!value.is_number()) {
+      return;
+    }
+    const double x = value.as_number();
+    if (numbers_ == 0U) {
+      s_ = x;
+    } else {
+      switch (aggregation_) {
+        case Aggregation::Product:
+          s_ = snap_cancellation(x, flush_subnormal(s_ * x));
+          break;
+        case Aggregation::Min:
+          s_ = snap_cancellation(x, std::min(s_, x));
+          break;
+        case Aggregation::Max:
+          s_ = snap_cancellation(x, std::max(s_, x));
+          break;
+        default:
+          s_ = snap_cancellation(x, s_ + x);
+          break;
+      }
+    }
+    s2_ += x * x;
+    ++numbers_;
+  }
+
+  void combine(const AggregateState& other) {
+    non_blank_ += other.non_blank_;
+    if (!error_.is_error() && other.error_.is_error()) {
+      error_ = other.error_;
+    }
+    s2_ += other.s2_;
+    if (other.numbers_ > 0U) {
+      if (numbers_ == 0U) {
+        s_ = other.s_;
+      } else {
+        switch (aggregation_) {
+          case Aggregation::Product:
+            s_ = s_ * other.s_;
+            break;
+          case Aggregation::Min:
+            s_ = std::min(s_, other.s_);
+            break;
+          case Aggregation::Max:
+            s_ = std::max(s_, other.s_);
+            break;
+          default:
+            s_ = s_ + other.s_;
+            break;
+        }
+      }
+      numbers_ += other.numbers_;
+    }
+  }
+
+  /// True when no non-blank record contributed: the cell renders blank.
+  bool all_blank() const { return non_blank_ == 0U; }
+
+  Value finish() const {
+    if (aggregation_ == Aggregation::Count) {
+      return Value::number(static_cast<double>(non_blank_));
+    }
+    if (aggregation_ == Aggregation::CountNumbers) {
+      return Value::number(static_cast<double>(numbers_));
+    }
+    if (error_.is_error()) {
+      return error_;
+    }
+    const double n = static_cast<double>(numbers_);
+    switch (aggregation_) {
+      case Aggregation::Average:
+        return numbers_ == 0U ? Value::error(ErrorCode::Div0) : finite_number(s_ / n);
+      case Aggregation::Product:
+      case Aggregation::Min:
+      case Aggregation::Max:
+        return finite_number(numbers_ > 0U ? s_ : 0.0);
+      case Aggregation::Var:
+      case Aggregation::StdDev: {
+        if (numbers_ < 2U) {
+          return Value::error(ErrorCode::Div0);
+        }
+        return dispersion((s2_ - s_ * s_ / n) / (n - 1.0), aggregation_ == Aggregation::StdDev);
+      }
+      case Aggregation::VarP:
+      case Aggregation::StdDevP: {
+        if (numbers_ == 0U) {
+          return Value::error(ErrorCode::Div0);
+        }
+        return dispersion((n * s2_ - s_ * s_) / (n * n), aggregation_ == Aggregation::StdDevP);
+      }
+      default:
+        return Value::error(ErrorCode::NA);
+    }
+  }
+
+ private:
+  // Overflow (NaN or infinity) is #NUM!; a negative one-pass residue is 0.
+  static Value dispersion(double variance, bool root) {
+    if (!std::isfinite(variance)) {
+      return Value::error(ErrorCode::Num);
+    }
+    variance = std::max(0.0, variance);
+    return Value::number(root ? std::sqrt(variance) : variance);
+  }
+
+  Aggregation aggregation_;
+  std::size_t non_blank_ = 0;
+  std::size_t numbers_ = 0;
+  Value error_ = Value::blank();
+  double s_ = 0.0;
+  double s2_ = 0.0;
+};
+
 /// Borrowed source of Values. The getter may resolve a cache record or read
 /// an already-materialized vector; aggregation never stores the returned
 /// Value beyond the current synchronous pass.
@@ -87,13 +220,16 @@ struct RecordValueContext {
   std::uint32_t field_index = 0;
 };
 
-Value record_value_get(const void* context, std::size_t index) {
-  const auto& source = *static_cast<const RecordValueContext*>(context);
-  const std::size_t record_index = source.records->record_at(index);
-  if (record_index >= source.cache->records().size()) {
+Value record_cell(const PivotCache& cache, std::size_t record_index, std::uint32_t field_index) {
+  if (record_index >= cache.records().size()) {
     return Value::blank();
   }
-  return cell_value(*source.cache, source.cache->records()[record_index], source.field_index);
+  return cell_value(cache, cache.records()[record_index], field_index);
+}
+
+Value record_value_get(const void* context, std::size_t index) {
+  const auto& source = *static_cast<const RecordValueContext*>(context);
+  return record_cell(*source.cache, source.records->record_at(index), source.field_index);
 }
 
 ValueInputView vector_value_view(const std::vector<Value>& values) {
@@ -106,44 +242,12 @@ ValueInputView record_value_view(const PivotCache& cache, const RecordIndexView&
   return ValueInputView{&context, records.size(), &record_value_get};
 }
 
-Value lift_kernel_result(Expected<double, ErrorCode> result) {
-  if (!result) {
-    return Value::error(result.error());
-  }
-  return Value::number(result.value());
-}
-
 // A non-finite aggregate is #NUM!, as Excel reports it.
 Value finite_number(double value) {
   if (!std::isfinite(value)) {
     return Value::error(ErrorCode::Num);
   }
   return Value::number(value);
-}
-
-// Variance and standard deviation use the contiguous NumericKernel so their
-// two-pass arithmetic keeps the established rounding order. The input scan
-// also checks errors, avoiding a separate callback pass before materializing
-// the numeric slice.
-struct NumericValues {
-  std::vector<double> values;
-  std::optional<Value> error;
-};
-
-NumericValues collect_numeric_values(const ValueInputView& input) {
-  NumericValues result;
-  result.values.reserve(input.size);
-  for (std::size_t index = 0; index < input.size; ++index) {
-    const Value value = input.at(index);
-    if (value.is_error()) {
-      result.error = value;
-      break;
-    }
-    if (const std::optional<double> number = numeric_aggregate_value(value); number.has_value()) {
-      result.values.push_back(*number);
-    }
-  }
-  return result;
 }
 
 Value aggregate_sum(const ValueInputView& values) {
@@ -160,147 +264,15 @@ Value aggregate_sum(const ValueInputView& values) {
   return finite_number(sum);
 }
 
-// Excel's pivot `Count` mirrors COUNTA: any non-blank cell counts,
-// including text, booleans and errors.
-Value aggregate_count(const ValueInputView& values) {
-  double count = 0.0;
-  for (std::size_t index = 0; index < values.size; ++index) {
-    if (!values.at(index).is_blank()) {
-      count += 1.0;
-    }
-  }
-  return Value::number(count);
-}
-
-// Excel's pivot `CountNumbers` mirrors COUNT: only numeric cells
-// (booleans included, per Excel). Errors are classified, never propagated.
-Value aggregate_count_numbers(const ValueInputView& values) {
-  double count = 0.0;
-  for (std::size_t index = 0; index < values.size; ++index) {
-    const Value value = values.at(index);
-    if (value.is_number() || value.is_boolean()) {
-      count += 1.0;
-    }
-  }
-  return Value::number(count);
-}
-
-Value aggregate_average(const ValueInputView& values) {
-  double sum = 0.0;
-  std::size_t count = 0U;
-  for (std::size_t index = 0; index < values.size; ++index) {
-    const Value value = values.at(index);
-    if (value.is_error()) {
-      return value;
-    }
-    if (const std::optional<double> number = numeric_aggregate_value(value); number.has_value()) {
-      sum = snapped_add(*number, sum);
-      ++count;
-    }
-  }
-  if (count == 0U) {
-    return Value::error(ErrorCode::Div0);
-  }
-  return finite_number(sum / static_cast<double>(count));
-}
-
-Value aggregate_max(const ValueInputView& values) {
-  double maximum = -std::numeric_limits<double>::infinity();
-  std::size_t count = 0U;
-  for (std::size_t index = 0; index < values.size; ++index) {
-    const Value value = values.at(index);
-    if (value.is_error()) {
-      return value;
-    }
-    if (const std::optional<double> number = numeric_aggregate_value(value); number.has_value()) {
-      const double x = *number;
-      maximum = (count == 0U || x > maximum) ? x : maximum;
-      ++count;
-    }
-  }
-  // Excel's pivot MAX over an empty/all-text group returns 0.
-  return finite_number(count > 0U ? maximum : 0.0);
-}
-
-Value aggregate_min(const ValueInputView& values) {
-  double minimum = std::numeric_limits<double>::infinity();
-  std::size_t count = 0U;
-  for (std::size_t index = 0; index < values.size; ++index) {
-    const Value value = values.at(index);
-    if (value.is_error()) {
-      return value;
-    }
-    if (const std::optional<double> number = numeric_aggregate_value(value); number.has_value()) {
-      const double x = *number;
-      minimum = (count == 0U || x < minimum) ? x : minimum;
-      ++count;
-    }
-  }
-  return finite_number(count > 0U ? minimum : 0.0);
-}
-
-Value variance_helper(const ValueInputView& values, bool population) {
-  NumericValues numeric = collect_numeric_values(values);
-  if (numeric.error.has_value()) {
-    return *numeric.error;
-  }
-  // Booleans count as 0/1, text and blanks are skipped; too few values yield
-  // #DIV/0! as in Excel's pivot.
-  return lift_kernel_result(numeric_aggregate_kernels::run_variance(numeric.values, !population));
-}
-
-Value aggregate_stddev(const ValueInputView& values, bool population) {
-  NumericValues numeric = collect_numeric_values(values);
-  if (numeric.error.has_value()) {
-    return *numeric.error;
-  }
-  return lift_kernel_result(numeric_aggregate_kernels::run_stdev(numeric.values, !population));
-}
-
-Value aggregate_product(const ValueInputView& values) {
-  double product = 1.0;
-  std::size_t count = 0U;
-  for (std::size_t index = 0; index < values.size; ++index) {
-    const Value value = values.at(index);
-    if (value.is_error()) {
-      return value;
-    }
-    if (const std::optional<double> number = numeric_aggregate_value(value); number.has_value()) {
-      // Like PRODUCT, start from the first value and flush a subnormal step.
-      product = count > 0U ? flush_subnormal(product * *number) : *number;
-      ++count;
-    }
-  }
-  // Excel's pivot PRODUCT on an empty/all-text group returns 0.
-  return finite_number(count > 0U ? product : 0.0);
-}
-
 Value apply_value_aggregation(Aggregation aggregation, const ValueInputView& values) {
-  switch (aggregation) {
-    case Aggregation::Sum:
-      return aggregate_sum(values);
-    case Aggregation::Count:
-      return aggregate_count(values);
-    case Aggregation::Average:
-      return aggregate_average(values);
-    case Aggregation::Max:
-      return aggregate_max(values);
-    case Aggregation::Min:
-      return aggregate_min(values);
-    case Aggregation::Product:
-      return aggregate_product(values);
-    case Aggregation::CountNumbers:
-      return aggregate_count_numbers(values);
-    case Aggregation::StdDev:
-      return aggregate_stddev(values, /*population=*/false);
-    case Aggregation::StdDevP:
-      return aggregate_stddev(values, /*population=*/true);
-    case Aggregation::Var:
-      return variance_helper(values, /*population=*/false);
-    case Aggregation::VarP:
-      return variance_helper(values, /*population=*/true);
+  if (aggregation == Aggregation::Sum) {
+    return aggregate_sum(values);
   }
-  return Value::error(ErrorCode::NA);
+  AggregateState state(aggregation);
+  for (std::size_t index = 0; index < values.size; ++index) {
+    state.add(values.at(index));
+  }
+  return state.finish();
 }
 
 // ---------------------------------------------------------------------------
@@ -343,9 +315,6 @@ Value apply_record_aggregation(Aggregation aggregation, const PivotCache& cache,
 std::optional<double> numeric_aggregate_value(const Value& value) {
   if (value.is_number()) {
     return value.as_number();
-  }
-  if (value.is_boolean()) {
-    return value.as_boolean() ? 1.0 : 0.0;
   }
   return std::nullopt;
 }
@@ -407,13 +376,48 @@ Value aggregate_records_or_blank(Aggregation aggregation, const PivotCache& cach
   if (records.empty()) {
     return Value::blank();
   }
-  return reify(apply_record_aggregation(aggregation, cache, records, field_index), result);
+  AggregateState state(aggregation);
+  for (std::size_t i = 0; i < records.size(); ++i) {
+    state.add(record_cell(cache, records.record_at(i), field_index));
+  }
+  if (state.all_blank()) {
+    return Value::blank();
+  }
+  // Sum keeps its own snapped chain.
+  return aggregation == Aggregation::Sum
+             ? reify(apply_record_aggregation(aggregation, cache, records, field_index), result)
+             : state.finish();
 }
 
 Value aggregate_records_or_blank(Aggregation aggregation, const PivotCache& cache,
                                  const std::vector<std::size_t>& records, std::uint32_t field_index,
                                  PivotResult& result) {
   return aggregate_records_or_blank(aggregation, cache, RecordIndexView(records), field_index, result);
+}
+
+Value aggregate_row_partials_or_blank(Aggregation aggregation, const PivotCache& cache, const RecordBuckets& buckets,
+                                      const std::vector<std::size_t>& row_leaves,
+                                      const std::vector<std::size_t>& col_leaves, std::uint32_t field_index,
+                                      PivotResult& result) {
+  if (aggregation == Aggregation::Sum) {
+    std::vector<RecordIndexSpan> spans;
+    return aggregate_records_or_blank(
+        aggregation, cache, make_leaf_set_record_view(buckets, row_leaves, col_leaves, spans), field_index, result);
+  }
+  AggregateState total(aggregation);
+  for (const std::size_t row_leaf : row_leaves) {
+    AggregateState row(aggregation);
+    for (const std::size_t col_leaf : col_leaves) {
+      if (row_leaf >= buckets.size() || col_leaf >= buckets[row_leaf].size()) {
+        continue;
+      }
+      for (const std::size_t record : buckets[row_leaf][col_leaf]) {
+        row.add(record_cell(cache, record, field_index));
+      }
+    }
+    total.combine(row);
+  }
+  return total.all_blank() ? Value::blank() : total.finish();
 }
 
 namespace {

@@ -555,7 +555,8 @@ TEST(PivotEvaluator, AdjacentLargeValuesMatchExcelPopulationVariance) {
   const Value variance =
       apply_aggregation(Aggregation::VarP, {Value::number(first), Value::number(std::nextafter(first, 0.0))});
   ASSERT_TRUE(variance.is_number()) << variance.debug_to_string();
-  EXPECT_DOUBLE_EQ(variance.as_number(), 1.650920409798954e+268);
+  // One-pass (n*S2 - S1*S1) / n^2, as Excel's pivot computes it, not the two-pass worksheet VARP.
+  EXPECT_DOUBLE_EQ(variance.as_number(), 1.4870169084777831e+284);
 }
 
 TEST(PivotEvaluator, VarAndStdDevSampleNeedTwoValuesElseDiv0) {
@@ -781,11 +782,11 @@ TEST(PivotAggregator, BorrowedRecordViewsMatchMaterializedValuesForEveryAggregat
     expect_bitwise_value_equal(expected, borrowed);
   }
 
-  // Pinned source-order results: 1e16 + 1 rounds back to 1e16 before -1e16 cancels it.
-  expect_bitwise_value_equal(apply_record_aggregation(Aggregation::Sum, cache, multi, 0), Value::number(1.0));
-  expect_bitwise_value_equal(apply_record_aggregation(Aggregation::Average, cache, multi, 0), Value::number(0.25));
+  // Pinned bucket-order results: 1e16 + 1 rounds back to 1e16 before -1e16 cancels it; the boolean is non-numeric.
+  expect_bitwise_value_equal(apply_record_aggregation(Aggregation::Sum, cache, multi, 0), Value::number(0.0));
+  expect_bitwise_value_equal(apply_record_aggregation(Aggregation::Average, cache, multi, 0), Value::number(0.0));
   expect_bitwise_value_equal(apply_record_aggregation(Aggregation::Count, cache, multi, 0), Value::number(5.0));
-  expect_bitwise_value_equal(apply_record_aggregation(Aggregation::CountNumbers, cache, multi, 0), Value::number(4.0));
+  expect_bitwise_value_equal(apply_record_aggregation(Aggregation::CountNumbers, cache, multi, 0), Value::number(3.0));
   expect_bitwise_value_equal(apply_record_aggregation(Aggregation::Max, cache, multi, 0), Value::number(1.0e16));
   expect_bitwise_value_equal(apply_record_aggregation(Aggregation::Min, cache, multi, 0), Value::number(-1.0e16));
 }
@@ -837,8 +838,11 @@ TEST(PivotAggregator, BorrowedRecordViewsPreserveFirstErrorsAndSparseBlankSemant
   EXPECT_TRUE(sparse_blank.is_blank());
   const std::vector<std::size_t> one_blank{3};
   const Value one_blank_result = aggregate_records_or_blank(Aggregation::Sum, cache, one_blank, 0, result);
-  ASSERT_TRUE(one_blank_result.is_number());
-  EXPECT_DOUBLE_EQ(one_blank_result.as_number(), 0.0);
+  EXPECT_TRUE(one_blank_result.is_blank());
+  const std::vector<std::size_t> blank_and_text{3, 2};
+  const Value text_result = aggregate_records_or_blank(Aggregation::Sum, cache, blank_and_text, 0, result);
+  ASSERT_TRUE(text_result.is_number());
+  EXPECT_DOUBLE_EQ(text_result.as_number(), 0.0);
 }
 
 }  // namespace

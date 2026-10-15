@@ -7,9 +7,8 @@
 // `CountNumbers` are the exception -- they classify cells instead of
 // coercing values, so an error is counted (COUNTA) or passed over
 // (COUNT) but never becomes the result, which is what Excel reports.
-// Booleans coerce numerically (TRUE=1, FALSE=0) for arithmetic
-// aggregations; for `Count`, booleans are non-blank so they count, which
-// also matches Excel's COUNTA on a boolean column.
+// Booleans and text are non-numeric for every aggregation; for `Count` they
+// are non-blank so they count, which matches Excel's COUNTA.
 
 #ifndef FORMULON_PIVOT_AGGREGATOR_H_
 #define FORMULON_PIVOT_AGGREGATOR_H_
@@ -95,7 +94,8 @@ Value apply_record_aggregation(Aggregation agg, const PivotCache& cache, const s
                                std::uint32_t field_index);
 
 /// Numeric coercion of a single aggregate cell. Returns the underlying
-/// double when `v` is a `Number` or `Bool`; `nullopt` otherwise.
+/// double when `v` is a `Number`; booleans and text are non-numeric in a
+/// pivot, so `nullopt` for them and everything else.
 std::optional<double> numeric_aggregate_value(const Value& v);
 
 /// Builds a borrowed concatenation of `buckets[row][col]` in column-major
@@ -125,14 +125,21 @@ void recompute_sum_totals_from_cells(const PivotTable& table, PivotResult& resul
                                      const std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets);
 
 /// Aggregates cache records while preserving the sparse-intersection rule:
-/// no record positions means a blank result, whereas one or more positions
-/// (including a position whose field is Blank) use normal aggregation
-/// identities and error semantics.
+/// no record positions or only blank values means a blank result; otherwise
+/// normal aggregation identities and error semantics apply.
 Value aggregate_records_or_blank(Aggregation aggregation, const PivotCache& cache, const RecordIndexView& records,
                                  std::uint32_t field_index, PivotResult& result);
 Value aggregate_records_or_blank(Aggregation aggregation, const PivotCache& cache,
                                  const std::vector<std::size_t>& records, std::uint32_t field_index,
                                  PivotResult& result);
+
+/// A total across both axes: every row leaf's one-axis state over `col_leaves`
+/// is combined raw (no snap, no flush) top to bottom. Sum keeps its record
+/// chain, since its totals are rebuilt from the rendered cells afterwards.
+Value aggregate_row_partials_or_blank(Aggregation aggregation, const PivotCache& cache, const RecordBuckets& buckets,
+                                      const std::vector<std::size_t>& row_leaves,
+                                      const std::vector<std::size_t>& col_leaves, std::uint32_t field_index,
+                                      PivotResult& result);
 
 }  // namespace formulon::pivot
 

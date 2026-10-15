@@ -366,6 +366,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/pivot/pivot_evaluator_ordering_test.cpp
   unit/pivot/pivot_evaluator_totals_test.cpp
   unit/pivot/pivot_sum_snap_test.cpp
+  unit/pivot/pivot_aggregation_totals_test.cpp
   unit/pivot/pivot_locale_test.cpp
   unit/pivot/pivot_filter_date_test.cpp
   unit/pivot/pivot_filter_label_test.cpp
