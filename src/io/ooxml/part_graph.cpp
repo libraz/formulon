@@ -53,40 +53,6 @@ Expected<std::vector<DrawingRel>, Error> parse_part_rels(const std::vector<std::
   return rels;
 }
 
-bool referenced(const Workbook& wb, const std::vector<PassthroughPart>& parts, const std::string& path) {
-  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    const Sheet& sheet = wb.sheet(i);
-    if (sheet.drawing_rel_target() == path) {
-      return true;
-    }
-    for (const UnknownRelationship& rel : sheet.unknown_relationships()) {
-      if (!rel.target_external && rel.target == path) {
-        return true;
-      }
-    }
-  }
-  for (const UnknownRelationship& rel : wb.unknown_workbook_rels()) {
-    if (!rel.target_external && (rel.target == path || "xl/" + rel.target == path)) {
-      return true;
-    }
-  }
-  for (const PassthroughPart& part : parts) {
-    if (!strings::ends_with(part.path, ".rels")) {
-      continue;
-    }
-    auto rels = parse_part_rels(part.bytes, dir_of(dir_of(part.path)));
-    if (!rels) {
-      return true;  // An unreadable rels part might reference it.
-    }
-    for (const DrawingRel& rel : rels.value()) {
-      if (!rel.external && rel.target == path) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 void remove_orphans(Workbook& wb, std::vector<std::string> candidates) {
   const std::vector<PassthroughPart>& parts = wb.passthrough_parts();
   if (candidates.empty() || parts.empty()) {

@@ -39,10 +39,6 @@ struct DrawingRel {
 Expected<std::vector<DrawingRel>, Error> parse_part_rels(const std::vector<std::uint8_t>& bytes,
                                                          std::string_view owner_dir);
 
-/// True when a sheet relationship, a workbook relationship or any rels part
-/// in `parts` targets `path`. An unreadable rels part counts as a reference.
-bool referenced(const Workbook& wb, const std::vector<PassthroughPart>& parts, const std::string& path);
-
 /// Drops each candidate part nothing references any more, with its rels part,
 /// and then the targets only that rels part referenced.
 void remove_orphans(Workbook& wb, std::vector<std::string> candidates);

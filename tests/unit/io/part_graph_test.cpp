@@ -67,20 +67,6 @@ TEST(PartGraph, MalformedRelsAreRefused) {
   EXPECT_EQ(escaping.error().code, FormulonErrorCode::kIoDrawingUnparseable);
 }
 
-TEST(PartGraph, ReferencedCountsSheetWorkbookAndRelsLinks) {
-  Workbook wb = Workbook::create();
-  wb.sheet(0).set_drawing_rel_target("xl/drawings/drawing1.xml");
-  wb.set_unknown_workbook_rels({UnknownRelationship{"rId9", "urn:t", "theme/theme1.xml", false}});
-  ASSERT_TRUE(static_cast<bool>(
-      wb.add_passthrough_part(PassthroughPart("xl/drawings/_rels/drawing1.xml.rels", "", ToBytes(kRels)))));
-  const std::vector<PassthroughPart>& parts = wb.passthrough_parts();
-  EXPECT_TRUE(io::ooxml::referenced(wb, parts, "xl/drawings/drawing1.xml"));
-  EXPECT_TRUE(io::ooxml::referenced(wb, parts, "xl/theme/theme1.xml"));
-  EXPECT_TRUE(io::ooxml::referenced(wb, parts, "xl/media/image1.png"));
-  EXPECT_FALSE(io::ooxml::referenced(wb, parts, "xl/media/image2.png"));
-  EXPECT_FALSE(io::ooxml::referenced(wb, parts, "https://example.com/a"));
-}
-
 TEST(PartGraph, RemoveOrphansFollowsTheChain) {
   // a.xml -> (its rels) -> b.xml -> (its rels) -> c.xml; kept.xml is also
   // reached from a rels part that stays.
