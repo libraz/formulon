@@ -44,12 +44,6 @@ bool append_range_sourced_value(const FunctionDef& def, const Value& value, std:
 bool append_range_sourced_values(const FunctionDef& def, const Value* cells, std::size_t count,
                                  std::vector<Value>* values, Value* out_err);
 
-/// Applies the same filter while compacting retained values into an arena
-/// buffer. `out_cells` must have room for `count` values; the retained count
-/// may be zero after a valid non-empty input.
-bool filter_range_sourced_values(const FunctionDef& def, const Value* cells, std::size_t count, Value* out_cells,
-                                 std::size_t* out_count, Value* out_err);
-
 /// Resolution result for a range-shaped argument: a flat row-major vector
 /// of cell `Value`s plus the rectangle's shape. A 1-cell `Ref` produces
 /// `rows = cols = 1`; a `RangeOp` produces the computed shape; a flattened

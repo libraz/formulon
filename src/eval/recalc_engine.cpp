@@ -529,7 +529,7 @@ Expected<void, Error> RecalcEngine::evaluate_cyclic_component_locked(const Seria
     const bool settled = !closes_through_dynamic_edge(component, graph_) &&
                          settle_component_by_reads(pass.workbook, cells, evaluate_with, commit);
     if (arena_->exhausted()) {
-      return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
+      return make_error(FormulonErrorCode::kOutOfMemory, pass.oom_message);
     }
     if (settled) {
       pass.stats.cells_evaluated += static_cast<std::uint32_t>(cells.size());
@@ -936,7 +936,6 @@ partial_recalc_next_wave:
   // Phantoms of dynamic-array spills are intentionally NOT seeded
   // separately — the spill anchor is the formula cell, and resolving the
   // anchor forces the spill to refresh.
-  const Sheet& view_sheet = workbook.sheet(viewport.sheet_id);
   std::vector<CellNodeId> seeds;
   seeds.reserve(static_cast<std::size_t>(viewport_rect.size()));
   for (auto [row, col] : viewport_rect) {
@@ -946,7 +945,6 @@ partial_recalc_next_wave:
     // edges (e.g. a formula on it that has been cleared but whose
     // dependents have not been re-registered yet). The closure walk
     // below tolerates absent nodes.
-    (void)view_sheet;
     seeds.push_back(CellNodeId{viewport.sheet_id, row, col});
   }
 

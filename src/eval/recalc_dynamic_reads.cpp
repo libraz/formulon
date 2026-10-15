@@ -119,10 +119,6 @@ void RecalcEngine::DynamicReadPass::discover_pending_candidates(
         stale_.push_back(read.reader);
       }
     }
-    // Drop an empty entry so the next wave does not visit it.
-    if (pending != nullptr && pending->empty()) {
-      pending_candidates_.erase(read.reader);
-    }
   }
 }
 

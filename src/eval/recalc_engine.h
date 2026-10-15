@@ -381,10 +381,6 @@ class RecalcEngine {
     progress_user_data_ = user_data;
   }
 
-  /// Returns the currently installed iterative progress callback, or
-  /// `nullptr` when none is active.
-  IterativeProgressCb iterative_progress() const noexcept { return progress_cb_; }
-
  private:
   // The parallel scheduler reads `graph_` / `volatiles_` and mutates
   // `dirty_` / `arena_` via the same algorithm as `recalc()`. Granting

@@ -547,23 +547,6 @@ bool append_range_sourced_values(const FunctionDef& def, const Value* cells, std
   return true;
 }
 
-bool filter_range_sourced_values(const FunctionDef& def, const Value* cells, std::size_t count, Value* out_cells,
-                                 std::size_t* out_count, Value* out_err) {
-  std::size_t kept = 0;
-  for (std::size_t i = 0; i < count; ++i) {
-    Value filtered = Value::blank();
-    bool keep = false;
-    if (!filter_range_sourced_value(def, cells[i], &filtered, &keep, out_err)) {
-      return false;
-    }
-    if (keep) {
-      out_cells[kept++] = filtered;
-    }
-  }
-  *out_count = kept;
-  return true;
-}
-
 bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, std::vector<Value>* out) {
   const Workbook* wb = ctx.workbook();

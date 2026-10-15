@@ -268,9 +268,13 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
       // that reads back into itself is one; `settle_component_by_reads` is
       // the rule the serial drivers apply too.
       const bool dynamic_cycle = obs.log != nullptr && closes_through_dynamic_edge(component, graph);
-      if (!dynamic_cycle && settle_component_by_reads(wb, cells, evaluate_with, commit)) {
+      const bool settled = !dynamic_cycle && settle_component_by_reads(wb, cells, evaluate_with, commit);
+      if (arena.exhausted()) {
+        out.arena_exhausted = true;
+        return out;
+      }
+      if (settled) {
         out.cells_evaluated += cells.size();
-        out.arena_exhausted = arena.exhausted();
         return out;
       }
       // Otherwise every member surfaces #REF!, except that a cycle closing
