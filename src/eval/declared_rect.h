@@ -28,6 +28,7 @@
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"  // formulon::ErrorCode
@@ -139,10 +140,12 @@ namespace detail {
 /// simply never read, matching `declared_rect`'s own rule that a
 /// whole-column endpoint's `row` is a structure default.
 struct RangeChainFold {
-  const parser::Reference* first = nullptr;
-  /// The first leaf whose sheet qualifier differs from `first`'s, so the
-  /// synthesised pair carries the disagreement into `effective_range_sheet`
-  /// rather than restating its cross-sheet rule here.
+  /// First nonempty qualifier, independent of the first coordinate leaf.
+  /// Empty qualifiers inherit and must not hide a later sheet conflict.
+  const parser::Reference* representative_sheet = nullptr;
+  /// First nonempty qualifier that names a different sheet from
+  /// `representative_sheet`, so the synthesised pair carries the conflict
+  /// into `effective_range_sheet` rather than restating its rule here.
   const parser::Reference* other_sheet = nullptr;
   /// Extents in the coordinates each leaf actually bounds: a whole-column
   /// leaf spans every row, a whole-row leaf spans every column.
@@ -168,17 +171,20 @@ inline bool fold_range_chain(const parser::AstNode& node, RangeChainFold* acc) {
     const std::uint32_t leaf_col_last = ref.is_full_row ? Sheet::kMaxCols - 1U : ref.col;
     acc->any_full_col = acc->any_full_col || ref.is_full_col;
     acc->any_full_row = acc->any_full_row || ref.is_full_row;
+    if (!ref.sheet.empty()) {
+      if (acc->representative_sheet == nullptr) {
+        acc->representative_sheet = &ref;
+      } else if (acc->other_sheet == nullptr && !sheet_names::equal(acc->representative_sheet->sheet, ref.sheet)) {
+        acc->other_sheet = &ref;
+      }
+    }
     if (!acc->seen) {
-      acc->first = &ref;
       acc->row_first = leaf_row_first;
       acc->row_last = leaf_row_last;
       acc->col_first = leaf_col_first;
       acc->col_last = leaf_col_last;
       acc->seen = true;
       return true;
-    }
-    if (acc->other_sheet == nullptr && ref.sheet != acc->first->sheet) {
-      acc->other_sheet = &ref;
     }
     acc->row_first = std::min(acc->row_first, leaf_row_first);
     acc->row_last = std::max(acc->row_last, leaf_row_last);
@@ -254,10 +260,16 @@ inline bool declared_rect_endpoint_pair(const parser::AstNode& node, parser::Ref
     rhs.row = acc.row_last;
     rhs.col = acc.col_last;
   }
-  lhs.sheet = acc.first->sheet;
-  lhs.sheet_quoted = acc.first->sheet_quoted;
-  rhs.sheet = acc.other_sheet != nullptr ? acc.other_sheet->sheet : acc.first->sheet;
-  rhs.sheet_quoted = acc.other_sheet != nullptr ? acc.other_sheet->sheet_quoted : acc.first->sheet_quoted;
+  const parser::Reference* lhs_sheet = acc.representative_sheet;
+  const parser::Reference* rhs_sheet = acc.other_sheet != nullptr ? acc.other_sheet : acc.representative_sheet;
+  if (lhs_sheet != nullptr) {
+    lhs.sheet = lhs_sheet->sheet;
+    lhs.sheet_quoted = lhs_sheet->sheet_quoted;
+  }
+  if (rhs_sheet != nullptr) {
+    rhs.sheet = rhs_sheet->sheet;
+    rhs.sheet_quoted = rhs_sheet->sheet_quoted;
+  }
   *out_lhs = lhs;
   *out_rhs = rhs;
   return true;

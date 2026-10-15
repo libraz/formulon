@@ -132,6 +132,13 @@ TEST(DepExtractor, ChainedRangeRegistersBoundingBox) {
   EXPECT_EQ(Sorted(ExtractFrom("SUM(A1:B2:C3)", wb).cell_deps), RectCells(0U, 0U, 2U, 0U, 2U));
 }
 
+TEST(DepExtractor, ChainedRangeDoesNotRegisterABoundingBoxAcrossSheets) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  const ExtractedDeps deps = ExtractFrom("SUM(A1:Sheet1!A2:Sheet2!A1000000)", wb);
+  EXPECT_FALSE(HasRangeDep(deps, CellRangeDependency{0U, 0U, 999999U, 0U, 0U}));
+}
+
 TEST(DepExtractor, DynamicEndpointOverWholeColumnStaysCompact) {
   const Workbook wb = Workbook::create();
   const ExtractedDeps deps = ExtractFrom("SUM(A1:INDEX(C:C,5))", wb);

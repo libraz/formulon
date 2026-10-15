@@ -659,6 +659,30 @@ TEST(BuiltinsShapeChainedRange, ChainedRangeAggregatesOverTheBoundingBox) {
   EXPECT_DOUBLE_EQ(sum.as_number(), 15.0);
 }
 
+TEST(BuiltinsShapeChainedRange, EveryDistinctQualifiedSheetIsValidated) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(1, 0, Value::number(2.0));
+  sheet.set_cell_value(2, 0, Value::number(3.0));
+
+  for (const char* src : {"=SUM(Sheet1!A1:A2:Sheet2!A3)", "=SUM(A1:Sheet1!A2:Sheet2!A3)",
+                          "=SUM(Sheet1!A1:sHeEt1!A2:Sheet2!A3)", "=SUM(A1:sHeEt1!A2:Sheet2!A3)"}) {
+    const Value value = EvalSourceIn(src, wb, sheet);
+    ASSERT_TRUE(value.is_error()) << src;
+    EXPECT_EQ(value.as_error(), ErrorCode::Ref) << src;
+  }
+
+  // Empty qualifiers inherit, and spelling-only case changes name the same
+  // sheet. Neither should hide a later conflicting sheet.
+  for (const char* src : {"=SUM(Sheet1!A1:A2:A3)", "=SUM(A1:Sheet1!A2:A3)", "=SUM(Sheet1!A1:sHeEt1!A2:A3)"}) {
+    const Value value = EvalSourceIn(src, wb, sheet);
+    ASSERT_TRUE(value.is_number()) << src;
+    EXPECT_DOUBLE_EQ(value.as_number(), 6.0) << src;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
