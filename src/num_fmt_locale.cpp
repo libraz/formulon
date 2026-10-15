@@ -1,7 +1,8 @@
 //
 // Per-locale built-in number formats, measured on Mac Excel 365 16.113.4 by
 // reading NumberFormatLocal and the displayed text of ids 0-163 in each of the
-// fourteen UI locales. Windows profiles reuse the Mac table.
+// fourteen UI locales. Windows profiles reuse the Mac table; Windows Excel
+// 16.0.20430 in ja-JP renders every id 0-163 the same as Mac.
 //
 // Only ids whose rendering differs from the ECMA-376 table in `styles.cpp` are
 // listed; every other id falls through to that table. Two shared rules keep the per-locale lists short: outside th-TH
