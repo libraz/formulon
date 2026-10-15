@@ -330,10 +330,11 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
       }
       format_fixed_digits(mantissa, frac_digits, &negative, &int_digits, &frac_digits_str);
     }
-    // A zero mantissa fills every `0` / `#` integer placeholder with 0 (`##0.0E+0` -> 000.0E+0).
+    // A zero mantissa fills every `0` / `#` integer placeholder with 0 (`##0.0E+0` -> 000.0E+0), and a grouped
+    // one keeps the four-digit floor (`0,00E+00` -> 0,000E+00).
     if (mantissa == 0.0) {
-      int_digits.assign(static_cast<std::size_t>(std::max(1, section.integer_zero_digits + section.integer_opt_digits)),
-                        '0');
+      const int fill = std::max(1, section.integer_zero_digits + section.integer_opt_digits);
+      int_digits.assign(static_cast<std::size_t>(section.thousands_separator ? std::max(fill, 4) : fill), '0');
     }
   } else {
     format_fixed_digits(scaled, frac_digits, &negative, &int_digits, &frac_digits_str);
@@ -347,18 +348,18 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
     negative = scaled < 0.0;
   }
 
+  // An integer part of zero is insignificant: each `0` placeholder prints its own 0 and a `?` pads a space
+  // (`TEXT(0,"00?")` -> `00 `).
+  if (!section.has_scientific && int_digits == "0") {
+    int_digits.clear();
+  }
+
   // Pad integer digits to the required minimum imposed by `0` placeholders.
   // `?` reserves a visual position but must render a space rather than a zero
   // when the value has fewer integer digits (e.g. `TEXT(5,"?0")` -> ` 5`).
   const int int_min = section.integer_zero_digits;
-  if (static_cast<int>(int_digits.size()) < int_min) {
+  if (!int_digits.empty() && static_cast<int>(int_digits.size()) < int_min) {
     int_digits.insert(0, static_cast<std::size_t>(int_min) - int_digits.size(), '0');
-  }
-
-  // Remove a redundant leading "0" for values with an integer part of zero
-  // when the format has no `0` integer placeholder; a `?` then pads a space.
-  if (section.integer_zero_digits == 0 && !section.has_scientific && int_digits == "0") {
-    int_digits.clear();
   }
 
   // Fraction adjustment: the formatter produced exactly `frac_digits` chars.
@@ -479,9 +480,12 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
   if (negative) {
     result.push_back('-');
   }
-  // Cursor into the pure integer digit stream (0-based, left-to-right).
-  // Used to decide when to prepend a thousands-separator comma.
-  std::size_t int_cursor = 0;
+  // Integer positions (0-based, left-to-right) place the thousands separators: there are as many as digits or
+  // placeholders, and a separator after a `?` pad is a space (`TEXT(-7,"??0,0")` -> `-   07`).
+  enum class IntFill { kNone, kDigit, kPad };
+  const std::size_t n_int_positions = std::max(n_int_digits, n_int_tokens);
+  std::size_t int_position = 0;
+  IntFill prev_int_fill = IntFill::kNone;
   std::size_t int_token_cursor = 0;
   std::size_t frac_cursor = 0;
   std::size_t exponent_token_cursor = 0;
@@ -489,12 +493,20 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
   bool in_exponent = false;
 
   const LocaleFacts& facts = locale_facts(eval::current_eval_profile());
-  auto emit_int_digit_char = [&](char digit) {
-    if (section.thousands_separator && int_cursor > 0 && (n_int_digits - int_cursor) % 3 == 0) {
-      result.push_back(facts.group_separator);
+  auto open_int_position = [&](IntFill fill) {
+    if (section.thousands_separator && int_position > 0 && (n_int_positions - int_position) % 3 == 0) {
+      if (prev_int_fill == IntFill::kDigit) {
+        result.push_back(facts.group_separator);
+      } else if (prev_int_fill == IntFill::kPad) {
+        result.push_back(' ');
+      }
     }
+    prev_int_fill = fill;
+    ++int_position;
+  };
+  auto emit_int_digit_char = [&](char digit) {
+    open_int_position(IntFill::kDigit);
     append_digit_dbnum(result, section.digit_style, digit);
-    ++int_cursor;
   };
 
   // Helper: emit a single fractional digit with DBNum substitution.
@@ -546,9 +558,12 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
               // `0` forces a literal '0' when the digit stream is exhausted.
               emit_int_digit_char('0');
             } else if (tk.kind == Tok::DigitPad) {
+              open_int_position(IntFill::kPad);
               result.push_back(' ');
+            } else {
+              // `#` emits nothing.
+              open_int_position(IntFill::kNone);
             }
-            // `#` emits nothing.
           }
           ++int_token_cursor;
         }

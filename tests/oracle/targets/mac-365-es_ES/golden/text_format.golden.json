@@ -2,11 +2,11 @@
   "suite": "text_format",
   "description": "TEXT format-string engine (number + date/time formatting)",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.113.4",
     "excel_locale": "es-ES",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T08:22:49Z"
+    "generated_at": "2026-10-15T00:38:32Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -812,6 +812,564 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_qmark_00",
+      "formula": "=TEXT(0, \"0.0?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "00 "
+      }
+    },
+    {
+      "id": "text_qmark_01",
+      "formula": "=TEXT(0, \"?.??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "   "
+      }
+    },
+    {
+      "id": "text_qmark_02",
+      "formula": "=TEXT(0.5, \"?.??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "  1"
+      }
+    },
+    {
+      "id": "text_qmark_03",
+      "formula": "=TEXT(5, \"???\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "  5"
+      }
+    },
+    {
+      "id": "text_qmark_04",
+      "formula": "=TEXT(0, \"???\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "   "
+      }
+    },
+    {
+      "id": "text_qmark_05",
+      "formula": "=TEXT(-0.5, \"?.??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-  1"
+      }
+    },
+    {
+      "id": "text_qmark_06",
+      "formula": "=TEXT(1.05, \"0.??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0 1"
+      }
+    },
+    {
+      "id": "text_qmark_07",
+      "formula": "=TEXT(0.1, \"#.??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "  "
+      }
+    },
+    {
+      "id": "text_qmark_08",
+      "formula": "=TEXT(0, \"#.??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "  "
+      }
+    },
+    {
+      "id": "text_qmark_09",
+      "formula": "=TEXT(10, \"??0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 10"
+      }
+    },
+    {
+      "id": "text_qmark_10",
+      "formula": "=TEXT(0.001, \"0.0?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "00 "
+      }
+    },
+    {
+      "id": "text_qmark_11",
+      "formula": "=TEXT(1234.5, \"#,???.??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1234,5    "
+      }
+    },
+    {
+      "id": "text_qmark_12",
+      "formula": "=TEXT(0, \"?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " "
+      }
+    },
+    {
+      "id": "text_qmark_13",
+      "formula": "=TEXT(0.04, \"0.??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0  "
+      }
+    },
+    {
+      "id": "text_qmark_14",
+      "formula": "=TEXT(12.3, \"??.??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "   12"
+      }
+    },
+    {
+      "id": "text_qmark_15",
+      "formula": "=TEXT(-7, \"??0.0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-   07"
+      }
+    },
+    {
+      "id": "text_exp_zero_00",
+      "formula": "=TEXT(0, \"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000E+00"
+      }
+    },
+    {
+      "id": "text_exp_zero_01",
+      "formula": "=TEXT(1, \"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "001E+00"
+      }
+    },
+    {
+      "id": "text_exp_zero_02",
+      "formula": "=TEXT(-1, \"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-001E+00"
+      }
+    },
+    {
+      "id": "text_exp_zero_03",
+      "formula": "=TEXT(12345, \"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "001E+04"
+      }
+    },
+    {
+      "id": "text_exp_zero_04",
+      "formula": "=TEXT(0.00012345, \"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "001E-04"
+      }
+    },
+    {
+      "id": "text_exp_zero_05",
+      "formula": "=TEXT(1E+100, \"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "001E+100"
+      }
+    },
+    {
+      "id": "text_exp_zero_06",
+      "formula": "=TEXT(1E-100, \"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "001E-100"
+      }
+    },
+    {
+      "id": "text_exp_zero_07",
+      "formula": "=TEXT(9.999E+9, \"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "100E+08"
+      }
+    },
+    {
+      "id": "text_exp_zero_08",
+      "formula": "=TEXT(0, \"0.0E+0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000E+0"
+      }
+    },
+    {
+      "id": "text_exp_zero_09",
+      "formula": "=TEXT(0, \"0E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0E+00"
+      }
+    },
+    {
+      "id": "text_exp_zero_10",
+      "formula": "=TEXT(12345, \"0.00E-00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "001E04"
+      }
+    },
+    {
+      "id": "text_exp_zero_11",
+      "formula": "=TEXT(0.00012345, \"0.00E-00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "001E-04"
+      }
+    },
+    {
+      "id": "text_exp_zero_12",
+      "formula": "=TEXT(5, \"0.00E+000\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "005E+000"
+      }
+    },
+    {
+      "id": "text_exp_zero_13",
+      "formula": "=TEXT(123456, \"00.0E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "012E+04"
+      }
+    },
+    {
+      "id": "text_exp_zero_14",
+      "formula": "=TEXT(0.5, \"#.##E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5.000E-04"
+      }
+    },
+    {
+      "id": "text_exp_zero_15",
+      "formula": "=TEXT(0, \"#.##E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000E+00"
+      }
+    },
+    {
+      "id": "text_exp_zero_16",
+      "formula": "=TEXT(12345, \"##0.0E+0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "01E+4"
+      }
+    },
+    {
+      "id": "text_exp_zero_17",
+      "formula": "=TEXT(0.00012345, \"##0.0E+0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "01E-4"
+      }
+    },
+    {
+      "id": "text_exp_zero_18",
+      "formula": "=TEXT(0, \"##0.0E+0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000E+0"
+      }
+    },
+    {
+      "id": "text_exp_zero_19",
+      "formula": "=TEXT(1, \"##0.0E+0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "01E+0"
+      }
+    },
+    {
+      "id": "text_exp_zero_20",
+      "formula": "=TEXT(-123456, \"##0.0E+0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-12E+4"
+      }
+    },
+    {
+      "id": "text_exp_zero_21",
+      "formula": "=TEXT(999999, \"##0.0E+0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "100E+4"
+      }
+    },
+    {
+      "id": "text_exp_zero_22",
+      "formula": "=TEXT(1234567.89, \"##0.0E+0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123E+4"
+      }
+    },
+    {
+      "id": "text_exp_zero_23",
+      "formula": "=TEXT(0.000999, \"##0.0E+0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "10E-4"
+      }
+    },
+    {
+      "id": "text_fraction_conv_00",
+      "formula": "=TEXT(PI(), \"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3 1/7"
+      }
+    },
+    {
+      "id": "text_fraction_conv_01",
+      "formula": "=TEXT(PI(), \"# ??/??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3  1/7 "
+      }
+    },
+    {
+      "id": "text_fraction_conv_02",
+      "formula": "=TEXT(PI(), \"# ???/???\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3  16/113"
+      }
+    },
+    {
+      "id": "text_fraction_conv_03",
+      "formula": "=TEXT(EXP(1), \"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2 5/7"
+      }
+    },
+    {
+      "id": "text_fraction_conv_04",
+      "formula": "=TEXT(EXP(1), \"# ??/??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2 51/71"
+      }
+    },
+    {
+      "id": "text_fraction_conv_05",
+      "formula": "=TEXT(EXP(1), \"# ???/???\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2 385/536"
+      }
+    },
+    {
+      "id": "text_fraction_conv_06",
+      "formula": "=TEXT(SQRT(2), \"# ??/??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1 29/70"
+      }
+    },
+    {
+      "id": "text_fraction_conv_07",
+      "formula": "=TEXT(SQRT(2), \"# ???/???\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1 408/985"
+      }
+    },
+    {
+      "id": "text_fraction_conv_08",
+      "formula": "=TEXT(0.333333, \"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 1/3"
+      }
+    },
+    {
+      "id": "text_fraction_conv_09",
+      "formula": "=TEXT(0.6667, \"# ??/??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "  2/3 "
+      }
+    },
+    {
+      "id": "text_fraction_conv_10",
+      "formula": "=TEXT(0.142857, \"# ???/???\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "   1/7  "
+      }
+    },
+    {
+      "id": "text_fraction_conv_11",
+      "formula": "=TEXT(0.999, \"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1    "
+      }
+    },
+    {
+      "id": "text_fraction_conv_12",
+      "formula": "=TEXT(0.001, \"# ??/??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0      "
+      }
+    },
+    {
+      "id": "text_fraction_conv_13",
+      "formula": "=TEXT(-1/3, \"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "- 1/3"
+      }
+    },
+    {
+      "id": "text_fraction_conv_14",
+      "formula": "=TEXT(3.14159, \"# ???/???\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3  16/113"
+      }
+    },
+    {
+      "id": "text_fraction_conv_15",
+      "formula": "=TEXT(0.98765, \"# ??/??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 80/81"
+      }
+    },
+    {
+      "id": "text_fraction_conv_16",
+      "formula": "=TEXT(123.456, \"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123 1/2"
+      }
+    },
+    {
+      "id": "text_fraction_conv_17",
+      "formula": "=TEXT(123.456, \"# ???/???\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123  57/125"
+      }
+    },
+    {
+      "id": "text_fraction_conv_18",
+      "formula": "=TEXT(-0.7, \"# ??/??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-  7/10"
+      }
+    },
+    {
+      "id": "text_fraction_conv_19",
+      "formula": "=TEXT(0, \"# ??/??\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0      "
+      }
+    },
+    {
+      "id": "text_fraction_conv_20",
+      "formula": "=TEXT(0, \"# ???/???\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0        "
+      }
+    },
+    {
+      "id": "text_fraction_conv_21",
+      "formula": "=TEXT(-0, \"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0    "
       }
     }
   ]
