@@ -6,9 +6,11 @@
 #include <string_view>
 #include <vector>
 
+#include "chart/chart_ns.h"
 #include "drawing/drawing_edit.h"
 #include "gtest/gtest.h"
 #include "io/ooxml/part_dom.h"
+#include "io/xml_utils.h"
 #include "parser/ref_transforms.h"
 #include "passthrough_part.h"
 #include "pugixml.hpp"
@@ -65,6 +67,22 @@ pugi::xml_document Parse(const std::string& xml) {
   return doc;
 }
 
+std::string_view NamespaceUri(const pugi::xml_node& node) {
+  const std::string_view name = node.name();
+  const std::size_t colon = name.find(':');
+  const std::string_view prefix = colon == std::string_view::npos ? std::string_view() : name.substr(0, colon);
+  return io::find_namespace_binding(node, prefix);
+}
+
+pugi::xml_node FirstElementChild(const pugi::xml_node& parent) {
+  for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
+    if (child.type() == pugi::node_element) {
+      return child;
+    }
+  }
+  return {};
+}
+
 std::vector<std::string> Texts(const pugi::xml_document& doc) {
   std::vector<std::string> out;
   for (const pugi::xml_node& site : chart_ref::enumerate_sites(doc)) {
@@ -113,6 +131,242 @@ TEST(ChartRef, EnumeratesEverySiteKind) {
   const std::vector<std::string> expected = {"S!$B$1", "S!$A$2:$A$3", "S!$B$2:$B$3", "S!$C$2",      "S!$D$2",
                                              "S!$E$2", "S!$F$1",      "S!$G$1",      "S!$H$1:$H$4", "S!$I$1"};
   EXPECT_EQ(Texts(Parse(xml)), expected);
+}
+
+TEST(ChartRef, AlternateAndDefaultNamespacePrefixesFollowStructuralEdits) {
+  const std::string xml = std::string("<root xmlns:q=\"") + chart_ns::kNsC + "\" xmlns:x=\"" + chart_ns::kNsC15 +
+                          "\" xmlns:z=\"http://schemas.microsoft.com/office/drawing/2014/chartex\">" +
+                          "<q:chartSpace><q:chart><q:f>Sheet1!$A$1</q:f><q:ext><x:f>Sheet1!$B$1</x:f>"
+                          "<z:f>Sheet1!$F$1</z:f><x:fullRef>"
+                          "<x:sqref>Sheet1!$C$1:$C$2</x:sqref></x:fullRef></q:ext></q:chart></q:chartSpace>"
+                          "<chartSpace xmlns=\"" +
+                          chart_ns::kNsC +
+                          "\"><chart><f>Sheet1!$D$1</f><ext><x:formulaRef>"
+                          "<x:sqref>Sheet1!$E$1</x:sqref></x:formulaRef></ext></chart></chartSpace></root>";
+  pugi::xml_document doc = Parse(xml);
+  const std::vector<std::string> initial = {"Sheet1!$A$1",      "Sheet1!$B$1", "Sheet1!$F$1",
+                                            "Sheet1!$C$1:$C$2", "Sheet1!$D$1", "Sheet1!$E$1"};
+  EXPECT_EQ(Texts(doc), initial);
+
+  EXPECT_EQ(chart_ref::rewrite_sites(doc, InsertRows(0, 2)), 6U);
+  const parser::SheetRenameTransform rename("Sheet1", "Data Set");
+  EXPECT_EQ(chart_ref::rewrite_sites(doc, rename), 6U);
+  const std::vector<std::string> expected = {"'Data Set'!$A$3",      "'Data Set'!$B$3", "'Data Set'!$F$3",
+                                             "'Data Set'!$C$3:$C$4", "'Data Set'!$D$3", "'Data Set'!$E$3"};
+  EXPECT_EQ(Texts(doc), expected);
+}
+
+TEST(ChartRef, AlternatePrefixKeepsCacheAndFilteredTitleNamespacesValid) {
+  const std::string xml =
+      std::string("<q:chartSpace xmlns:q=\"") + chart_ns::kNsC + "\" xmlns:x=\"" + chart_ns::kNsC15 + "\">" +
+      "<q:chart><q:plotArea><q:barChart><q:ser xmlns:c15=\"urn:shadowed\"><q:idx val=\"0\"/><q:order val=\"0\"/>"
+      "<q:tx><q:strRef><q:f>Other!$B$1</q:f><c15:foreign><c15:leaf/></c15:foreign>"
+      "<q:strCache><q:ptCount val=\"1\"/><q:pt idx=\"0\"><q:v>name</q:v>"
+      "</q:pt></q:strCache></q:strRef></q:tx><q:cat><q:strRef><q:f>Other!$A$2:$A$4</q:f></q:strRef></q:cat>"
+      "<q:val><q:numRef><q:f>Other!$B$2:$B$4</q:f><q:numCache><q:formatCode>0.0</q:formatCode>"
+      "<q:ptCount "
+      "val=\"1\"/></q:numCache></q:numRef></q:val></q:ser></q:barChart></q:plotArea></q:chart></q:chartSpace>";
+  pugi::xml_document doc = Parse(xml);
+  const std::vector<std::string_view> order = {"Sheet1", "Other"};
+  const parser::SheetRemovalTransform removal(order, 1);
+
+  EXPECT_EQ(chart_ref::rewrite_sites(doc, removal), 3U);
+  const std::vector<std::string> expected = {"#REF!", "#REF!", "#REF!"};
+  EXPECT_EQ(Texts(doc), expected);
+
+  std::ostringstream serialized;
+  doc.document_element().print(serialized, "", pugi::format_raw);
+  const std::string result = serialized.str();
+  EXPECT_NE(result.find("<q:extLst>"), std::string::npos) << result;
+  EXPECT_EQ(result.find("<c:extLst>"), std::string::npos) << result;
+  EXPECT_NE(result.find("<c15ext:filteredSeriesTitle>"), std::string::npos) << result;
+  EXPECT_NE(result.find("<c15ext:filteredCategoryTitle>"), std::string::npos) << result;
+  EXPECT_NE(result.find("<c15ext:tx><q:strRef>"), std::string::npos) << result;
+  EXPECT_NE(result.find("<c15ext:cat><q:strRef>"), std::string::npos) << result;
+  EXPECT_NE(result.find("xmlns:c15ext=\"http://schemas.microsoft.com/office/drawing/2012/chart\""), std::string::npos)
+      << result;
+  EXPECT_NE(result.find("<c15ext:formulaRef>"), std::string::npos) << result;
+  EXPECT_NE(result.find("<c15:foreign><c15:leaf/></c15:foreign>"), std::string::npos) << result;
+  EXPECT_NE(result.find("<q:numCache><q:formatCode>General</q:formatCode>"), std::string::npos) << result;
+  EXPECT_NE(result.find("xmlns:c15=\"urn:shadowed\""), std::string::npos) << result;
+
+  pugi::xml_document reparsed;
+  EXPECT_TRUE(reparsed.load_string(result.c_str())) << result;
+  const pugi::xml_node series = reparsed.select_node("//q:ser").node();
+  const pugi::xml_node ext_list = series.child("q:extLst");
+  const pugi::xml_node title_ext = FirstElementChild(ext_list);
+  const pugi::xml_node title = FirstElementChild(title_ext);
+  const pugi::xml_node title_ref = FirstElementChild(FirstElementChild(title));
+  EXPECT_EQ(NamespaceUri(title_ext), chart_ns::kNsC);
+  EXPECT_EQ(NamespaceUri(title), chart_ns::kNsC15);
+  EXPECT_EQ(NamespaceUri(title_ref), chart_ns::kNsC);
+  const pugi::xml_node foreign = title_ref.child("c15:foreign");
+  ASSERT_TRUE(foreign);
+  EXPECT_EQ(NamespaceUri(foreign), "urn:shadowed");
+  EXPECT_EQ(NamespaceUri(foreign.child("c15:leaf")), "urn:shadowed");
+  const pugi::xml_node formula_ext = FirstElementChild(title_ref.child("q:extLst"));
+  const pugi::xml_node formula_ref = FirstElementChild(formula_ext);
+  EXPECT_EQ(NamespaceUri(formula_ext), chart_ns::kNsC);
+  EXPECT_EQ(NamespaceUri(formula_ref), chart_ns::kNsC15);
+}
+
+TEST(ChartRef, ChartPrefixNamedC15DoesNotGetReboundByFilteredTitle) {
+  const std::string xml = std::string("<c15:chartSpace xmlns:c15=\"") + chart_ns::kNsC + "\" xmlns:x=\"" +
+                          chart_ns::kNsC15 + "\">" +
+                          "<c15:chart><c15:plotArea><c15:barChart><c15:ser><c15:idx val=\"0\"/><c15:order val=\"0\"/>"
+                          "<c15:tx><c15:strRef><c15:f>Other!$B$1</c15:f></c15:strRef></c15:tx>"
+                          "<c15:cat><c15:strRef><c15:f>Other!$A$2:$A$4</c15:f></c15:strRef></c15:cat>"
+                          "<c15:val><c15:numRef><c15:f>Other!$B$2:$B$4</c15:f></c15:numRef></c15:val>"
+                          "</c15:ser></c15:barChart></c15:plotArea></c15:chart></c15:chartSpace>";
+  pugi::xml_document doc = Parse(xml);
+  const std::vector<std::string_view> order = {"Sheet1", "Other"};
+  const parser::SheetRemovalTransform removal(order, 1);
+
+  EXPECT_EQ(chart_ref::rewrite_sites(doc, removal), 3U);
+  std::ostringstream serialized;
+  doc.document_element().print(serialized, "", pugi::format_raw);
+  const std::string result = serialized.str();
+  EXPECT_NE(result.find("<c15:ext uri=\"{02D57815-91ED-43cb-92C2-25804820EDAC}\" xmlns:c15ext=\""), std::string::npos)
+      << result;
+  EXPECT_NE(result.find("<c15ext:filteredSeriesTitle>"), std::string::npos) << result;
+  EXPECT_NE(result.find("<c15ext:formulaRef>"), std::string::npos) << result;
+
+  pugi::xml_document reparsed;
+  ASSERT_TRUE(reparsed.load_string(result.c_str())) << result;
+  const pugi::xml_node series = reparsed.select_node("//c15:ser").node();
+  const pugi::xml_node title_ext = FirstElementChild(series.child("c15:extLst"));
+  const pugi::xml_node title = FirstElementChild(title_ext);
+  const pugi::xml_node title_holder = FirstElementChild(title);
+  const pugi::xml_node title_ref = FirstElementChild(title_holder);
+  EXPECT_EQ(NamespaceUri(title_ext), chart_ns::kNsC);
+  EXPECT_EQ(NamespaceUri(title), chart_ns::kNsC15);
+  EXPECT_EQ(NamespaceUri(title_holder), chart_ns::kNsC15);
+  EXPECT_EQ(NamespaceUri(title_ref), chart_ns::kNsC);
+  const pugi::xml_node formula_ext = FirstElementChild(title_ref.child("c15:extLst"));
+  const pugi::xml_node formula_ref = FirstElementChild(formula_ext);
+  EXPECT_EQ(NamespaceUri(formula_ext), chart_ns::kNsC);
+  EXPECT_EQ(NamespaceUri(formula_ref), chart_ns::kNsC15);
+}
+
+TEST(ChartRef, ExtListDefaultNamespaceDoesNotChangeMovedReference) {
+  const std::string xml = std::string("<q:chartSpace xmlns:q=\"") + chart_ns::kNsC +
+                          "\"><q:chart><q:plotArea>"
+                          "<q:barChart><q:ser xmlns=\"" +
+                          chart_ns::kNsC +
+                          "\"><q:tx><strRef><f>Other!$B$1</f></strRef></q:tx>"
+                          "<q:val><q:numRef><q:f>Other!$B$2</q:f></q:numRef></q:val>"
+                          "<q:extLst xmlns=\"urn:extension-default\" xmlns:aux=\"urn:ext-only\"/>"
+                          "</q:ser></q:barChart></q:plotArea></q:chart></q:chartSpace>";
+  pugi::xml_document doc = Parse(xml);
+  const std::vector<std::string_view> order = {"Sheet1", "Other"};
+  const parser::SheetRemovalTransform removal(order, 1);
+
+  EXPECT_EQ(chart_ref::rewrite_sites(doc, removal), 2U);
+  std::ostringstream serialized;
+  doc.document_element().print(serialized, "", pugi::format_raw);
+  const std::string result = serialized.str();
+  EXPECT_EQ(result.find("xmlns:aux=\"\""), std::string::npos) << result;
+
+  pugi::xml_document reparsed;
+  ASSERT_TRUE(reparsed.load_string(result.c_str())) << result;
+  const pugi::xml_node series = reparsed.select_node("//q:ser").node();
+  const pugi::xml_node title_ext = FirstElementChild(series.child("q:extLst"));
+  const pugi::xml_node title = FirstElementChild(title_ext);
+  const pugi::xml_node title_ref = FirstElementChild(FirstElementChild(title));
+  EXPECT_EQ(NamespaceUri(title_ref), chart_ns::kNsC);
+  const pugi::xml_node cache = title_ref.child("strCache");
+  ASSERT_TRUE(cache);
+  EXPECT_EQ(NamespaceUri(cache), chart_ns::kNsC);
+  EXPECT_EQ(NamespaceUri(cache.child("ptCount")), chart_ns::kNsC);
+  const pugi::xml_node formula_ext = FirstElementChild(title_ref.child("extLst"));
+  EXPECT_EQ(NamespaceUri(formula_ext), chart_ns::kNsC);
+  EXPECT_EQ(NamespaceUri(FirstElementChild(formula_ext)), chart_ns::kNsC15);
+}
+
+TEST(ChartRef, DefaultNamespaceCategoryFlattensAfterLevelDeletion) {
+  const std::string xml =
+      std::string("<chartSpace xmlns=\"") + chart_ns::kNsC +
+      "\"><chart><plotArea><barChart><ser>"
+      "<tx><strRef><f>Sheet1!$C$1</f></strRef></tx><cat><multiLvlStrRef><f>Sheet1!$A$2:$B$3</f>"
+      "<multiLvlStrCache><ptCount val=\"2\"/><lvl/><lvl/></multiLvlStrCache></multiLvlStrRef></cat>"
+      "<val><numRef><f>Sheet1!$C$2:$C$3</f></numRef></val></ser></barChart></plotArea></chart></chartSpace>";
+  pugi::xml_document doc = Parse(xml);
+  const parser::RowColShiftTransform del("Sheet1", parser::RowColAxis::kCol, parser::RowColEdit::kDelete, 0, 1);
+
+  EXPECT_EQ(chart_ref::rewrite_sites(doc, del), 3U);
+  const std::vector<std::string> expected = {"Sheet1!$B$1", "Sheet1!$A$2:$A$3", "Sheet1!$B$2:$B$3"};
+  EXPECT_EQ(Texts(doc), expected);
+  std::ostringstream serialized;
+  doc.document_element().print(serialized, "", pugi::format_raw);
+  EXPECT_NE(serialized.str().find("<cat><strRef><f>Sheet1!$A$2:$A$3</f>"), std::string::npos) << serialized.str();
+  EXPECT_EQ(serialized.str().find("multiLvlStr"), std::string::npos) << serialized.str();
+}
+
+TEST(ChartRef, ForeignAndShadowedFormulaElementsAreIgnored) {
+  const std::string xml =
+      std::string("<q:chartSpace xmlns:q=\"") + chart_ns::kNsC + "\" xmlns:c=\"" + chart_ns::kNsC + "\">" +
+      "<q:chart><q:plotArea><q:barChart><q:ser><q:cat><q:strRef><q:f>Sheet1!$A$1</q:f></q:strRef></q:cat>"
+      "<q:extLst><q:ext xmlns:c=\"urn:foreign\"><c:f>Sheet1!$B$1</c:f><q:f xmlns:q=\"urn:foreign\">"
+      "Sheet1!$C$1</q:f></q:ext></q:extLst></q:ser></q:barChart></q:plotArea></q:chart></q:chartSpace>";
+  pugi::xml_document doc = Parse(xml);
+  EXPECT_EQ(Texts(doc), (std::vector<std::string>{"Sheet1!$A$1"}));
+  EXPECT_EQ(chart_ref::rewrite_sites(doc, InsertRows(0, 1)), 1U);
+  EXPECT_EQ(Texts(doc), (std::vector<std::string>{"Sheet1!$A$2"}));
+
+  std::ostringstream serialized;
+  doc.document_element().print(serialized, "", pugi::format_raw);
+  EXPECT_NE(serialized.str().find("<c:f>Sheet1!$B$1</c:f>"), std::string::npos) << serialized.str();
+  EXPECT_NE(serialized.str().find("Sheet1!$C$1</q:f>"), std::string::npos) << serialized.str();
+}
+
+TEST(ChartRef, ForeignCacheWithShadowedPrefixSurvivesReset) {
+  const std::string xml =
+      std::string("<q:chartSpace xmlns:q=\"") + chart_ns::kNsC +
+      "\"><q:chart><q:plotArea><q:barChart><q:ser>"
+      "<q:val><q:numRef><q:f>Other!$B$1</q:f><q:numCache xmlns:q=\"urn:foreign\"><q:formatCode>keep</q:formatCode>"
+      "</q:numCache></q:numRef></q:val></q:ser></q:barChart></q:plotArea></q:chart></q:chartSpace>";
+  pugi::xml_document doc = Parse(xml);
+  const std::vector<std::string_view> order = {"Sheet1", "Other"};
+  const parser::SheetRemovalTransform removal(order, 1);
+
+  EXPECT_EQ(chart_ref::rewrite_sites(doc, removal), 1U);
+  EXPECT_EQ(Texts(doc), (std::vector<std::string>{"#REF!"}));
+  std::ostringstream serialized;
+  doc.document_element().print(serialized, "", pugi::format_raw);
+  EXPECT_NE(serialized.str().find("<q:numCache><q:formatCode>General</q:formatCode>"), std::string::npos)
+      << serialized.str();
+  EXPECT_NE(serialized.str().find("<q:numCache xmlns:q=\"urn:foreign\"><q:formatCode>keep</q:formatCode>"),
+            std::string::npos)
+      << serialized.str();
+}
+
+TEST(ChartRef, FilteredTitlesKeepHolderLocalNamespaceDeclarations) {
+  const std::string xml =
+      std::string("<q:chartSpace xmlns:q=\"") + chart_ns::kNsC +
+      "\"><q:chart><q:plotArea><q:barChart>"
+      "<q:ser><m:tx xmlns:m=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"><m:strRef>"
+      "<m:f>Other!$A$1</m:f></m:strRef></m:tx><q:val><q:numRef><q:f>Other!$A$2</q:f></q:numRef></q:val></q:ser>"
+      "<q:ser><q:tx xmlns=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"><strRef><f>Other!$B$1</f>"
+      "</strRef></q:tx><q:val><q:numRef><q:f>Other!$B$2</q:f></q:numRef></q:val></q:ser>"
+      "</q:barChart></q:plotArea></q:chart></q:chartSpace>";
+  pugi::xml_document doc = Parse(xml);
+  const std::vector<std::string_view> order = {"Sheet1", "Other"};
+  const parser::SheetRemovalTransform removal(order, 1);
+
+  EXPECT_EQ(chart_ref::rewrite_sites(doc, removal), 4U);
+  EXPECT_EQ(Texts(doc), (std::vector<std::string>{"#REF!", "#REF!", "#REF!", "#REF!"}));
+  std::ostringstream serialized;
+  doc.document_element().print(serialized, "", pugi::format_raw);
+  const std::string result = serialized.str();
+  EXPECT_NE(result.find("<c15:tx><m:strRef xmlns:m=\"http://schemas.openxmlformats.org/drawingml/2006/chart\">"),
+            std::string::npos)
+      << result;
+  EXPECT_NE(result.find("<c15:tx><strRef xmlns=\"http://schemas.openxmlformats.org/drawingml/2006/chart\">"),
+            std::string::npos)
+      << result;
+
+  pugi::xml_document reparsed;
+  EXPECT_TRUE(reparsed.load_string(result.c_str())) << result;
 }
 
 TEST(ChartRef, EnumeratesChartexNameSites) {

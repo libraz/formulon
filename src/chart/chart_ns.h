@@ -14,6 +14,8 @@ inline constexpr const char* kNsC = "http://schemas.openxmlformats.org/drawingml
 inline constexpr const char* kNsA = "http://schemas.openxmlformats.org/drawingml/2006/main";
 /// Office 2013 chart extension namespace (`c15:`).
 inline constexpr const char* kNsC15 = "http://schemas.microsoft.com/office/drawing/2012/chart";
+/// Office 2016 chartex namespace (`cx:`).
+inline constexpr const char* kNsCx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
 
 /// `c:ext/@uri` of the `c15:` extensions (filtered series and titles, formula refs).
 inline constexpr const char* kUriC15 = "{02D57815-91ED-43cb-92C2-25804820EDAC}";

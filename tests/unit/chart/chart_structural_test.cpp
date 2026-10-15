@@ -161,6 +161,24 @@ TEST(ChartStructural, RenameUpdatesRefs) {
   EXPECT_FALSE(Has(after, "Sheet1"));
 }
 
+TEST(ChartStructural, AlternatePrefixRefsFollowWorkbookEdits) {
+  const std::string chart =
+      "<q:chartSpace xmlns:q=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"><q:chart><q:plotArea>"
+      "<q:barChart><q:ser><q:idx val=\"0\"/><q:order val=\"0\"/><q:cat><q:strRef><q:f>Sheet1!$A$2:$A$5</q:f>"
+      "</q:strRef></q:cat><q:val><q:numRef><q:f>Sheet1!$B$2:$B$5</q:f></q:numRef></q:val></q:ser></q:barChart>"
+      "</q:plotArea></q:chart></q:chartSpace>";
+  Workbook wb = WithChart(chart);
+
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, 0, 1)));
+  EXPECT_TRUE(Has(PartText(wb), "<q:f>Sheet1!$A$3:$A$6</q:f>"));
+  EXPECT_TRUE(Has(PartText(wb), "<q:f>Sheet1!$B$3:$B$6</q:f>"));
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(0, "Data")));
+  EXPECT_TRUE(Has(PartText(wb), "<q:f>Data!$A$3:$A$6</q:f>"));
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, 0, 1)));
+  EXPECT_TRUE(Has(PartText(wb), "<q:f>Data!$A$2:$A$5</q:f>"));
+  EXPECT_TRUE(Has(PartText(wb), "<q:f>Data!$B$2:$B$5</q:f>"));
+}
+
 TEST(ChartStructural, RemovingTheReferencedSheetYieldsRefSites) {
   Workbook wb = WithChart(ChartXml("Other!$A$2:$A$5", "Other!$B$2:$B$5"));
   ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1)));

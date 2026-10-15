@@ -1,7 +1,9 @@
 //
-// Reference sites inside chart parts: enumeration and rewriting. Sites are
-// the `c:f` elements under series `c:tx|c:cat|c:val|c:xVal|c:yVal|c:bubbleSize`,
-// title and axis-title `c:strRef`, `c15:f` in `c:extLst`, and chartex `cx:f`.
+// Reference sites inside chart parts: enumeration and rewriting. Elements
+// match by namespace URI under any prefix. Sites are the `c:f` elements under
+// series `c:tx|c:cat|c:val|c:xVal|c:yVal|c:bubbleSize`, title and axis-title
+// `c:strRef`, `c15:f` in `c:extLst`, `c15:sqref` under `c15:fullRef` /
+// `c15:formulaRef`, and chartex `cx:f`.
 
 #ifndef FORMULON_CHART_CHART_REF_H_
 #define FORMULON_CHART_CHART_REF_H_
