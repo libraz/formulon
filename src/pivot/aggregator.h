@@ -97,8 +97,9 @@ Value apply_record_aggregation(Aggregation agg, const PivotCache& cache, const s
 /// double when `v` is a `Number` or `Bool`; `nullopt` otherwise.
 std::optional<double> numeric_aggregate_value(const Value& v);
 
-/// Builds a borrowed concatenation of `buckets[row][col]` in row-major
-/// order (row leaves outer, column leaves inner). `spans` owns only the
+/// Builds a borrowed concatenation of `buckets[row][col]` in column-major
+/// order (column leaves outer, row leaves inner), the order Excel sums a
+/// two-axis grand total in. `spans` owns only the
 /// span descriptors and must outlive the returned view and every aggregation
 /// using it. Out-of-range leaves and empty buckets are skipped.
 RecordIndexView make_leaf_set_record_view(const RecordBuckets& buckets, const std::vector<std::size_t>& row_leaves,

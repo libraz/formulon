@@ -15,6 +15,7 @@
 #include "pivot/record_access.h"
 #include "utils/cancellation_snap.h"
 #include "utils/error.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -151,7 +152,7 @@ Value aggregate_sum(const ValueInputView& values) {
       return value;
     }
     if (const std::optional<double> number = numeric_aggregate_value(value); number.has_value()) {
-      sum += *number;
+      sum = snapped_add(sum, *number);
     }
   }
   return finite_number(sum);
@@ -263,7 +264,8 @@ Value aggregate_product(const ValueInputView& values) {
       return value;
     }
     if (const std::optional<double> number = numeric_aggregate_value(value); number.has_value()) {
-      product *= *number;
+      // Like PRODUCT, start from the first value and flush a subnormal step.
+      product = count > 0U ? flush_subnormal(product * *number) : *number;
       ++count;
     }
   }
@@ -369,8 +371,8 @@ RecordIndexView make_leaf_set_record_view(const RecordBuckets& buckets, const st
                                           std::vector<RecordIndexSpan>& spans) {
   spans.clear();
   std::size_t total_count = 0U;
-  for (const std::size_t row_leaf : row_leaves) {
-    for (const std::size_t col_leaf : col_leaves) {
+  for (const std::size_t col_leaf : col_leaves) {
+    for (const std::size_t row_leaf : row_leaves) {
       append_bucket_span(buckets, row_leaf, col_leaf, spans, total_count);
     }
   }

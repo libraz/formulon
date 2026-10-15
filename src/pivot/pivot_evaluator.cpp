@@ -644,7 +644,9 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   // `grand_total` mirrors slot 0 for existing GETPIVOTDATA callers.
   if ((table.grand_totals_rows() || table.grand_totals_cols()) && data_field_count > 0) {
     result.grand_totals.reserve(data_field_count);
-    const RecordIndexView records(surviving);
+    // Leaf order, not source order: the SUM snap makes the order observable.
+    std::vector<RecordIndexSpan> spans;
+    const RecordIndexView records = make_leaf_set_record_view(buckets, all_row_leaves, all_col_leaves, spans);
     for (const PivotDataField& df : table.data_fields()) {
       result.grand_totals.push_back(aggregate_records_or_blank(df.aggregation, cache, records, df.field_index, result));
     }
