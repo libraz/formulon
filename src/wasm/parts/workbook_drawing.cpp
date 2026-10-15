@@ -113,7 +113,7 @@ emscripten::val JsWorkbook::probeImage(emscripten::val bytes) const {
 emscripten::val JsWorkbook::listDrawingObjects(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
   if (handle_ == nullptr) {
-    arr.set("status", error_status(kBindingInvalidHandle));
+    arr.set("status", invalid_handle_status());
     return arr;
   }
   size_t count = 0;
@@ -147,7 +147,7 @@ emscripten::val JsWorkbook::getImage(uint32_t sheet, uint32_t objectId) const {
 
 emscripten::val JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts) {
   if (handle_ == nullptr) {
-    return image_id_result(error_status(kBindingInvalidHandle), 0U);
+    return image_id_result(invalid_handle_status(), 0U);
   }
   std::string name_store;
   std::string descr_store;
@@ -172,14 +172,14 @@ emscripten::val JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, e
 
 JsStatus JsWorkbook::removeDrawing(uint32_t sheet, uint32_t objectId) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_remove_drawing(handle_, sheet, objectId));
 }
 
 JsStatus JsWorkbook::setDrawingAnchor(uint32_t sheet, uint32_t objectId, emscripten::val placement) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setDrawingAnchor");
   const emscripten::val options = !js_value_present(placement) ? emscripten::val::object() : placement;
@@ -192,7 +192,7 @@ JsStatus JsWorkbook::setDrawingAnchor(uint32_t sheet, uint32_t objectId, emscrip
 
 JsStatus JsWorkbook::setDrawingZOrder(uint32_t sheet, uint32_t objectId, uint32_t index) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_set_drawing_z_order(handle_, sheet, objectId, index));
 }
@@ -200,7 +200,7 @@ JsStatus JsWorkbook::setDrawingZOrder(uint32_t sheet, uint32_t objectId, uint32_
 emscripten::val JsWorkbook::snapshotDrawing(uint32_t sheet, uint32_t objectId) const {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
-    o.set("status", error_status(kBindingInvalidHandle));
+    o.set("status", invalid_handle_status());
     o.set("bytes", bytes_to_val(nullptr, 0));
     return o;
   }
@@ -215,7 +215,7 @@ emscripten::val JsWorkbook::snapshotDrawing(uint32_t sheet, uint32_t objectId) c
 
 emscripten::val JsWorkbook::restoreDrawing(uint32_t sheet, emscripten::val bytes, emscripten::val opts) {
   if (handle_ == nullptr) {
-    return image_id_result(error_status(kBindingInvalidHandle), 0U);
+    return image_id_result(invalid_handle_status(), 0U);
   }
   JsNarrowNumericReader reader("restoreDrawing");
   const emscripten::val options = !js_value_present(opts) ? emscripten::val::object() : opts;

@@ -28,7 +28,7 @@ emscripten::val JsWorkbook::getSheetAutoFilterXml(uint32_t sheet) const {
 
 JsStatus JsWorkbook::setSheetAutoFilterXml(uint32_t sheet, const std::string& xml) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_set_auto_filter_xml(handle_, sheet, xml.c_str()));
 }
@@ -326,7 +326,7 @@ emscripten::val get_auto_filter(const fm_workbook_t* wb, const AutoFilterOps& op
   emscripten::val o = emscripten::val::object();
   o.set("autoFilter", emscripten::val::null());
   if (wb == nullptr) {
-    o.set("status", error_status(kBindingInvalidHandle));
+    o.set("status", invalid_handle_status());
     return o;
   }
   fm_auto_filter f{};
@@ -341,7 +341,7 @@ emscripten::val get_auto_filter(const fm_workbook_t* wb, const AutoFilterOps& op
 
 JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t index, const emscripten::val& filter) {
   if (wb == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setAutoFilter");
   fm_auto_filter f{};
@@ -422,7 +422,7 @@ JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t i
 }
 
 JsStatus run_auto_filter(fm_workbook_t* wb, fm_status_t (*fn)(fm_workbook_t*, size_t), uint32_t index) {
-  return wb == nullptr ? error_status(kBindingInvalidHandle) : status_from_rc(fn(wb, index));
+  return wb == nullptr ? invalid_handle_status() : status_from_rc(fn(wb, index));
 }
 
 emscripten::val evaluate_auto_filter(const fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t index) {
@@ -430,7 +430,7 @@ emscripten::val evaluate_auto_filter(const fm_workbook_t* wb, const AutoFilterOp
   o.set("firstRow", 0U);
   o.set("match", emscripten::val::array());
   if (wb == nullptr) {
-    o.set("status", error_status(kBindingInvalidHandle));
+    o.set("status", invalid_handle_status());
     return o;
   }
   size_t len = 0;

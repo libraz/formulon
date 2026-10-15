@@ -826,7 +826,7 @@ val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val override
 
 val JsWorkbook::insertChart(uint32_t sheet, val options) {
   if (handle_ == nullptr) {
-    return id_envelope(error_status(kBindingInvalidHandle), "objectId", 0U);
+    return id_envelope(invalid_handle_status(), "objectId", 0U);
   }
   if (!options.typeOf().strictlyEquals(val("object"))) {
     return id_envelope(binding_error_status(kInvalidArgument, "insertChart expects (sheet:number, options:object)"),
@@ -862,7 +862,7 @@ val JsWorkbook::insertChart(uint32_t sheet, val options) {
 
 JsStatus JsWorkbook::setChartType(uint32_t sheet, uint32_t objectId, uint32_t plot, int32_t kind, val grouping) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setChartType");
   const int32_t group = reader.i32_value(grouping, FM_CHART_GROUPING_CLUSTERED, "grouping");
@@ -874,7 +874,7 @@ JsStatus JsWorkbook::setChartType(uint32_t sheet, uint32_t objectId, uint32_t pl
 
 JsStatus JsWorkbook::setChartTitle(uint32_t sheet, uint32_t objectId, val title) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setChartTitle");
   Arena arena;
@@ -892,7 +892,7 @@ JsStatus JsWorkbook::setChartTitle(uint32_t sheet, uint32_t objectId, val title)
 JsStatus JsWorkbook::setChartLegend(uint32_t sheet, uint32_t objectId, int32_t position, bool overlay,
                                     val hiddenSeries) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setChartLegend");
   const std::vector<uint32_t> hidden = read_indices(reader, hiddenSeries, "hiddenSeries");
@@ -912,7 +912,7 @@ JsStatus JsWorkbook::setChartLegend(uint32_t sheet, uint32_t objectId, int32_t p
 
 JsStatus JsWorkbook::setChartAxis(uint32_t sheet, uint32_t objectId, uint32_t axisId, val patch) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setChartAxis");
   Arena arena;
@@ -925,7 +925,7 @@ JsStatus JsWorkbook::setChartAxis(uint32_t sheet, uint32_t objectId, uint32_t ax
 
 JsStatus JsWorkbook::setChartDisplay(uint32_t sheet, uint32_t objectId, int32_t blanksAs, val plotVisibleOnly) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setChartDisplay");
   // `null` or omitted removes `c:plotVisOnly`.
@@ -939,7 +939,7 @@ JsStatus JsWorkbook::setChartDisplay(uint32_t sheet, uint32_t objectId, int32_t 
 
 JsStatus JsWorkbook::setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx, val patch) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setChartSeries");
   Arena arena;
@@ -953,7 +953,7 @@ JsStatus JsWorkbook::setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t 
 JsStatus JsWorkbook::setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx,
                                    uint32_t pointIdx, val patch) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setChartPoint");
   Arena arena;
@@ -967,7 +967,7 @@ JsStatus JsWorkbook::setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t p
 
 JsStatus JsWorkbook::setChartPlot(uint32_t sheet, uint32_t objectId, uint32_t plot, val patch) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setChartPlot");
   Arena arena;
@@ -980,7 +980,7 @@ JsStatus JsWorkbook::setChartPlot(uint32_t sheet, uint32_t objectId, uint32_t pl
 
 JsStatus JsWorkbook::setChartFilter(uint32_t sheet, uint32_t objectId, val hiddenSeries, val hiddenCategories) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setChartFilter");
   const std::vector<uint32_t> series = read_indices(reader, hiddenSeries, "hiddenSeries");
@@ -994,7 +994,7 @@ JsStatus JsWorkbook::setChartFilter(uint32_t sheet, uint32_t objectId, val hidde
 
 val JsWorkbook::addChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, val patch) {
   if (handle_ == nullptr) {
-    return id_envelope(error_status(kBindingInvalidHandle), "seriesIdx", 0U);
+    return id_envelope(invalid_handle_status(), "seriesIdx", 0U);
   }
   JsNarrowNumericReader reader("addChartSeries");
   Arena arena;
@@ -1009,7 +1009,7 @@ val JsWorkbook::addChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot,
 
 JsStatus JsWorkbook::removeChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_remove_chart_series(handle_, sheet, objectId, plot, seriesIdx));
 }
@@ -1017,7 +1017,7 @@ JsStatus JsWorkbook::removeChartSeries(uint32_t sheet, uint32_t objectId, uint32
 JsStatus JsWorkbook::setChartSource(uint32_t sheet, uint32_t objectId, const std::string& source, int32_t direction,
                                     val headerRow, val headerColumn) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setChartSource");
   const int32_t row = header_mode(reader, headerRow, "headerRow");

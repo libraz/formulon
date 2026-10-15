@@ -43,7 +43,7 @@ emscripten::val xml_result(const fm_workbook_t* handle, uint32_t sheet, XmlGette
 
 JsStatus xml_set(fm_workbook_t* handle, uint32_t sheet, const std::string& xml, XmlSetter setter) {
   if (handle == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(setter(handle, sheet, xml.c_str()));
 }
@@ -52,7 +52,7 @@ emscripten::val breaks_array(const fm_workbook_t* handle, uint32_t sheet, bool r
   emscripten::val out = emscripten::val::object();
   emscripten::val items = emscripten::val::array();
   if (handle == nullptr) {
-    out.set("status", error_status(kBindingInvalidHandle));
+    out.set("status", invalid_handle_status());
     out.set("breaks", items);
     return out;
   }
@@ -124,7 +124,7 @@ JsStatus JsWorkbook::setSheetSheetPrXml(uint32_t sheet, const std::string& xml) 
 
 JsStatus JsWorkbook::setSheetFitToPage(uint32_t sheet, bool enabled) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_set_fit_to_page(handle_, sheet, enabled ? 1 : 0));
 }
@@ -137,7 +137,7 @@ emscripten::val JsWorkbook::getSheetPrintArea(uint32_t sheet) const {
 
 JsStatus JsWorkbook::setSheetPrintArea(uint32_t sheet, const std::string& rangesA1) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_set_print_area(handle_, sheet, rangesA1.c_str()));
 }
@@ -145,7 +145,7 @@ JsStatus JsWorkbook::setSheetPrintArea(uint32_t sheet, const std::string& ranges
 emscripten::val JsWorkbook::getSheetPrintTitles(uint32_t sheet) const {
   emscripten::val out = emscripten::val::object();
   if (handle_ == nullptr) {
-    out.set("status", error_status(kBindingInvalidHandle));
+    out.set("status", invalid_handle_status());
     out.set("repeatRows", std::string());
     out.set("repeatCols", std::string());
     return out;
@@ -167,7 +167,7 @@ emscripten::val JsWorkbook::getSheetPrintTitles(uint32_t sheet) const {
 
 JsStatus JsWorkbook::setSheetPrintTitles(uint32_t sheet, const std::string& repeatRows, const std::string& repeatCols) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_set_print_titles(handle_, sheet, repeatRows.c_str(), repeatCols.c_str()));
 }
@@ -176,35 +176,35 @@ JsStatus JsWorkbook::setSheetPrintTitles(uint32_t sheet, const std::string& repe
 
 JsStatus JsWorkbook::addSheetRowBreak(uint32_t sheet, uint32_t row, bool manual) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_add_row_break(handle_, sheet, row, manual ? 1 : 0));
 }
 
 JsStatus JsWorkbook::addSheetColBreak(uint32_t sheet, uint32_t col, bool manual) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_add_col_break(handle_, sheet, col, manual ? 1 : 0));
 }
 
 JsStatus JsWorkbook::removeSheetRowBreak(uint32_t sheet, uint32_t row) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_remove_row_break(handle_, sheet, row));
 }
 
 JsStatus JsWorkbook::removeSheetColBreak(uint32_t sheet, uint32_t col) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_remove_col_break(handle_, sheet, col));
 }
 
 JsStatus JsWorkbook::clearSheetBreaks(uint32_t sheet) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_clear_breaks(handle_, sheet));
 }
@@ -221,7 +221,7 @@ emscripten::val JsWorkbook::getSheetColBreaks(uint32_t sheet) const {
 
 JsStatus JsWorkbook::setSheetPageSetup(uint32_t sheet, emscripten::val setup) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setSheetPageSetup");
   fm_page_setup_t out{};
@@ -251,7 +251,7 @@ JsStatus JsWorkbook::setSheetPageSetup(uint32_t sheet, emscripten::val setup) {
 
 JsStatus JsWorkbook::setSheetPageMargins(uint32_t sheet, emscripten::val margins) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setSheetPageMargins");
   fm_page_margins_t out{};
@@ -281,7 +281,7 @@ JsStatus JsWorkbook::setSheetPageMargins(uint32_t sheet, emscripten::val margins
 
 JsStatus JsWorkbook::setSheetPrintOptions(uint32_t sheet, emscripten::val options) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setSheetPrintOptions");
   fm_print_options_t out{};
@@ -306,7 +306,7 @@ JsStatus JsWorkbook::setSheetPrintOptions(uint32_t sheet, emscripten::val option
 
 JsStatus JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val headerFooter) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   // The six section strings must outlive the call, so their storage is
   // declared here rather than inside the helper.

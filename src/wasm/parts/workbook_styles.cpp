@@ -294,7 +294,7 @@ emscripten::val JsWorkbook::getCellXfIndex(uint32_t sheet, uint32_t row, uint32_
   emscripten::val o = emscripten::val::object();
   uint32_t xf = 0;
   if (handle_ == nullptr) {
-    o.set("status", error_status(kBindingInvalidHandle));
+    o.set("status", invalid_handle_status());
     o.set("xfIndex", xf);
     return o;
   }
@@ -306,15 +306,14 @@ emscripten::val JsWorkbook::getCellXfIndex(uint32_t sheet, uint32_t row, uint32_
 
 JsStatus JsWorkbook::setCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col, uint32_t xf_index) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_cell_set_xf_index(handle_, sheet, row, col, xf_index);
-  return status_from_rc(rc);
+  return status_from_rc(fm_cell_set_xf_index(handle_, sheet, row, col, xf_index));
 }
 
 JsStatus JsWorkbook::clearCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_cell_clear_xf_index(handle_, sheet, row, col));
 }
@@ -322,7 +321,7 @@ JsStatus JsWorkbook::clearCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col
 JsStatus JsWorkbook::setRangeXfIndex(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
                                      uint32_t lastCol, uint32_t xf_index) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_set_range_xf_index(handle_, sheet, firstRow, firstCol, lastRow, lastCol, xf_index));
 }
@@ -383,7 +382,7 @@ emscripten::val JsWorkbook::getNumFmt(uint32_t num_fmt_id) const {
 emscripten::val JsWorkbook::getDxf(uint32_t dxf_index) const {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
-    o.set("status", error_status(kBindingInvalidHandle));
+    o.set("status", invalid_handle_status());
     return o;
   }
   fm_dxf_record d{};
@@ -422,7 +421,7 @@ emscripten::val JsWorkbook::getDxf(uint32_t dxf_index) const {
 JsAddStyleResult JsWorkbook::addFont(emscripten::val record) {
   JsAddStyleResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(kBindingInvalidHandle);
+    r.status = invalid_handle_status();
     return r;
   }
   std::string name;
@@ -440,7 +439,7 @@ JsAddStyleResult JsWorkbook::addFont(emscripten::val record) {
 
 JsStatus JsWorkbook::setFont(uint32_t font_index, emscripten::val record) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   std::string name;
   fm_font_record fr{};
@@ -454,7 +453,7 @@ JsStatus JsWorkbook::setFont(uint32_t font_index, emscripten::val record) {
 
 JsStatus JsWorkbook::setDefaultFont(emscripten::val record) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   std::string name;
   fm_font_record fr{};
@@ -469,7 +468,7 @@ JsStatus JsWorkbook::setDefaultFont(emscripten::val record) {
 JsAddStyleResult JsWorkbook::addFill(emscripten::val record) {
   JsAddStyleResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(kBindingInvalidHandle);
+    r.status = invalid_handle_status();
     return r;
   }
   JsNarrowNumericReader reader("addFill");
@@ -486,7 +485,7 @@ JsAddStyleResult JsWorkbook::addFill(emscripten::val record) {
 JsAddStyleResult JsWorkbook::addBorder(emscripten::val record) {
   JsAddStyleResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(kBindingInvalidHandle);
+    r.status = invalid_handle_status();
     return r;
   }
   JsNarrowNumericReader reader("addBorder");
@@ -503,7 +502,7 @@ JsAddStyleResult JsWorkbook::addBorder(emscripten::val record) {
 JsAddNumFmtResult JsWorkbook::addNumFmt(const std::string& format_code) {
   JsAddNumFmtResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(kBindingInvalidHandle);
+    r.status = invalid_handle_status();
     return r;
   }
   uint16_t id = 0;
@@ -520,7 +519,7 @@ JsAddNumFmtResult JsWorkbook::addNumFmt(const std::string& format_code) {
 JsAddStyleResult JsWorkbook::addXf(emscripten::val record) {
   JsAddStyleResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(kBindingInvalidHandle);
+    r.status = invalid_handle_status();
     return r;
   }
   fm_cell_xf xf{};
@@ -538,7 +537,7 @@ JsAddStyleResult JsWorkbook::addXf(emscripten::val record) {
 JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
   JsAddStyleResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(kBindingInvalidHandle);
+    r.status = invalid_handle_status();
     return r;
   }
 
@@ -651,7 +650,7 @@ emscripten::val JsWorkbook::getCellStyleXf(uint32_t index) const {
 JsAddStyleResult JsWorkbook::addCellStyleXf(emscripten::val record) {
   JsAddStyleResult out;
   if (handle_ == nullptr) {
-    out.status = error_status(kBindingInvalidHandle);
+    out.status = invalid_handle_status();
     return out;
   }
   fm_cell_xf xf{};
@@ -668,7 +667,7 @@ JsAddStyleResult JsWorkbook::addCellStyleXf(emscripten::val record) {
 
 JsStatus JsWorkbook::setCellStyle(emscripten::val record) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setCellStyle");
   const std::string name = reader.string(record, "name", "cellStyle.name");
@@ -687,7 +686,7 @@ JsStatus JsWorkbook::setCellStyle(emscripten::val record) {
 
 JsStatus JsWorkbook::removeCellStyle(const std::string& name) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_styles_remove_cell_style(handle_, name.c_str()));
 }
@@ -758,7 +757,7 @@ emscripten::val JsWorkbook::getTheme() const {
 
 JsStatus JsWorkbook::setThemeColors(emscripten::val colors) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   fm_theme_colors tc{};
   JsNarrowNumericReader reader("setThemeColors");
@@ -777,7 +776,7 @@ JsStatus JsWorkbook::setThemeColors(emscripten::val colors) {
 
 JsStatus JsWorkbook::setThemeFonts(emscripten::val fonts) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setThemeFonts");
   const std::string major_latin = reader.string(fonts, "majorLatin", "theme.majorLatin");
@@ -797,14 +796,14 @@ JsStatus JsWorkbook::setThemeFonts(emscripten::val fonts) {
 
 JsStatus JsWorkbook::setThemeScriptFont(bool major, const std::string& script, const std::string& typeface) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_workbook_set_theme_script_font(handle_, major ? 1 : 0, script.c_str(), typeface.c_str()));
 }
 
 JsStatus JsWorkbook::resetTheme() {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_workbook_reset_theme(handle_));
 }
@@ -814,7 +813,7 @@ emscripten::val JsWorkbook::resolveColor(emscripten::val spec, int32_t context) 
   int32_t resolution = 0;
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
-    o.set("status", error_status(kBindingInvalidHandle));
+    o.set("status", invalid_handle_status());
     o.set("argb", 0U);
     o.set("resolution", 0);
     return o;

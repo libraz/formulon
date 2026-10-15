@@ -184,6 +184,10 @@ JsStatus error_status(int32_t code) {
   return s;
 }
 
+JsStatus invalid_handle_status() {
+  return error_status(kBindingInvalidHandle);
+}
+
 JsStatus status_from_rc(fm_status_t rc) {
   return rc == 0 ? ok_status() : error_status(rc);
 }

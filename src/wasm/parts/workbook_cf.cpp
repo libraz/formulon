@@ -70,7 +70,7 @@ emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, uint32_t firstRow, u
   emscripten::val r = emscripten::val::object();
   emscripten::val cells = emscripten::val::array();
   if (handle_ == nullptr) {
-    r.set("status", error_status(kBindingInvalidHandle));
+    r.set("status", invalid_handle_status());
     r.set("cells", cells);
     return r;
   }
@@ -119,7 +119,7 @@ emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, uint32_t firstRow, u
 emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
   if (handle_ == nullptr) {
-    arr.set("status", error_status(kBindingInvalidHandle));
+    arr.set("status", invalid_handle_status());
     return arr;
   }
   std::size_t count = 0;
@@ -255,7 +255,7 @@ emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
 JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   JsAddStyleResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(kBindingInvalidHandle);
+    r.status = invalid_handle_status();
     return r;
   }
   // Pull every JS field into local storage; the C ABI receives
@@ -424,18 +424,16 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
 
 JsStatus JsWorkbook::removeConditionalFormatAt(uint32_t sheet, uint32_t index) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_sheet_cf_remove_at(handle_, sheet, index);
-  return status_from_rc(rc);
+  return status_from_rc(fm_sheet_cf_remove_at(handle_, sheet, index));
 }
 
 JsStatus JsWorkbook::clearConditionalFormats(uint32_t sheet) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_sheet_cf_clear(handle_, sheet);
-  return status_from_rc(rc);
+  return status_from_rc(fm_sheet_cf_clear(handle_, sheet));
 }
 
 }  // namespace parts

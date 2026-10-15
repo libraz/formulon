@@ -26,7 +26,7 @@ namespace {
 JsStatus edit_merge(fm_workbook_t* wb, uint32_t sheet, const emscripten::val& range, const char* operation,
                     fm_status_t (*edit)(fm_workbook_t*, uint32_t, fm_merge_range)) {
   if (wb == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader(operation);
   const fm_merge_range m = js_pull_range(range, &reader);
@@ -48,18 +48,16 @@ JsStatus JsWorkbook::removeMerge(uint32_t sheet, emscripten::val range) {
 
 JsStatus JsWorkbook::removeMergeAt(uint32_t sheet, uint32_t index) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_sheet_remove_merge_at(handle_, sheet, index);
-  return status_from_rc(rc);
+  return status_from_rc(fm_sheet_remove_merge_at(handle_, sheet, index));
 }
 
 JsStatus JsWorkbook::clearMerges(uint32_t sheet) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_sheet_clear_merges(handle_, sheet);
-  return status_from_rc(rc);
+  return status_from_rc(fm_sheet_clear_merges(handle_, sheet));
 }
 
 namespace {
@@ -74,7 +72,7 @@ emscripten::val sheet_list(fm_workbook_t* wb, uint32_t sheet,
                            fm_status_t (*count_fn)(fm_workbook_t*, uint32_t, uint32_t*), SheetListItemFn item_fn) {
   emscripten::val arr = emscripten::val::array();
   if (wb == nullptr) {
-    arr.set("status", error_status(kBindingInvalidHandle));
+    arr.set("status", invalid_handle_status());
     return arr;
   }
   uint32_t count = 0;
@@ -115,7 +113,7 @@ emscripten::val JsWorkbook::getMerges(uint32_t sheet) const {
 emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val range) const {
   emscripten::val arr = emscripten::val::array();
   if (handle_ == nullptr) {
-    arr.set("status", error_status(kBindingInvalidHandle));
+    arr.set("status", invalid_handle_status());
     return arr;
   }
   JsNarrowNumericReader reader("getMergesInRange");
@@ -161,7 +159,7 @@ emscripten::val JsWorkbook::getComment(uint32_t sheet, uint32_t row, uint32_t co
 emscripten::val JsWorkbook::getCommentResult(uint32_t sheet, uint32_t row, uint32_t col) const {
   emscripten::val out = emscripten::val::object();
   if (handle_ == nullptr) {
-    out.set("status", error_status(kBindingInvalidHandle));
+    out.set("status", invalid_handle_status());
     out.set("comment", emscripten::val::null());
     return out;
   }
@@ -204,7 +202,7 @@ emscripten::val JsWorkbook::getComments(uint32_t sheet) const {
 JsStatus JsWorkbook::setComment(uint32_t sheet, uint32_t row, uint32_t col, const std::string& author,
                                 const std::string& text) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   const char* author_c = author.empty() ? nullptr : author.c_str();
   const char* text_c = text.empty() ? nullptr : text.c_str();
@@ -223,7 +221,7 @@ JsStatus JsWorkbook::addHyperlinkRange(uint32_t sheet, uint32_t row, uint32_t co
                                        const std::string& target, const std::string& display,
                                        const std::string& tooltip, const std::string& location) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   fm_hyperlink hl{};
   hl.row = row;
@@ -240,26 +238,23 @@ JsStatus JsWorkbook::addHyperlinkRange(uint32_t sheet, uint32_t row, uint32_t co
 
 JsStatus JsWorkbook::removeHyperlink(uint32_t sheet, uint32_t row, uint32_t col) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_sheet_remove_hyperlink(handle_, sheet, row, col);
-  return status_from_rc(rc);
+  return status_from_rc(fm_sheet_remove_hyperlink(handle_, sheet, row, col));
 }
 
 JsStatus JsWorkbook::removeHyperlinkAt(uint32_t sheet, uint32_t index) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_sheet_remove_hyperlink_at(handle_, sheet, index);
-  return status_from_rc(rc);
+  return status_from_rc(fm_sheet_remove_hyperlink_at(handle_, sheet, index));
 }
 
 JsStatus JsWorkbook::clearHyperlinks(uint32_t sheet) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_sheet_clear_hyperlinks(handle_, sheet);
-  return status_from_rc(rc);
+  return status_from_rc(fm_sheet_clear_hyperlinks(handle_, sheet));
 }
 
 namespace {
@@ -328,7 +323,7 @@ emscripten::val JsWorkbook::getValidations(uint32_t sheet) const {
 
 JsStatus JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   // Pull every JS field into local storage first; the C ABI receives
   // borrowed `const char*` views that must stay valid until
@@ -376,18 +371,16 @@ JsStatus JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
 
 JsStatus JsWorkbook::removeValidationAt(uint32_t sheet, uint32_t index) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_sheet_remove_validation_at(handle_, sheet, index);
-  return status_from_rc(rc);
+  return status_from_rc(fm_sheet_remove_validation_at(handle_, sheet, index));
 }
 
 JsStatus JsWorkbook::clearValidations(uint32_t sheet) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_sheet_clear_validations(handle_, sheet);
-  return status_from_rc(rc);
+  return status_from_rc(fm_sheet_clear_validations(handle_, sheet));
 }
 
 // ---- Threaded comments and persons -------------------------------------
@@ -469,7 +462,7 @@ emscripten::val JsWorkbook::getThreadedComments(uint32_t sheet) const {
   emscripten::val comments = emscripten::val::array();
   o.set("comments", comments);
   if (handle_ == nullptr) {
-    o.set("status", error_status(kBindingInvalidHandle));
+    o.set("status", invalid_handle_status());
     return o;
   }
   size_t count = 0;
@@ -487,7 +480,7 @@ emscripten::val JsWorkbook::getThreadedComments(uint32_t sheet) const {
 
 JsStatus JsWorkbook::addThreadedComment(uint32_t sheet, emscripten::val comment) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("addThreadedComment");
   const std::string id = reader.string(comment, "id", "comment.id");
@@ -523,7 +516,7 @@ JsStatus JsWorkbook::addThreadedComment(uint32_t sheet, emscripten::val comment)
 JsStatus JsWorkbook::editThreadedComment(uint32_t sheet, const std::string& id, const std::string& text,
                                          emscripten::val mentions) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("editThreadedComment");
   MentionStore store;
@@ -538,14 +531,14 @@ JsStatus JsWorkbook::editThreadedComment(uint32_t sheet, const std::string& id, 
 
 JsStatus JsWorkbook::setThreadResolved(uint32_t sheet, const std::string& threadId, bool done) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_set_thread_resolved(handle_, sheet, threadId.c_str(), done ? 1 : 0));
 }
 
 JsStatus JsWorkbook::removeThreadedComment(uint32_t sheet, const std::string& id) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_remove_threaded_comment(handle_, sheet, id.c_str()));
 }
@@ -555,7 +548,7 @@ emscripten::val JsWorkbook::getPersons() const {
   emscripten::val persons = emscripten::val::array();
   o.set("persons", persons);
   if (handle_ == nullptr) {
-    o.set("status", error_status(kBindingInvalidHandle));
+    o.set("status", invalid_handle_status());
     return o;
   }
   size_t count = 0;
@@ -573,7 +566,7 @@ emscripten::val JsWorkbook::getPersons() const {
 
 JsStatus JsWorkbook::addPerson(emscripten::val person) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   JsNarrowNumericReader reader("addPerson");
   const std::string id = reader.string(person, "id", "person.id");
@@ -589,7 +582,7 @@ JsStatus JsWorkbook::addPerson(emscripten::val person) {
 
 JsStatus JsWorkbook::removePerson(const std::string& id) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_workbook_remove_person(handle_, id.c_str()));
 }

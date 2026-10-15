@@ -41,7 +41,7 @@ JsStringResult map_profile_text(ProfileTextMapFn fn, const std::string& text, co
 emscripten::val JsWorkbook::trace_to_val(TraceFn fn, uint32_t sheet, uint32_t row, uint32_t col, uint32_t depth) const {
   emscripten::val arr = emscripten::val::array();
   if (handle_ == nullptr) {
-    arr.set("status", error_status(kBindingInvalidHandle));
+    arr.set("status", invalid_handle_status());
     return arr;
   }
   fm_cell_nodes_t* nodes = nullptr;
@@ -199,7 +199,7 @@ emscripten::val JsWorkbook::spillInfo(uint32_t sheet, uint32_t row, uint32_t col
   item.set("rows", 0U);
   item.set("cols", 0U);
   if (handle_ == nullptr) {
-    item.set("status", error_status(kBindingInvalidHandle));
+    item.set("status", invalid_handle_status());
     return item;
   }
   fm_spill_info_t info{};

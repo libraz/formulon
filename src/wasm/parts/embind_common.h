@@ -276,6 +276,9 @@ bool js_value_present(const emscripten::val& value);
 /// than the residue of an earlier, unrelated call.
 JsStatus error_status(int32_t code);
 
+/// Failure envelope for a call made on a destroyed workbook handle.
+JsStatus invalid_handle_status();
+
 /// Builds a failure envelope for a rejection the binding raised itself --
 /// a missing or wrongly-shaped JS argument -- carrying `message` and an
 /// empty context. Never reads the thread-local diagnostics, which at that

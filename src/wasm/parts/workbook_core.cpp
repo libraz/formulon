@@ -192,7 +192,7 @@ void finish_save(fm_status_t rc, uint8_t* out, std::size_t len, JsStatus& status
 JsSaveResult JsWorkbook::save() const {
   JsSaveResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(kBindingInvalidHandle);
+    r.status = invalid_handle_status();
     return r;
   }
   uint8_t* out = nullptr;
@@ -205,7 +205,7 @@ JsSaveResult JsWorkbook::save() const {
 JsSaveResult JsWorkbook::saveAs(int32_t format) const {
   JsSaveResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(kBindingInvalidHandle);
+    r.status = invalid_handle_status();
     return r;
   }
   uint8_t* out = nullptr;
@@ -218,7 +218,7 @@ JsSaveResult JsWorkbook::saveAs(int32_t format) const {
 JsSaveDiagnosticsResult JsWorkbook::saveWithDiagnostics(int32_t format) const {
   JsSaveDiagnosticsResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(kBindingInvalidHandle);
+    r.status = invalid_handle_status();
     return r;
   }
   uint8_t* out = nullptr;
@@ -240,7 +240,7 @@ JsSaveDiagnosticsResult JsWorkbook::saveWithDiagnostics(int32_t format) const {
 JsReadDiagnosticsResult JsWorkbook::readDiagnostics() const {
   JsReadDiagnosticsResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(kBindingInvalidHandle);
+    r.status = invalid_handle_status();
     return r;
   }
   fm_read_diagnostics_t d{};
@@ -262,57 +262,51 @@ JsReadDiagnosticsResult JsWorkbook::readDiagnostics() const {
 
 JsStatus JsWorkbook::addSheet(const std::string& name) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_workbook_add_sheet(handle_, name.c_str());
-  return status_from_rc(rc);
+  return status_from_rc(fm_workbook_add_sheet(handle_, name.c_str()));
 }
 
 JsStatus JsWorkbook::moveSheet(uint32_t fromIdx, uint32_t toIdx) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_workbook_move_sheet(handle_, fromIdx, toIdx);
-  return status_from_rc(rc);
+  return status_from_rc(fm_workbook_move_sheet(handle_, fromIdx, toIdx));
 }
 
 JsStatus JsWorkbook::removeSheet(uint32_t index) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_workbook_remove_sheet(handle_, index);
-  return status_from_rc(rc);
+  return status_from_rc(fm_workbook_remove_sheet(handle_, index));
 }
 
 JsStatus JsWorkbook::renameSheet(uint32_t index, const std::string& newName) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_workbook_rename_sheet(handle_, index, newName.c_str());
-  return status_from_rc(rc);
+  return status_from_rc(fm_workbook_rename_sheet(handle_, index, newName.c_str()));
 }
 
 JsStatus JsWorkbook::setDefinedName(const std::string& name, const std::string& formula) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_workbook_set_defined_name(handle_, name.c_str(), formula.c_str());
-  return status_from_rc(rc);
+  return status_from_rc(fm_workbook_set_defined_name(handle_, name.c_str(), formula.c_str()));
 }
 
 JsStatus JsWorkbook::setDefinedNameScoped(const std::string& name, const std::string& formula, int32_t localSheetId) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_workbook_set_defined_name_scoped(handle_, name.c_str(), formula.c_str(), localSheetId);
-  return status_from_rc(rc);
+  return status_from_rc(fm_workbook_set_defined_name_scoped(handle_, name.c_str(), formula.c_str(), localSheetId));
 }
 
 // ---- Row / column edits --------------------------------------------------
 
 JsStatus JsWorkbook::invoke_row_col_edit(RowColEditFn fn, uint32_t sheet, uint32_t index, uint32_t count) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fn(handle_, sheet, index, count));
 }
@@ -346,7 +340,7 @@ JsStringResult JsWorkbook::sheetName(uint32_t idx) const {
 
 JsStatus JsWorkbook::recalc() {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   progress_callback_threw_ = false;
   fm_status_t rc = fm_workbook_recalc(handle_);
@@ -364,7 +358,7 @@ JsStatus JsWorkbook::recalc() {
 JsParallelRecalcResult JsWorkbook::recalcParallel(emscripten::val threadCount) {
   JsParallelRecalcResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(kBindingInvalidHandle);
+    r.status = invalid_handle_status();
     return r;
   }
 
@@ -420,10 +414,9 @@ JsParallelRecalcResult JsWorkbook::recalcParallel(emscripten::val threadCount) {
 
 JsStatus JsWorkbook::setIterative(bool enabled, int32_t max_iterations, double max_change) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_workbook_set_iterative(handle_, enabled ? 1 : 0, max_iterations, max_change);
-  return status_from_rc(rc);
+  return status_from_rc(fm_workbook_set_iterative(handle_, enabled ? 1 : 0, max_iterations, max_change));
 }
 
 emscripten::val JsWorkbook::getIterative() const {
@@ -456,17 +449,16 @@ JsNumberResult JsWorkbook::calcMode() const {
 
 JsStatus JsWorkbook::setCalcMode(uint32_t mode) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_workbook_set_calc_mode(handle_, static_cast<std::int32_t>(mode));
-  return status_from_rc(rc);
+  return status_from_rc(fm_workbook_set_calc_mode(handle_, static_cast<std::int32_t>(mode)));
 }
 
 emscripten::val JsWorkbook::pinnedNow() const {
   emscripten::val out = emscripten::val::object();
   out.set("now", emscripten::val::null());
   if (handle_ == nullptr) {
-    out.set("status", error_status(kBindingInvalidHandle));
+    out.set("status", invalid_handle_status());
     return out;
   }
   fm_civil_time_t now{};
@@ -490,7 +482,7 @@ emscripten::val JsWorkbook::pinnedNow() const {
 JsStatus JsWorkbook::setPinnedNow(uint32_t year, uint32_t month, uint32_t day, uint32_t hour, uint32_t minute,
                                   uint32_t second) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   // Each field is widened rather than range-checked here: the C layer owns
   // the calendar domain, and a JS-side duplicate would be a second place to
@@ -503,7 +495,7 @@ JsStatus JsWorkbook::setPinnedNow(uint32_t year, uint32_t month, uint32_t day, u
 
 JsStatus JsWorkbook::clearPinnedNow() {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   return status_from_rc(fm_workbook_clear_pinned_now(handle_));
 }
@@ -519,16 +511,15 @@ JsStringResult JsWorkbook::excelProfileId() const {
 
 JsStatus JsWorkbook::setExcelProfileId(const std::string& profile_id) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
-  fm_status_t rc = fm_workbook_set_excel_profile_id(handle_, profile_id.c_str());
-  return status_from_rc(rc);
+  return status_from_rc(fm_workbook_set_excel_profile_id(handle_, profile_id.c_str()));
 }
 
 emscripten::val JsWorkbook::partialRecalc(emscripten::val viewport) {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
-    o.set("status", error_status(kBindingInvalidHandle));
+    o.set("status", invalid_handle_status());
     o.set("recomputed", static_cast<uint32_t>(0));
     return o;
   }
@@ -602,7 +593,7 @@ void JsWorkbook::rebind_progress_callback() {
 
 JsStatus JsWorkbook::setIterativeProgress(emscripten::val cb) {
   if (handle_ == nullptr) {
-    return error_status(kBindingInvalidHandle);
+    return invalid_handle_status();
   }
   if (cb.isNull() || cb.isUndefined()) {
     progress_callback_ = emscripten::val::null();
