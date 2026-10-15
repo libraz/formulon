@@ -593,12 +593,11 @@ Value HypgeomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
     if (k >= k_max) {
       return finalize(1.0);
     }
-    double acc = 0.0;
-    const auto start = static_cast<std::uint64_t>(k_min);
-    const auto stop = static_cast<std::uint64_t>(k);
-    for (std::uint64_t i = start; i <= stop; ++i) {
-      acc += HypgeomPmf(static_cast<double>(i), n, big_k, big_n);
+    // No closed form: a span past the term cap is rejected rather than walked.
+    if (k - k_min >= stats_detail::kMaxCumulativeTerms) {
+      return Value::error(ErrorCode::Num);
     }
+    const double acc = stats_detail::sum_pmf(k_min, k, [&](double i) { return HypgeomPmf(i, n, big_k, big_n); });
     return finalize(std::clamp(acc, 0.0, 1.0));
   }
   // PMF branch: 0 outside the support, otherwise the log-combination form.

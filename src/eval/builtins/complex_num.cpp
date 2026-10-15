@@ -310,7 +310,7 @@ Value im_unary_number(double (*op)(Complex), const Value* args) {
   if (!z) {
     return Value::error(z.error());
   }
-  return Value::number(op(z.value()));
+  return builtins_detail::to_finite_value(op(z.value()));
 }
 
 // ---------------------------------------------------------------------------

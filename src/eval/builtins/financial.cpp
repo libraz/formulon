@@ -561,6 +561,10 @@ Value cum_payment_sum(const Value* args, bool principal) {
   }
   const std::int64_t start_i = bounds.value().first;
   const std::int64_t end_i = bounds.value().second;
+  // The loop runs once per period; a longer span is rejected, not walked.
+  if (static_cast<double>(end_i - start_i) + 1.0 > financial_detail::kMaxDepreciationPeriods) {
+    return Value::error(ErrorCode::Num);
+  }
   double pmt = 0.0;
   if (principal) {
     pmt = pmt_scalar(rate, nper, pv, 0.0, input.value().type);
