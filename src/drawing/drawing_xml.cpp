@@ -119,10 +119,13 @@ Expected<void, Error> parse_drawing_part(const std::vector<std::uint8_t>& bytes,
   return Expected<void, Error>::Ok();
 }
 
+std::string_view local_name(const char* qname) {
+  const char* colon = std::strchr(qname, ':');
+  return colon != nullptr ? colon + 1 : qname;
+}
+
 std::string_view local_name(const pugi::xml_node& node) {
-  const char* name = node.name();
-  const char* colon = std::strchr(name, ':');
-  return colon != nullptr ? colon + 1 : name;
+  return local_name(node.name());
 }
 
 pugi::xml_node child_local(const pugi::xml_node& parent, std::string_view name) {
@@ -132,6 +135,16 @@ pugi::xml_node child_local(const pugi::xml_node& parent, std::string_view name) 
     }
   }
   return {};
+}
+
+std::vector<pugi::xml_node> children_local(const pugi::xml_node& parent, std::string_view name) {
+  std::vector<pugi::xml_node> out;
+  for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
+    if (child.type() == pugi::node_element && local_name(child) == name) {
+      out.push_back(child);
+    }
+  }
+  return out;
 }
 
 std::vector<pugi::xml_node> drawing_anchors(const pugi::xml_node& root, bool include_fallback) {

@@ -1,5 +1,6 @@
 #include "chart/chart_source.h"
 
+#include <algorithm>
 #include <string>
 
 #include "defined_name.h"
@@ -10,7 +11,9 @@
 #include "eval/range_resolvers.h"
 #include "parser/ast.h"
 #include "sheet.h"
+#include "sheet_layout_edit.h"
 #include "utils/arena.h"
+#include "utils/number_text.h"
 #include "utils/resource_budget.h"
 #include "utils/strings.h"
 #include "workbook.h"
@@ -188,6 +191,49 @@ Expected<ResolvedSource, Error> resolve_chart_source(const Workbook& wb, std::si
   ResolvedSource out;
   out.areas = std::move(resolver.areas);
   return out;
+}
+
+SheetRect trim_to_populated(const Workbook& wb, SheetRect r) {
+  const bool whole_col = r.top == 0 && r.bottom == Sheet::kMaxRows - 1;
+  const bool whole_row = r.left == 0 && r.right == Sheet::kMaxCols - 1;
+  if (!whole_col && !whole_row) {
+    return r;
+  }
+  const auto extent = wb.sheet(r.sheet).populated_extent(0, 0, Sheet::kMaxRows - 1, Sheet::kMaxCols - 1);
+  if (!extent.has_value()) {
+    r.top = 1;
+    r.bottom = 0;
+    return r;
+  }
+  if (whole_col) {
+    r.bottom = std::min(r.bottom, extent->last_row);
+  }
+  if (whole_row) {
+    r.right = std::min(r.right, extent->last_col);
+  }
+  return r;
+}
+
+bool row_hidden(const Sheet& sheet, std::uint32_t row) {
+  if (const RowLayout* entry = find_row_override(sheet.layout(), row); entry != nullptr) {
+    return entry->hidden;
+  }
+  return sheet.format_defaults().zero_height;
+}
+
+bool col_hidden(const Sheet& sheet, std::uint32_t col) {
+  for (const ColumnLayout& span : sheet.layout().columns) {
+    if (col >= span.first && col <= span.last) {
+      return span.hidden;
+    }
+  }
+  return false;
+}
+
+std::string count_text(std::uint64_t n) {
+  char buf[24];
+  const int len = format_unsigned(buf, sizeof(buf), n);
+  return std::string(buf, len > 0 ? static_cast<std::size_t>(len) : 0U);
 }
 
 }  // namespace formulon

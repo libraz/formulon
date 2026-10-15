@@ -102,15 +102,6 @@ pugi::xml_node child_element(const pugi::xml_node& parent, std::string_view uri,
   return {};
 }
 
-pugi::xml_node first_element_child(const pugi::xml_node& parent) {
-  for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
-    if (child.type() == pugi::node_element) {
-      return child;
-    }
-  }
-  return {};
-}
-
 void preserve_local_namespace_declarations(const pugi::xml_node& source, pugi::xml_node destination) {
   for (pugi::xml_attribute attr = source.first_attribute(); attr; attr = attr.next_attribute()) {
     const std::string_view name = attr.name();
@@ -338,7 +329,7 @@ void file_as_filtered_title(const pugi::xml_node& site) {
     if (!is_chart_element(ext, "ext")) {
       continue;
     }
-    const pugi::xml_node title = first_element_child(ext);
+    const pugi::xml_node title = io::first_element_child(ext);
     const std::string_view title_local = local_name(title);
     if (namespace_uri(title) == kNsC15 && title_local.substr(0, 8) == "filtered") {
       after = ext;
@@ -381,7 +372,7 @@ bool lost_values(const pugi::xml_node& ser) {
   if (!holder) {
     holder = child_element(ser, kNsC, "yVal");
   }
-  const pugi::xml_node ref = first_element_child(holder);
+  const pugi::xml_node ref = io::first_element_child(holder);
   const pugi::xml_node formula = child_element(ref, kNsC, "f");
   const std::string_view text = formula.child_value();
   const std::string_view tail = "!#REF!";

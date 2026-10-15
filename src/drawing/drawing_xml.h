@@ -114,8 +114,14 @@ Expected<void, Error> parse_drawing_part(const std::vector<std::uint8_t>& bytes,
 /// Local name of `node` (the part after any `prefix:`).
 std::string_view local_name(const pugi::xml_node& node);
 
+/// Local name of the qualified name `qname`.
+std::string_view local_name(const char* qname);
+
 /// First element child of `parent` whose local name is `name`.
 pugi::xml_node child_local(const pugi::xml_node& parent, std::string_view name);
+
+/// Every element child of `parent` whose local name is `name`, in document order.
+std::vector<pugi::xml_node> children_local(const pugi::xml_node& parent, std::string_view name);
 
 /// The anchor elements of `root` in document order. `include_fallback`
 /// adds the `mc:Fallback` anchors of `mc:AlternateContent` wrappers, which a

@@ -113,30 +113,6 @@ Error unparseable(const char* message) {
 // DOM helpers
 // ---------------------------------------------------------------------------
 
-std::string_view local_of(const char* qname) {
-  const char* colon = std::strchr(qname, ':');
-  return colon != nullptr ? std::string_view(colon + 1) : std::string_view(qname);
-}
-
-xml_node first_element(const xml_node& parent) {
-  for (xml_node c = parent.first_child(); c; c = c.next_sibling()) {
-    if (c.type() == pugi::node_element) {
-      return c;
-    }
-  }
-  return {};
-}
-
-std::vector<xml_node> kids(const xml_node& parent, std::string_view name) {
-  std::vector<xml_node> out;
-  for (xml_node c = parent.first_child(); c; c = c.next_sibling()) {
-    if (c.type() == pugi::node_element && local_name(c) == name) {
-      out.push_back(c);
-    }
-  }
-  return out;
-}
-
 int rank(Order order, std::string_view name) {
   for (int i = 0; order[i] != nullptr; ++i) {
     if (name == order[i]) {
@@ -158,10 +134,10 @@ xml_node slot(const xml_node& parent, std::string_view name, Order order) {
 }
 
 xml_node ensure(xml_node parent, const char* qname, Order order) {
-  if (const xml_node found = child_local(parent, local_of(qname))) {
+  if (const xml_node found = child_local(parent, local_name(qname))) {
     return found;
   }
-  const xml_node before = slot(parent, local_of(qname), order);
+  const xml_node before = slot(parent, local_name(qname), order);
   return before ? parent.insert_child_before(qname, before) : parent.append_child(qname);
 }
 
@@ -190,7 +166,7 @@ xml_node put_val(xml_node parent, const char* qname, Order order, const std::str
 }
 
 void drop(xml_node parent, std::string_view name) {
-  for (const xml_node& node : kids(parent, name)) {
+  for (const xml_node& node : children_local(parent, name)) {
     parent.remove_child(node);
   }
 }
@@ -380,7 +356,7 @@ bool is_pie(const xml_node& plot) {
 
 /// The `c15:filtered*Series` group of a plot, or null.
 xml_node filter_group(const xml_node& plot) {
-  for (const xml_node& ext : kids(child_local(plot, "extLst"), "ext")) {
+  for (const xml_node& ext : children_local(child_local(plot, "extLst"), "ext")) {
     for (xml_node g = ext.first_child(); g; g = g.next_sibling()) {
       const std::string_view n = local_name(g);
       if (g.type() == pugi::node_element && n.size() > 14 && n.substr(0, 8) == "filtered" &&
@@ -393,8 +369,8 @@ xml_node filter_group(const xml_node& plot) {
 }
 
 std::vector<xml_node> plot_series(const xml_node& plot) {
-  std::vector<xml_node> out = kids(plot, "ser");
-  for (const xml_node& s : kids(filter_group(plot), "ser")) {
+  std::vector<xml_node> out = children_local(plot, "ser");
+  for (const xml_node& s : children_local(filter_group(plot), "ser")) {
     out.push_back(s);
   }
   return out;
@@ -411,7 +387,7 @@ Expected<xml_node, Error> series_at(const xml_node& plot, std::uint32_t idx) {
 
 /// The `strRef` / `numRef` / `multiLvlStrRef` of a series input, or null.
 xml_node ref_of(const xml_node& holder) {
-  const xml_node ref = first_element(holder);
+  const xml_node ref = io::first_element_child(holder);
   const std::string_view n = local_name(ref);
   return n.size() > 3 && n.substr(n.size() - 3) == "Ref" ? ref : xml_node();
 }
@@ -427,7 +403,7 @@ void bind_c15(xml_node node) {
 /// child and binds `c15` on it for the children the caller appends.
 xml_node c15_ext(xml_node ref, bool create) {
   xml_node list = child_local(ref, "extLst");
-  for (xml_node ext : kids(list, "ext")) {
+  for (xml_node ext : children_local(list, "ext")) {
     if (std::string_view(ext.attribute("uri").value()) == kUriC15) {
       if (create) {
         bind_c15(ext);
@@ -450,12 +426,12 @@ xml_node c15_ext(xml_node ref, bool create) {
 /// Removes an empty c15 ext and an empty extLst from `ref`.
 void prune_ext(xml_node ref) {
   xml_node list = child_local(ref, "extLst");
-  for (const xml_node& ext : kids(list, "ext")) {
-    if (!first_element(ext)) {
+  for (const xml_node& ext : children_local(list, "ext")) {
+    if (!io::first_element_child(ext)) {
       list.remove_child(ext);
     }
   }
-  if (list && !first_element(list)) {
+  if (list && !io::first_element_child(list)) {
     ref.remove_child(list);
   }
 }
@@ -499,7 +475,7 @@ void load_palette(const Workbook& wb, const std::string& chart_path, Palette& ou
   pugi::xml_document doc;
   std::string colors;
   if (rels != nullptr && doc.load_buffer(rels->bytes.data(), rels->bytes.size())) {
-    for (const xml_node& r : kids(doc.document_element(), "Relationship")) {
+    for (const xml_node& r : children_local(doc.document_element(), "Relationship")) {
       const std::string_view type = r.attribute("Type").value();
       const auto ends = [&](std::string_view tail) {
         return type.size() >= tail.size() && type.substr(type.size() - tail.size()) == tail;
@@ -575,7 +551,7 @@ Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatch
     drop(holder, "solidFill");
   } else if (color.is_set()) {
     const std::string alpha =
-        child_local(first_element(child_local(holder, "solidFill")), "alpha").attribute("val").value();
+        child_local(io::first_element_child(child_local(holder, "solidFill")), "alpha").attribute("val").value();
     for (Order f = kFills; *f != nullptr; ++f) {
       drop(holder, *f);
     }
@@ -588,7 +564,7 @@ Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatch
   if (transparency.is_keep()) {
     return ok();
   }
-  xml_node clr = first_element(child_local(holder, "solidFill"));
+  xml_node clr = io::first_element_child(child_local(holder, "solidFill"));
   if (transparency.is_clear()) {
     drop(clr, "alpha");
     return ok();
@@ -798,7 +774,7 @@ Expected<void, Error> apply_labels(xml_node ser, bool pie, const std::string& la
   for (int i = 0; i < 6; ++i) {
     if (i < 5 && flags[i]->has_value()) {
       put_val(d, kShow[i], kLabelsOrder, **flags[i] ? "1" : "0");
-    } else if (!child_local(d, local_of(kShow[i]))) {
+    } else if (!child_local(d, local_name(kShow[i]))) {
       put_val(d, kShow[i], kLabelsOrder, "0");
     }
   }
@@ -851,8 +827,8 @@ Expected<void, Error> apply_labels(xml_node ser, bool pie, const std::string& la
 
 /// Replaces `ser`'s `tag` input with a reference to `formula` and an empty cache.
 void put_ref(xml_node ser, const char* tag, const std::string& formula, bool multi, bool filtered) {
-  drop(ser, local_of(tag));
-  const bool name = local_of(tag) == "tx";
+  drop(ser, local_name(tag));
+  const bool name = local_name(tag) == "tx";
   const char* ref = name ? "strRef" : multi ? "multiLvlStrRef" : "numRef";
   std::string x = std::string("<") + tag + "><c:" + ref + ">";
   std::string esc;
@@ -917,15 +893,15 @@ std::string filtered_group_name(std::string_view plot) {
 
 void drop_empty_group(xml_node plot) {
   xml_node group = filter_group(plot);
-  if (!group || first_element(group)) {
+  if (!group || io::first_element_child(group)) {
     return;
   }
   xml_node ext = group.parent();
   ext.remove_child(group);
-  if (!first_element(ext)) {
+  if (!io::first_element_child(ext)) {
     xml_node list = ext.parent();
     list.remove_child(ext);
-    if (!first_element(list)) {
+    if (!io::first_element_child(list)) {
       plot.remove_child(list);
     }
   }
@@ -934,7 +910,7 @@ void drop_empty_group(xml_node plot) {
 /// Moves series between the plot and its `c15:filtered*Series` group, in the form Excel saves.
 void patch_series_filter(const Chart& c, const std::set<std::uint32_t>& hidden) {
   for (xml_node plot : plots_of(c)) {
-    for (xml_node ser : kids(plot, "ser")) {
+    for (xml_node ser : children_local(plot, "ser")) {
       if (hidden.count(val_u(ser, "idx")) == 0) {
         continue;
       }
@@ -950,14 +926,14 @@ void patch_series_filter(const Chart& c, const std::set<std::uint32_t>& hidden) 
       moved.set_name("c15:ser");
       each_ref(moved, hide_ref);
     }
-    for (xml_node ser : kids(filter_group(plot), "ser")) {
+    for (xml_node ser : children_local(filter_group(plot), "ser")) {
       if (hidden.count(val_u(ser, "idx")) != 0) {
         continue;
       }
       each_ref(ser, show_ref);
       const std::uint32_t order = val_u(ser, "order");
       xml_node before;
-      for (const xml_node& s : kids(plot, "ser")) {
+      for (const xml_node& s : children_local(plot, "ser")) {
         if (val_u(s, "order") > order) {
           before = s;
           break;
@@ -1050,7 +1026,7 @@ Expected<void, Error> patch_category_filter(const Workbook& wb, const Chart& c, 
 std::set<std::uint32_t> filtered_series(const Chart& c) {
   std::set<std::uint32_t> out;
   for (const xml_node& plot : plots_of(c)) {
-    for (const xml_node& s : kids(filter_group(plot), "ser")) {
+    for (const xml_node& s : children_local(filter_group(plot), "ser")) {
       out.insert(val_u(s, "idx"));
     }
   }
@@ -1090,7 +1066,7 @@ Expected<void, Error> patch_series(const Workbook& wb, const Chart& c, xml_node 
       if (f.required) {
         return bad_arg("chart: a series needs its values");
       }
-      drop(ser, local_of(f.tag));
+      drop(ser, local_name(f.tag));
       continue;
     }
     ASSIGN_OR_RETURN(ResolvedSource src, resolve_chart_source(wb, c.host, text, eval::default_registry()));
@@ -1121,7 +1097,7 @@ std::string accent_sppr(const Palette& p, std::uint32_t i) {
 
 /// Inserts a copy of `src` among `ser`'s `c:dPt` in idx order.
 xml_node insert_point(xml_node ser, const xml_node& src, std::uint32_t idx) {
-  for (const xml_node& d : kids(ser, "dPt")) {
+  for (const xml_node& d : children_local(ser, "dPt")) {
     if (val_u(d, "idx") > idx) {
       return ser.insert_copy_before(src, d);
     }
@@ -1130,7 +1106,7 @@ xml_node insert_point(xml_node ser, const xml_node& src, std::uint32_t idx) {
 }
 
 xml_node find_point(const xml_node& ser, std::uint32_t idx) {
-  for (const xml_node& d : kids(ser, "dPt")) {
+  for (const xml_node& d : children_local(ser, "dPt")) {
     if (val_u(d, "idx") == idx) {
       return d;
     }
@@ -1157,7 +1133,7 @@ void vary_bar(xml_node plot, bool on, const Palette& palette) {
       }
       continue;
     }
-    for (const xml_node& d : kids(ser, "dPt")) {
+    for (const xml_node& d : children_local(ser, "dPt")) {
       const std::string_view clr =
           child_local(child_local(child_local(d, "spPr"), "solidFill"), "schemeClr").attribute("val").value();
       if (clr.substr(0, 6) == "accent") {
@@ -1209,15 +1185,15 @@ Expected<void, Error> patch_source(const Workbook& wb, Chart& c, std::string_vie
                                ChartLegendPosition::kRight, split, t));
   patch_series_filter(c, {});
   RETURN_IF_ERROR(patch_category_filter(wb, c, {}));
-  const std::vector<xml_node> fresh = kids(template_plot(t), "ser");
-  for (const xml_node& ser : kids(plot, "ser")) {
+  const std::vector<xml_node> fresh = children_local(template_plot(t), "ser");
+  for (const xml_node& ser : children_local(plot, "ser")) {
     if (val_u(ser, "idx") >= fresh.size()) {
       plot.remove_child(ser);
     }
   }
   for (std::uint32_t i = 0; i < fresh.size(); ++i) {
     xml_node ser;
-    for (const xml_node& s : kids(plot, "ser")) {
+    for (const xml_node& s : children_local(plot, "ser")) {
       if (val_u(s, "idx") == i) {
         ser = s;
       }
@@ -1233,7 +1209,7 @@ Expected<void, Error> patch_source(const Workbook& wb, Chart& c, std::string_vie
       }
     }
     put_val(ser, "c:order", kSerOrder, std::to_string(i));
-    for (const xml_node& d : kids(fresh[i], "dPt")) {
+    for (const xml_node& d : children_local(fresh[i], "dPt")) {
       if (!find_point(ser, val_u(d, "idx"))) {
         insert_point(ser, d, val_u(d, "idx"));
       }
@@ -1324,8 +1300,8 @@ bool same_tree(const xml_node& a, const xml_node& b) {
       } while (n && n.type() != pugi::node_element);
       return n;
     };
-    xml_node cx = first_element(x);
-    xml_node cy = first_element(y);
+    xml_node cx = io::first_element_child(x);
+    xml_node cy = io::first_element_child(y);
     for (; cx && cy; cx = next(cx), cy = next(cy)) {
       todo.emplace_back(cx, cy);
     }
@@ -1413,7 +1389,7 @@ void carry_series_line(const xml_node& from, xml_node to, int old_kind, int new_
 /// and keeps its own line.
 void convert_points(const xml_node& from, xml_node to, Family old_family, Family new_family, bool bar) {
   const xml_node series_sp = child_local(to, "spPr");
-  for (const xml_node& d : kids(from, "dPt")) {
+  for (const xml_node& d : children_local(from, "dPt")) {
     const std::uint32_t idx = val_u(d, "idx");
     pugi::xml_document frag;
     xml_node p = fragment(frag, "<c:dPt><c:idx val=\"" + std::to_string(idx) + "\"/>" +
@@ -1504,11 +1480,11 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
     return unsupported("chart: a pivot chart cannot be a scatter chart");
   }
   std::vector<std::uint32_t> ids;
-  for (const xml_node& a : kids(plot, "axId")) {
+  for (const xml_node& a : children_local(plot, "axId")) {
     ids.push_back(a.attribute("val").as_uint());
   }
   for (const xml_node& other : plots_of(c)) {
-    for (const xml_node& a : kids(other, "axId")) {
+    for (const xml_node& a : children_local(other, "axId")) {
       if (other != plot && std::count(ids.begin(), ids.end(), a.attribute("val").as_uint()) != 0) {
         return unsupported("chart: the plot shares its axes with another plot");
       }
@@ -1521,7 +1497,7 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
 
   const std::set<std::uint32_t> hidden = filtered_series(c);
   patch_series_filter(c, {});
-  const std::vector<xml_node> sers = kids(plot, "ser");
+  const std::vector<xml_node> sers = children_local(plot, "ser");
   ChartSplit split;
   for (const xml_node& s : sers) {
     const xml_node cat = child_local(s, "cat") ? child_local(s, "cat") : child_local(s, "xVal");
@@ -1538,7 +1514,7 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
   pugi::xml_document t;
   RETURN_IF_ERROR(template_doc(wb, c, kind, grouping, std::nullopt, ChartLegendPosition::kRight, split, t));
   xml_node tplot = template_plot(t);
-  const std::vector<xml_node> fresh = kids(tplot, "ser");
+  const std::vector<xml_node> fresh = children_local(tplot, "ser");
   for (std::size_t i = 0; i < sers.size() && i < fresh.size(); ++i) {
     xml_node to = fresh[i];
     const xml_node from = sers[i];
@@ -1573,13 +1549,13 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
     // points as-is.
     if (old_ring && new_ring) {
       drop(to, "dPt");
-      for (const xml_node& d : kids(from, "dPt")) {
+      for (const xml_node& d : children_local(from, "dPt")) {
         copy_at(to, d, kSerOrder);
       }
     } else if (old_ring && family_of(k) == Family::kFill) {
       replace_ln(child_local(to, "spPr"), child_local(child_local(child_local(from, "dPt"), "spPr"), "ln"));
     } else if (family_of(old) == Family::kFill && new_ring) {
-      for (const xml_node& d : kids(to, "dPt")) {
+      for (const xml_node& d : children_local(to, "dPt")) {
         replace_ln(child_local(d, "spPr"), child_local(child_local(from, "spPr"), "ln"));
       }
     } else if (!old_ring && !new_ring) {
@@ -1647,7 +1623,7 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
       put_val(a, "c:crossAx", kAxisOrder, std::to_string(new_ids[1 - i]));
     }
   }
-  const std::vector<xml_node> axis_refs = kids(tplot, "axId");
+  const std::vector<xml_node> axis_refs = children_local(tplot, "axId");
   for (std::size_t i = 0; i < axis_refs.size() && i < new_ids.size(); ++i) {
     set_attr(axis_refs[i], "val", std::to_string(new_ids[i]));
   }
@@ -1897,7 +1873,7 @@ Expected<void, Error> set_chart_legend(Workbook& wb, std::size_t sheet, std::uin
   put_val(node, "c:overlay", kLegendOrder, legend.overlay ? "1" : "0");
   if (legend.hidden_series_idx.has_value()) {
     const std::set<std::uint32_t> hidden(legend.hidden_series_idx->begin(), legend.hidden_series_idx->end());
-    for (const xml_node& e : kids(node, "legendEntry")) {
+    for (const xml_node& e : children_local(node, "legendEntry")) {
       if (flag(child_local(e, "delete")) || hidden.count(val_u(e, "idx")) != 0) {
         node.remove_child(e);
       }
@@ -1939,7 +1915,7 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
   const char* bound_names[] = {"c:min", "c:max"};
   for (int i = 0; i < 2; ++i) {
     if (bounds[i]->is_clear()) {
-      drop(scaling(), local_of(bound_names[i]));
+      drop(scaling(), local_name(bound_names[i]));
     } else if (bounds[i]->is_set()) {
       if (!std::isfinite(bounds[i]->value)) {
         return bad_arg("chart: axis bounds must be finite");
@@ -2189,7 +2165,7 @@ Expected<std::uint32_t, Error> add_chart_series(Workbook& wb, std::size_t sheet,
   pugi::xml_document t;
   RETURN_IF_ERROR(template_doc(wb, c, static_cast<ChartInsertKind>(kind), grouping_of(node), std::nullopt,
                                ChartLegendPosition::kRight, split, t));
-  xml_node ser = copy_at(node, kids(template_plot(t), "ser").back(), kPlotOrder);
+  xml_node ser = copy_at(node, children_local(template_plot(t), "ser").back(), kPlotOrder);
   put_val(ser, "c:order", kSerOrder, std::to_string(order));
   bool refs_changed = false;
   RETURN_IF_ERROR(patch_series(wb, c, node, ser, patch, &refs_changed));

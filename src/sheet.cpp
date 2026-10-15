@@ -160,6 +160,15 @@ void RowCells::erase_cols(std::uint32_t col, std::uint32_t count) {
   }
 }
 
+Cell& Sheet::ensure_overwritten_cell_locked(std::uint32_t row, std::uint32_t col) {
+  // A write can replace either a spill anchor or a phantom; the whole region
+  // must disappear before storage is updated.
+  if (const std::optional<CellAddress> anchor = spill_displaced_by_write(spill_table_.get(), row, col)) {
+    clear_spill_locked(anchor->row, anchor->col);
+  }
+  return rows_[row].ensure(col);
+}
+
 void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
   // Bounds checks are advisory: callers above this layer (parser, OOXML
   // reader) own coordinate validation. A debug assert catches programming
@@ -168,14 +177,7 @@ void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
 
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
 
-  // A literal write can replace either the anchor or a phantom. In both
-  // cases the complete region must disappear before updating storage.
-  if (const std::optional<CellAddress> anchor = spill_displaced_by_write(spill_table_.get(), row, col)) {
-    clear_spill_locked(anchor->row, anchor->col);
-  }
-
-  RowCells& row_cells = rows_[row];
-  Cell& slot = row_cells.ensure(col);
+  Cell& slot = ensure_overwritten_cell_locked(row, col);
   reset_to_literal(slot);
   slot.cached_value = v;
   if (!v.is_text()) {
@@ -189,12 +191,7 @@ void Sheet::set_cell_text(std::uint32_t row, std::uint32_t col, std::string_view
   assert(row < kMaxRows && col < kMaxCols);
 
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  if (const std::optional<CellAddress> anchor = spill_displaced_by_write(spill_table_.get(), row, col)) {
-    clear_spill_locked(anchor->row, anchor->col);
-  }
-
-  RowCells& row_cells = rows_[row];
-  Cell& slot = row_cells.ensure(col);
+  Cell& slot = ensure_overwritten_cell_locked(row, col);
   reset_to_literal(slot);
   auto owned = std::make_unique<std::string>(text);
   slot.cached_value = Value::text(*owned);
@@ -208,13 +205,7 @@ void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string f
 
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
 
-  // Formula replacement can likewise target an anchor or a phantom.
-  if (const std::optional<CellAddress> anchor = spill_displaced_by_write(spill_table_.get(), row, col)) {
-    clear_spill_locked(anchor->row, anchor->col);
-  }
-
-  RowCells& row_cells = rows_[row];
-  Cell& slot = row_cells.ensure(col);
+  Cell& slot = ensure_overwritten_cell_locked(row, col);
   slot.formula_text = std::move(formula);
   slot.phonetic_runs.clear();
   slot.phonetic_props = PhoneticProperties{};

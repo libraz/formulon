@@ -1618,6 +1618,10 @@ class Sheet {
   /// Caller must hold `spill_mutex_`.
   void shift_blocked_spills_locked(const StructuralEdit& edit);
 
+  /// Clears the spill region a write at `(row, col)` displaces and returns the
+  /// cell slot, creating it. Caller must hold `spill_mutex_`.
+  Cell& ensure_overwritten_cell_locked(std::uint32_t row, std::uint32_t col);
+
   /// Records whether `(row, col)` holds formula text in `formula_cells_`.
   /// Caller must hold `spill_mutex_`.
   void index_formula_cell_locked(std::uint32_t row, std::uint32_t col, bool has_formula);

@@ -140,13 +140,17 @@ void append_xml_number(std::string& out, double value) {
   }
 }
 
-bool has_element_child(const pugi::xml_node& node) {
+pugi::xml_node first_element_child(const pugi::xml_node& node) {
   for (pugi::xml_node child = node.first_child(); child; child = child.next_sibling()) {
     if (child.type() == pugi::node_element) {
-      return true;
+      return child;
     }
   }
-  return false;
+  return {};
+}
+
+bool has_element_child(const pugi::xml_node& node) {
+  return static_cast<bool>(first_element_child(node));
 }
 
 std::uint32_t parse_xml_u32_attr(const pugi::xml_attribute& attr, std::uint32_t default_value) {

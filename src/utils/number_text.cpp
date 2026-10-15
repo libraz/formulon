@@ -246,6 +246,19 @@ void put_exponential(Out* out, const Digits& g, int frac) {
   }
 }
 
+/// Writes `-` for a negative `v` and returns true; for a non-finite `v` writes
+/// its `inf` / `nan` spelling and returns false.
+bool put_sign_or_special(Out* out, double v) {
+  if (!std::isfinite(v)) {
+    put_special(out, v);
+    return false;
+  }
+  if (std::signbit(v)) {
+    out->put('-');
+  }
+  return true;
+}
+
 int format_unsigned_base(char* buf, std::size_t cap, unsigned long long v, int min_width, bool negative, unsigned base,
                          bool upper) {
   char tmp[24];
@@ -273,15 +286,11 @@ int format_unsigned_base(char* buf, std::size_t cap, unsigned long long v, int m
 
 int format_fixed(char* buf, std::size_t cap, double v, int frac_digits) {
   Out out(buf, cap);
-  if (!std::isfinite(v)) {
-    put_special(&out, v);
+  if (!put_sign_or_special(&out, v)) {
     return out.finish();
   }
   if (frac_digits < 0) {
     frac_digits = 0;
-  }
-  if (std::signbit(v)) {
-    out.put('-');
   }
   Digits g;
   fixed_digits(std::fabs(v), frac_digits, &g);
@@ -298,15 +307,11 @@ std::string fixed_string(double v, int frac_digits) {
 
 int format_exponential(char* buf, std::size_t cap, double v, int frac_digits) {
   Out out(buf, cap);
-  if (!std::isfinite(v)) {
-    put_special(&out, v);
+  if (!put_sign_or_special(&out, v)) {
     return out.finish();
   }
   if (frac_digits < 0) {
     frac_digits = 0;
-  }
-  if (std::signbit(v)) {
-    out.put('-');
   }
   Digits g;
   precision_digits(std::fabs(v), frac_digits + 1, &g);
@@ -316,15 +321,11 @@ int format_exponential(char* buf, std::size_t cap, double v, int frac_digits) {
 
 int format_general(char* buf, std::size_t cap, double v, int precision) {
   Out out(buf, cap);
-  if (!std::isfinite(v)) {
-    put_special(&out, v);
+  if (!put_sign_or_special(&out, v)) {
     return out.finish();
   }
   if (precision < 1) {
     precision = 1;
-  }
-  if (std::signbit(v)) {
-    out.put('-');
   }
   Digits g;
   precision_digits(std::fabs(v), precision, &g);

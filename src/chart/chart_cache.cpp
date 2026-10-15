@@ -22,10 +22,8 @@
 #include "io/xsd_double.h"
 #include "num_fmt_locale.h"
 #include "sheet.h"
-#include "sheet_layout_edit.h"
 #include "style_resolve.h"
 #include "styles.h"
-#include "utils/number_text.h"
 #include "utils/status_macros.h"
 #include "workbook.h"
 
@@ -50,11 +48,6 @@ struct Cache {
 
 enum class RefKind : std::uint8_t { kNum, kStr, kMultiLvl };
 
-std::string_view local_name(const char* name) {
-  const char* colon = std::strrchr(name, ':');
-  return colon != nullptr ? std::string_view(colon + 1) : std::string_view(name);
-}
-
 bool is_role(std::string_view n) {
   return n == "tx" || n == "cat" || n == "val" || n == "xVal" || n == "yVal" || n == "bubbleSize";
 }
@@ -70,15 +63,6 @@ bool ref_kind_of(std::string_view n, RefKind& kind) {
     return false;
   }
   return true;
-}
-
-pugi::xml_node child_named(const pugi::xml_node& parent, std::string_view name) {
-  for (pugi::xml_node c = parent.first_child(); c; c = c.next_sibling()) {
-    if (c.type() == pugi::node_element && local_name(c.name()) == name) {
-      return c;
-    }
-  }
-  return {};
 }
 
 /// Series references: `ser/<role>/<ref>`, including `c15:ser` of filtered series.
@@ -108,20 +92,14 @@ void collect_refs(const pugi::xml_node& node, std::vector<pugi::xml_node>& out) 
 
 /// `c:f`, or the `c15:formulaRef/c15:sqref` a filtered series keeps instead.
 std::string ref_formula(const pugi::xml_node& ref) {
-  std::string text = child_named(ref, "f").text().get();
+  std::string text = child_local(ref, "f").text().get();
   if (text.empty()) {
-    pugi::xml_node ext = child_named(ref, "extLst");
+    pugi::xml_node ext = child_local(ref, "extLst");
     for (pugi::xml_node e = ext.first_child(); e && text.empty(); e = e.next_sibling()) {
-      text = child_named(child_named(e, "formulaRef"), "sqref").text().get();
+      text = child_local(child_local(e, "formulaRef"), "sqref").text().get();
     }
   }
   return text;
-}
-
-std::string count_text(std::uint64_t n) {
-  char buf[24];
-  const int len = format_unsigned(buf, sizeof(buf), n);
-  return std::string(buf, len > 0 ? static_cast<std::size_t>(len) : 0U);
 }
 
 struct Pos {
@@ -262,44 +240,6 @@ class Gatherer {
     return cache;
   }
 
-  /// Whole columns / rows stop at the sheet's populated extent; the rest is blank.
-  SheetRect trim(SheetRect r) const {
-    const bool whole_col = r.top == 0 && r.bottom == Sheet::kMaxRows - 1;
-    const bool whole_row = r.left == 0 && r.right == Sheet::kMaxCols - 1;
-    if (!whole_col && !whole_row) {
-      return r;
-    }
-    const auto extent = wb_.sheet(r.sheet).populated_extent(0, 0, Sheet::kMaxRows - 1, Sheet::kMaxCols - 1);
-    if (!extent.has_value()) {
-      r.top = 1;
-      r.bottom = 0;
-      return r;
-    }
-    if (whole_col) {
-      r.bottom = std::min(r.bottom, extent->last_row);
-    }
-    if (whole_row) {
-      r.right = std::min(r.right, extent->last_col);
-    }
-    return r;
-  }
-
-  bool row_hidden(const Sheet& sheet, std::uint32_t row) const {
-    if (const RowLayout* entry = find_row_override(sheet.layout(), row); entry != nullptr) {
-      return entry->hidden;
-    }
-    return sheet.format_defaults().zero_height;
-  }
-
-  bool col_hidden(const Sheet& sheet, std::uint32_t col) const {
-    for (const ColumnLayout& span : sheet.layout().columns) {
-      if (col >= span.first && col <= span.last) {
-        return span.hidden;
-      }
-    }
-    return false;
-  }
-
   /// Cells in point order (column by column) with hidden ones dropped
   /// and the rest renumbered; returns the point count.
   std::uint64_t flatten(const std::vector<SheetRect>& areas, bool hide, std::vector<Item>& items,
@@ -307,7 +247,7 @@ class Gatherer {
     std::uint64_t next = 0;
     for (const SheetRect& area : areas) {
       const Sheet& sheet = wb_.sheet(area.sheet);
-      const SheetRect r = trim(area);
+      const SheetRect r = trim_to_populated(wb_, area);
       std::uint64_t kept = 0;
       for (std::uint32_t col = r.left; col <= r.right && r.top <= r.bottom; ++col) {
         if (hide && col_hidden(sheet, col)) {
@@ -372,7 +312,7 @@ std::vector<CachePt> read_points(const pugi::xml_node& parent) {
       CachePt pt;
       pt.idx = io::parse_xml_u32_attr(c.attribute("idx"), 0);
       pt.format_code = c.attribute("formatCode").value();
-      io::AppendOoxmlTextUnescaped(pt.text, child_named(c, "v").text().get());
+      io::AppendOoxmlTextUnescaped(pt.text, child_local(c, "v").text().get());
       pts.push_back(std::move(pt));
     }
   }
@@ -399,8 +339,8 @@ Cache read_cache(const pugi::xml_node& node) {
   if (!node) {
     return cache;
   }
-  cache.point_count = io::parse_xml_u32_attr(child_named(node, "ptCount").attribute("val"), 0);
-  cache.format_code = child_named(node, "formatCode").text().get();
+  cache.point_count = io::parse_xml_u32_attr(child_local(node, "ptCount").attribute("val"), 0);
+  cache.format_code = child_local(node, "formatCode").text().get();
   if (local_name(node.name()) == "multiLvlStrCache") {
     for (pugi::xml_node c = node.first_child(); c; c = c.next_sibling()) {
       if (c.type() == pugi::node_element && local_name(c.name()) == "lvl") {
@@ -492,7 +432,7 @@ void write_cache(pugi::xml_node ref, const std::string& prefix, RefKind kind, co
   if (old) {
     node = ref.insert_child_after(qualified.c_str(), old);
     ref.remove_child(old);
-  } else if (const pugi::xml_node f = child_named(ref, "f"); f) {
+  } else if (const pugi::xml_node f = child_local(ref, "f"); f) {
     node = ref.insert_child_after(qualified.c_str(), f);
   } else {
     node = ref.append_child(qualified.c_str());
@@ -521,10 +461,10 @@ bool refresh_chart_caches(const Workbook& wb, std::size_t host_sheet, pugi::xml_
   const std::string_view root_prefix =
       root_colon == std::string_view::npos ? std::string_view() : root_name.substr(0, root_colon);
   if (local_name(root.name()) != "chartSpace" || io::find_namespace_binding(root, root_prefix) == chart_ns::kNsCx ||
-      child_named(root, "pivotSource")) {
+      child_local(root, "pivotSource")) {
     return false;
   }
-  const pugi::xml_node vis = child_named(child_named(root, "chart"), "plotVisOnly");
+  const pugi::xml_node vis = child_local(child_local(root, "chart"), "plotVisOnly");
   const char* vis_val = vis.attribute("val").value();
   const Gatherer gatherer(wb, !vis || (std::strcmp(vis_val, "0") != 0 && std::strcmp(vis_val, "false") != 0));
   std::vector<pugi::xml_node> refs;

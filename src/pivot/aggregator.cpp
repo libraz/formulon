@@ -346,25 +346,32 @@ std::optional<double> numeric_aggregate_value(const Value& value) {
   return std::nullopt;
 }
 
+namespace {
+
+/// Appends the bucket at (`row_leaf`, `col_leaf`) to `spans` when it exists and is non-empty.
+void append_bucket_span(const RecordBuckets& buckets, std::size_t row_leaf, std::size_t col_leaf,
+                        std::vector<RecordIndexSpan>& spans, std::size_t& total_count) {
+  if (row_leaf >= buckets.size() || col_leaf >= buckets[row_leaf].size()) {
+    return;
+  }
+  const std::vector<std::size_t>& records = buckets[row_leaf][col_leaf];
+  if (records.empty()) {
+    return;
+  }
+  total_count += records.size();
+  spans.push_back(RecordIndexSpan{records.data(), records.size(), total_count});
+}
+
+}  // namespace
+
 RecordIndexView make_leaf_set_record_view(const RecordBuckets& buckets, const std::vector<std::size_t>& row_leaves,
                                           const std::vector<std::size_t>& col_leaves,
                                           std::vector<RecordIndexSpan>& spans) {
   spans.clear();
   std::size_t total_count = 0U;
   for (const std::size_t row_leaf : row_leaves) {
-    if (row_leaf >= buckets.size()) {
-      continue;
-    }
     for (const std::size_t col_leaf : col_leaves) {
-      if (col_leaf >= buckets[row_leaf].size()) {
-        continue;
-      }
-      const std::vector<std::size_t>& records = buckets[row_leaf][col_leaf];
-      if (records.empty()) {
-        continue;
-      }
-      total_count += records.size();
-      spans.push_back(RecordIndexSpan{records.data(), records.size(), total_count});
+      append_bucket_span(buckets, row_leaf, col_leaf, spans, total_count);
     }
   }
   return RecordIndexView::from_spans(spans.data(), spans.size(), total_count);
@@ -374,20 +381,9 @@ RecordIndexView make_leaf_set_record_view(const RecordBuckets& buckets, std::siz
                                           const std::vector<std::size_t>& col_leaves,
                                           std::vector<RecordIndexSpan>& spans) {
   spans.clear();
-  if (row_leaf >= buckets.size()) {
-    return RecordIndexView::from_spans(spans.data(), spans.size(), 0U);
-  }
   std::size_t total_count = 0U;
   for (const std::size_t col_leaf : col_leaves) {
-    if (col_leaf >= buckets[row_leaf].size()) {
-      continue;
-    }
-    const std::vector<std::size_t>& records = buckets[row_leaf][col_leaf];
-    if (records.empty()) {
-      continue;
-    }
-    total_count += records.size();
-    spans.push_back(RecordIndexSpan{records.data(), records.size(), total_count});
+    append_bucket_span(buckets, row_leaf, col_leaf, spans, total_count);
   }
   return RecordIndexView::from_spans(spans.data(), spans.size(), total_count);
 }
@@ -397,15 +393,7 @@ RecordIndexView make_leaf_set_record_view(const RecordBuckets& buckets, const st
   spans.clear();
   std::size_t total_count = 0U;
   for (const std::size_t row_leaf : row_leaves) {
-    if (row_leaf >= buckets.size() || col_leaf >= buckets[row_leaf].size()) {
-      continue;
-    }
-    const std::vector<std::size_t>& records = buckets[row_leaf][col_leaf];
-    if (records.empty()) {
-      continue;
-    }
-    total_count += records.size();
-    spans.push_back(RecordIndexSpan{records.data(), records.size(), total_count});
+    append_bucket_span(buckets, row_leaf, col_leaf, spans, total_count);
   }
   return RecordIndexView::from_spans(spans.data(), spans.size(), total_count);
 }

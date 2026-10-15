@@ -40,16 +40,6 @@ xml_node path(xml_node node, std::initializer_list<std::string_view> names) {
   return node;
 }
 
-std::vector<xml_node> kids(const xml_node& parent, std::string_view name) {
-  std::vector<xml_node> out;
-  for (xml_node c = parent.first_child(); c; c = c.next_sibling()) {
-    if (c.type() == pugi::node_element && local_name(c) == name) {
-      out.push_back(c);
-    }
-  }
-  return out;
-}
-
 std::string_view val_of(const xml_node& node) {
   return node.attribute("val").value();
 }
@@ -332,7 +322,7 @@ void read_points(const xml_node& cache, bool numeric, bool direct_text, std::vec
     point_count = cache.attribute("ptCount").as_uint();
   }
   out.clear();
-  for (const xml_node& pt : kids(cache, "pt")) {
+  for (const xml_node& pt : children_local(cache, "pt")) {
     const std::string_view raw_text =
         direct_text ? std::string_view(pt.child_value()) : std::string_view(kid(pt, "v").child_value());
     std::string decoded;
@@ -348,7 +338,7 @@ void read_points(const xml_node& cache, bool numeric, bool direct_text, std::vec
 }
 
 xml_node ext_child(const xml_node& ref, std::string_view name) {
-  for (const xml_node& ext : kids(kid(ref, "extLst"), "ext")) {
+  for (const xml_node& ext : children_local(kid(ref, "extLst"), "ext")) {
     if (const xml_node found = kid(ext, name)) {
       return found;
     }
@@ -379,7 +369,7 @@ ChartDataSource read_data_source(const xml_node& holder) {
       const xml_node cache = kid(body, kind == "multiLvlStrRef" ? "multiLvlStrCache" : "multiLvlNumCache");
       std::uint32_t unused = 0;
       src.point_count = kid(cache, "ptCount").attribute("val").as_uint();
-      const std::vector<xml_node> levels = kids(cache, "lvl");
+      const std::vector<xml_node> levels = children_local(cache, "lvl");
       for (std::size_t i = 0; i < levels.size(); ++i) {
         std::vector<ChartValue> level;
         read_points(levels[i], false, false, level, unused);
@@ -417,7 +407,7 @@ ChartDataSource read_data_source(const xml_node& holder) {
 std::string flatten_rich(const xml_node& rich) {
   std::string out;
   bool first = true;
-  for (const xml_node& p : kids(rich, "p")) {
+  for (const xml_node& p : children_local(rich, "p")) {
     if (!first) {
       out += '\n';
     }
@@ -476,7 +466,7 @@ ChartLegend read_legend(const xml_node& legend) {
   out.present = true;
   out.position = legend_position_of(val_of(kid(legend, "legendPos")), ChartLegendPosition::kRight);
   out.overlay = flag_of(kid(legend, "overlay"));
-  for (const xml_node& entry : kids(legend, "legendEntry")) {
+  for (const xml_node& entry : children_local(legend, "legendEntry")) {
     if (flag_of(kid(entry, "delete"))) {
       out.hidden_series_idx.push_back(uint_of(kid(entry, "idx")).value_or(0U));
     }
@@ -590,7 +580,7 @@ ChartSeries read_series(const Workbook& wb, const xml_node& ser, bool filtered) 
     s.marker = read_marker(wb, marker);
   }
   s.smooth = tri_of(kid(ser, "smooth"));
-  for (const xml_node& dpt : kids(ser, "dPt")) {
+  for (const xml_node& dpt : children_local(ser, "dPt")) {
     ChartPoint point;
     point.idx = uint_of(kid(dpt, "idx")).value_or(0U);
     const xml_node point_sp_pr = kid(dpt, "spPr");
@@ -625,19 +615,19 @@ ChartPlot read_plot(const Workbook& wb, const xml_node& node, ChartPlotType type
   if (const xml_node dlbls = kid(node, "dLbls")) {
     plot.labels = read_labels(wb, dlbls);
   }
-  for (const xml_node& ax_id : kids(node, "axId")) {
+  for (const xml_node& ax_id : children_local(node, "axId")) {
     plot.axis_ids.push_back(static_cast<std::uint32_t>(ax_id.attribute("val").as_uint()));
   }
-  for (const xml_node& ser : kids(node, "ser")) {
+  for (const xml_node& ser : children_local(node, "ser")) {
     plot.series.push_back(read_series(wb, ser, false));
   }
   // Series hidden through the chart filter move to `c15:filtered*Series`.
-  for (const xml_node& ext : kids(kid(node, "extLst"), "ext")) {
+  for (const xml_node& ext : children_local(kid(node, "extLst"), "ext")) {
     for (xml_node group = ext.first_child(); group; group = group.next_sibling()) {
       const std::string_view name = local_name(group);
       if (group.type() == pugi::node_element && name.size() > 14 && name.substr(0, 8) == "filtered" &&
           name.substr(name.size() - 6) == "Series") {
-        for (const xml_node& ser : kids(group, "ser")) {
+        for (const xml_node& ser : children_local(group, "ser")) {
           plot.series.push_back(read_series(wb, ser, true));
         }
       }
@@ -727,10 +717,10 @@ std::vector<std::uint32_t> read_category_filter(const xml_node& plot_area) {
     if (plot.type() != pugi::node_element || !plot_type_of(local_name(plot))) {
       continue;
     }
-    std::vector<xml_node> sers = kids(plot, "ser");
-    for (const xml_node& ext : kids(kid(plot, "extLst"), "ext")) {
+    std::vector<xml_node> sers = children_local(plot, "ser");
+    for (const xml_node& ext : children_local(kid(plot, "extLst"), "ext")) {
       for (xml_node group = ext.first_child(); group; group = group.next_sibling()) {
-        for (const xml_node& ser : kids(group, "ser")) {
+        for (const xml_node& ser : children_local(group, "ser")) {
           sers.push_back(ser);
         }
       }
@@ -749,7 +739,7 @@ std::vector<std::uint32_t> read_category_filter(const xml_node& plot_area) {
 }
 
 std::optional<std::int32_t> read_style(const xml_node& root) {
-  for (const xml_node& alt : kids(root, "AlternateContent")) {
+  for (const xml_node& alt : children_local(root, "AlternateContent")) {
     if (const xml_node style = kid(kid(alt, "Choice"), "style")) {
       return int_of(style);
     }
@@ -757,7 +747,7 @@ std::optional<std::int32_t> read_style(const xml_node& root) {
   if (const xml_node style = kid(root, "style")) {
     return int_of(style);
   }
-  for (const xml_node& alt : kids(root, "AlternateContent")) {
+  for (const xml_node& alt : children_local(root, "AlternateContent")) {
     if (const xml_node style = kid(kid(alt, "Fallback"), "style")) {
       return int_of(style);
     }
@@ -776,7 +766,7 @@ void read_drawingml_chart(const Workbook& wb, const xml_node& root, ChartModel& 
   model.auto_title_deleted = tri_of(kid(chart, "autoTitleDeleted"));
   model.legend = read_legend(kid(chart, "legend"));
   model.plot_vis_only = tri_of(kid(chart, "plotVisOnly"));
-  for (const xml_node& ext : kids(kid(chart, "extLst"), "ext")) {
+  for (const xml_node& ext : children_local(kid(chart, "extLst"), "ext")) {
     if (const Tri na = tri_of(path(ext, {"dataDisplayOptions16", "dispNaAsBlank"})); na != Tri::kAbsent) {
       model.disp_na_as_blank = na;
     }
@@ -931,7 +921,7 @@ void read_chartex(const xml_node& root, ChartModel& model) {
     std::vector<Dim> dims;
   };
   std::vector<Data> data_sets;
-  for (const xml_node& data : kids(kid(root, "chartData"), "data")) {
+  for (const xml_node& data : children_local(kid(root, "chartData"), "data")) {
     Data entry;
     entry.id = data.attribute("id").value();
     for (xml_node dim = data.first_child(); dim; dim = dim.next_sibling()) {
@@ -947,7 +937,7 @@ void read_chartex(const xml_node& root, ChartModel& model) {
   const xml_node plot_area = kid(chart, "plotArea");
   ChartPlot plot;
   plot.type = ChartPlotType::kChartex;
-  for (const xml_node& ser : kids(kid(plot_area, "plotAreaRegion"), "series")) {
+  for (const xml_node& ser : children_local(kid(plot_area, "plotAreaRegion"), "series")) {
     if (plot.series.empty()) {
       plot.chartex_layout = ser.attribute("layoutId").value();
     }
@@ -977,7 +967,7 @@ void read_chartex(const xml_node& root, ChartModel& model) {
         }
       }
     }
-    for (const xml_node& ax_id : kids(ser, "axisId")) {
+    for (const xml_node& ax_id : children_local(ser, "axisId")) {
       plot.axis_ids.push_back(static_cast<std::uint32_t>(ax_id.attribute("val").as_uint()));
     }
     plot.series.push_back(std::move(s));
@@ -990,7 +980,7 @@ void read_chartex(const xml_node& root, ChartModel& model) {
     model.legend.position = legend_position_of(legend.attribute("pos").value(), ChartLegendPosition::kRight);
     model.legend.overlay = attr_flag(legend, "overlay");
   }
-  for (const xml_node& axis : kids(plot_area, "axis")) {
+  for (const xml_node& axis : children_local(plot_area, "axis")) {
     model.axes.push_back(read_cx_axis(axis));
   }
 }

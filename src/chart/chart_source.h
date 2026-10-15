@@ -6,6 +6,8 @@
 #define FORMULON_CHART_CHART_SOURCE_H_
 
 #include <cstddef>
+#include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -15,6 +17,7 @@
 
 namespace formulon {
 
+class Sheet;
 class Workbook;
 
 namespace eval {
@@ -34,6 +37,17 @@ struct ResolvedSource {
 /// external or non-reference results.
 Expected<ResolvedSource, Error> resolve_chart_source(const Workbook& wb, std::size_t host_sheet,
                                                      std::string_view formula, const eval::FunctionRegistry& registry);
+
+/// Whole-column / whole-row rectangles stop at the sheet's populated extent; an
+/// empty extent yields an inverted rectangle (`top > bottom`).
+SheetRect trim_to_populated(const Workbook& wb, SheetRect r);
+
+/// Whether `row` / `col` is hidden by the sheet's layout.
+bool row_hidden(const Sheet& sheet, std::uint32_t row);
+bool col_hidden(const Sheet& sheet, std::uint32_t col);
+
+/// Decimal text of a point count or index.
+std::string count_text(std::uint64_t n);
 
 }  // namespace formulon
 

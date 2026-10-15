@@ -15,10 +15,8 @@
 #include "eval/text_format/display_text.h"
 #include "num_fmt_locale.h"
 #include "sheet.h"
-#include "sheet_layout_edit.h"
 #include "style_resolve.h"
 #include "styles.h"
-#include "utils/number_text.h"
 #include "utils/resource_budget.h"
 #include "workbook.h"
 
@@ -70,12 +68,6 @@ bool is_xy(ChartPlotType type) {
   return type == ChartPlotType::kScatter || type == ChartPlotType::kBubble;
 }
 
-std::string count_label(std::size_t n) {
-  char buf[24];
-  const int len = format_unsigned(buf, sizeof(buf), n);
-  return std::string(buf, len > 0 ? static_cast<std::size_t>(len) : 0U);
-}
-
 class Reader {
  public:
   /// `pivot` takes points from the cache: a pivot chart's references span the
@@ -123,7 +115,7 @@ class Reader {
     }
     const std::vector<SheetRect>& areas = out.ranges;
     if (multi_level && areas.size() == 1 && areas[0].top != areas[0].bottom && areas[0].left != areas[0].right) {
-      const SheetRect r = trim(areas[0]);
+      const SheetRect r = trim_to_populated(wb_, areas[0]);
       if (r.top <= r.bottom && r.left <= r.right) {
         const std::uint64_t cells =
             (static_cast<std::uint64_t>(r.bottom) - r.top + 1U) * (static_cast<std::uint64_t>(r.right) - r.left + 1U);
@@ -139,7 +131,7 @@ class Reader {
     trimmed.reserve(areas.size());
     std::uint64_t cells = 0;
     for (const SheetRect& area : areas) {
-      const SheetRect r = trim(area);
+      const SheetRect r = trim_to_populated(wb_, area);
       if (r.top > r.bottom || r.left > r.right) {
         continue;
       }
@@ -175,44 +167,6 @@ class Reader {
     std::uint32_t row;
     std::uint32_t col;
   };
-
-  /// Whole columns / rows stop at the sheet's populated extent.
-  SheetRect trim(SheetRect r) const {
-    const bool whole_col = r.top == 0 && r.bottom == Sheet::kMaxRows - 1;
-    const bool whole_row = r.left == 0 && r.right == Sheet::kMaxCols - 1;
-    if (!whole_col && !whole_row) {
-      return r;
-    }
-    const auto extent = wb_.sheet(r.sheet).populated_extent(0, 0, Sheet::kMaxRows - 1, Sheet::kMaxCols - 1);
-    if (!extent.has_value()) {
-      r.bottom = 0;
-      r.top = 1;  // empty
-      return r;
-    }
-    if (whole_col) {
-      r.bottom = std::min(r.bottom, extent->last_row);
-    }
-    if (whole_row) {
-      r.right = std::min(r.right, extent->last_col);
-    }
-    return r;
-  }
-
-  bool row_hidden(const Sheet& sheet, std::uint32_t row) const {
-    if (const RowLayout* entry = find_row_override(sheet.layout(), row); entry != nullptr) {
-      return entry->hidden;
-    }
-    return sheet.format_defaults().zero_height;
-  }
-
-  bool col_hidden(const Sheet& sheet, std::uint32_t col) const {
-    for (const ColumnLayout& span : sheet.layout().columns) {
-      if (col >= span.first && col <= span.last) {
-        return span.hidden;
-      }
-    }
-    return false;
-  }
 
   /// Hidden rows and columns drop out when only visible cells are plotted;
   /// a hidden sheet's cells do not.
@@ -599,7 +553,7 @@ Expected<ChartData, Error> resolve_chart_data(const Workbook& wb, std::size_t ho
     if (cat_owner == nullptr) {
       data.categories.generated = true;
       for (std::size_t i = 1; i <= longest; ++i) {
-        data.categories.labels.push_back(count_label(i));
+        data.categories.labels.push_back(count_text(i));
       }
     }
   }

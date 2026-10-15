@@ -194,6 +194,24 @@ Expected<double, ErrorCode> run_stdev(const std::vector<double>& xs, bool sample
   return std::sqrt(v);
 }
 
+namespace {
+
+/// Value `frac` of the way from `xs[lo_index]` to its successor. Weighted
+/// endpoints avoid overflowing `high - low` for a legitimate extreme pair such
+/// as {-1E308, 1E308}.
+Expected<double, ErrorCode> interpolate_sorted(const std::vector<double>& xs, std::size_t lo_index, double frac) {
+  if (frac == 0.0 || lo_index + 1U >= xs.size()) {
+    return xs[lo_index];
+  }
+  const double interpolated = (1.0 - frac) * xs[lo_index] + frac * xs[lo_index + 1U];
+  if (!std::isfinite(interpolated)) {
+    return ErrorCode::Num;
+  }
+  return interpolated;
+}
+
+}  // namespace
+
 Expected<double, ErrorCode> percentile_sorted_inc(const std::vector<double>& xs_sorted, double k) {
   if (xs_sorted.empty() || !std::isfinite(k) || k < 0.0 || k > 1.0) {
     return ErrorCode::Num;
@@ -208,17 +226,7 @@ Expected<double, ErrorCode> percentile_sorted_inc(const std::vector<double>& xs_
   const double floor_pos = std::floor(pos);
   const auto lo_index = static_cast<std::size_t>(floor_pos) - 1U;
   const double frac = pos - floor_pos;
-  if (frac == 0.0 || lo_index + 1U >= n) {
-    return xs_sorted[lo_index];
-  }
-  // Weighted endpoints avoid overflowing `high - low` for a legitimate
-  // extreme pair such as {-1E308, 1E308}; the result remains inside the
-  // closed interval spanned by the two finite neighbours.
-  const double interpolated = (1.0 - frac) * xs_sorted[lo_index] + frac * xs_sorted[lo_index + 1U];
-  if (!std::isfinite(interpolated)) {
-    return ErrorCode::Num;
-  }
-  return interpolated;
+  return interpolate_sorted(xs_sorted, lo_index, frac);
 }
 
 Expected<double, ErrorCode> percentile_sorted_exc(const std::vector<double>& xs_sorted, double k) {
@@ -236,14 +244,7 @@ Expected<double, ErrorCode> percentile_sorted_exc(const std::vector<double>& xs_
   }
   const auto lo_index = static_cast<std::size_t>(idx - 1);
   const double frac = pos - floor_pos;
-  if (frac == 0.0 || lo_index + 1U >= n) {
-    return xs_sorted[lo_index];
-  }
-  const double interpolated = (1.0 - frac) * xs_sorted[lo_index] + frac * xs_sorted[lo_index + 1U];
-  if (!std::isfinite(interpolated)) {
-    return ErrorCode::Num;
-  }
-  return interpolated;
+  return interpolate_sorted(xs_sorted, lo_index, frac);
 }
 
 Expected<double, ErrorCode> run_median(std::vector<double> xs) {
