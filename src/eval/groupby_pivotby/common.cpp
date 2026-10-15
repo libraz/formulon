@@ -313,17 +313,6 @@ bool group_cell_equal(const Value& a, const Value& b) {
   }
 }
 
-bool group_key_equal(const ArrayValue& keys, std::uint32_t row_a, std::uint32_t row_b) {
-  for (std::uint32_t c = 0; c < keys.cols; ++c) {
-    const Value& va = keys.cells[static_cast<std::size_t>(row_a) * keys.cols + c];
-    const Value& vb = keys.cells[static_cast<std::size_t>(row_b) * keys.cols + c];
-    if (!group_cell_equal(va, vb)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 std::string normalized_group_key(const ArrayValue& keys, std::uint32_t row) {
   std::string out;
   out.reserve(static_cast<std::size_t>(keys.cols) * 12U);

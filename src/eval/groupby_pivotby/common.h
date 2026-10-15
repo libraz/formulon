@@ -177,10 +177,6 @@ std::vector<std::uint32_t> collect_included_rows(const std::vector<bool>& includ
 /// dynamic strength.
 bool group_cell_equal(const Value& a, const Value& b);
 
-/// Multi-column key equality: walks each column of the keys and compares
-/// cellwise via `group_cell_equal`.
-bool group_key_equal(const ArrayValue& keys, std::uint32_t row_a, std::uint32_t row_b);
-
 /// Builds a hashable canonical key for one row. Text cells become their
 /// dynamic-strength collation key; all scalar kinds retain their type tag. Values which cannot be
 /// equal under `group_cell_equal` receive a row-unique key.

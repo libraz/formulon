@@ -542,6 +542,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // Helper: write the per-slot cells of one row; `leaf` / `subtotal` are
   // indexed by col group / outer group, then value column.
   const auto fill_slot_cells = [&](std::vector<Value>& row, const auto& leaf, const auto& subtotal) {
+    // `subtotal` is empty when column subtotals are off; outer slots never occur then.
     for (std::size_t ci = 0; ci < col_slots.size(); ++ci) {
       const ColSlot& slot = col_slots[ci];
       const std::uint32_t base = body_block_start + static_cast<std::uint32_t>(ci) * val_cols;
@@ -555,6 +556,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     }
   };
 
+  const std::vector<std::vector<Value>> no_outer_subtotals;
+
   // Helper: render one body row (per row-group rg).
   auto render_body_row = [&](std::size_t rg) {
     std::vector<Value> row(out_cols, placeholder_cell());
@@ -563,7 +566,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       row[c] = row_fields->cells[static_cast<std::size_t>(row_repr[rg]) * key_cols + c];
     }
     // Body cells: per physical column slot, value column.
-    fill_slot_cells(row, body[rg], col_subtotal_body[rg]);
+    fill_slot_cells(row, body[rg], emit_col_subtotals ? col_subtotal_body[rg] : no_outer_subtotals);
     // Grand-total block: row totals per value column. Mac Excel ja-JP only
     // populates this strip for the single-value-column layout; with
     // val_cols > 1 the grand-total columns carry headers but blank values.
