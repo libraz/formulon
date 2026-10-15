@@ -519,11 +519,11 @@ TEST(DatevalueDmmm, PurelyNumericDmyRejected) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(DatevalueDmmm, MixedSeparatorsRejected) {
-  // Dash before the month but slash after -> #VALUE!.
+TEST(DatevalueDmmm, MixedSeparatorsAccepted) {
+  // The gaps around the month name take `-` and `/` independently.
   const Value v = EvalSource("=DATEVALUE(\"29-Feb/1900\")");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 60.0);
 }
 
 TEST(DatevalueDmmm, MonthFirstOrderRejected) {
@@ -698,12 +698,13 @@ TEST(DatevalueYearLess, PinnedClockReachesContextFreeCoercion) {
   ASSERT_TRUE(abs.is_number());
   EXPECT_EQ(abs.as_number(), 46096.0);
 
-  // Feb 29 exists only in a leap pinned year, so TIMEVALUE shows which year it read.
+  // Feb 29 exists only in a leap pinned year, so TIMEVALUE shows which year it
+  // read; a Year-Month-Day profile has no m/y reading to fall back to.
   constexpr date_time::CivilTime kLeapYear{{2024, 4U, 23U}, {15U, 30U, 45U}};
-  const Value leap = EvalSourcePinned("=TIMEVALUE(\"2/29 6:00\")", kLeapYear);
+  const Value leap = EvalSourcePinned("=TIMEVALUE(\"2/29 6:00\")", kLeapYear, mac_365_ja_jp_profile());
   ASSERT_TRUE(leap.is_number());
   EXPECT_EQ(leap.as_number(), 0.25);
-  const Value common = EvalSourcePinned("=TIMEVALUE(\"2/29 6:00\")");
+  const Value common = EvalSourcePinned("=TIMEVALUE(\"2/29 6:00\")", kPinnedNowForDatevalue, mac_365_ja_jp_profile());
   ASSERT_TRUE(common.is_error());
   EXPECT_EQ(common.as_error(), ErrorCode::Value);
 }
@@ -766,7 +767,9 @@ TEST(TimeTextMeridiem, RejectedForms) {
 TEST(TimeTextMeridiem, MonthWordAfterTimeIsNotAMarker) {
   const Value v = EvalSource("=TIMEVALUE(\"10:00 Apr 5, 2024\")");
   ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), 10.0 / 24.0, 1e-15);
+  // TIMEVALUE is v - INT(v) of the date-time serial, last bits included.
+  const double serial = 45387.0 + 10.0 / 24.0;
+  EXPECT_EQ(v.as_number(), serial - std::floor(serial));
 }
 
 TEST(DateTextLenientShapes, HourBeyondTwentyThreeRollsTheDateForward) {

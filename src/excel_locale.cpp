@@ -592,20 +592,21 @@ constexpr LocaleFacts kJapaneseFacts{
     {"$", "€", "¥", "￥"},                       // value_dollar_prefix, value_euro_prefix, value_yen_prefix
     "$",                                         // usdollar.usdollar_two_decimals
     DateOrder::kYMD,
-    false,                  // value_dotted_ymd
-    true,                   // datevalue_timevalue.datevalue_kanji_with_terminator
-    true,                   // datevalue_timevalue.timevalue_jp_kanji_units
-    true,                   // datevalue_timevalue.datevalue_era_reiwa_full
-    RLetter::kJapaneseEra,  // locale_tokens.text_letter_r_date, text_letter_rr_date
-    false,                  // locale_tokens.value_korean_ymd
-    true,                   // value_month_name_en
-    true,                   // value_coercion_probes.value_d_mmm_yy
-    true,                   // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
-    true,                   // datevalue_timevalue.timevalue_trailing_dot
-    true,                   // datevalue_timevalue.timevalue_space_dot
-    "AM",                   // text_format.text_time_am
-    "PM",                   // text_format.text_time_pm
-    true,                   // text_format.text_time_a_p
+    false,                          // value_dotted_ymd
+    KanjiDateText::kAll,            // datevalue_timevalue.datevalue_kanji_with_terminator
+    true,                           // datevalue_timevalue.timevalue_jp_kanji_units
+    true,                           // datevalue_timevalue.datevalue_era_reiwa_full
+    RLetter::kJapaneseEra,          // locale_tokens.text_letter_r_date, text_letter_rr_date
+    false,                          // locale_tokens.value_korean_ymd
+    MonthNameText::kEnglishPrefix,  // value_month_name_en
+    {},
+    false,
+    true,  // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
+    true,  // datevalue_timevalue.timevalue_trailing_dot
+    true,  // datevalue_timevalue.timevalue_space_dot
+    "AM",  // text_format.text_time_am
+    "PM",  // text_format.text_time_pm
+    true,  // text_format.text_time_a_p
     DbcsCodepage::kJis0208,
     true,                   // code_char_jp_probes.char_halfwidth_kata_177
     true,                   // value_numbervalue.value_fullwidth_digits
@@ -661,19 +662,20 @@ constexpr LocaleFacts kEnglishFacts{
     "$",                                         // usdollar.usdollar_two_decimals
     DateOrder::kMDY,
     false,  // value_dotted_ymd
+    KanjiDateText::kNone,
     false,
     false,
+    RLetter::kLiteral,              // locale_tokens.text_letter_r_date, text_letter_rr_date
+    false,                          // locale_tokens.value_korean_ymd
+    MonthNameText::kEnglishPrefix,  // value_month_name_en
+    {},
     false,
-    RLetter::kLiteral,  // locale_tokens.text_letter_r_date, text_letter_rr_date
-    false,              // locale_tokens.value_korean_ymd
-    true,               // value_month_name_en
-    true,               // value_coercion_probes.value_d_mmm_yy
-    true,               // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
-    true,               // datevalue_timevalue.timevalue_trailing_dot
-    true,               // datevalue_timevalue.timevalue_space_dot
-    "AM",               // text_format.text_time_am
-    "PM",               // text_format.text_time_pm
-    true,               // text_format.text_time_a_p
+    true,  // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
+    true,  // datevalue_timevalue.timevalue_trailing_dot
+    true,  // datevalue_timevalue.timevalue_space_dot
+    "AM",  // text_format.text_time_am
+    "PM",  // text_format.text_time_pm
+    true,  // text_format.text_time_a_p
     DbcsCodepage::kNone,
     false,
     false,
@@ -732,13 +734,14 @@ constexpr LocaleFacts kGermanFacts{
     "",                                         // usdollar.usdollar_two_decimals
     DateOrder::kDMY,                            // value_coercion_probes.value_slash_date_short
     true,                                       // value_dotted_dmy
-    false,                                      // datevalue_timevalue.datevalue_kanji_with_terminator
+    KanjiDateText::kNone,                       // datevalue_timevalue.datevalue_kanji_with_terminator
     false,                                      // datevalue_timevalue.timevalue_jp_kanji_units
     false,                                      // datevalue_timevalue.datevalue_era_reiwa_full
     RLetter::kLiteral,                          // locale_tokens.text_letter_r_date, text_letter_rr_date
     false,                                      // locale_tokens.value_korean_ymd
-    false,                                      // value_month_name_en
-    true,                                       // value_coercion_probes.value_d_mmm_yy
+    MonthNameText::kLocalPrefix,
+    {},
+    false,
     true,                 // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
     true,                 // datevalue_timevalue.timevalue_trailing_dot
     true,                 // datevalue_timevalue.timevalue_space_dot
@@ -803,13 +806,14 @@ constexpr LocaleFacts kFrenchFacts{
     "",                                        // usdollar.usdollar_two_decimals
     DateOrder::kDMY,                           // value_coercion_probes.value_slash_date_short
     false,                                     // value_dotted_dmy
-    false,                                     // datevalue_timevalue.datevalue_kanji_with_terminator
+    KanjiDateText::kNone,                      // datevalue_timevalue.datevalue_kanji_with_terminator
     false,                                     // datevalue_timevalue.timevalue_jp_kanji_units
     false,                                     // datevalue_timevalue.datevalue_era_reiwa_full
     RLetter::kLiteral,                         // locale_tokens.text_letter_r_date, text_letter_rr_date
     false,                                     // locale_tokens.value_korean_ymd
-    false,                                     // value_month_name_en
-    true,                                      // value_coercion_probes.value_d_mmm_yy
+    MonthNameText::kLocalPrefix,
+    {"", "", "", "", "", "jun", "jul", "", "", "", "", ""},
+    false,
     true,                 // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
     false,                // datevalue_timevalue.timevalue_trailing_dot
     false,                // datevalue_timevalue.timevalue_space_dot
@@ -867,17 +871,18 @@ constexpr LocaleFacts kChineseFacts{
     kInvariantFormatLetters,  // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"¥", false, false, true, false, true, 2U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
-    {"$", "€", "¥", ""},    // value_dollar_prefix, value_euro_prefix, value_yen_prefix; ￥ unmeasured
-    "$",                    // usdollar.usdollar_two_decimals
-    DateOrder::kYMD,        // locale_profile_measurements.datevalue_two_digit_year
-    false,                  // value_dotted_ymd
-    true,                   // datevalue_timevalue.datevalue_kanji_with_terminator
-    false,                  // datevalue_timevalue.timevalue_jp_kanji_units
-    false,                  // datevalue_timevalue.datevalue_era_reiwa_full
-    RLetter::kLiteral,      // locale_tokens.text_letter_r_date, text_letter_rr_date
-    false,                  // locale_tokens.value_korean_ymd
-    true,                   // value_month_name_en
-    true,                   // value_coercion_probes.value_d_mmm_yy
+    {"$", "€", "¥", ""},            // value_dollar_prefix, value_euro_prefix, value_yen_prefix; ￥ unmeasured
+    "$",                            // usdollar.usdollar_two_decimals
+    DateOrder::kYMD,                // locale_profile_measurements.datevalue_two_digit_year
+    false,                          // value_dotted_ymd
+    KanjiDateText::kAll,            // datevalue_timevalue.datevalue_kanji_with_terminator
+    false,                          // datevalue_timevalue.timevalue_jp_kanji_units
+    false,                          // datevalue_timevalue.datevalue_era_reiwa_full
+    RLetter::kLiteral,              // locale_tokens.text_letter_r_date, text_letter_rr_date
+    false,                          // locale_tokens.value_korean_ymd
+    MonthNameText::kEnglishPrefix,  // value_month_name_en
+    {},
+    false,
     true,                   // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
     true,                   // datevalue_timevalue.timevalue_trailing_dot
     true,                   // datevalue_timevalue.timevalue_space_dot
@@ -939,13 +944,14 @@ constexpr LocaleFacts kKoreanFacts{
     "$",                                         // usdollar.usdollar_two_decimals
     DateOrder::kYMD,                             // locale_profile_measurements.datevalue_two_digit_year
     true,                                        // value_dotted_ymd
-    false,                                       // datevalue_timevalue.datevalue_kanji_with_terminator
+    KanjiDateText::kNone,                        // datevalue_timevalue.datevalue_kanji_with_terminator
     false,                                       // datevalue_timevalue.timevalue_jp_kanji_units
     false,                                       // datevalue_timevalue.datevalue_era_reiwa_full
     RLetter::kLiteral,                           // locale_tokens.text_letter_r_date, text_letter_rr_date
     true,                                        // locale_tokens.value_korean_ymd
-    true,                                        // value_month_name_en
-    true,                                        // value_coercion_probes.value_d_mmm_yy
+    MonthNameText::kEnglishPrefix,               // value_month_name_en
+    {},
+    false,
     false,                   // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
     true,                    // datevalue_timevalue.timevalue_trailing_dot
     true,                    // datevalue_timevalue.timevalue_space_dot
@@ -1008,13 +1014,14 @@ constexpr LocaleFacts kThaiFacts{
     "",                                          // usdollar.usdollar_two_decimals
     DateOrder::kDMY,                             // value_coercion_probes.value_slash_date_short
     false,                                       // value_dotted_dmy
-    false,                                       // datevalue_timevalue.datevalue_kanji_with_terminator
+    KanjiDateText::kNone,                        // datevalue_timevalue.datevalue_kanji_with_terminator
     false,                                       // datevalue_timevalue.timevalue_jp_kanji_units
     false,                                       // datevalue_timevalue.datevalue_era_reiwa_full
     RLetter::kLiteral,                           // locale_tokens.text_letter_r_date, text_letter_rr_date
     false,                                       // locale_tokens.value_korean_ymd
-    true,                                        // value_month_name_en
-    true,                                        // value_coercion_probes.value_d_mmm_yy
+    MonthNameText::kEnglishExact,
+    {},
+    false,
     true,                 // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
     false,                // datevalue_timevalue.timevalue_trailing_dot
     true,                 // datevalue_timevalue.timevalue_space_dot
@@ -1075,18 +1082,19 @@ constexpr LocaleFacts kRussianFacts{
     {'y', 'M', 'd', 'h', 'm', 's', true, true, true, 'a'},
     kRussianLetterAliases,
     {"₽", true, true, false, false, true,
-     2U},                 // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
-    {"€", "", "", ""},    // value_euro_prefix, value_dollar_prefix, value_yen_prefix
-    "",                   // usdollar.usdollar_two_decimals
-    DateOrder::kDMY,      // value_coercion_probes.value_slash_date_short
-    true,                 // value_dotted_dmy, value_dotted_ymd
-    false,                // datevalue_timevalue.datevalue_kanji_with_terminator
-    false,                // datevalue_timevalue.timevalue_jp_kanji_units
-    false,                // datevalue_timevalue.datevalue_era_reiwa_full
-    RLetter::kLiteral,    // locale_tokens.text_letter_r_date, text_letter_rr_date
-    false,                // locale_tokens.value_korean_ymd
-    false,                // value_month_name_en
-    false,                // value_coercion_probes.value_d_mmm_yy
+     2U},                  // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
+    {"€", "", "", ""},     // value_euro_prefix, value_dollar_prefix, value_yen_prefix
+    "",                    // usdollar.usdollar_two_decimals
+    DateOrder::kDMY,       // value_coercion_probes.value_slash_date_short
+    true,                  // value_dotted_dmy, value_dotted_ymd
+    KanjiDateText::kNone,  // datevalue_timevalue.datevalue_kanji_with_terminator
+    false,                 // datevalue_timevalue.timevalue_jp_kanji_units
+    false,                 // datevalue_timevalue.datevalue_era_reiwa_full
+    RLetter::kLiteral,     // locale_tokens.text_letter_r_date, text_letter_rr_date
+    false,                 // locale_tokens.value_korean_ymd
+    MonthNameText::kLocalPrefix,
+    {},
+    false,
     true,                 // timevalue_comma_fraction
     true,                 // datevalue_timevalue.timevalue_trailing_dot
     true,                 // datevalue_timevalue.timevalue_space_dot
@@ -1145,18 +1153,19 @@ constexpr LocaleFacts kTraditionalChineseFacts{
     kInvariantFormatLetters,  // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"$", false, false, true, false, true,
-     2U},                             // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
-    {"$", "€", "", ""},               // value_dollar_prefix, value_euro_prefix, value_yen_prefix
-    "US$",                            // usdollar.usdollar_two_decimals
-    DateOrder::kYMD,                  // locale_profile_measurements.datevalue_two_digit_year
-    false,                            // value_dotted_ymd
-    true,                             // datevalue_timevalue.datevalue_kanji_with_terminator
-    true,                             // datevalue_timevalue.timevalue_jp_kanji_units
-    false,                            // datevalue_timevalue.datevalue_era_reiwa_full
-    RLetter::kYear,                   // locale_tokens.text_letter_r_date, text_letter_rr_date
-    false,                            // locale_tokens.value_korean_ymd
-    true,                             // value_month_name_en
-    true,                             // value_coercion_probes.value_d_mmm_yy
+     2U},                           // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
+    {"$", "€", "", ""},             // value_dollar_prefix, value_euro_prefix, value_yen_prefix
+    "US$",                          // usdollar.usdollar_two_decimals
+    DateOrder::kYMD,                // locale_profile_measurements.datevalue_two_digit_year
+    false,                          // value_dotted_ymd
+    KanjiDateText::kFullDate,       // datevalue_timevalue.datevalue_kanji_with_terminator
+    true,                           // datevalue_timevalue.timevalue_jp_kanji_units
+    false,                          // datevalue_timevalue.datevalue_era_reiwa_full
+    RLetter::kYear,                 // locale_tokens.text_letter_r_date, text_letter_rr_date
+    false,                          // locale_tokens.value_korean_ymd
+    MonthNameText::kEnglishPrefix,  // value_month_name_en
+    {},
+    true,
     true,                             // datevalue_timevalue.timevalue_fractional_seconds
     true,                             // datevalue_timevalue.timevalue_trailing_dot
     true,                             // datevalue_timevalue.timevalue_space_dot
@@ -1217,18 +1226,19 @@ constexpr LocaleFacts kItalianFacts{
     {'a', 'm', 'g', 'h', 'm', 's', false, false, false, '\0'},
     kNoLetterAliases,
     {"€", true, true, false, false, true,
-     2U},                 // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
-    {"€", "", "", ""},    // value_euro_prefix, value_dollar_prefix, value_yen_prefix
-    "",                   // usdollar.usdollar_two_decimals
-    DateOrder::kDMY,      // value_coercion_probes.value_slash_date_short
-    false,                // value_dotted_dmy, value_dotted_ymd
-    false,                // datevalue_timevalue.datevalue_kanji_with_terminator
-    false,                // datevalue_timevalue.timevalue_jp_kanji_units
-    false,                // datevalue_timevalue.datevalue_era_reiwa_full
-    RLetter::kLiteral,    // locale_tokens.text_letter_r_date, text_letter_rr_date
-    false,                // locale_tokens.value_korean_ymd
-    false,                // value_month_name_en
-    false,                // value_coercion_probes.value_d_mmm_yy
+     2U},                  // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
+    {"€", "", "", ""},     // value_euro_prefix, value_dollar_prefix, value_yen_prefix
+    "",                    // usdollar.usdollar_two_decimals
+    DateOrder::kDMY,       // value_coercion_probes.value_slash_date_short
+    false,                 // value_dotted_dmy, value_dotted_ymd
+    KanjiDateText::kNone,  // datevalue_timevalue.datevalue_kanji_with_terminator
+    false,                 // datevalue_timevalue.timevalue_jp_kanji_units
+    false,                 // datevalue_timevalue.datevalue_era_reiwa_full
+    RLetter::kLiteral,     // locale_tokens.text_letter_r_date, text_letter_rr_date
+    false,                 // locale_tokens.value_korean_ymd
+    MonthNameText::kLocalPrefix,
+    {},
+    false,
     true,                 // timevalue_comma_fraction
     false,                // datevalue_timevalue.timevalue_trailing_dot
     false,                // datevalue_timevalue.timevalue_space_dot
@@ -1288,18 +1298,19 @@ constexpr LocaleFacts kDutchFacts{
     {'j', 'm', 'd', 'u', 'm', 's', false, false, false, 'a'},
     kNoLetterAliases,
     {"€", false, true, true, false, true,
-     2U},                 // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
-    {"€", "", "", ""},    // value_euro_prefix, value_dollar_prefix, value_yen_prefix
-    "",                   // usdollar.usdollar_two_decimals
-    DateOrder::kDMY,      // value_coercion_probes.value_slash_date_short
-    false,                // value_dotted_dmy, value_dotted_ymd
-    false,                // datevalue_timevalue.datevalue_kanji_with_terminator
-    false,                // datevalue_timevalue.timevalue_jp_kanji_units
-    false,                // datevalue_timevalue.datevalue_era_reiwa_full
-    RLetter::kLiteral,    // locale_tokens.text_letter_r_date, text_letter_rr_date
-    false,                // locale_tokens.value_korean_ymd
-    false,                // value_month_name_en
-    true,                 // value_coercion_probes.value_d_mmm_yy
+     2U},                  // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
+    {"€", "", "", ""},     // value_euro_prefix, value_dollar_prefix, value_yen_prefix
+    "",                    // usdollar.usdollar_two_decimals
+    DateOrder::kDMY,       // value_coercion_probes.value_slash_date_short
+    false,                 // value_dotted_dmy, value_dotted_ymd
+    KanjiDateText::kNone,  // datevalue_timevalue.datevalue_kanji_with_terminator
+    false,                 // datevalue_timevalue.timevalue_jp_kanji_units
+    false,                 // datevalue_timevalue.datevalue_era_reiwa_full
+    RLetter::kLiteral,     // locale_tokens.text_letter_r_date, text_letter_rr_date
+    false,                 // locale_tokens.value_korean_ymd
+    MonthNameText::kLocalPrefix,
+    {},
+    false,
     true,                 // timevalue_comma_fraction
     false,                // datevalue_timevalue.timevalue_trailing_dot
     false,                // datevalue_timevalue.timevalue_space_dot
@@ -1366,18 +1377,19 @@ constexpr LocaleFacts kSpanishFacts{
     kIberianLetters,  // months_aaaa, months_mmmm, months_dd, text_format.text_time_hh_mm_ss, weekdays_aaaa
     kNoLetterAliases,
     {"€", true, true, false, false, true,
-     2U},                 // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
-    {"€", "", "", ""},    // value_euro_prefix, value_dollar_prefix, value_yen_prefix
-    "",                   // usdollar.usdollar_two_decimals
-    DateOrder::kDMY,      // value_coercion_probes.value_slash_date_short
-    false,                // value_dotted_dmy, value_dotted_ymd
-    false,                // datevalue_timevalue.datevalue_kanji_with_terminator
-    false,                // datevalue_timevalue.timevalue_jp_kanji_units
-    false,                // datevalue_timevalue.datevalue_era_reiwa_full
-    RLetter::kLiteral,    // locale_tokens.text_letter_r_date, text_letter_rr_date
-    false,                // locale_tokens.value_korean_ymd
-    false,                // value_month_name_en
-    false,                // value_coercion_probes.value_d_mmm_yy
+     2U},                  // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
+    {"€", "", "", ""},     // value_euro_prefix, value_dollar_prefix, value_yen_prefix
+    "",                    // usdollar.usdollar_two_decimals
+    DateOrder::kDMY,       // value_coercion_probes.value_slash_date_short
+    false,                 // value_dotted_dmy, value_dotted_ymd
+    KanjiDateText::kNone,  // datevalue_timevalue.datevalue_kanji_with_terminator
+    false,                 // datevalue_timevalue.timevalue_jp_kanji_units
+    false,                 // datevalue_timevalue.datevalue_era_reiwa_full
+    RLetter::kLiteral,     // locale_tokens.text_letter_r_date, text_letter_rr_date
+    false,                 // locale_tokens.value_korean_ymd
+    MonthNameText::kLocalPrefix,
+    {},
+    false,
     true,                 // timevalue_comma_fraction
     false,                // datevalue_timevalue.timevalue_trailing_dot
     false,                // datevalue_timevalue.timevalue_space_dot
@@ -1438,18 +1450,19 @@ constexpr LocaleFacts kMexicanSpanishFacts{
     kIberianLetters,  // months_aaaa, months_mmmm, months_dd, text_format.text_time_hh_mm_ss, weekdays_aaaa
     kNoLetterAliases,
     {"$", false, false, false, false, true,
-     2U},                 // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
-    {"$", "€", "", ""},   // value_dollar_prefix, value_euro_prefix, value_yen_prefix
-    "",                   // usdollar.usdollar_two_decimals
-    DateOrder::kDMY,      // value_coercion_probes.value_slash_date_short
-    false,                // value_dotted_dmy, value_dotted_ymd
-    false,                // datevalue_timevalue.datevalue_kanji_with_terminator
-    false,                // datevalue_timevalue.timevalue_jp_kanji_units
-    false,                // datevalue_timevalue.datevalue_era_reiwa_full
-    RLetter::kLiteral,    // locale_tokens.text_letter_r_date, text_letter_rr_date
-    false,                // locale_tokens.value_korean_ymd
-    false,                // value_month_name_en
-    false,                // value_coercion_probes.value_d_mmm_yy
+     2U},                  // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
+    {"$", "€", "", ""},    // value_dollar_prefix, value_euro_prefix, value_yen_prefix
+    "",                    // usdollar.usdollar_two_decimals
+    DateOrder::kDMY,       // value_coercion_probes.value_slash_date_short
+    false,                 // value_dotted_dmy, value_dotted_ymd
+    KanjiDateText::kNone,  // datevalue_timevalue.datevalue_kanji_with_terminator
+    false,                 // datevalue_timevalue.timevalue_jp_kanji_units
+    false,                 // datevalue_timevalue.datevalue_era_reiwa_full
+    RLetter::kLiteral,     // locale_tokens.text_letter_r_date, text_letter_rr_date
+    false,                 // locale_tokens.value_korean_ymd
+    MonthNameText::kLocalPrefix,
+    {},
+    false,
     true,                 // datevalue_timevalue.timevalue_fractional_seconds
     true,                 // datevalue_timevalue.timevalue_trailing_dot
     true,                 // datevalue_timevalue.timevalue_space_dot
@@ -1510,18 +1523,19 @@ constexpr LocaleFacts kPortugueseFacts{
     kIberianLetters,  // months_aaaa, months_mmmm, months_dd, text_format.text_time_hh_mm_ss, weekdays_aaaa
     kNoLetterAliases,
     {"R$", false, true, false, false, true,
-     2U},                 // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
-    {"€", "", "", ""},    // value_euro_prefix, value_dollar_prefix, value_yen_prefix
-    "",                   // usdollar.usdollar_two_decimals
-    DateOrder::kDMY,      // value_coercion_probes.value_slash_date_short
-    false,                // value_dotted_dmy, value_dotted_ymd
-    false,                // datevalue_timevalue.datevalue_kanji_with_terminator
-    false,                // datevalue_timevalue.timevalue_jp_kanji_units
-    false,                // datevalue_timevalue.datevalue_era_reiwa_full
-    RLetter::kLiteral,    // locale_tokens.text_letter_r_date, text_letter_rr_date
-    false,                // locale_tokens.value_korean_ymd
-    false,                // value_month_name_en
-    true,                 // value_coercion_probes.value_d_mmm_yy
+     2U},                  // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
+    {"€", "", "", ""},     // value_euro_prefix, value_dollar_prefix, value_yen_prefix
+    "",                    // usdollar.usdollar_two_decimals
+    DateOrder::kDMY,       // value_coercion_probes.value_slash_date_short
+    false,                 // value_dotted_dmy, value_dotted_ymd
+    KanjiDateText::kNone,  // datevalue_timevalue.datevalue_kanji_with_terminator
+    false,                 // datevalue_timevalue.timevalue_jp_kanji_units
+    false,                 // datevalue_timevalue.datevalue_era_reiwa_full
+    RLetter::kLiteral,     // locale_tokens.text_letter_r_date, text_letter_rr_date
+    false,                 // locale_tokens.value_korean_ymd
+    MonthNameText::kLocalPrefix,
+    {},
+    false,
     true,                 // timevalue_comma_fraction
     false,                // datevalue_timevalue.timevalue_trailing_dot
     false,                // datevalue_timevalue.timevalue_space_dot

@@ -98,13 +98,14 @@ void ExpectFactsEqual(const LocaleFacts& lhs, const LocaleFacts& rhs) {
   EXPECT_EQ(lhs.usdollar_symbol, rhs.usdollar_symbol);
   EXPECT_EQ(lhs.date_order, rhs.date_order);
   EXPECT_EQ(lhs.dotted_date, rhs.dotted_date);
-  EXPECT_EQ(lhs.kanji_ymd_text, rhs.kanji_ymd_text);
+  EXPECT_EQ(lhs.kanji_date_text, rhs.kanji_date_text);
   EXPECT_EQ(lhs.kanji_time_text, rhs.kanji_time_text);
   EXPECT_EQ(lhs.japanese_era, rhs.japanese_era);
   EXPECT_EQ(lhs.r_letter, rhs.r_letter);
   EXPECT_EQ(lhs.hangul_ymd_text, rhs.hangul_ymd_text);
-  EXPECT_EQ(lhs.english_month_names, rhs.english_month_names);
-  EXPECT_EQ(lhs.hyphen_english_months, rhs.hyphen_english_months);
+  EXPECT_EQ(lhs.month_name_text, rhs.month_name_text);
+  EXPECT_EQ(lhs.month_extra_names, rhs.month_extra_names);
+  EXPECT_EQ(lhs.leading_separator_current_year, rhs.leading_separator_current_year);
   EXPECT_EQ(lhs.fractional_seconds, rhs.fractional_seconds);
   EXPECT_EQ(lhs.meridiem_dot_attached, rhs.meridiem_dot_attached);
   EXPECT_EQ(lhs.meridiem_dot_spaced, rhs.meridiem_dot_spaced);
@@ -202,7 +203,7 @@ void ExpectJapaneseFacts(const LocaleFacts& facts) {
   EXPECT_EQ(facts.currency.default_decimals, 0U);
   EXPECT_EQ(facts.accepted_currency, (std::array<std::string_view, 4>{"$", "€", "¥", "￥"}));
   EXPECT_EQ(facts.date_order, DateOrder::kYMD);
-  EXPECT_TRUE(facts.kanji_ymd_text);
+  EXPECT_EQ(facts.kanji_date_text, KanjiDateText::kAll);
   EXPECT_TRUE(facts.kanji_time_text);
   EXPECT_TRUE(facts.japanese_era);
   EXPECT_EQ(facts.dbcs_codepage, DbcsCodepage::kJis0208);
@@ -246,7 +247,7 @@ void ExpectEnglishFacts(const LocaleFacts& facts) {
   EXPECT_EQ(facts.currency.default_decimals, 2U);
   EXPECT_EQ(facts.accepted_currency, (std::array<std::string_view, 4>{"$", "€", "", ""}));
   EXPECT_EQ(facts.date_order, DateOrder::kMDY);
-  EXPECT_FALSE(facts.kanji_ymd_text);
+  EXPECT_EQ(facts.kanji_date_text, KanjiDateText::kNone);
   EXPECT_FALSE(facts.kanji_time_text);
   EXPECT_FALSE(facts.japanese_era);
   EXPECT_EQ(facts.dbcs_codepage, DbcsCodepage::kNone);

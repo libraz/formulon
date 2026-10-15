@@ -51,9 +51,9 @@ std::uint32_t decode_utf8(std::string_view s, std::size_t i, std::size_t* len) n
   return cp;
 }
 
-// Decimal digits of the non-ASCII scripts Excel reads as numbers; 0 when `cp`
-// is not one. Tamil and Ethiopic have no zero, only 1..9.
-char fold_script_digit(std::uint32_t cp) noexcept {
+// Decimal digits (Unicode Nd) of the non-ASCII scripts Excel reads; 0 when
+// `cp` is not one. Tamil has no zero, only 1..9.
+char fold_decimal_digit(std::uint32_t cp) noexcept {
   constexpr std::uint32_t kZeros[] = {0x0660, 0x06F0, 0x0966, 0x09E6, 0x0A66, 0x0AE6, 0x0B66, 0x0C66,
                                       0x0CE6, 0x0D66, 0x0E50, 0x0ED0, 0x0F20, 0x1040, 0x17E0, 0x1810};
   for (const std::uint32_t zero : kZeros) {
@@ -63,6 +63,16 @@ char fold_script_digit(std::uint32_t cp) noexcept {
   }
   if (cp >= 0x0BE7u && cp <= 0x0BEFu) {
     return static_cast<char>('1' + (cp - 0x0BE7u));
+  }
+  return '\0';
+}
+
+// The decimal digits plus the Ethiopic 1..9 (no zero), which numbers read
+// but date and time text does not.
+char fold_script_digit(std::uint32_t cp) noexcept {
+  const char digit = fold_decimal_digit(cp);
+  if (digit != '\0') {
+    return digit;
   }
   if (cp >= 0x1369u && cp <= 0x1371u) {
     return static_cast<char>('1' + (cp - 0x1369u));
@@ -267,13 +277,15 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, int per
     return false;
   }
   // A mixed fraction `N a/b`: a whole number, one blank, then a fraction.
+  // Where the blank groups digits, the numerator takes at most two digits.
   const std::size_t blank = s.rfind(' ');
   if (blank != std::string_view::npos && s.substr(blank).find('/') != std::string_view::npos) {
     int numerator = 0;
     int denominator = 0;
     std::string whole_text;
     double whole = 0.0;
-    if (!parse_fraction(s.substr(blank + 1), &numerator, &denominator) ||
+    const std::string_view fraction = s.substr(blank + 1);
+    if ((group_sep == ' ' && fraction.find('/') > 2) || !parse_fraction(fraction, &numerator, &denominator) ||
         !canonical_number(s.substr(0, blank), decimal_sep, group_sep, &whole_text) ||
         whole_text.find_first_of(".e") != std::string::npos || !excel_text_number(whole_text, false, 0, &whole)) {
       return false;
@@ -360,7 +372,7 @@ std::string fold_script_digits(std::string_view text) {
   out.reserve(text.size());
   for (std::size_t i = 0; i < text.size();) {
     std::size_t len = 1;
-    const char digit = fold_script_digit(decode_utf8(text, i, &len));
+    const char digit = fold_decimal_digit(decode_utf8(text, i, &len));
     if (digit != '\0') {
       out.push_back(digit);
     } else {

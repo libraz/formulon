@@ -57,8 +57,9 @@ bool excel_text_number(std::string_view magnitude, bool negative, int percent_co
 /// (0 or 1), or -1 when the placement is invalid.
 std::string normalize_locale_numeric(std::string_view raw, int* percent_count);
 
-/// `text` with the decimal digit scripts folded to ASCII and nothing else
-/// changed; what the date / time recogniser sees.
+/// `text` with the decimal digit scripts (Unicode Nd; not the Ethiopic digits
+/// numbers read) folded to ASCII and nothing else changed; what the date /
+/// time recogniser sees.
 std::string fold_script_digits(std::string_view text);
 
 /// The first UTF-16 unit of `text` (a lead surrogate for a supplementary-plane

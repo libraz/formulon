@@ -1045,16 +1045,17 @@ Value DatevalueHostClock_(const Value* args, std::uint32_t arity, Arena& arena, 
   return Datevalue_(args, arity, arena, date1904, current_eval_now());
 }
 
-/// TIMEVALUE(text). The time part less its whole days: a date-only text is 0
-/// and `TIMEVALUE("25:00")` is `1.0416666666666667 - 1`. TIMEVALUE is eager,
-/// so a year-less date_text reads the evaluation clock's year.
+/// TIMEVALUE(text). The recognised value less its whole days (`v - INT(v)`,
+/// so the date's magnitude shows in the last bits): a date-only text is 0 and
+/// `TIMEVALUE("25:00")` is `1.0416666666666667 - 1`. TIMEVALUE is eager, so a
+/// year-less date_text reads the evaluation clock's year.
 Value Timevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto parsed = parse_date_time_arg(args[0], current_eval_now().date.y);
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  const double time = parsed.value().time;
-  return Value::number(time - std::floor(time));
+  const double value = parsed.value().value;
+  return Value::number(value - std::floor(value));
 }
 
 }  // namespace

@@ -18,6 +18,20 @@ enum class DateOrder : std::uint8_t {
   kDMY = 2,
 };
 
+/// Kanji date forms date text takes.
+enum class KanjiDateText : std::uint8_t {
+  kNone = 0,
+  kFullDate = 1,  ///< `Y年M月D日` only.
+  kAll = 2,       ///< `Y年M月D日`, `Y年M月` and `M月D日`.
+};
+
+/// Month names date text takes. A name is matched case- and width-insensitively.
+enum class MonthNameText : std::uint8_t {
+  kEnglishPrefix = 0,  ///< Any prefix of three or more letters of an English name (`Sept`, `Janu`).
+  kEnglishExact = 1,   ///< An English three-letter abbreviation or full name, or a local spelling.
+  kLocalPrefix = 2,    ///< Any prefix of three or more letters of a local full name, or a local spelling.
+};
+
 /// Single-byte code page used by CHAR / CODE for bytes 0x80-0xFF.
 /// `kDbcsHighBlank` decodes the high bytes of a DBCS locale without
 /// single-byte katakana; `kMacThai` and `kMacCyrillic` are the Mac pages.
@@ -173,18 +187,21 @@ struct LocaleFacts {
   std::array<std::string_view, 4> accepted_currency;
   /// Symbol USDOLLAR formats US dollars with; empty when USDOLLAR is DOLLAR.
   std::string_view usdollar_symbol;
+  /// Field order of numeric date text and the reading of `MMM N` (a year when day-first).
   DateOrder date_order;
+  /// `.` separates date fields, joins month names to numbers and separates the ignored tail after a time.
   bool dotted_date;
-  bool kanji_ymd_text;
+  KanjiDateText kanji_date_text;
   bool kanji_time_text;
   bool japanese_era;
   RLetter r_letter;
   /// Date text takes the `2024년 3월 15일` form.
   bool hangul_ymd_text;
-  /// Date text takes English month names.
-  bool english_month_names;
-  /// The hyphenated `d-mmm-yy` form takes the English abbreviations.
-  bool hyphen_english_months;
+  MonthNameText month_name_text;
+  /// Further month spellings date text takes as a whole token, January first; empty slots are unused.
+  std::array<std::string_view, 12> month_extra_names;
+  /// An empty leading field is the current year (`/1/2`).
+  bool leading_separator_current_year;
   /// Time text takes a fraction of a second after the decimal separator.
   bool fractional_seconds;
   /// A `.` may directly follow the AM / PM marker (`6 PM.`).
@@ -198,6 +215,7 @@ struct LocaleFacts {
   bool short_meridiem;
   DbcsCodepage dbcs_codepage;
   bool halfwidth_kana_single_byte;
+  /// Numeric and date text fold the full-width ASCII forms and read U+3000 as a blank.
   bool fullwidth_numeric_text;
   bool char_snaps_near_integer;
   bool phonetic;

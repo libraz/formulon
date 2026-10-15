@@ -138,6 +138,156 @@ TEST(LocaleDateInput, DayFirstDottedAndMonthNames) {
   }
 }
 
+constexpr int kYear = 2026;
+
+bool rejects(std::string_view text) {
+  double serial = 0.0;
+  return !parse_date(text, &serial, kYear);
+}
+
+double date_of(std::string_view text) {
+  double serial = -1.0;
+  EXPECT_TRUE(parse_date(text, &serial, kYear)) << text;
+  return serial;
+}
+
+TEST(LocaleDateInput, MonthFirstOrder) {
+  const ScopedEvalProfile scope(mac_profile(ExcelLocale::kEnUS));
+  // A pair is m/d in the current year, else m/y; never d/m or y/m.
+  EXPECT_EQ(date_of("1/2"), 46024.0);
+  EXPECT_EQ(date_of("2/30"), 10990.0);
+  EXPECT_EQ(date_of("1/0"), 36526.0);
+  EXPECT_EQ(date_of("1/2026"), 46023.0);
+  EXPECT_TRUE(rejects("13/1"));
+  EXPECT_TRUE(rejects("2026/1"));
+  // Triples follow the order with no fallback; a four-digit lead is the year.
+  EXPECT_EQ(date_of("1/2/3"), 37623.0);
+  EXPECT_EQ(date_of("2026/1/1"), 46023.0);
+  EXPECT_TRUE(rejects("13/2/2026"));
+  EXPECT_TRUE(rejects("2026/1/001"));
+  // Month names: `MMM D` falls back to a year; `D MMM`; `MMM D, Y`.
+  EXPECT_EQ(date_of("Jan 32"), 11689.0);
+  EXPECT_EQ(date_of("1 Jan"), 46023.0);
+  EXPECT_EQ(date_of("Sept 1, 2026"), 46266.0);
+  // Full-width letters fold, full-width digits do not.
+  EXPECT_EQ(date_of("\xEF\xBC\xAA\xEF\xBD\x81\xEF\xBD\x8E 1"), 46023.0);
+  EXPECT_TRUE(rejects("\xEF\xBC\x91/2"));
+  // U+3000 is a blank only after a time and in a long month-name date.
+  EXPECT_EQ(date_of("1:30\xE3\x80\x80"), 0.0625);
+  EXPECT_EQ(date_of("Jan 1\xE3\x80\x80"
+                    "2026"),
+            46023.0);
+  EXPECT_TRUE(rejects("1/2\xE3\x80\x80"));
+  EXPECT_TRUE(
+      rejects("1/2\xE3\x80\x80"
+              "1:30"));
+  EXPECT_TRUE(
+      rejects("1 Jan\xE3\x80\x80"
+              "2026"));
+}
+
+TEST(LocaleDateInput, DayFirstOrder) {
+  const ScopedEvalProfile scope(mac_profile(ExcelLocale::kFrFR));
+  // A pair is d/m in the current year, else m/y with a year of at least 1.
+  EXPECT_EQ(date_of("1/13"), 41275.0);
+  EXPECT_EQ(date_of("2/29"), 47150.0);
+  EXPECT_TRUE(rejects("1/0"));
+  EXPECT_EQ(date_of("1/2/3"), 37653.0);
+  // `MMM N` is month and year; `D MMM, Y`; local name prefixes only.
+  EXPECT_EQ(date_of("Jan 1"), 36892.0);
+  EXPECT_TRUE(rejects("Jan 1, 2026"));
+  EXPECT_EQ(date_of("1 Jan, 2026"), 46023.0);
+  EXPECT_EQ(date_of("1\xE3\x80\x80Jan\xE3\x80\x80"
+                    "2026"),
+            46023.0);
+  EXPECT_TRUE(rejects("Feb 1"));
+  // Extra whole-token spellings on top of the prefix rule; ambiguous prefixes take the first month.
+  EXPECT_EQ(date_of("Jun 1"), 37043.0);
+  EXPECT_EQ(date_of("1 Jul 2026"), 46204.0);
+  EXPECT_EQ(date_of("Jui 1"), 37043.0);
+  EXPECT_TRUE(rejects("Jn 1"));
+  EXPECT_TRUE(rejects("Fev 1"));
+  // `,` closes a time, `.` does not (and is no fraction).
+  EXPECT_EQ(date_of("1:30 PM,"), 0.5625);
+  EXPECT_TRUE(rejects("1:30."));
+  EXPECT_TRUE(rejects("2026/1/1 1:30:00.5"));
+  EXPECT_NEAR(date_of("1:30,5"), 90.5 / 86400.0, 1e-15);
+}
+
+TEST(LocaleDateInput, ExtraMonthSpellingsAreLocaleData) {
+  const ScopedEvalProfile scope(mac_profile(ExcelLocale::kItIT));
+  EXPECT_TRUE(rejects("Jun 1"));
+  EXPECT_TRUE(rejects("Jul 1"));
+  EXPECT_EQ(date_of("Nov 1"), 37196.0);
+}
+
+TEST(LocaleDateInput, DottedDayFirstOrder) {
+  const ScopedEvalProfile scope(mac_profile(ExcelLocale::kDeDE));
+  EXPECT_EQ(date_of("1.13"), 41275.0);
+  EXPECT_TRUE(rejects("2026.1"));
+  EXPECT_EQ(date_of("1.2.2026"), 46054.0);
+  EXPECT_EQ(date_of("Janu 1"), 36892.0);
+  EXPECT_TRUE(rejects("May 1"));
+  // `.` closes a time, joins it to a following date and separates the tail.
+  EXPECT_EQ(date_of("1:30.5.5"), 46147.0625);
+  EXPECT_EQ(date_of("2026/1/1 1:30 1.5"), 46023.0625);
+  EXPECT_EQ(date_of("2026/1/1 1:30:00.9999"), 46023.0625);
+  EXPECT_TRUE(rejects("2026/1/1 1:30:00.0004"));
+  EXPECT_TRUE(rejects("1:30:00.5"));
+}
+
+TEST(LocaleDateInput, YearFirstOrder) {
+  {
+    const ScopedEvalProfile scope(mac_profile(ExcelLocale::kKoKR));
+    EXPECT_EQ(date_of("Jan.1"), 46023.0);
+    EXPECT_EQ(date_of("Jan. 1, 2026"), 46023.0);
+    EXPECT_TRUE(rejects("1:30:00.5"));
+  }
+  {
+    const ScopedEvalProfile scope(mac_profile(ExcelLocale::kZhTW));
+    EXPECT_EQ(date_of("/1/2"), 46024.0);
+    EXPECT_EQ(date_of("2026\xE5\xB9\xB4"
+                      "1\xE6\x9C\x88"
+                      "1\xE6\x97\xA5"),
+              46023.0);
+    EXPECT_TRUE(
+        rejects("1\xE6\x9C\x88"
+                "1\xE6\x97\xA5"));
+  }
+  {
+    const ScopedEvalProfile scope(mac_365_ja_jp_profile());
+    // A time's trailing separator joins a following date without a blank.
+    EXPECT_EQ(date_of("1:30-5-5"), 46147.0625);
+    // Tail runs follow the time-field digit rule.
+    EXPECT_EQ(date_of("2026/1/1 1:30 9999"), 46023.0625);
+    EXPECT_TRUE(rejects("2026/1/1 1:30 0004"));
+    // Ethiopic digits are numbers, never date fields.
+    EXPECT_TRUE(rejects("\xE1\x8D\xA9/\xE1\x8D\xAA"));
+  }
+}
+
+TEST(LocaleDateInput, MarkerSpellings) {
+  {
+    const ScopedEvalProfile scope(mac_profile(ExcelLocale::kThTH));
+    EXPECT_EQ(date_of("Sep 1"), 37135.0);
+    EXPECT_TRUE(rejects("Sept 1"));
+    EXPECT_TRUE(rejects("1:30 PM."));
+    EXPECT_EQ(date_of("1:30 PM ."), 0.5625);
+  }
+  {
+    const ScopedEvalProfile scope(mac_profile(ExcelLocale::kEsES));
+    EXPECT_EQ(date_of("1 P. M."), 13.0 / 24.0);
+  }
+}
+
+TEST(LocaleNumberInput, SpaceGroupCapsTheMixedFractionNumerator) {
+  double v = 0.0;
+  const ScopedEvalProfile scope(mac_profile(ExcelLocale::kFrFR));
+  ASSERT_TRUE(parse_excel_number("1 12/345", &v));
+  EXPECT_DOUBLE_EQ(v, 1.0 + 12.0 / 345.0);
+  EXPECT_FALSE(parse_excel_number("1 100/1", &v));
+}
+
 TEST(LocaleBooleanInput, OnlyTheLocaleNamesCoerce) {
   bool out = false;
   ErrorCode err = ErrorCode::Value;
