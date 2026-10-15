@@ -411,7 +411,11 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
         RecordArrayAnchor(ctx, f.attribute("ref").value(), parsed.row, parsed.col);
       }
       if (const pugi::xml_attribute cm = c.attribute("cm"); cm && !formula_text.empty()) {
-        ctx.cell_metadata.emplace_back(parsed.row, parsed.col, cm.as_uint(0U));
+        std::uint32_t cm_idx = 0;
+        if (!parse_xsd_nonneg_int(cm.value(), &cm_idx)) {
+          cm_idx = 0;
+        }
+        ctx.cell_metadata.emplace_back(parsed.row, parsed.col, cm_idx);
       }
     }
   }
@@ -568,8 +572,8 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   }
   if (!rec.cm.empty() && !formula_text.empty()) {
     std::uint32_t cm = 0;
-    for (const char c : rec.cm) {
-      cm = (c >= '0' && c <= '9') ? cm * 10U + static_cast<std::uint32_t>(c - '0') : 0U;
+    if (!parse_xsd_nonneg_int(rec.cm, &cm)) {
+      cm = 0;
     }
     ctx.cell_metadata.emplace_back(rec.row, rec.col, cm);
   }
