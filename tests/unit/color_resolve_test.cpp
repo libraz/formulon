@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <string>
 
 #include "gtest/gtest.h"
@@ -105,6 +106,18 @@ TEST(ColorResolve, ProbeTable) {
     EXPECT_EQ(Hex(fill.argb), kIndexedFill[index]) << "indexed fill " << index;
     EXPECT_EQ(Hex(font.argb), kIndexedFont[index]) << "indexed font " << index;
   }
+}
+
+TEST(ColorResolve, ExtremeTintIsBoundedBeforeLuminanceArithmetic) {
+  constexpr std::uint32_t rgb = 0xFF4472C4U;
+  for (double tint : {1e300, std::numeric_limits<double>::max(), std::numeric_limits<double>::infinity()}) {
+    EXPECT_EQ(apply_tint(rgb, tint), apply_tint(rgb, 1.0));
+    EXPECT_EQ(apply_tint(rgb, -tint), apply_tint(rgb, -1.0));
+  }
+  EXPECT_EQ(apply_tint(rgb, std::numeric_limits<double>::quiet_NaN()), rgb);
+  const Theme theme = MeasuredTheme();
+  EXPECT_EQ(resolve_color(ThemeSpec(4U, 1e300), theme, ThemeSource::kPart, {}, ColorContext::kFont).argb, 0xFFFFFFFFU);
+  EXPECT_EQ(resolve_color(ThemeSpec(4U, -1e300), theme, ThemeSource::kPart, {}, ColorContext::kFont).argb, 0xFF000000U);
 }
 
 TEST(ColorResolve, ThemeFontColourWithoutTint) {

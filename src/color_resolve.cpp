@@ -62,6 +62,12 @@ std::uint32_t default_indexed_color(std::uint32_t index) {
 }
 
 std::uint32_t apply_tint(std::uint32_t argb, double tint) {
+  // Malformed file values and direct callers must not reach an out-of-range
+  // floating-to-integer conversion in the luminance calculation.
+  if (std::isnan(tint)) {
+    tint = 0.0;
+  }
+  tint = std::clamp(tint, -1.0, 1.0);
   if (tint == 0.0) {
     return argb | 0xFF000000U;
   }
