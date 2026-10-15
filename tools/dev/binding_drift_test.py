@@ -208,7 +208,7 @@ class ReadmeFactsTest(unittest.TestCase):
     def test_each_fact_catches_a_stale_claim(self) -> None:
         stale = {
             "function-counts": ("526 Excel function names", "525 Excel function names"),
-            "size-ceilings": ("1056 KiB Brotli", "1040 KiB Brotli"),
+            "size-ceilings": ("1280 KiB Brotli", "1216 KiB Brotli"),
             "default-profile": ("New workbooks use `win-365-en_US`", "New workbooks use `mac-365-ja_JP`"),
             "profile-ids": (",nl_NL}", ",nl_NL,pl_PL}"),
             "node-min": ("Node 22+", "Node 20+"),

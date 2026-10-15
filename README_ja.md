@@ -30,7 +30,7 @@ Excel との既知の差分は [`tests/divergence.yaml`](https://github.com/libr
 - **ワークブック入出力** — `.xlsx` と `.xlsb` を読み込み、再計算し、書き出します。スタイル、条件付き書式、テーブル、ピボットテーブル、印刷レイアウトも扱います。[ファイル形式](https://formulon.libraz.net/ja/compatibility/file-format-support)
 - **ロケールプロファイル** — 14 ロケール × Mac / Windows ホストの、28 種類の Excel 挙動プロファイルを選べます。[ロケールプロファイル](https://formulon.libraz.net/ja/compatibility/locale-profiles)
 - **Excel oracle** — 数式の結果は、14 ロケールの Mac Excel 365 から取得したゴールデンデータとビット単位で照合しています。ピボットと印刷レイアウトは Windows Excel 365 と照合しています。[Oracle テスト](https://formulon.libraz.net/ja/compatibility/oracle-testing)
-- **サイズ上限つきの WASM** — 非圧縮 3.75 MiB、Brotli 1056 KiB を超えると CI が失敗します。[サイズ予算](https://formulon.libraz.net/ja/development/size-budgets)
+- **サイズ上限つきの WASM** — 非圧縮 4.5 MiB、Brotli 1280 KiB を超えると CI が失敗します。[サイズ予算](https://formulon.libraz.net/ja/development/size-budgets)
 
 ## インストール
 

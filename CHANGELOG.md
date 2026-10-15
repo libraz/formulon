@@ -39,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The WASM size report's ceilings moved to 4.25 MiB soft / 4.5 MiB hard
+  uncompressed and 1216 KiB soft / 1280 KiB hard Brotli, to take in the
+  chart API.
 - Numbers in saved `.xlsx` cell values are spelled the way Excel writes
   them: fixed notation with 15 significant digits when that round-trips
   (else 17) for magnitudes from 0.01 up to 1E+16, and 17-digit exponential

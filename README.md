@@ -30,7 +30,7 @@ Known differences from Excel are listed case by case in [`tests/divergence.yaml`
 - **Workbook I/O** — read, recalculate and write `.xlsx` and `.xlsb`, including styles, conditional formatting, tables, pivot tables and print layout. [File formats](https://formulon.libraz.net/compatibility/file-format-support)
 - **Locale profiles** — 28 Excel behavior profiles across fourteen locales on Mac and Windows hosts. [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
 - **Excel oracle** — formula results are compared bit for bit against goldens captured from Mac Excel 365 in fourteen locales; pivot and print layout against Windows Excel 365. [Oracle testing](https://formulon.libraz.net/compatibility/oracle-testing)
-- **Size-budgeted WASM** — CI fails the build above 3.75 MiB uncompressed or 1056 KiB Brotli. [Size budgets](https://formulon.libraz.net/development/size-budgets)
+- **Size-budgeted WASM** — CI fails the build above 4.5 MiB uncompressed or 1280 KiB Brotli. [Size budgets](https://formulon.libraz.net/development/size-budgets)
 
 ## Installation
 
