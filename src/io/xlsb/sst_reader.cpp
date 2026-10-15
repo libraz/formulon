@@ -1,5 +1,6 @@
 #include "io/xlsb/sst_reader.h"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -29,6 +30,50 @@ constexpr std::uint8_t kRichStrPhonetic = 0x02U;
 
 /// One `StrRun` ([MS-XLSB] §2.5.94) is `(u16 ich, u16 ifnt)`.
 constexpr std::size_t kStrRunSize = 4U;
+
+/// UTF-16 offsets into one phonetic string, indexed once before its runs are
+/// sliced. At a supplementary-plane midpoint, the floor and ceil entries
+/// intentionally differ just as they do in `utf16_substring`.
+class Utf16SliceIndex {
+ public:
+  explicit Utf16SliceIndex(std::string_view text) : text_(text) {
+    floor_bytes_.push_back(0U);
+    ceil_bytes_.push_back(0U);
+    std::size_t byte = 0U;
+    while (byte < text_.size()) {
+      std::size_t byte_length = 0U;
+      const std::uint32_t codepoint = decode_utf8_step(text_, byte, &byte_length);
+      if (codepoint > 0xFFFFU) {
+        floor_bytes_.push_back(byte);
+        ceil_bytes_.push_back(byte + byte_length);
+      }
+      byte += byte_length;
+      floor_bytes_.push_back(byte);
+      ceil_bytes_.push_back(byte);
+    }
+  }
+
+  std::uint32_t utf16_units() const noexcept { return static_cast<std::uint32_t>(floor_bytes_.size() - 1U); }
+
+  std::string substring(std::uint32_t start_units, std::uint32_t length_units) const {
+    std::uint32_t end_units = start_units + length_units;
+    if (end_units < start_units) {
+      end_units = UINT32_MAX;
+    }
+    const std::size_t last_unit = floor_bytes_.size() - 1U;
+    const std::size_t start_byte = floor_bytes_[std::min<std::size_t>(start_units, last_unit)];
+    const std::size_t end_byte = ceil_bytes_[std::min<std::size_t>(end_units, last_unit)];
+    if (end_byte <= start_byte) {
+      return {};
+    }
+    return std::string(text_.substr(start_byte, end_byte - start_byte));
+  }
+
+ private:
+  std::string_view text_;
+  std::vector<std::size_t> floor_bytes_;
+  std::vector<std::size_t> ceil_bytes_;
+};
 
 /// Decodes the phonetic tail a `RichStr` carries when `fExtStr` is set,
 /// appending one `PhoneticRun` per `PhRun` to `out`.
@@ -118,7 +163,8 @@ Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surf
     runs.push_back(fields);
   }
 
-  const std::uint32_t phonetic_units = utf16_units_in(phonetic);
+  const Utf16SliceIndex phonetic_index(phonetic);
+  const std::uint32_t phonetic_units = phonetic_index.utf16_units();
   for (std::size_t i = 0; i < runs.size(); ++i) {
     const std::uint32_t kana_start = runs[i][0];
     const std::uint32_t surface_start = runs[i][1];
@@ -129,7 +175,7 @@ Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surf
     // boundaries are Excel's own bookkeeping rather than user data.
     const std::uint32_t kana_length = kana_end > kana_start ? kana_end - kana_start : 0U;
     out.push_back(
-        PhoneticRun{surface_start, surface_start + surface_length, utf16_substring(phonetic, kana_start, kana_length)});
+        PhoneticRun{surface_start, surface_start + surface_length, phonetic_index.substring(kana_start, kana_length)});
   }
   DecodePhoneticProperties(cursor, out_props);
   return {};

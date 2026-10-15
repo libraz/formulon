@@ -1,16 +1,13 @@
 //
-// Unit tests for the XLSB shared-string-table builder + emitter.
-// Symmetry with `read_xlsb`'s SST decoder is checked by re-walking the
-// emitted bytes through `io/xlsb/record.h` (the writer's reader-side
-// counterpart) — Bundle 4.1's SST decoder lives inside
-// `read_xlsb` and isn't directly callable, so we hand-decode the
-// records the same way the reader does.
+// Unit tests for the XLSB shared-string-table builder, emitter, and decoder.
+// Emitted records are checked through the production `DecodeSharedStringsBin`
+// path as well as the low-level record framing helpers.
 
 #include "io/xlsb/sst_writer.h"
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -18,10 +15,11 @@
 
 #include "gtest/gtest.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_writer.h"
+#include "io/xlsb/sst_reader.h"
 #include "io/zip_reader.h"
 #include "phonetic.h"
 #include "utils/text_ops.h"
-#include "utils/utf8_length.h"
 
 namespace formulon {
 namespace io {
@@ -35,108 +33,59 @@ ByteSpan SpanOf(const std::vector<std::uint8_t>& v) {
   return ByteSpan{v.data(), v.size()};
 }
 
-// Walks a serialised SST body the way `read_xlsb` does: skip records
-// other than `BrtSSTItem`, decode each item as `(u8 flags, XLWideString)`.
-// Returns the decoded items in stream order.
-std::vector<std::string> DecodeSstStream(const std::vector<std::uint8_t>& body) {
-  std::vector<std::string> out;
-  ByteSpan cursor = SpanOf(body);
-  while (cursor.size > 0) {
-    auto rec = read_record(cursor);
-    if (!rec) {
-      ADD_FAILURE() << "read_record failed: " << rec.error().message;
-      return out;
-    }
-    if (rec.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtSSTItem)) {
-      continue;
-    }
-    ByteSpan p = rec.value().payload;
-    auto flags = read_u8(p);
-    if (!flags) {
-      ADD_FAILURE() << "BrtSSTItem flags truncated";
-      return out;
-    }
-    (void)flags.value();
-    auto s = read_xlwidestring(p);
-    if (!s) {
-      ADD_FAILURE() << "BrtSSTItem string truncated: " << s.error().message;
-      return out;
-    }
-    out.push_back(s.value());
-  }
-  return out;
-}
-
 /// One `BrtSSTItem` decoded far enough to see the phonetic tail.
 struct DecodedSstItem {
   std::string text;
   std::vector<PhoneticRun> phonetic;
+  PhoneticProperties phonetic_props;
 };
 
-// Walks the emitted stream the way `read_xlsb` does, but decodes the
-// phonetic tail as well: the kana concatenation, the run count, and each
-// `(ichFirst, ichMom, cchMom)` triple, closed by `(ifnt, flags)`.
+// Uses the same decoder as `read_xlsb`, retaining owned text for the
+// non-owning views returned by `DecodeSharedStringsBin`.
 std::vector<DecodedSstItem> DecodeSstItems(const std::vector<std::uint8_t>& body) {
+  std::deque<std::string> text_storage;
+  std::vector<std::vector<PhoneticRun>> phonetic;
+  std::vector<PhoneticProperties> phonetic_props;
+  auto entries = DecodeSharedStringsBin(body, text_storage, phonetic, phonetic_props);
+  if (!entries) {
+    ADD_FAILURE() << "DecodeSharedStringsBin failed: " << entries.error().message;
+    return {};
+  }
+
   std::vector<DecodedSstItem> out;
-  ByteSpan cursor = SpanOf(body);
-  while (cursor.size > 0) {
-    auto rec = read_record(cursor);
-    if (!rec) {
-      ADD_FAILURE() << "read_record failed: " << rec.error().message;
-      return out;
-    }
-    if (rec.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtSSTItem)) {
-      continue;
-    }
-    ByteSpan p = rec.value().payload;
-    auto flags = read_u8(p);
-    auto text = read_xlwidestring(p);
-    if (!flags || !text) {
-      ADD_FAILURE() << "BrtSSTItem truncated";
-      return out;
-    }
-    DecodedSstItem item;
-    item.text = text.value();
-    if ((flags.value() & 0x02U) != 0U) {
-      auto kana = read_xlwidestring(p);
-      auto count = read_u32(p);
-      if (!kana || !count) {
-        ADD_FAILURE() << "phonetic tail truncated";
-        return out;
-      }
-      std::vector<std::array<std::uint16_t, 3>> runs;
-      for (std::uint32_t i = 0; i < count.value(); ++i) {
-        std::array<std::uint16_t, 3> fields{};
-        for (std::uint16_t& field : fields) {
-          auto value = read_u16(p);
-          if (!value) {
-            ADD_FAILURE() << "phonetic run truncated";
-            return out;
-          }
-          field = value.value();
-        }
-        runs.push_back(fields);
-      }
-      const std::uint32_t kana_units = utf16_units_in(kana.value());
-      for (std::size_t i = 0; i < runs.size(); ++i) {
-        const std::uint32_t end = (i + 1U < runs.size()) ? runs[i + 1U][0] : kana_units;
-        item.phonetic.push_back(PhoneticRun{runs[i][1], static_cast<std::uint32_t>(runs[i][1] + runs[i][2]),
-                                            utf16_substring(kana.value(), runs[i][0], end - runs[i][0])});
-      }
-      auto ifnt = read_u16(p);
-      auto tail_flags = read_u16(p);
-      if (!ifnt || !tail_flags) {
-        ADD_FAILURE() << "phonetic properties truncated";
-        return out;
-      }
-      // Excel's own defaults for a guide that arrived without a
-      // `<phoneticPr>`: the workbook font, halfwidthKatakana, noControl.
-      EXPECT_EQ(ifnt.value(), 0U);
-      EXPECT_EQ(tail_flags.value(), 0x0030U);
-    }
-    out.push_back(std::move(item));
+  out.reserve(entries.value().size());
+  for (std::size_t i = 0; i < entries.value().size(); ++i) {
+    out.push_back(DecodedSstItem{std::string(entries.value()[i]), std::move(phonetic[i]), phonetic_props[i]});
   }
   return out;
+}
+
+std::vector<std::string> DecodeSstStream(const std::vector<std::uint8_t>& body) {
+  const std::vector<DecodedSstItem> items = DecodeSstItems(body);
+  std::vector<std::string> out;
+  out.reserve(items.size());
+  for (const DecodedSstItem& item : items) {
+    out.push_back(item.text);
+  }
+  return out;
+}
+
+void AppendPhoneticSliceCase(std::vector<std::uint8_t>& body, std::string_view kana, std::uint16_t start,
+                             std::uint16_t next_start) {
+  std::vector<std::uint8_t> payload;
+  emit_u8(payload, 0x02U);
+  emit_xlwidestring(payload, "surface");
+  emit_xlwidestring(payload, kana);
+  emit_u32(payload, 2U);
+  emit_u16(payload, start);
+  emit_u16(payload, 0U);
+  emit_u16(payload, 1U);
+  emit_u16(payload, next_start);
+  emit_u16(payload, 1U);
+  emit_u16(payload, 1U);
+  emit_u16(payload, 0U);
+  emit_u16(payload, 0x0030U);
+  emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtSSTItem), payload);
 }
 
 TEST(XlsbSstBuilder, EmptyBuilderEmitsBeginEndFraming) {
@@ -226,9 +175,41 @@ TEST(XlsbSstBuilder, PhoneticGuideKeepsItsSpansAndSplitsTheInternKey) {
   EXPECT_EQ(items[0].phonetic[1].sb, 2U);
   EXPECT_EQ(items[0].phonetic[1].eb, 3U);
   EXPECT_EQ(items[0].phonetic[1].text, "ト");
+  EXPECT_EQ(items[0].phonetic_props.font_id, 0U);
+  EXPECT_EQ(items[0].phonetic_props.type, 0U);
+  EXPECT_EQ(items[0].phonetic_props.alignment, 0U);
   ASSERT_EQ(items[1].phonetic.size(), 1U);
   EXPECT_EQ(items[1].phonetic[0].text, "ヒガシキョウト");
   EXPECT_TRUE(items[2].phonetic.empty());
+}
+
+TEST(XlsbSstBuilder, PhoneticSlicesMatchUtf16SubstringForEveryBoundaryPair) {
+  const std::string kana = "A🌟BC";
+  const std::vector<std::uint16_t> boundaries{0U, 1U, 2U, 3U, 4U, 5U, 6U, UINT16_MAX};
+  std::vector<std::uint8_t> body;
+  std::vector<std::pair<std::uint16_t, std::uint16_t>> cases;
+  cases.reserve(boundaries.size() * boundaries.size());
+  for (const std::uint16_t start : boundaries) {
+    for (const std::uint16_t next_start : boundaries) {
+      AppendPhoneticSliceCase(body, kana, start, next_start);
+      cases.emplace_back(start, next_start);
+    }
+  }
+
+  const std::vector<DecodedSstItem> decoded = DecodeSstItems(body);
+  ASSERT_EQ(decoded.size(), cases.size());
+  for (std::size_t i = 0; i < cases.size(); ++i) {
+    const auto [start, next_start] = cases[i];
+    const std::uint32_t length = next_start > start ? next_start - start : 0U;
+    ASSERT_EQ(decoded[i].phonetic.size(), 2U);
+    EXPECT_EQ(decoded[i].phonetic[0].text, utf16_substring(kana, start, length))
+        << "case " << start << " -> " << next_start;
+    if (start == 2U && next_start == 2U) {
+      // A zero-length slice at the midpoint of 🌟 widens to that codepoint
+      // because starts round down and ends round up.
+      EXPECT_EQ(decoded[i].phonetic[0].text, "🌟");
+    }
+  }
 }
 
 TEST(XlsbSstBuilder, BeginRecordCarriesCountFields) {
