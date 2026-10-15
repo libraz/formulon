@@ -6,13 +6,17 @@
 
 #include "eval/number_parse.h"
 
+#include <cfloat>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 #include "eval/eval_profile_scope.h"
 #include "excel_locale.h"
 #include "utils/double_parse.h"
+#include "utils/number_text.h"
+#include "utils/utf8_length.h"
 
 namespace formulon {
 namespace eval {
@@ -66,7 +70,9 @@ std::string_view strip_trailing_euro(std::string_view s) noexcept {
 
 }  // namespace
 
-bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double* out, bool strict_groups) noexcept {
+bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double* out, bool strict_groups,
+                   int text_percent) noexcept {
+  const bool text_rule = text_percent >= 0;
   // Trim ASCII whitespace first.
   s = trim_ascii(s);
   if (s.empty()) {
@@ -117,10 +123,11 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
       return false;
     }
   }
-  // Trailing percent signs. Each `%` multiplies the parsed value by 0.01,
-  // so `"50%%"` yields `0.005` (matching Excel's NUMBERVALUE behavior).
-  int percent_count = 0;
-  while (!s.empty() && s.back() == '%') {
+  // Trailing percent signs. Each `%` multiplies the parsed value by 0.01, so
+  // `"50%%"` yields `0.005` (matching Excel's NUMBERVALUE behavior). Under the
+  // text rule the single `%` was already taken out by the normaliser.
+  int percent_count = text_rule ? text_percent : 0;
+  while (!text_rule && !s.empty() && s.back() == '%') {
     ++percent_count;
     s.remove_suffix(1);
   }
@@ -206,6 +213,12 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
     return false;
   }
   double parsed = 0.0;
+  if (text_rule) {
+    if (!parse_double_exact(canonical, &parsed) || !excel_text_number(canonical, negative, percent_count, out)) {
+      return false;
+    }
+    return true;
+  }
   if (!parse_double_exact(canonical, &parsed) || std::isinf(parsed) || numeric_text_above_excel_max(canonical)) {
     return false;
   }
@@ -223,7 +236,7 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
   return true;
 }
 
-std::string normalize_locale_numeric(std::string_view raw, bool* paren_negated) {
+std::string normalize_locale_numeric(std::string_view raw, bool* paren_negated, int* text_percent) {
   *paren_negated = false;
   const bool fold_fullwidth = locale_facts(current_eval_profile()).fullwidth_numeric_text;
   std::string out;
@@ -273,6 +286,25 @@ std::string normalize_locale_numeric(std::string_view raw, bool* paren_negated) 
     out.push_back(raw[i]);
     ++i;
   }
+  if (text_percent != nullptr) {
+    // Excel takes one `%` anywhere outside the digit run (either side of the
+    // sign, inside or outside the parentheses); a second one, or one with
+    // number characters on both sides, is not a number.
+    *text_percent = 0;
+    const auto body = [](char c) { return (c >= '0' && c <= '9') || c == '.' || c == ',' || c == 'e' || c == 'E'; };
+    for (std::size_t k = 0; k < out.size(); ++k) {
+      if (out[k] != '%') {
+        continue;
+      }
+      if (*text_percent != 0 || (k > 0 && body(out[k - 1]) && k + 1 < out.size() && body(out[k + 1]))) {
+        *text_percent = -1;
+        return out;
+      }
+      *text_percent = 1;
+      out.erase(k, 1);
+      --k;
+    }
+  }
   // Accounting-style outer parens. Trim only ASCII whitespace because
   // `parse_numeric` does the same; a Japanese profile has already folded
   // full-width spaces to ASCII above.
@@ -286,6 +318,80 @@ std::string normalize_locale_numeric(std::string_view raw, bool* paren_negated) 
     }
   }
   return out;
+}
+
+bool numeric_text_too_long(std::string_view raw) noexcept {
+  return utf16_units_in(raw) > kMaxNumericTextLength;
+}
+
+bool excel_text_number(std::string_view magnitude, bool negative, int percent_count, double* out) {
+  // At most 15 significant digits are kept (truncated); `scale` is the decimal
+  // exponent of the kept mantissa.
+  constexpr int kKeptDigits = 15;
+  constexpr long long kExponentCap = 1000000000LL;
+  std::uint64_t mantissa = 0;
+  int kept = 0;
+  long long scale = 0;
+  std::size_t i = 0;
+  for (; i < magnitude.size() && magnitude[i] >= '0' && magnitude[i] <= '9'; ++i) {
+    const int d = magnitude[i] - '0';
+    if (mantissa == 0 && d == 0) {
+      continue;
+    }
+    if (kept < kKeptDigits) {
+      mantissa = mantissa * 10U + static_cast<std::uint64_t>(d);
+      ++kept;
+    } else {
+      ++scale;
+    }
+  }
+  if (i < magnitude.size() && magnitude[i] == '.') {
+    for (++i; i < magnitude.size() && magnitude[i] >= '0' && magnitude[i] <= '9'; ++i) {
+      const int d = magnitude[i] - '0';
+      if (mantissa == 0 && d == 0) {
+        --scale;
+      } else if (kept < kKeptDigits) {
+        mantissa = mantissa * 10U + static_cast<std::uint64_t>(d);
+        ++kept;
+        --scale;
+      }
+    }
+  }
+  if (i < magnitude.size() && (magnitude[i] == 'e' || magnitude[i] == 'E')) {
+    ++i;
+    bool exponent_negative = false;
+    if (i < magnitude.size() && (magnitude[i] == '+' || magnitude[i] == '-')) {
+      exponent_negative = magnitude[i] == '-';
+      ++i;
+    }
+    long long written = 0;
+    for (; i < magnitude.size() && magnitude[i] >= '0' && magnitude[i] <= '9'; ++i) {
+      if (written < kExponentCap) {
+        written = written * 10 + (magnitude[i] - '0');
+      }
+    }
+    scale += exponent_negative ? -written : written;
+  }
+  scale -= 2LL * percent_count;
+  // The check sits on the leading digit's decimal exponent; zero has none and
+  // is judged with no digits.
+  const long long normalized = scale + kept;
+  if (normalized < -308 || normalized > 308) {
+    return false;
+  }
+  double value = 0.0;
+  if (mantissa != 0) {
+    char decimal[48];
+    int len = format_unsigned(decimal, sizeof(decimal), mantissa);
+    decimal[len++] = 'e';
+    len += format_signed(decimal + len, sizeof(decimal) - static_cast<std::size_t>(len), scale);
+    parse_double_exact(std::string_view(decimal, static_cast<std::size_t>(len)), &value);
+    if (value < DBL_MIN) {
+      value = 0.0;
+    }
+  }
+  *out = negative && value != 0.0 ? -value : value;
+  return true;
 }
 
 bool numeric_text_above_excel_max(std::string_view text) {
@@ -338,11 +444,16 @@ bool numeric_text_above_excel_max(std::string_view text) {
 }
 
 bool parse_excel_number(std::string_view text, double* out) {
+  if (numeric_text_too_long(text)) {
+    return false;
+  }
   bool paren_negated = false;
-  const std::string normalized = normalize_locale_numeric(text, &paren_negated);
+  int text_percent = 0;
+  const std::string normalized = normalize_locale_numeric(text, &paren_negated, &text_percent);
   double value = 0.0;
   const LocaleFacts& facts = locale_facts(current_eval_profile());
-  if (!parse_numeric(normalized, facts.decimal_separator, facts.group_separator, &value)) {
+  if (text_percent < 0 ||
+      !parse_numeric(normalized, facts.decimal_separator, facts.group_separator, &value, true, text_percent)) {
     return false;
   }
   *out = paren_negated ? -value : value;

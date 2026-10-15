@@ -271,10 +271,10 @@ TEST(CoerceToNumberTextPercent, ScientificBody) {
   EXPECT_DOUBLE_EQ(r.value(), 1.5);
 }
 
-TEST(CoerceToNumberTextPercent, LeadingPercentRejected) {
+TEST(CoerceToNumberTextPercent, LeadingPercentAccepted) {
   auto r = coerce_to_number(Value::text("%5"));
-  ASSERT_FALSE(r.has_value());
-  EXPECT_EQ(r.error(), ErrorCode::Value);
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 0.05);
 }
 
 // Currency-prefixed/suffixed text: Mac Excel 365 (ja-JP) accepts ONLY the

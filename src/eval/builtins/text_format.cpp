@@ -323,10 +323,12 @@ Value Value_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, int c
       // full-width digits/punctuation to ASCII and strips accounting-
       // style outer parentheses (`"(1234)"` -> -1234).
       bool paren_negated = false;
-      const std::string normalized = normalize_locale_numeric(raw, &paren_negated);
+      int text_percent = 0;
+      const std::string normalized = normalize_locale_numeric(raw, &paren_negated, &text_percent);
       double numeric = 0.0;
       const LocaleFacts& facts = locale_facts(current_eval_profile());
-      if (parse_numeric(normalized, facts.decimal_separator, facts.group_separator, &numeric)) {
+      if (!numeric_text_too_long(raw) && text_percent >= 0 &&
+          parse_numeric(normalized, facts.decimal_separator, facts.group_separator, &numeric, true, text_percent)) {
         return Value::number(paren_negated ? -numeric : numeric);
       }
       // Phase 2: date / time parse. Leading whitespace is trimmed (the
@@ -415,7 +417,8 @@ Value NumberValue_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // Spaces are dropped wherever they sit (value_numbervalue.numbervalue_inner_spaces).
   normalized.erase(std::remove(normalized.begin(), normalized.end(), ' '), normalized.end());
   double parsed = 0.0;
-  if (parse_numeric(normalized, decimal_sep, group_sep, &parsed, /*strict_groups=*/false)) {
+  if (parse_numeric(normalized, decimal_sep, group_sep, &parsed, /*strict_groups=*/false,
+                    /*text_percent=*/-1)) {
     return Value::number(paren_negated ? -parsed : parsed);
   }
   // Mac Excel ja-JP NUMBERVALUE accepts date / time strings in addition

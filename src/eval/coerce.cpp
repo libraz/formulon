@@ -85,6 +85,9 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* f
   // raw string_view in a `Value::text(...)` temporary. The trim / numeric
   // / percent / currency / date fallback ladder is byte-for-byte
   // identical to the original site so external behaviour is unchanged.
+  if (numeric_text_too_long(text)) {
+    return ErrorCode::Value;
+  }
   const std::string_view trimmed = strings::trim(text);
   if (trimmed.empty()) {
     // Empty / whitespace-only text is #VALUE! in every numeric-coercion
@@ -96,38 +99,30 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* f
   }
   // Layered numeric-coercion fallback, in order:
   //   1. decimal parse(trimmed)             - plain numeric fast path
-  //   2. trailing '%' stripped, parse, /100 - percent literals
-  //   3. VALUE()-style locale parse          - grouping, parens, full-width,
+  //   2. VALUE()-style locale parse          - grouping, parens, full-width,
   //                                            currency ({$, €} everywhere;
   //                                            ¥/￥ in Japanese, one side
   //                                            only), currency + percent
-  //   4. date / datetime fallback (raw text) - DATEVALUE-style shapes
-  //   5. #VALUE!
-  // Currency handling lives entirely in step 3 (`parse_excel_number`) so
+  //   3. date / datetime fallback (raw text) - DATEVALUE-style shapes
+  //   4. #VALUE!
+  // Currency handling lives entirely in step 2 (`parse_excel_number`) so
   // implicit coercion and the VALUE() builtin share one code path and agree
   // exactly (Excel accepts a currency marker on the leading OR trailing side
   // but not both; yen is Japanese-profile-only). The date fallback
   // runs against the raw, untrimmed text so padded date strings stay #VALUE!
   // (see WhitespacePaddedDate rejection test).
   double parsed = 0.0;
-  // The two invariant fast paths read `.` as the decimal point, so they only
-  // stand in for the locale parse where that is the profile's separator.
+  // The invariant fast path reads `.` as the decimal point, so it only
+  // stands in for the locale parse where that is the profile's separator.
   const bool invariant_decimal = locale_facts(current_eval_profile()).decimal_separator == '.';
   if (invariant_decimal && parse_double_exact(trimmed, &parsed)) {
-    if (std::isinf(parsed) || (std::fabs(parsed) >= 9.9e307 && numeric_text_above_excel_max(trimmed))) {
+    const bool negative = trimmed.front() == '-';
+    const std::string_view magnitude = trimmed.front() == '-' || trimmed.front() == '+' ? trimmed.substr(1) : trimmed;
+    double converted = 0.0;
+    if (!excel_text_number(magnitude, negative, 0, &converted)) {
       return ErrorCode::Value;
     }
-    return parsed;
-  }
-  if (invariant_decimal && trimmed.back() == '%') {
-    const std::string_view body = trimmed.substr(0, trimmed.size() - 1);
-    if (parse_double_exact(body, &parsed)) {
-      const double scaled = parsed / 100.0;
-      if (std::isinf(scaled)) {
-        return ErrorCode::Num;
-      }
-      return scaled;
-    }
+    return converted;
   }
   // Locale-aware numeric forms that the fast paths above reject: thousands
   // grouping ("1,000"), accounting parentheses ("(100)" -> -100), full-width
