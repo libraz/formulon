@@ -204,6 +204,11 @@ Expected<MergeRange, Error> read_rfx(ByteSpan& cursor);
 /// Reads a little-endian IEEE 754 64-bit double; advances `cursor`.
 Expected<double, Error> read_double(ByteSpan& cursor);
 
+/// Appends `units` UTF-16LE code units at `data` (which must hold `units * 2`
+/// bytes) to `*out` as UTF-8. Surrogate pairs are joined; a lone surrogate
+/// passes through as its own code point.
+void append_utf16le_as_utf8(const std::uint8_t* data, std::uint32_t units, std::string* out);
+
 /// Reads an `XLWideString` ([MS-XLSB] §2.5.166): a 32-bit length-prefix
 /// followed by `length` UCS-2 little-endian code units. The returned
 /// string is UTF-8 encoded. Lone surrogates are passed through as if

@@ -104,6 +104,42 @@ Expected<double, Error> read_double(ByteSpan& cursor) {
   return value;
 }
 
+void append_utf16le_as_utf8(const std::uint8_t* data, std::uint32_t units, std::string* out) {
+  // Every unit takes at most 3 UTF-8 bytes; a surrogate pair takes 4 over two units.
+  out->reserve(out->size() + static_cast<std::size_t>(units) * 3U);
+  for (std::uint32_t i = 0; i < units; ++i) {
+    const std::size_t offset = static_cast<std::size_t>(i) * 2U;
+    const std::uint32_t cu =
+        static_cast<std::uint32_t>(data[offset]) | (static_cast<std::uint32_t>(data[offset + 1U]) << 8);
+    std::uint32_t cp = cu;
+    // Surrogate pair: high surrogate followed by low surrogate; a lone unit passes through.
+    if (cu >= 0xD800U && cu <= 0xDBFFU && i + 1U < units) {
+      const std::size_t low_offset = offset + 2U;
+      const std::uint32_t low =
+          static_cast<std::uint32_t>(data[low_offset]) | (static_cast<std::uint32_t>(data[low_offset + 1U]) << 8);
+      if (low >= 0xDC00U && low <= 0xDFFFU) {
+        cp = 0x10000U + ((cu - 0xD800U) << 10) + (low - 0xDC00U);
+        ++i;
+      }
+    }
+    if (cp < 0x80U) {
+      out->push_back(static_cast<char>(cp));
+    } else if (cp < 0x800U) {
+      out->push_back(static_cast<char>(0xC0U | (cp >> 6)));
+      out->push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
+    } else if (cp < 0x10000U) {
+      out->push_back(static_cast<char>(0xE0U | (cp >> 12)));
+      out->push_back(static_cast<char>(0x80U | ((cp >> 6) & 0x3FU)));
+      out->push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
+    } else {
+      out->push_back(static_cast<char>(0xF0U | (cp >> 18)));
+      out->push_back(static_cast<char>(0x80U | ((cp >> 12) & 0x3FU)));
+      out->push_back(static_cast<char>(0x80U | ((cp >> 6) & 0x3FU)));
+      out->push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
+    }
+  }
+}
+
 Expected<std::string, Error> read_xlwidestring(ByteSpan& cursor) {
   ASSIGN_OR_RETURN(auto len, read_u32(cursor));
   const std::uint32_t cch = len;
@@ -123,42 +159,7 @@ Expected<std::string, Error> read_xlwidestring(ByteSpan& cursor) {
   }
   const std::size_t needed = static_cast<std::size_t>(cch) * 2;
   std::string out;
-  // Reserve a generous upper bound: every code unit takes at most 3
-  // UTF-8 bytes (BMP) and surrogate pairs take 4 over two units. Safe
-  // from overflow per the bound established above.
-  out.reserve(static_cast<std::size_t>(cch) * 3);
-  for (std::uint32_t i = 0; i < cch; ++i) {
-    const std::uint32_t cu_lo = cursor.data[2 * i];
-    const std::uint32_t cu_hi = cursor.data[2 * i + 1];
-    const std::uint16_t cu = static_cast<std::uint16_t>(cu_lo | (cu_hi << 8));
-    std::uint32_t cp = cu;
-    // Surrogate pair: high surrogate followed by low surrogate.
-    if (cu >= 0xD800 && cu <= 0xDBFF && i + 1 < cch) {
-      const std::uint32_t low_lo = cursor.data[2 * (i + 1)];
-      const std::uint32_t low_hi = cursor.data[2 * (i + 1) + 1];
-      const std::uint16_t low = static_cast<std::uint16_t>(low_lo | (low_hi << 8));
-      if (low >= 0xDC00 && low <= 0xDFFF) {
-        cp =
-            0x10000U + ((static_cast<std::uint32_t>(cu) - 0xD800U) << 10) + (static_cast<std::uint32_t>(low) - 0xDC00U);
-        ++i;  // consumed the low surrogate as well
-      }
-    }
-    if (cp < 0x80) {
-      out.push_back(static_cast<char>(cp));
-    } else if (cp < 0x800) {
-      out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
-      out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-    } else if (cp < 0x10000) {
-      out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
-      out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-      out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-    } else {
-      out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
-      out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
-      out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-      out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-    }
-  }
+  append_utf16le_as_utf8(cursor.data, cch, &out);
   cursor.data += needed;
   cursor.size -= needed;
   return out;

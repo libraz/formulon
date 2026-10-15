@@ -141,7 +141,8 @@ Expected<pivot::Aggregation, Error> AggregationFromSelector(std::uint32_t select
 /// size the count implies.
 Expected<std::vector<std::uint32_t>, Error> ReadFieldOrder(ByteSpan payload) {
   ASSIGN_OR_RETURN(const std::uint32_t count, read_u32(payload));
-  if (payload.size != static_cast<std::size_t>(count) * sizeof(std::uint32_t)) {
+  // Divide first: `count * 4` wraps on wasm32.
+  if (count > payload.size / sizeof(std::uint32_t) || payload.size != count * sizeof(std::uint32_t)) {
     return CorruptError("xlsb pivot axis field order length does not match its count");
   }
   std::vector<std::uint32_t> order;

@@ -111,27 +111,13 @@ Expected<std::string, Error> read_ptg_string(ByteSpan& cursor) {
     return std::move(cch_or.error());
   }
   const std::uint32_t cch = cch_or.value();
-  std::string out;
-  out.reserve(cch);
-  for (std::uint32_t i = 0; i < cch; ++i) {
-    auto unit_or = read_u16(cursor);
-    if (!unit_or) {
-      return std::move(unit_or.error());
-    }
-    const std::uint16_t cu = unit_or.value();
-    // Best-effort UTF-16 -> UTF-8 for the BMP. Surrogate handling mirrors
-    // `read_xlwidestring`: lone units pass through as their code point.
-    if (cu < 0x80) {
-      out.push_back(static_cast<char>(cu));
-    } else if (cu < 0x800) {
-      out.push_back(static_cast<char>(0xC0 | (cu >> 6)));
-      out.push_back(static_cast<char>(0x80 | (cu & 0x3F)));
-    } else {
-      out.push_back(static_cast<char>(0xE0 | (cu >> 12)));
-      out.push_back(static_cast<char>(0x80 | ((cu >> 6) & 0x3F)));
-      out.push_back(static_cast<char>(0x80 | (cu & 0x3F)));
-    }
+  if (cursor.size < static_cast<std::size_t>(cch) * 2U) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb PtgStr body truncated", "context=xlsb.ptg");
   }
+  std::string out;
+  append_utf16le_as_utf8(cursor.data, cch, &out);
+  cursor.data += static_cast<std::size_t>(cch) * 2U;
+  cursor.size -= static_cast<std::size_t>(cch) * 2U;
   return out;
 }
 

@@ -127,38 +127,7 @@ bool ReadFixedWideString(ByteSpan& cursor, std::uint32_t units, std::string& out
   }
   const std::size_t byte_len = static_cast<std::size_t>(units) * 2U;
   out.clear();
-  out.reserve(byte_len);
-  for (std::uint32_t i = 0; i < units; ++i) {
-    const std::size_t offset = static_cast<std::size_t>(i) * 2U;
-    const std::uint16_t cu = static_cast<std::uint16_t>(static_cast<std::uint16_t>(cursor.data[offset]) |
-                                                        (static_cast<std::uint16_t>(cursor.data[offset + 1U]) << 8));
-    std::uint32_t cp = cu;
-    if (cu >= 0xD800U && cu <= 0xDBFFU && i + 1 < units) {
-      const std::size_t low_offset = static_cast<std::size_t>(i + 1U) * 2U;
-      const std::uint16_t low =
-          static_cast<std::uint16_t>(static_cast<std::uint16_t>(cursor.data[low_offset]) |
-                                     (static_cast<std::uint16_t>(cursor.data[low_offset + 1U]) << 8));
-      if (low >= 0xDC00U && low <= 0xDFFFU) {
-        cp = 0x10000U + ((static_cast<std::uint32_t>(cu) - 0xD800U) << 10) + (low - 0xDC00U);
-        ++i;
-      }
-    }
-    if (cp < 0x80U) {
-      out.push_back(static_cast<char>(cp));
-    } else if (cp < 0x800U) {
-      out.push_back(static_cast<char>(0xC0U | (cp >> 6)));
-      out.push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
-    } else if (cp < 0x10000U) {
-      out.push_back(static_cast<char>(0xE0U | (cp >> 12)));
-      out.push_back(static_cast<char>(0x80U | ((cp >> 6) & 0x3FU)));
-      out.push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
-    } else {
-      out.push_back(static_cast<char>(0xF0U | (cp >> 18)));
-      out.push_back(static_cast<char>(0x80U | ((cp >> 12) & 0x3FU)));
-      out.push_back(static_cast<char>(0x80U | ((cp >> 6) & 0x3FU)));
-      out.push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
-    }
-  }
+  append_utf16le_as_utf8(cursor.data, units, &out);
   cursor.data += byte_len;
   cursor.size -= byte_len;
   return true;
@@ -401,11 +370,12 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     p.data += 9;  // flags (2) + 3 reserved bytes + itab (4).
     p.size -= 9;
     ASSIGN_OR_RETURN(auto cch, read_u32(p));
-    const std::size_t name_bytes = static_cast<std::size_t>(cch) * 2;
-    if (name_bytes > p.size) {
+    // Divide first: `cch * 2` wraps on wasm32.
+    if (cch > p.size / 2U) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
                         "workbook.bin: BrtName name truncated (defined-name pass)", "context=xlsb_reader");
     }
+    const std::size_t name_bytes = static_cast<std::size_t>(cch) * 2U;
     p.data += name_bytes;
     p.size -= name_bytes;
     ASSIGN_OR_RETURN(const std::uint32_t cce, read_u32(p));
