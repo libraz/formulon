@@ -87,17 +87,9 @@ struct CumPaymentArgs {
 };
 
 Expected<TvmArgs, ErrorCode> read_tvm_args(const Value* args, std::uint32_t arity, double fourth_default) {
-  auto first = read_required_number(args, 0);
-  if (!first) {
-    return std::move(first.error());
-  }
-  auto second = read_required_number(args, 1);
-  if (!second) {
-    return std::move(second.error());
-  }
-  auto third = read_required_number(args, 2);
-  if (!third) {
-    return std::move(third.error());
+  double v[3];
+  if (auto read = read_required_numbers(args, "nnn", v); !read) {
+    return std::move(read.error());
   }
   auto fourth = read_optional_number(args, arity, 3, fourth_default);
   if (!fourth) {
@@ -107,7 +99,7 @@ Expected<TvmArgs, ErrorCode> read_tvm_args(const Value* args, std::uint32_t arit
   if (!type) {
     return std::move(type.error());
   }
-  return TvmArgs{first.value(), second.value(), third.value(), fourth.value(), normalize_type(type.value())};
+  return TvmArgs{v[0], v[1], v[2], fourth.value(), normalize_type(type.value())};
 }
 
 Expected<RateArgs, ErrorCode> read_rate_args(const Value* args, std::uint32_t arity) {

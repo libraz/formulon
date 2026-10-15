@@ -140,42 +140,6 @@ Value lift_kernel_result(Expected<double, ErrorCode> result) {
   return Value::number(result.value());
 }
 
-Value run_sum(const Value* args, std::uint32_t arity) {
-  std::vector<double> xs;
-  ErrorCode err = ErrorCode::Value;
-  if (!collect_numeric(args, arity, &xs, &err)) {
-    return Value::error(err);
-  }
-  return lift_kernel_result(numeric_aggregate_kernels::run_sum(xs));
-}
-
-Value run_product(const Value* args, std::uint32_t arity) {
-  std::vector<double> xs;
-  ErrorCode err = ErrorCode::Value;
-  if (!collect_numeric(args, arity, &xs, &err)) {
-    return Value::error(err);
-  }
-  return lift_kernel_result(numeric_aggregate_kernels::run_product(xs));
-}
-
-Value run_min_max(const Value* args, std::uint32_t arity, bool want_max) {
-  std::vector<double> xs;
-  ErrorCode err = ErrorCode::Value;
-  if (!collect_numeric(args, arity, &xs, &err)) {
-    return Value::error(err);
-  }
-  return lift_kernel_result(want_max ? numeric_aggregate_kernels::run_max(xs) : numeric_aggregate_kernels::run_min(xs));
-}
-
-Value run_average(const Value* args, std::uint32_t arity) {
-  std::vector<double> xs;
-  ErrorCode err = ErrorCode::Value;
-  if (!collect_numeric(args, arity, &xs, &err)) {
-    return Value::error(err);
-  }
-  return lift_kernel_result(numeric_aggregate_kernels::run_average(xs));
-}
-
 Value run_count(const Value* args, std::uint32_t arity) {
   std::uint32_t n = 0;
   // Errors do not abort COUNT (Excel's COUNT is provenance-tolerant), so we
@@ -198,22 +162,38 @@ Value run_counta(const Value* args, std::uint32_t arity) {
   return Value::number(static_cast<double>(n));
 }
 
-Value run_variance(const Value* args, std::uint32_t arity, bool population) {
+// Collects the numeric cells, then runs the shared kernel `mode` selects.
+// COUNT / COUNTA walk the cells themselves and never reach here.
+Value run_numeric(const Value* args, std::uint32_t arity, Mode mode) {
   std::vector<double> xs;
   ErrorCode err = ErrorCode::Value;
   if (!collect_numeric(args, arity, &xs, &err)) {
     return Value::error(err);
   }
-  return lift_kernel_result(numeric_aggregate_kernels::run_variance(xs, /*sample=*/!population));
-}
-
-Value run_stdev(const Value* args, std::uint32_t arity, bool population) {
-  std::vector<double> xs;
-  ErrorCode err = ErrorCode::Value;
-  if (!collect_numeric(args, arity, &xs, &err)) {
-    return Value::error(err);
+  switch (mode) {
+    case Mode::kAverage:
+      return lift_kernel_result(numeric_aggregate_kernels::run_average(xs));
+    case Mode::kMax:
+      return lift_kernel_result(numeric_aggregate_kernels::run_max(xs));
+    case Mode::kMin:
+      return lift_kernel_result(numeric_aggregate_kernels::run_min(xs));
+    case Mode::kProduct:
+      return lift_kernel_result(numeric_aggregate_kernels::run_product(xs));
+    case Mode::kStdev:
+      return lift_kernel_result(numeric_aggregate_kernels::run_stdev(xs, /*sample=*/true));
+    case Mode::kStdevP:
+      return lift_kernel_result(numeric_aggregate_kernels::run_stdev(xs, /*sample=*/false));
+    case Mode::kSum:
+      return lift_kernel_result(numeric_aggregate_kernels::run_sum(xs));
+    case Mode::kVar:
+      return lift_kernel_result(numeric_aggregate_kernels::run_variance(xs, /*sample=*/true));
+    case Mode::kVarP:
+      return lift_kernel_result(numeric_aggregate_kernels::run_variance(xs, /*sample=*/false));
+    case Mode::kCount:
+    case Mode::kCountA:
+      break;
   }
-  return lift_kernel_result(numeric_aggregate_kernels::run_stdev(xs, /*sample=*/!population));
+  return Value::error(ErrorCode::Value);
 }
 
 }  // namespace
@@ -242,30 +222,13 @@ Value subtotal_apply(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const Value* tail = args + 1;
   const std::uint32_t tail_arity = arity - 1;
   switch (mode) {
-    case Mode::kAverage:
-      return run_average(tail, tail_arity);
     case Mode::kCount:
       return run_count(tail, tail_arity);
     case Mode::kCountA:
       return run_counta(tail, tail_arity);
-    case Mode::kMax:
-      return run_min_max(tail, tail_arity, /*want_max=*/true);
-    case Mode::kMin:
-      return run_min_max(tail, tail_arity, /*want_max=*/false);
-    case Mode::kProduct:
-      return run_product(tail, tail_arity);
-    case Mode::kStdev:
-      return run_stdev(tail, tail_arity, /*population=*/false);
-    case Mode::kStdevP:
-      return run_stdev(tail, tail_arity, /*population=*/true);
-    case Mode::kSum:
-      return run_sum(tail, tail_arity);
-    case Mode::kVar:
-      return run_variance(tail, tail_arity, /*population=*/false);
-    case Mode::kVarP:
-      return run_variance(tail, tail_arity, /*population=*/true);
+    default:
+      return run_numeric(tail, tail_arity, mode);
   }
-  return Value::error(ErrorCode::Value);
 }
 
 void register_subtotal_builtins(FunctionRegistry& registry) {

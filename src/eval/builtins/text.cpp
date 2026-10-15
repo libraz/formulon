@@ -185,28 +185,6 @@ Value Right(const Value* args, std::uint32_t arity, Arena& arena) {
   return Value::text(arena.intern(utf16_substring(text, start, take)));
 }
 
-// MID(text, start_num, num_chars) - 1-based slice in UTF-16 units. Excel
-// returns `""` when `start_num` is past the end. `start_num<1` or
-// `num_chars<0` -> `#VALUE!`.
-Value Mid(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto parsed = read_text_window_args(args, arity, /*snap_start=*/false);
-  if (!parsed) {
-    return Value::error(parsed.error());
-  }
-  const std::string& text = parsed.value().text;
-  const int start = parsed.value().start;
-  const int length = parsed.value().count;
-  const std::uint32_t total = utf16_units_in(text);
-  const auto start_unit = static_cast<std::uint32_t>(start - 1);
-  if (start_unit >= total) {
-    return Value::text({});
-  }
-  if (length == 0) {
-    return Value::text({});
-  }
-  return Value::text(arena.intern(utf16_substring(text, start_unit, static_cast<std::uint32_t>(length))));
-}
-
 // REPT(text, n) - repeat. n<0 -> `#VALUE!`. Excel caps the result length at
 // 32,767 UTF-16 units; exceeding the cap also surfaces as `#VALUE!`.
 Value Rept(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
@@ -310,41 +288,6 @@ Value Substitute(const Value* args, std::uint32_t arity, Arena& arena) {
       }
     }
     i = pos + needle.size();
-  }
-  return Value::text(arena.intern(out));
-}
-
-// REPLACE(old_text, start_num, num_chars, new_text) - UTF-16-unit replace.
-// Replaces `num_chars` UTF-16 units of `old_text` starting at 1-based
-// `start_num` with `new_text`. `start_num > total_units + 1` clamps to
-// append (the suffix is empty). `start_num < 1` or `num_chars < 0` surface
-// `#VALUE!`. The result is capped at Excel's 32,767-unit text limit.
-Value Replace_(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto parsed = read_text_window_args(args, arity, /*snap_start=*/true);
-  if (!parsed) {
-    return Value::error(parsed.error());
-  }
-  const std::string& old_text = parsed.value().text;
-  const int start = parsed.value().start;
-  const int num_chars = parsed.value().count;
-  const std::string& new_text = parsed.value().new_text;
-  const std::uint32_t total = utf16_units_in(old_text);
-  auto start_unit = static_cast<std::uint32_t>(start - 1);
-  if (start_unit > total) {
-    start_unit = total;
-  }
-  const std::uint32_t remaining = total - start_unit;
-  const auto delete_units =
-      static_cast<std::uint32_t>(num_chars) > remaining ? remaining : static_cast<std::uint32_t>(num_chars);
-  const std::string prefix = utf16_substring(old_text, 0u, start_unit);
-  const std::string suffix = utf16_substring(old_text, start_unit + delete_units, remaining - delete_units);
-  std::string out;
-  out.reserve(prefix.size() + new_text.size() + suffix.size());
-  out.append(prefix);
-  out.append(new_text);
-  out.append(suffix);
-  if (static_cast<std::uint64_t>(utf16_units_in(out)) > kExcelTextCapUnits) {
-    return Value::error(ErrorCode::Value);
   }
   return Value::text(arena.intern(out));
 }
@@ -636,6 +579,67 @@ Value Hyperlink(const Value* args, std::uint32_t arity, Arena& arena) {
 
 }  // namespace
 
+namespace text_detail {
+
+// MID(text, start_num, num_chars) - 1-based slice in UTF-16 units. Excel
+// returns `""` when `start_num` is past the end. `start_num<1` or
+// `num_chars<0` -> `#VALUE!`.
+Value Mid(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto parsed = read_text_window_args(args, arity, /*snap_start=*/false);
+  if (!parsed) {
+    return Value::error(parsed.error());
+  }
+  const std::string& text = parsed.value().text;
+  const int start = parsed.value().start;
+  const int length = parsed.value().count;
+  const std::uint32_t total = utf16_units_in(text);
+  const auto start_unit = static_cast<std::uint32_t>(start - 1);
+  if (start_unit >= total) {
+    return Value::text({});
+  }
+  if (length == 0) {
+    return Value::text({});
+  }
+  return Value::text(arena.intern(utf16_substring(text, start_unit, static_cast<std::uint32_t>(length))));
+}
+
+// REPLACE(old_text, start_num, num_chars, new_text) - UTF-16-unit replace.
+// Replaces `num_chars` UTF-16 units of `old_text` starting at 1-based
+// `start_num` with `new_text`. `start_num > total_units + 1` clamps to
+// append (the suffix is empty). `start_num < 1` or `num_chars < 0` surface
+// `#VALUE!`. The result is capped at Excel's 32,767-unit text limit.
+Value Replace_(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto parsed = read_text_window_args(args, arity, /*snap_start=*/true);
+  if (!parsed) {
+    return Value::error(parsed.error());
+  }
+  const std::string& old_text = parsed.value().text;
+  const int start = parsed.value().start;
+  const int num_chars = parsed.value().count;
+  const std::string& new_text = parsed.value().new_text;
+  const std::uint32_t total = utf16_units_in(old_text);
+  auto start_unit = static_cast<std::uint32_t>(start - 1);
+  if (start_unit > total) {
+    start_unit = total;
+  }
+  const std::uint32_t remaining = total - start_unit;
+  const auto delete_units =
+      static_cast<std::uint32_t>(num_chars) > remaining ? remaining : static_cast<std::uint32_t>(num_chars);
+  const std::string prefix = utf16_substring(old_text, 0u, start_unit);
+  const std::string suffix = utf16_substring(old_text, start_unit + delete_units, remaining - delete_units);
+  std::string out;
+  out.reserve(prefix.size() + new_text.size() + suffix.size());
+  out.append(prefix);
+  out.append(new_text);
+  out.append(suffix);
+  if (static_cast<std::uint64_t>(utf16_units_in(out)) > kExcelTextCapUnits) {
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::text(arena.intern(out));
+}
+
+}  // namespace text_detail
+
 void register_text_builtins(FunctionRegistry& registry) {
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       {"UPPER", 1u, 1u, &Upper},
@@ -643,13 +647,13 @@ void register_text_builtins(FunctionRegistry& registry) {
       {"TRIM", 1u, 1u, &Trim},
       {"LEFT", 1u, 2u, &Left},
       {"RIGHT", 1u, 2u, &Right},
-      {"MID", 3u, 3u, &Mid},
+      {"MID", 3u, 3u, &text_detail::Mid},
       {"REPT", 2u, 2u, &Rept},
       {"SUBSTITUTE", 3u, 4u, &Substitute},
       {"FIND", 2u, 3u, &Find},
       {"SEARCH", 2u, 3u, &Search},
       {"EXACT", 2u, 2u, &Exact},
-      {"REPLACE", 4u, 4u, &Replace_},
+      {"REPLACE", 4u, 4u, &text_detail::Replace_},
       {"FINDB", 2u, 3u, &text_detail::FindB_},
       {"SEARCHB", 2u, 3u, &text_detail::SearchB_},
       {"TEXTBEFORE", 2u, 6u, &text_detail::TextBefore_, false},

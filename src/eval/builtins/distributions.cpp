@@ -87,33 +87,17 @@ inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args) {
   return builtins_detail::read_number_triple(args, 0, 1, 2);
 }
 
-// The `(x, param1, param2, cumulative)` arguments of the four-argument DIST entries.
-struct CumulativeTriple {
-  NumberTriple params;
-  bool cumulative;
-};
-
-// Reads the three numbers, then the cumulative flag, propagating the left-most error.
-Expected<CumulativeTriple, ErrorCode> read_cumulative_triple(const Value* args) {
-  auto parsed = read_number_triple(args);
-  if (!parsed) {
-    return std::move(parsed.error());
-  }
-  auto cum_e = coerce_to_bool(args[3]);
-  if (!cum_e) {
-    return std::move(cum_e.error());
-  }
-  return CumulativeTriple{parsed.value(), cum_e.value()};
-}
+using stats_detail::read_triple_cumulative;
+using stats_detail::TripleCumulative;
 
 // Reads the (x, alpha, beta, cumulative) arguments of GAMMA.DIST / WEIBULL.DIST
 // and applies their shared domain check: x >= 0, alpha > 0, beta > 0.
-Expected<CumulativeTriple, ErrorCode> read_scaled_cumulative_triple(const Value* args) {
-  auto parsed = read_cumulative_triple(args);
+Expected<TripleCumulative, ErrorCode> read_scaled_cumulative_triple(const Value* args) {
+  auto parsed = read_triple_cumulative(args);
   if (!parsed) {
     return std::move(parsed.error());
   }
-  const NumberTriple& p = parsed.value().params;
+  const TripleCumulative& p = parsed.value();
   if (p.first < 0.0 || p.second <= 0.0 || p.third <= 0.0) {
     return ErrorCode::Num;
   }
@@ -228,7 +212,7 @@ double BetaPdfStd(double x, double alpha, double beta_shape) noexcept {
 // Jacobian 1 / (B - A). #NUM! on: alpha <= 0, beta <= 0, A >= B,
 // x < A, x > B.
 Value BetaDist(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto parsed = read_cumulative_triple(args);
+  auto parsed = read_triple_cumulative(args);
   if (!parsed) {
     return Value::error(parsed.error());
   }
@@ -240,9 +224,9 @@ Value BetaDist(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!b_e) {
     return Value::error(b_e.error());
   }
-  const double x = parsed.value().params.first;
-  const double alpha = parsed.value().params.second;
-  const double beta_shape = parsed.value().params.third;
+  const double x = parsed.value().first;
+  const double alpha = parsed.value().second;
+  const double beta_shape = parsed.value().third;
   const double a = a_e.value();
   const double b = b_e.value();
   if (alpha <= 0.0 || beta_shape <= 0.0 || a >= b || x < a || x > b) {
@@ -396,9 +380,9 @@ Value GammaDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  const double x = parsed.value().params.first;
-  const double alpha = parsed.value().params.second;
-  const double beta_scale = parsed.value().params.third;
+  const double x = parsed.value().first;
+  const double alpha = parsed.value().second;
+  const double beta_scale = parsed.value().third;
   if (parsed.value().cumulative) {
     if (x == 0.0) {
       return finalize(0.0);
@@ -459,9 +443,9 @@ Value WeibullDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  const double x = parsed.value().params.first;
-  const double alpha = parsed.value().params.second;
-  const double beta_scale = parsed.value().params.third;
+  const double x = parsed.value().first;
+  const double alpha = parsed.value().second;
+  const double beta_scale = parsed.value().third;
   const double t = x / beta_scale;
   const double t_pow = std::pow(t, alpha);
   if (parsed.value().cumulative) {
@@ -487,13 +471,13 @@ Value WeibullDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
 //   PDF: 1 / (x * sd * sqrt(2*pi)) * exp(-(ln x - mean)^2 / (2 sd^2))
 // #NUM! on x <= 0, sd <= 0.
 Value LognormDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto parsed = read_cumulative_triple(args);
+  auto parsed = read_triple_cumulative(args);
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  const double x = parsed.value().params.first;
-  const double mean = parsed.value().params.second;
-  const double sd = parsed.value().params.third;
+  const double x = parsed.value().first;
+  const double mean = parsed.value().second;
+  const double sd = parsed.value().third;
   if (x <= 0.0 || sd <= 0.0) {
     return Value::error(ErrorCode::Num);
   }

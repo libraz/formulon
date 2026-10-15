@@ -35,15 +35,7 @@
 
 namespace formulon {
 namespace eval {
-namespace {
 
-using builtins_detail::to_finite_value;
-
-/// Per-cell numeric coercion. MMULT / MDETERM / MINVERSE require every
-/// matrix cell to be a `Number` (Booleans coerce to 1/0 via the standard
-/// dispatcher rule; Blank / Text / Error never become a numeric matrix
-/// cell). On the first non-numeric or error cell, returns `false` and
-/// writes the propagating error into `out_err`.
 bool coerce_matrix(const ArrayValue& src, std::vector<double>& out, Value& out_err) {
   // Defensive overflow check: on 32-bit `size_t` (WASM) a maliciously
   // crafted ArrayValue with `rows * cols >= 2^32` would silently wrap and
@@ -57,27 +49,20 @@ bool coerce_matrix(const ArrayValue& src, std::vector<double>& out, Value& out_e
   const std::size_t n = n_or.value();
   out.resize(n);
   for (std::size_t i = 0; i < n; ++i) {
-    const Value& cell = src.cells[i];
-    if (cell.is_error()) {
-      out_err = cell;
+    // Mac Excel's matrix functions do not coerce Text-numeric strings ("3" -> 3).
+    auto cell = matrix_strict_number(src.cells[i]);
+    if (!cell) {
+      out_err = Value::error(cell.error());
       return false;
     }
-    if (cell.is_number()) {
-      out[i] = cell.as_number();
-      continue;
-    }
-    if (cell.is_boolean()) {
-      out[i] = cell.as_boolean() ? 1.0 : 0.0;
-      continue;
-    }
-    // Blank / Text / Lambda / Ref / Array — all rejected. Mac Excel's
-    // matrix functions do not coerce Text-numeric strings ("3" -> 3); a
-    // bare Text cell anywhere in the matrix surfaces `#VALUE!`.
-    out_err = Value::error(ErrorCode::Value);
-    return false;
+    out[i] = cell.value();
   }
   return true;
 }
+
+namespace {
+
+using builtins_detail::to_finite_value;
 
 /// Builds an arena-allocated `ArrayValue` from a flat row-major double
 /// buffer + shape. Returns `nullptr` on arena OOM.

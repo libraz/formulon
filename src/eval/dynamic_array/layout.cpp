@@ -7,7 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include "eval/coerce.h"
 #include "eval/dynamic_array/common.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
@@ -80,17 +79,9 @@ bool resolve_tocol_torow_options(const parser::AstNode& call, std::uint32_t arit
     ignore_mask = static_cast<std::int64_t>(ignore_d);
   }
   if (arity >= 3U) {
-    const Value sc_v = eval_node(call.as_call_arg(2), arena, registry, ctx);
-    if (sc_v.is_error()) {
-      error_out = sc_v;
+    if (!dynamic_array::eval_bool_arg(call.as_call_arg(2), arena, registry, ctx, scan_by_column, error_out)) {
       return false;
     }
-    auto coerced_b = coerce_to_bool(sc_v);
-    if (!coerced_b) {
-      error_out = Value::error(coerced_b.error());
-      return false;
-    }
-    scan_by_column = coerced_b.value();
   }
   return true;
 }

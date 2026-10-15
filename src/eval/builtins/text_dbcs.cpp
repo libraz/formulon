@@ -208,51 +208,6 @@ Value rightb_utf16(const Value* args, std::uint32_t arity, Arena& arena) {
   return Value::text(arena.intern(utf16_substring(src, total - take, take)));
 }
 
-Value midb_utf16(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto parsed = text_detail::read_text_window_args(args, arity, /*snap_start=*/false);
-  if (!parsed) {
-    return Value::error(parsed.error());
-  }
-  const std::string& src = parsed.value().text;
-  const std::uint32_t total = utf16_units_in(src);
-  const std::uint32_t start = static_cast<std::uint32_t>(parsed.value().start - 1);
-  if (start >= total || parsed.value().count == 0) {
-    return Value::text({});
-  }
-  const std::uint32_t available = total - start;
-  const std::uint32_t length = static_cast<std::uint32_t>(parsed.value().count) < available
-                                   ? static_cast<std::uint32_t>(parsed.value().count)
-                                   : available;
-  return Value::text(arena.intern(utf16_substring(src, start, length)));
-}
-
-Value replaceb_utf16(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto parsed = text_detail::read_text_window_args(args, arity, /*snap_start=*/true);
-  if (!parsed) {
-    return Value::error(parsed.error());
-  }
-  const std::string& old_text = parsed.value().text;
-  const std::uint32_t total = utf16_units_in(old_text);
-  std::uint32_t start = static_cast<std::uint32_t>(parsed.value().start - 1);
-  if (start > total) {
-    start = total;
-  }
-  const std::uint32_t remaining = total - start;
-  const std::uint32_t requested = static_cast<std::uint32_t>(parsed.value().count);
-  const std::uint32_t deleted = requested < remaining ? requested : remaining;
-  const std::string prefix = utf16_substring(old_text, 0u, start);
-  const std::string suffix = utf16_substring(old_text, start + deleted, remaining - deleted);
-  std::string out;
-  out.reserve(prefix.size() + parsed.value().new_text.size() + suffix.size());
-  out.append(prefix);
-  out.append(parsed.value().new_text);
-  out.append(suffix);
-  if (static_cast<std::uint64_t>(utf16_units_in(out)) > kExcelTextCapUnits) {
-    return Value::error(ErrorCode::Value);
-  }
-  return Value::text(arena.intern(out));
-}
-
 }  // namespace
 
 namespace text_detail {
@@ -384,7 +339,7 @@ Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
 // the trailing edge with the same 1-byte-overflow rule as LEFTB.
 Value Midb(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!uses_dbcs_profile()) {
-    return midb_utf16(args, arity, arena);
+    return Mid(args, arity, arena);
   }
   const bool kana_single = halfwidth_kana_single_byte();
   auto parsed = read_text_window_args(args, arity, /*snap_start=*/false);
@@ -497,7 +452,7 @@ std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src, bool kana_sin
 // -> `#VALUE!`. Result capped at Excel's 32,767-unit text limit.
 Value ReplaceB_(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!uses_dbcs_profile()) {
-    return replaceb_utf16(args, arity, arena);
+    return Replace_(args, arity, arena);
   }
   const bool kana_single = halfwidth_kana_single_byte();
   auto parsed = read_text_window_args(args, arity, /*snap_start=*/true);

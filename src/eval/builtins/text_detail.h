@@ -116,6 +116,11 @@ struct DbcsCharRec {
 // Walks `src` once and builds the per-character map. O(n) time, one pass.
 std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src, bool halfwidth_kana_single_byte);
 
+// MID / REPLACE in UTF-16 units. Defined in `text.cpp`; MIDB / REPLACEB
+// fall back to them outside a DBCS profile.
+Value Mid(const Value* args, std::uint32_t arity, Arena& arena);
+Value Replace_(const Value* args, std::uint32_t arity, Arena& arena);
+
 // Byte-oriented text family (DBCS) implementations. Defined in
 // `text_dbcs.cpp`. Exposed so `register_text_builtins()` in `text.cpp` can
 // take their addresses when populating the FunctionRegistry.

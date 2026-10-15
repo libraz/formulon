@@ -540,8 +540,7 @@ TEST(CoerceToNumberHostLocale, UnaffectedByCommaDecimalHostLocale) {
 // Number passes through (NaN / Inf included — the strict path is for
 // raw passthrough), Bool coerces to 1/0, Error propagates, everything
 // else (Blank, Text incl. numeric-looking text, Array, Ref, Lambda)
-// is `#VALUE!`. Tests mirror the behaviour of the production helper
-// `coerce_strict_numeric` in `forecast_ets_lazy.cpp`.
+// is `#VALUE!`.
 
 TEST(MatrixStrictNumber, NumberPassesThrough) {
   auto r = matrix_strict_number(Value::number(2.5));

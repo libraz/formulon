@@ -623,18 +623,26 @@ Value ImCos(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return im_unary_text(&cplx_cos, args, arena);
 }
 
-Value ImTan(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+// Shared body of IMTAN (sin / cos) and IMCOT (cos / sin); #NUM! when the
+// divisor is 0.
+Value im_trig_ratio(const Value* args, Arena& arena, bool cot) {
   auto z = parse_complex_value(args[0]);
   if (!z) {
     return Value::error(z.error());
   }
   const Complex s = cplx_sin(z.value());
   const Complex c = cplx_cos(z.value());
-  const double denom = c.re * c.re + c.im * c.im;
+  const Complex& num = cot ? c : s;
+  const Complex& den = cot ? s : c;
+  const double denom = den.re * den.re + den.im * den.im;
   if (denom == 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  return text_complex(cplx_mul(s, cplx_recip(c)), arena);
+  return text_complex(cplx_mul(num, cplx_recip(den)), arena);
+}
+
+Value ImTan(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  return im_trig_ratio(args, arena, /*cot=*/false);
 }
 
 // Shared kernel for IMSEC / IMCSC / IMSECH / IMCSCH: computes 1 / op(z),
@@ -665,17 +673,7 @@ Value ImCsc(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 }
 
 Value ImCot(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  const Complex s = cplx_sin(z.value());
-  const Complex c = cplx_cos(z.value());
-  const double denom = s.re * s.re + s.im * s.im;
-  if (denom == 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  return text_complex(cplx_mul(c, cplx_recip(s)), arena);
+  return im_trig_ratio(args, arena, /*cot=*/true);
 }
 
 // ---------------------------------------------------------------------------

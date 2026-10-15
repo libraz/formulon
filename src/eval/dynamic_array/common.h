@@ -58,6 +58,12 @@ const ArrayValue* resolve_array_prelude(const parser::AstNode& call, std::uint32
 bool eval_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx, double& out, Value& error_out);
 
+/// Evaluate `node` and coerce it through `coerce_to_bool`. On error or
+/// coercion failure writes the caller-visible error to `error_out` and
+/// returns `false`.
+bool eval_bool_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                   bool& out, Value& error_out);
+
 /// Evaluate `node`, coerce to a finite number, and truncate toward zero.
 /// On error or coercion failure writes the caller-visible error to
 /// `error_out` and returns `false`. Shared by every helper that takes a

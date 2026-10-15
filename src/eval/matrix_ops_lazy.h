@@ -76,6 +76,11 @@ Value eval_mdeterm_lazy(const parser::AstNode& call, Arena& arena, const Functio
 Value eval_minverse_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx);
 
+/// Strict numeric read of a matrix argument, shared by the matrix family
+/// and LINEST: every cell goes through `matrix_strict_number` in row-major
+/// order. False with the propagating error in `out_err` on the first bad cell.
+bool coerce_matrix(const ArrayValue& src, std::vector<double>& out, Value& out_err);
+
 /// One Gauss-Jordan step on a row-major `n x w` augmented matrix, shared
 /// by MINVERSE and LINEST: swaps row `pivot` into row `k`, normalises row
 /// `k` so its diagonal is 1, and eliminates column `k` from every other

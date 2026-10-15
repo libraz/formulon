@@ -266,10 +266,9 @@ Expected<double, ErrorCode> apply_pow(double base, double exp) {
 }
 
 Expected<double, ErrorCode> matrix_strict_number(const Value& v) {
-  // Matches `forecast_ets_lazy.cpp::coerce_strict_numeric`: Number passes
-  // through raw (NaN / Inf included — matrix-strict callers run their own
-  // finite-result guard at the end), Bool coerces to 1/0, Error
-  // propagates, everything else (Blank, Text, Array, Ref, Lambda) is
+  // Number passes through raw (NaN / Inf included — matrix-strict callers
+  // run their own finite-result guard at the end), Bool coerces to 1/0,
+  // Error propagates, everything else (Blank, Text, Array, Ref, Lambda) is
   // `#VALUE!`. The Text rejection is the point of the strict variant.
   switch (v.kind()) {
     case ValueKind::Number:

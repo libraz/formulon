@@ -175,7 +175,7 @@ Expected<double, ErrorCode> apply_pow(double base, double exp);
 ///
 /// * `Number` is returned as-is (including NaN / Inf; matrix-strict
 ///   callers expect raw passthrough rather than the `coerce_to_number`
-///   finiteness guard, mirroring `forecast_ets_lazy.cpp::coerce_strict_numeric`).
+///   finiteness guard).
 /// * `Bool` becomes 1.0 / 0.0.
 /// * `Error` propagates its code unchanged.
 /// * `Blank`, `Text`, `Array`, `Ref`, `Lambda` all yield `#VALUE!`. In

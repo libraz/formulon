@@ -83,38 +83,6 @@ using ets::Series;
 using ets::sort_and_aggregate;
 
 // ---------------------------------------------------------------------------
-// Array materialisation + strict numeric coercion
-// ---------------------------------------------------------------------------
-
-// Strict numeric reading for timeline / values cells.
-// Numbers pass through; Booleans coerce to 1/0; Blank fails as `#VALUE!`
-// (FORECAST.ETS treats blanks in the data series as missing -- but the
-// data-completion fill happens AFTER pairing, so a blank cell that
-// survives the array materialisation is genuinely missing data and we
-// reject the call). Errors propagate verbatim. Text fails as `#VALUE!`
-// matching Excel's strict-matrix rule.
-//
-// Returns `true` on success with the number written to `*out`, otherwise
-// writes the propagating error into `*out_err`.
-bool coerce_strict_numeric(const Value& v, double* out, Value* out_err) {
-  if (v.is_error()) {
-    *out_err = v;
-    return false;
-  }
-  if (v.is_number()) {
-    *out = v.as_number();
-    return true;
-  }
-  if (v.is_boolean()) {
-    *out = v.as_boolean() ? 1.0 : 0.0;
-    return true;
-  }
-  // Blank / Text / Array / Lambda / Ref are all rejected.
-  *out_err = Value::error(ErrorCode::Value);
-  return false;
-}
-
-// ---------------------------------------------------------------------------
 // Front-end: shared input preprocessing
 // ---------------------------------------------------------------------------
 
@@ -271,15 +239,23 @@ bool preprocess(const parser::AstNode& values_node, const parser::AstNode& timel
   Series raw;
   raw.t.resize(n_t);
   raw.y.resize(n_v);
+  // A blank surviving materialisation is genuinely missing data (the
+  // data-completion fill runs after pairing), so it is `#VALUE!` here.
   for (std::size_t i = 0; i < n_t; ++i) {
-    if (!coerce_strict_numeric(timeline_arr->cells[i], &raw.t[i], out_err)) {
+    auto t = matrix_strict_number(timeline_arr->cells[i]);
+    if (!t) {
+      *out_err = Value::error(t.error());
       return false;
     }
+    raw.t[i] = t.value();
   }
   for (std::size_t i = 0; i < n_v; ++i) {
-    if (!coerce_strict_numeric(values_arr->cells[i], &raw.y[i], out_err)) {
+    auto y = matrix_strict_number(values_arr->cells[i]);
+    if (!y) {
+      *out_err = Value::error(y.error());
       return false;
     }
+    raw.y[i] = y.value();
   }
 
   // Sort + aggregate.

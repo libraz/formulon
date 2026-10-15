@@ -326,23 +326,34 @@ Value Multinomial(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // GCD / LCM
 // ---------------------------------------------------------------------------
 
+// One GCD / LCM argument: a boolean is #VALUE!; otherwise coerced and
+// truncated to a non-negative integer below 2^53, else #NUM!.
+Expected<std::uint64_t, ErrorCode> read_gcd_lcm_arg(const Value& v) {
+  if (v.is_boolean()) {
+    return ErrorCode::Value;
+  }
+  auto coerced = coerce_to_number(v);
+  if (!coerced) {
+    return std::move(coerced.error());
+  }
+  std::uint64_t k = 0;
+  if (!try_truncate_nonneg(coerced.value(), static_cast<std::uint64_t>(1) << 53u, &k)) {
+    return ErrorCode::Num;
+  }
+  return k;
+}
+
 // GCD(a1, a2, ...) - greatest common divisor. All args truncated to
 // non-negative integers. Negative -> #NUM!. All zero -> 0. A boolean
 // (including one read from a range cell) is #VALUE!.
 Value Gcd(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   std::uint64_t g = 0;
   for (std::uint32_t i = 0; i < arity; ++i) {
-    if (args[i].is_boolean()) {
-      return Value::error(ErrorCode::Value);
+    auto arg = read_gcd_lcm_arg(args[i]);
+    if (!arg) {
+      return Value::error(arg.error());
     }
-    auto coerced = coerce_to_number(args[i]);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    std::uint64_t k = 0;
-    if (!try_truncate_nonneg(coerced.value(), static_cast<std::uint64_t>(1) << 53u, &k)) {
-      return Value::error(ErrorCode::Num);
-    }
+    const std::uint64_t k = arg.value();
     g = std::gcd(g, k);
   }
   return Value::number(static_cast<double>(g));
@@ -354,17 +365,11 @@ Value Lcm(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   std::uint64_t l = 1;
   bool any_zero = false;
   for (std::uint32_t i = 0; i < arity; ++i) {
-    if (args[i].is_boolean()) {
-      return Value::error(ErrorCode::Value);
+    auto arg = read_gcd_lcm_arg(args[i]);
+    if (!arg) {
+      return Value::error(arg.error());
     }
-    auto coerced = coerce_to_number(args[i]);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    std::uint64_t k = 0;
-    if (!try_truncate_nonneg(coerced.value(), static_cast<std::uint64_t>(1) << 53u, &k)) {
-      return Value::error(ErrorCode::Num);
-    }
+    const std::uint64_t k = arg.value();
     if (k == 0) {
       any_zero = true;
       continue;

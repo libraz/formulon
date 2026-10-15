@@ -24,57 +24,12 @@
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
-#include "utils/checked_mul.h"
 #include "utils/error.h"
 #include "value.h"
 
 namespace formulon {
 namespace eval {
 namespace {
-
-/// Strict numeric coercion for LINEST inputs. Numbers pass through;
-/// Booleans coerce to 1/0; Blank/Text/Error fail. Errors propagate
-/// verbatim via `*out_err` (and `false`); non-numeric non-error cells
-/// surface as `#VALUE!`. Mac Excel's matrix-strict rule.
-bool coerce_cell(const Value& cell, double* out, Value* out_err) {
-  if (cell.is_error()) {
-    *out_err = cell;
-    return false;
-  }
-  if (cell.is_number()) {
-    *out = cell.as_number();
-    return true;
-  }
-  if (cell.is_boolean()) {
-    *out = cell.as_boolean() ? 1.0 : 0.0;
-    return true;
-  }
-  *out_err = Value::error(ErrorCode::Value);
-  return false;
-}
-
-/// Evaluates a flat-cell scan over an entire `ArrayValue`, populating
-/// `out` with the coerced doubles in row-major order. Returns `false`
-/// on the first non-numeric / error cell.
-bool coerce_array(const ArrayValue& src, std::vector<double>& out, Value* out_err) {
-  // Defensive overflow guard: on 32-bit `size_t` (WASM) a malformed
-  // ArrayValue with `rows * cols >= 2^32` would silently wrap the
-  // multiply, leaving `out` shorter than the loop's iteration bound and
-  // producing OOB reads on `src.cells[i]`. Surface as `#NUM!` instead.
-  auto n_or = checked_mul_size_t(src.rows, src.cols);
-  if (!n_or) {
-    *out_err = Value::error(ErrorCode::Num);
-    return false;
-  }
-  const std::size_t n = n_or.value();
-  out.resize(n);
-  for (std::size_t i = 0; i < n; ++i) {
-    if (!coerce_cell(src.cells[i], &out[i], out_err)) {
-      return false;
-    }
-  }
-  return true;
-}
 
 /// Returns true if `v` is finite, false for NaN / +-inf. Used to gate
 /// final result cells; LINEST surfaces `#NUM!` for any non-finite
@@ -356,7 +311,7 @@ bool build_design_matrix(const ArrayValue& y_arr, const ArrayValue* x_arr, bool 
 
   // Coerce y first; errors here propagate (left-to-right rule: y first).
   std::vector<double> y_vec;
-  if (!coerce_array(y_arr, y_vec, out_err)) {
+  if (!coerce_matrix(y_arr, y_vec, *out_err)) {
     return false;
   }
 
@@ -372,7 +327,7 @@ bool build_design_matrix(const ArrayValue& y_arr, const ArrayValue* x_arr, bool 
     }
   } else {
     std::vector<double> x_vec;
-    if (!coerce_array(*x_arr, x_vec, out_err)) {
+    if (!coerce_matrix(*x_arr, x_vec, *out_err)) {
       return false;
     }
     // Match orientation against y. The "observation axis" of x must
@@ -753,7 +708,7 @@ namespace {
 bool resolve_new_x_design(const ArrayValue& new_x, const DesignMatrix& dm, bool y_is_col, bool with_const,
                           std::vector<double>* out_design, std::uint32_t* out_n, Value* out_err) {
   std::vector<double> raw;
-  if (!coerce_array(new_x, raw, out_err)) {
+  if (!coerce_matrix(new_x, raw, *out_err)) {
     return false;
   }
   const std::uint32_t k = dm.k;

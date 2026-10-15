@@ -92,6 +92,24 @@ Expected<int, ErrorCode> coerce_bessel_order(const Value& v) {
   return static_cast<int>(t.value());
 }
 
+// The `(x, n)` arguments of the BESSEL family, coerced left to right.
+struct BesselArgs {
+  double x;
+  int n;
+};
+
+Expected<BesselArgs, ErrorCode> read_bessel_args(const Value* args) {
+  auto x = coerce_real_arg(args[0]);
+  if (!x) {
+    return std::move(x.error());
+  }
+  auto n = coerce_bessel_order(args[1]);
+  if (!n) {
+    return std::move(n.error());
+  }
+  return BesselArgs{x.value(), n.value()};
+}
+
 // ---------------------------------------------------------------------------
 // ERF family
 // ---------------------------------------------------------------------------
@@ -423,15 +441,11 @@ double bessk(int n, double x) {
 /// BESSELJ(x, n) = J_n(x), defined on all real x. Delegates to libm `::jn`,
 /// which agrees with Mac Excel 365 across the oracle corpus to within 1 ULP.
 Value BesselJ(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_real_arg(args[0]);
-  if (!x) {
-    return Value::error(x.error());
+  auto in = read_bessel_args(args);
+  if (!in) {
+    return Value::error(in.error());
   }
-  auto n = coerce_bessel_order(args[1]);
-  if (!n) {
-    return Value::error(n.error());
-  }
-  const double r = ::jn(n.value(), x.value());
+  const double r = ::jn(in.value().n, in.value().x);
   if (std::isnan(r)) {
     return Value::error(ErrorCode::Num);
   }
@@ -442,19 +456,15 @@ Value BesselJ(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 /// Computed via the NR2 6.5 polynomial / asymptotic split; libm `::yn`
 /// drifts from Mac by up to 1e-5 relative on small x and is not used.
 Value BesselY(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_real_arg(args[0]);
-  if (!x) {
-    return Value::error(x.error());
+  auto in = read_bessel_args(args);
+  if (!in) {
+    return Value::error(in.error());
   }
-  auto n = coerce_bessel_order(args[1]);
-  if (!n) {
-    return Value::error(n.error());
-  }
-  const double xv = x.value();
+  const double xv = in.value().x;
   if (xv <= 0.0 || std::isnan(xv)) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = bessy(n.value(), xv);
+  const double r = bessy(in.value().n, xv);
   return to_finite_value(r);
 }
 
@@ -463,19 +473,15 @@ Value BesselY(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 /// for n >= 2. The earlier power-series implementation accumulated 1e-5
 /// relative error past x ~= 30 and is replaced.
 Value BesselI(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_real_arg(args[0]);
-  if (!x) {
-    return Value::error(x.error());
+  auto in = read_bessel_args(args);
+  if (!in) {
+    return Value::error(in.error());
   }
-  auto n = coerce_bessel_order(args[1]);
-  if (!n) {
-    return Value::error(n.error());
-  }
-  const double xv = x.value();
+  const double xv = in.value().x;
   if (std::isnan(xv) || std::isinf(xv)) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = bessi(n.value(), xv);
+  const double r = bessi(in.value().n, xv);
   return to_finite_value(r);
 }
 
@@ -483,19 +489,15 @@ Value BesselI(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 /// Computed via NR2 6.6 polynomial / asymptotic K_0 / K_1 plus the forward
 /// recurrence for n >= 2.
 Value BesselK(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_real_arg(args[0]);
-  if (!x) {
-    return Value::error(x.error());
+  auto in = read_bessel_args(args);
+  if (!in) {
+    return Value::error(in.error());
   }
-  auto n = coerce_bessel_order(args[1]);
-  if (!n) {
-    return Value::error(n.error());
-  }
-  const double xv = x.value();
+  const double xv = in.value().x;
   if (xv <= 0.0 || std::isnan(xv)) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = bessk(n.value(), xv);
+  const double r = bessk(in.value().n, xv);
   return to_finite_value(r);
 }
 

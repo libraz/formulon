@@ -19,17 +19,9 @@ namespace financial_detail {
 namespace {
 
 // Re-expose the shared POD types under this TU's anonymous namespace so
-// the impl bodies below read naturally. The NumberQuad type stays local
-// because it is only needed by ISPMT.
+// the impl bodies below read naturally.
 using NumberPair = builtins_detail::NumberPair;
 using NumberTriple = builtins_detail::NumberTriple;
-
-struct NumberQuad {
-  double first;
-  double second;
-  double third;
-  double fourth;
-};
 
 Expected<NumberPair, ErrorCode> read_non_bool_number_pair(const Value* args, std::uint32_t first_index,
                                                           std::uint32_t second_index) {
@@ -42,28 +34,6 @@ Expected<NumberPair, ErrorCode> read_non_bool_number_pair(const Value* args, std
 inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args, std::uint32_t first_index,
                                                             std::uint32_t second_index, std::uint32_t third_index) {
   return builtins_detail::read_number_triple(args, first_index, second_index, third_index);
-}
-
-Expected<NumberQuad, ErrorCode> read_number_quad(const Value* args, std::uint32_t first_index,
-                                                 std::uint32_t second_index, std::uint32_t third_index,
-                                                 std::uint32_t fourth_index) {
-  auto first = builtins_detail::read_required_number(args, first_index);
-  if (!first) {
-    return std::move(first.error());
-  }
-  auto second = builtins_detail::read_required_number(args, second_index);
-  if (!second) {
-    return std::move(second.error());
-  }
-  auto third = builtins_detail::read_required_number(args, third_index);
-  if (!third) {
-    return std::move(third.error());
-  }
-  auto fourth = builtins_detail::read_required_number(args, fourth_index);
-  if (!fourth) {
-    return std::move(fourth.error());
-  }
-  return NumberQuad{first.value(), second.value(), third.value(), fourth.value()};
 }
 
 // --- DOLLARDE / DOLLARFR shared denominator scaling --------------------
@@ -285,14 +255,14 @@ Value Rri(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // is used as-is (Excel lets negative or out-of-range `per` produce the
 // raw algebraic result).
 Value IsPmt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_number_quad(args, 0, 1, 2, 3);
-  if (!input) {
-    return Value::error(input.error());
+  double v[4];
+  if (auto read = read_required_numbers(args, "nnnn", v); !read) {
+    return Value::error(read.error());
   }
-  const double rate = input.value().first;
-  const double per = input.value().second;
-  const double nper = input.value().third;
-  const double pv = input.value().fourth;
+  const double rate = v[0];
+  const double per = v[1];
+  const double nper = v[2];
+  const double pv = v[3];
   if (nper == 0.0) {
     return Value::error(ErrorCode::Div0);
   }
