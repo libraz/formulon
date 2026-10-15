@@ -500,6 +500,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   /// safe to invoke after any operation that may have changed the
   /// footprint. Destroying the handle reports the whole amount back.
   void SyncExternalMemory(Napi::Env env);
+  /// Applies an already measured footprint to V8's external-memory count.
+  void ApplyExternalMemoryEstimate(Napi::Env env, size_t bytes);
 
   /// Clears the record of a throwing progress callback and reports whether
   /// it was set. The solver is only told "abort", which is

@@ -185,13 +185,15 @@ void Workbook::DestroyHandle(Napi::Env env) {
 }
 
 void Workbook::SyncExternalMemory(Napi::Env env) {
-  int64_t current = 0;
+  size_t bytes = 0;
   if (handle_ != nullptr) {
-    size_t bytes = 0;
-    if (fm_workbook_memory_usage(handle_, &bytes) == 0) {
-      current = static_cast<int64_t>(bytes);
-    }
+    (void)fm_workbook_memory_usage(handle_, &bytes);
   }
+  ApplyExternalMemoryEstimate(env, bytes);
+}
+
+void Workbook::ApplyExternalMemoryEstimate(Napi::Env env, size_t bytes) {
+  const int64_t current = static_cast<int64_t>(bytes);
   const int64_t delta = current - reported_external_bytes_;
   if (delta == 0) {
     return;

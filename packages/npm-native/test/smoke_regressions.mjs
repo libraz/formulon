@@ -1,6 +1,47 @@
 import test from 'node:test';
 import { assert, getModule } from './smoke_support.mjs';
 
+test('nested recalc keeps its diagnostic inside an iterative progress callback', async () => {
+  const mod = await getModule();
+  const runOuterRecalc = (recalcOuter) => {
+    const wb = mod.Workbook.createDefault();
+    try {
+      assert.ok(wb.setIterative(true, 10, 0.001).ok);
+      assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
+      let calls = 0;
+      let nested;
+      assert.ok(
+        wb.setIterativeProgress(() => {
+          calls += 1;
+          nested = wb.recalc();
+          return false;
+        }).ok,
+      );
+
+      const outer = recalcOuter(wb);
+      const outerStatus = typeof outer.status === 'object' ? outer.status : outer;
+      assert.ok(outerStatus.ok, `outer recalc: ${JSON.stringify(outerStatus)}`);
+      assert.equal(calls, 1);
+      assert.ok(nested, 'the progress callback must attempt a nested recalc');
+      assert.equal(nested.ok, false);
+      assert.equal(nested.status, 4005);
+      assert.equal(nested.message, 'RecalcEngine::recalc called recursively on the same thread');
+      assert.equal(nested.context, 'the engine does not support nested recalc; the inner call is rejected');
+
+      const value = wb.getValue(0, 0, 0);
+      assert.ok(value.status.ok, `workbook remains usable: ${JSON.stringify(value.status)}`);
+      return { status: nested.status, message: nested.message, context: nested.context };
+    } finally {
+      wb.setIterativeProgress(null);
+      wb.dispose();
+    }
+  };
+
+  const serial = runOuterRecalc((wb) => wb.recalc());
+  const parallel = runOuterRecalc((wb) => wb.recalcParallel(2));
+  assert.deepEqual(parallel, serial, 'serial and parallel outer recalcs preserve the same nested error');
+});
+
 test('a throwing iterative progress callback aborts the solve and reports a status', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();

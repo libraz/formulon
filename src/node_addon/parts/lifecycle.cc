@@ -150,6 +150,8 @@ Napi::Value Workbook::Recalc(const Napi::CallbackInfo& info) {
   (void)TakeIterativeProgressThrew();
   fm_status_t rc = fm_workbook_recalc(handle_);
   const bool callback_threw = TakeIterativeProgressThrew();
+  // Build the status before the memory query below clears the thread-local diagnostics.
+  Napi::Object status = MakeStatus(env, rc);
   // A full recalc is the coarsest boundary the binding has and the one
   // after which the footprint has most likely moved (spilled arrays,
   // newly cached text), so the external-memory figure is refreshed here
@@ -161,7 +163,7 @@ Napi::Value Workbook::Recalc(const Napi::CallbackInfo& info) {
   if (rc == 0 && callback_threw) {
     return MakeCallbackThrewStatus(env);
   }
-  return MakeStatus(env, rc);
+  return status;
 }
 
 Napi::Value Workbook::RecalcParallel(const Napi::CallbackInfo& info) {
@@ -338,10 +340,10 @@ Napi::Value Workbook::MemoryUsage(const Napi::CallbackInfo& info) {
   if (fm_workbook_memory_usage(handle_, &bytes) != 0) {
     return Napi::Number::New(env, 0);
   }
-  // Re-report while the figure is in hand: a script that has been
+  // Re-report the measurement already in hand: a script that has been
   // filling cells since the last sync has grown the workbook without V8
   // hearing about it, and this is the natural moment to correct that.
-  SyncExternalMemory(env);
+  ApplyExternalMemoryEstimate(env, bytes);
   return Napi::Number::New(env, static_cast<double>(bytes));
 }
 
