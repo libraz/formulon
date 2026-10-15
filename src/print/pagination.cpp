@@ -53,15 +53,20 @@ CellRange BoundingBox(const std::vector<CellRange>& ranges) {
   return box;
 }
 
-/// True when `index` is the target of a *manual* break in `breaks`.
-///
-/// Excel persists automatic page breaks (`man="0"`) alongside user-placed
-/// ones once a sheet has been previewed or printed. Only breaks with
-/// `manual == true` force a page boundary; automatic breaks are
-/// recomputed by the pagination walk and must not be treated as forced.
-bool HasManualBreakAt(const std::vector<ManualBreak>& breaks, std::uint32_t index) {
-  return std::any_of(breaks.begin(), breaks.end(),
-                     [index](const ManualBreak& brk) { return brk.manual && brk.id == index; });
+/// Copies, sorts, and de-duplicates the user-placed break IDs for one axis.
+/// Persisted automatic breaks are recomputed by the pagination walk and do
+/// not enter this lookup set.
+std::vector<std::uint32_t> CollectManualBreakIds(const std::vector<ManualBreak>& breaks) {
+  std::vector<std::uint32_t> ids;
+  ids.reserve(breaks.size());
+  for (const ManualBreak& brk : breaks) {
+    if (brk.manual) {
+      ids.push_back(brk.id);
+    }
+  }
+  sort_ascending(ids);
+  ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+  return ids;
 }
 
 /// Relative tolerance for the "does this track still fit" comparison.
@@ -72,13 +77,13 @@ constexpr double kAxisFitEpsilon = 1e-9;
 /// One axis of the break walk.
 ///
 /// `track_sizes[i]` is the size in points of the i-th track of the print
-/// area (column or row). `manual` lists track indices (absolute, not
+/// area (column or row). `manual_ids` lists sorted unique track indices (absolute, not
 /// print-area-relative) that force a break before themselves.
 struct AxisInput {
-  std::uint32_t first = 0;                           ///< Absolute index of the first print-area track.
-  std::vector<double> track_sizes;                   ///< Per-track size in points (model-scaled).
-  const std::vector<ManualBreak>* manual = nullptr;  ///< Manual breaks for this axis.
-  double limit_pt = 0.0;                             ///< Printable body extent for this axis.
+  std::uint32_t first = 0;                                 ///< Absolute index of the first print-area track.
+  std::vector<double> track_sizes;                         ///< Per-track size in points (model-scaled).
+  const std::vector<std::uint32_t>* manual_ids = nullptr;  ///< Sorted unique manual breaks for this axis.
+  double limit_pt = 0.0;                                   ///< Printable body extent for this axis.
 };
 
 /// Walks one axis, accumulating track sizes until the printable limit is
@@ -96,10 +101,16 @@ std::uint32_t WalkAxis(const AxisInput& axis, std::vector<std::uint32_t>* out_br
   std::uint32_t pages = 1;
   out_page_starts->push_back(axis.first);
   double accumulated = 0.0;
+  std::size_t manual_cursor = static_cast<std::size_t>(
+      std::lower_bound(axis.manual_ids->begin(), axis.manual_ids->end(), axis.first) - axis.manual_ids->begin());
   for (std::size_t i = 0; i < track_count; ++i) {
     const auto absolute = static_cast<std::uint32_t>(axis.first + i);
     const double size = axis.track_sizes[i];
-    const bool manual_break = i != 0 && HasManualBreakAt(*axis.manual, absolute);
+    while (manual_cursor < axis.manual_ids->size() && (*axis.manual_ids)[manual_cursor] < absolute) {
+      ++manual_cursor;
+    }
+    const bool manual_break =
+        i != 0 && manual_cursor < axis.manual_ids->size() && (*axis.manual_ids)[manual_cursor] == absolute;
     // An automatic break fires when adding this track overflows the body
     // and the page already holds at least one track (so a single track
     // wider than the page still occupies one page rather than zero).
@@ -117,6 +128,9 @@ std::uint32_t WalkAxis(const AxisInput& axis, std::vector<std::uint32_t>* out_br
       // contributes its own automatic break (`print_pagination.
       // multi_area_row_stacked_col_break` -> v=[3,7,7], where 3 is manual).
       (manual_break ? out_manual_breaks : out_breaks)->push_back(absolute);
+      if (manual_break) {
+        ++manual_cursor;
+      }
       ++pages;
       out_page_starts->push_back(absolute);
       accumulated = 0.0;
@@ -391,6 +405,8 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   std::vector<std::uint32_t> all_v;
   std::vector<std::uint32_t> manual_h;
   std::vector<std::uint32_t> manual_v;
+  const std::vector<std::uint32_t> manual_row_ids = CollectManualBreakIds(settings.manual_row_breaks);
+  const std::vector<std::uint32_t> manual_col_ids = CollectManualBreakIds(settings.manual_col_breaks);
   // Accumulated in 64 bits: one axis can produce a page per grid track, so
   // the per-area product reaches 2^34 and the sum across areas grows past
   // that again. A 32-bit accumulator would wrap and report a count that is
@@ -407,7 +423,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     AxisInput row_axis;
     row_axis.first = rect.first_row;
     row_axis.track_sizes = std::move(row_points);
-    row_axis.manual = &settings.manual_row_breaks;
+    row_axis.manual_ids = &manual_row_ids;
     row_axis.limit_pt = body.height_pt;
     std::vector<std::uint32_t> row_starts;
     const std::uint32_t row_pages = WalkAxis(row_axis, &all_h, &manual_h, &row_starts);
@@ -427,7 +443,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     AxisInput col_axis;
     col_axis.first = rect.first_col;
     col_axis.track_sizes = std::move(col_points);
-    col_axis.manual = &settings.manual_col_breaks;
+    col_axis.manual_ids = &manual_col_ids;
     col_axis.limit_pt = body.width_pt;
     std::vector<std::uint32_t> col_starts;
     const std::uint32_t col_pages = WalkAxis(col_axis, &all_v, &manual_v, &col_starts);

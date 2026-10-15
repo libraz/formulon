@@ -171,6 +171,33 @@ TEST(PaginationDetail, ManualBreaksAreFlaggedPerBreak) {
   EXPECT_NE(std::find(r.h_breaks.begin(), r.h_breaks.end(), 1U), r.h_breaks.end());
 }
 
+TEST(PaginationDetail, UnsortedDuplicateManualBreaksIgnoreAutomaticEntries) {
+  Workbook wb = MakeGridWorkbook();
+  auto& breaks = wb.sheet(0).mutable_print_settings().manual_row_breaks;
+
+  ManualBreak before_row_three;
+  before_row_three.id = 2U;
+  before_row_three.manual = true;
+  breaks.push_back(before_row_three);
+
+  ManualBreak automatic;
+  automatic.id = 3U;
+  automatic.manual = false;
+  breaks.push_back(automatic);
+
+  ManualBreak before_row_two;
+  before_row_two.id = 1U;
+  before_row_two.manual = true;
+  breaks.push_back(before_row_two);
+  breaks.push_back(before_row_three);  // Duplicate user entry.
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  const PaginationResult& r = result.value();
+  EXPECT_EQ(r.h_breaks, (std::vector<std::uint32_t>{1U, 2U}));
+  EXPECT_EQ(r.h_break_manual, (std::vector<bool>{true, true}));
+}
+
 TEST(PaginationDetail, PrintTitlesAndRepeatedOffsetsAreReported) {
   Workbook wb = MakeGridWorkbook();
   wb.set_defined_names({SheetName("_xlnm.Print_Area", "Sheet1!$A$1:$D$4"),
