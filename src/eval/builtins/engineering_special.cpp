@@ -20,9 +20,9 @@
 //
 //   * BESSELJ uses J_0(x) / J_1(x) from rational polynomials (|x| < 8)
 //     and an asymptotic expansion (|x| >= 8), forward recurrence when
-//     |x| > n and Miller's normalised downward recurrence otherwise. It is
-//     bit-exact against Mac for |x| < 8; above that Excel's own expansion
-//     differs by up to ~3e-5 relative, about as far as libm `::jn` does.
+//     |x| > n and Miller's normalised downward recurrence otherwise. The
+//     |x| >= 8 expansion carries Excel's coefficient slips (up to ~3e-5
+//     from the true J_n) so the result stays bit-exact against Mac.
 //   * BESSELY uses Y_0(x) / Y_1(x) computed from rational polynomials
 //     (small x, with the J_n log correction) and an asymptotic
 //     expansion (large x), then forward recurrence
@@ -186,7 +186,12 @@ Value ErfcPrecise(const Value* args, std::uint32_t arity, Arena& arena) {
 // are also tabulated in Abramowitz & Stegun 9.4 / 9.8 and on netlib.
 // ---------------------------------------------------------------------------
 
-// J_0(x): rational polynomial for |x| < 8, asymptotic for |x| >= 8.
+// Largest asymptotic phase |x| - pi/4 (or 3pi/4) Excel evaluates in J_0 /
+// J_1; beyond it BESSELJ is #NUM! (Mac Excel 365, located within 0.05).
+constexpr double kMaxBesselPhase = 134217727.0;
+
+// J_0(x): rational polynomial for |x| < 8, asymptotic for |x| >= 8. The
+// asymptotic branch reproduces Excel's transcription of NR, not NR itself.
 double bessj0(double x) {
   const double ax = std::fabs(x);
   if (ax < 8.0) {
@@ -200,14 +205,19 @@ double bessj0(double x) {
   }
   const double z = 8.0 / ax;
   const double y = z * z;
-  const double p = 1.0 + y * (-0.1098628627e-2 + y * (0.2734510407e-4 + y * (-0.2073370639e-5 + y * 0.2093887211e-6)));
+  // Excel's P has -0.1098628267e-2 where NR prints -0.1098628627e-2.
+  const double p = 1.0 + y * (-0.1098628267e-2 + y * (0.2734510407e-4 + y * (-0.2073370639e-5 + y * 0.2093887211e-6)));
   const double q =
       -0.1562499995e-1 + y * (0.1430488765e-3 + y * (-0.6911147651e-5 + y * (0.7621095161e-6 + y * (-0.934935152e-7))));
   const double xx = ax - 0.785398164;
+  if (xx > kMaxBesselPhase) {
+    return std::nan("");
+  }
   return std::sqrt(0.636619772 / ax) * (std::cos(xx) * p - z * std::sin(xx) * q);
 }
 
-// J_1(x): rational polynomial for |x| < 8, asymptotic for |x| >= 8.
+// J_1(x): rational polynomial for |x| < 8, asymptotic for |x| >= 8, again
+// as Excel transcribed it (P and the grouping of the second term differ).
 double bessj1(double x) {
   const double ax = std::fabs(x);
   double ans;
@@ -222,11 +232,17 @@ double bessj1(double x) {
   } else {
     const double z = 8.0 / ax;
     const double y = z * z;
-    const double p = 1.0 + y * (0.183105e-2 + y * (-0.3516396496e-4 + y * (0.2457520174e-5 + y * (-0.240337019e-6))));
+    // Excel's P repeats the y^2 coefficient, pushing the last two terms a degree up.
+    const double p =
+        1.0 + y * (0.183105e-2 +
+                   y * (-0.3516396496e-4 + y * (-0.3516396496e-4 + y * (0.2457520174e-5 + y * (-0.240337019e-6)))));
     const double q =
         0.04687499995 + y * (-0.2002690873e-3 + y * (0.8449199096e-5 + y * (-0.88228987e-6 + y * 0.105787412e-6)));
     const double xx = ax - 2.356194491;
-    ans = std::sqrt(0.636619772 / ax) * (std::cos(xx) * p - z * std::sin(xx) * q);
+    if (xx > kMaxBesselPhase) {
+      return std::nan("");
+    }
+    ans = std::sqrt(0.636619772 / ax) * (std::cos(xx) * p - z * (std::sin(xx) * q));
     if (x < 0.0) {
       ans = -ans;
     }

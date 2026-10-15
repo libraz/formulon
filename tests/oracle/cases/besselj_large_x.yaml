@@ -1,0 +1,137 @@
+suite: besselj_large_x
+description: BESSELJ at |x| >= 8 and around the phase limit, compared as 15 digits plus the residual
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  - id: besselj_8_0_digits
+    description: "BESSELJ(8,0) (leading 15 digits): x = 8 branch boundary, J0 coefficient slip"
+    formula: "=TEXT(BESSELJ(8,0),\"0.00000000000000E+00\")"
+  - id: besselj_8_0_residual
+    description: "BESSELJ(8,0) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(8,0))-VALUE(TEXT(BESSELJ(8,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_8_1_digits
+    description: "BESSELJ(8,1) (leading 15 digits): x = 8, J1 repeated P coefficient"
+    formula: "=TEXT(BESSELJ(8,1),\"0.00000000000000E+00\")"
+  - id: besselj_8_1_residual
+    description: "BESSELJ(8,1) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(8,1))-VALUE(TEXT(BESSELJ(8,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_m7p999_1_digits
+    description: "BESSELJ(-7.999,1) (leading 15 digits): just below 8, rational branch"
+    formula: "=TEXT(BESSELJ(-7.999,1),\"0.00000000000000E+00\")"
+  - id: besselj_m7p999_1_residual
+    description: "BESSELJ(-7.999,1) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(-7.999,1))-VALUE(TEXT(BESSELJ(-7.999,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_10_1_digits
+    description: "BESSELJ(10,1) (leading 15 digits): J1 slip away from the boundary"
+    formula: "=TEXT(BESSELJ(10,1),\"0.00000000000000E+00\")"
+  - id: besselj_10_1_residual
+    description: "BESSELJ(10,1) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(10,1))-VALUE(TEXT(BESSELJ(10,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_10_1p9999999_digits
+    description: "BESSELJ(10,1.9999999) (leading 15 digits): order truncates toward zero"
+    formula: "=TEXT(BESSELJ(10,1.9999999),\"0.00000000000000E+00\")"
+  - id: besselj_10_1p9999999_residual
+    description: "BESSELJ(10,1.9999999) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(10,1.9999999))-VALUE(TEXT(BESSELJ(10,1.9999999),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_m12p3_1_digits
+    description: "BESSELJ(-12.3,1) (leading 15 digits): odd order flips sign for negative x"
+    formula: "=TEXT(BESSELJ(-12.3,1),\"0.00000000000000E+00\")"
+  - id: besselj_m12p3_1_residual
+    description: "BESSELJ(-12.3,1) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(-12.3,1))-VALUE(TEXT(BESSELJ(-12.3,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_m8p5_0_digits
+    description: "BESSELJ(-8.5,0) (leading 15 digits): even order is symmetric in x"
+    formula: "=TEXT(BESSELJ(-8.5,0),\"0.00000000000000E+00\")"
+  - id: besselj_m8p5_0_residual
+    description: "BESSELJ(-8.5,0) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(-8.5,0))-VALUE(TEXT(BESSELJ(-8.5,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_15p25_1_digits
+    description: "BESSELJ(15.25,1) (leading 15 digits): J1 second-term grouping"
+    formula: "=TEXT(BESSELJ(15.25,1),\"0.00000000000000E+00\")"
+  - id: besselj_15p25_1_residual
+    description: "BESSELJ(15.25,1) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(15.25,1))-VALUE(TEXT(BESSELJ(15.25,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_22_1_digits
+    description: "BESSELJ(22,1) (leading 15 digits): J1 second-term grouping"
+    formula: "=TEXT(BESSELJ(22,1),\"0.00000000000000E+00\")"
+  - id: besselj_22_1_residual
+    description: "BESSELJ(22,1) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(22,1))-VALUE(TEXT(BESSELJ(22,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_14p928451337535938_0_digits
+    description: "BESSELJ(14.928451337535938,0) (leading 15 digits): J0 second-term grouping"
+    formula: "=TEXT(BESSELJ(14.928451337535938,0),\"0.00000000000000E+00\")"
+  - id: besselj_14p928451337535938_0_residual
+    description: "BESSELJ(14.928451337535938,0) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(14.928451337535938,0))-VALUE(TEXT(BESSELJ(14.928451337535938,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_24p2546099394925_0_digits
+    description: "BESSELJ(24.2546099394925,0) (leading 15 digits): J0 second-term grouping"
+    formula: "=TEXT(BESSELJ(24.2546099394925,0),\"0.00000000000000E+00\")"
+  - id: besselj_24p2546099394925_0_residual
+    description: "BESSELJ(24.2546099394925,0) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(24.2546099394925,0))-VALUE(TEXT(BESSELJ(24.2546099394925,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_8p5_2_digits
+    description: "BESSELJ(8.5,2) (leading 15 digits): forward recurrence inherits J0/J1"
+    formula: "=TEXT(BESSELJ(8.5,2),\"0.00000000000000E+00\")"
+  - id: besselj_8p5_2_residual
+    description: "BESSELJ(8.5,2) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(8.5,2))-VALUE(TEXT(BESSELJ(8.5,2),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_10_10_digits
+    description: "BESSELJ(10,10) (leading 15 digits): x equal to n uses downward recurrence"
+    formula: "=TEXT(BESSELJ(10,10),\"0.00000000000000E+00\")"
+  - id: besselj_10_10_residual
+    description: "BESSELJ(10,10) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(10,10))-VALUE(TEXT(BESSELJ(10,10),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_10p000000001_10_digits
+    description: "BESSELJ(10.000000001,10) (leading 15 digits): x just above n uses forward recurrence"
+    formula: "=TEXT(BESSELJ(10.000000001,10),\"0.00000000000000E+00\")"
+  - id: besselj_10p000000001_10_residual
+    description: "BESSELJ(10.000000001,10) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(10.000000001,10))-VALUE(TEXT(BESSELJ(10.000000001,10),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_9p5_10_digits
+    description: "BESSELJ(9.5,10) (leading 15 digits): downward recurrence region"
+    formula: "=TEXT(BESSELJ(9.5,10),\"0.00000000000000E+00\")"
+  - id: besselj_9p5_10_residual
+    description: "BESSELJ(9.5,10) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(9.5,10))-VALUE(TEXT(BESSELJ(9.5,10),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_1000_1_digits
+    description: "BESSELJ(1000,1) (leading 15 digits): large-x tail"
+    formula: "=TEXT(BESSELJ(1000,1),\"0.00000000000000E+00\")"
+  - id: besselj_1000_1_residual
+    description: "BESSELJ(1000,1) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(1000,1))-VALUE(TEXT(BESSELJ(1000,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_100000000_0_digits
+    description: "BESSELJ(100000000,0) (leading 15 digits): large x below the phase limit"
+    formula: "=TEXT(BESSELJ(100000000,0),\"0.00000000000000E+00\")"
+  - id: besselj_100000000_0_residual
+    description: "BESSELJ(100000000,0) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(100000000,0))-VALUE(TEXT(BESSELJ(100000000,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_134217727p5_0_digits
+    description: "BESSELJ(134217727.5,0) (leading 15 digits): last J0 phase before the limit"
+    formula: "=TEXT(BESSELJ(134217727.5,0),\"0.00000000000000E+00\")"
+  - id: besselj_134217727p5_0_residual
+    description: "BESSELJ(134217727.5,0) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(134217727.5,0))-VALUE(TEXT(BESSELJ(134217727.5,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_134217729_1_digits
+    description: "BESSELJ(134217729,1) (leading 15 digits): last J1 phase before the limit"
+    formula: "=TEXT(BESSELJ(134217729,1),\"0.00000000000000E+00\")"
+  - id: besselj_134217729_1_residual
+    description: "BESSELJ(134217729,1) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(134217729,1))-VALUE(TEXT(BESSELJ(134217729,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_8_100_digits
+    description: "BESSELJ(8,100) (leading 15 digits): downward recurrence deep in the tail"
+    formula: "=TEXT(BESSELJ(8,100),\"0.00000000000000E+00\")"
+  - id: besselj_8_100_residual
+    description: "BESSELJ(8,100) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(8,100))-VALUE(TEXT(BESSELJ(8,100),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_8_300_digits
+    description: "BESSELJ(8,300) (leading 15 digits): downward recurrence underflows to 0"
+    formula: "=TEXT(BESSELJ(8,300),\"0.00000000000000E+00\")"
+  - id: besselj_8_300_residual
+    description: "BESSELJ(8,300) (residual below the 15 digits)"
+    formula: "=TEXT((BESSELJ(8,300))-VALUE(TEXT(BESSELJ(8,300),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: besselj_134217727p8_0
+    description: "BESSELJ(134217727.8,0): J0 phase beyond the limit is #NUM!"
+    formula: "=BESSELJ(134217727.8,0)"
+  - id: besselj_134217730_1
+    description: "BESSELJ(134217730,1): J1 phase beyond the limit is #NUM!"
+    formula: "=BESSELJ(134217730,1)"
