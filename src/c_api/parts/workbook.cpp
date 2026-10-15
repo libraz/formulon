@@ -26,6 +26,7 @@
 #include "value.h"
 
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
@@ -113,6 +114,7 @@ fm_status_t create_handle(fm_workbook_t** out, formulon::Workbook (*factory)(), 
   if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, null_out_message);
   }
+  *out = nullptr;
   auto handle = std::unique_ptr<fm_workbook_t>(new fm_workbook_t{});
   handle->wb.emplace(factory());
   *out = handle.release();
@@ -135,10 +137,10 @@ extern "C" fm_status_t fm_workbook_create_for_profile(const char* profile_id, fm
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_create_for_profile: NULL argument");
   }
+  *out = nullptr;
   formulon::ExcelProfile profile;
-  if (!formulon::parse_excel_profile_id(profile_id, &profile)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_create_for_profile: unknown profile");
+  if (const fm_status_t st = check_profile_id(profile_id, "fm_workbook_create_for_profile", &profile)) {
+    return st;
   }
   auto handle = std::unique_ptr<fm_workbook_t>(new fm_workbook_t{});
   handle->wb.emplace(formulon::Workbook::create_for_profile(profile));

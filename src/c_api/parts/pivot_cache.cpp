@@ -22,6 +22,7 @@
 #include "value.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
@@ -349,6 +350,9 @@ formulon::pivot::PivotCacheField* lookup_cache_field_mut(fm_workbook_t* wb, std:
 extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_number(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                             std::size_t field_idx, double value) {
   clear_last_error();
+  if (const fm_status_t st = check_finite(value, "fm_workbook_pivot_cache_field_add_shared_item_number", "value")) {
+    return st;
+  }
   fm_status_t status = 0;
   auto* field =
       lookup_cache_field_mut(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_add_shared_item_number", &status);
@@ -544,6 +548,9 @@ extern "C" fm_status_t fm_workbook_pivot_cache_record_set_number(fm_workbook_t* 
                                                                  std::size_t record_idx, std::size_t field_idx,
                                                                  double value) {
   clear_last_error();
+  if (const fm_status_t st = check_finite(value, "fm_workbook_pivot_cache_record_set_number", "value")) {
+    return st;
+  }
   return set_record_cell(wb, cache_id, record_idx, field_idx, "fm_workbook_pivot_cache_record_set_number",
                          formulon::Value::number(value));
 }

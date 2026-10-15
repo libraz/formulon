@@ -14,6 +14,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_finite_non_negative;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
@@ -100,6 +101,9 @@ extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enab
   clear_last_error();
   if (wb == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_set_iterative: wb is NULL");
+  }
+  if (const fm_status_t st = check_finite_non_negative(max_change, "fm_workbook_set_iterative", "max_change")) {
+    return st;
   }
   formulon::IterativeOptions opts;
   opts.enabled = (enabled != 0);
