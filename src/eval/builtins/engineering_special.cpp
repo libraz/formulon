@@ -77,14 +77,15 @@ Expected<double, ErrorCode> coerce_real_arg(const Value& v) {
   return coerce_to_number(v);
 }
 
-// Coerces a BESSEL order argument. Must be a finite number >= 0 after
-// truncation toward zero; returns the integer order. Negative or non-finite
-// -> #NUM!. Bool is rejected with #VALUE! to match Excel 365.
+// Largest BESSEL order Excel evaluates; the next integer is #NUM! for every x
+// in all four functions (Mac Excel 365).
+constexpr double kMaxBesselOrder = 10000000.0;
+
+// Coerces a BESSEL order argument. Must lie in [0, kMaxBesselOrder] after
+// truncation toward zero; returns the integer order. Out of range or
+// non-finite -> #NUM!. Bool is rejected with #VALUE! to match Excel 365.
 Expected<int, ErrorCode> coerce_bessel_order(const Value& v) {
-  // Upper bound: guard against absurd orders that would overflow the
-  // recurrence. Excel caps orders well below this; 2^30 is a defensive
-  // ceiling that still accommodates any realistic engineering query.
-  auto t = builtins_detail::coerce_truncated_in_range(v, 0.0, static_cast<double>((1 << 30)), /*reject_bool=*/true);
+  auto t = builtins_detail::coerce_truncated_in_range(v, 0.0, kMaxBesselOrder, /*reject_bool=*/true);
   if (!t) {
     return std::move(t.error());
   }

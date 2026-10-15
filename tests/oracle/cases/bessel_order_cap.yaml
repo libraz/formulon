@@ -1,0 +1,29 @@
+suite: bessel_order_cap
+description: BESSELI / BESSELJ / BESSELK / BESSELY accept a truncated order up to 1E7 and return #NUM! past it
+tolerance: { abs: 1.0e-12, rel: 1.0e-6 }
+locale: ja-JP
+cases:
+  - id: besseli_order_at_cap
+    formula: "=BESSELI(1,10000000)"
+  - id: besseli_order_past_cap
+    formula: "=BESSELI(1,10000001)"
+  - id: besseli_order_text_past_cap
+    formula: "=BESSELI(1,\"10000001\")"
+  - id: besseli_order_2_pow_30
+    formula: "=BESSELI(1,1073741824)"
+  - id: besselj_order_at_cap
+    formula: "=BESSELJ(1,10000000)"
+  - id: besselj_order_truncates_to_cap
+    formula: "=BESSELJ(1,10000000.9)"
+  - id: besselj_order_past_cap
+    formula: "=BESSELJ(1,10000001)"
+  - id: besselj_order_2_pow_31
+    formula: "=BESSELJ(1,2147483648)"
+  - id: besselk_order_at_cap
+    formula: "=BESSELK(1E7,10000000)"
+  - id: besselk_order_past_cap
+    formula: "=BESSELK(1E7,10000001)"
+  - id: bessely_order_at_cap
+    formula: "=BESSELY(1E7,10000000)"
+  - id: bessely_order_past_cap
+    formula: "=BESSELY(1E7,10000001)"
