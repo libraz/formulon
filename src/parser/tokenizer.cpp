@@ -682,6 +682,7 @@ Tokenizer::CodepointInfo Tokenizer::peek_codepoint(std::size_t i) const noexcept
   const Utf8DecodeResult decoded = decode_first_utf8_codepoint(source_.substr(i));
   if (!decoded.valid) {
     info.byte_len = 1;  // skip one malformed byte
+    info.utf16_units = 1;
     return info;
   }
   info.codepoint = decoded.codepoint;

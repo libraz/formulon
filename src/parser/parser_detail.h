@@ -102,7 +102,7 @@ inline bool HasWorkbookExtension(std::string_view name) noexcept {
   constexpr std::string_view kExtensions[] = {".xlsx", ".xlsm", ".xlsb", ".xls", ".xltx",
                                               ".xltm", ".xlt",  ".xlam", ".xla"};
   for (const std::string_view ext : kExtensions) {
-    if (name.size() > ext.size() && strings::case_insensitive_eq(name.substr(name.size() - ext.size()), ext)) {
+    if (name.size() > ext.size() && strings::case_insensitive_ends_with(name, ext)) {
       return true;
     }
   }
