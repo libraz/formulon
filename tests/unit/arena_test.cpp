@@ -25,6 +25,27 @@ struct Pod {
   char c;
 };
 
+TEST(ArenaTest, ExposesConfiguredChunkAndTotalLimitsReadOnly) {
+  Arena arena(128U, 1024U);
+  EXPECT_EQ(arena.initial_chunk_bytes(), 128U);
+  EXPECT_EQ(arena.max_bytes(), 1024U);
+  EXPECT_EQ(arena.bytes_allocated(), 0U);
+  EXPECT_EQ(arena.bytes_used(), 0U);
+  EXPECT_FALSE(arena.exhausted());
+
+  ASSERT_NE(nullptr, arena.create<std::uint32_t>(7U));
+  const std::size_t allocated = arena.bytes_allocated();
+  const std::size_t used = arena.bytes_used();
+  const std::size_t chunks = arena.chunk_count();
+  const bool exhausted = arena.exhausted();
+  EXPECT_EQ(arena.initial_chunk_bytes(), 128U);
+  EXPECT_EQ(arena.max_bytes(), 1024U);
+  EXPECT_EQ(arena.bytes_allocated(), allocated);
+  EXPECT_EQ(arena.bytes_used(), used);
+  EXPECT_EQ(arena.chunk_count(), chunks);
+  EXPECT_EQ(arena.exhausted(), exhausted);
+}
+
 TEST(ArenaTest, AllocateAlignedRaw) {
   Arena arena(128);
   void* p8 = arena.allocate(16, 8);

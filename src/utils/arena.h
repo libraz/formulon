@@ -209,6 +209,14 @@ class Arena {
   /// Returns the total capacity of every owned chunk.
   std::size_t bytes_allocated() const noexcept { return bytes_allocated_; }
 
+  /// Returns the configured size of the first chunk (and the reset growth
+  /// baseline). This is configuration only; reading it does not mutate the
+  /// arena.
+  std::size_t initial_chunk_bytes() const noexcept { return initial_chunk_bytes_; }
+
+  /// Returns the configured upper bound for total owned chunk capacity.
+  std::size_t max_bytes() const noexcept { return max_bytes_; }
+
   /// Returns the number of chunks currently owned.
   std::size_t chunk_count() const noexcept { return chunk_count_; }
 
