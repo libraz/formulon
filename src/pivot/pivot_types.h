@@ -9,7 +9,6 @@
 #ifndef FORMULON_PIVOT_PIVOT_TYPES_H_
 #define FORMULON_PIVOT_PIVOT_TYPES_H_
 
-#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -526,9 +525,17 @@ struct PivotField {
 /// them (enum order, duplicates dropped) rather than the order they were
 /// added. Layout rows and the written `<items>` markers both follow it.
 inline std::vector<SubtotalFn> ordered_subtotal_fns(const PivotField& field) {
-  std::vector<SubtotalFn> fns = field.subtotal_fns;
-  std::sort(fns.begin(), fns.end());
-  fns.erase(std::unique(fns.begin(), fns.end()), fns.end());
+  // A presence mask over the closed enum instead of sort + unique.
+  std::uint32_t present = 0;
+  for (const SubtotalFn fn : field.subtotal_fns) {
+    present |= 1U << static_cast<unsigned>(fn);
+  }
+  std::vector<SubtotalFn> fns;
+  for (unsigned i = 0; (present >> i) != 0U; ++i) {
+    if ((present & (1U << i)) != 0U) {
+      fns.push_back(static_cast<SubtotalFn>(i));
+    }
+  }
   return fns;
 }
 
