@@ -6,6 +6,7 @@
 # - -Wall -Wextra -Wpedantic -Werror -Wshadow -Wconversion (strict warnings)
 # - -fno-exceptions -fno-rtti (enforces Expected<T, Error> usage)
 # - -fvisibility=hidden -fvisibility-inlines-hidden (clean WASM export surface)
+# - -ffp-contract=off (no fused multiply-add, matching Excel and WASM)
 
 function(formulon_apply_warnings target)
   if(NOT TARGET ${target})
@@ -23,11 +24,15 @@ function(formulon_apply_warnings target)
       -Wshadow
       -Wconversion
     )
+    # -ffp-contract=off: Excel evaluates without fused multiply-add, and so
+    # does WASM; contracting on native FMA hardware moves tail bits
+    # (BESSELJ(5,2) differs from Excel in the 15th digit when fused).
     set(_codegen_flags
       -fno-exceptions
       -fno-rtti
       -fvisibility=hidden
       -fvisibility-inlines-hidden
+      -ffp-contract=off
     )
   elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     # MSVC flag mapping for potential future Windows support.
