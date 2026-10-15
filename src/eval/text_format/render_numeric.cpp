@@ -35,11 +35,11 @@ namespace {
 // is always at least `"0"`).
 //
 // This helper does not handle scientific notation; see `render_scientific`.
-// Returns `v / 10^exponent` as the double nearest the exact quotient. Shifting the exponent of the 17-digit decimal
-// text keeps the scaling to one rounding; a loop of 219 multiplications drifts by an ULP.
+// Returns the 15-significant-digit decimal of `v` divided by 10^exponent. Shifting the exponent of that text keeps
+// Excel's display view (ties decided on 15 digits) and avoids the ULP drift of 219 repeated multiplications.
 double shift_decimal_exponent(double v, int exponent) {
   char buf[48];
-  const int n = format_exponential(buf, sizeof(buf), v, 16);
+  const int n = format_exponential(buf, sizeof(buf), v, kExcelSignificantDigits - 1);
   const std::string_view text(buf, n > 0 ? static_cast<std::size_t>(n) : 0U);
   const std::size_t e = text.find('e');
   if (e == std::string_view::npos) {

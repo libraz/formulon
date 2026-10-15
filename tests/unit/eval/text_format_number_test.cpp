@@ -326,10 +326,12 @@ TEST(NumberFormatScientific, ExpNegativeExponent) {
   EXPECT_EQ(Render(0.0001234, "0.00E+00"), "1.23E-04");
 }
 
-TEST(NumberFormatScientific, TinyMagnitudeMantissaRoundsFromExactValue) {
+TEST(NumberFormatScientific, MantissaRoundsOnFifteenDigitView) {
   // Exact expansion 6.66389990427709118...E-219 (BESSELJ(0.5,100)); Excel shows ...709.
   EXPECT_EQ(Render(6.6638999042770912e-219, "0.00000000000000E+00"), "6.66389990427709E-219");
   EXPECT_EQ(Render(6.6638999042770912e+219, "0.00000000000000E+00"), "6.66389990427709E+219");
+  // 0x1.641fea514781fp-5 = 0.0434722496522541509...: the 15-digit view ends ...542 (BESSELJ(10,1)).
+  EXPECT_EQ(Render(0x1.641fea514781fp-5, "0.00000000000000E+00"), "4.34722496522542E-02");
 }
 
 TEST(NumberFormatScientific, ExcelMantissaNormalizationAndStoredDisplayParity) {
