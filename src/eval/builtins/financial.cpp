@@ -190,7 +190,8 @@ Value Pv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   }
   const double pow_term = std::pow(1.0 + r, n);
   if (pow_term == 0.0) {
-    return Value::error(ErrorCode::Num);
+    // An underflowed discount factor divides by zero like rate == -1 does.
+    return Value::error(ErrorCode::Div0);
   }
   const double result = -((f + p * (1.0 + r * t) * (pow_term - 1.0) / r) / pow_term);
   return finalize(result);

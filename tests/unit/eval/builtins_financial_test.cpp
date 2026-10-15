@@ -154,6 +154,29 @@ TEST(FinancialPv, RateBelowMinusOneIntegerNperIsFinite) {
   EXPECT_DOUBLE_EQ(v.as_number(), 34.375);
 }
 
+TEST(FinancialPv, UnderflowedDiscountFactorIsDiv0) {
+  // Mac Excel 365: (1-0.99)^1000 underflows to 0, and PV divides by it.
+  for (const char* src : {"=PV(-0.99, 1000, 1)", "=PV(-0.99, 1000, 0, 1)", "=PV(-0.99, 1000, 0, 0)"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Div0) << src;
+  }
+}
+
+TEST(FinancialPv, OverflowedDiscountFactorIsNum) {
+  // Mac Excel 365: 2^2000 overflows, which stays #NUM! rather than #DIV/0!.
+  const Value v = EvalSource("=PV(1, 2000, 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialFv, UnderflowedGrowthFactorIsFinite) {
+  // FV only multiplies by (1+rate)^nper, so an underflow to 0 stays finite.
+  const Value v = EvalSource("=FV(-0.99, 1000, 1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), -1.0 / 0.99);
+}
+
 TEST(FinancialFv, RateAtMinusOneIsDiv0) {
   // Excel 365 / IronCalc oracle (FV Sheet2 A1 and docs FV A14): rate == -1
   // collapses (1+r)^n to 0 or infinity depending on nper sign; Excel

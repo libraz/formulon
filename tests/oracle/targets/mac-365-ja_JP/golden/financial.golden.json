@@ -2,11 +2,11 @@
   "suite": "financial",
   "description": "PV / FV / PMT / NPER / NPV / IRR / RATE / IPMT / PPMT / CUMIPMT / CUMPRINC / SLN / SYD / DDB / DB — time-value-of-money and depreciation builtins",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.113.4",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T03:47:54Z"
+    "generated_at": "2026-10-15T07:35:14Z"
   },
   "tolerance": {
     "abs": 1e-09,
@@ -59,6 +59,24 @@
       }
     },
     {
+      "id": "pv_underflowed_discount_is_div0",
+      "formula": "=PV(-0.99, 1000, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "pv_overflowed_discount_is_num",
+      "formula": "=PV(1, 2000, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
       "id": "fv_basic",
       "formula": "=FV(0.08/12, 120, -200)",
       "setup": {},
@@ -101,6 +119,19 @@
       "expect": {
         "kind": "number",
         "value": 5727.4999
+      }
+    },
+    {
+      "id": "fv_underflowed_growth_is_finite",
+      "formula": "=FV(-0.99, 1000, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0101
+      },
+      "tolerance": {
+        "abs": 0.0001,
+        "rel": 0.0
       }
     },
     {

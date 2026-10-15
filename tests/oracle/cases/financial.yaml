@@ -32,6 +32,14 @@ cases:
     description: "High discount rate (50% annual) heavily reduces PV magnitude"
     formula: "=PV(0.5, 10, -500)"
 
+  - id: pv_underflowed_discount_is_div0
+    description: "(1-0.99)^1000 underflows to 0 and PV divides by it: #DIV/0!"
+    formula: "=PV(-0.99, 1000, 1)"
+
+  - id: pv_overflowed_discount_is_num
+    description: "2^2000 overflows: #NUM!"
+    formula: "=PV(1, 2000, 1)"
+
   # -- FV ------------------------------------------------------------------
   - id: fv_basic
     description: "10-year monthly deposit at 8%"
@@ -52,6 +60,12 @@ cases:
   - id: fv_high_rate
     description: "High rate (10% per period over 20 periods) compounds dramatically"
     formula: "=FV(0.1, 20, -100)"
+
+  - id: fv_underflowed_growth_is_finite
+    description: "(1-0.99)^1000 underflows to 0; FV only multiplies by it, so -1/0.99"
+    formula: "=FV(-0.99, 1000, 1)"
+    # xlwings returns the displayed value, about 4 decimal digits here.
+    tolerance: { abs: 1.0e-4 }
 
   # -- PMT -----------------------------------------------------------------
   - id: pmt_basic
