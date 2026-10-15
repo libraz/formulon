@@ -12,11 +12,11 @@
 #include "eval/coerce.h"
 #include "eval/collation.h"
 #include "eval/date_text_parse.h"
+#include "eval/eval_clock_scope.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/jp_fold.h"
 #include "eval/wildcard.h"
 #include "excel_locale.h"
-#include "utils/date_time.h"
 #include "utils/strings.h"
 #include "utils/text_ops.h"
 #include "value.h"
@@ -110,8 +110,7 @@ bool probe_bool(std::string_view rhs, bool* out_bool) {
 // date-string criteria as numeric date comparisons.
 bool probe_date(std::string_view rhs, double* out_number) {
   date_parse::DateTimeText parsed{};
-  if (!date_parse::parse_date_time_text(rhs, date_parse::TextEdges::kTrim, date_time::host_civil_time().date.y,
-                                        &parsed)) {
+  if (!date_parse::parse_date_time_text(rhs, date_parse::TextEdges::kTrim, current_eval_now().date.y, &parsed)) {
     return false;
   }
   *out_number = parsed.value;

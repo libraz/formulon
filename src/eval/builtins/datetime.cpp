@@ -29,6 +29,7 @@
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
 #include "eval/datetime_lazy.h"
+#include "eval/eval_clock_scope.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/date_time.h"
@@ -101,10 +102,10 @@ Expected<CoercedDateArg, ErrorCode> coerce_date_arg(const Value& v, bool date190
     return out;
   }
 
-  // Same reading as `coerce_to_number`, which has no clock but the host's.
+  // Same reading as `coerce_to_number`, on the evaluation clock.
   date_parse::DateTimeText parsed{};
-  if (!date_parse::parse_date_time_text(v.as_text(), date_parse::TextEdges::kKeepLead,
-                                        date_time::host_civil_time().date.y, &parsed) ||
+  if (!date_parse::parse_date_time_text(v.as_text(), date_parse::TextEdges::kKeepLead, current_eval_now().date.y,
+                                        &parsed) ||
       !parsed.has_date) {
     return out;
   }
@@ -973,16 +974,16 @@ Value TodayAt_(const date_time::CivilTime& now, bool date1904) {
   return Value::number(serial_from_civil(now, date1904).date_serial);
 }
 
-/// Host-clock fallbacks. Callers holding an `EvalContext` reach the two
-/// functions above through `DateEntry::clock_impl` instead, so a pinned
-/// workbook stays deterministic; these serve the contextless callers and
-/// keep one reading per invocation (no drift between date and time halves).
+/// Contextless fallbacks. Callers holding an `EvalContext` reach the two
+/// functions above through `DateEntry::clock_impl` instead; these read the
+/// evaluation clock (the host clock outside an evaluation) and keep one
+/// reading per invocation (no drift between date and time halves).
 Value Now_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  return NowAt_(date_time::host_civil_time(), date1904);
+  return NowAt_(current_eval_now(), date1904);
 }
 
 Value Today_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  return TodayAt_(date_time::host_civil_time(), date1904);
+  return TodayAt_(current_eval_now(), date1904);
 }
 
 // ---------------------------------------------------------------------------
@@ -1036,20 +1037,19 @@ Value Datevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, b
   return Value::number(serial);
 }
 
-/// Host-clock fallback for `DATEVALUE`, registered as `DateEntry::impl` so
-/// a contextless caller (with no `EvalContext` to offer a pinned reading)
-/// still resolves a year-less date_text; callers holding a context reach
-/// `Datevalue_` directly through `DateEntry::clock_aware_impl`, matching
-/// the `Now_`/`NowAt_` split above.
+/// Contextless fallback for `DATEVALUE`, registered as `DateEntry::impl` so
+/// a caller with no `EvalContext` still resolves a year-less date_text on the
+/// evaluation clock; callers holding a context reach `Datevalue_` directly
+/// through `DateEntry::clock_aware_impl`, matching the `Now_`/`NowAt_` split.
 Value DatevalueHostClock_(const Value* args, std::uint32_t arity, Arena& arena, bool date1904) {
-  return Datevalue_(args, arity, arena, date1904, date_time::host_civil_time());
+  return Datevalue_(args, arity, arena, date1904, current_eval_now());
 }
 
 /// TIMEVALUE(text). The time part less its whole days: a date-only text is 0
 /// and `TIMEVALUE("25:00")` is `1.0416666666666667 - 1`. TIMEVALUE is eager,
-/// so a year-less date_text reads the host clock's year.
+/// so a year-less date_text reads the evaluation clock's year.
 Value Timevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto parsed = parse_date_time_arg(args[0], date_time::host_civil_time().date.y);
+  auto parsed = parse_date_time_arg(args[0], current_eval_now().date.y);
   if (!parsed) {
     return Value::error(parsed.error());
   }

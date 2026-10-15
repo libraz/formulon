@@ -9,12 +9,12 @@
 #include <string_view>
 
 #include "eval/date_text_parse.h"
+#include "eval/eval_clock_scope.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/locale_text.h"
 #include "eval/number_parse.h"
 #include "eval/x87_arith.h"
 #include "excel_locale.h"
-#include "utils/date_time.h"
 #include "utils/double_parse.h"
 #include "utils/expected.h"
 #include "utils/strings.h"
@@ -143,11 +143,10 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* f
   // TIMEVALUE / VALUE recogniser; only fires after the numeric fallbacks
   // have rejected the input so plain numerics keep their fast path.
   // Unlike VALUE, a leading blank makes the text no date (`" 1/2"+0` is
-  // #VALUE!) while trailing ones are fine. There is no evaluation clock
-  // here, so a year-less date ("1/2") takes the host clock's year.
+  // #VALUE!) while trailing ones are fine. A year-less date ("1/2") takes
+  // the evaluation clock's year.
   date_parse::DateTimeText date_text{};
-  if (date_parse::parse_date_time_text(text, date_parse::TextEdges::kKeepLead, date_time::host_civil_time().date.y,
-                                       &date_text)) {
+  if (date_parse::parse_date_time_text(text, date_parse::TextEdges::kKeepLead, current_eval_now().date.y, &date_text)) {
     if (from_date_text != nullptr) {
       *from_date_text = date_text.has_date;
     }

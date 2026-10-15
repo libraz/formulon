@@ -20,6 +20,7 @@
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
+#include "eval/eval_clock_scope.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
 #include "eval/locale_text.h"
@@ -633,14 +634,14 @@ Value numbervalue_builtin_impl(const Value* args, std::uint32_t arity, Arena& ar
 }
 
 Value numbervalue_builtin_host_clock_impl(const Value* args, std::uint32_t arity, Arena& arena, bool date1904) {
-  return numbervalue_builtin_impl(args, arity, arena, date1904, date_time::host_civil_time());
+  return numbervalue_builtin_impl(args, arity, arena, date1904, current_eval_now());
 }
 
-// Host-clock fallback for VALUE, registered as `DateEntry::impl` so a
-// contextless caller still resolves a year-less date_text. Mirrors
-// `DatevalueHostClock_` in `builtins/datetime.cpp`.
+// Contextless fallback for VALUE, registered as `DateEntry::impl` so a
+// caller with no `EvalContext` still resolves a year-less date_text on the
+// evaluation clock. Mirrors `DatevalueHostClock_` in `builtins/datetime.cpp`.
 Value value_builtin_host_clock_impl(const Value* args, std::uint32_t arity, Arena& arena, bool date1904) {
-  return value_builtin_impl(args, arity, arena, date1904, date_time::host_civil_time());
+  return value_builtin_impl(args, arity, arena, date1904, current_eval_now());
 }
 
 Value eval_arraytotext_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
