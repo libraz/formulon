@@ -11,6 +11,7 @@
 
 #include "chart/chart_cache.h"
 #include "chart/chart_model.h"
+#include "chart/chart_ns.h"
 #include "chart/chart_template.h"
 #include "drawing/drawing_edit.h"
 #include "drawing/drawing_xml.h"
@@ -18,8 +19,11 @@
 #include "gtest/gtest.h"
 #include "io/ooxml/part_dom.h"
 #include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "io/xlsb/reader.h"
+#include "io/xml_utils.h"
 #include "passthrough_part.h"
+#include "pugixml.hpp"
 #include "sheet.h"
 #include "value.h"
 #include "workbook.h"
@@ -75,6 +79,18 @@ Workbook LoadFixture(const std::string& name) {
   }
   wb.set_excel_profile(mac_365_ja_jp_profile());
   return wb;
+}
+
+Workbook OoxmlRoundTrip(const Workbook& wb) {
+  auto saved = io::write_ooxml(wb);
+  EXPECT_TRUE(static_cast<bool>(saved)) << (saved ? "" : saved.error().message);
+  if (!saved) {
+    return Workbook::create_empty();
+  }
+  const io::ByteSpan span{saved.value().data(), saved.value().size()};
+  auto read = io::read_ooxml(span);
+  EXPECT_TRUE(static_cast<bool>(read)) << (read ? "" : read.error().message);
+  return read ? std::move(read.value().workbook) : Workbook::create_empty();
 }
 
 struct Located {
@@ -506,6 +522,50 @@ TEST(ChartEdit, TitleLegendDisplayPlotRoundTrip) {
   pp = ChartPlotPatch{};
   pp.gap_width = 10;
   ExpectCode(set_chart_plot(wb, 0, pie, 0, pp), Code::kInvalidArgument);
+}
+
+TEST(ChartEdit, PlainTitleAndReferencesSurviveTwoOoxmlCyclesAndMutation) {
+  Workbook wb = GridBook();
+  constexpr char kSheetName[] = "_x0041_";
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(0, kSheetName)));
+
+  ChartInsertOptions options;
+  options.kind = K::kColumn;
+  options.source = std::string(kSheetName) + "!$A$1:$D$5";
+  const std::uint32_t id = Must(insert_chart(wb, 0, options));
+
+  ChartTitle ref_title;
+  ref_title.kind = ChartTitleKind::kRef;
+  ref_title.ref_formula = std::string(kSheetName) + "!$A$1";
+  MustOk(set_chart_title(wb, 0, id, ref_title));
+
+  const auto expect_reference_model = [&](const Workbook& current, const std::string& value_formula) {
+    const ChartModel model = Must(get_chart(current, 0, id));
+    EXPECT_EQ(model.title.kind, ChartTitleKind::kRef);
+    EXPECT_EQ(model.title.ref_formula, std::string(kSheetName) + "!$A$1");
+    ASSERT_EQ(model.plots.size(), 1U);
+    ASSERT_EQ(model.plots[0].series.size(), 3U);
+    EXPECT_EQ(model.plots[0].series[0].val.formula, value_formula);
+  };
+  expect_reference_model(wb, std::string(kSheetName) + "!$B$2:$B$5");
+
+  wb = OoxmlRoundTrip(wb);
+  expect_reference_model(wb, std::string(kSheetName) + "!$B$2:$B$5");
+
+  ChartTitle text_title;
+  text_title.kind = ChartTitleKind::kText;
+  text_title.text = "literal _x0041_ _x005F_x0041_ & <猫>\r";
+  MustOk(set_chart_title(wb, 0, id, text_title));
+  const std::string changed_formula = std::string(kSheetName) + "!$B$2:$B$4";
+  MustOk(set_chart_source(wb, 0, id, std::string(kSheetName) + "!$A$1:$B$4", D::kAuto, H::kAuto, H::kAuto));
+
+  wb = OoxmlRoundTrip(wb);
+  const ChartModel after_mutation = Must(get_chart(wb, 0, id));
+  EXPECT_EQ(after_mutation.title.kind, ChartTitleKind::kText);
+  EXPECT_EQ(after_mutation.title.text, text_title.text);
+  ASSERT_EQ(after_mutation.plots.size(), 1U);
+  ASSERT_EQ(after_mutation.plots[0].series.size(), 1U);
+  EXPECT_EQ(after_mutation.plots[0].series[0].val.formula, changed_formula);
 }
 
 TEST(ChartEdit, AxisRoundTrip) {
@@ -1363,6 +1423,43 @@ TEST(ChartEdit, FilterRoundTrip) {
   EXPECT_EQ(m.plots[0].series[0].val.formula, "Sheet1!$B$2:$B$5");
   ExpectSameData(Must(get_chart_data(wb, 0, id)), full);
   EXPECT_TRUE(NoRefresh(wb));
+}
+
+// A filtered group bound to a non-`c15` prefix still gets in-scope `c15:` children.
+TEST(ChartEdit, FilterUnderForeignC15PrefixKeepsC15Bound) {
+  Workbook wb = GridBook();
+  const std::uint32_t id = Insert(wb, K::kColumn);
+  MustOk(set_chart_filter(wb, 0, id, {1}, {}));
+  const Located c = Find(wb);
+  std::string xml = PartText(wb, c.path);
+  for (const auto& [from, to] :
+       {std::pair<std::string, std::string>{"xmlns:c15=", "xmlns:x="},
+        std::pair<std::string, std::string>{"<c15:", "<x:"}, std::pair<std::string, std::string>{"</c15:", "</x:"}}) {
+    for (std::size_t at = xml.find(from); at != std::string::npos; at = xml.find(from, at + to.size())) {
+      xml.replace(at, from.size(), to);
+    }
+  }
+  ASSERT_EQ(xml.find("c15:"), std::string::npos);
+  ASSERT_TRUE(
+      static_cast<bool>(wb.replace_passthrough_part(c.path, std::vector<std::uint8_t>(xml.begin(), xml.end()))));
+
+  MustOk(set_chart_filter(wb, 0, id, {0, 1}, {}));
+  const std::string edited = PartText(wb, c.path);
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_buffer(edited.data(), edited.size()));
+  int c15_elements = 0;
+  for (const pugi::xpath_node& hit : doc.select_nodes("//*")) {
+    const pugi::xml_node node = hit.node();
+    if (std::string(node.name()).rfind("c15:", 0) == 0) {
+      ++c15_elements;
+      EXPECT_EQ(io::find_namespace_binding(node, "c15"), std::string_view(chart_ns::kNsC15)) << node.name();
+    }
+  }
+  EXPECT_GT(c15_elements, 0);
+  const ChartModel m = Must(get_chart(wb, 0, id));
+  for (const ChartSeries& s : m.plots[0].series) {
+    EXPECT_EQ(s.filtered, s.idx <= 1U) << s.idx;
+  }
 }
 
 // ---------------------------------------------------------------------------

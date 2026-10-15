@@ -416,11 +416,22 @@ xml_node ref_of(const xml_node& holder) {
   return n.size() > 3 && n.substr(n.size() - 3) == "Ref" ? ref : xml_node();
 }
 
-/// The `c:ext` holding a ref's c15 children; `create` makes it the ref's first child.
-xml_node c15_ext(xml_node ref, bool create, bool declare) {
+/// Declares `c15` on `node` unless it already resolves there to the c15 namespace.
+void bind_c15(xml_node node) {
+  if (io::find_namespace_binding(node, "c15") != kNsC15) {
+    node.append_attribute("xmlns:c15").set_value(kNsC15);
+  }
+}
+
+/// The `c:ext` holding a ref's c15 children; `create` makes it the ref's first
+/// child and binds `c15` on it for the children the caller appends.
+xml_node c15_ext(xml_node ref, bool create) {
   xml_node list = child_local(ref, "extLst");
-  for (const xml_node& ext : kids(list, "ext")) {
+  for (xml_node ext : kids(list, "ext")) {
     if (std::string_view(ext.attribute("uri").value()) == kUriC15) {
+      if (create) {
+        bind_c15(ext);
+      }
       return ext;
     }
   }
@@ -432,9 +443,7 @@ xml_node c15_ext(xml_node ref, bool create, bool declare) {
   }
   xml_node ext = list.prepend_child("c:ext");
   ext.append_attribute("uri").set_value(kUriC15);
-  if (declare) {
-    ext.append_attribute("xmlns:c15").set_value(kNsC15);
-  }
+  bind_c15(ext);
   return ext;
 }
 
@@ -456,7 +465,7 @@ xml_node formula_node(const xml_node& ref) {
   if (const xml_node f = child_local(ref, "f")) {
     return f;
   }
-  return child_local(child_local(c15_ext(ref, false, false), "formulaRef"), "sqref");
+  return child_local(child_local(c15_ext(ref, false), "formulaRef"), "sqref");
 }
 
 std::string formula_of(const xml_node& holder) {
@@ -847,7 +856,7 @@ void put_ref(xml_node ser, const char* tag, const std::string& formula, bool mul
   const char* ref = name ? "strRef" : multi ? "multiLvlStrRef" : "numRef";
   std::string x = std::string("<") + tag + "><c:" + ref + ">";
   std::string esc;
-  io::AppendXmlEscaped(esc, formula);
+  io::AppendXmlAttrEscaped(esc, formula);
   x += filtered ? std::string("<c:extLst><c:ext uri=\"") + kUriC15 + "\"><c15:formulaRef><c15:sqref>" + esc +
                       "</c15:sqref></c15:formulaRef></c:ext></c:extLst>"
                 : "<c:f>" + esc + "</c:f>";
@@ -867,11 +876,11 @@ void hide_ref(xml_node ref) {
   }
   const std::string text = f.child_value();
   ref.remove_child(f);
-  c15_ext(ref, true, false).append_child("c15:formulaRef").append_child("c15:sqref").text().set(text.c_str());
+  c15_ext(ref, true).append_child("c15:formulaRef").append_child("c15:sqref").text().set(text.c_str());
 }
 
 void show_ref(xml_node ref) {
-  xml_node ext = c15_ext(ref, false, false);
+  xml_node ext = c15_ext(ref, false);
   const xml_node fr = child_local(ext, "formulaRef");
   if (!fr) {
     return;
@@ -936,8 +945,10 @@ void patch_series_filter(const Chart& c, const std::set<std::uint32_t>& hidden) 
         ext.append_attribute("xmlns:c15").set_value(kNsC15);
         group = ext.append_child(filtered_group_name(local_name(plot)).c_str());
       }
-      each_ref(ser, hide_ref);
-      group.append_move(ser).set_name("c15:ser");
+      bind_c15(group);
+      xml_node moved = group.append_move(ser);
+      moved.set_name("c15:ser");
+      each_ref(moved, hide_ref);
     }
     for (xml_node ser : kids(filter_group(plot), "ser")) {
       if (hidden.count(val_u(ser, "idx")) != 0) {
@@ -978,7 +989,7 @@ Expected<void, Error> patch_category_filter(const Workbook& wb, const Chart& c, 
         if (!text) {
           continue;
         }
-        xml_node ext = c15_ext(ref, false, false);
+        xml_node ext = c15_ext(ref, false);
         xml_node full = child_local(child_local(ext, "fullRef"), "sqref");
         const std::string full_text = full ? full.child_value() : text.child_value();
         if (hidden.empty()) {
@@ -1026,7 +1037,7 @@ Expected<void, Error> patch_category_filter(const Workbook& wb, const Chart& c, 
         }
         text.text().set((runs.size() > 1 ? "(" + joined + ")" : joined).c_str());
         if (!full) {
-          ext = c15_ext(ref, true, true);
+          ext = c15_ext(ref, true);
           full = ext.prepend_child("c15:fullRef").append_child("c15:sqref");
           full.text().set(full_text.c_str());
         }
@@ -1695,7 +1706,7 @@ void put_title(xml_node host, Order order, const xml_node& from, const ChartTitl
   }
   if (title.kind == ChartTitleKind::kRef) {
     std::string x = "<c:tx><c:strRef><c:f>";
-    io::AppendXmlEscaped(x, title.ref_formula);
+    io::AppendXmlAttrEscaped(x, title.ref_formula);
     x += "</c:f></c:strRef></c:tx>";
     pugi::xml_document frag;
     copy_at(node, fragment(frag, x), kTitleOrder);

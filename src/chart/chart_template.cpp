@@ -359,7 +359,7 @@ void append_title(std::string& x, const std::optional<std::string>& text, const 
     x += "<a:p><a:pPr>";
     append_def_rpr(x, sz, !axis);
     x += "</a:pPr><a:r><a:rPr lang=\"" + lang + "\"/><a:t>";
-    io::AppendXmlEscaped(x, *text);
+    io::AppendXmlAttrEscaped(x, *text);
     x += "</a:t></a:r></a:p></c:rich></c:tx>";
   }
   x += "<c:overlay val=\"0\"/>";
@@ -383,7 +383,7 @@ void append_source(std::string& x, const char* tag, const std::string& f, RefKin
   const char* ref = kind == RefKind::kNum ? "numRef" : (kind == RefKind::kStr ? "strRef" : "multiLvlStrRef");
   const char* cache = kind == RefKind::kNum ? "numCache" : (kind == RefKind::kStr ? "strCache" : "multiLvlStrCache");
   x += std::string("<c:") + tag + "><c:" + ref + "><c:f>";
-  io::AppendXmlEscaped(x, f);
+  io::AppendXmlAttrEscaped(x, f);
   x += std::string("</c:f><c:") + cache + ">";
   x += kind == RefKind::kNum ? "<c:formatCode>General</c:formatCode>" : "";
   x += std::string("<c:ptCount val=\"0\"/></c:") + cache + "></c:" + ref + "></c:" + tag + ">";
@@ -889,7 +889,7 @@ std::string chart_cycle_color(const pugi::xml_node& style, std::size_t idx) {
   std::string x = std::string("<") + base.name();
   for (const pugi::xml_attribute& a : base.attributes()) {
     x += std::string(" ") + a.name() + "=\"";
-    io::AppendXmlEscaped(x, a.value());
+    io::AppendXmlAttrEscaped(x, a.value());
     x += "\"";
   }
   return inner.empty() ? x + "/>" : x + ">" + inner + "</" + base.name() + ">";

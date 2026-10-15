@@ -706,6 +706,40 @@ TEST(ChartTemplateXml, TitleForms) {
   EXPECT_TRUE(doc.load_string(xml.c_str()));
 }
 
+TEST(ChartTemplateXml, PlainTextAndFormulaSlotsKeepOoxmlSpellingsLiteral) {
+  Workbook wb = measured_workbook();
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(0, "_x0041_")));
+  const std::string title = "literal _x0041_ _x005F_x0041_ & <猫>\r";
+  ChartInsertOptions options;
+  options.title = title;
+
+  ChartSeriesRefs series;
+  series.name = "_x0041_!$B$1";
+  series.cat = "_x0041_!$A$2:$A$5";
+  series.val = "_x0041_!$B$2:$B$5";
+  ChartSplit split;
+  split.series.push_back(series);
+
+  auto xml = build_chart_xml(wb, options, split);
+  ASSERT_TRUE(static_cast<bool>(xml)) << (xml ? "" : xml.error().message);
+  EXPECT_NE(xml.value().find("<a:t>literal _x0041_ _x005F_x0041_ &amp; &lt;猫&gt;&#13;</a:t>"), std::string::npos);
+  EXPECT_NE(xml.value().find("<c:f>_x0041_!$B$2:$B$5</c:f>"), std::string::npos);
+  EXPECT_EQ(xml.value().find("_x005F_x005F_x0041_"), std::string::npos);
+
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_buffer(xml.value().data(), xml.value().size()));
+  const pugi::xml_node title_text = doc.child("c:chartSpace")
+                                        .child("c:chart")
+                                        .child("c:title")
+                                        .child("c:tx")
+                                        .child("c:rich")
+                                        .child("a:p")
+                                        .child("a:r")
+                                        .child("a:t");
+  ASSERT_TRUE(title_text);
+  EXPECT_EQ(title_text.child_value(), title);
+}
+
 TEST(ChartTemplateXml, LegendDate1904AndLocale) {
   Workbook wb = Workbook::create();  // win-365-en_US
   wb.set_date1904(true);
@@ -804,6 +838,16 @@ TEST(ChartTemplateXml, ColoursCycleThroughVariations) {
   EXPECT_NE(xml.value().find("<c:idx val=\"9\"/><c:bubble3D val=\"0\"/><c:spPr><a:solidFill><a:schemeClr "
                              "val=\"accent4\"><a:lumMod val=\"60000\"/></a:schemeClr>"),
             std::string::npos);
+}
+
+TEST(ChartTemplateXml, ColourAttributesKeepOoxmlSpellingsLiteral) {
+  pugi::xml_document style;
+  ASSERT_TRUE(style.load_string(
+      "<cs:colorStyle xmlns:cs=\"http://schemas.microsoft.com/office/drawing/2012/chartStyle\" "
+      "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><a:schemeClr val=\"_x0041_\"/>"
+      "</cs:colorStyle>"));
+
+  EXPECT_EQ(chart_cycle_color(style.document_element(), 0), "<a:schemeClr val=\"_x0041_\"/>");
 }
 
 TEST(ChartTemplateXml, RejectsEmptySplit) {
