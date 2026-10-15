@@ -70,6 +70,28 @@ TEST(XmlEscape, OoxmlControlAndLiteralEscapeRoundTrip) {
   EXPECT_EQ(unescaped, original);
 }
 
+TEST(XmlEscape, OoxmlTextEncoderLeavesMarkupForDomSerialization) {
+  const std::string input = "literal _x0041_ _x005F_x0041_ & <猫>\r\x01";
+  std::string encoded = "prefix:";
+  AppendOoxmlTextEscaped(encoded, input);
+  EXPECT_EQ(encoded, "prefix:literal _x005F_x0041_ _x005F_x005F_x005F_x0041_ & <猫>_x000D__x0001_");
+
+  std::string decoded;
+  AppendOoxmlTextUnescaped(decoded, encoded.substr(std::string("prefix:").size()));
+  EXPECT_EQ(decoded, input);
+
+  const std::string_view unchanged[] = {"plain text", "&<>\"'", "tab\there\n", "日本\xF0\x9F\x98\x80"};
+  for (const std::string_view value : unchanged) {
+    std::string out;
+    AppendOoxmlTextEscaped(out, value);
+    EXPECT_EQ(out, value);
+  }
+
+  std::string malformed;
+  AppendOoxmlTextEscaped(malformed, "a\xC3\x28\x80");
+  EXPECT_EQ(malformed, "a\xEF\xBF\xBD(\xEF\xBF\xBD");
+}
+
 TEST(XmlEscape, ReplacesInvalidUtf8BeforeWritingXml) {
   std::string escaped;
   AppendXmlEscaped(escaped, "a\xC3\x28\x80");
@@ -333,6 +355,15 @@ TEST(XmlEscape, CapturedTableAttributeKeepsWhitespaceControls) {
   auto reread = read_table(std::vector<std::uint8_t>(rewritten.begin(), rewritten.end()), 0U);
   ASSERT_TRUE(static_cast<bool>(reread)) << reread.error().message;
   EXPECT_EQ(reread.value().root_extra_attrs, extras);
+}
+
+TEST(XmlEscape, OoxmlUnescapeReplacesUnpairedSurrogates) {
+  std::string out;
+  AppendOoxmlTextUnescaped(out, "a_xD800_b_xDC00_c_xD83D__xDE00_");
+  EXPECT_EQ(out,
+            "a\xEF\xBF\xBD"
+            "b\xEF\xBF\xBD"
+            "c\xF0\x9F\x98\x80");
 }
 
 }  // namespace

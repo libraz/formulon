@@ -101,7 +101,10 @@ std::size_t ValidUtf8SequenceLength(std::string_view in, std::size_t pos) {
   return 0U;
 }
 
-void AppendXmlEscapedImpl(std::string& out, std::string_view in, bool attribute) {
+enum class XmlEscapingMode { kElementText, kAttribute, kOoxmlNotationOnly };
+
+void AppendXmlEscapedImpl(std::string& out, std::string_view in, XmlEscapingMode mode) {
+  const bool attribute = mode == XmlEscapingMode::kAttribute;
   for (std::size_t i = 0; i < in.size(); ++i) {
     const char raw = in[i];
     const unsigned char byte = static_cast<unsigned char>(raw);
@@ -118,10 +121,10 @@ void AppendXmlEscapedImpl(std::string& out, std::string_view in, bool attribute)
       }
       continue;
     }
-    if (!attribute) {
-      // Only element text is decoded by `AppendOoxmlTextUnescaped` on the way
-      // back in, so only element text may carry the OOXML notation -- and
-      // there it must protect a literal `_xHHHH_` spelling behind
+    if (mode != XmlEscapingMode::kAttribute) {
+      // Element text and notation-only DOM text are decoded by
+      // `AppendOoxmlTextUnescaped` on the way back in, so both may carry the
+      // notation and must protect a literal `_xHHHH_` spelling behind
       // `_x005F_`. Attribute values are read straight off the parser, so
       // emitting either form there would leave the escape text itself in the
       // value and grow it by six bytes on every save.
@@ -135,9 +138,10 @@ void AppendXmlEscapedImpl(std::string& out, std::string_view in, bool attribute)
     // them: Excel reserves that notation for characters XML cannot carry at
     // all. They still need handling because XML normalises them depending on
     // context, which the `switch` below does. Every other C0 control is
-    // XML-illegal: element text spells it with the OOXML escape, while an
-    // attribute value -- having no reader that would decode one -- replaces
-    // it, exactly as an invalid UTF-8 byte is replaced above.
+    // XML-illegal: element text and notation-only DOM text spell it with the
+    // OOXML escape, while an attribute value -- having no reader that would
+    // decode one -- replaces it, exactly as an invalid UTF-8 byte is replaced
+    // above.
     const bool xml_legal_control = raw == '\t' || raw == '\n' || raw == '\r';
     if (byte < 0x20U && !xml_legal_control) {
       if (attribute) {
@@ -145,6 +149,10 @@ void AppendXmlEscapedImpl(std::string& out, std::string_view in, bool attribute)
       } else {
         AppendOoxmlEscape(out, byte);
       }
+      continue;
+    }
+    if (mode == XmlEscapingMode::kOoxmlNotationOnly && raw != '\r') {
+      out.push_back(raw);
       continue;
     }
     switch (raw) {
@@ -199,11 +207,15 @@ void AppendXmlEscapedImpl(std::string& out, std::string_view in, bool attribute)
 }  // namespace
 
 void AppendXmlEscaped(std::string& out, std::string_view in) {
-  AppendXmlEscapedImpl(out, in, false);
+  AppendXmlEscapedImpl(out, in, XmlEscapingMode::kElementText);
+}
+
+void AppendOoxmlTextEscaped(std::string& out, std::string_view in) {
+  AppendXmlEscapedImpl(out, in, XmlEscapingMode::kOoxmlNotationOnly);
 }
 
 void AppendXmlAttrEscaped(std::string& out, std::string_view in) {
-  AppendXmlEscapedImpl(out, in, true);
+  AppendXmlEscapedImpl(out, in, XmlEscapingMode::kAttribute);
 }
 
 void AppendOoxmlTextUnescaped(std::string& out, std::string_view in) {
@@ -223,7 +235,8 @@ void AppendOoxmlTextUnescaped(std::string& out, std::string_view in) {
         continue;
       }
     }
-    AppendUtf8(out, code);
+    // An unpaired surrogate has no UTF-8 form; the writer stores U+FFFD for it too.
+    AppendUtf8(out, code >= 0xD800U && code <= 0xDFFFU ? 0xFFFDU : code);
   }
 }
 

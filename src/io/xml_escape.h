@@ -27,6 +27,11 @@ namespace io {
 // subsequent OOXML reader preserves it literally.
 void AppendXmlEscaped(std::string& out, std::string_view in);
 
+// Encodes OOXML `_xHHHH_` escapes without XML-escaping markup characters.
+// Use before assigning text to a DOM node for legacy ST_Xstring payloads:
+// pugi::xml will escape `&` / `<` / `>` when it serialises the node.
+void AppendOoxmlTextEscaped(std::string& out, std::string_view in);
+
 // Escapes `in` for an attribute value (`name="..."`). Same five
 // XML-critical characters as `AppendXmlEscaped`, but attribute-value
 // normalisation turns a literal TAB / LF / CR into a space, so those three
@@ -43,7 +48,8 @@ void AppendXmlEscaped(std::string& out, std::string_view in);
 // U+FFFD, which makes a second pass a fixed point.
 //
 // This is also the escaper for `Relationship/@Target`: an `xsd:anyURI` must
-// not gain OOXML escapes, and this function emits none.
+// not gain OOXML escapes, and this function emits none. Element text that is
+// read back raw (plain `xsd:string`, e.g. chart `c:f` and `a:t`) uses it too.
 void AppendXmlAttrEscaped(std::string& out, std::string_view in);
 
 // Appends `in` after decoding OOXML `_xHHHH_` escapes. This is for text
