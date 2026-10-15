@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <string>
 #include <utility>
@@ -10,6 +11,7 @@
 #include "cell.h"
 #include "gtest/gtest.h"
 #include "io/auto_filter_xml.h"
+#include "io/xlsb/brt_color.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
@@ -27,6 +29,21 @@ namespace formulon {
 namespace io {
 namespace xlsb {
 namespace {
+
+TEST(XlsbWriter, BrtColorTintEncodesNonFiniteAsNoTint) {
+  ColorSpec spec;
+  spec.kind = ColorSpec::Kind::kTheme;
+  spec.theme = 4U;
+  spec.tint = std::numeric_limits<double>::quiet_NaN();
+  const auto nan_bytes = encode_brt_color(0xFF000000U, spec);
+  EXPECT_EQ(nan_bytes[2], 0U);
+  EXPECT_EQ(nan_bytes[3], 0U);
+
+  spec.tint = std::numeric_limits<double>::infinity();
+  const auto inf_bytes = encode_brt_color(0xFF000000U, spec);
+  EXPECT_EQ(inf_bytes[2], 0xFFU);
+  EXPECT_EQ(inf_bytes[3], 0x7FU);
+}
 
 TEST(XlsbWriter, SheetVisibilitySurvivesRoundTrip) {
   // A hidden sheet must stay hidden across write -> read. The Sheet model

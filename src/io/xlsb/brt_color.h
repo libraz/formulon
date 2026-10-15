@@ -27,6 +27,15 @@ inline constexpr std::uint8_t kBrtColorAutoIndex = 0x40U;
 /// A tint is stored as a signed 16-bit fraction of this scale.
 inline constexpr double kBrtColorTintScale = 32767.0;
 
+/// Scales a tint to its stored i16 fraction; NaN stores no tint.
+inline std::int16_t encode_brt_tint(double tint) {
+  if (std::isnan(tint)) {
+    return 0;
+  }
+  return static_cast<std::int16_t>(
+      std::clamp(std::round(tint * kBrtColorTintScale), -kBrtColorTintScale, kBrtColorTintScale));
+}
+
 /// Encodes `spec`, keeping a theme / indexed / auto selector; the RGBA
 /// bytes are `argb`, literal for an RGB selector and a fallback otherwise.
 /// Bit 7 of the flags byte stays clear: the reserved type 0x41 it would
@@ -39,8 +48,7 @@ inline std::array<std::uint8_t, 8> encode_brt_color(std::uint32_t argb, const Co
     case ColorSpec::Kind::kTheme:
       type = kBrtColorTypeTheme;
       index = static_cast<std::uint8_t>(std::min<std::uint32_t>(spec.theme, 0xFFU));
-      tint = static_cast<std::int16_t>(
-          std::clamp(std::round(spec.tint * kBrtColorTintScale), -kBrtColorTintScale, kBrtColorTintScale));
+      tint = encode_brt_tint(spec.tint);
       break;
     case ColorSpec::Kind::kIndexed:
       type = kBrtColorTypeIndexed;

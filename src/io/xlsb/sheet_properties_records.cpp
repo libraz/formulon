@@ -124,9 +124,7 @@ WorksheetProperties ParseSheetProperties(std::string_view raw) {
   if (const pugi::xml_attribute theme = tab.attribute("theme")) {
     out.color_type = 3U;
     out.color_index = static_cast<std::uint8_t>(std::min<unsigned>(theme.as_uint(0U), 0xFFU));
-    const double tint = std::clamp(std::round(tab.attribute("tint").as_double(0.0) * kBrtColorTintScale),
-                                   -kBrtColorTintScale, kBrtColorTintScale);
-    out.color_tint = static_cast<std::int16_t>(tint);
+    out.color_tint = encode_brt_tint(tab.attribute("tint").as_double(0.0));
     return out;
   }
   if (const pugi::xml_attribute indexed = tab.attribute("indexed")) {
