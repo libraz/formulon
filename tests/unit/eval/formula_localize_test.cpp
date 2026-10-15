@@ -106,6 +106,29 @@ TEST(FormulaLocalize, CanonicalizeInvertsTheCaptures) {
   EXPECT_EQ(canonicalize_in(ExcelLocale::kJaJP, "=IF(TRUE,1.5,{1,2;3,4})"), "=IF(TRUE,1.5,{1,2;3,4})");
 }
 
+TEST(FormulaLocalize, QualifiedCallableNamesRemainVerbatim) {
+  const char* const qualifiers[] = {"Sheet1!", "'My Sheet'!", "[0]!", "[Book.xlsx]Sheet1!"};
+  for (const char* qualifier : qualifiers) {
+    const std::string canonical = std::string("=") + qualifier + "SUM(1,2)";
+    const std::string localized = std::string("=") + qualifier + "SUM(1;2)";
+    EXPECT_EQ(localize_in(ExcelLocale::kDeDE, canonical), localized) << qualifier;
+
+    const std::string localized_builtin = std::string("=") + qualifier + "SUMME(1;2)";
+    const std::string canonicalized = std::string("=") + qualifier + "SUMME(1,2)";
+    EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, localized_builtin), canonicalized) << qualifier;
+  }
+
+  // French's localized spelling TRIM maps back to MIRR. A sheet-qualified
+  // defined name must keep that spelling through both rewrite directions.
+  EXPECT_EQ(localize_in(ExcelLocale::kFrFR, "=Sheet1!TRIM(1)"), "=Sheet1!TRIM(1)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kFrFR, "=Sheet1!TRIM(1)"), "=Sheet1!TRIM(1)");
+
+  // TRUE/FALSE tokens after `!` are names in the qualifier's scope, not
+  // localized Boolean literals, even when followed by a call parenthesis.
+  EXPECT_EQ(localize_in(ExcelLocale::kDeDE, "=Sheet1!TRUE(1,2)"), "=Sheet1!TRUE(1;2)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "=Sheet1!WAHR(1;2)"), "=Sheet1!WAHR(1,2)");
+}
+
 TEST(FormulaLocalize, CanonicalizeRoundTripsLocalize) {
   const char* const formulas[] = {
       "=SUM(1.5,2)",       "=IF(TRUE,1.5,FALSE)",          "=SUM({1,2.5;3,4})", "=IFERROR(#N/A,\"x;y\")",

@@ -113,6 +113,13 @@ std::string rewrite_formula_text(std::string_view formula, ExcelProfile profile,
       continue;
     }
 
+    const bool is_qualified_name =
+        i > 0 && tokens[i - 1].kind == parser::TokenKind::Bang && is_function_name_token(token.kind);
+    if (is_qualified_name) {
+      // A qualified name (`Sheet1!TRUE`, `[0]!SUM`) is scoped, never a builtin to localize.
+      out.append(token.lexeme);
+      continue;
+    }
     const bool is_call = i + 1 < tokens.size() && tokens[i + 1].kind == parser::TokenKind::LParen;
     if (is_call && is_function_name_token(token.kind)) {
       const char* renamed = to_locale ? localized_function_name(profile.locale, token.lexeme)
