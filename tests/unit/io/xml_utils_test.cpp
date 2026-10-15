@@ -138,6 +138,18 @@ TEST(XmlUtilsAttr, RootExtraAttributesEscapeValuesForReEmission) {
             " custom=\"one &amp; two &quot;three&quot; &lt;four&gt;\"");
 }
 
+TEST(XmlUtilsNamespaces, FindsDefaultAndNearestPrefixedBindings) {
+  pugi::xml_document doc = Load(
+      R"(<root xmlns="urn:default" xmlns:p="urn:root"><outer xmlns="urn:outer" xmlns:p="urn:outer-prefix"><inner/></outer></root>)");
+  const pugi::xml_node inner = doc.child("root").child("outer").child("inner");
+
+  EXPECT_EQ(find_namespace_binding(inner, ""), "urn:outer");
+  EXPECT_EQ(find_namespace_binding(inner, "p"), "urn:outer-prefix");
+  EXPECT_EQ(find_namespace_binding(doc.child("root"), ""), "urn:default");
+  EXPECT_EQ(find_namespace_binding(doc.child("root"), "p"), "urn:root");
+  EXPECT_TRUE(find_namespace_binding(inner, "missing").empty());
+}
+
 // ---------------------------------------------------------------------------
 // Element-level passthrough
 // ---------------------------------------------------------------------------
@@ -158,6 +170,139 @@ TEST(XmlUtilsRawXml, SerialisesElementAndSubtreeWithoutIndentation) {
 TEST(XmlUtilsRawXml, EscapesMarkupInTextAndAttributes) {
   pugi::xml_document doc = Load(R"(<n v="a &amp; b">x &lt; y</n>)");
   EXPECT_EQ(raw_xml(doc.child("n")), R"(<n v="a &amp; b">x &lt; y</n>)");
+}
+
+TEST(XmlUtilsRawXml, PcdataCarriageReturnsKeepCharacterReferencesAcrossTwoCycles) {
+  const std::string expected_text = "one\rtwo\r\nthree & < _x0041_";
+  const std::string xml =
+      R"(<root name="attr&#13;value"><outer><text>one&#13;two&#13;&#10;three &amp; &lt; _x0041_</text></outer></root>)";
+  pugi::xml_document first;
+  ASSERT_TRUE(first.load_string(xml.c_str()));
+  const std::string first_serialized = raw_xml(first.child("root"));
+  EXPECT_EQ(first_serialized,
+            R"(<root name="attr&#13;value"><outer><text>one&#13;two&#13;
+three &amp; &lt; _x0041_</text></outer></root>)");
+  EXPECT_EQ(first.child("root").child("outer").child("text").child_value(), expected_text);
+
+  pugi::xml_document second;
+  ASSERT_TRUE(second.load_string(first_serialized.c_str()));
+  EXPECT_STREQ(second.child("root").attribute("name").value(), "attr\rvalue");
+  EXPECT_EQ(second.child("root").child("outer").child("text").child_value(), expected_text);
+  const std::string second_serialized = raw_xml(second.child("root"));
+  EXPECT_EQ(second_serialized, first_serialized);
+
+  pugi::xml_document third;
+  ASSERT_TRUE(third.load_string(second_serialized.c_str()));
+  EXPECT_EQ(third.child("root").child("outer").child("text").child_value(), expected_text);
+  EXPECT_EQ(raw_xml(third.child("root")), first_serialized);
+
+  pugi::xml_document ordinary = Load(R"(<plain id="7">a &amp; b &lt; c _x0041_</plain>)");
+  EXPECT_EQ(raw_xml(ordinary.child("plain")), R"(<plain id="7">a &amp; b &lt; c _x0041_</plain>)");
+}
+
+TEST(XmlUtilsRawXml, LeavesCommentsCdataAndProcessingInstructionsUnchanged) {
+  pugi::xml_document doc;
+  pugi::xml_node root = doc.append_child("root");
+  root.append_child(pugi::node_comment).set_value("comment\rtext");
+  root.append_child(pugi::node_cdata).set_value("cdata\rtext");
+  pugi::xml_node pi = root.append_child(pugi::node_pi);
+  ASSERT_TRUE(pi.set_name("probe"));
+  ASSERT_TRUE(pi.set_value("value\rtext"));
+
+  EXPECT_EQ(raw_xml(root), "<root><!--comment\rtext--><![CDATA[cdata\rtext]]><?probe value\rtext?></root>");
+}
+
+TEST(XmlUtilsRawXml, MixedTextKeepsNonPcdataNodesAndPugiEscaping) {
+  pugi::xml_document doc;
+  pugi::xml_node root = doc.append_child("root");
+  pugi::xml_node text = root.append_child("text");
+  text.append_child(pugi::node_pcdata).set_value("A\rB \"_x0041_'");
+  text.append_child(pugi::node_cdata).set_value("cdata\rtext");
+  text.append_child(pugi::node_comment).set_value("comment\rtext");
+  pugi::xml_node pi = text.append_child(pugi::node_pi);
+  ASSERT_TRUE(pi.set_name("probe"));
+  ASSERT_TRUE(pi.set_value("value\rtext"));
+
+  EXPECT_EQ(
+      raw_xml(root),
+      "<root><text>A&#13;B \"_x0041_'<![CDATA[cdata\rtext]]><!--comment\rtext--><?probe value\rtext?></text></root>");
+}
+
+TEST(XmlUtilsRawXml, PCDATAAndDocumentRootsKeepBoundariesAndPrefixes) {
+  pugi::xml_document doc;
+  pugi::xml_node first = doc.append_child("first");
+  first.text().set("A\rB");
+  pugi::xml_node second = doc.append_child("second");
+  second.text().set("C\rD");
+
+  EXPECT_EQ(raw_xml(first.first_child()), "A&#13;B");
+  EXPECT_EQ(raw_xml(doc), "<first>A&#13;B</first><second>C&#13;D</second>");
+
+  std::string prefixed = "prefix\r";
+  append_raw_xml(prefixed, first);
+  EXPECT_EQ(prefixed, "prefix\r<first>A&#13;B</first>");
+}
+
+TEST(XmlUtilsRawXml, EmbeddedPCDATAKeepsCarriageReturnsAndEntities) {
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string("<root>A&amp;B&#13;_x0041_</root>", pugi::parse_default | pugi::parse_embed_pcdata));
+  const pugi::xml_node root = doc.child("root");
+  ASSERT_FALSE(root.first_child());
+  EXPECT_STREQ(root.value(), "A&B\r_x0041_");
+
+  const std::string serialized = raw_xml(root);
+  EXPECT_EQ(serialized, "<root>A&amp;B&#13;_x0041_</root>");
+
+  pugi::xml_document second;
+  ASSERT_TRUE(second.load_string(serialized.c_str(), pugi::parse_default | pugi::parse_embed_pcdata));
+  EXPECT_STREQ(second.child("root").value(), "A&B\r_x0041_");
+}
+
+TEST(XmlUtilsRawXml, LongTextAndSubtreeSerializationRemainStable) {
+  pugi::xml_document doc;
+  pugi::xml_node root = doc.append_child("root");
+  pugi::xml_node target = root.append_child("target");
+  const std::string text_payload = std::string(12U * 1024U, 'x') + "\r_end";
+  const std::string expected_payload = std::string(12U * 1024U, 'x') + "&#13;_end";
+  target.text().set(text_payload.c_str());
+  root.append_child("sibling").text().set("outside\rsubtree");
+
+  const std::string serialized = raw_xml(target);
+  EXPECT_EQ(serialized, "<target>" + expected_payload + "</target>");
+  EXPECT_EQ(raw_xml(root),
+            "<root><target>" + expected_payload + "</target><sibling>outside&#13;subtree</sibling></root>");
+}
+
+TEST(XmlUtilsRawXml, DeepCarriageReturnSubtreeUsesIterativeFallback) {
+  constexpr std::size_t kDepth = 5000U;
+  pugi::xml_document doc;
+  pugi::xml_node root = doc.append_child("level");
+  pugi::xml_node leaf = root;
+  for (std::size_t depth = 1U; depth < kDepth; ++depth) {
+    leaf = leaf.append_child("level");
+  }
+  ASSERT_TRUE(leaf);
+  leaf.append_child(pugi::node_pcdata).set_value("deep\rvalue");
+
+  const std::string serialized = raw_xml(root);
+  EXPECT_EQ(serialized.find("&#13;"), 7U * kDepth + 4U);
+  EXPECT_EQ(serialized.find('\r'), std::string::npos);
+
+  pugi::xml_document reparsed;
+  ASSERT_TRUE(reparsed.load_string(serialized.c_str()));
+  std::size_t observed_depth = 0;
+  pugi::xml_node current = reparsed.document_element();
+  while (current) {
+    ++observed_depth;
+    pugi::xml_node child = current.first_child();
+    if (child.type() != pugi::node_element) {
+      ASSERT_EQ(child.type(), pugi::node_pcdata);
+      EXPECT_STREQ(child.value(), "deep\rvalue");
+      break;
+    }
+    current = child;
+  }
+  EXPECT_EQ(observed_depth, kDepth);
 }
 
 TEST(XmlUtilsRawXml, AppendVariantDoesNotClearTheTarget) {

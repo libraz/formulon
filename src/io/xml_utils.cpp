@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -236,15 +237,14 @@ bool parse_xml_bool_attr(const pugi::xml_attribute& attr) {
   return parse_xml_bool(attr.value());
 }
 
-namespace {
-
-/// Finds the `xmlns:<prefix>` binding in scope for `node`, or an empty
-/// view when nothing declares it. pugixml does no namespace resolution,
-/// so a declaration is an ordinary attribute on whichever ancestor
-/// carries it — Excel puts these on the part root.
 std::string_view find_namespace_binding(const pugi::xml_node& node, std::string_view prefix) {
-  std::string declaration("xmlns:");
-  declaration.append(prefix);
+  std::string declaration;
+  if (prefix.empty()) {
+    declaration = "xmlns";
+  } else {
+    declaration = "xmlns:";
+    declaration.append(prefix);
+  }
   for (pugi::xml_node scope = node; scope; scope = scope.parent()) {
     if (pugi::xml_attribute decl = scope.attribute(declaration.c_str()); decl) {
       return decl.value();
@@ -252,8 +252,6 @@ std::string_view find_namespace_binding(const pugi::xml_node& node, std::string_
   }
   return {};
 }
-
-}  // namespace
 
 void capture_unknown_attrs(const pugi::xml_node& node, std::initializer_list<std::string_view> known,
                            std::vector<std::pair<std::string, std::string>>& out) {
@@ -315,19 +313,167 @@ namespace {
 /// pugixml writer sink that appends straight into a caller-owned string.
 struct StringXmlWriter : pugi::xml_writer {
   std::string* dst = nullptr;
+  bool saw_cr = false;
+  bool escape_pcdata_cr = false;
+
   void write(const void* data, std::size_t size) override {
-    if (dst != nullptr) {
-      dst->append(static_cast<const char*>(data), size);
+    if (dst == nullptr || size == 0U) {
+      return;
     }
+    const char* bytes = static_cast<const char*>(data);
+    const bool contains_cr = std::memchr(bytes, '\r', size) != nullptr;
+    saw_cr = saw_cr || contains_cr;
+    if (!escape_pcdata_cr || !contains_cr) {
+      dst->append(bytes, size);
+      return;
+    }
+
+    std::size_t start = 0;
+    for (std::size_t i = 0; i < size; ++i) {
+      if (bytes[i] == '\r') {
+        dst->append(bytes + start, i - start);
+        dst->append("&#13;");
+        start = i + 1U;
+      }
+    }
+    dst->append(bytes + start, size - start);
   }
 };
+
+bool HasCarriageReturn(const char* value) {
+  return value != nullptr && std::string_view(value).find('\r') != std::string_view::npos;
+}
+
+/// Checks this node and its descendants without visiting a sibling of `root`.
+bool HasPcdataCarriageReturn(const pugi::xml_node& root) {
+  for (pugi::xml_node current = root; current;) {
+    if ((current.type() == pugi::node_pcdata || current.type() == pugi::node_element) &&
+        HasCarriageReturn(current.value())) {
+      return true;
+    }
+    if (pugi::xml_node child = current.first_child(); child) {
+      current = child;
+      continue;
+    }
+    while (current && current != root && !current.next_sibling()) {
+      current = current.parent();
+    }
+    if (!current || current == root) {
+      break;
+    }
+    current = current.next_sibling();
+  }
+  return false;
+}
+
+void AppendPcdataWithCarriageReturnReferences(StringXmlWriter& sink, const pugi::xml_node& pcdata) {
+  const bool previous_mode = sink.escape_pcdata_cr;
+  sink.escape_pcdata_cr = true;
+  pcdata.print(sink, /*indent=*/"", pugi::format_raw);
+  sink.escape_pcdata_cr = previous_mode;
+}
+
+void AppendElementName(std::string& out, const pugi::xml_node& element) {
+  const char* name = element.name();
+  if (name == nullptr || *name == '\0') {
+    out.append(":anonymous");
+  } else {
+    out.append(name);
+  }
+}
+
+void AppendElementStart(StringXmlWriter& sink, const pugi::xml_node& element, bool empty) {
+  std::string& out = *sink.dst;
+  out.push_back('<');
+  AppendElementName(out, element);
+  for (pugi::xml_attribute attribute = element.first_attribute(); attribute; attribute = attribute.next_attribute()) {
+    append_xml_attr(out, attribute.name(), attribute.value());
+  }
+  if (empty) {
+    out.append("/>");
+  } else {
+    out.push_back('>');
+  }
+}
+
+void AppendElementEnd(std::string& out, const pugi::xml_node& element) {
+  out.append("</");
+  AppendElementName(out, element);
+  out.push_back('>');
+}
+
+bool IsEmptyElement(const pugi::xml_node& element) {
+  if (element.value() != nullptr && *element.value() != '\0') {
+    return false;
+  }
+  const pugi::xml_node first_child = element.first_child();
+  if (!first_child) {
+    return true;
+  }
+  return first_child.type() == pugi::node_pcdata && first_child.value() != nullptr && *first_child.value() == '\0' &&
+         !first_child.next_sibling();
+}
+
+void AppendSlowRawXml(std::string& out, const pugi::xml_node& root) {
+  StringXmlWriter sink;
+  sink.dst = &out;
+  pugi::xml_node current = root;
+  while (current) {
+    if (current.type() == pugi::node_element) {
+      const bool empty = IsEmptyElement(current);
+      AppendElementStart(sink, current, empty);
+      if (!empty) {
+        if (current.value() != nullptr && *current.value() != '\0') {
+          // Embedded pcdata; attribute escaping keeps CR as `&#13;` in text content too.
+          AppendXmlAttrEscaped(out, current.value());
+        }
+        if (pugi::xml_node child = current.first_child(); child) {
+          current = child;
+          continue;
+        }
+        AppendElementEnd(out, current);
+      }
+    } else if (current.type() == pugi::node_document) {
+      if (pugi::xml_node child = current.first_child(); child) {
+        current = child;
+        continue;
+      }
+    } else if (current.type() == pugi::node_pcdata) {
+      AppendPcdataWithCarriageReturnReferences(sink, current);
+    } else {
+      current.print(sink, /*indent=*/"", pugi::format_raw);
+    }
+
+    if (current == root) {
+      break;
+    }
+    while (current != root) {
+      if (pugi::xml_node sibling = current.next_sibling(); sibling) {
+        current = sibling;
+        break;
+      }
+      current = current.parent();
+      if (current.type() == pugi::node_element) {
+        AppendElementEnd(out, current);
+      }
+    }
+    if (current == root) {
+      break;
+    }
+  }
+}
 
 }  // namespace
 
 void append_raw_xml(std::string& out, const pugi::xml_node& node) {
+  const std::size_t output_start = out.size();
   StringXmlWriter sink;
   sink.dst = &out;
   node.print(sink, /*indent=*/"", pugi::format_raw);
+  if (sink.saw_cr && HasPcdataCarriageReturn(node)) {
+    out.resize(output_start);
+    AppendSlowRawXml(out, node);
+  }
 }
 
 std::string raw_xml(const pugi::xml_node& node) {

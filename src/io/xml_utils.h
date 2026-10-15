@@ -54,6 +54,12 @@ void append_xml_attr_int(std::string& out, std::string_view name, std::int64_t v
 /// Appends ` name="value"` with `value` spelled by `append_xml_number`.
 void append_xml_attr_number(std::string& out, std::string_view name, double value);
 
+/// Finds the namespace URI bound to `prefix` at `node` or its nearest
+/// ancestor. An empty prefix looks up the default `xmlns` binding. Returns
+/// an empty view when no non-empty binding is in scope. The view points into
+/// the owning XML document.
+std::string_view find_namespace_binding(const pugi::xml_node& node, std::string_view prefix);
+
 /// Appends a double spelled the way Excel writes it into sheet `<v>` and
 /// chart `c:v` (the two are byte-identical).
 ///
