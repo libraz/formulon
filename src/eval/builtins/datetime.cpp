@@ -53,9 +53,6 @@ namespace {
 using date_time::days_in_month;
 using date_time::kSecondsPerDay;
 
-// Excel's maximum serial value: 2958465 = 9999-12-31. Serial 2958466 would
-// map to 10000-01-01 which is outside the representable range.
-constexpr double kExcelMaxSerial = 2958465.0;
 using date_time::kDate1904EpochGap;
 
 double max_date_serial(bool date1904) noexcept {
@@ -81,17 +78,6 @@ double serial_from_date_components(int y, unsigned m, long long d, bool date1904
   const std::int64_t civil_day = date_time::days_from_civil(y, m, 1u) + d - 1;
   const date_time::YMD normalised = date_time::civil_from_days(civil_day);
   return date_time::serial_from_ymd(normalised.y, normalised.m, normalised.d, date1904);
-}
-
-Expected<double, ErrorCode> coerce_serial(const Value& v) {
-  auto n = coerce_to_number(v);
-  if (!n) {
-    return std::move(n.error());
-  }
-  if (n.value() < 0.0 || n.value() >= kExcelMaxSerial + 1.0) {
-    return ErrorCode::Num;
-  }
-  return n.value();
 }
 
 // A date argument keeps the raw serial produced by generic numeric coercion,
@@ -234,12 +220,14 @@ Expected<date_time::YMD, ErrorCode> coerce_serial_ymd(const Value& v, bool date1
   return date_time::ymd_from_serial(day_serial, /*date1904=*/false);
 }
 
-Expected<date_time::HMS, ErrorCode> coerce_serial_hms(const Value& v) {
-  auto serial = coerce_serial(v);
-  if (!serial) {
-    return std::move(serial.error());
+// The time of day of a date argument, bounded by the workbook epoch's last
+// day like the calendar parts. Rebasing direct date text keeps the fraction.
+Expected<date_time::HMS, ErrorCode> coerce_serial_hms(const Value& v, bool date1904) {
+  auto bounded = coerce_bounded_date_arg(v, date1904);
+  if (!bounded) {
+    return std::move(bounded.error());
   }
-  return date_time::hms_from_fraction(serial.value());
+  return date_time::hms_from_fraction(bounded.value().serial);
 }
 
 // DATE's month argument is limited to [-32767, 32766] and its day saturates at the 16-bit bounds.
@@ -382,8 +370,8 @@ Value Day_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool da
 }
 
 /// HOUR(serial). Returns 0..23.
-Value Hour_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto hms = coerce_serial_hms(args[0]);
+Value Hour_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
+  auto hms = coerce_serial_hms(args[0], date1904);
   if (!hms) {
     return Value::error(hms.error());
   }
@@ -391,8 +379,8 @@ Value Hour_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }
 
 /// MINUTE(serial). Returns 0..59.
-Value Minute_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto hms = coerce_serial_hms(args[0]);
+Value Minute_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
+  auto hms = coerce_serial_hms(args[0], date1904);
   if (!hms) {
     return Value::error(hms.error());
   }
@@ -400,8 +388,8 @@ Value Minute_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }
 
 /// SECOND(serial). Returns 0..59.
-Value Second_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto hms = coerce_serial_hms(args[0]);
+Value Second_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
+  auto hms = coerce_serial_hms(args[0], date1904);
   if (!hms) {
     return Value::error(hms.error());
   }
@@ -1126,6 +1114,9 @@ const DateEntry* find_date_entry(std::string_view name) noexcept {
       {"YEAR", {&Year_, 1u, 1u}},
       {"MONTH", {&Month_, 1u, 1u}},
       {"DAY", {&Day_, 1u, 1u}},
+      {"HOUR", {&Hour_, 1u, 1u}},
+      {"MINUTE", {&Minute_, 1u, 1u}},
+      {"SECOND", {&Second_, 1u, 1u}},
       {"WEEKDAY", {&Weekday_, 1u, 2u}},
       {"EDATE", {&Edate_, 2u, 2u, nullptr, nullptr, true}},
       {"EOMONTH", {&Eomonth_, 2u, 2u, nullptr, nullptr, true}},
@@ -1156,16 +1147,16 @@ const DateEntry* find_date_entry(std::string_view name) noexcept {
 }
 
 void register_datetime_builtins(FunctionRegistry& registry) {
-  // Time-of-day functions stay eager and scalar-only. The date1904-sensitive
-  // calendar functions (DATE / YEAR / MONTH / DAY / WEEKDAY / EDATE /
+  // TIME and TIMEVALUE stay eager and scalar-only. The date1904-sensitive
+  // calendar functions (DATE / YEAR / MONTH / DAY / HOUR / MINUTE / SECOND / WEEKDAY / EDATE /
   // EOMONTH / WEEKNUM / ISOWEEKNUM / YEARFRAC / DATEDIF / DAYS360 / DAYS /
   // DATEVALUE / NOW / TODAY) are NOT
   // registered here: they route through the lazy dispatch table
   // (`eval_datetime_lazy`) and the VM's `find_date_entry` hook so the
   // workbook's date epoch (`EvalContext::date1904()`) reaches the impl.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"TIME", 3u, 3u, &Time_},     {"HOUR", 1u, 1u, &Hour_},           {"MINUTE", 1u, 1u, &Minute_},
-      {"SECOND", 1u, 1u, &Second_}, {"TIMEVALUE", 1u, 1u, &Timevalue_},
+      {"TIME", 3u, 3u, &Time_},
+      {"TIMEVALUE", 1u, 1u, &Timevalue_},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

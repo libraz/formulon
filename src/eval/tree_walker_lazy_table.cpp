@@ -179,6 +179,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"GROUPBY", &eval_groupby_lazy, LazyResultShape::kArray},
     {"GROWTH", &eval_growth_lazy, LazyResultShape::kArray},
     {"HLOOKUP", &eval_hlookup_lazy, LazyResultShape::kArray},
+    {"HOUR", &eval_datetime_lazy, LazyResultShape::kBroadcast},
     {"HSTACK", &eval_hstack_lazy, LazyResultShape::kArray},
     {"IF", &eval_if_lazy, LazyResultShape::kBroadcast},
     {"IFERROR", &eval_iferror_lazy, LazyResultShape::kBroadcast},
@@ -207,6 +208,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"MDETERM", &eval_mdeterm_lazy, LazyResultShape::kScalar},
     {"MDURATION", &eval_financial_date_lazy, LazyResultShape::kScalar},
     {"MINIFS", &eval_minifs_lazy, LazyResultShape::kReduce},
+    {"MINUTE", &eval_datetime_lazy, LazyResultShape::kBroadcast},
     {"MINVERSE", &eval_minverse_lazy, LazyResultShape::kArray},
     {"MIRR", &eval_mirr_lazy, LazyResultShape::kScalar},
     {"MMULT", &eval_mmult_lazy, LazyResultShape::kArray},
@@ -248,6 +250,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"ROWS", &eval_rows_lazy, LazyResultShape::kReduce},
     {"RSQ", &eval_rsq_lazy, LazyResultShape::kScalar},
     {"SCAN", &eval_scan_lazy, LazyResultShape::kArray},
+    {"SECOND", &eval_datetime_lazy, LazyResultShape::kBroadcast},
     {"SERIESSUM", &eval_series_sum_lazy, LazyResultShape::kScalar},
     // SHEET / SHEETS consult the bound Workbook + current Sheet on the
     // EvalContext; AST introspection of an optional reference argument

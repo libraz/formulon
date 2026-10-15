@@ -1,0 +1,30 @@
+suite: datetime_time_parts_1904
+description: HOUR / MINUTE / SECOND bound their serial by the 1904 system's last day, like YEAR
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+options:
+  date1904: true
+  iterative: false
+cases:
+  - id: hour_last_day
+    formula: "=HOUR(2957003.5)"
+  - id: minute_last_day
+    formula: "=MINUTE(2957003.75)"
+  - id: second_last_day
+    formula: "=SECOND(2957003.5)"
+  - id: year_last_day
+    formula: "=YEAR(2957003.5)"
+  - id: hour_past_last_day
+    formula: "=HOUR(2957004.5)"
+  - id: minute_past_last_day
+    formula: "=MINUTE(2957004.5)"
+  - id: second_past_last_day
+    formula: "=SECOND(2957004.5)"
+  - id: year_past_last_day
+    formula: "=YEAR(2957004.5)"
+  - id: hour_1900_last_day
+    formula: "=HOUR(2958465.5)"
+  - id: hour_date_text_last_day
+    formula: "=HOUR(\"9999/12/31 18:00\")"
+  - id: hour_negative
+    formula: "=HOUR(-0.5)"
