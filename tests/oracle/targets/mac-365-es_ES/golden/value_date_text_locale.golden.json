@@ -1,0 +1,593 @@
+{
+  "suite": "value_date_text_locale",
+  "description": "Date / time text recognition across UI locales: numeric pair and triple order with their fallbacks, dotted dates, month-name matching, CJK width folding, kanji and era forms, the fraction and trailing separators of a time, AM/PM spellings, and mixed fractions next to group separators. Dates are reported as \"cy\" (current year) or the year, then month, day and minutes, so goldens do not depend on the capture year.\n",
+  "environment": {
+    "excel_version": "16.113.4",
+    "excel_locale": "es-ES",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-15T22:22:52Z"
+  },
+  "tolerance": {
+    "abs": 1e-10,
+    "rel": 1e-10
+  },
+  "cases": [
+    {
+      "id": "pair_13_1",
+      "formula": "=IFERROR(LET(v,VALUE(\"13/1\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "cy-1-13+0"
+      }
+    },
+    {
+      "id": "pair_1_13",
+      "formula": "=IFERROR(LET(v,VALUE(\"1/13\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2013-1-1+0"
+      }
+    },
+    {
+      "id": "pair_2_30",
+      "formula": "=IFERROR(LET(v,VALUE(\"2/30\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1930-2-1+0"
+      }
+    },
+    {
+      "id": "pair_1_0",
+      "formula": "=IFERROR(LET(v,VALUE(\"1/0\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "pair_1_2026",
+      "formula": "=IFERROR(LET(v,VALUE(\"1/2026\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "cy-1-1+0"
+      }
+    },
+    {
+      "id": "pair_2026_1",
+      "formula": "=IFERROR(LET(v,VALUE(\"2026/1\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "pair_32_12",
+      "formula": "=IFERROR(LET(v,VALUE(\"32/12\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "pair_12_32",
+      "formula": "=IFERROR(LET(v,VALUE(\"12/32\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1932-12-1+0"
+      }
+    },
+    {
+      "id": "pair_spaced",
+      "formula": "=IFERROR(LET(v,VALUE(\"1 / 2\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "cy-2-1+0"
+      }
+    },
+    {
+      "id": "triple_1_2_3",
+      "formula": "=IFERROR(LET(v,VALUE(\"1/2/3\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2003-2-1+0"
+      }
+    },
+    {
+      "id": "triple_13_2_2026",
+      "formula": "=IFERROR(LET(v,VALUE(\"13/2/2026\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "cy-2-13+0"
+      }
+    },
+    {
+      "id": "triple_1_13_26",
+      "formula": "=IFERROR(LET(v,VALUE(\"1/13/26\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "triple_32_1_1",
+      "formula": "=IFERROR(LET(v,VALUE(\"32/1/1\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "triple_year_first",
+      "formula": "=IFERROR(LET(v,VALUE(\"2026/1/2\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "cy-1-2+0"
+      }
+    },
+    {
+      "id": "triple_dotted",
+      "formula": "=IFERROR(LET(v,VALUE(\"1.2.2026\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "pair_dotted",
+      "formula": "=IFERROR(LET(v,VALUE(\"1.13\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "mmm_2",
+      "formula": "=IFERROR(LET(v,VALUE(\"Jan 2\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "mmm_32",
+      "formula": "=IFERROR(LET(v,VALUE(\"Jan 32\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "mmm_2026",
+      "formula": "=IFERROR(LET(v,VALUE(\"Jan 2026\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "d_mmm",
+      "formula": "=IFERROR(LET(v,VALUE(\"2 Jan\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "d_mmm_comma_y",
+      "formula": "=IFERROR(LET(v,VALUE(\"2 Jan, 2026\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "mmm_d_comma_y",
+      "formula": "=IFERROR(LET(v,VALUE(\"Jan 2, 2026\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "mmm_sept",
+      "formula": "=IFERROR(LET(v,VALUE(\"Sept 2\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2002-9-1+0"
+      }
+    },
+    {
+      "id": "mmm_janu",
+      "formula": "=IFERROR(LET(v,VALUE(\"Janu 2\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "mmm_januar",
+      "formula": "=IFERROR(LET(v,VALUE(\"Januar 2\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "mmm_mar",
+      "formula": "=IFERROR(LET(v,VALUE(\"Mar 2\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2002-3-1+0"
+      }
+    },
+    {
+      "id": "mmm_feb",
+      "formula": "=IFERROR(LET(v,VALUE(\"Feb 2\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2002-2-1+0"
+      }
+    },
+    {
+      "id": "mmm_jun",
+      "formula": "=IFERROR(LET(v,VALUE(\"Jun 2\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2002-6-1+0"
+      }
+    },
+    {
+      "id": "mmm_jul",
+      "formula": "=IFERROR(LET(v,VALUE(\"Jul 2\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2002-7-1+0"
+      }
+    },
+    {
+      "id": "mmm_jui",
+      "formula": "=IFERROR(LET(v,VALUE(\"Jui 2\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "mmm_dot_d",
+      "formula": "=IFERROR(LET(v,VALUE(\"Jan.2\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "d_mmm_y_hyphen",
+      "formula": "=IFERROR(LET(v,VALUE(\"2-Jan-2026\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "pair_time",
+      "formula": "=IFERROR(LET(v,VALUE(\"1/2 1:30\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "cy-2-1+90"
+      }
+    },
+    {
+      "id": "time_pair",
+      "formula": "=IFERROR(LET(v,VALUE(\"1:30 1/2\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "cy-2-1+90"
+      }
+    },
+    {
+      "id": "time_sep_date",
+      "formula": "=IFERROR(LET(v,VALUE(\"1:30-5-5\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "cy-5-5+90"
+      }
+    },
+    {
+      "id": "fullwidth_pair",
+      "formula": "=IFERROR(LET(v,VALUE(\"１／２\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "tail_0004",
+      "formula": "=IFERROR(LET(v,VALUE(\"2026/1/2 1:30 0004\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "tail_dotted",
+      "formula": "=IFERROR(LET(v,VALUE(\"2026/1/2 1:30 1.5\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "kanji_ymd",
+      "formula": "=IFERROR(LET(v,VALUE(\"2026年1月2日\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "kanji_md",
+      "formula": "=IFERROR(LET(v,VALUE(\"1月2日\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "era_letter",
+      "formula": "=IFERROR(LET(v,VALUE(\"R8.1.2\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "leading_slash",
+      "formula": "=IFERROR(LET(v,VALUE(\"/1/2\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "ideographic_space_gap",
+      "formula": "=IFERROR(LET(v,VALUE(\"1/2　1:30\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "date_time_fraction",
+      "formula": "=IFERROR(LET(v,VALUE(\"2026/1/2 1:30:00.5\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "time_dot_fraction",
+      "formula": "=VALUE(\"1:30.5\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_comma_fraction",
+      "formula": "=VALUE(\"1:30,5\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0010474537037037037
+      }
+    },
+    {
+      "id": "marker_dot_attached",
+      "formula": "=VALUE(\"1:30 PM.\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "marker_dot_spaced",
+      "formula": "=VALUE(\"1:30 PM .\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "marker_comma",
+      "formula": "=VALUE(\"1:30 PM,\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5625
+      }
+    },
+    {
+      "id": "marker_p_m_dotted",
+      "formula": "=VALUE(\"1 p.m.\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "marker_p_m_spaced",
+      "formula": "=VALUE(\"1 p. m.\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5416666666666666
+      }
+    },
+    {
+      "id": "marker_fullwidth",
+      "formula": "=VALUE(\"1 ＰＭ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5416666666666666
+      }
+    },
+    {
+      "id": "time_ideographic_trail",
+      "formula": "=VALUE(\"1:30　\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0625
+      }
+    },
+    {
+      "id": "mixed_grouped_whole",
+      "formula": "=VALUE(\"1,000 1/2\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mixed_numerator_3",
+      "formula": "=VALUE(\"1 100/1\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "mixed_denominator_3",
+      "formula": "=VALUE(\"1 12/345\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0347826086956522
+      }
+    },
+    {
+      "id": "mixed_yen",
+      "formula": "=VALUE(\"¥1 1/2\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_tail_route",
+      "formula": "=TIMEVALUE(\"2026/1/2 23:59:59.9999\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datevalue_dotted_pair",
+      "formula": "=IFERROR(LET(v,DATEVALUE(\"1.5\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "numbervalue_comma",
+      "formula": "=NUMBERVALUE(\"1,5\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "numbervalue_dot",
+      "formula": "=NUMBERVALUE(\"1.5\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "numbervalue_space_group",
+      "formula": "=NUMBERVALUE(\"1 234,5\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1234.5
+      }
+    },
+    {
+      "id": "numbervalue_decimal_equals_group",
+      "formula": "=NUMBERVALUE(\"1.5\",\",\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "numbervalue_explicit",
+      "formula": "=NUMBERVALUE(\"1,234.5\",\".\",\",\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1234.5
+      }
+    }
+  ]
+}
