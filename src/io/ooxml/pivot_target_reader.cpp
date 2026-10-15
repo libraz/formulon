@@ -31,7 +31,7 @@ Expected<std::string, Error> load_pivot_cache_records_target(const ZipReader& zi
                                                  if (target.empty()) {
                                                    return Expected<void, Error>::Ok();
                                                  }
-                                                 if (type == kRelPivotCacheRecords && records_target.empty()) {
+                                                 if (type == kRelPivotCacheRecords) {
                                                    auto resolved = resolve_relative_path(base_dir, target);
                                                    if (!resolved) {
                                                      return std::move(resolved.error());

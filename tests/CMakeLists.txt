@@ -74,6 +74,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/package_diagnostics_test.cpp
   unit/io/pivot_cache_reader_test.cpp
   unit/io/pivot_cache_writer_test.cpp
+  unit/io/pivot_target_reader_test.cpp
   unit/io/pivot_table_reader_test.cpp
   unit/io/pivot_table_reader_corruption_test.cpp
   unit/io/pivot_table_reader_filters_test.cpp

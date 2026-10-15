@@ -29,7 +29,10 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <map>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include "eval/function_registry.h"
@@ -38,6 +41,7 @@
 #include "io/xlsb/pivot_reader.h"
 #include "io/xlsb/reader.h"
 #include "io/zip_reader.h"
+#include "miniz.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -464,6 +468,76 @@ TEST(XlsbPivotFixture, DataFieldHeaderTruncationIsRejected) {
   ASSERT_FALSE(static_cast<bool>(table_or));
   EXPECT_EQ(table_or.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
   EXPECT_EQ(table_or.error().message, "xlsb pivot data field header truncated");
+}
+
+// ---------------------------------------------------------------------------
+// (d) A duplicated single-valued relationship resolves to its last entry,
+//     as the workbook and sheet rels readers do.
+// ---------------------------------------------------------------------------
+
+std::vector<std::uint8_t> RepackWithEntries(const std::vector<std::uint8_t>& src,
+                                            const std::map<std::string, std::string>& replaced) {
+  mz_zip_archive reader{};
+  EXPECT_NE(mz_zip_reader_init_mem(&reader, src.data(), src.size(), 0), MZ_FALSE);
+  mz_zip_archive writer{};
+  EXPECT_NE(mz_zip_writer_init_heap(&writer, 0, 4096), MZ_FALSE);
+  const mz_uint count = mz_zip_reader_get_num_files(&reader);
+  for (mz_uint i = 0; i < count; ++i) {
+    char name[256] = {};
+    EXPECT_GT(mz_zip_reader_get_filename(&reader, i, name, sizeof(name)), 0U);
+    const auto hit = replaced.find(name);
+    if (hit != replaced.end()) {
+      EXPECT_NE(mz_zip_writer_add_mem(&writer, name, hit->second.data(), hit->second.size(),
+                                      static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)),
+                MZ_FALSE);
+      continue;
+    }
+    std::size_t size = 0;
+    void* data = mz_zip_reader_extract_to_heap(&reader, i, &size, 0);
+    EXPECT_NE(data, nullptr);
+    EXPECT_NE(mz_zip_writer_add_mem(&writer, name, data, size, static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)), MZ_FALSE);
+    mz_free(data);
+  }
+  mz_zip_reader_end(&reader);
+  void* archive = nullptr;
+  std::size_t archive_size = 0;
+  EXPECT_NE(mz_zip_writer_finalize_heap_archive(&writer, &archive, &archive_size), MZ_FALSE);
+  EXPECT_NE(mz_zip_writer_end(&writer), MZ_FALSE);
+  std::vector<std::uint8_t> out(static_cast<const std::uint8_t*>(archive),
+                                static_cast<const std::uint8_t*>(archive) + archive_size);
+  mz_free(archive);
+  return out;
+}
+
+std::string TwoRelsOfType(std::string_view type, std::string_view stale_target, std::string_view live_target) {
+  std::string xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">";
+  for (const auto& [id, target] : {std::pair<std::string_view, std::string_view>{"rId1", stale_target},
+                                   std::pair<std::string_view, std::string_view>{"rId2", live_target}}) {
+    xml.append("<Relationship Id=\"").append(id).append("\" Type=\"").append(type);
+    xml.append("\" Target=\"").append(target).append("\"/>");
+  }
+  xml.append("</Relationships>");
+  return xml;
+}
+
+TEST(XlsbPivotFixture, DuplicatedPivotRelsResolveToTheLastEntry) {
+  const std::vector<std::uint8_t> bytes = ReadFileBytes(FixturePath());
+  ASSERT_FALSE(bytes.empty());
+  const std::string rel_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
+  const std::vector<std::uint8_t> repacked = RepackWithEntries(
+      bytes, {{"xl/pivotTables/_rels/pivotTable1.bin.rels",
+               TwoRelsOfType(rel_ns + "pivotCacheDefinition", "../pivotCache/missingDefinition.bin",
+                             "../pivotCache/pivotCacheDefinition1.bin")},
+              {"xl/pivotCache/_rels/pivotCacheDefinition1.bin.rels",
+               TwoRelsOfType(rel_ns + "pivotCacheRecords", "missingRecords.bin", "pivotCacheRecords1.bin")}});
+
+  auto result_or = io::xlsb::read_xlsb(io::ByteSpan{repacked.data(), repacked.size()});
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const Workbook& wb = result_or.value().workbook;
+  ASSERT_EQ(wb.pivot_caches().size(), 1U);
+  EXPECT_EQ(wb.pivot_caches().front()->records().size(), 6U);
 }
 
 }  // namespace

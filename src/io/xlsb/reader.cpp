@@ -364,7 +364,7 @@ Expected<std::vector<UnknownRelationship>, Error> LoadSheetRelationships(const Z
   return out;
 }
 
-/// Returns the package-relative target of the first internal relationship
+/// Returns the package-relative target of the last internal relationship
 /// declared by `part_path` whose `attr` attribute equals `value`, or an
 /// empty string when the part has no rels file or no such relationship.
 /// `label` names the rels file in error messages.
@@ -378,7 +378,7 @@ Expected<std::string, Error> FindRelationship(const ZipReader& zip, std::string_
   std::string found;
   auto status = ooxml::visit_relationship_nodes(
       zip, rels_path, label, "xlsb_reader", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-        if (!found.empty() || std::string_view(rel.attribute(attr).value()) != value) {
+        if (std::string_view(rel.attribute(attr).value()) != value) {
           return Expected<void, Error>::Ok();
         }
         if (std::string_view(rel.attribute("TargetMode").value()) == "External") {
