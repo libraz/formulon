@@ -69,10 +69,6 @@ cases:
   # -- BESSELI -------------------------------------------------------------
   - id: besseli_one_zero
     description: "I_0(1)"
-    # Mac Excel's BESSELI uses A&S 9.8.1/9.8.2 polynomials with rated
-    # |epsilon| < 1.9e-7; Formulon's power series is accurate to ~1e-13.
-    # Widened tolerance accepts the published Excel error bound.
-    tolerance: { abs: 1e-6, rel: 1e-7 }
     formula: "=BESSELI(1,0)"
 
   - id: besseli_two_one
@@ -166,10 +162,6 @@ cases:
 
   - id: bessely_large_order_decay
     description: "Y_5 at moderate x shows heavy growth in magnitude"
-    # Mac Excel's BESSELY drifts ~1e-7 from the true value; Formulon delegates
-    # to POSIX ::yn which is ULP-accurate. Widened tolerance accepts the
-    # documented Excel approximation error (see divergence.yaml).
-    tolerance: { abs: 1e-6, rel: 1e-7 }
     formula: "=BESSELY(2,5)"
 
   # -- BESSELI -------------------------------------------------------------
@@ -183,10 +175,6 @@ cases:
 
   - id: besseli_large_x_growth
     description: "I_0(20) grows exponentially; verify against Excel cap"
-    # Same A&S BESSELI accuracy gap as besseli_one_zero; magnitudes here
-    # are ~4.4e7 so the published 1.9e-7 relative error becomes ~10
-    # absolute. Widen both axes accordingly.
-    tolerance: { abs: 100.0, rel: 1e-6 }
     formula: "=BESSELI(20,0)"
 
   # -- BESSELK -------------------------------------------------------------
@@ -210,8 +198,6 @@ cases:
 
   - id: besseli_text_x_coerces
     description: "Text x is parsed as a number for BESSELI"
-    # Same I_0(1) accuracy gap as besseli_one_zero.
-    tolerance: { abs: 1e-6, rel: 1e-7 }
     formula: "=BESSELI(\"1\",0)"
 
   - id: besselk_blank_x_rejected

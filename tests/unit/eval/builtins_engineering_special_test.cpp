@@ -154,14 +154,14 @@ TEST(BuiltinsEngineeringSpecial, ErfcPreciseMatchesErfc) {
 }
 
 // ---------------------------------------------------------------------------
-// BESSELJ (POSIX jn)
+// BESSELJ (NR bessj)
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsEngineeringSpecial, BesselJZeroZero) {
-  // J_0(0) = 1.
+  // Excel returns the NR rational approximation at 0, 1.00000000283141, not 1.
   const Value v = EvalSource("=BESSELJ(0,0)");
   ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), 1.0, 1e-12);
+  EXPECT_EQ(v.as_number(), 57568490574.0 / 57568490411.0);
 }
 
 TEST(BuiltinsEngineeringSpecial, BesselJOneZero) {
@@ -201,7 +201,7 @@ TEST(BuiltinsEngineeringSpecial, BesselJOrderTruncates) {
 }
 
 // ---------------------------------------------------------------------------
-// BESSELY (POSIX yn)
+// BESSELY (NR bessy)
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsEngineeringSpecial, BesselYOneZero) {

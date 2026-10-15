@@ -18,9 +18,11 @@
 // coefficients are widely tabulated (Abramowitz & Stegun, NIST DLMF,
 // netlib TOMS) and are reproduced here verbatim.
 //
-//   * BESSELJ uses POSIX `::jn` (libm). Mac probes show no observable
-//     drift from libm for the J_n cases in our corpus, so the shorter,
-//     library-backed path is retained.
+//   * BESSELJ uses J_0(x) / J_1(x) from rational polynomials (|x| < 8)
+//     and an asymptotic expansion (|x| >= 8), forward recurrence when
+//     |x| > n and Miller's normalised downward recurrence otherwise. It is
+//     bit-exact against Mac for |x| < 8; above that Excel's own expansion
+//     differs by up to ~3e-5 relative, about as far as libm `::jn` does.
 //   * BESSELY uses Y_0(x) / Y_1(x) computed from rational polynomials
 //     (small x, with the J_n log correction) and an asymptotic
 //     expansion (large x), then forward recurrence
@@ -33,7 +35,9 @@
 //   * BESSELK uses K_0(x) / K_1(x) computed from polynomial
 //     approximations (with the I_n log correction) for x <= 2 and an
 //     asymptotic expansion for x > 2, then forward recurrence
-//     K_{n+1} = (2n/x) K_n + K_{n-1} for n >= 2.
+//     K_{n+1} = (2n/x) K_n + K_{n-1} for n >= 2, whose product flushes a
+//     subnormal to 0 as Excel's multiply does (BESSELK(700, 2) equals
+//     BESSELK(700, 0)).
 //
 // Domain rules for BESSEL* (matching Excel's API):
 //   * n < 0                                   -> #NUM!
@@ -54,6 +58,7 @@
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -182,8 +187,6 @@ Value ErfcPrecise(const Value* args, std::uint32_t arity, Arena& arena) {
 // ---------------------------------------------------------------------------
 
 // J_0(x): rational polynomial for |x| < 8, asymptotic for |x| >= 8.
-// Used by Y_0 (log-term correction). Not exposed for BESSELJ itself --
-// libm `::jn` is sufficient for J_n in our oracle corpus.
 double bessj0(double x) {
   const double ax = std::fabs(x);
   if (ax < 8.0) {
@@ -205,7 +208,6 @@ double bessj0(double x) {
 }
 
 // J_1(x): rational polynomial for |x| < 8, asymptotic for |x| >= 8.
-// Used by Y_1 (log-term correction).
 double bessj1(double x) {
   const double ax = std::fabs(x);
   double ans;
@@ -230,6 +232,63 @@ double bessj1(double x) {
     }
   }
   return ans;
+}
+
+// J_n(x) for n >= 0: forward recurrence J_{n+1} = (2n/x) J_n - J_{n-1}
+// when |x| > n, otherwise Miller's downward recurrence from an even start
+// m = n + sqrt(40 n), normalised by J_0 + 2 (J_2 + J_4 + ...).
+double bessj(int n, double x) {
+  if (n == 0) {
+    return bessj0(x);
+  }
+  if (n == 1) {
+    return bessj1(x);
+  }
+  const double ax = std::fabs(x);
+  if (ax == 0.0) {
+    return 0.0;
+  }
+  const double tox = 2.0 / ax;
+  double ans = 0.0;
+  if (ax > static_cast<double>(n)) {
+    double bjm = bessj0(ax);
+    double bj = bessj1(ax);
+    for (int j = 1; j < n; ++j) {
+      const double bjp = static_cast<double>(j) * tox * bj - bjm;
+      bjm = bj;
+      bj = bjp;
+    }
+    ans = bj;
+  } else {
+    constexpr double kBig = 1.0e10;
+    constexpr double kBigInverse = 1.0e-10;
+    const int m = 2 * ((n + static_cast<int>(std::sqrt(40.0 * static_cast<double>(n)))) / 2);
+    bool even_term = false;
+    double bjp = 0.0;
+    double bj = 1.0;
+    double sum = 0.0;
+    for (int j = m; j > 0; --j) {
+      const double bjm = static_cast<double>(j) * tox * bj - bjp;
+      bjp = bj;
+      bj = bjm;
+      if (std::fabs(bj) > kBig) {
+        bj *= kBigInverse;
+        bjp *= kBigInverse;
+        ans *= kBigInverse;
+        sum *= kBigInverse;
+      }
+      if (even_term) {
+        sum += bj;
+      }
+      even_term = !even_term;
+      if (j == n) {
+        ans = bjp;
+      }
+    }
+    sum = 2.0 * sum - bj;
+    ans /= sum;
+  }
+  return (x < 0.0 && (n & 1) != 0) ? -ans : ans;
 }
 
 // Y_0(x), x > 0. Rational polynomial + (2/pi) J_0(x) ln(x) for x < 8;
@@ -427,7 +486,7 @@ double bessk(int n, double x) {
   double bkm = bessk0(x);
   double bk = bessk1(x);
   for (int j = 1; j < n; ++j) {
-    const double bkp = bkm + static_cast<double>(j) * tox * bk;
+    const double bkp = bkm + flush_subnormal(static_cast<double>(j) * tox * bk);
     bkm = bk;
     bk = bkp;
   }
@@ -438,14 +497,13 @@ double bessk(int n, double x) {
 // BESSEL family entry points
 // ---------------------------------------------------------------------------
 
-/// BESSELJ(x, n) = J_n(x), defined on all real x. Delegates to libm `::jn`,
-/// which agrees with Mac Excel 365 across the oracle corpus to within 1 ULP.
+/// BESSELJ(x, n) = J_n(x), defined on all real x, via the NR2 6.5 `bessj`.
 Value BesselJ(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto in = read_bessel_args(args);
   if (!in) {
     return Value::error(in.error());
   }
-  const double r = ::jn(in.value().n, in.value().x);
+  const double r = bessj(in.value().n, in.value().x);
   if (std::isnan(r)) {
     return Value::error(ErrorCode::Num);
   }
