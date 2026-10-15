@@ -313,6 +313,12 @@ TEST(NumberFormatScientific, ExpPlus) {
   EXPECT_EQ(Render(12345.0, "0.00E+00"), "1.23E+04");
 }
 
+TEST(NumberFormatScientific, AllNinesMantissaKeepsItsExponent) {
+  EXPECT_EQ(Render(999999999999999.0, "0.00000000000000E+00"), "9.99999999999999E+14");
+  EXPECT_EQ(Render(9.99999999999999E+307, "0.00000000000000000E+00"), "9.99999999999999000E+307");
+  EXPECT_EQ(Render(999999999999999.0, "0.00E+00"), "1.00E+15");
+}
+
 TEST(NumberFormatScientific, ExpPlusLargeExponent) {
   EXPECT_EQ(Render(1.5e10, "0.0E+00"), "1.5E+10");
 }

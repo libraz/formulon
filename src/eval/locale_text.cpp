@@ -1,6 +1,8 @@
 #include "eval/locale_text.h"
 
 #include <cstddef>
+#include <cstdlib>
+#include <string>
 
 #include "eval/eval_profile_scope.h"
 #include "excel_locale.h"
@@ -17,6 +19,14 @@ std::string locale_number_text(double value) {
   }
   std::string out;
   format_double(out, value);
+  // Excel keeps 14 significant digits once the decimal exponent reaches 99 in magnitude.
+  if (const std::size_t e = out.find('E'); e != std::string::npos) {
+    const int exponent = std::abs(std::atoi(out.c_str() + e + 1));
+    if (exponent >= 99) {
+      out.clear();
+      format_double(out, value, 14);
+    }
+  }
   const char separator = locale_facts(current_eval_profile()).decimal_separator;
   if (separator != '.') {
     for (char& c : out) {

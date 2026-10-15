@@ -30,6 +30,9 @@ std::string fixed_string(double v, int frac_digits);
 /// Equivalent of `snprintf(buf, cap, "%.*e", frac_digits, v)`.
 int format_exponential(char* buf, std::size_t cap, double v, int frac_digits);
 
+/// `format_exponential`, except that an exact decimal tie rounds toward zero.
+int format_exponential_tie_toward_zero(char* buf, std::size_t cap, double v, int frac_digits);
+
 /// Equivalent of `snprintf(buf, cap, "%.*g", precision, v)`; a precision of 0
 /// is treated as 1.
 int format_general(char* buf, std::size_t cap, double v, int precision);

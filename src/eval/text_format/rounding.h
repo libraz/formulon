@@ -9,6 +9,7 @@
 #include <cstring>
 #include <string_view>
 
+#include "utils/double_format.h"
 #include "utils/double_parse.h"
 #include "utils/number_text.h"
 
@@ -48,7 +49,8 @@ inline double round_display_decimal(double value, int decimals) noexcept {
     return value;
   }
   char text[32];
-  const int written = format_exponential(text, sizeof(text), std::fabs(value), kExcelSignificantDigits - 1);
+  const int written = format_exponential(
+      text, sizeof(text), excel_decimal_view(std::fabs(value), kExcelSignificantDigits), kExcelSignificantDigits - 1);
   if (written <= 0 || static_cast<std::size_t>(written) >= sizeof(text)) {
     return value;
   }

@@ -20,6 +20,7 @@
 #include "eval/text_format/render_fraction.h"
 #include "eval/text_format/rounding.h"
 #include "excel_locale.h"
+#include "utils/double_format.h"
 #include "utils/double_parse.h"
 #include "utils/number_text.h"
 #include "utils/subnormal_flush.h"
@@ -36,11 +37,23 @@ namespace {
 // is always at least `"0"`).
 //
 // This helper does not handle scientific notation; see `render_scientific`.
+// Decimal exponent of the leading digit of `v`'s 15-significant-digit decimal. log10 rounds
+// 999999999999999 up to exactly 15.
+int decimal_exponent15(double v) {
+  char buf[48];
+  const int n =
+      format_exponential(buf, sizeof(buf), excel_decimal_view(v, kExcelSignificantDigits), kExcelSignificantDigits - 1);
+  const std::string_view text(buf, n > 0 ? static_cast<std::size_t>(n) : 0U);
+  const std::size_t e = text.find('e');
+  return e == std::string_view::npos ? 0 : static_cast<int>(parse_double_prefix(text.substr(e + 1U)).value);
+}
+
 // Returns the 15-significant-digit decimal of `v` divided by 10^exponent. Shifting the exponent of that text keeps
 // Excel's display view (ties decided on 15 digits) and avoids the ULP drift of 219 repeated multiplications.
 double shift_decimal_exponent(double v, int exponent) {
   char buf[48];
-  const int n = format_exponential(buf, sizeof(buf), v, kExcelSignificantDigits - 1);
+  const int n =
+      format_exponential(buf, sizeof(buf), excel_decimal_view(v, kExcelSignificantDigits), kExcelSignificantDigits - 1);
   const std::string_view text(buf, n > 0 ? static_cast<std::size_t>(n) : 0U);
   const std::size_t e = text.find('e');
   if (e == std::string_view::npos) {
@@ -323,8 +336,7 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
       exponent = -1;
       mantissa = 0.0;
     } else if (mantissa != 0.0) {
-      const double abs_m = std::fabs(mantissa);
-      const int raw_exponent = static_cast<int>(std::floor(std::log10(abs_m)));
+      const int raw_exponent = decimal_exponent15(std::fabs(mantissa));
       // Floor division keeps values in (-1, 0) in the preceding group.
       int quotient = raw_exponent / integer_group;
       if (raw_exponent < 0 && raw_exponent % integer_group != 0) {

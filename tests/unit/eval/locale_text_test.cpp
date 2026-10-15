@@ -27,6 +27,14 @@ TEST(LocaleText, EnglishAndJapaneseKeepTheInvariantSpelling) {
   }
 }
 
+TEST(LocaleText, ExponentOf99OrMoreKeeps14Digits) {
+  const ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  EXPECT_EQ(locale_number_text(1.23456789012345E+98), "1.23456789012345E+98");
+  EXPECT_EQ(locale_number_text(1.23456789012345E+99), "1.2345678901235E+99");
+  EXPECT_EQ(locale_number_text(1.23456789012345E-99), "1.2345678901235E-99");
+  EXPECT_EQ(locale_number_text(9.99999999999999E+99), "1E+100");
+}
+
 TEST(LocaleText, GermanUsesItsSeparatorAndNames) {
   const ScopedEvalProfile scope(ExcelProfile{ExcelHost::kMac365, ExcelLocale::kDeDE});
   // locale_tokens.general_tiny_number_text, bool_text_true / bool_text_false

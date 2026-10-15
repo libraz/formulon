@@ -10,6 +10,7 @@
 #include <cstring>
 #include <string>
 
+#include "utils/double_parse.h"
 #include "utils/number_text.h"
 
 namespace formulon {
@@ -56,7 +57,57 @@ void append_excel_exponent(std::string& out, int exp) {
 
 }  // namespace
 
-void format_double(std::string& out, double v) {
+double excel_decimal_view(double v, int significant_digits) noexcept {
+  if (v == 0.0 || !std::isfinite(v) || significant_digits < 1 || significant_digits > 15) {
+    return v;
+  }
+  char text[40];
+  const int written = format_exponential_tie_toward_zero(text, sizeof(text), std::fabs(v), 14);
+  if (written <= 0 || static_cast<std::size_t>(written) >= sizeof(text)) {
+    return v;
+  }
+  char digits[15];
+  int count = 0;
+  int cursor = 0;
+  for (; cursor < written && text[cursor] != 'e'; ++cursor) {
+    if (text[cursor] >= '0' && text[cursor] <= '9' && count < 15) {
+      digits[count++] = text[cursor];
+    }
+  }
+  if (count < 15 || cursor >= written) {
+    return v;
+  }
+  long long exponent = static_cast<long long>(
+      parse_double_prefix(std::string_view(text + cursor + 1, static_cast<std::size_t>(written - cursor - 1))).value);
+  int keep = 15;
+  if (significant_digits == 14) {
+    keep = 14;
+    if (digits[14] >= '5') {
+      int i = keep - 1;
+      for (; i >= 0 && digits[i] == '9'; --i) {
+        digits[i] = '0';
+      }
+      if (i >= 0) {
+        ++digits[i];
+      } else {
+        digits[0] = '1';
+        ++exponent;
+      }
+    }
+  }
+  char rebuilt[40];
+  std::memcpy(rebuilt, digits, static_cast<std::size_t>(keep));
+  rebuilt[keep] = 'e';
+  const int m =
+      format_signed(rebuilt + keep + 1, sizeof(rebuilt) - static_cast<std::size_t>(keep) - 1, exponent - keep + 1);
+  if (m <= 0) {
+    return v;
+  }
+  const double snapped = parse_double_prefix(std::string_view(rebuilt, static_cast<std::size_t>(keep + 1 + m))).value;
+  return std::isfinite(snapped) ? std::copysign(snapped, v) : v;
+}
+
+void format_double(std::string& out, double v, int significant_digits) {
   if (std::isnan(v)) {
     out.append("nan");
     return;
@@ -72,7 +123,7 @@ void format_double(std::string& out, double v) {
   }
 
   const bool negative = v < 0.0;
-  const double abs_v = negative ? -v : v;
+  const double abs_v = excel_decimal_view(negative ? -v : v, significant_digits);
 
   // Excel's General format renders to at most 15 significant digits;
   // %.15g performs IEEE round-to-nearest-even on the shortest form,
@@ -80,7 +131,7 @@ void format_double(std::string& out, double v) {
   // divergences at 16+ sig digits — e.g. literal `1234567890123456` —
   // are documented in tests/divergence.yaml.)
   char buf[40];
-  int n = format_general(buf, sizeof(buf), abs_v, 15);
+  int n = format_general(buf, sizeof(buf), abs_v, significant_digits);
   if (n <= 0 || static_cast<std::size_t>(n) >= sizeof(buf)) {
     // Defensive fallback: should not happen for finite doubles.
     if (negative) {

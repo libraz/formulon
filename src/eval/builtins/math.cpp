@@ -17,6 +17,7 @@
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
+#include "utils/double_format.h"
 #include "utils/expected.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
@@ -238,7 +239,8 @@ Value Round(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return round_to_digits(
       args, 2,
       [](double x, double factor) {
-        const double scaled = x * factor;
+        // Ties at the 16th digit follow Excel's 15-digit decimal view (100000000000001.5 rounds to ...01).
+        const double scaled = excel_decimal_view(x, 15) * factor;
         const double bias = std::copysign(std::fabs(scaled) * 2.0 * std::numeric_limits<double>::epsilon(), scaled);
         return to_finite_value(std::round(scaled + bias) / factor);
       },

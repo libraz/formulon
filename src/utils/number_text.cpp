@@ -160,7 +160,7 @@ void fixed_digits(double v, int frac, Digits* g) {
 }
 
 /// Digits of |v| rounded to `n` significant digits (printf `%e` / `%g`).
-void precision_digits(double v, int n, Digits* g) {
+void precision_digits(double v, int n, Digits* g, bool tie_toward_zero = false) {
   if (v == 0.0) {
     g->d[0] = '0';
     g->len = 1;
@@ -184,7 +184,11 @@ void precision_digits(double v, int n, Digits* g) {
     return;
   }
   if (is_tie_at(v, n - g->point)) {
-    round_tie_even(g, n);
+    if (tie_toward_zero) {
+      g->len = n;
+    } else {
+      round_tie_even(g, n);
+    }
     return;
   }
   to_ascii(v, DoubleToStringConverter::PRECISION, n, g);
@@ -315,6 +319,20 @@ int format_exponential(char* buf, std::size_t cap, double v, int frac_digits) {
   }
   Digits g;
   precision_digits(std::fabs(v), frac_digits + 1, &g);
+  put_exponential(&out, g, frac_digits);
+  return out.finish();
+}
+
+int format_exponential_tie_toward_zero(char* buf, std::size_t cap, double v, int frac_digits) {
+  Out out(buf, cap);
+  if (!put_sign_or_special(&out, v)) {
+    return out.finish();
+  }
+  if (frac_digits < 0) {
+    frac_digits = 0;
+  }
+  Digits g;
+  precision_digits(std::fabs(v), frac_digits + 1, &g, /*tie_toward_zero=*/true);
   put_exponential(&out, g, frac_digits);
   return out.finish();
 }
