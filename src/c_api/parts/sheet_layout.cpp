@@ -38,6 +38,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
+using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::FragmentValidation;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -374,11 +375,7 @@ extern "C" fm_status_t fm_sheet_remap_range_style(fm_workbook_t* wb, size_t shee
   for (size_t i = 0; i < count; ++i) {
     map[i] = {from_xfs[i], to_xfs[i]};
   }
-  auto r = wb->workbook().remap_range_style(sheet_index, rect, std::move(map));
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().remap_range_style(sheet_index, rect, std::move(map)));
 }
 
 extern "C" fm_status_t fm_sheet_snapshot_range_style(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
@@ -417,11 +414,7 @@ extern "C" fm_status_t fm_sheet_restore_range_style(fm_workbook_t* wb, size_t sh
   if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
     return rc;
   }
-  auto r = wb->workbook().restore_range_style(sheet_index, bytes, len);
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().restore_range_style(sheet_index, bytes, len));
 }
 
 extern "C" fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row) {

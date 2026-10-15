@@ -23,6 +23,7 @@
 using formulon::effective_num_fmt;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
@@ -60,11 +61,7 @@ extern "C" fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, u
   if (wb == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cell_set_xf_index: wb is NULL");
   }
-  auto r = wb->workbook().set_cell_xf_index(sheet, row, col, xf_index);
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().set_cell_xf_index(sheet, row, col, xf_index));
 }
 
 extern "C" fm_status_t fm_cell_clear_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col) {
@@ -72,11 +69,7 @@ extern "C" fm_status_t fm_cell_clear_xf_index(fm_workbook_t* wb, uint32_t sheet,
   if (wb == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cell_clear_xf_index: wb is NULL");
   }
-  auto r = wb->workbook().clear_cell_xf_index(sheet, row, col);
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().clear_cell_xf_index(sheet, row, col));
 }
 
 extern "C" fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t first_row,

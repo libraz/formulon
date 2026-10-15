@@ -87,6 +87,10 @@ fm_status_t set_last_error(const formulon::Error& err) {
   return static_cast<fm_status_t>(err.code);
 }
 
+fm_status_t finish_status(const formulon::Expected<void, formulon::Error>& r) {
+  return r ? 0 : set_last_error(r.error());
+}
+
 fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message, std::string context) {
   formulon::Error err;
   err.code = code;

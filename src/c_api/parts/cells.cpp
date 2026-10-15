@@ -38,6 +38,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::TextStore;
@@ -247,11 +248,7 @@ extern "C" fm_status_t fm_workbook_set_blank(fm_workbook_t* wb, size_t sheet_ind
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_blank"); rc != 0) {
     return rc;
   }
-  auto r = wb->workbook().set_cell_value(sheet_index, row, col, formulon::Value::blank());
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().set_cell_value(sheet_index, row, col, formulon::Value::blank()));
 }
 
 extern "C" fm_status_t fm_workbook_set_formula(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,

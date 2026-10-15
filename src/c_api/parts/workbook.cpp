@@ -30,6 +30,7 @@ using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
+using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
@@ -328,11 +329,7 @@ extern "C" fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, uint32_t inde
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_rename_sheet: NULL argument");
   }
-  auto r = wb->workbook().rename_sheet(index, std::string(new_name));
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().rename_sheet(index, std::string(new_name)));
 }
 
 namespace {
@@ -355,11 +352,7 @@ extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const cha
   if (auto rc = check_defined_name_formula("fm_workbook_set_defined_name", name, formula, &stored); rc != 0) {
     return rc;
   }
-  auto r = wb->workbook().set_defined_name(std::string(name), std::move(stored));
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().set_defined_name(std::string(name), std::move(stored)));
 }
 
 extern "C" fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, const char* name, const char* formula,
@@ -373,11 +366,7 @@ extern "C" fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, co
   if (auto rc = check_defined_name_formula("fm_workbook_set_defined_name_scoped", name, formula, &stored); rc != 0) {
     return rc;
   }
-  auto r = wb->workbook().set_defined_name_scoped(std::string(name), std::move(stored), local_sheet_id);
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().set_defined_name_scoped(std::string(name), std::move(stored), local_sheet_id));
 }
 
 extern "C" fm_status_t fm_workbook_insert_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count) {
@@ -386,11 +375,7 @@ extern "C" fm_status_t fm_workbook_insert_rows(fm_workbook_t* wb, uint32_t sheet
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_insert_rows: NULL argument");
   }
-  auto r = wb->workbook().insert_rows(sheet, row, count);
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().insert_rows(sheet, row, count));
 }
 
 extern "C" fm_status_t fm_workbook_delete_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count) {
@@ -399,11 +384,7 @@ extern "C" fm_status_t fm_workbook_delete_rows(fm_workbook_t* wb, uint32_t sheet
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_delete_rows: NULL argument");
   }
-  auto r = wb->workbook().delete_rows(sheet, row, count);
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().delete_rows(sheet, row, count));
 }
 
 extern "C" fm_status_t fm_workbook_insert_cols(fm_workbook_t* wb, uint32_t sheet, uint32_t col, uint32_t count) {
@@ -412,11 +393,7 @@ extern "C" fm_status_t fm_workbook_insert_cols(fm_workbook_t* wb, uint32_t sheet
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_insert_cols: NULL argument");
   }
-  auto r = wb->workbook().insert_cols(sheet, col, count);
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().insert_cols(sheet, col, count));
 }
 
 extern "C" fm_status_t fm_workbook_delete_cols(fm_workbook_t* wb, uint32_t sheet, uint32_t col, uint32_t count) {
@@ -425,11 +402,7 @@ extern "C" fm_status_t fm_workbook_delete_cols(fm_workbook_t* wb, uint32_t sheet
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_delete_cols: NULL argument");
   }
-  auto r = wb->workbook().delete_cols(sheet, col, count);
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().delete_cols(sheet, col, count));
 }
 
 // ---------------------------------------------------------------------------

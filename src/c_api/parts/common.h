@@ -80,6 +80,9 @@ void clear_last_error();
 // status code. The Error code is mirrored bit-for-bit into `fm_status_t`.
 fm_status_t set_last_error(const formulon::Error& err);
 
+// Maps a void result to a status: 0 on success, else `set_last_error` of its error.
+fm_status_t finish_status(const formulon::Expected<void, formulon::Error>& r);
+
 // Convenience wrapper for the very common "binding misuse" case (NULL
 // pointer argument, unknown handle, ...). `context` is appended verbatim;
 // callers should keep it short and machine-friendly (key=value).

@@ -22,9 +22,9 @@
 
 using formulon::effective_num_fmt;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::num_fmt_id_known;
 using formulon::c_api::parts::set_binding_error;
-using formulon::c_api::parts::set_last_error;
 
 namespace {
 
@@ -641,11 +641,7 @@ extern "C" fm_status_t fm_styles_remove_cell_style(fm_workbook_t* wb, const char
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_styles_remove_cell_style: NULL argument");
   }
-  auto r = formulon::remove_cell_style(wb->workbook().mutable_styles(), name);
-  if (!r) {
-    return set_last_error(r.error());
-  }
-  return 0;
+  return finish_status(formulon::remove_cell_style(wb->workbook().mutable_styles(), name));
 }
 
 extern "C" fm_status_t fm_styles_add_batch(fm_workbook_t* wb, const fm_styles_batch* batch) {
