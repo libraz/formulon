@@ -690,6 +690,24 @@ TEST(DatevalueYearLess, FullYearFormStillTakesPriorityOverMonthDay) {
   EXPECT_EQ(v.as_number(), 45366.0);  // 2024-03-15, independent of the pinned year
 }
 
+TEST(DatevalueYearLess, PinnedClockReachesContextFreeCoercion) {
+  const Value plus = EvalSourcePinned("=\"3/15\"+0");
+  ASSERT_TRUE(plus.is_number());
+  EXPECT_EQ(plus.as_number(), 46096.0);
+  const Value abs = EvalSourcePinned("=ABS(\"3/15\")");
+  ASSERT_TRUE(abs.is_number());
+  EXPECT_EQ(abs.as_number(), 46096.0);
+
+  // Feb 29 exists only in a leap pinned year, so TIMEVALUE shows which year it read.
+  constexpr date_time::CivilTime kLeapYear{{2024, 4U, 23U}, {15U, 30U, 45U}};
+  const Value leap = EvalSourcePinned("=TIMEVALUE(\"2/29 6:00\")", kLeapYear);
+  ASSERT_TRUE(leap.is_number());
+  EXPECT_EQ(leap.as_number(), 0.25);
+  const Value common = EvalSourcePinned("=TIMEVALUE(\"2/29 6:00\")");
+  ASSERT_TRUE(common.is_error());
+  EXPECT_EQ(common.as_error(), ErrorCode::Value);
+}
+
 TEST(DatevalueYearLess, WithoutAPinnedClockStillUsesTheHostYear) {
   // The contextless entry point (no EvalContext offered at all) falls back
   // to the host clock rather than rejecting the year-less form outright.
@@ -976,12 +994,15 @@ TEST(DateTextJaJp, MixedFractions) {
       {"=VALUE(\"1 1/2%\")", 0.015},
       {"=VALUE(\"1,000 1/2\")", 1000.5},
       {"=VALUE(\"1 12345/1\")", 12346.0},
+      {"=VALUE(\"1 32767/32767\")", 2.0},
+      {"=VALUE(\"1 00001/2\")", 1.5},
       {"=VALUE(\"\xEF\xBC\x91\xE3\x80\x80\xEF\xBC\x91\xEF\xBC\x8F\xEF\xBC\x92\")", 1.5},
       {"=\"1 1/2\"+0", 1.5},
   };
   ExpectJaNumbers(cases, sizeof(cases) / sizeof(cases[0]));
-  const char* const rejected[] = {"=VALUE(\"1 1/0\")",      "=VALUE(\"1  1/2\")", "=VALUE(\"1.5 1/2\")",
-                                  "=VALUE(\"1 1/2 1:30\")", "=VALUE(\"1 1 /2\")", "=VALUE(\"1 1/2e1\")"};
+  const char* const rejected[] = {"=VALUE(\"1 1/0\")",      "=VALUE(\"1  1/2\")",    "=VALUE(\"1.5 1/2\")",
+                                  "=VALUE(\"1 1/2 1:30\")", "=VALUE(\"1 1 /2\")",    "=VALUE(\"1 1/2e1\")",
+                                  "=VALUE(\"1 32768/1\")",  "=VALUE(\"1 1/32768\")", "=VALUE(\"1 000001/2\")"};
   ExpectJaValueErrors(rejected, sizeof(rejected) / sizeof(rejected[0]));
 }
 

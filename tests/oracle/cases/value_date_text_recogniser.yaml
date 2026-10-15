@@ -185,3 +185,77 @@ cases:
     formula: "=\" 1/2\"+0"
   - id: coerce_mixed_fraction
     formula: "=\"1 1/2\"+0"
+
+  # -- era boundaries (Meiji accepted from 1900) ----------------------------
+  - id: era_meiji_33_first_accepted_year
+    formula: "=DATEVALUE(\"明治33年1月1日\")"
+  - id: era_meiji_32_before_1900_rejected
+    formula: "=VALUE(\"明治32年12月31日\")"
+  - id: era_meiji_45_last_day
+    formula: "=VALUE(\"明治45年7月29日\")"
+  - id: era_meiji_46_overruns
+    formula: "=VALUE(\"明治46年1月1日\")"
+  - id: era_meiji_letter_form
+    formula: "=VALUE(\"M45.7.29\")"
+  - id: era_taisho_1_before_start
+    formula: "=VALUE(\"大正1年7月29日\")"
+  - id: era_showa_64_after_end
+    formula: "=VALUE(\"昭和64年1月8日\")"
+  - id: era_heisei_1_before_start
+    formula: "=VALUE(\"平成1年1月7日\")"
+  - id: era_gannen_rejected
+    formula: "=VALUE(\"令和元年5月1日\")"
+
+  # -- mixed fraction part limits -------------------------------------------
+  - id: mixed_fraction_parts_at_32767
+    formula: "=VALUE(\"1 32767/32767\")"
+  - id: mixed_fraction_numerator_32768_rejected
+    formula: "=VALUE(\"1 32768/1\")"
+  - id: mixed_fraction_denominator_32768_rejected
+    formula: "=VALUE(\"1 1/32768\")"
+  - id: mixed_fraction_five_digits_leading_zeros
+    formula: "=VALUE(\"1 00001/2\")"
+  - id: mixed_fraction_six_digits_rejected
+    formula: "=VALUE(\"1 000001/2\")"
+  - id: mixed_fraction_zero_over_zero_rejected
+    formula: "=VALUE(\"1 0/0\")"
+  - id: mixed_fraction_large_whole
+    formula: "=VALUE(\"99999999999999 1/2\")"
+
+  # -- criteria reuse the recogniser (year-less = current year) -------------
+  - id: criteria_year_less_current_year
+    setup:
+      B1: =DATE(YEAR(TODAY()),1,2)
+    formula: "=COUNTIF(B1,\"1/2\")"
+  - id: criteria_year_less_other_year
+    setup:
+      B1: =DATE(YEAR(TODAY())-1,1,2)
+    formula: "=COUNTIF(B1,\"1/2\")"
+  - id: criteria_year_less_ge
+    setup:
+      B1: =DATE(YEAR(TODAY()),1,1)
+    formula: "=COUNTIF(B1,\">=1/2\")"
+  - id: criteria_month_name
+    setup:
+      B1: =DATE(YEAR(TODAY()),1,2)
+    formula: "=SUMIF(B1,\"Jan 2\",B1)-B1"
+  - id: criteria_kanji_month_day
+    setup:
+      B1: =DATE(YEAR(TODAY()),1,2)
+    formula: "=COUNTIF(B1,\"1月2日\")"
+  - id: criteria_date_time
+    setup:
+      B1: =DATE(YEAR(TODAY()),1,2)+0.5
+    formula: "=COUNTIF(B1,\"1/2 12:00\")"
+  - id: criteria_pair_fallback_is_m_d
+    setup:
+      B1: =DATE(YEAR(TODAY()),1,2)
+    formula: "=COUNTIF(B1,\"02/1\")"
+  - id: criteria_text_cell_matches_text
+    setup:
+      B1: "=\"1/2\""
+    formula: "=COUNTIF(B1,\"1/2\")"
+  - id: criteria_mixed_fraction
+    setup:
+      B1: 1.5
+    formula: "=COUNTIF(B1,\"1 1/2\")"

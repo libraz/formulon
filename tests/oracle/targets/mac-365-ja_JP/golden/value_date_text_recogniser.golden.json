@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-15T11:14:31Z"
+    "generated_at": "2026-10-15T16:59:46Z"
   },
   "tolerance": {
     "abs": 1e-10,
@@ -749,6 +749,276 @@
       "expect": {
         "kind": "number",
         "value": 1.5
+      }
+    },
+    {
+      "id": "era_meiji_33_first_accepted_year",
+      "formula": "=DATEVALUE(\"明治33年1月1日\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "era_meiji_32_before_1900_rejected",
+      "formula": "=VALUE(\"明治32年12月31日\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "era_meiji_45_last_day",
+      "formula": "=VALUE(\"明治45年7月29日\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4594.0
+      }
+    },
+    {
+      "id": "era_meiji_46_overruns",
+      "formula": "=VALUE(\"明治46年1月1日\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4750.0
+      }
+    },
+    {
+      "id": "era_meiji_letter_form",
+      "formula": "=VALUE(\"M45.7.29\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4594.0
+      }
+    },
+    {
+      "id": "era_taisho_1_before_start",
+      "formula": "=VALUE(\"大正1年7月29日\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4594.0
+      }
+    },
+    {
+      "id": "era_showa_64_after_end",
+      "formula": "=VALUE(\"昭和64年1月8日\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32516.0
+      }
+    },
+    {
+      "id": "era_heisei_1_before_start",
+      "formula": "=VALUE(\"平成1年1月7日\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32515.0
+      }
+    },
+    {
+      "id": "era_gannen_rejected",
+      "formula": "=VALUE(\"令和元年5月1日\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mixed_fraction_parts_at_32767",
+      "formula": "=VALUE(\"1 32767/32767\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "mixed_fraction_numerator_32768_rejected",
+      "formula": "=VALUE(\"1 32768/1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mixed_fraction_denominator_32768_rejected",
+      "formula": "=VALUE(\"1 1/32768\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mixed_fraction_five_digits_leading_zeros",
+      "formula": "=VALUE(\"1 00001/2\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "mixed_fraction_six_digits_rejected",
+      "formula": "=VALUE(\"1 000001/2\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mixed_fraction_zero_over_zero_rejected",
+      "formula": "=VALUE(\"1 0/0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mixed_fraction_large_whole",
+      "formula": "=VALUE(\"99999999999999 1/2\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99999999999999.5
+      }
+    },
+    {
+      "id": "criteria_year_less_current_year",
+      "formula": "=COUNTIF(B1,\"1/2\")",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=DATE(YEAR(TODAY()),1,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "criteria_year_less_other_year",
+      "formula": "=COUNTIF(B1,\"1/2\")",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=DATE(YEAR(TODAY())-1,1,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "criteria_year_less_ge",
+      "formula": "=COUNTIF(B1,\">=1/2\")",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=DATE(YEAR(TODAY()),1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "criteria_month_name",
+      "formula": "=SUMIF(B1,\"Jan 2\",B1)-B1",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=DATE(YEAR(TODAY()),1,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "criteria_kanji_month_day",
+      "formula": "=COUNTIF(B1,\"1月2日\")",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=DATE(YEAR(TODAY()),1,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "criteria_date_time",
+      "formula": "=COUNTIF(B1,\"1/2 12:00\")",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=DATE(YEAR(TODAY()),1,2)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "criteria_pair_fallback_is_m_d",
+      "formula": "=COUNTIF(B1,\"02/1\")",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=DATE(YEAR(TODAY()),1,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "criteria_text_cell_matches_text",
+      "formula": "=COUNTIF(B1,\"1/2\")",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=\"1/2\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "criteria_mixed_fraction",
+      "formula": "=COUNTIF(B1,\"1 1/2\")",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
       }
     }
   ]

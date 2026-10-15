@@ -163,12 +163,12 @@ bool canonical_number(std::string_view s, char decimal_sep, char group_sep, std:
   return seen_digit && !(seen_group_sep && !seen_point && !seen_exp && !group_ok());
 }
 
-// The `a/b` of a mixed fraction: plain digits, each part at most 32767, and a
-// non-zero denominator.
+// The `a/b` of a mixed fraction: plain digits, each part at most five digits
+// (leading zeros count) and at most 32767, and a non-zero denominator.
 bool parse_fraction(std::string_view s, int* numerator, int* denominator) noexcept {
   const std::size_t slash = s.find('/');
   const auto part = [](std::string_view digits, int* value) {
-    if (digits.empty()) {
+    if (digits.empty() || digits.size() > 5) {
       return false;
     }
     int v = 0;
