@@ -9,6 +9,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -189,6 +190,17 @@ TEST(BuiltinsDatabase, DSumEmptyMatchReturnsZero) {
   const Value v = EvalIn("=DSUM(A1:C5, \"Sales\", E1:E2)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsDatabase, DSumAllBlankCriterionRowMatchesEveryRecord) {
+  Workbook wb = MakeFruitWorkbook();
+  auto& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 4, Value::text("Fruit"));
+  sheet.set_cell_value(1, 4, Value::blank());
+
+  const Value v = EvalIn("=DSUM(A1:C5, \"Sales\", E1:E2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 650.0);
 }
 
 TEST(BuiltinsDatabase, HeaderOnlyDatabaseReturnsValueError) {
@@ -621,6 +633,105 @@ TEST(BuiltinsDatabase, CriterionHeaderNotFoundDisjunctFails) {
   const Value v = EvalIn("=DSUM(A1:C5, \"Sales\", E1:E2)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsDatabase, UnknownNonblankCriterionRowDoesNotHideLaterOrRows) {
+  Workbook wb = MakeFruitWorkbook();
+  auto& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 4, Value::text("Fruit"));
+  sheet.set_cell_value(0, 5, Value::text("NotAColumn"));
+  sheet.set_cell_value(0, 6, Value::text("Region"));
+  // The first OR row is impossible because its nonblank criterion refers
+  // to a missing database header. The second row is still evaluated and
+  // matches the East records (Apple 100 + Pear 50).
+  sheet.set_cell_value(1, 4, Value::text("Apple"));
+  sheet.set_cell_value(1, 5, Value::text("x"));
+  sheet.set_cell_value(2, 6, Value::text("East"));
+
+  const Value v = EvalIn("=DSUM(A1:C5, \"Sales\", E1:G3)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 150.0);
+}
+
+TEST(BuiltinsDatabase, DuplicateCriterionHeaderUsesFirstDatabaseColumn) {
+  Workbook wb = Workbook::create();
+  auto& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::text("Tag"));
+  sheet.set_cell_value(0, 1, Value::text("Tag"));
+  sheet.set_cell_value(0, 2, Value::text("Sales"));
+  sheet.set_cell_value(1, 0, Value::text("Alpha"));
+  sheet.set_cell_value(1, 1, Value::text("Beta"));
+  sheet.set_cell_value(1, 2, Value::number(10.0));
+  sheet.set_cell_value(2, 0, Value::text("Beta"));
+  sheet.set_cell_value(2, 1, Value::text("Alpha"));
+  sheet.set_cell_value(2, 2, Value::number(20.0));
+  sheet.set_cell_value(0, 4, Value::text("Tag"));
+  sheet.set_cell_value(1, 4, Value::text("Alpha"));
+
+  // Both database columns share the same label. Excel resolves the
+  // criteria header to the first matching column, whose Alpha row is 10.
+  const Value v = EvalIn("=DSUM(A1:C3, \"Sales\", E1:E2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 10.0);
+}
+
+TEST(BuiltinsDatabase, NumericFieldSelectorRejectsHugeAndNonFiniteValues) {
+  Workbook wb = MakeFruitWorkbook();
+  SetSingleFruitCriterion(wb, "Apple");
+  auto& sheet = wb.sheet(0);
+  const double invalid_selectors[] = {std::numeric_limits<double>::max(), -std::numeric_limits<double>::max(),
+                                      std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity(),
+                                      std::numeric_limits<double>::quiet_NaN()};
+
+  for (const double selector : invalid_selectors) {
+    SCOPED_TRACE(selector);
+    sheet.set_cell_value(0, 5, Value::number(selector));
+    const Value v = EvalIn("=DSUM(A1:C5, F1, E1:E2)", wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_error());
+    EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  }
+}
+
+TEST(BuiltinsDatabase, NumericFieldSelectorPreservesNearIntegerSnapping) {
+  Workbook wb = MakeFruitWorkbook();
+  SetSingleFruitCriterion(wb, "Apple");
+  auto& sheet = wb.sheet(0);
+
+  // A value just below 1 snaps to the first database column.
+  sheet.set_cell_value(0, 5, Value::number(0.9999999));
+  const Value first_column = EvalIn("=DCOUNTA(A1:C5, F1, E1:E2)", wb, wb.sheet(0));
+  ASSERT_TRUE(first_column.is_number());
+  EXPECT_DOUBLE_EQ(first_column.as_number(), 2.0);
+
+  // Just below 3 snaps upward to the Sales column. A value outside the
+  // snap tolerance truncates to column 2, which contains only text.
+  sheet.set_cell_value(0, 5, Value::number(2.9999999));
+  const Value snapped = EvalIn("=DSUM(A1:C5, F1, E1:E2)", wb, wb.sheet(0));
+  ASSERT_TRUE(snapped.is_number());
+  EXPECT_DOUBLE_EQ(snapped.as_number(), 300.0);
+
+  sheet.set_cell_value(0, 5, Value::number(2.999999));
+  const Value unsnapped = EvalIn("=DSUM(A1:C5, F1, E1:E2)", wb, wb.sheet(0));
+  ASSERT_TRUE(unsnapped.is_number());
+  EXPECT_DOUBLE_EQ(unsnapped.as_number(), 0.0);
+}
+
+TEST(BuiltinsDatabase, NumericFieldSelectorAllowsFractionalLastColumn) {
+  Workbook wb = Workbook::create();
+  auto& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::text("Tag"));
+  sheet.set_cell_value(0, 1, Value::text("Sales"));
+  sheet.set_cell_value(1, 0, Value::text("Alpha"));
+  sheet.set_cell_value(1, 1, Value::number(10.0));
+  sheet.set_cell_value(2, 0, Value::text("Beta"));
+  sheet.set_cell_value(2, 1, Value::number(20.0));
+  sheet.set_cell_value(0, 3, Value::text("Tag"));
+  sheet.set_cell_value(1, 3, Value::text("Alpha"));
+  sheet.set_cell_value(0, 5, Value::number(2.9));
+
+  const Value v = EvalIn("=DSUM(A1:B3, F1, D1:D2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 10.0);
 }
 
 // ---------------------------------------------------------------------------

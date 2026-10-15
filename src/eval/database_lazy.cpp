@@ -13,10 +13,12 @@
 
 #include "eval/database_lazy.h"
 
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "eval/builtins/numeric_helpers.h"
@@ -96,12 +98,17 @@ bool resolve_field_column(const Value& field_value, const std::vector<Value>& db
     // is rejected with `#VALUE!`.
     const double raw = field_value.is_boolean() ? (field_value.as_boolean() ? 1.0 : 0.0) : field_value.as_number();
     // Excel snaps a near integer up, then truncates toward zero.
-    const long long idx = static_cast<long long>(snap_near_integer(raw));
-    if (idx < 1 || static_cast<std::uint64_t>(idx) > db_cols) {
+    const double snapped = snap_near_integer(raw);
+    if (!std::isfinite(snapped)) {
       *out_err = Value::error(ErrorCode::Value);
       return false;
     }
-    *out_col_index = static_cast<std::uint32_t>(idx - 1);
+    const double idx = std::trunc(snapped);
+    if (idx < 1.0 || idx > static_cast<double>(db_cols)) {
+      *out_err = Value::error(ErrorCode::Value);
+      return false;
+    }
+    *out_col_index = static_cast<std::uint32_t>(idx - 1.0);
     return true;
   }
   if (field_value.is_text()) {
@@ -173,62 +180,82 @@ std::uint32_t find_db_column(const Value& header_needle, const std::vector<Value
   return db_cols;
 }
 
-// Tests whether database row `r` (0-indexed into `db_cells`) matches the
-// criterion row `cr` of `criteria` (0-indexed into `crit_cells`). A
-// criterion row matches when, for every criteria column `j`, either:
-//   - `criteria[cr][j]` is blank (this criteria column is a no-op for
-//     this row), OR
-//   - `criteria[cr][j]` is non-blank AND the database column whose
-//     header matches `criteria[0][j]` satisfies
-//     `matches_criterion(db_cell, parse_criterion(crit_cell))`.
-//
-// If the criteria column's header has no corresponding database header
-// AND the row's cell is non-blank, the criterion cannot be satisfied and
-// the row fails. An entirely-blank criterion row matches every record
-// (empty AND is true).
-bool record_matches_criterion_row(std::uint32_t r, std::uint32_t cr, const std::vector<Value>& db_cells,
-                                  std::uint32_t db_cols, const std::vector<Value>& crit_cells, std::uint32_t crit_cols,
-                                  ExcelProfile profile) {
-  for (std::uint32_t j = 0; j < crit_cols; ++j) {
-    const Value& cell = crit_cells[(static_cast<std::size_t>(cr) * crit_cols) + j];
-    if (cell.is_blank()) {
-      continue;
-    }
-    const Value& header = crit_cells[j];
-    const std::uint32_t db_col = find_db_column(header, db_cells, db_cols, profile);
-    if (db_col == db_cols) {
-      // Criterion references a column the database does not have, and
-      // the cell is non-blank. This disjunct cannot be satisfied.
-      return false;
-    }
-    const Value& db_cell = db_cells[(static_cast<std::size_t>(r) * db_cols) + db_col];
-    // Per Excel docs, D-function plain-text criteria are prefix-matched
-    // (case-insensitive): "Sm" finds rows that begin with "Sm" such as
-    // "Smith" and "Smithfield". `parse_criterion_dfunc` preserves every
-    // other criterion shape (numeric, comparator-prefixed, wildcard,
-    // error, blank).
-    const ParsedCriterion parsed = parse_criterion_dfunc(cell);
-    if (!matches_criterion(db_cell, parsed, profile)) {
-      return false;
+struct CompiledCriterionPredicate {
+  std::uint32_t db_col = 0;
+  ParsedCriterion criterion;
+};
+
+struct CompiledCriterionRow {
+  bool impossible = false;
+  std::vector<CompiledCriterionPredicate> predicates;
+};
+
+// Resolves every used criteria header and parses each non-blank criterion
+// once for this D-function evaluation. An unknown header makes only rows
+// that use it impossible; blank cells remain omitted predicates, so an
+// all-blank row is the empty AND and matches every record.
+std::vector<CompiledCriterionRow> compile_criteria(const std::vector<Value>& db_cells, std::uint32_t db_cols,
+                                                   const std::vector<Value>& crit_cells, std::uint32_t crit_rows,
+                                                   std::uint32_t crit_cols, ExcelProfile profile) {
+  std::vector<bool> used_columns(crit_cols, false);
+  for (std::uint32_t r = 1; r < crit_rows; ++r) {
+    for (std::uint32_t c = 0; c < crit_cols; ++c) {
+      if (!crit_cells[(static_cast<std::size_t>(r) * crit_cols) + c].is_blank()) {
+        used_columns[c] = true;
+      }
     }
   }
-  return true;
+
+  std::vector<std::uint32_t> db_column_for_criterion(crit_cols, db_cols);
+  for (std::uint32_t c = 0; c < crit_cols; ++c) {
+    if (used_columns[c]) {
+      db_column_for_criterion[c] = find_db_column(crit_cells[c], db_cells, db_cols, profile);
+    }
+  }
+
+  // `resolve_common` guarantees a header plus at least one criterion row.
+  assert(crit_rows >= 2U);
+  std::vector<CompiledCriterionRow> rows;
+  rows.reserve(crit_rows - 1U);
+  for (std::uint32_t r = 1; r < crit_rows; ++r) {
+    CompiledCriterionRow row;
+    for (std::uint32_t c = 0; c < crit_cols; ++c) {
+      const Value& cell = crit_cells[(static_cast<std::size_t>(r) * crit_cols) + c];
+      if (cell.is_blank()) {
+        continue;
+      }
+      const std::uint32_t db_col = db_column_for_criterion[c];
+      if (db_col == db_cols) {
+        // A non-blank criterion references a missing database column, so
+        // this OR row cannot match any record.
+        row.impossible = true;
+        break;
+      }
+      row.predicates.push_back({db_col, parse_criterion_dfunc(cell)});
+    }
+    rows.push_back(std::move(row));
+  }
+  return rows;
 }
 
-// Returns `true` iff database row `r` satisfies AT LEAST ONE criterion
-// row of `criteria`. Callers must already have rejected criteria tables
-// with fewer than two rows (header + at least one criterion row); this
-// function therefore treats a header-only block as a no-match. Mac Excel
-// 365 surfaces `#VALUE!` for that shape — see the `crit_rows < 2U` guard
-// in `resolve_common()`.
+// Returns `true` iff database row `r` satisfies at least one precompiled
+// OR row. Within a row every stored predicate must match; an empty
+// predicate list is an all-blank criterion row and matches every record.
 bool record_matches(std::uint32_t r, const std::vector<Value>& db_cells, std::uint32_t db_cols,
-                    const std::vector<Value>& crit_cells, std::uint32_t crit_rows, std::uint32_t crit_cols,
-                    ExcelProfile profile) {
-  if (crit_rows < 2U) {
-    return false;
-  }
-  for (std::uint32_t cr = 1; cr < crit_rows; ++cr) {
-    if (record_matches_criterion_row(r, cr, db_cells, db_cols, crit_cells, crit_cols, profile)) {
+                    const std::vector<CompiledCriterionRow>& criteria, ExcelProfile profile) {
+  for (const CompiledCriterionRow& row : criteria) {
+    if (row.impossible) {
+      continue;
+    }
+    bool matches_row = true;
+    for (const CompiledCriterionPredicate& predicate : row.predicates) {
+      const Value& db_cell = db_cells[(static_cast<std::size_t>(r) * db_cols) + predicate.db_col];
+      if (!matches_criterion(db_cell, predicate.criterion, profile)) {
+        matches_row = false;
+        break;
+      }
+    }
+    if (matches_row) {
       return true;
     }
   }
@@ -310,9 +337,11 @@ std::vector<Value> collect_matching_field_values(const std::vector<Value>& db_ce
   if (db_rows <= 1U) {
     return out;
   }
+  const std::vector<CompiledCriterionRow> compiled_criteria =
+      compile_criteria(db_cells, db_cols, crit_cells, crit_rows, crit_cols, profile);
   out.reserve(db_rows - 1U);
   for (std::uint32_t r = 1; r < db_rows; ++r) {
-    if (record_matches(r, db_cells, db_cols, crit_cells, crit_rows, crit_cols, profile)) {
+    if (record_matches(r, db_cells, db_cols, compiled_criteria, profile)) {
       out.push_back(db_cells[(static_cast<std::size_t>(r) * db_cols) + field_col]);
     }
   }
