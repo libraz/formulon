@@ -79,6 +79,10 @@ cases:
   - id: combina_negative_is_num
     formula: "=COMBINA(-1, 2)"
 
+  - id: combina_zero_positive_is_num
+    description: "An empty set has no multisets of size k > 0: #NUM!."
+    formula: "=COMBINA(0, 3)"
+
   - id: combina_k_zero
     description: "Multichoose(n, 0) = 1."
     formula: "=COMBINA(5, 0)"

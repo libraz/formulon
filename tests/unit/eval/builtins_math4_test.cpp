@@ -186,6 +186,15 @@ TEST(BuiltinsMath4CombinA, ZeroChooseZeroIsOne) {
   EXPECT_EQ(v.as_number(), 1.0);
 }
 
+TEST(BuiltinsMath4CombinA, ZeroChoosePositiveIsNum) {
+  // Mac Excel 365: an empty set yields #NUM! for any k > 0, fractional n included.
+  for (const char* src : {"=COMBINA(0, 1)", "=COMBINA(0, 5)", "=COMBINA(0.5, 1)"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << src;
+  }
+}
+
 TEST(BuiltinsMath4CombinA, NegativeYieldsNum) {
   const Value v = EvalSource("=COMBINA(-1, 2)");
   ASSERT_TRUE(v.is_error());

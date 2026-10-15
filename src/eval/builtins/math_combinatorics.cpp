@@ -230,7 +230,7 @@ Value CombinA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   const std::uint64_t n = pair.value().first;
   const std::uint64_t k = pair.value().second;
-  // Excel quirk: `COMBINA(0, 0) = 1`; `COMBINA(0, k>0) = 0`.
+  // Excel quirk: `COMBINA(0, 0) = 1`; `COMBINA(0, k>0)` is #NUM!.
   if (n == 0 && k == 0) {
     return Value::number(1.0);
   }
