@@ -1,0 +1,47 @@
+suite: sheet_name_quoting
+description: ADDRESS quotes sheet_text by the A1 sheet-qualifier rule of formula display, in both reference styles
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: address_cell_shape
+    formula: "=ADDRESS(1,1,1,TRUE,\"A1\")"
+  - id: address_zero_padded_row
+    formula: "=ADDRESS(1,1,1,TRUE,\"A01\")"
+  - id: address_long_zero_padded_row
+    formula: "=ADDRESS(1,1,1,TRUE,\"A00000001\")"
+  - id: address_zero_padded_last_row
+    formula: "=ADDRESS(1,1,1,TRUE,\"A001048576\")"
+  - id: address_zero_padded_row_past_grid
+    formula: "=ADDRESS(1,1,1,TRUE,\"A0001048577\")"
+  - id: address_row_zero
+    formula: "=ADDRESS(1,1,1,TRUE,\"A0\")"
+  - id: address_last_cell
+    formula: "=ADDRESS(1,1,1,TRUE,\"XFD1048576\")"
+  - id: address_column_past_grid
+    formula: "=ADDRESS(1,1,1,TRUE,\"XFE01\")"
+  - id: address_r1c1_shape
+    formula: "=ADDRESS(1,1,1,TRUE,\"R1C1\")"
+  - id: address_rc_shape
+    formula: "=ADDRESS(1,1,1,TRUE,\"RC\")"
+  - id: address_bool_name
+    formula: "=ADDRESS(1,1,1,TRUE,\"TRUE\")"
+  - id: address_digit_leading
+    formula: "=ADDRESS(1,1,1,TRUE,\"1abc\")"
+  - id: address_hyphen
+    formula: "=ADDRESS(1,1,1,TRUE,\"a-b\")"
+  - id: address_dot_is_bare
+    formula: "=ADDRESS(1,1,1,TRUE,\"a.b\")"
+  - id: address_underscore_is_bare
+    formula: "=ADDRESS(1,1,1,TRUE,\"a_b\")"
+  - id: address_apostrophe_doubled
+    formula: "=ADDRESS(1,1,1,TRUE,\"a'b\")"
+  - id: address_cjk_is_bare
+    formula: "=ADDRESS(1,1,1,TRUE,\"日本\")"
+  - id: address_accented_is_bare
+    formula: "=ADDRESS(1,1,1,TRUE,\"é\")"
+  - id: address_ideographic_space
+    formula: "=ADDRESS(1,1,1,TRUE,\"全角　空白\")"
+  - id: address_r1c1_style_zero_padded_row
+    formula: "=ADDRESS(1,1,1,FALSE,\"A01\")"
+  - id: address_r1c1_style_cell_shape
+    formula: "=ADDRESS(1,1,1,FALSE,\"A1\")"

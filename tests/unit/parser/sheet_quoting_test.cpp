@@ -29,11 +29,40 @@ struct LocalRow {
 // digit, R/C and bool shapes; R1C1 display drops the quotes of the A1 cell
 // shapes only.
 constexpr LocalRow kLocalRows[] = {
-    {"A1", true, false},    {"S2", true, false},     {"XFD1048576", true, false}, {"XFE1", false, false},
-    {"R1C1", true, true},   {"R", true, true},       {"C", true, true},           {"r2c3", true, true},
-    {"RC", true, true},     {"R2C", true, true},     {"RC3", true, true},         {"C7", true, true},
-    {"TRUE", true, true},   {"false", true, true},   {"2024", true, true},        {"a.b", false, false},
-    {"Data", false, false}, {"Sheet 1", true, true}, {"It's", true, true},        {"", true, true},
+    {"A1", true, false},
+    {"S2", true, false},
+    {"XFD1048576", true, false},
+    {"XFE1", false, false},
+    {"R1C1", true, true},
+    {"R", true, true},
+    {"C", true, true},
+    {"r2c3", true, true},
+    {"RC", true, true},
+    {"R2C", true, true},
+    {"RC3", true, true},
+    {"C7", true, true},
+    {"TRUE", true, true},
+    {"false", true, true},
+    {"2024", true, true},
+    {"a.b", false, false},
+    {"Data", false, false},
+    {"Sheet 1", true, true},
+    {"It's", true, true},
+    {"", true, true},
+    // A zero-padded row still names a cell; row 0 and a padded row past the
+    // grid do not.
+    {"A01", true, false},
+    {"A00000001", true, false},
+    {"A001048576", true, false},
+    {"ZZ01", true, false},
+    {"A0", false, false},
+    {"A0001048577", false, false},
+    {"XFE01", false, false},
+    // Non-ASCII letters are bare; an ideographic space is not.
+    {"\xE6\x97\xA5\xE6\x9C\xAC", false, false},            // 日本
+    {"\xC3\xA9", false, false},                            // é
+    {"\xEF\xBC\xA1\xEF\xBC\xA2", false, false},            // ＡＢ
+    {"\xE5\x85\xA8\xE3\x80\x80\xE8\xA7\x92", true, true},  // 全　角
 };
 
 TEST(SheetQuoting, LocalPredicatesFollowMeasuredDisplay) {

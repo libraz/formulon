@@ -28,17 +28,6 @@ bool IsBareRun(std::string_view name) noexcept {
   return detail::BareQualifierRunLength(name, 0) == name.size();
 }
 
-// True when `name` contains a byte outside `[A-Za-z0-9_.]`.
-bool HasNonBareAsciiByte(std::string_view name) noexcept {
-  for (char c : name) {
-    const bool bare = detail::IsAsciiLetter(c) || detail::IsAsciiDigit(c) || c == '_' || c == '.';
-    if (!bare) {
-      return true;
-    }
-  }
-  return false;
-}
-
 // Advances `*i` over a run of ASCII digits and returns how many it skipped.
 std::size_t SkipDigits(std::string_view name, std::size_t* i) noexcept {
   const std::size_t start = *i;
@@ -49,8 +38,8 @@ std::size_t SkipDigits(std::string_view name, std::size_t* i) noexcept {
 }
 
 // A cell inside the A1 grid (`A1`..`XFD1048576`, any letter case): the
-// tokenizer reads such a run as a cell reference. `XFE1` lies past the last
-// column and is an ordinary name.
+// tokenizer reads such a run as a cell reference. Zero padding counts
+// (`A01` is row 1); `XFE1` and `A0` lie off the grid and are ordinary names.
 bool IsA1CellShaped(std::string_view name) noexcept {
   std::size_t i = 0;
   std::uint32_t col = 0;
@@ -63,11 +52,11 @@ bool IsA1CellShaped(std::string_view name) noexcept {
     return false;
   }
   const std::size_t digits_begin = i;
-  if (SkipDigits(name, &i) == 0 || i != name.size() || name[digits_begin] == '0') {
+  if (SkipDigits(name, &i) == 0 || i != name.size()) {
     return false;
   }
-  return i - digits_begin <= 7 &&
-         detail::DecodeDigitRunClamped(name.substr(digits_begin), detail::kMaxRow) <= detail::kMaxRow;
+  const std::uint64_t row = detail::DecodeDigitRunClamped(name.substr(digits_begin), detail::kMaxRow);
+  return row >= 1U && row <= detail::kMaxRow;
 }
 
 // `R`, `C`, `R<n>`, `C<n>`, `R<n>C<n>`, `RC<n>`, `R<n>C`, `RC`, ASCII
@@ -93,10 +82,10 @@ bool IsR1C1Shaped(std::string_view name) noexcept {
 }
 
 // The rules both notations share: an empty name, a byte outside the bare
-// ASCII run, a leading digit (read as a number), TRUE / FALSE (read as a
+// qualifier run, a leading digit (read as a number), TRUE / FALSE (read as a
 // bool) and an R1C1 shape.
 bool LocalSheetNeedsQuotingInEitherNotation(std::string_view name) noexcept {
-  return name.empty() || HasNonBareAsciiByte(name) || detail::IsAsciiDigit(name.front()) ||
+  return name.empty() || !IsBareRun(name) || detail::IsAsciiDigit(name.front()) ||
          strings::case_insensitive_eq(name, "TRUE") || strings::case_insensitive_eq(name, "FALSE") ||
          IsR1C1Shaped(name);
 }

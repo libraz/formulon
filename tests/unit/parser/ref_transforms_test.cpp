@@ -50,10 +50,11 @@ TEST(LocalSheetNeedsQuotingA1, HyphenTriggersQuoting) {
   EXPECT_TRUE(local_sheet_needs_quoting_a1("Sheet-1"));
 }
 
-TEST(LocalSheetNeedsQuotingA1, UnicodeBytesTriggerQuoting) {
-  // Hiragana sheet name (UTF-8) lives outside the ASCII ident ruleset; we
-  // conservatively require quoting.
-  EXPECT_TRUE(local_sheet_needs_quoting_a1("\xe3\x82\xb7\xe3\x83\xbc\xe3\x83\x88"));  // "シート"
+TEST(LocalSheetNeedsQuotingA1, NonAsciiLettersStayBare) {
+  // Excel displays a katakana sheet name bare; only U+3000 / U+FEFF among
+  // non-ASCII characters force quoting.
+  EXPECT_FALSE(local_sheet_needs_quoting_a1("\xe3\x82\xb7\xe3\x83\xbc\xe3\x83\x88"));  // "シート"
+  EXPECT_TRUE(local_sheet_needs_quoting_a1("\xe3\x82\xb7\xe3\x80\x80"));               // "シ　"
 }
 
 // ---------------------------------------------------------------------------

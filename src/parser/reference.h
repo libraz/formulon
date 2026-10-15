@@ -64,8 +64,9 @@ struct Reference {
 std::string format_a1(const Reference& r);
 
 /// Returns true iff the local sheet `name` must be wrapped in single quotes
-/// when written into an A1 reference: names containing bytes outside
-/// `[A-Za-z0-9_.]`, digit-leading names, TRUE / FALSE, names shaped like an
+/// when written into an A1 reference: names leaving the bare qualifier run
+/// (ASCII letters, digits, `.`, `_` and non-ASCII characters other than
+/// U+3000 and U+FEFF), digit-leading names, TRUE / FALSE, names shaped like an
 /// A1 cell inside the grid, and names shaped like an R1C1 reference (`R`,
 /// `C`, `R2`, `C3`, `R2C3`, `RC3`, `R2C`, `RC`).
 bool local_sheet_needs_quoting_a1(std::string_view name) noexcept;

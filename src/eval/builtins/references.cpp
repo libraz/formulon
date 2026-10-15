@@ -19,6 +19,7 @@
 #include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
 #include "excel_locale.h"
+#include "parser/ast_format.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -61,51 +62,13 @@ Expected<bool, ErrorCode> read_optional_bool(const Value* args, std::uint32_t ar
   return coerce_to_bool(args[index]);
 }
 
-// True iff `ch` is an ASCII letter or digit.
-bool is_alnum_ascii(char ch) noexcept {
-  return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9');
-}
-
-// Returns true iff the sheet name needs single-quote wrapping per Excel
-// convention: any byte outside `[A-Za-z0-9_]` (including leading digits
-// and high-bit bytes) forces quoting. Empty names are rejected by the
-// caller before we get here.
-bool needs_sheet_quotes(std::string_view name) noexcept {
-  if (name.empty()) {
-    return false;
-  }
-  // Leading digit forces quoting (Excel treats e.g. `2020` as a year-like
-  // identifier that must be quoted to be a sheet name).
-  if (name[0] >= '0' && name[0] <= '9') {
-    return true;
-  }
-  for (char ch : name) {
-    if (!is_alnum_ascii(ch) && ch != '_') {
-      return true;
-    }
-  }
-  return false;
-}
-
-// Appends `name` to `out`, wrapping in single quotes and escaping
-// embedded apostrophes iff required. The result always carries the
-// trailing `!` separator.
+// Appends `name` and the `!` separator. An empty sheet_text stays bare
+// (`!$A$1`); any other name is quoted by the A1 sheet-qualifier rule in both
+// reference styles.
 void append_quoted_sheet(std::string* out, std::string_view name) {
-  if (!needs_sheet_quotes(name)) {
-    out->append(name);
-    out->push_back('!');
-    return;
+  if (!name.empty()) {
+    parser::append_sheet_name(name, /*force_quote=*/false, *out);
   }
-  out->push_back('\'');
-  for (char ch : name) {
-    if (ch == '\'') {
-      // Excel escapes an embedded apostrophe by doubling it.
-      out->append("''");
-    } else {
-      out->push_back(ch);
-    }
-  }
-  out->push_back('\'');
   out->push_back('!');
 }
 
@@ -182,9 +145,7 @@ Value Address(const Value* args, std::uint32_t arity, Arena& arena) {
   out.reserve(sheet_text.size() + 16);
   if (has_sheet) {
     // Emit the sheet prefix whenever the caller supplied the argument;
-    // an empty name still produces `"!A1"` (matches Excel 365). Bare
-    // names skip quoting; names with spaces / punctuation / leading
-    // digits are quoted with `''` apostrophe escaping.
+    // an empty name still produces `"!A1"` (matches Excel 365).
     append_quoted_sheet(&out, sheet_text);
   }
 

@@ -1,0 +1,206 @@
+{
+  "suite": "sheet_name_quoting",
+  "description": "ADDRESS quotes sheet_text by the A1 sheet-qualifier rule of formula display, in both reference styles",
+  "environment": {
+    "excel_version": "16.113.4",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-15T02:50:56Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "address_cell_shape",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"A1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'A1'!$A$1"
+      }
+    },
+    {
+      "id": "address_zero_padded_row",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"A01\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'A01'!$A$1"
+      }
+    },
+    {
+      "id": "address_long_zero_padded_row",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"A00000001\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'A00000001'!$A$1"
+      }
+    },
+    {
+      "id": "address_zero_padded_last_row",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"A001048576\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'A001048576'!$A$1"
+      }
+    },
+    {
+      "id": "address_zero_padded_row_past_grid",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"A0001048577\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "A0001048577!$A$1"
+      }
+    },
+    {
+      "id": "address_row_zero",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"A0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "A0!$A$1"
+      }
+    },
+    {
+      "id": "address_last_cell",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"XFD1048576\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'XFD1048576'!$A$1"
+      }
+    },
+    {
+      "id": "address_column_past_grid",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"XFE01\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "XFE01!$A$1"
+      }
+    },
+    {
+      "id": "address_r1c1_shape",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"R1C1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'R1C1'!$A$1"
+      }
+    },
+    {
+      "id": "address_rc_shape",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"RC\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'RC'!$A$1"
+      }
+    },
+    {
+      "id": "address_bool_name",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"TRUE\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'TRUE'!$A$1"
+      }
+    },
+    {
+      "id": "address_digit_leading",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"1abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'1abc'!$A$1"
+      }
+    },
+    {
+      "id": "address_hyphen",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"a-b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'a-b'!$A$1"
+      }
+    },
+    {
+      "id": "address_dot_is_bare",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"a.b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a.b!$A$1"
+      }
+    },
+    {
+      "id": "address_underscore_is_bare",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"a_b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a_b!$A$1"
+      }
+    },
+    {
+      "id": "address_apostrophe_doubled",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"a'b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'a''b'!$A$1"
+      }
+    },
+    {
+      "id": "address_cjk_is_bare",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"日本\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "日本!$A$1"
+      }
+    },
+    {
+      "id": "address_accented_is_bare",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"é\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "é!$A$1"
+      }
+    },
+    {
+      "id": "address_ideographic_space",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"全角　空白\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'全角　空白'!$A$1"
+      }
+    },
+    {
+      "id": "address_r1c1_style_zero_padded_row",
+      "formula": "=ADDRESS(1,1,1,FALSE,\"A01\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'A01'!R1C1"
+      }
+    },
+    {
+      "id": "address_r1c1_style_cell_shape",
+      "formula": "=ADDRESS(1,1,1,FALSE,\"A1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'A1'!R1C1"
+      }
+    }
+  ]
+}
