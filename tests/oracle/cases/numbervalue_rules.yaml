@@ -1,0 +1,147 @@
+suite: numbervalue_rules
+description: 'NUMBERVALUE as a pre-pass over the VALUE recogniser: separators, percent, whitespace, length cap, range and script digits'
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: sixteenth_digit_truncated
+    formula: "=NUMBERVALUE(\"9.999999999999995e307\")"
+  - id: fraction_digits_truncated
+    formula: "=NUMBERVALUE(\"0.99999999999999999\")"
+  - id: integer_digits_truncated
+    formula: "=NUMBERVALUE(\"9999999999999999\")"
+  - id: upper_bound_rejected
+    formula: "=NUMBERVALUE(\"1e308\")"
+  - id: lower_bound_flushed
+    formula: "=NUMBERVALUE(\"1e-309\")"
+  - id: below_lower_bound
+    formula: "=NUMBERVALUE(\"1e-310\")"
+  - id: dbl_min_cut_flushed
+    formula: "=NUMBERVALUE(\"2.2250738585072014e-308\")"
+  - id: zero_written_exponent_rejected
+    formula: "=NUMBERVALUE(\"0e309\")"
+  - id: huge_negative_exponent_rejected
+    formula: "=NUMBERVALUE(\"1e-999\")"
+  - id: trailing_percent_not_folded
+    formula: "=NUMBERVALUE(\"1e309%\")"
+  - id: leading_percent_folded
+    formula: "=NUMBERVALUE(\"%1e309\")"
+  - id: trailing_percent_divides
+    formula: "=NUMBERVALUE(\"1e-9%\")"
+  - id: leading_percent_exact
+    formula: "=NUMBERVALUE(\"%1e-9\")"
+  - id: percent_result_flushed
+    formula: "=NUMBERVALUE(\"2.2e-306%\")"
+  - id: percent_result_kept
+    formula: "=NUMBERVALUE(\"2.3e-306%\")"
+  - id: three_percents
+    formula: "=NUMBERVALUE(\"50%%%\")"
+  - id: leading_and_trailing_percents
+    formula: "=NUMBERVALUE(\"%5%%\")"
+  - id: two_leading_percents
+    formula: "=NUMBERVALUE(\"%%5\")"
+  - id: percent_inside_parens_once
+    formula: "=NUMBERVALUE(\"(5%)\")"
+  - id: two_percents_inside_parens
+    formula: "=NUMBERVALUE(\"(5%%)\")"
+  - id: percents_after_parens
+    formula: "=NUMBERVALUE(\"(5)%%\")"
+  - id: percent_only_is_zero
+    formula: "=NUMBERVALUE(\"%\")"
+  - id: group_separators_only_is_zero
+    formula: "=NUMBERVALUE(\",,\")"
+  - id: fullwidth_percent_not_stripped
+    formula: "=NUMBERVALUE(\"５％％\")"
+  - id: fullwidth_then_ascii_percent
+    formula: "=NUMBERVALUE(\"５％%\")"
+  - id: tab_inside_digits
+    formula: "=NUMBERVALUE(\"1\"&CHAR(9)&\"2\")"
+  - id: lf_inside_digits
+    formula: "=NUMBERVALUE(\"1\"&CHAR(10)&\"2\")"
+  - id: only_spaces_is_zero
+    formula: "=NUMBERVALUE(\"   \")"
+  - id: fullwidth_space_inside_digits
+    formula: "=NUMBERVALUE(\"1　2\")"
+  - id: fullwidth_space_after_sign
+    formula: "=NUMBERVALUE(\"-　5\")"
+  - id: length_cap_counts_spaces
+    formula: "=NUMBERVALUE(REPT(\" \",255)&\"1\")"
+  - id: length_cap_255_accepted
+    formula: "=NUMBERVALUE(REPT(\"0\",254)&\"1\")"
+  - id: length_cap_256_rejected
+    formula: "=NUMBERVALUE(REPT(\"0\",255)&\"1\")"
+  - id: two_arg_comma_swaps_group
+    formula: "=NUMBERVALUE(\"1.234.567,5\",\",\")"
+  - id: two_arg_other_decimal_keeps_dot
+    formula: "=NUMBERVALUE(\"1.5\",\":\")"
+  - id: locale_dot_survives_explicit_args
+    formula: "=NUMBERVALUE(\"1.500\",\"x\",\";\")"
+  - id: locale_comma_strict_under_explicit_args
+    formula: "=NUMBERVALUE(\"1,500\",\".\",\";\")"
+  - id: locale_comma_short_group_rejected
+    formula: "=NUMBERVALUE(\"1,5\",\".\",\";\")"
+  - id: group_after_decimal_rejected
+    formula: "=NUMBERVALUE(\"1.5,000\")"
+  - id: group_in_exponent_dropped
+    formula: "=NUMBERVALUE(\"1e1,0\")"
+  - id: group_in_exponent_after_point_rejected
+    formula: "=NUMBERVALUE(\"1.5e1,0\")"
+  - id: untracked_dot_lets_group_pass
+    formula: "=NUMBERVALUE(\"1.5,000\",\":\")"
+  - id: separator_first_char_only
+    formula: "=NUMBERVALUE(\"1,5\",\",;\")"
+  - id: digit_as_decimal_separator
+    formula: "=NUMBERVALUE(\"105\",\"0\")"
+  - id: true_as_decimal_separator
+    formula: "=NUMBERVALUE(\"1T5\",TRUE)"
+  - id: same_separator_unused_rejected
+    formula: "=NUMBERVALUE(\"15\",\".\",\".\")"
+  - id: fullwidth_comma_needs_three_digits
+    formula: "=NUMBERVALUE(\"1，5\")"
+  - id: fullwidth_comma_long_group
+    formula: "=NUMBERVALUE(\"1，2345\")"
+  - id: fullwidth_comma_not_matched_by_ascii_arg
+    formula: "=NUMBERVALUE(\"1，5\",\",\")"
+  - id: fullwidth_dollar_prefix
+    formula: "=NUMBERVALUE(\"＄５\")"
+  - id: currency_with_percent_inside_parens
+    formula: "=NUMBERVALUE(\"(¥1%)\")"
+  - id: currency_parens_then_percent
+    formula: "=NUMBERVALUE(\"(¥1)%\")"
+  - id: currency_before_parens
+    formula: "=NUMBERVALUE(\"¥(1)\")"
+  - id: euro_suffix_then_percent
+    formula: "=NUMBERVALUE(\"5€%\")"
+  - id: percent_then_euro_suffix
+    formula: "=NUMBERVALUE(\"5%€\")"
+  - id: time_then_percent
+    formula: "=NUMBERVALUE(\"1:30%\")"
+  - id: time_with_space_pm_rejected
+    formula: "=NUMBERVALUE(\"1:30 PM\")"
+  - id: date_with_time_rejected
+    formula: "=NUMBERVALUE(\"2026/1/1 1:30\")"
+  - id: explicit_decimal_breaks_date
+    formula: "=NUMBERVALUE(\"2026/1/1\",\"/\")"
+  - id: group_removed_before_time
+    formula: "=NUMBERVALUE(\"1,:30\",\".\",\",\")"
+  - id: arabic_indic_digits
+    formula: "=NUMBERVALUE(\"١٢٣.٥\")"
+  - id: thai_digits
+    formula: "=NUMBERVALUE(\"๑๒๓\")"
+  - id: ethiopic_digits
+    formula: "=NUMBERVALUE(\"፩፩\")"
+  - id: nko_digits_rejected
+    formula: "=NUMBERVALUE(\"߁߂߃\")"
+  - id: arabic_digit_as_separator_arg
+    formula: "=NUMBERVALUE(\"1٢5\",\"٢\")"
+  - id: number_arg_comma_decimal
+    formula: "=NUMBERVALUE(1.5,\",\")"
+  - id: value_long_group
+    formula: "=VALUE(\"1,2345\")"
+  - id: value_leading_zero_group_rejected
+    formula: "=VALUE(\"0,123\")"
+  - id: value_space_after_sign
+    formula: "=VALUE(\"- 5\")"
+  - id: value_currency_with_percent_rejected
+    formula: "=VALUE(\"¥1%\")"
+  - id: value_arabic_indic_digits
+    formula: "=VALUE(\"١٢٣\")"

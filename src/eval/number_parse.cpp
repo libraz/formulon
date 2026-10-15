@@ -7,7 +7,6 @@
 #include "eval/number_parse.h"
 
 #include <cfloat>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -34,6 +33,41 @@ std::string_view trim_ascii(std::string_view s) noexcept {
     s.remove_suffix(1);
   }
   return s;
+}
+
+// Decodes the UTF-8 sequence at `s[i]`; a malformed byte decodes as itself.
+std::uint32_t decode_utf8(std::string_view s, std::size_t i, std::size_t* len) noexcept {
+  const unsigned char b0 = static_cast<unsigned char>(s[i]);
+  const std::size_t n = b0 < 0xC0u ? 1u : b0 < 0xE0u ? 2u : b0 < 0xF0u ? 3u : 4u;
+  if (n == 1u || i + n > s.size()) {
+    *len = 1;
+    return b0;
+  }
+  std::uint32_t cp = b0 & (0xFFu >> (n + 1u));
+  for (std::size_t k = 1; k < n; ++k) {
+    cp = (cp << 6) | (static_cast<unsigned char>(s[i + k]) & 0x3Fu);
+  }
+  *len = n;
+  return cp;
+}
+
+// Decimal digits of the non-ASCII scripts Excel reads as numbers; 0 when `cp`
+// is not one. Tamil and Ethiopic have no zero, only 1..9.
+char fold_script_digit(std::uint32_t cp) noexcept {
+  constexpr std::uint32_t kZeros[] = {0x0660, 0x06F0, 0x0966, 0x09E6, 0x0A66, 0x0AE6, 0x0B66, 0x0C66,
+                                      0x0CE6, 0x0D66, 0x0E50, 0x0ED0, 0x0F20, 0x1040, 0x17E0, 0x1810};
+  for (const std::uint32_t zero : kZeros) {
+    if (cp >= zero && cp <= zero + 9u) {
+      return static_cast<char>('0' + (cp - zero));
+    }
+  }
+  if (cp >= 0x0BE7u && cp <= 0x0BEFu) {
+    return static_cast<char>('1' + (cp - 0x0BE7u));
+  }
+  if (cp >= 0x1369u && cp <= 0x1371u) {
+    return static_cast<char>('1' + (cp - 0x1369u));
+  }
+  return '\0';
 }
 
 // Strips a leading currency prefix from the active locale's accepted set.
@@ -70,128 +104,127 @@ std::string_view strip_trailing_euro(std::string_view s) noexcept {
 
 }  // namespace
 
-bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double* out, bool strict_groups,
-                   int text_percent) noexcept {
-  const bool text_rule = text_percent >= 0;
-  // Trim ASCII whitespace first.
+bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, int percent_count, double* out) noexcept {
   s = trim_ascii(s);
-  if (s.empty()) {
-    return false;
-  }
-  // Sign and currency may appear in either order at the front, and Excel
-  // accepts a currency symbol on the leading OR trailing side but NOT both:
-  //   "-$100" / "$-100" / "$ 100" -> ok;  "$100" / "€100" / "100€" -> ok;
-  //   "$100€" -> #VALUE! (currency on both ends).
+  const auto skip_blanks = [&s]() {
+    while (!s.empty() && s.front() == ' ') {
+      s.remove_prefix(1);
+    }
+  };
+  const auto trim_back_blanks = [&s]() {
+    while (!s.empty() && s.back() == ' ') {
+      s.remove_suffix(1);
+    }
+  };
+  // Front: `(` or a sign, then a currency symbol, then (when neither came
+  // first) a sign or `(` after the symbol: "(¥1)", "-¥1", "¥-1", "¥(1)".
+  // Only blanks may sit between a sign and the digits; a tab there is no number.
   bool negative = false;
-  auto try_sign = [&negative, &s]() -> bool {
+  bool paren = false;
+  bool signed_front = false;
+  const auto take_sign = [&]() {
     if (!s.empty() && (s.front() == '+' || s.front() == '-')) {
       negative = s.front() == '-';
       s.remove_prefix(1);
+      skip_blanks();
       return true;
     }
     return false;
   };
-  const bool had_leading_sign = try_sign();
-  bool leading_currency = false;
+  if (!s.empty() && s.front() == '(') {
+    paren = true;
+    s.remove_prefix(1);
+    skip_blanks();
+  } else {
+    signed_front = take_sign();
+  }
+  bool currency = false;
   {
     const std::string_view after = strip_currency(s);
     if (after.size() != s.size()) {
       s = after;
-      leading_currency = true;
+      currency = true;
+      while (!s.empty() && is_ascii_ws(static_cast<unsigned char>(s.front()))) {
+        s.remove_prefix(1);
+      }
+      if (!paren && !signed_front && !take_sign() && !s.empty() && s.front() == '(') {
+        paren = true;
+        s.remove_prefix(1);
+        skip_blanks();
+      }
     }
   }
-  if (leading_currency) {
-    // A space between the currency symbol and the number is allowed
-    // ("$ 100"), and the sign may follow the symbol ("$-100").
-    while (!s.empty() && is_ascii_ws(static_cast<unsigned char>(s.front()))) {
-      s.remove_prefix(1);
+  // Back: a Euro suffix (one currency side only) and the closing `)`, in
+  // either order: "(5)€", "(5€)".
+  const auto take_euro = [&]() {
+    if (currency) {
+      return;
     }
-    if (!had_leading_sign) {
-      try_sign();
+    const std::string_view before = strip_trailing_euro(s);
+    if (before.size() != s.size()) {
+      s = before;
+      currency = true;
+      trim_back_blanks();
     }
-  }
-  if (s.empty()) {
-    return false;
-  }
-  // A trailing Euro suffix is a single-sided currency: strip it only when no
-  // leading currency was consumed, so "$100€" (currency on both ends) keeps a
-  // stray `€` that the numeric scan below rejects. Excel accepts `€` as a
-  // suffix (e.g. `"23€"`); `$` and `円` are not accepted as suffixes.
-  if (!leading_currency) {
-    s = strip_trailing_euro(s);
-    if (s.empty()) {
+  };
+  trim_back_blanks();
+  take_euro();
+  if (paren) {
+    if (s.empty() || s.back() != ')') {
       return false;
     }
-  }
-  // Trailing percent signs. Each `%` multiplies the parsed value by 0.01, so
-  // `"50%%"` yields `0.005` (matching Excel's NUMBERVALUE behavior). Under the
-  // text rule the single `%` was already taken out by the normaliser.
-  int percent_count = text_rule ? text_percent : 0;
-  while (!text_rule && !s.empty() && s.back() == '%') {
-    ++percent_count;
     s.remove_suffix(1);
+    trim_back_blanks();
+    take_euro();
   }
-  if (s.empty()) {
+  if (s.empty() || (currency && percent_count > 0)) {
     return false;
   }
-  // Scan and assemble a canonical C-locale numeric string (digits, one
-  // optional `.`, optional exponent `e[+/-]digits`). Reject on any
-  // unexpected byte.
+  // Assemble a canonical C-locale numeric string (digits, one optional `.`,
+  // optional exponent `e[+/-]digits`), rejecting any other byte. Grouping: the
+  // first group is 1+ digits not starting with `0`, every later one 3+.
   std::string canonical;
   canonical.reserve(s.size());
   bool seen_digit = false;
   bool seen_point = false;
   bool seen_exp = false;
-  // Thousands-grouping validation state. Mac Excel rejects malformed
-  // groupings such as `"12,34"` (2 digits before, 2 after) or `"1,2345"`
-  // (final group not exactly 3 digits). The first group (before the first
-  // separator) must be 1-3 digits; every subsequent group must be exactly 3.
   bool seen_group_sep = false;
   int digits_in_current_group = 0;
+  bool group_starts_with_zero = false;
+  const auto group_ok = [&]() {
+    return seen_group_sep ? digits_in_current_group >= 3 : !group_starts_with_zero && digits_in_current_group >= 1;
+  };
   for (std::size_t i = 0; i < s.size(); ++i) {
     const char c = s[i];
     if (c >= '0' && c <= '9') {
       canonical.push_back(c);
       seen_digit = true;
       if (!seen_point && !seen_exp) {
+        group_starts_with_zero =
+            group_starts_with_zero || (digits_in_current_group == 0 && c == '0' && !seen_group_sep);
         ++digits_in_current_group;
       }
       continue;
     }
-    if (c == decimal_sep && !seen_point && !seen_exp) {
-      // Transitioning out of integer part: validate the final integer group
-      // if any group separators were seen.
-      if (seen_group_sep && digits_in_current_group != 3) {
+    const bool in_integer = !seen_point && !seen_exp;
+    if (c == decimal_sep && in_integer) {
+      if (seen_group_sep && !group_ok()) {
         return false;
       }
       canonical.push_back('.');
       seen_point = true;
       continue;
     }
-    if (group_sep != '\0' && c == group_sep && !seen_point && !seen_exp && !strict_groups) {
-      continue;
-    }
-    if (group_sep != '\0' && c == group_sep && !seen_point && !seen_exp) {
-      // Group separator inside the integer part. Validate the just-finished
-      // group: 1-3 digits for the first one, exactly 3 for any subsequent.
-      // `group_sep == '\0'` means the caller opted out of grouping.
-      if (!seen_group_sep) {
-        if (digits_in_current_group < 1 || digits_in_current_group > 3) {
-          return false;
-        }
-      } else {
-        if (digits_in_current_group != 3) {
-          return false;
-        }
+    if (group_sep != '\0' && c == group_sep && in_integer) {
+      if (!group_ok()) {
+        return false;
       }
       seen_group_sep = true;
       digits_in_current_group = 0;
       continue;
     }
     if ((c == 'e' || c == 'E') && seen_digit && !seen_exp) {
-      // Transitioning out of integer part (no decimal seen): validate the
-      // final integer group if any group separators were seen.
-      if (!seen_point && seen_group_sep && digits_in_current_group != 3) {
+      if (in_integer && seen_group_sep && !group_ok()) {
         return false;
       }
       canonical.push_back('e');
@@ -204,56 +237,22 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
     }
     return false;
   }
-  if (!seen_digit) {
-    return false;
-  }
-  // End-of-input: if grouping was used and we never left the integer part,
-  // the final group must also be exactly 3 digits.
-  if (seen_group_sep && !seen_point && !seen_exp && digits_in_current_group != 3) {
+  if (!seen_digit || (seen_group_sep && !seen_point && !seen_exp && !group_ok())) {
     return false;
   }
   double parsed = 0.0;
-  if (text_rule) {
-    if (!parse_double_exact(canonical, &parsed) || !excel_text_number(canonical, negative, percent_count, out)) {
-      return false;
-    }
-    return true;
-  }
-  if (!parse_double_exact(canonical, &parsed) || std::isinf(parsed) || numeric_text_above_excel_max(canonical)) {
-    return false;
-  }
-  // Apply percent scaling with division (not multiplication by 0.01) so the
-  // result is bit-identical to Mac Excel for clean cases such as
-  // `VALUE("23.5%")`. `23.5 * 0.01` is one ulp above the canonical `0.235`
-  // that Excel returns; dividing by 100 directly lands on that bit pattern.
-  for (int k = 0; k < percent_count; ++k) {
-    parsed /= 100.0;
-  }
-  if (negative) {
-    parsed = -parsed;
-  }
-  *out = parsed;
-  return true;
+  return parse_double_exact(canonical, &parsed) && excel_text_number(canonical, negative != paren, percent_count, out);
 }
 
-std::string normalize_locale_numeric(std::string_view raw, bool* paren_negated, int* text_percent) {
-  *paren_negated = false;
+std::string normalize_locale_numeric(std::string_view raw, int* percent_count) {
   const bool fold_fullwidth = locale_facts(current_eval_profile()).fullwidth_numeric_text;
   std::string out;
   out.reserve(raw.size());
-  std::size_t i = 0;
-  while (i < raw.size()) {
-    const unsigned char b0 = static_cast<unsigned char>(raw[i]);
-    // 3-byte UTF-8 sequences cover the U+3000 / U+FF00 / U+FFE5 ranges we
-    // care about; everything else passes through verbatim so multi-byte
-    // tails (e.g. `¥` 0xC2 0xA5, the kanji `円`, etc.) reach `parse_numeric`
-    // unchanged.
-    if (fold_fullwidth && b0 >= 0xE0u && b0 < 0xF0u && i + 2 < raw.size()) {
-      const unsigned char b1 = static_cast<unsigned char>(raw[i + 1]);
-      const unsigned char b2 = static_cast<unsigned char>(raw[i + 2]);
-      const std::uint32_t cp = (static_cast<std::uint32_t>(b0 & 0x0Fu) << 12) |
-                               (static_cast<std::uint32_t>(b1 & 0x3Fu) << 6) | static_cast<std::uint32_t>(b2 & 0x3Fu);
-      char ascii = '\0';
+  for (std::size_t i = 0; i < raw.size();) {
+    std::size_t len = 1;
+    const std::uint32_t cp = decode_utf8(raw, i, &len);
+    char ascii = cp >= 0x80u ? fold_script_digit(cp) : '\0';
+    if (ascii == '\0' && fold_fullwidth) {
       if (cp >= 0xFF10u && cp <= 0xFF19u) {
         ascii = static_cast<char>('0' + (cp - 0xFF10u));
       } else if (cp >= 0xFF21u && cp <= 0xFF3Au) {
@@ -274,50 +273,95 @@ std::string normalize_locale_numeric(std::string_view raw, bool* paren_negated, 
         ascii = '(';
       } else if (cp == 0xFF09u) {
         ascii = ')';
+      } else if (cp == 0xFF04u) {
+        ascii = '$';
       } else if (cp == 0x3000u) {
         ascii = ' ';
       }
-      if (ascii != '\0') {
-        out.push_back(ascii);
-        i += 3;
-        continue;
-      }
     }
-    out.push_back(raw[i]);
-    ++i;
+    if (ascii != '\0') {
+      out.push_back(ascii);
+    } else {
+      out.append(raw.substr(i, len));
+    }
+    i += len;
   }
-  if (text_percent != nullptr) {
-    // Excel takes one `%` anywhere outside the digit run (either side of the
-    // sign, inside or outside the parentheses); a second one, or one with
-    // number characters on both sides, is not a number.
-    *text_percent = 0;
-    const auto body = [](char c) { return (c >= '0' && c <= '9') || c == '.' || c == ',' || c == 'e' || c == 'E'; };
-    for (std::size_t k = 0; k < out.size(); ++k) {
-      if (out[k] != '%') {
-        continue;
-      }
-      if (*text_percent != 0 || (k > 0 && body(out[k - 1]) && k + 1 < out.size() && body(out[k + 1]))) {
-        *text_percent = -1;
-        return out;
-      }
-      *text_percent = 1;
-      out.erase(k, 1);
-      --k;
+  // Excel takes one `%` anywhere outside the digit run (either side of the
+  // sign, inside or outside the parentheses); a second one, or one with number
+  // characters on both sides, is not a number.
+  *percent_count = 0;
+  const auto body = [](char c) { return (c >= '0' && c <= '9') || c == '.' || c == ',' || c == 'e' || c == 'E'; };
+  for (std::size_t k = 0; k < out.size(); ++k) {
+    if (out[k] != '%') {
+      continue;
     }
-  }
-  // Accounting-style outer parens. Trim only ASCII whitespace because
-  // `parse_numeric` does the same; a Japanese profile has already folded
-  // full-width spaces to ASCII above.
-  std::string_view trimmed = trim_ascii(out);
-  if (trimmed.size() >= 3 && trimmed.front() == '(' && trimmed.back() == ')') {
-    std::string_view inner = trimmed.substr(1, trimmed.size() - 2);
-    inner = trim_ascii(inner);
-    if (!inner.empty() && inner.front() != '+' && inner.front() != '-') {
-      *paren_negated = true;
-      return std::string(inner);
+    if (*percent_count != 0 || (k > 0 && body(out[k - 1]) && k + 1 < out.size() && body(out[k + 1]))) {
+      *percent_count = -1;
+      return out;
     }
+    *percent_count = 1;
+    out.erase(k, 1);
+    --k;
   }
   return out;
+}
+
+std::string fold_script_digits(std::string_view text) {
+  std::string out;
+  out.reserve(text.size());
+  for (std::size_t i = 0; i < text.size();) {
+    std::size_t len = 1;
+    const char digit = fold_script_digit(decode_utf8(text, i, &len));
+    if (digit != '\0') {
+      out.push_back(digit);
+    } else {
+      out.append(text.substr(i, len));
+    }
+    i += len;
+  }
+  return out;
+}
+
+std::uint32_t first_utf16_unit(std::string_view text) noexcept {
+  if (text.empty()) {
+    return 0;
+  }
+  std::size_t len = 1;
+  const std::uint32_t cp = decode_utf8(text, 0, &len);
+  return cp >= 0x10000u ? 0xD800u + ((cp - 0x10000u) >> 10) : cp;
+}
+
+bool numbervalue_prepass(std::string_view text, std::uint32_t decimal_unit, std::uint32_t group_unit, std::string* out,
+                         int* percent_count) {
+  if (numeric_text_too_long(text) || decimal_unit == group_unit) {
+    return false;
+  }
+  const char locale_decimal = locale_facts(current_eval_profile()).decimal_separator;
+  out->clear();
+  bool seen_decimal = false;
+  for (std::size_t i = 0; i < text.size();) {
+    std::size_t len = 1;
+    const std::uint32_t cp = decode_utf8(text, i, &len);
+    if (cp == ' ' || cp == '\t' || cp == '\n' || cp == '\r') {
+      // Dropped.
+    } else if (cp == decimal_unit) {
+      out->push_back(locale_decimal);
+      seen_decimal = true;
+    } else if (cp == group_unit) {
+      if (seen_decimal) {
+        return false;
+      }
+    } else {
+      out->append(text.substr(i, len));
+    }
+    i += len;
+  }
+  *percent_count = 0;
+  while (!out->empty() && out->back() == '%') {
+    out->pop_back();
+    ++*percent_count;
+  }
+  return true;
 }
 
 bool numeric_text_too_long(std::string_view raw) noexcept {
@@ -394,70 +438,15 @@ bool excel_text_number(std::string_view magnitude, bool negative, int percent_co
   return true;
 }
 
-bool numeric_text_above_excel_max(std::string_view text) {
-  std::size_t i = 0;
-  if (i < text.size() && (text[i] == '+' || text[i] == '-')) {
-    ++i;
-  }
-  long long digits_before_point = 0;
-  long long first_nonzero = -1;
-  long long seen = 0;
-  bool in_fraction = false;
-  for (; i < text.size(); ++i) {
-    const char c = text[i];
-    if (c == '.' && !in_fraction) {
-      in_fraction = true;
-    } else if (c >= '0' && c <= '9') {
-      if (c != '0' && first_nonzero < 0) {
-        first_nonzero = seen;
-      }
-      ++seen;
-      if (!in_fraction) {
-        ++digits_before_point;
-      }
-    } else {
-      break;
-    }
-  }
-  if (first_nonzero < 0) {
-    return false;
-  }
-  long long exponent = 0;
-  if (i < text.size() && (text[i] == 'e' || text[i] == 'E')) {
-    ++i;
-    bool negative = false;
-    if (i < text.size() && (text[i] == '+' || text[i] == '-')) {
-      negative = text[i] == '-';
-      ++i;
-    }
-    for (; i < text.size() && text[i] >= '0' && text[i] <= '9' && exponent < 100000; ++i) {
-      exponent = exponent * 10 + (text[i] - '0');
-    }
-    if (negative) {
-      exponent = -exponent;
-    }
-  }
-  // The leading digit's decimal exponent decides it: fifteen nines at 307 is
-  // the largest accepted value, so anything whose leading digit sits at 308
-  // or beyond is over.
-  return digits_before_point - 1 - first_nonzero + exponent >= 308;
-}
-
 bool parse_excel_number(std::string_view text, double* out) {
   if (numeric_text_too_long(text)) {
     return false;
   }
-  bool paren_negated = false;
-  int text_percent = 0;
-  const std::string normalized = normalize_locale_numeric(text, &paren_negated, &text_percent);
-  double value = 0.0;
+  int percent_count = 0;
+  const std::string normalized = normalize_locale_numeric(text, &percent_count);
   const LocaleFacts& facts = locale_facts(current_eval_profile());
-  if (text_percent < 0 ||
-      !parse_numeric(normalized, facts.decimal_separator, facts.group_separator, &value, true, text_percent)) {
-    return false;
-  }
-  *out = paren_negated ? -value : value;
-  return true;
+  return percent_count >= 0 &&
+         parse_numeric(normalized, facts.decimal_separator, facts.group_separator, percent_count, out);
 }
 
 }  // namespace eval

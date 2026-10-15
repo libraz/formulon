@@ -699,10 +699,10 @@ TEST(ValueFunction, ValidThousandsGroupingMultiple) {
   EXPECT_EQ(v.as_number(), 1234567.0);
 }
 
-TEST(ValueFunction, FourDigitFinalGroupRejected) {
+TEST(ValueFunction, FourDigitFinalGroupAccepted) {
   const Value v = EvalSource("=VALUE(\"1,2345\")");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 12345.0);
 }
 
 TEST(ValueFunction, LeadingGroupSepRejected) {

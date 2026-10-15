@@ -83,14 +83,6 @@ TEST(LocaleNumberInput, DecimalAndGroupFollowTheProfile) {
   }
 }
 
-TEST(LocaleNumberInput, LenientGroupsDropSeparatorsAnywhere) {
-  double v = 0.0;
-  // value_numbervalue.numbervalue_whitespace_trimmed (de)
-  ASSERT_TRUE(parse_numeric("3.14", ',', '.', &v, /*strict_groups=*/false));
-  EXPECT_EQ(v, 314.0);
-  EXPECT_FALSE(parse_numeric("3.14", ',', '.', &v));
-}
-
 TEST(LocaleDateInput, DayFirstDottedAndMonthNames) {
   double serial = 0.0;
   {

@@ -216,6 +216,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"NETWORKDAYS", &eval_networkdays_lazy, LazyResultShape::kScalar},
     {"NETWORKDAYS.INTL", &eval_networkdays_intl_lazy, LazyResultShape::kScalar},
     {"NOW", &eval_datetime_lazy, LazyResultShape::kScalar},
+    {"NUMBERVALUE", &eval_datetime_lazy, LazyResultShape::kBroadcast},
     {"ODDFPRICE", &eval_financial_date_lazy, LazyResultShape::kScalar},
     {"ODDFYIELD", &eval_financial_date_lazy, LazyResultShape::kScalar},
     {"ODDLPRICE", &eval_financial_date_lazy, LazyResultShape::kScalar},

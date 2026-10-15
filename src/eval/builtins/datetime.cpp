@@ -1137,6 +1137,8 @@ const DateEntry* find_date_entry(std::string_view name) noexcept {
       // date_text fallback ("3/15", "3月15日") needs the wall-clock
       // reading; the impl lives in builtins/text_format.cpp.
       {"VALUE", {&value_builtin_host_clock_impl, 1u, 1u, nullptr, &value_builtin_impl}},
+      // NUMBERVALUE shares VALUE's recogniser, date fallback included.
+      {"NUMBERVALUE", {&numbervalue_builtin_host_clock_impl, 1u, 3u, nullptr, &numbervalue_builtin_impl}},
   };
   for (const auto& e : kEntries) {
     if (strings::case_insensitive_eq(e.name, name)) {

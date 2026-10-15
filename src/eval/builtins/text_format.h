@@ -18,10 +18,11 @@ namespace eval {
 
 class FunctionRegistry;
 
-/// Registers VALUETOTEXT, ARRAYTOTEXT, NUMBERVALUE, FIXED, DOLLAR, USDOLLAR,
+/// Registers VALUETOTEXT, ARRAYTOTEXT, FIXED, DOLLAR, USDOLLAR,
 /// and the rest of the text-conversion family into `registry`. Intended to be
-/// invoked from `register_builtins`. TEXT and VALUE are NOT registered
-/// here -- see `text_builtin_impl` / `value_builtin_impl` below.
+/// invoked from `register_builtins`. TEXT, VALUE and NUMBERVALUE are NOT
+/// registered here -- see `text_builtin_impl` / `value_builtin_impl` /
+/// `numbervalue_builtin_impl` below.
 void register_text_format_builtins(FunctionRegistry& registry);
 
 /// TEXT(value, format_text) impl. Not eager-registered: TEXT is
@@ -44,6 +45,14 @@ Value value_builtin_impl(const Value* args, std::uint32_t arity, Arena& arena, b
 /// `DateImplFn` signature every plain `DateEntry::impl` uses. Serves a
 /// contextless caller (no `EvalContext` to offer a pinned reading).
 Value value_builtin_host_clock_impl(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+
+/// NUMBERVALUE(text, [decimal_sep], [group_sep]) impl. Served like VALUE: its
+/// date / time fallback reads the current year. `date1904` is unused.
+Value numbervalue_builtin_impl(const Value* args, std::uint32_t arity, Arena& arena, bool date1904,
+                               const date_time::CivilTime& now);
+
+/// Host-clock fallback for `numbervalue_builtin_impl`.
+Value numbervalue_builtin_host_clock_impl(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
 
 /// ARRAYTOTEXT(array, [format]) must preserve the 2-D shape of range and
 /// inline-array arguments, so it rides the lazy dispatch path.

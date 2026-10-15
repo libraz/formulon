@@ -178,6 +178,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/excel_locale_test.cpp
   unit/eval/locale_text_test.cpp
   unit/eval/text_number_range_test.cpp
+  unit/eval/numbervalue_rules_test.cpp
   unit/eval/format_localize_test.cpp
   unit/eval/formula_localize_test.cpp
   unit/eval/dbcs_table_test.cpp

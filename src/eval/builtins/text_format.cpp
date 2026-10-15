@@ -8,6 +8,7 @@
 #include "eval/builtins/text_format.h"
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -297,10 +298,39 @@ Value UsDollar_(const Value* args, std::uint32_t arity, Arena& arena) {
 // VALUE(text)
 // ---------------------------------------------------------------------------
 
-// `current_year` supplies the fallback year for a year-less date_text
-// ("3/15", "3月15日"), matching Microsoft's documented DATEVALUE rule (which
-// VALUE's date-parse fallback shares). `0` disables that form, matching the
-// pre-existing year-required behaviour.
+// Converts text to a number the way VALUE does: the numeric grammar first,
+// then the date / time recogniser. `current_year` supplies the fallback year
+// for a year-less date_text ("3/15", "3月15日"), matching Microsoft's
+// documented DATEVALUE rule (which VALUE's date-parse fallback shares). `0`
+// disables that form, matching the pre-existing year-required behaviour.
+bool text_to_number(std::string_view raw, int current_year, double* out) {
+  int percent_count = 0;
+  const std::string normalized = normalize_locale_numeric(raw, &percent_count);
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  if (!numeric_text_too_long(raw) && percent_count >= 0 &&
+      parse_numeric(normalized, facts.decimal_separator, facts.group_separator, percent_count, out)) {
+    return true;
+  }
+  // Leading whitespace is trimmed (the date/time parser rejects leading
+  // U+3000, so only ASCII is stripped). Only the digit scripts are folded: the
+  // date parser has its own ja-JP / kanji handling and must not see a
+  // normalised form.
+  const std::string folded = fold_script_digits(raw);
+  const std::string_view trimmed = date_parse::trim_date_text(folded);
+  if (trimmed.empty()) {
+    return false;
+  }
+  double date_serial = 0.0;
+  double time_frac = 0.0;
+  bool has_date = false;
+  bool has_time = false;
+  if (!date_parse::parse_date_time_text(trimmed, &date_serial, &time_frac, &has_date, &has_time, current_year)) {
+    return false;
+  }
+  *out = date_serial + time_frac;
+  return true;
+}
+
 Value Value_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, int current_year) {
   const Value& v = args[0];
   switch (v.kind()) {
@@ -318,32 +348,9 @@ Value Value_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, int c
       return Value::number(0.0);
     }
     case ValueKind::Text: {
-      const std::string_view raw = v.as_text();
-      // Phase 1: numeric parse with a locale pre-pass that folds
-      // full-width digits/punctuation to ASCII and strips accounting-
-      // style outer parentheses (`"(1234)"` -> -1234).
-      bool paren_negated = false;
-      int text_percent = 0;
-      const std::string normalized = normalize_locale_numeric(raw, &paren_negated, &text_percent);
       double numeric = 0.0;
-      const LocaleFacts& facts = locale_facts(current_eval_profile());
-      if (!numeric_text_too_long(raw) && text_percent >= 0 &&
-          parse_numeric(normalized, facts.decimal_separator, facts.group_separator, &numeric, true, text_percent)) {
-        return Value::number(paren_negated ? -numeric : numeric);
-      }
-      // Phase 2: date / time parse. Leading whitespace is trimmed (the
-      // date/time parser rejects leading U+3000, so we only strip ASCII).
-      // The original (non-normalised) text is used: the date parser has
-      // its own ja-JP / kanji handling and must not see a folded form.
-      const std::string_view trimmed = date_parse::trim_date_text(raw);
-      if (!trimmed.empty()) {
-        double date_serial = 0.0;
-        double time_frac = 0.0;
-        bool has_date = false;
-        bool has_time = false;
-        if (date_parse::parse_date_time_text(trimmed, &date_serial, &time_frac, &has_date, &has_time, current_year)) {
-          return Value::number(date_serial + time_frac);
-        }
+      if (text_to_number(v.as_text(), current_year, &numeric)) {
+        return Value::number(numeric);
       }
       return Value::error(ErrorCode::Value);
     }
@@ -359,84 +366,66 @@ Value Value_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, int c
 // NUMBERVALUE(text, [decimal_sep], [group_sep])
 // ---------------------------------------------------------------------------
 
-Value NumberValue_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+// Separator arguments count by their first UTF-16 unit, after numbers and
+// booleans became text; an empty one is #VALUE!.
+Expected<std::uint32_t, ErrorCode> separator_unit(const Value& arg) {
+  auto text = coerce_to_text(arg);
+  if (!text) {
+    return text.error();
+  }
+  if (text.value().empty()) {
+    return ErrorCode::Value;
+  }
+  return first_utf16_unit(text.value());
+}
+
+Value NumberValue_(const Value* args, std::uint32_t arity, Arena& /*arena*/, int current_year) {
+  if (args[0].is_boolean()) {
+    return Value::error(ErrorCode::Value);
+  }
   auto text = coerce_to_text(args[0]);
   if (!text) {
     return Value::error(text.error());
   }
   const LocaleFacts& facts = locale_facts(current_eval_profile());
-  char decimal_sep = facts.decimal_separator;
-  char group_sep = facts.group_separator;
-  // Track whether the caller supplied an explicit group separator; when
-  // they only passed `decimal_sep`, we silently disable grouping so the
-  // 2-arity call `NUMBERVALUE("3,14", ",")` cannot collide with the
-  // locale's default group sep.
-  bool group_sep_supplied = false;
+  std::uint32_t decimal_unit = static_cast<unsigned char>(facts.decimal_separator);
+  std::uint32_t group_unit = static_cast<unsigned char>(facts.group_separator);
   if (arity >= 2) {
-    auto dsep = coerce_to_text(args[1]);
-    if (!dsep) {
-      return Value::error(dsep.error());
+    auto unit = separator_unit(args[1]);
+    if (!unit) {
+      return Value::error(unit.error());
     }
-    if (dsep.value().empty()) {
-      return Value::error(ErrorCode::Value);
+    // A lone decimal naming the locale's group makes the group the locale's
+    // decimal, so `NUMBERVALUE("1.5", ",")` still has a group to drop.
+    if (arity == 2 && unit.value() == group_unit) {
+      group_unit = static_cast<unsigned char>(facts.decimal_separator);
     }
-    decimal_sep = dsep.value().front();
+    decimal_unit = unit.value();
   }
   if (arity >= 3) {
-    auto gsep = coerce_to_text(args[2]);
-    if (!gsep) {
-      return Value::error(gsep.error());
+    auto unit = separator_unit(args[2]);
+    if (!unit) {
+      return Value::error(unit.error());
     }
-    if (gsep.value().empty()) {
-      return Value::error(ErrorCode::Value);
-    }
-    group_sep = gsep.value().front();
-    group_sep_supplied = true;
+    group_unit = unit.value();
   }
-  // Only the explicit 3-arg form can produce an identical-separator error.
-  // When `group_sep` is the implicit default that happens to collide with
-  // the user's `decimal_sep`, disable grouping instead of erroring.
-  if (group_sep_supplied && decimal_sep == group_sep) {
+  std::string prepared;
+  int percent_count = 0;
+  if (!numbervalue_prepass(text.value(), decimal_unit, group_unit, &prepared, &percent_count)) {
     return Value::error(ErrorCode::Value);
   }
-  if (!group_sep_supplied && decimal_sep == group_sep) {
-    group_sep = '\0';
+  double result = 0.0;
+  if (!prepared.empty() && !text_to_number(prepared, current_year, &result)) {
+    return Value::error(ErrorCode::Value);
   }
-  // Empty input (including a Blank cell that `coerce_to_text` flattened
-  // to `""`) returns 0, matching Mac Excel ja-JP. This mirrors VALUE's
-  // existing empty-string-is-zero handling.
-  if (text.value().empty()) {
-    return Value::number(0.0);
-  }
-  // Locale pre-pass: fold full-width digits/punctuation to ASCII and
-  // detect accounting-style outer parentheses. Mac Excel accepts
-  // `NUMBERVALUE("(1234)", ".")` as -1234 contrary to the original
-  // assumption documented in `tests/divergence.yaml`.
-  bool paren_negated = false;
-  std::string normalized = normalize_locale_numeric(text.value(), &paren_negated);
-  // Spaces are dropped wherever they sit (value_numbervalue.numbervalue_inner_spaces).
-  normalized.erase(std::remove(normalized.begin(), normalized.end(), ' '), normalized.end());
-  double parsed = 0.0;
-  if (parse_numeric(normalized, decimal_sep, group_sep, &parsed, /*strict_groups=*/false,
-                    /*text_percent=*/-1)) {
-    return Value::number(paren_negated ? -parsed : parsed);
-  }
-  // Mac Excel ja-JP NUMBERVALUE accepts date / time strings in addition
-  // to the numeric grammar documented by Microsoft. Fall through to the
-  // shared date-parse helper when the numeric path fails. The original
-  // (non-normalised) text is used so the date parser's ja-JP path sees
-  // the input verbatim.
-  const std::string_view trimmed = date_parse::trim_date_text(text.value());
-  if (!trimmed.empty()) {
-    double date_serial = 0.0;
-    double time_frac = 0.0;
-    bool has_date = false;
-    bool has_time = false;
-    if (date_parse::parse_date_time_text(trimmed, &date_serial, &time_frac, &has_date, &has_time)) {
-      return Value::number(date_serial + time_frac);
+  // Each trailing `%` is a double division by 100 after the range check.
+  for (int k = 0; k < percent_count; ++k) {
+    result /= 100.0;
+    if (std::fabs(result) < DBL_MIN) {
+      result = 0.0;
     }
   }
-  return Value::error(ErrorCode::Value);
+  return Value::number(result);
 }
 
 void append_quoted_text(std::string_view src, std::string& out) {
@@ -650,6 +639,15 @@ Value value_builtin_impl(const Value* args, std::uint32_t arity, Arena& arena, b
   return Value_(args, arity, arena, now.date.y);
 }
 
+Value numbervalue_builtin_impl(const Value* args, std::uint32_t arity, Arena& arena, bool /*date1904*/,
+                               const date_time::CivilTime& now) {
+  return NumberValue_(args, arity, arena, now.date.y);
+}
+
+Value numbervalue_builtin_host_clock_impl(const Value* args, std::uint32_t arity, Arena& arena, bool date1904) {
+  return numbervalue_builtin_impl(args, arity, arena, date1904, date_time::host_civil_time());
+}
+
 // Host-clock fallback for VALUE, registered as `DateEntry::impl` so a
 // contextless caller still resolves a year-less date_text. Mirrors
 // `DatevalueHostClock_` in `builtins/datetime.cpp`.
@@ -701,8 +699,7 @@ void register_text_format_builtins(FunctionRegistry& registry) {
   // `find_date_entry` hook (VM), which pass `EvalContext::date1904()` /
   // `EvalContext::wall_clock()` into `text_builtin_impl` / `value_builtin_impl`.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"VALUETOTEXT", 1u, 2u, &ValueToText_}, {"ARRAYTOTEXT", 1u, 2u, &ArrayToText_},
-      {"NUMBERVALUE", 1u, 3u, &NumberValue_}, {"FIXED", 1u, 3u, &Fixed_},
+      {"VALUETOTEXT", 1u, 2u, &ValueToText_}, {"ARRAYTOTEXT", 1u, 2u, &ArrayToText_}, {"FIXED", 1u, 3u, &Fixed_},
       {"DOLLAR", 1u, 2u, &Dollar_},           {"USDOLLAR", 1u, 2u, &UsDollar_},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
