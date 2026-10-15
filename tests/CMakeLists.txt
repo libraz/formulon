@@ -88,6 +88,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/sax_xml_reader_test.cpp
   unit/io/sheet_name_validation_test.cpp
   unit/io/sheet_reader_lexing_parity_test.cpp
+  unit/io/sheet_reader_cell_metadata_parity_test.cpp
   unit/io/sheet_reader_test.cpp
   unit/io/sst_reader_test.cpp
   unit/io/storage_prefix_container_test.cpp
@@ -118,6 +119,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/func_id_fixture_test.cpp
   unit/io/xlsb/func_id_test.cpp
   unit/io/xlsb/ptg_test.cpp
+  unit/io/xlsb/ptg_string_surrogate_test.cpp
+  unit/io/xlsb/pivot_field_order_count_test.cpp
+  unit/io/xlsb/external_link_cached_error_test.cpp
   unit/io/xlsb/writer_external_link_test.cpp
   unit/io/xlsb/ptg_class_fixture_test.cpp
   unit/io/xlsb/ptg_codec_test.cpp
@@ -146,6 +150,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/ooxml_output_contract_test.cpp
   unit/io/spill_phantom_fixture_test.cpp
   unit/parser/tokenizer_test.cpp
+  unit/parser/tokenizer_malformed_utf8_test.cpp
   unit/parser/local_sheet_qualifier_test.cpp
   unit/parser/sheet_quoting_test.cpp
   unit/parser/external_ref_parse_test.cpp
@@ -276,6 +281,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/reference_lazy_test.cpp
   unit/eval/builtins_vlookup_test.cpp
   unit/eval/builtins_xlookup_test.cpp
+  unit/eval/xmatch_mode_range_test.cpp
   unit/eval/builtins_datetime_test.cpp
   unit/eval/builtins_datetime_1904_test.cpp
   unit/eval/builtins_datetime_calendar_test.cpp
@@ -320,6 +326,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_engineering_convert_test.cpp
   unit/eval/builtins_engineering_special_test.cpp
   unit/eval/builtins_complex_test.cpp
+  unit/eval/builtins_cumulative_span_cap_test.cpp
   unit/eval/builtins_web_test.cpp
   unit/eval/builtins_cube_test.cpp
   unit/eval/builtins_xirr_xnpv_test.cpp

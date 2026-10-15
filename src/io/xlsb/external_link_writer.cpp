@@ -15,6 +15,7 @@
 #include "external_book.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml_defs.h"
+#include "io/stored_cell_error.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xml_utils.h"
@@ -141,7 +142,7 @@ void EmitSheetTable(std::vector<std::uint8_t>& out, const ExternalBook& book, st
       emit_u8(p, value.as_boolean() ? 1U : 0U);
     } else if (value.is_error()) {
       type = XlsbRecordType::BrtExternCellError;
-      emit_u8(p, static_cast<std::uint8_t>(ooxml_code(value.as_error())));
+      emit_u8(p, static_cast<std::uint8_t>(ooxml_code(stored_cell_error(value.as_error()))));
     } else if (value.is_text()) {
       type = XlsbRecordType::BrtExternCellString;
       emit_xlwidestring(p, cell.text);
