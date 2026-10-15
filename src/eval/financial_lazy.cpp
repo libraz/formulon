@@ -173,9 +173,9 @@ double irr_newton(const std::vector<double>& flows, double guess) noexcept {
     if (std::fabs(new_rate - rate) < kTolerance) {
       // Step convergence alone is not sufficient: on pathological
       // cashflows the iterate can stall at a point where NPV is far from
-      // zero. Accept only when the residual is also near zero (mirrors
-      // `xirr_newton`); otherwise report non-convergence so the bracketed
-      // fallback / #NUM! path takes over.
+      // zero. Accept only when the residual is also near zero; otherwise
+      // report non-convergence so the bracketed fallback / #NUM! path
+      // takes over.
       if (std::fabs(irr_npv(flows, new_rate)) < kResidualTolerance) {
         return new_rate;
       }
@@ -186,7 +186,7 @@ double irr_newton(const std::vector<double>& flows, double guess) noexcept {
   return std::numeric_limits<double>::quiet_NaN();
 }
 
-// Shared bracketed fallback for IRR/XIRR when Newton diverges or can't
+// Bracketed fallback for IRR when Newton diverges or can't
 // cross the rate = -1 singularity. Samples f(rate) on a log-linear grid
 // spanning the domain rate > -1, looks for an adjacent sign change, and
 // bisects. The final midpoint is optionally polished by the caller's
@@ -605,8 +605,9 @@ bool collect_xpairs(XFinKind which, const parser::AstNode& values_arg, const par
   return true;
 }
 
-// XNPV-style sum over a (value, date) schedule at `rate`. Caller must
-// have ensured `rate > -1`.
+// XNPV-style sum over a (value, date) schedule at `rate`. At `rate == -1`
+// every later flow divides by zero, so the sum is +-inf, or NaN when later
+// flows of both signs meet.
 double xnpv_sum(const std::vector<double>& values, const std::vector<double>& dates, double rate) noexcept {
   const double base = 1.0 + rate;
   const double anchor = dates.empty() ? 0.0 : dates[0];
@@ -618,56 +619,79 @@ double xnpv_sum(const std::vector<double>& values, const std::vector<double>& da
   return total;
 }
 
-// d/dr of xnpv_sum: f'(r) = -sum_i values[i] * t_i / (1+r)^(t_i + 1).
-double xnpv_dsum(const std::vector<double>& values, const std::vector<double>& dates, double rate) noexcept {
-  const double base = 1.0 + rate;
-  const double anchor = dates.empty() ? 0.0 : dates[0];
-  double total = 0.0;
-  for (std::size_t i = 0; i < values.size(); ++i) {
-    const double t = (dates[i] - anchor) / 365.0;
-    total += -values[i] * t / std::pow(base, t + 1.0);
-  }
-  return total;
+// XIRR bracket test: a zero endpoint brackets a root, a NaN one does not.
+bool xirr_brackets(double f_a, double f_b) noexcept {
+  return (f_a <= 0.0 && f_b >= 0.0) || (f_a >= 0.0 && f_b <= 0.0);
 }
 
-// Runs Newton-Raphson on xnpv_sum starting from `guess`. Returns NaN on
-// failure (iterate leaves the domain rate > -1, derivative collapses,
-// or the iteration cap is exhausted without converging); otherwise the
-// converged rate.
-double xirr_newton(const std::vector<double>& values, const std::vector<double>& dates, double guess) noexcept {
-  constexpr int kMaxIter = 100;
-  constexpr double kTolerance = 1.0e-10;
-  double rate = guess;
+// Bisects [lo, hi] as Mac Excel's XIRR does: the midpoint is taken from `hi`,
+// and the first midpoint within 5e-9 + 1e-8|m| of the previous one whose
+// residual is below 2e-8 of the largest cash flow is the result.
+double xirr_bisect(const std::vector<double>& values, const std::vector<double>& dates, double lo, double hi,
+                   double max_abs_value) noexcept {
+  constexpr int kMaxIter = 2200;
+  double f_lo = xnpv_sum(values, dates, lo);
+  double prev = std::numeric_limits<double>::quiet_NaN();
   for (int iter = 0; iter < kMaxIter; ++iter) {
-    if (rate <= -1.0) {
-      return std::numeric_limits<double>::quiet_NaN();
+    const double mid = hi - (hi - lo) / 2.0;
+    const double f_mid = xnpv_sum(values, dates, mid);
+    if (std::fabs(mid - prev) < 5.0e-9 + 1.0e-8 * std::fabs(mid) && std::fabs(f_mid) / max_abs_value < 2.0e-8) {
+      return mid;
     }
-    const double fval = xnpv_sum(values, dates, rate);
-    if (std::isnan(fval) || std::isinf(fval)) {
-      return std::numeric_limits<double>::quiet_NaN();
+    prev = mid;
+    if (f_mid * f_lo > 0.0) {
+      lo = mid;
+      f_lo = f_mid;
+    } else {
+      hi = mid;
     }
-    if (std::fabs(fval) < kTolerance) {
-      return rate;
-    }
-    const double dval = xnpv_dsum(values, dates, rate);
-    if (dval == 0.0 || std::isnan(dval) || std::isinf(dval)) {
-      return std::numeric_limits<double>::quiet_NaN();
-    }
-    const double new_rate = rate - fval / dval;
-    if (std::isnan(new_rate) || std::isinf(new_rate)) {
-      return std::numeric_limits<double>::quiet_NaN();
-    }
-    if (std::fabs(new_rate - rate) < kTolerance) {
-      return new_rate;
-    }
-    rate = new_rate;
   }
   return std::numeric_limits<double>::quiet_NaN();
 }
 
-double xirr_bracket(const std::vector<double>& values, const std::vector<double>& dates) noexcept {
-  return bracket_rate_root([&](double rate) noexcept { return xnpv_sum(values, dates, rate); },
-                           [&](double guess) noexcept { return xirr_newton(values, dates, guess); });
+// Mac Excel's XIRR search from step `s` (the guess, or 1e-5 for a zero
+// guess): [0, 2s] doubled until it brackets a root, then, when s < 1,
+// [-s, 0] (a zero f(-s) does not count) and [-1, -s]. NaN when no bracket
+// is found.
+double xirr_solve(const std::vector<double>& values, const std::vector<double>& dates, double s) noexcept {
+  double max_abs_value = 0.0;
+  for (double v : values) {
+    max_abs_value = std::max(max_abs_value, std::fabs(v));
+  }
+  const double f_zero = xnpv_sum(values, dates, 0.0);
+  double hi = 2.0 * s;
+  double f_hi = xnpv_sum(values, dates, hi);
+  while (std::isfinite(hi)) {
+    if (xirr_brackets(f_zero, f_hi)) {
+      return xirr_bisect(values, dates, 0.0, hi, max_abs_value);
+    }
+    const double next = 2.0 * hi;
+    const double f_next = xnpv_sum(values, dates, next);
+    // The sum has settled on its asymptote, so no wider bracket can help.
+    if (f_next == f_hi) {
+      break;
+    }
+    hi = next;
+    f_hi = f_next;
+  }
+  if (s < 1.0) {
+    const double f_neg_step = xnpv_sum(values, dates, -s);
+    if ((f_neg_step < 0.0 && f_zero > 0.0) || (f_neg_step > 0.0 && f_zero < 0.0)) {
+      return xirr_bisect(values, dates, -s, 0.0, max_abs_value);
+    }
+    // Later flows of both signs make f(-1) inf - inf; the bracket then starts
+    // one step above -1.
+    double lo = -1.0;
+    double f_lo = xnpv_sum(values, dates, lo);
+    if (std::isnan(f_lo)) {
+      lo = std::nextafter(-1.0, 0.0);
+      f_lo = xnpv_sum(values, dates, lo);
+    }
+    if (xirr_brackets(f_lo, f_neg_step)) {
+      return xirr_bisect(values, dates, lo, -s, max_abs_value);
+    }
+  }
+  return std::numeric_limits<double>::quiet_NaN();
 }
 
 }  // namespace
@@ -693,9 +717,8 @@ Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return err;
   }
 
-  // XIRR needs at least two cash flows with opposite sign to root-find
-  // meaningfully; otherwise Newton either diverges or converges to the
-  // boundary `rate == -1`. Mac Excel 365 reports #NUM! here.
+  // XIRR needs at least two cash flows with opposite sign; Mac Excel 365
+  // reports #NUM! otherwise.
   if (values.size() < 2U) {
     return Value::error(ErrorCode::Num);
   }
@@ -708,26 +731,13 @@ Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
       !read_optional_guess(call.as_call_arg(2), arena, registry, ctx, /*analysis_toolpak=*/true, &guess, &err)) {
     return err;
   }
-  // Mac Excel rejects any negative guess; Newton-Raphson would still
-  // converge from there, but Excel treats negative guesses as an input
-  // error (e.g. =XIRR(v, d, -0.5) -> #NUM!).
+  // Mac Excel rejects any negative guess (e.g. =XIRR(v, d, -0.5) -> #NUM!).
   if (guess < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-
-  // Try Newton-Raphson first; it converges quickly for the well-posed
-  // schedules (positive roots, guess near the answer). When it fails —
-  // typically because the true root is near the rate == -1 singularity
-  // and Newton can't cross it — fall back to a bracket + bisection
-  // scan over the full rate > -1 domain. LibreOffice and gnumeric use
-  // the same hybrid strategy.
-  const double newton_rate = xirr_newton(values, dates, guess);
-  if (std::isfinite(newton_rate)) {
-    return Value::number(newton_rate);
-  }
-  const double bracket_rate = xirr_bracket(values, dates);
-  if (std::isfinite(bracket_rate)) {
-    return Value::number(bracket_rate);
+  const double rate = xirr_solve(values, dates, guess == 0.0 ? 1.0e-5 : guess);
+  if (std::isfinite(rate)) {
+    return Value::number(rate);
   }
   return Value::error(ErrorCode::Num);
 }

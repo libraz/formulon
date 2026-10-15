@@ -1,0 +1,100 @@
+suite: xirr_search
+description: XIRR full-precision results from Excel's bracket-and-bisect search, compared as 15 digits plus the residual
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  - id: documentation_schedule_default_guess_digits
+    description: "Microsoft docs schedule, default guess (leading 15 digits)"
+    formula: "=TEXT(XIRR({-10000,2750,4250,3250,2750},{39448,39508,39751,39859,39904}),\"0.00000000000000E+00\")"
+  - id: documentation_schedule_default_guess_residual
+    description: "Microsoft docs schedule, default guess (residual below the 15 digits)"
+    formula: "=TEXT((XIRR({-10000,2750,4250,3250,2750},{39448,39508,39751,39859,39904}))-VALUE(TEXT(XIRR({-10000,2750,4250,3250,2750},{39448,39508,39751,39859,39904}),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: bracket_doubles_to_root_digits
+    description: "[0, 2s] doubles until it brackets the root at 1 (leading 15 digits)"
+    formula: "=TEXT(XIRR({-1,2},{39448,39813}),\"0.00000000000000E+00\")"
+  - id: bracket_doubles_to_root_residual
+    description: "[0, 2s] doubles until it brackets the root at 1 (residual below the 15 digits)"
+    formula: "=TEXT((XIRR({-1,2},{39448,39813}))-VALUE(TEXT(XIRR({-1,2},{39448,39813}),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: root_on_midpoint_digits
+    description: "root 1 hit exactly by a midpoint is approached from below (leading 15 digits)"
+    formula: "=TEXT(XIRR({-1,2},{39448,39813},1),\"0.00000000000000E+00\")"
+  - id: root_on_midpoint_residual
+    description: "root 1 hit exactly by a midpoint is approached from below (residual below the 15 digits)"
+    formula: "=TEXT((XIRR({-1,2},{39448,39813},1))-VALUE(TEXT(XIRR({-1,2},{39448,39813},1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: root_at_zero_digits
+    description: "root 0 stops on a halved guess (leading 15 digits)"
+    formula: "=TEXT(XIRR({-1,1},{39448,39813},0.5),\"0.00000000000000E+00\")"
+  - id: root_at_zero_residual
+    description: "root 0 stops on a halved guess (residual below the 15 digits)"
+    formula: "=TEXT((XIRR({-1,1},{39448,39813},0.5))-VALUE(TEXT(XIRR({-1,1},{39448,39813},0.5),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: zero_guess_digits
+    description: "a zero guess steps from 1E-5 (leading 15 digits)"
+    formula: "=TEXT(XIRR({-1,2},{39448,39848},0),\"0.00000000000000E+00\")"
+  - id: zero_guess_residual
+    description: "a zero guess steps from 1E-5 (residual below the 15 digits)"
+    formula: "=TEXT((XIRR({-1,2},{39448,39848},0))-VALUE(TEXT(XIRR({-1,2},{39448,39848},0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: guess_above_root_digits
+    description: "a guess above the root still bisects from 0 (leading 15 digits)"
+    formula: "=TEXT(XIRR({-100,110},{39448,39813},3),\"0.00000000000000E+00\")"
+  - id: guess_above_root_residual
+    description: "a guess above the root still bisects from 0 (residual below the 15 digits)"
+    formula: "=TEXT((XIRR({-100,110},{39448,39813},3))-VALUE(TEXT(XIRR({-100,110},{39448,39813},3),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: negative_root_lower_bracket_digits
+    description: "negative root below -guess uses [-1, -guess] (leading 15 digits)"
+    formula: "=TEXT(XIRR({-1,0.2},{39448,39848},0.5),\"0.00000000000000E+00\")"
+  - id: negative_root_lower_bracket_residual
+    description: "negative root below -guess uses [-1, -guess] (residual below the 15 digits)"
+    formula: "=TEXT((XIRR({-1,0.2},{39448,39848},0.5))-VALUE(TEXT(XIRR({-1,0.2},{39448,39848},0.5),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: negative_root_on_minus_guess_digits
+    description: "f(-guess) = 0 brackets with -1 (leading 15 digits)"
+    formula: "=TEXT(XIRR({-2,1},{39448,39813},0.5),\"0.00000000000000E+00\")"
+  - id: negative_root_on_minus_guess_residual
+    description: "f(-guess) = 0 brackets with -1 (residual below the 15 digits)"
+    formula: "=TEXT((XIRR({-2,1},{39448,39813},0.5))-VALUE(TEXT(XIRR({-2,1},{39448,39813},0.5),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: negative_root_upper_bracket_digits
+    description: "negative root above -guess uses [-guess, 0] (leading 15 digits)"
+    formula: "=TEXT(XIRR({-1,0.8},{39448,39848},0.3),\"0.00000000000000E+00\")"
+  - id: negative_root_upper_bracket_residual
+    description: "negative root above -guess uses [-guess, 0] (residual below the 15 digits)"
+    formula: "=TEXT((XIRR({-1,0.8},{39448,39848},0.3))-VALUE(TEXT(XIRR({-1,0.8},{39448,39848},0.3),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: multi_flow_large_root_digits
+    description: "multi-flow schedule whose root lies past 4 (leading 15 digits)"
+    setup:
+      A1: -5440000
+      A2: 63700000
+      A3: -0.0717
+      A4: -48800
+      A5: -2870000
+      A6: 0.0146
+      B1: 39448
+      B2: 40004
+      B3: 40066
+      B4: 41395
+      B5: 61205
+      B6: 75734
+    formula: "=TEXT(XIRR(A1:A6,B1:B6,0),\"0.00000000000000E+00\")"
+  - id: multi_flow_large_root_residual
+    description: "multi-flow schedule whose root lies past 4 (residual below the 15 digits)"
+    setup:
+      A1: -5440000
+      A2: 63700000
+      A3: -0.0717
+      A4: -48800
+      A5: -2870000
+      A6: 0.0146
+      B1: 39448
+      B2: 40004
+      B3: 40066
+      B4: 41395
+      B5: 61205
+      B6: 75734
+    formula: "=TEXT(XIRR(A1:A6,B1:B6,0)-VALUE(TEXT(XIRR(A1:A6,B1:B6,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: nan_at_minus_one_digits
+    description: "f(-1) is inf - inf, so the lower bracket starts one step above -1 (leading 15 digits)"
+    formula: "=TEXT(XIRR({-100;-20;60},{40000;40100;40200},0.1),\"0.00000000000000E+00\")"
+  - id: nan_at_minus_one_residual
+    description: "f(-1) is inf - inf, so the lower bracket starts one step above -1 (residual below the 15 digits)"
+    formula: "=TEXT(XIRR({-100;-20;60},{40000;40100;40200},0.1)-VALUE(TEXT(XIRR({-100;-20;60},{40000;40100;40200},0.1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")"
+  - id: negative_root_guess_at_least_one
+    description: "a negative root with guess >= 1 is #NUM!"
+    formula: "=XIRR({-2,1},{39448,39813},1)"
