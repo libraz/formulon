@@ -4,7 +4,7 @@
 
 #include "eval/range_dep_index.h"
 
-#include <algorithm>
+#include <cassert>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -21,16 +21,26 @@ std::uint32_t RangeDepIndex::intern_range(const CellRangeDependency& range) {
   if (!free_range_ids_.empty()) {
     range_id = free_range_ids_.back();
     free_range_ids_.pop_back();
-    ranges_[range_id] = RangeEntry{range, {}};
+    RangeEntry entry;
+    entry.range = range;
+    ranges_[range_id] = std::move(entry);
   } else {
     range_id = static_cast<std::uint32_t>(ranges_.size());
-    ranges_.push_back(RangeEntry{range, {}});
+    RangeEntry entry;
+    entry.range = range;
+    ranges_.push_back(std::move(entry));
   }
   range_ids_.emplace(range, range_id);
   const std::uint32_t first_band = range.row_first / kBandRows;
   const std::uint32_t last_band = range.row_last / kBandRows;
+  RangeEntry& entry = ranges_[range_id];
+  if (first_band <= last_band) {
+    entry.band_positions.reserve(static_cast<std::size_t>(last_band - first_band) + 1U);
+  }
   for (std::uint32_t band = first_band; band <= last_band; ++band) {
-    bands_[(static_cast<std::uint64_t>(range.sheet_id) << 32U) | band].push_back(range_id);
+    std::vector<std::uint32_t>& ids = bands_[(static_cast<std::uint64_t>(range.sheet_id) << 32U) | band];
+    entry.band_positions.push_back(ids.size());
+    ids.push_back(range_id);
   }
   ++live_range_count_;
   return range_id;
@@ -40,20 +50,34 @@ void RangeDepIndex::release_range(std::uint32_t range_id) {
   RangeEntry& entry = ranges_[range_id];
   const std::uint32_t first_band = entry.range.row_first / kBandRows;
   const std::uint32_t last_band = entry.range.row_last / kBandRows;
+  std::size_t position_index = 0U;
   for (std::uint32_t band = first_band; band <= last_band; ++band) {
     const std::uint64_t key = (static_cast<std::uint64_t>(entry.range.sheet_id) << 32U) | band;
     const auto bucket = bands_.find(key);
-    if (bucket == bands_.end()) {
-      continue;
-    }
+    assert(bucket != bands_.end());
     auto& ids = bucket->second;
-    ids.erase(std::remove(ids.begin(), ids.end(), range_id), ids.end());
+    assert(position_index < entry.band_positions.size());
+    std::size_t position = entry.band_positions[position_index++];
+    assert(position < ids.size());
+    assert(ids[position] == range_id);
+    const std::size_t last_position = ids.size() - 1U;
+    if (position != last_position) {
+      const std::uint32_t moved_range_id = ids[last_position];
+      ids[position] = moved_range_id;
+      RangeEntry& moved = ranges_[moved_range_id];
+      const std::uint32_t moved_first_band = moved.range.row_first / kBandRows;
+      assert(band >= moved_first_band);
+      const std::size_t moved_band_position = static_cast<std::size_t>(band - moved_first_band);
+      assert(moved_band_position < moved.band_positions.size());
+      moved.band_positions[moved_band_position] = position;
+    }
+    ids.pop_back();
     if (ids.empty()) {
       bands_.erase(bucket);
     }
   }
   range_ids_.erase(entry.range);
-  entry.range = CellRangeDependency{};
+  entry = RangeEntry{};
   free_range_ids_.push_back(range_id);
   --live_range_count_;
 }

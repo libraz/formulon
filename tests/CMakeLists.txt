@@ -179,6 +179,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/eval_recursion_depth_test.cpp
   unit/eval/eval_state_test.cpp
   unit/eval/dep_graph_test.cpp
+  unit/eval/range_dep_index_test.cpp
   unit/eval/dep_extractor_test.cpp
   unit/eval/dep_extractor_names_test.cpp
   unit/eval/dep_extractor_structured_refs_test.cpp
@@ -479,19 +480,19 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(
     NAME DbcsTableDrift
     COMMAND ${_FORMULON_BEHAVIOR_PY} -m unittest
-            ${CMAKE_SOURCE_DIR}/tests/codegen/dbcs_generated_test.py
+            tests/codegen/dbcs_generated_test.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   add_test(
     NAME CollationTableDrift
     COMMAND ${_FORMULON_BEHAVIOR_PY} -m unittest
-            ${CMAKE_SOURCE_DIR}/tests/codegen/collation_generated_test.py
+            tests/codegen/collation_generated_test.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   add_test(
     NAME LocaleFunctionNamesDrift
     COMMAND ${_FORMULON_BEHAVIOR_PY} -m unittest
-            ${CMAKE_SOURCE_DIR}/tests/codegen/locale_function_names_generated_test.py
+            tests/codegen/locale_function_names_generated_test.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   # Marked SLOW because the YAML-vocabulary scan reads the whole behaviour

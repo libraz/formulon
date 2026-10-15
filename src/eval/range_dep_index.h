@@ -188,6 +188,10 @@ class RangeDepIndex {
   struct RangeEntry {
     CellRangeDependency range;
     std::vector<CellNodeId> owners;
+    // Position of this id in each row-band bucket from the range's first
+    // band through its last. This makes release independent of the number
+    // of unrelated ranges sharing those buckets.
+    std::vector<std::size_t> band_positions;
     std::uint64_t visited_generation = 0U;
     std::uint32_t visited_owners = 0U;
   };
