@@ -276,6 +276,10 @@ class DepGraph {
 
   void add_dependency_source(CellNodeId dependent, CellNodeId dependency, DependencySource source);
   bool remove_dependency_source(CellNodeId dependent, CellNodeId dependency, DependencySource source);
+  /// Removes selected source bits from a detached snapshot of the
+  /// dependent's outgoing edges, then compacts the union adjacency once.
+  void clear_outgoing_sources(CellNodeId dependent, const std::vector<CellNodeId>& dependencies,
+                              std::uint8_t source_mask, bool dependent_was_known);
   /// Removes every provenance bit in `mask` from the pair.
   void remove_all_sources(CellNodeId dependent, CellNodeId dependency, std::uint8_t mask);
   /// Removes every provenance bit of the `dependent -> dependency` edge, if present.

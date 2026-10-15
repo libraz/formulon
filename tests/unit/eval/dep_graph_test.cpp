@@ -148,6 +148,94 @@ TEST(DepGraph, DynamicProvenanceCoexistsWithOtherSources) {
   EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kDynamicReference), 0U);
 }
 
+TEST(DepGraph, BulkDynamicClearPreservesSourcesOrderAndNodeCounts) {
+  DepGraph g;
+  const CellNodeId reader = Make(0, 10, 0);
+  const CellNodeId incoming_reader = Make(0, 9, 0);
+  const CellNodeId authored_only = Make(0, 11, 0);
+  const CellNodeId dynamic_only = Make(0, 12, 0);
+  const CellNodeId authored_dynamic = Make(0, 13, 0);
+  const CellNodeId spill_dynamic = Make(0, 14, 0);
+  const CellNodeId virtual_range = range_node(7U);
+
+  g.add_dependency(incoming_reader, reader);
+  g.add_dependency(reader, authored_only);
+  g.add_dynamic_dependency(reader, dynamic_only);
+  g.add_dependency(reader, authored_dynamic);
+  g.add_dynamic_dependency(reader, authored_dynamic);
+  g.replace_dependencies(DepGraph::DependencySource::kSpillFootprint, {{reader, spill_dynamic}});
+  g.add_dynamic_dependency(reader, spill_dynamic);
+  g.add_dependency(reader, reader);
+  g.add_dynamic_dependency(reader, reader);
+  g.add_dynamic_dependency(reader, virtual_range);
+
+  ASSERT_EQ(g.dependencies_of(reader), (std::vector<CellNodeId>{authored_only, dynamic_only, authored_dynamic,
+                                                                spill_dynamic, reader, virtual_range}));
+  ASSERT_EQ(g.source_edge_count(DepGraph::DependencySource::kAuthored), 4U);
+  ASSERT_EQ(g.source_edge_count(DepGraph::DependencySource::kSpillFootprint), 1U);
+  ASSERT_EQ(g.source_edge_count(DepGraph::DependencySource::kDynamicReference), 5U);
+  ASSERT_EQ(g.node_count(), 6U);
+
+  g.clear_dynamic_dependencies_of(reader);
+
+  EXPECT_FALSE(g.has_dynamic_dependencies(reader));
+  EXPECT_EQ(g.dependencies_of(reader),
+            (std::vector<CellNodeId>{authored_only, authored_dynamic, spill_dynamic, reader}));
+  EXPECT_EQ(Sorted(g.dependents_of(reader)), Sorted({incoming_reader, reader}));
+  EXPECT_TRUE(g.dependents_of(dynamic_only).empty());
+  EXPECT_TRUE(g.dependents_of(virtual_range).empty());
+  EXPECT_TRUE(g.has_dependency_source(reader, authored_dynamic, DepGraph::DependencySource::kAuthored));
+  EXPECT_TRUE(g.has_dependency_source(reader, spill_dynamic, DepGraph::DependencySource::kSpillFootprint));
+  EXPECT_FALSE(g.has_dependency_source(reader, spill_dynamic, DepGraph::DependencySource::kDynamicReference));
+  EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kAuthored), 4U);
+  EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kSpillFootprint), 1U);
+  EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kDynamicReference), 0U);
+  EXPECT_EQ(g.node_count(), 5U);
+}
+
+TEST(DepGraph, BulkClearRemovesEveryProvenanceButKeepsIncomingEdges) {
+  DepGraph g;
+  const CellNodeId dependent = Make(0, 20, 0);
+  const CellNodeId upstream = Make(0, 19, 0);
+  const CellNodeId authored_target = Make(0, 21, 0);
+  const CellNodeId dynamic_target = Make(0, 22, 0);
+  const CellNodeId shared_target = Make(0, 23, 0);
+  const CellNodeId peer = Make(0, 24, 0);
+  const CellNodeId virtual_range = range_node(9U);
+
+  g.add_dependency(upstream, dependent);
+  g.add_dependency(dependent, authored_target);
+  g.add_dynamic_dependency(dependent, dynamic_target);
+  g.add_dependency(dependent, shared_target);
+  g.add_dynamic_dependency(dependent, shared_target);
+  g.add_dependency(dependent, dependent);
+  g.add_dynamic_dependency(dependent, dependent);
+  g.add_dependency(dependent, virtual_range);
+  g.add_dependency(peer, shared_target);
+  g.add_dynamic_dependency(peer, shared_target);
+  g.replace_dependencies(DepGraph::DependencySource::kSpillFootprint,
+                         {{dependent, shared_target}, {peer, shared_target}});
+
+  ASSERT_EQ(g.node_count(), 6U);
+  ASSERT_EQ(g.source_edge_count(DepGraph::DependencySource::kAuthored), 6U);
+  ASSERT_EQ(g.source_edge_count(DepGraph::DependencySource::kSpillFootprint), 2U);
+  ASSERT_EQ(g.source_edge_count(DepGraph::DependencySource::kDynamicReference), 4U);
+
+  g.clear_dependencies_of(dependent);
+
+  EXPECT_TRUE(g.dependencies_of(dependent).empty());
+  EXPECT_EQ(g.dependents_of(dependent), std::vector<CellNodeId>{upstream});
+  EXPECT_TRUE(g.dependents_of(authored_target).empty());
+  EXPECT_TRUE(g.dependents_of(dynamic_target).empty());
+  EXPECT_EQ(g.dependents_of(shared_target), std::vector<CellNodeId>{peer});
+  EXPECT_TRUE(g.dependents_of(virtual_range).empty());
+  EXPECT_FALSE(g.has_dynamic_dependencies(dependent));
+  EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kAuthored), 2U);
+  EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kSpillFootprint), 1U);
+  EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kDynamicReference), 1U);
+  EXPECT_EQ(g.node_count(), 4U);
+}
+
 TEST(DepGraph, NodeRemovalPurgesDynamicProvenance) {
   DepGraph g;
   const CellNodeId reader = Make(0, 1, 0);
@@ -163,6 +251,76 @@ TEST(DepGraph, NodeRemovalPurgesDynamicProvenance) {
   EXPECT_FALSE(g.has_dynamic_dependencies(reader));
   EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kDynamicReference), 0U);
   EXPECT_TRUE(g.empty());
+}
+
+TEST(DepGraph, RemoveHighIndegreeNodePreservesOwnerSourcesAndCounts) {
+  constexpr std::size_t kReaderCount = 64U;
+  DepGraph g;
+  const CellNodeId target = Make(0, 100, 0);
+  const CellNodeId target_output = Make(0, 101, 0);
+  const CellNodeId shared_dependency = Make(0, 102, 0);
+  const CellNodeId survivor = Make(0, 300, 0);
+  const CellNodeId survivor_dependency = Make(0, 301, 0);
+  std::vector<CellNodeId> readers;
+  std::vector<DepGraph::Edge> spill_edges;
+  readers.reserve(kReaderCount);
+  spill_edges.reserve(kReaderCount / 3U + 3U);
+
+  for (std::size_t i = 0U; i < kReaderCount; ++i) {
+    const CellNodeId reader = Make(0, static_cast<std::uint32_t>(200U + i), 0);
+    readers.push_back(reader);
+    g.add_dependency(reader, target);
+    if (i % 2U == 0U) {
+      g.add_dynamic_dependency(reader, target);
+    }
+    if (i % 3U == 0U) {
+      spill_edges.emplace_back(reader, target);
+    }
+    if (i % 4U == 0U) {
+      g.add_dependency(reader, shared_dependency);
+      if (i % 12U == 0U) {
+        g.add_dynamic_dependency(reader, shared_dependency);
+      }
+    }
+  }
+  g.add_dependency(target, target_output);
+  g.add_dependency(target, target);
+  g.add_dynamic_dependency(target, target);
+  g.add_dependency(survivor, survivor_dependency);
+  g.add_dynamic_dependency(survivor, survivor_dependency);
+  spill_edges.emplace_back(target, target_output);
+  spill_edges.emplace_back(target, target);
+  spill_edges.emplace_back(survivor, survivor_dependency);
+  g.replace_dependencies(DepGraph::DependencySource::kSpillFootprint, spill_edges);
+
+  ASSERT_EQ(g.node_count(), 69U);
+  ASSERT_EQ(g.source_edge_count(DepGraph::DependencySource::kAuthored), 83U);
+  ASSERT_EQ(g.source_edge_count(DepGraph::DependencySource::kSpillFootprint), 25U);
+  ASSERT_EQ(g.source_edge_count(DepGraph::DependencySource::kDynamicReference), 40U);
+
+  g.remove_node(target);
+
+  EXPECT_TRUE(g.dependencies_of(target).empty());
+  EXPECT_TRUE(g.dependents_of(target).empty());
+  EXPECT_TRUE(g.dependents_of(target_output).empty());
+  EXPECT_EQ(g.dependencies_of(survivor), std::vector<CellNodeId>{survivor_dependency});
+  EXPECT_TRUE(g.has_dependency_source(survivor, survivor_dependency, DepGraph::DependencySource::kAuthored));
+  EXPECT_TRUE(g.has_dependency_source(survivor, survivor_dependency, DepGraph::DependencySource::kSpillFootprint));
+  EXPECT_TRUE(g.has_dependency_source(survivor, survivor_dependency, DepGraph::DependencySource::kDynamicReference));
+  for (std::size_t i = 0U; i < readers.size(); ++i) {
+    const bool keeps_an_edge = i % 4U == 0U;
+    const bool keeps_dynamic_edge = i % 12U == 0U;
+    EXPECT_FALSE(g.has_dependency_source(readers[i], target, DepGraph::DependencySource::kAuthored));
+    EXPECT_FALSE(g.has_dependency_source(readers[i], target, DepGraph::DependencySource::kDynamicReference));
+    EXPECT_EQ(g.dependencies_of(readers[i]),
+              keeps_an_edge ? std::vector<CellNodeId>{shared_dependency} : std::vector<CellNodeId>{});
+    EXPECT_EQ(g.has_dynamic_dependencies(readers[i]), keeps_dynamic_edge);
+  }
+  EXPECT_EQ(g.dependents_of(shared_dependency).size(), 16U);
+  EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kAuthored), 17U);
+  EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kSpillFootprint), 1U);
+  EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kDynamicReference), 7U);
+  EXPECT_EQ(g.node_count(), 19U);
 }
 
 TEST(DepGraph, SourceReplacementIsIdempotentAndRemovesDerivedOnlyEdges) {

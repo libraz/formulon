@@ -204,10 +204,10 @@ void DepGraph::clear_dynamic_dependencies_of(CellNodeId dependent) {
   if (pos == dynamic_by_dependent_.end()) {
     return;
   }
-  const std::vector<CellNodeId> dependencies = pos->second;
-  for (CellNodeId dependency : dependencies) {
-    remove_dependency_source(dependent, dependency, DependencySource::kDynamicReference);
-  }
+  const bool dependent_was_known = forward_.count(dependent) != 0U || reverse_.count(dependent) != 0U;
+  std::vector<CellNodeId> dependencies = std::move(pos->second);
+  dynamic_by_dependent_.erase(pos);
+  clear_outgoing_sources(dependent, dependencies, source_bit(DependencySource::kDynamicReference), dependent_was_known);
 }
 
 bool DepGraph::is_dynamic_only_edge(CellNodeId dependent, CellNodeId dependency) const noexcept {
@@ -231,29 +231,96 @@ void DepGraph::remove_edge_sources(CellNodeId dependent, CellNodeId dependency) 
   }
 }
 
+void DepGraph::clear_outgoing_sources(CellNodeId dependent, const std::vector<CellNodeId>& dependencies,
+                                      std::uint8_t source_mask, bool dependent_was_known) {
+  for (CellNodeId dependency : dependencies) {
+    const auto edge = edge_sources_.find(Edge{dependent, dependency});
+    if (edge == edge_sources_.end()) {
+      continue;
+    }
+    const std::uint8_t removed_mask = static_cast<std::uint8_t>(edge->second & source_mask);
+    if (removed_mask == 0U) {
+      continue;
+    }
+    if ((removed_mask & source_bit(DependencySource::kAuthored)) != 0U) {
+      --authored_edge_count_;
+    }
+    if ((removed_mask & source_bit(DependencySource::kSpillFootprint)) != 0U) {
+      spill_footprint_edges_.erase(Edge{dependent, dependency});
+    }
+    if ((removed_mask & source_bit(DependencySource::kDynamicReference)) != 0U) {
+      --dynamic_edge_count_;
+    }
+
+    edge->second = static_cast<std::uint8_t>(edge->second & static_cast<std::uint8_t>(~removed_mask));
+    if (edge->second != 0U) {
+      continue;
+    }
+    edge_sources_.erase(edge);
+
+    // Targets are distinct, so each reverse bucket is edited once; the source list is compacted below.
+    const auto reverse = reverse_.find(dependency);
+    if (reverse != reverse_.end()) {
+      erase_first(reverse->second, dependent);
+      if (reverse->second.empty()) {
+        reverse_.erase(reverse);
+      }
+    }
+
+    if (dependency != dependent && !is_range_node(dependency) && forward_.count(dependency) == 0U &&
+        reverse_.count(dependency) == 0U) {
+      --node_count_;
+    }
+  }
+
+  const auto forward = forward_.find(dependent);
+  if (forward != forward_.end()) {
+    std::vector<CellNodeId>& adjacency = forward->second;
+    const auto retained_end = std::remove_if(adjacency.begin(), adjacency.end(), [&](CellNodeId dependency) {
+      return edge_sources_.find(Edge{dependent, dependency}) == edge_sources_.end();
+    });
+    adjacency.erase(retained_end, adjacency.end());
+    if (adjacency.empty()) {
+      forward_.erase(forward);
+    }
+  }
+
+  if (dependent_was_known && !is_range_node(dependent) && forward_.count(dependent) == 0U &&
+      reverse_.count(dependent) == 0U) {
+    --node_count_;
+  }
+}
+
 void DepGraph::clear_dependencies_of(CellNodeId dependent) {
   auto fwd = forward_.find(dependent);
   if (fwd == forward_.end()) {
     return;
   }
-  const std::vector<CellNodeId> dependencies = fwd->second;
-  for (CellNodeId dependency : dependencies) {
-    remove_edge_sources(dependent, dependency);
-  }
+  const bool dependent_was_known = forward_.count(dependent) != 0U || reverse_.count(dependent) != 0U;
+  std::vector<CellNodeId> dependencies = std::move(fwd->second);
+  forward_.erase(fwd);
+  dynamic_by_dependent_.erase(dependent);
+  constexpr std::uint8_t kAllSourceBits = static_cast<std::uint8_t>(source_bit(DependencySource::kAuthored) |
+                                                                    source_bit(DependencySource::kSpillFootprint) |
+                                                                    source_bit(DependencySource::kDynamicReference));
+  clear_outgoing_sources(dependent, dependencies, kAllSourceBits, dependent_was_known);
 }
 
 void DepGraph::remove_node(CellNodeId node) {
-  // Remove outgoing edges first, then use the now-stable reverse bucket to
-  // remove all incoming source bits. Copying both lists avoids invalidating
-  // an adjacency vector while the source-aware helper updates it.
+  // Detach both buckets whole so no per-edge removal shifts a high-degree list.
   clear_dependencies_of(node);
   auto rev = reverse_.find(node);
   if (rev == reverse_.end()) {
     return;
   }
-  const std::vector<CellNodeId> dependents = rev->second;
+  const bool node_was_known = forward_.count(node) != 0U || reverse_.count(node) != 0U;
+  std::vector<CellNodeId> dependents = std::move(rev->second);
+  reverse_.erase(rev);
   for (CellNodeId dependent : dependents) {
     remove_edge_sources(dependent, node);
+  }
+  if (node_was_known && !is_range_node(node)) {
+    --node_count_;
   }
 }
 
