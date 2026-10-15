@@ -173,8 +173,21 @@ TEST(PivotTableReader, MissingSortTypeKeepsAscendingDefault) {
   ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
   const pivot::PivotTable& table = table_or.value();
   ASSERT_EQ(table.fields().size(), 1U);
-  EXPECT_TRUE(table.fields()[0].sort.ascending);
-  EXPECT_FALSE(table.fields()[0].sort.manual);
+  EXPECT_TRUE(table.fields()[0].sort.manual);
+}
+TEST(PivotTableReader, ExplicitAscendingSortTypeIsLabelOrder) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("  <location ref=\"A1:B2\"/>");
+  xml.append("  <pivotFields count=\"1\">");
+  xml.append("    <pivotField axis=\"axisRow\" sortType=\"ascending\"/>");
+  xml.append("  </pivotFields>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  EXPECT_TRUE(table_or.value().fields()[0].sort.ascending);
+  EXPECT_FALSE(table_or.value().fields()[0].sort.manual);
 }
 TEST(PivotTableReader, ValuesFieldMarkerIsKeptOutOfFieldOrder) {
   std::string xml(kXmlDecl);

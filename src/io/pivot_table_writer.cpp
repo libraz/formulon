@@ -118,13 +118,12 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, pivot::P
     out.append(names->attr);
     out.append("=\"1\"");
   }
-  // `sortType` defaults to ascending-by-label; only emit it when the
-  // field's sort deviates from that (explicit descending, or manual
-  // order from `<items>` document order), matching the reader's default.
-  if (field.sort.manual) {
-    out.append(" sortType=\"manual\"");
-  } else if (!field.sort.ascending) {
-    out.append(" sortType=\"descending\"");
+  // An absent `sortType` reads back as manual (`<items>` order), so only
+  // label-sorted axis fields spell their direction out.
+  const bool on_axis = field.axis == pivot::PivotAxis::Row || field.axis == pivot::PivotAxis::Col ||
+                       field.axis == pivot::PivotAxis::Page;
+  if (on_axis && !field.sort.manual) {
+    out.append(field.sort.ascending ? " sortType=\"ascending\"" : " sortType=\"descending\"");
   }
   // The report form is per field in Excel (`compact` / `outline` default to
   // true); every field carries the table's form, as Excel writes it.

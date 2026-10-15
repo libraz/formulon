@@ -69,6 +69,9 @@ struct HierNode {
   /// field. Ordinary label, descending, and manual-sorted levels leave this
   /// empty because no consumer needs to reconstruct their record set.
   std::vector<std::size_t> record_indices;
+  /// Lowest cache-record index below this node; orders manual-sort siblings
+  /// that the field's `<items>` never enumerated.
+  std::size_t first_record = static_cast<std::size_t>(-1);
   /// Aggregate used when the owning field has SortSpec::by_field. Absent
   /// means normal label ordering remains in effect.
   std::optional<Value> value_sort_key;
@@ -91,7 +94,7 @@ struct HierLevel {
   /// `ordered_children` can sort siblings by authored order instead of
   /// by label. A value the map does not contain (the cache carries data
   /// `<items>` never enumerated) sorts after every mapped value, in the
-  /// field's natural ascending order.
+  /// source first-appearance order.
   const std::map<Value, std::size_t, ValueLess>* manual_order;
 };
 
@@ -140,6 +143,8 @@ inline std::vector<OrderedHierarchyChild> ordered_children(HierNode& tree, const
         // label order below.
       } else if (l_mapped != r_mapped) {
         return l_mapped;  // Authored items sort before ones the file never enumerated.
+      } else if (lhs.node->first_record != rhs.node->first_record) {
+        return lhs.node->first_record < rhs.node->first_record;
       }
     }
     if (sort_by_value && lhs.node->value_sort_key.has_value() && rhs.node->value_sort_key.has_value()) {

@@ -202,13 +202,23 @@ TEST(PivotTableWriter, DefinitionRoundTripsThroughReader) {
 // sortType
 // ---------------------------------------------------------------------------
 
-TEST(PivotTableWriter, AscendingSortOmitsSortTypeAttribute) {
-  // The struct default (ascending, not manual) matches the schema's
-  // observed common case, so it must not gain a new attribute no
-  // existing Excel-authored file carries.
+TEST(PivotTableWriter, AscendingSortSpellsOutSortType) {
+  // An absent attribute reads back as manual, so the struct default
+  // (ascending, not manual) must be written explicitly.
   pivot::PivotTable table;
   pivot::PivotField field;
   field.axis = pivot::PivotAxis::Row;
+  table.mutable_fields().push_back(std::move(field));
+
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("sortType=\"ascending\""), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, ManualSortOmitsSortTypeAttribute) {
+  pivot::PivotTable table;
+  pivot::PivotField field;
+  field.axis = pivot::PivotAxis::Row;
+  field.sort.manual = true;
   table.mutable_fields().push_back(std::move(field));
 
   const std::string xml = write_pivot_table_definition(table);
@@ -229,7 +239,6 @@ TEST(PivotTableWriter, DescendingAndManualSortRoundTrip) {
 
   const std::string xml = write_pivot_table_definition(table);
   EXPECT_NE(xml.find("sortType=\"descending\""), std::string::npos) << xml;
-  EXPECT_NE(xml.find("sortType=\"manual\""), std::string::npos) << xml;
 
   auto parsed_or = read_pivot_table_definition(Bytes(xml));
   ASSERT_TRUE(static_cast<bool>(parsed_or)) << "read failed: " << parsed_or.error().message;
@@ -1079,7 +1088,7 @@ TEST(PivotTableWriter, TabularTwoRowFieldsDeriveFirstDataCol) {
 
 TEST(PivotTableWriter, AuthoredFieldsCarryShowAllZeroAndUpdatedVersion) {
   const std::string xml = write_pivot_table_definition(TableWithRowAndDataFields(1U));
-  EXPECT_NE(xml.find("<pivotField axis=\"axisRow\" showAll=\"0\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<pivotField axis=\"axisRow\" showAll=\"0\" sortType=\"ascending\"/>"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<pivotField dataField=\"1\" showAll=\"0\"/>"), std::string::npos) << xml;
   EXPECT_NE(xml.find(" updatedVersion=\"8\""), std::string::npos) << xml;
 }

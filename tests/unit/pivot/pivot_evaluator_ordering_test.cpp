@@ -547,5 +547,45 @@ TEST(PivotEvaluatorCollation, CaptionOrderingUsesItemOrder) {
   EXPECT_EQ(evaluate_labels(labels, mac(ExcelLocale::kEnUS), greater).rows.size(), 0U);
 }
 
+TEST(PivotEvaluator, ManualSortAppendsUnlistedItemsInSourceOrder) {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  PivotCacheField region;
+  region.name = "Region";
+  // Shared items are label-sorted, so label order and appearance order differ.
+  region.shared_items.push_back(owned_text(cache, "East"));
+  region.shared_items.push_back(owned_text(cache, "North"));
+  region.shared_items.push_back(owned_text(cache, "South"));
+  region.shared_items.push_back(owned_text(cache, "West"));
+  cache.mutable_fields().push_back(std::move(region));
+  cache.mutable_fields().push_back(PivotCacheField{"Product", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+
+  auto add = [&](std::uint32_t region_index) {
+    PivotCacheRecord rec;
+    rec.cells = {Value::number(region_index), Value::blank(), Value::number(1.0)};
+    rec.cell_is_index = {true, false, false};
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  add(3U);  // West
+  add(0U);  // East
+  add(2U);  // South
+  add(1U);  // North
+
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_pivot_cache_id(1);
+  table.mutable_fields()[0].sort.manual = true;
+  table.mutable_fields()[0].items = {PivotItem{"South", true, true, 2U}};
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 4U);
+  EXPECT_EQ(r.rows[0].label, "South");
+  EXPECT_EQ(r.rows[1].label, "West");
+  EXPECT_EQ(r.rows[2].label, "East");
+  EXPECT_EQ(r.rows[3].label, "North");
+}
+
 }  // namespace
 }  // namespace formulon::pivot

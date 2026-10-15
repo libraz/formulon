@@ -312,6 +312,7 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
       it->second.label_override = std::move(label_override);
     }
     cursor = &it->second;
+    cursor->first_record = std::min(cursor->first_record, record_index);
     // Only value-sorted levels consume record indices.
     if (level.value_sort_field.has_value() && level.value_sort_aggregation.has_value()) {
       cursor->record_indices.push_back(record_index);

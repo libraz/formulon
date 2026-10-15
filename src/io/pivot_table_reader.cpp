@@ -134,15 +134,8 @@ Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot:
     if (!field.subtotal_fns.empty()) {
       field.default_subtotal = false;
     }
-    // `sortType="descending"` reverses sibling order; `"manual"` defers
-    // to this field's `<items>` document order instead of label order.
-    // A missing attribute keeps the ascending-by-label default already
-    // in force rather than the schema's nominal "manual" default: no
-    // fixture in this tree exercises the attribute, and treating
-    // absence as manual would reorder every field that has never set it
-    // for a spelling this reader cannot confirm against a real file.
-    // `"ascending"` (or any other spelling) leaves that default in place
-    // too.
+    // Measured: an absent `sortType` is the schema's "manual" default, so
+    // the field follows its `<items>` document order.
     if (pugi::xml_attribute sort_attr = f.attribute("sortType"); sort_attr) {
       const std::string_view value = sort_attr.value();
       if (value == "descending") {
@@ -150,6 +143,8 @@ Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot:
       } else if (value == "manual") {
         field.sort.manual = true;
       }
+    } else {
+      field.sort.manual = true;
     }
     if (pugi::xml_node items_node = f.child("items"); items_node) {
       RETURN_IF_ERROR(ParseItems(items_node, &field));

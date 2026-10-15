@@ -464,7 +464,7 @@ TEST(FormulonCApiPivot, ManualSortKeepsItemOrderThroughSaveAndReload) {
   EXPECT_EQ(RowLabels(wb.handle, pivot_idx), (std::vector<std::string>{"South", "North"}));
 
   const std::string xml = SavedPivotXml(wb.handle);
-  EXPECT_NE(xml.find("sortType=\"manual\""), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("sortType"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<item x=\"1\"/><item x=\"0\"/>"), std::string::npos) << xml;
 
   BufferGuard saved;
@@ -474,10 +474,10 @@ TEST(FormulonCApiPivot, ManualSortKeepsItemOrderThroughSaveAndReload) {
   ASSERT_EQ(fm_workbook_set_excel_profile_id(loaded.handle, "win-365-ja_JP"), 0);
   EXPECT_EQ(RowLabels(loaded.handle, 0), (std::vector<std::string>{"South", "North"}));
 
-  // Leaving manual order returns to label order and drops the attribute.
+  // Leaving manual order returns to label order and spells it out.
   ASSERT_EQ(fm_workbook_pivot_field_set_sort(wb.handle, 0, pivot_idx, 0, FM_PIVOT_SORT_ASCENDING, nullptr), 0);
   EXPECT_EQ(RowLabels(wb.handle, pivot_idx), (std::vector<std::string>{"North", "South"}));
-  EXPECT_EQ(SavedPivotXml(wb.handle).find("sortType"), std::string::npos);
+  EXPECT_NE(SavedPivotXml(wb.handle).find("sortType=\"ascending\""), std::string::npos);
 }
 
 TEST(FormulonCApiPivot, ManualSortRejectsAByFieldKeyWithoutMutation) {
