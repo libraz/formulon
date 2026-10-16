@@ -27,9 +27,11 @@ cases:
 
   - id: norminv_median
     formula: "=NORMINV(0.5, 10, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norminv_upper_tail
     formula: "=NORMINV(0.975, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: normsdist_legacy_is_cumulative
     description: "Legacy NORMSDIST has no cumulative flag — always CDF"
@@ -40,6 +42,7 @@ cases:
 
   - id: normsinv_upper_tail
     formula: "=NORMSINV(0.975)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- BINOMDIST -----------------------------------------------------------
   - id: binomdist_pmf
@@ -131,12 +134,14 @@ cases:
   - id: lognormdist_legacy_is_cumulative
     description: "Legacy LOGNORMDIST has no cumulative flag — always CDF"
     formula: "=LOGNORMDIST(2, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: lognormdist_nonpositive_x_is_num
     formula: "=LOGNORMDIST(0, 0, 1)"
 
   - id: loginv_median
     formula: "=LOGINV(0.5, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- HYPGEOMDIST ---------------------------------------------------------
   - id: hypgeomdist_pmf
@@ -204,6 +209,7 @@ cases:
   - id: normdist_negative_x_cdf
     description: "Standard-normal CDF at x=-1.5 (symmetric tail)"
     formula: "=NORMDIST(-1.5, 0, 1, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norminv_lower_tail
     description: "Lower 2.5% quantile = -1.96"
@@ -229,6 +235,7 @@ cases:
   - id: normsinv_median
     description: "p=0.5 -> 0 (standard-normal median)"
     formula: "=NORMSINV(0.5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: normsinv_lower_tail
     formula: "=NORMSINV(0.025)"
@@ -351,9 +358,11 @@ cases:
 
   - id: loginv_upper_quantile
     formula: "=LOGINV(0.95, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: loginv_lower_quantile
     formula: "=LOGINV(0.05, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: loginv_p_zero_is_num
     formula: "=LOGINV(0, 0, 1)"

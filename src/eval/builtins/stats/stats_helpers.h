@@ -208,12 +208,9 @@ Value percentile_inc_sorted(const std::vector<double>& xs, double k);
 // boundary, matching Mac Excel 365.
 Value percentile_exc_sorted(const std::vector<double>& xs, double k);
 
-// Inverse standard-normal CDF. Uses Peter Acklam's rational
-// approximation for the initial guess (good to ~1e-6 in practice across
-// the unit interval) and then runs Halley-method refinement steps to
-// bring the accuracy up to ~1e-14, comfortably inside Excel's reported
-// precision. Callers must guarantee `0 < p < 1`; `p <= 0` or `p >= 1`
-// should surface `#NUM!` before calling in.
+// Inverse standard-normal CDF, `stats::normal_quantile`. Callers must
+// guarantee `0 < p < 1`; `p <= 0` or `p >= 1` should surface `#NUM!` before
+// calling in.
 double InverseStandardNormal(double p);
 
 // Ceiling on how many probability-mass terms a discrete cumulative

@@ -25,6 +25,7 @@ cases:
   - id: norm_dist_scaled
     description: "N(100, 15) CDF at 105 ~ 0.630559"
     formula: "=NORM.DIST(105, 100, 15, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norm_dist_negative_sd_is_num
     description: "sd <= 0 yields #NUM!"
@@ -45,14 +46,17 @@ cases:
   - id: norm_inv_half
     description: "p=0.5 maps to the mean"
     formula: "=NORM.INV(0.5, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norm_inv_95pct
     description: "95th percentile of N(0, 1) ~ 1.644854"
     formula: "=NORM.INV(0.95, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norm_inv_scaled
     description: "97.5th percentile of N(100, 15) ~ 129.3995"
     formula: "=NORM.INV(0.975, 100, 15)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norm_inv_p_zero_is_num
     description: "p <= 0 yields #NUM!"
@@ -65,9 +69,11 @@ cases:
   # -- NORM.S.INV ----------------------------------------------------------
   - id: norm_s_inv_half
     formula: "=NORM.S.INV(0.5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norm_s_inv_95pct
     formula: "=NORM.S.INV(0.95)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- BINOM.DIST ----------------------------------------------------------
   - id: binom_pmf_fair_coin
@@ -128,10 +134,12 @@ cases:
   - id: confidence_norm_basic
     description: "z_{0.975} * 20 / sqrt(100) ~ 3.919928"
     formula: "=CONFIDENCE(0.05, 20, 100)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: confidence_norm_dot_matches
     description: "CONFIDENCE.NORM equals CONFIDENCE for the same inputs"
     formula: "=CONFIDENCE.NORM(0.05, 20, 100)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: confidence_alpha_zero_is_num
     formula: "=CONFIDENCE(0, 20, 100)"
@@ -264,6 +272,7 @@ cases:
   - id: confidence_size_one
     description: "Single-observation sample still produces an interval"
     formula: "=CONFIDENCE(0.05, 20, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: confidence_large_stddev
     description: "Linear in stddev: doubling stddev doubles half-width"
@@ -276,6 +285,7 @@ cases:
   - id: confidence_norm_size_one
     description: "CONFIDENCE.NORM mirrors CONFIDENCE for n=1"
     formula: "=CONFIDENCE.NORM(0.05, 20, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: confidence_norm_large_stddev
     description: "CONFIDENCE.NORM scales linearly with stddev"

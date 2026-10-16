@@ -127,6 +127,7 @@ cases:
   - id: lognorm_dist_cdf_basic
     description: "LOGNORM(mean=3.5, sd=1.2) CDF at 4 ~ 0.039083"
     formula: "=LOGNORM.DIST(4, 3.5, 1.2, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: lognorm_dist_pdf_standard
     description: "LOGNORM(mean=0, sd=1) PDF at 1 = 1/sqrt(2*pi) ~ 0.398942"
@@ -144,10 +145,12 @@ cases:
   - id: lognorm_inv_median
     description: "Median of LOGNORM(0, 1) is exp(0) = 1"
     formula: "=LOGNORM.INV(0.5, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: lognorm_inv_round_trip
     description: "LOGNORM.INV(LOGNORM.DIST(2, 0, 1, TRUE), 0, 1) ~ 2"
     formula: "=LOGNORM.INV(LOGNORM.DIST(2, 0, 1, TRUE), 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: lognorm_inv_p_zero_is_num
     description: "p <= 0 yields #NUM!"
@@ -264,10 +267,12 @@ cases:
   - id: lognormdist_legacy_parity
     description: "Legacy LOGNORMDIST(4, 3.5, 1.2) matches LOGNORM.DIST(...,TRUE)"
     formula: "=LOGNORMDIST(4, 3.5, 1.2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: loginv_legacy_parity
     description: "Legacy LOGINV matches LOGNORM.INV"
     formula: "=LOGINV(0.5, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- HYPGEOM edge probes -------------------------------------------------
   - id: hypgeom_population_s_exceeds_population_is_num
@@ -304,6 +309,7 @@ cases:
   - id: lognorm_inv_upper_tail
     description: "LOGNORM.INV(0.95, 0, 1) is the 95th percentile of standard lognormal"
     formula: "=LOGNORM.INV(0.95, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- GAMMALN (need +2) --------------------------------------------------
   - id: gammaln_one_is_zero

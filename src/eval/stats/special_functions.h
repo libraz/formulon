@@ -94,17 +94,24 @@ double regularized_incomplete_beta(double a, double b, double x) noexcept;
 /// beta is not finite along the way.
 double beta_inverse_tail(double target, double shape1, double shape2) noexcept;
 
-/// Excel's ERF / ERF.PRECISE of one argument: odd, direct for `|x| <= 0.5`,
-/// `1 - erfc` beyond. NaN propagates.
+/// Excel's ERF / ERF.PRECISE of one argument: odd; a rational in `x^2` below
+/// 0.5 and `1 - erfc` beyond, evaluated operation by operation as Excel does.
+/// NaN propagates.
 double erf_excel(double x) noexcept;
 
-/// Excel's ERFC / ERFC.PRECISE: `1 - erf` for `|x| <= 0.5`, the direct tail
-/// beyond, with `erfc(-x) = 2 - erfc(x)`. NaN propagates.
+/// Excel's ERFC / ERFC.PRECISE: `1 - erf` below 0.5, a rational in `x` times
+/// `exp(-x^2)` beyond (0 past 100), with `erfc(-x) = 2 - erfc(x)`. NaN
+/// propagates.
 double erfc_excel(double x) noexcept;
 
 /// Standard normal CDF as Excel's NORM.S.DIST(z, TRUE) evaluates it:
-/// `erfc_excel(-z * 0.7071067811865476) / 2`.
+/// `erfc_excel(z * -0.7071067811865476) * 0.5`.
 double normal_cdf(double z) noexcept;
+
+/// Standard normal quantile as Excel's NORM.S.INV evaluates it: tail
+/// rationals in `sqrt(-ln q)` for `p < 0.075` or `p > 0.9375`, `erfinv(2p - 1)
+/// * sqrt(2)` between. Requires `0 < p < 1`.
+double normal_quantile(double p) noexcept;
 
 }  // namespace stats
 }  // namespace eval

@@ -17,22 +17,27 @@ cases:
 
   - id: erf_one
     formula: "=ERF(1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: erf_negative_one_odd
     description: "erf(-x) = -erf(x)"
     formula: "=ERF(-1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: erf_two_arg_from_zero
     description: "2-arg form: erf(upper) - erf(lower)"
     formula: "=ERF(0,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: erf_two_arg_interval
     description: "erf(2) - erf(1)"
     formula: "=ERF(1,2)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- ERF.PRECISE / ERFC / ERFC.PRECISE -----------------------------------
   - id: erf_precise_one
     formula: "=ERF.PRECISE(1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: erfc_zero
     formula: "=ERFC(0)"
@@ -40,9 +45,11 @@ cases:
   - id: erfc_one
     description: "1 - erf(1) ~= 0.157299207"
     formula: "=ERFC(1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: erfc_precise_one
     formula: "=ERFC.PRECISE(1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- BESSELJ -------------------------------------------------------------
   - id: besselj_zero_zero
@@ -104,10 +111,12 @@ cases:
   - id: erf_two_arg_negative_bounds
     description: "erf(-1) - erf(-2): both negative, result positive"
     formula: "=ERF(-2,-1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: erf_two_arg_reversed_bounds
     description: "lower=2, upper=1 -> erf(1) - erf(2) (negative)"
     formula: "=ERF(2,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: erf_two_arg_same_value
     description: "lower == upper -> 0"
@@ -133,6 +142,7 @@ cases:
   - id: erfc_large_positive_to_zero
     description: "erfc(6) ~ 1e-17, far below typical tolerance"
     formula: "=ERFC(6)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: erfc_negative
     description: "erfc(-1) = 2 - erfc(1) ~= 1.842700793"
@@ -228,6 +238,7 @@ cases:
   - id: erf_precise_negative
     description: "ERF.PRECISE(-1) = -ERF.PRECISE(1) (odd function)"
     formula: "=ERF.PRECISE(-1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: erf_precise_large_positive
     description: "ERF.PRECISE(6) ~= 1 (saturates)"
@@ -245,6 +256,7 @@ cases:
   - id: erfc_precise_large_positive
     description: "ERFC.PRECISE(6) ~ 0 (saturates)"
     formula: "=ERFC.PRECISE(6)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: erfc_precise_two_arg_rejected
     description: "ERFC.PRECISE is strict 1-arg; 2nd arg surfaces #VALUE!"

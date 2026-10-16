@@ -27,6 +27,7 @@
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -86,7 +87,7 @@ Value NormInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double z = InverseStandardNormal(p);
-  return finite_number_result(mean + sd * z);
+  return finite_number_result(mean + flush_subnormal(sd * z));
 }
 
 // NORM.S.INV(p) - inverse standard-normal CDF. Equivalent to
