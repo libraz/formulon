@@ -136,3 +136,45 @@ cases:
     formula: "=NUMBERVALUE(\"1.5\",\",\")"
   - id: numbervalue_explicit
     formula: "=NUMBERVALUE(\"1,234.5\",\".\",\",\")"
+  - id: mmm_mrz
+    formula: "=IFERROR(LET(v,VALUE(\"2 Mrz 2026\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")"
+  - id: hangul_ymd
+    formula: "=IFERROR(LET(v,VALUE(\"2026년 1월 2일\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")"
+  - id: hangul_ymd_unspaced
+    formula: "=IFERROR(LET(v,VALUE(\"2026년1월2일\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")"
+  - id: hangul_two_digit_year
+    formula: "=IFERROR(LET(v,VALUE(\"26년 1월 2일\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")"
+  - id: hangul_two_digit_year_window
+    formula: "=IFERROR(LET(v,VALUE(\"63년 1월 2일\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")"
+  - id: hangul_with_time
+    formula: "=IFERROR(LET(v,VALUE(\"2026년 1월 2일 1:30\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")"
+  - id: zh_pm_after_time
+    formula: "=IFERROR(LET(v,VALUE(\"1:30 下午\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")"
+  - id: zh_pm_with_date
+    formula: "=IFERROR(LET(v,VALUE(\"2026/1/2 1:30 下午\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")"
+  - id: zh_pm_before_time
+    formula: "=IFERROR(LET(v,VALUE(\"下午 1:30\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")"
+  - id: currency_us_dollar
+    formula: "=VALUE(\"US$1\")"
+  - id: currency_us_dollar_parens
+    formula: "=VALUE(\"(US$1)\")"
+  - id: currency_fullwidth_won
+    formula: "=VALUE(\"￦1\")"
+  - id: currency_real
+    formula: "=VALUE(\"R$1\")"
+  - id: currency_nt_dollar
+    formula: "=VALUE(\"NT$1\")"
+  - id: currency_rouble_suffix
+    formula: "=VALUE(\"1 ₽\")"
+  - id: hangul_time
+    formula: "=VALUE(\"1시 30분\")"
+  - id: hangul_time_unspaced
+    formula: "=VALUE(\"1시30분\")"
+  - id: zh_pm_hour_over_12
+    formula: "=VALUE(\"13:30 下午\")"
+  - id: general_exponent_99
+    formula: "=TEXT(1.23456789012345E+99,\"General\")"
+  - id: general_exponent_minus_99
+    formula: "=TEXT(-1.23456789012345E-99,\"General\")"
+  - id: general_exponent_98
+    formula: "=TEXT(1.23456789012345E+98,\"General\")"
