@@ -494,8 +494,8 @@ TEST(BuiltinsLinest, BooleanCellsCoerceToNumeric) {
 }
 
 // ---------------------------------------------------------------------------
-// Bit-exact coefficient rows measured in Excel (const=TRUE and FALSE,
-// univariate and multivariate, collinear-column drop boundary)
+// Bit-exact coefficient rows (const=TRUE and FALSE, univariate and
+// multivariate, collinear-column drop boundary)
 // ---------------------------------------------------------------------------
 
 struct ExactRow {
@@ -516,8 +516,8 @@ TEST(BuiltinsLinest, CoefficientRowsAreBitExact) {
       {"=LINEST({11;14;16;12;18;12},{8,5,8;8,7,8;0,7,8;4,1,0;9,8,7;5,4,5},FALSE)",
        {-0.9651233627779482, 2.9708853690730033, 0.43222662199208034, 0.0},
        4U},
-      // Second column is twice the first plus a small step: dropped (coefficient 0) below
-      // the 1e-6 norm ratio, kept above it; the boundary differs between the two modes.
+      // Second column is twice the first plus a small step: it stops being a pivot (coefficient 0)
+      // once its downdated norm falls below the floor; the boundary differs between the two modes.
       {"=LINEST({3;5;8;9;13;12},{1,2;2,4;3,6.000005;4,8;5,10;6,12})",
        {1.0000001190473384, 0.0, 1.3333316666685322},
        3U},

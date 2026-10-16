@@ -4,10 +4,10 @@
 // `LINEST(known_y, [known_x], [const]=TRUE, [stats]=FALSE)` fits the
 // linear model `y = b_0 + b_1*x_1 + ... + b_k*x_k` by Householder QR.
 // With an intercept, x and y are centred by their means and a ones
-// column is kept in the design; a column whose norm collapses against
-// the earlier ones is dropped (coefficient 0). Operation order follows
-// the measured Mac Excel 365 results. The same kernel serves LOGEST, TREND and
-// GROWTH.
+// column is pivoted first; the other columns pivot by largest downdated
+// norm; a column whose norm has collapsed ends the factorisation and
+// keeps coefficient 0.
+// The same kernel serves LOGEST, TREND and GROWTH.
 //
 // Output shapes (all returned as a 2-D `ArrayValue`):
 //   stats=FALSE -> 1 x (k+1) row `[b_k, b_{k-1}, ..., b_1, b_0]`

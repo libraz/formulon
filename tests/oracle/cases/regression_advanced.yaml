@@ -20,6 +20,7 @@ cases:
   - id: linest_multivariate_basic
     description: "LINEST({1;2;4;7}, {1,1;2,1;3,2;4,3}) -> 1x3 spill (k=2 predictors + intercept)"
     formula: '=LINEST({1;2;4;7}, {1,1;2,1;3,2;4,3})'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: linest_const_false_no_intercept
     description: "LINEST({1;2;3}, {1;2;3}, FALSE) -> 1x2 spill, intercept slot = 0"
@@ -55,6 +56,7 @@ cases:
   - id: trend_multivariate_basic
     description: "TREND({1;2;4;7}, {1,1;2,1;3,2;4,3}) -> 4x1 spill of fitted y"
     formula: '=TREND({1;2;4;7}, {1,1;2,1;3,2;4,3})'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: trend_const_false_no_intercept
     description: "TREND({2;4;6}, {1;2;3}, , FALSE) -> 3x1 spill (forced through origin)"
@@ -81,6 +83,7 @@ cases:
   - id: logest_univariate_stats_false
     description: "LOGEST({2;4;8;16}, {1;2;3;4}) -> 1x2 spill (m=2, b=1)"
     formula: '=LOGEST({2;4;8;16}, {1;2;3;4})'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: logest_univariate_stats_true
     description: "LOGEST({2;4;8;16}, {1;2;3;4}, TRUE, TRUE) -> 5x2 stats matrix on log scale"
@@ -89,6 +92,7 @@ cases:
   - id: logest_multivariate_basic
     description: "LOGEST({2;4;8;16}, {1,0;2,0;3,1;4,1}) -> 1x3 spill (k=2 + intercept)"
     formula: '=LOGEST({2;4;8;16}, {1,0;2,0;3,1;4,1})'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: logest_const_false_intercept_one
     description: "LOGEST({2;4;8;16}, {1;2;3;4}, FALSE) -> 1x2 spill, trailing slot = 1 (exp(0))"
@@ -114,14 +118,17 @@ cases:
   - id: growth_univariate_omit_new_x
     description: "GROWTH({2;4;8;16}, {1;2;3;4}) -> 4x1 spill of fitted y at known_x"
     formula: '=GROWTH({2;4;8;16}, {1;2;3;4})'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: growth_univariate_with_new_x
     description: "GROWTH({2;4;8;16}, {1;2;3;4}, {5;6}) -> 2x1 spill at new_x = {5;6}"
     formula: '=GROWTH({2;4;8;16}, {1;2;3;4}, {5;6})'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: growth_multivariate_basic
     description: "GROWTH({2;4;8;16}, {1,0;2,0;3,1;4,1}) -> 4x1 spill"
     formula: '=GROWTH({2;4;8;16}, {1,0;2,0;3,1;4,1})'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: growth_const_false_no_intercept
     description: "GROWTH({2;4;8;16}, {1;2;3;4}, , FALSE) -> 4x1 spill (forced through 1)"
