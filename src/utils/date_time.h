@@ -180,6 +180,10 @@ double yearfrac_eu30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, 
 /// longer span divides by the average full length of the years `y1..y2`.
 double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept;
 
+/// Year length, in days, that `yearfrac_actual_actual` divides the actual day
+/// count by for the span `(y1, m1, d1)` to `(y2, m2, d2)`.
+double actual_actual_year_length(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept;
+
 /// Days between two Excel serials under a day-count `basis`, with `a <= b`.
 ///
 /// Bases 0 and 4 (the 30/360 family) decompose both serials and apply the

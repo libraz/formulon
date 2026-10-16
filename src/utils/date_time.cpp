@@ -190,10 +190,9 @@ double yearfrac_eu30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, 
   return days / 360.0;
 }
 
-double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
+double actual_actual_year_length(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
   const std::int64_t days1 = days_from_civil(y1, m1, d1);
   const std::int64_t days2 = days_from_civil(y2, m2, d2);
-  const double actual_days = static_cast<double>(days2 - days1);
   auto is_leap_year = [](int y) { return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0); };
   // Excel's basis=1 (actual/actual): the denominator depends on whether the
   // span is contained in a single calendar year.
@@ -235,7 +234,12 @@ double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned
     const std::int64_t span_days = days_from_civil(y2 + 1, 1, 1) - days_from_civil(y1, 1, 1);
     denom = static_cast<double>(span_days) / static_cast<double>(total_years);
   }
-  return actual_days / denom;
+  return denom;
+}
+
+double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
+  const double actual_days = static_cast<double>(days_from_civil(y2, m2, d2) - days_from_civil(y1, m1, d1));
+  return actual_days / actual_actual_year_length(y1, m1, d1, y2, m2, d2);
 }
 
 HMS hms_from_fraction(double serial) noexcept {

@@ -32,6 +32,7 @@ cases:
   - id: beta_inv_symmetric_median
     description: "Median of BETA(2, 2) is 0.5"
     formula: "=BETA.INV(0.5, 2, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: beta_inv_round_trip
     description: "BETA.INV(BETA.DIST(0.4, 8, 10, TRUE), 8, 10) ~ 0.4"

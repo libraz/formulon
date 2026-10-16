@@ -107,7 +107,9 @@ Expected<TBillArgs, ErrorCode> read_tbill_args(const Value* args, bool date1904)
 //
 // Discount rate for a security that doesn't pay periodic interest:
 //
-//   DISC = ((redemption - pr) / redemption) / YEARFRAC(settlement, maturity, basis)
+//   DISC = (1 - pr / redemption) * (B / DSM)
+//
+// where DSM is the day count from settlement to maturity and B the year length of the basis.
 //
 // Domain per Microsoft docs:
 //   - settlement >= maturity  ->  #NUM!
@@ -119,11 +121,14 @@ Value Disc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date19
     return Value::error(parsed.error());
   }
   const auto [settlement, maturity, pr, redemption, basis] = parsed.value();
-  auto yf = positive_yearfrac(settlement, maturity, basis, date1904);
-  if (!yf) {
-    return Value::error(yf.error());
+  auto span = day_count_span(settlement, maturity, basis, date1904);
+  if (!span) {
+    return Value::error(span.error());
   }
-  const double result = ((redemption - pr) / redemption) / yf.value();
+  if (span.value().days <= 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double result = (1.0 - pr / redemption) * (span.value().year / span.value().days);
   return finalize(result);
 }
 

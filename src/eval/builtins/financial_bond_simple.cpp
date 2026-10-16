@@ -197,7 +197,9 @@ Value YieldDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
 //   A   = YEARFRAC(issue, settlement, basis)
 //   DSM = YEARFRAC(settlement, maturity, basis)
 //   DIM = YEARFRAC(issue, maturity, basis)
-//   YIELDMAT = ((1 + DIM * rate) / (pr/100 + A * rate) - 1) / DSM
+//   YIELDMAT = ((1 + DIM/B*rate) - (pr/100 + A/B*rate)) / (pr/100 + A/B*rate) * (B/DSM)
+//
+// with A / DSM / DIM as day counts and B the year length of the basis.
 //
 // Domain per Microsoft docs:
 //   - issue >= settlement              ->  #NUM!
@@ -217,19 +219,22 @@ Value YieldMat(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   if (pr <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  auto yf = maturity_year_fracs(parsed.value(), date1904);
-  if (!yf) {
-    return Value::error(yf.error());
-  }
-  const auto [a, dsm, dim] = yf.value();
-  if (dsm == 0.0) {
+  const MaturityInterestArgs& in = parsed.value();
+  auto a_span = day_count_span(in.issue, in.settlement, in.basis, date1904);
+  auto dsm_span = day_count_span(in.settlement, in.maturity, in.basis, date1904);
+  auto dim_span = day_count_span(in.issue, in.maturity, in.basis, date1904);
+  if (!a_span || !dsm_span || !dim_span) {
     return Value::error(ErrorCode::Num);
   }
-  const double denom = pr / 100.0 + a * rate;
-  if (denom == 0.0) {
+  if (dsm_span.value().days == 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = ((1.0 + dim * rate) / denom - 1.0) / dsm;
+  const double accrued = pr / 100.0 + a_span.value().days / a_span.value().year * rate;
+  if (accrued == 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double result = ((1.0 + dim_span.value().days / dim_span.value().year * rate) - accrued) / accrued *
+                        (dsm_span.value().year / dsm_span.value().days);
   return finalize(result);
 }
 

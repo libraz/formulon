@@ -220,6 +220,34 @@ TEST(BuiltinsChisqPrecision, VeryLargeDegreesOfFreedom) {
   ExpectTailRel("=CHISQ.INV(0.95,4)", 9.487729036781154, 1e-12);
 }
 
+TEST(FInvBits, MatchesExcelAndSymmetricMedianIsOne) {
+  struct FInvCase {
+    const char* formula;
+    double expected;
+  };
+  const FInvCase kFinv[] = {
+      {"=F.INV.RT(0.05,1,10)", 4.964602743730713},
+      {"=F.INV.RT(0.1,1,1)", 39.863458189061404},
+      {"=F.INV(0.5,2,2)", 1.0},
+      {"=F.INV.RT(0.75,5,10)", 0.5291416855678218},
+      {"=F.INV(0.9,2,5)", 3.779716078773951},
+      {"=F.INV(0.95,1,10)", 4.964602743730713},
+      {"=F.INV(0.999,5,10)", 10.480722468097897},
+      {"=F.INV(0.999,3,7)", 18.77226981509898},
+  };
+
+  for (const FInvCase& c : kFinv) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+  for (const char* f : {"=FINV(0.5,5,5)", "=F.INV(0.5,5,5)", "=F.INV.RT(0.5,5,5)"}) {
+    const Value v = EvalSource(f);
+    ASSERT_TRUE(v.is_number()) << f;
+    EXPECT_EQ(v.as_number(), 1.0) << f;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

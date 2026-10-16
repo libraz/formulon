@@ -220,6 +220,55 @@ inline Expected<double, ErrorCode> yearfrac_for_basis(double start, double end, 
   return yf;
 }
 
+// `base^exponent` as Excel's financial solvers evaluate it: a right-to-left
+// square-and-multiply for an integral exponent, exp(exponent * log(base))
+// otherwise (NaN when `base <= 0`).
+inline double excel_power(double base, double exponent) noexcept {
+  if (std::trunc(exponent) == exponent && std::fabs(exponent) < 2147483648.0) {
+    std::uint64_t n = static_cast<std::uint64_t>(std::fabs(exponent));
+    double acc = 1.0;
+    double b = base;
+    while (n != 0) {
+      if ((n & 1U) != 0) {
+        acc *= b;
+      }
+      b *= b;
+      n >>= 1U;
+    }
+    return exponent >= 0.0 ? acc : 1.0 / acc;
+  }
+  return std::exp(exponent * std::log(base));
+}
+
+// A span between two dates as DISC / YIELDMAT count it: the day count and the
+// year length it is measured against (`days / year` is the YEARFRAC value).
+struct DayCountSpan {
+  double days;
+  double year;
+};
+
+inline Expected<DayCountSpan, ErrorCode> day_count_span(double start, double end, int basis, bool date1904) {
+  if (basis < 0 || basis > 4) {
+    return ErrorCode::Num;
+  }
+  const double s = std::trunc(start);
+  const double e = std::trunc(end);
+  switch (basis) {
+    case 0:
+    case 4:
+      return DayCountSpan{date_time::basis_days_between(s, e, basis, date1904), 360.0};
+    case 1: {
+      const date_time::YMD a = date_time::ymd_from_serial(s, date1904);
+      const date_time::YMD b = date_time::ymd_from_serial(e, date1904);
+      return DayCountSpan{e - s, date_time::actual_actual_year_length(a.y, a.m, a.d, b.y, b.m, b.d)};
+    }
+    case 2:
+      return DayCountSpan{e - s, 360.0};
+    default:
+      return DayCountSpan{e - s, 365.0};
+  }
+}
+
 // Finalises a scalar financial result: a non-finite value becomes `#NUM!`,
 // otherwise wraps the double in a `Value::number`. Thin alias to the
 // shared `builtins_detail::to_finite_value` helper.

@@ -88,6 +88,12 @@ double gamma_quantile(double a, double prob, bool upper) noexcept;
 /// caller translates NaN into `#NUM!`.
 double regularized_incomplete_beta(double a, double b, double x) noexcept;
 
+/// The `y` in (0, 1) with `I_y(shape1, shape2) == target`, found by a fixed
+/// 600-step bisection over the full support (exactly 0.5 for a symmetric
+/// shape at target 0.5). Returns NaN if the incomplete
+/// beta is not finite along the way.
+double beta_inverse_tail(double target, double shape1, double shape2) noexcept;
+
 /// Excel's ERF / ERF.PRECISE of one argument: odd, direct for `|x| <= 0.5`,
 /// `1 - erfc` beyond. NaN propagates.
 double erf_excel(double x) noexcept;

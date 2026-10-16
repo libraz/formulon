@@ -293,6 +293,7 @@ cases:
   - id: finv_median
     description: "FINV(0.5, df1, df2) = upper 50% quantile of right tail"
     formula: "=FINV(0.5, 5, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: finv_p_zero_is_num
     formula: "=FINV(0, 5, 5)"

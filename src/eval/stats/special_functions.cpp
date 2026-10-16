@@ -453,6 +453,27 @@ double regularized_incomplete_beta(double a, double b, double x) noexcept {
   return cf.converged ? 1.0 - bt * cf.value / b : cf.value;
 }
 
+double beta_inverse_tail(double target, double shape1, double shape2) noexcept {
+  if (target == 0.5 && shape1 == shape2) {
+    return 0.5;
+  }
+  double lo = 0.0;
+  double hi = 1.0;
+  for (int i = 0; i < 600; ++i) {
+    const double mid = 0.5 * (lo + hi);
+    const double value = regularized_incomplete_beta(shape1, shape2, mid);
+    if (!std::isfinite(value)) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    if (value < target) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return 0.5 * (lo + hi);
+}
+
 namespace {
 
 // Kernels behind the ERF structure; `x` is non-negative in both.

@@ -9,18 +9,23 @@ cases:
   - id: price_canonical_basis_0
     description: "PRICE docs canonical (basis 0 US 30/360) -> ~94.6346"
     formula: '=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,0)'
+    tolerance: { abs: 0, rel: 0 }
   - id: price_basis_1_actual_actual
     description: "PRICE basis 1 (actual/actual) on docs example"
     formula: '=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,1)'
+    tolerance: { abs: 0, rel: 0 }
   - id: price_basis_2_actual_360
     description: "PRICE basis 2 (actual/360)"
     formula: '=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,2)'
+    tolerance: { abs: 0, rel: 0 }
   - id: price_basis_3_actual_365
     description: "PRICE basis 3 (actual/365)"
     formula: '=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,3)'
+    tolerance: { abs: 0, rel: 0 }
   - id: price_basis_4_european_30_360
     description: "PRICE basis 4 (European 30/360)"
     formula: '=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,4)'
+    tolerance: { abs: 0, rel: 0 }
   - id: price_settlement_eq_maturity_error
     description: "PRICE settlement >= maturity -> #NUM!"
     formula: '=PRICE(DATE(2024,6,1),DATE(2024,6,1),0.05,0.06,100,2,0)'
@@ -34,18 +39,22 @@ cases:
   - id: yield_canonical_basis_0
     description: "YIELD docs canonical (basis 0) -> ~0.065"
     formula: '=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,0)'
+    tolerance: { abs: 0, rel: 0 }
   - id: yield_basis_1_actual_actual
     description: "YIELD basis 1 (actual/actual) on docs example"
     formula: '=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,1)'
+    tolerance: { abs: 0, rel: 0 }
   - id: yield_basis_2_actual_360
     description: "YIELD basis 2 (actual/360)"
     formula: '=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,2)'
   - id: yield_basis_3_actual_365
     description: "YIELD basis 3 (actual/365)"
     formula: '=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,3)'
+    tolerance: { abs: 0, rel: 0 }
   - id: yield_basis_4_european_30_360
     description: "YIELD basis 4 (European 30/360)"
     formula: '=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,4)'
+    tolerance: { abs: 0, rel: 0 }
   - id: yield_settlement_eq_maturity_error
     description: "YIELD settlement >= maturity -> #NUM!"
     formula: '=YIELD(DATE(2024,6,1),DATE(2024,6,1),0.05,100,100,2,0)'

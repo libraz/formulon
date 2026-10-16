@@ -26,35 +26,20 @@
 //     t1 = DSC/E. (Notation: A = days_bs, E = period_days, DSC = days_nc.)
 //     A zero `pr + AI` denominator surfaces as `#NUM!`.
 //
-//   * n > 1. The PRICE branch sums n discounted cash flows by v^(t1+i)
-//     and has no analytic inverse. We use Newton-Raphson on
+//   * n > 1. The PRICE branch has no analytic inverse; Newton-Raphson on
+//     the analytic derivative of PRICE starts from
 //
-//       f(yld) = compute_clean_price(yld) - pr
+//       y0 = (100*(rate*Ny) + (100-pr)) / (Ny*(100+pr)/2 + (pr-100)/4)
 //
-//     with a numerical central-difference derivative
-//
-//       f'(yld) ~= (f(yld + h) - f(yld - h)) / (2h)
-//
-//     where h = 1e-7 * max(1, |yld|). Convergence: |f(yld)| <
-//     1e-12 * (|pr| + 1) OR |delta| < 1e-15 within `kMaxIter` (= 100)
-//     iterations. The initial guess is Microsoft's documented "approximate
-//     yield" formula
-//
-//       yld_0 = ((100*rate + (redemption - pr)/n) / ((redemption + pr)/2))
-//                * frequency
-//
-//     which is well-conditioned across the entire valid bond domain --
-//     premiums (yld < rate -> pr > redemption), discounts, and zero
-//     coupons all converge in fewer than 10 iterations on every observed
-//     case. Non-convergence (degenerate derivative or 100-iter timeout)
-//     surfaces as `#NUM!`.
+//     with Ny the settlement-to-maturity span in years, and stops when a
+//     step is smaller than 1e-10 -- that last step is not applied. Negative
+//     yields are allowed. Non-convergence in 100 steps is `#NUM!`.
 //
 // The clean-price kernel itself is shared with PRICE via
 // `financial_clean_price.h` -- both functions agree by construction.
 
 #include "eval/builtins/financial_yield.h"
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
 
@@ -62,6 +47,7 @@
 #include "eval/builtins/financial_helpers.h"
 #include "eval/coupon_schedule.h"
 #include "utils/arena.h"
+#include "utils/date_time.h"
 #include "utils/expected.h"
 #include "value.h"
 
@@ -70,32 +56,52 @@ namespace eval {
 namespace financial_detail {
 namespace {
 
-// Evaluates `compute_clean_price` at the candidate yld by reusing
-// YIELD's own argument vector with slot 3 swapped for the iterate.
-//
-// PRICE's arg layout is `(settlement, maturity, rate, yld, redemption,
-// frequency, [basis])`; YIELD's layout is `(settlement, maturity, rate,
-// pr, redemption, frequency, [basis])`. Only slot 3 differs, so we copy
-// the (already-validated) Values verbatim and substitute the yld slot.
-//
-// `Value`'s default constructor is private, so we initialise the buffer
-// from existing valid Values (slot 0) before assigning into each slot;
-// this avoids any blank / uninitialised states. The buffer is sized 7
-// to cover the optional basis without branching; `arity` is forwarded
-// unchanged so `read_optional_number` inside `compute_clean_price`
-// selects the correct value.
-Expected<double, ErrorCode> price_at(const Value* yield_args, std::uint32_t arity, double yld_iterate, bool date1904) {
-  Value buf[7] = {yield_args[0], yield_args[0], yield_args[0], yield_args[0],
-                  yield_args[0], yield_args[0], yield_args[0]};
-  buf[1] = yield_args[1];
-  buf[2] = yield_args[2];
-  buf[3] = Value::number(yld_iterate);
-  buf[4] = yield_args[4];
-  buf[5] = yield_args[5];
-  if (arity == 7) {
-    buf[6] = yield_args[6];
+constexpr int kMaxNewtonSteps = 100;
+constexpr double kStepTolerance = 1.0e-10;
+
+// Settlement-to-maturity span in years: whole anniversary years of settlement
+// plus the remaining days over the basis' year length (basis 1: the length of
+// the anniversary year holding the remainder).
+double years_to_maturity(double settlement, double maturity, int basis, bool date1904) {
+  const double s = std::trunc(settlement);
+  const double m = std::trunc(maturity);
+  const date_time::YMD sd = date_time::ymd_from_serial(s, date1904);
+  const date_time::YMD md = date_time::ymd_from_serial(m, date1904);
+  const std::int64_t s_days = date_time::days_from_civil(sd.y, sd.m, sd.d);
+  const auto anniversary = [&](int years) { return date_time::days_from_civil(sd.y + years, sd.m, sd.d); };
+  int years = md.y - sd.y;
+  if (anniversary(years) > date_time::days_from_civil(md.y, md.m, md.d)) {
+    --years;
   }
-  return compute_clean_price(buf, arity, date1904);
+  const double anniv = s + static_cast<double>(anniversary(years) - s_days);
+  const double remainder_actual = m - anniv;
+  double remainder = remainder_actual;
+  double year_len = 365.0;
+  switch (basis) {
+    case 0:
+    case 4:
+      remainder = date_time::basis_days_between(anniv, m, basis, date1904);
+      year_len = 360.0;
+      break;
+    case 2:
+      year_len = 360.0;
+      break;
+    case 1: {
+      const std::int64_t lo = anniversary(years);
+      const std::int64_t hi = anniversary(years + 1);
+      for (int y = sd.y + years; y <= sd.y + years + 1; ++y) {
+        const bool leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+        const std::int64_t feb29 = leap ? date_time::days_from_civil(y, 2, 29) : -1;
+        if (leap && feb29 >= lo && feb29 < hi) {
+          year_len = 366.0;
+        }
+      }
+      break;
+    }
+    default:
+      break;
+  }
+  return static_cast<double>(years) + remainder / year_len;
 }
 
 // Computes the YIELD result. Returns the yield-to-maturity (decimal) on
@@ -135,34 +141,39 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
     return yld;
   }
 
-  // --- n > 1: Newton-Raphson on f(yld) = price(yld) - pr.
-  //
-  // Initial guess uses Microsoft's documented approximate-yield formula:
-  //
-  //   yld_0 = ((100*rate + (redemption - pr)/n) / ((redemption + pr)/2))
-  //            * frequency
-  //
-  // The numerator is the per-period income (coupon + amortised
-  // capital gain/loss); the denominator is the average invested
-  // capital. Multiplying by `frequency` annualises a per-period rate.
-  // This guess is within a few percent of the true yield across the
-  // entire bond domain, including premiums and discounts, so the
-  // Newton iteration converges fast.
-  const double avg_capital = (red + pr_v) / 2.0;
-  if (avg_capital == 0.0) {
+  // --- n > 1: Newton-Raphson on the price kernel, see the file header.
+  auto settlement = read_financial_date(args, 0);
+  auto maturity = read_financial_date(args, 1);
+  if (!settlement || !maturity) {
     return ErrorCode::Num;
   }
-  double yld = ((100.0 * rate + (red - pr_v) / static_cast<double>(n)) / avg_capital) * freq_d;
-  if (std::isnan(yld) || std::isinf(yld)) {
-    return ErrorCode::Num;
+  const double ny = years_to_maturity(settlement.value(), maturity.value(), tail.basis, date1904);
+  const double denom0 = ny * (100.0 + pr_v) / 2.0 + (pr_v - 100.0) / 4.0;
+  double yld = (100.0 * (rate * ny) + (100.0 - pr_v)) / denom0;
+  const double t1 = cd.bond_dsc / cd.period_days;
+  for (int iter = 0; iter < kMaxNewtonSteps; ++iter) {
+    const double b = 1.0 + yld / freq_d;
+    const double t_n = static_cast<double>(n - 1) + t1;
+    double price = red / excel_power(b, t_n);
+    double coupons = 0.0;
+    for (std::int32_t k = 1; k <= n; ++k) {
+      coupons += cf / excel_power(b, static_cast<double>(k - 1) + t1);
+    }
+    price = price + coupons - cf * cd.days_bs / cd.period_days;
+    double d = -t_n * red / excel_power(b, static_cast<double>(n) + t1);
+    for (std::int32_t k = 1; k <= n; ++k) {
+      d += -(static_cast<double>(k - 1) + t1) * cf / excel_power(b, static_cast<double>(k) + t1);
+    }
+    const double step = (price - pr_v) / (d / freq_d);
+    if (std::isnan(step) || std::isinf(step)) {
+      return ErrorCode::Num;
+    }
+    if (std::fabs(step) < kStepTolerance) {
+      return yld;
+    }
+    yld -= step;
   }
-  // PRICE's public domain is yld >= 0. The approximate-yield heuristic can
-  // start below that boundary for a premium bond, so begin at the boundary
-  // and use a one-sided numerical derivative there instead of asking the
-  // price kernel to evaluate an invalid negative yield.
-  yld = std::max(0.0, yld);
-
-  return solve_yield_by_newton(price_at, args, arity, pr_v, yld, date1904);
+  return ErrorCode::Num;
 }
 
 }  // namespace

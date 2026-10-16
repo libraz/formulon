@@ -50,6 +50,7 @@ cases:
   - id: f_inv_round_trip
     description: "F.INV(F.DIST(2, 5, 10, TRUE), 5, 10) - 2 should be 0 to tolerance"
     formula: "=F.INV(F.DIST(2, 5, 10, TRUE), 5, 10) - 2"
+    tolerance: { abs: 0, rel: 0 }
 
   # =========================================================================
   # Expanded probes: degree-of-freedom edges, tail probabilities, very
@@ -118,6 +119,7 @@ cases:
   - id: f_inv_p_just_below_one
     description: "Tail quantile near 1 — F.INV(0.999, 5, 10)"
     formula: "=F.INV(0.999, 5, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: f_inv_p_negative_is_num
     formula: "=F.INV(-0.1, 5, 10)"
@@ -141,6 +143,7 @@ cases:
   # -- Round-trip F.INV.RT with F.DIST.RT --------------------------------
   - id: f_inv_rt_round_trip
     formula: "=F.INV.RT(F.DIST.RT(2, 5, 10), 5, 10) - 2"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Symmetry between F.INV and F.INV.RT -------------------------------
   - id: f_inv_complement

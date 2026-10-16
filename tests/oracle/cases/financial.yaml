@@ -155,22 +155,27 @@ cases:
   - id: rate_basic
     description: "Car loan RATE: solve for monthly rate given pmt/pv"
     formula: "=RATE(60, -500, 25000)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: rate_zero_outcome
     description: "Symmetric setup pv+pmt*nper+fv=0 yields rate=0 exactly"
     formula: "=RATE(10, -100, 1000)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: rate_with_fv
     description: "RATE with non-zero future value changes the convergence point"
     formula: "=RATE(60, -500, 25000, -5000)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: rate_type_1
     description: "Annuity-due (type=1) yields a different rate from ordinary annuity"
     formula: "=RATE(60, -500, 25000, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: rate_guess_custom
     description: "Same setup as rate_basic but with an explicit starting guess"
     formula: "=RATE(60, -500, 25000, 0, 0, 0.05)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: rate_no_solution_is_num
     description: |

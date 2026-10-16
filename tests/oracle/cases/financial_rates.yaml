@@ -12,14 +12,17 @@ cases:
   - id: disc_basis_actual_actual
     description: "Microsoft docs example: DISC with basis 1 (actual/actual) ~ 0.05279"
     formula: "=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: disc_default_basis
     description: "DISC with default basis 0 (US 30/360)"
     formula: "=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: disc_basis_actual_360
     description: "DISC with basis 2 (actual/360)"
     formula: "=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: disc_invalid_basis_is_num
     description: "DISC with unsupported basis -> #NUM!"
@@ -113,10 +116,12 @@ cases:
   - id: yieldmat_basis_zero
     description: "Microsoft docs example: YIELDMAT basis 0 ~ 0.060954"
     formula: "=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 100.0123, 0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: yieldmat_default_basis
     description: "YIELDMAT with default basis 0 (omit trailing arg)"
     formula: "=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 100.0123)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- DISC additional perspectives ---------------------------------------
   - id: disc_settlement_after_maturity_is_num
@@ -219,6 +224,7 @@ cases:
   - id: yieldmat_basis_actual_360
     description: "YIELDMAT with basis 2 (actual/360)"
     formula: "=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 100.0123, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: yieldmat_issue_after_settlement_is_num
     description: "YIELDMAT with issue >= settlement -> #NUM!"

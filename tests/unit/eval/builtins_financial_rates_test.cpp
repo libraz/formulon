@@ -5,6 +5,7 @@
 // helpers exported from `utils/date_time.h`.
 
 #include <cmath>
+#include <iterator>
 #include <string>
 #include <string_view>
 
@@ -397,6 +398,99 @@ TEST(FinancialTBillEq, AcceptsExactOneYearOnLeapAnniversary) {
   const Value v = EvalSource("=TBILLEQ(14640, 15006, 0.5)");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 0.8522961312491701, 1e-6);
+}
+
+// RATE / YIELD / PRICE follow Excel's own iteration and summation order; the
+// expected values are Mac Excel 365 results compared bit for bit, and kErr
+// marks the cases Excel reports as #NUM!.
+struct SolverCase {
+  const char* formula;
+  double expected;
+};
+
+constexpr double kErr = -1.0e300;
+
+void ExpectSolverCases(const SolverCase* begin, const SolverCase* end) {
+  for (const SolverCase* c = begin; c != end; ++c) {
+    const Value v = EvalSource(c->formula);
+    if (c->expected == kErr) {
+      ASSERT_TRUE(v.is_error()) << c->formula;
+      EXPECT_EQ(v.as_error(), ErrorCode::Num) << c->formula;
+    } else {
+      ASSERT_TRUE(v.is_number()) << c->formula;
+      EXPECT_EQ(v.as_number(), c->expected) << c->formula;
+    }
+  }
+}
+
+TEST(FinancialSolverBits, Rate) {
+  const SolverCase kRate[] = {
+      {"=RATE(2,0,-1,4,0,0.1)", 1.0},
+      {"=RATE(10,-100,1000,0,0,-0.05)", -2.041911992328346e-9},
+      {"=RATE(10,-100,1000,0,0,0.0005)", -1.3775478725413001e-9},
+      {"=RATE(12,-100,1200,0,0,0.0291)", -1.2895408274247784e-9},
+      {"=RATE(10,-100,1000,0,0,0.0139)", -7.883954662430739e-10},
+      {"=RATE(10,-100,1000,0,0,0.0655)", -1.2040782954525884e-9},
+      {"=RATE(12,-100,1200,0,0,0.0212)", 2.556466805331766e-9},
+      {"=RATE(10,-100,1000,0,0,0.0013)", 2.0990922206472353e-9},
+      {"=RATE(12,-100,1200,0,0,0.0758)", -2.445262151554231e-9},
+      {"=RATE(10,-100,1000,0,0,0.2761)", -1.7975479238456246e-9},
+      {"=RATE(1,0,-100,0.00001,0,-0.9)", kErr},
+      {"=RATE(1,0,-100,1E-14,0,-0.9)", kErr},
+      {"=RATE(8.25,-500,1000,-5000,0,0.05)", kErr},
+      {"=RATE(60.25,-1000,-200,0,1,0.01)", kErr},
+      {"=RATE(8.3,-500,0,0,1,0.01)", kErr},
+      {"=RATE(10.3,-250,-200,0,0,0.03)", kErr},
+      {"=RATE(6,-250,100000,0,0,0.1)", -0.5990280207085503},
+      {"=RATE(10,-50,-200,0,0,0.05)", kErr},
+      {"=RATE(6,-100,-200,0,0,0.03)", kErr},
+      {"=RATE(1,-1234.5,500,-5000,1,0.1)", kErr},
+      {"=RATE(120,-250,500,-5000,1,0.03)", kErr},
+      {"=RATE(6,-10,1000,-1000,0,0.1)", 0.010000000000000916},
+      {"=RATE(5,-250,5000,100,1,0.1)", -0.5254109439807213},
+      {"=RATE(5,-100,100000,2000,1,0.2)", kErr},
+  };
+  ExpectSolverCases(std::begin(kRate), std::end(kRate));
+}
+
+TEST(FinancialSolverBits, YieldNewton) {
+  const SolverCase kYield[] = {
+      {"=YIELD(DATE(2010,1,1),DATE(2012,1,1),0,50.0,100,1,0)", 0.4142135623115364},
+      {"=YIELD(DATE(2010,1,1),DATE(2012,1,1),0,66.5,100,1,0)", 0.226278678969924},
+      {"=YIELD(DATE(2010,1,1),DATE(2012,1,1),0,83.0,100,1,0)", 0.09764259989690346},
+      {"=YIELD(DATE(2010,1,1),DATE(2012,1,1),0,99.5,100,1,0)", 0.0025094142304488295},
+      {"=YIELD(DATE(2010,1,1),DATE(2012,1,1),0,116.0,100,1,0)", -0.0715233091235927},
+      {"=YIELD(DATE(2010,1,1),DATE(2012,1,1),0,132.5,100,1,0)", -0.13125551447386127},
+      {"=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,80.04287,100,2,0)", 0.09104999647018831},
+      {"=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,104.04287,100,2,0)", 0.051684707256933166},
+      {"=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,86.04287,100,2,1)", 0.07996342919553746},
+      {"=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,112.04287,100,2,1)", 0.04096936923122717},
+      {"=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,97.04287,100,2,2)", 0.06191379763438008},
+      {"=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,81.04287,100,2,3)", 0.089136431041181},
+      {"=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,112.04287,100,2,3)", 0.040970386688201015},
+      {"=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,94.04287,100,2,4)", 0.06657419391469298},
+      {"=YIELD(DATE(2010,7,1),DATE(2013,1,1),0,70,100,1,1)", 0.15307909296387448},
+      {"=YIELD(DATE(2010,7,1),DATE(2013,1,1),0.05,99,100,1,1)", 0.054233433068821994},
+      {"=YIELD(DATE(2010,7,1),DATE(2013,1,1),0.05,80,100,1,2)", 0.1516183573014838},
+      {"=YIELD(DATE(2010,7,1),DATE(2013,1,1),0,110,100,1,3)", -0.037346269009127527},
+  };
+  ExpectSolverCases(std::begin(kYield), std::end(kYield));
+}
+
+TEST(FinancialSolverBits, PriceSeparateSums) {
+  const SolverCase kPrice[] = {
+      {"=PRICE(DATE(2010,1,1),DATE(2013,1,1),0.05,0.2391304347826087,100.0,1,0)", 62.47865740065779},
+      {"=PRICE(DATE(2010,1,1),DATE(2013,1,1),0.05,0.11617885378139524,100.0,1,0)", 84.00000002769346},
+      {"=PRICE(DATE(2010,1,1),DATE(2013,1,1),0.05,0.009257137767498935,100.0,1,0)", 112.00000487927517},
+      {"=PRICE(DATE(2010,1,1),DATE(2013,1,1),0.1,0.16911764705882354,100.0,1,0)", 84.70600761901646},
+      {"=PRICE(DATE(2010,1,1),DATE(2013,1,1),0.1,0.06954140510295907,100.0,1,0)", 108.00000000012301},
+      {"=PRICE(DATE(2010,1,1),DATE(2013,1,1),0.05,0.19487439078245164,105.0,1,0)", 72.16674886033783},
+      {"=PRICE(DATE(2010,1,1),DATE(2013,1,1),0.05,0.05,105.0,1,0)", 104.31918799265738},
+      {"=PRICE(DATE(2010,1,1),DATE(2013,1,1),0.03,0.1342822950739185,100.0,1,0)", 75.555295838188},
+      {"=PRICE(DATE(2010,1,1),DATE(2013,1,1),0.0575,0.10108407472960881,105.0,1,0)", 92.92742751301819},
+      {"=PRICE(DATE(2008,2,15),DATE(2016,11,15),0.0575,0.065,100,2,1)", 95.04403378062287},
+  };
+  ExpectSolverCases(std::begin(kPrice), std::end(kPrice));
 }
 
 }  // namespace

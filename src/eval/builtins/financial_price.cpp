@@ -8,7 +8,6 @@
 // Microsoft documented) closed form has two branches keyed on the number
 // of coupons remaining after settlement:
 //
-//   v   = 1 / (1 + yld / frequency)
 //   t1  = days_nc / period_days        (fractional periods to NCD)
 //   cf  = 100 * rate / frequency       (per-period coupon cash flow)
 //   AI  = 100 * rate * days_bs / (period_days * frequency)
@@ -16,10 +15,8 @@
 //   if n == 1:
 //     PRICE = (redemption + cf) / (1 + t1 * (yld / frequency)) - AI
 //   else:
-//     dirty = sum_{i=0..n-1}  CF_i * v^(t1 + i)
-//             where  CF_i  = cf                  for i < n-1
-//                    CF_{n-1} = cf + redemption
-//     PRICE = dirty - AI
+//     b     = 1 + yld / frequency
+//     PRICE = redemption / b^(n-1+t1) + sum_{k=1..n} cf / b^(k-1+t1) - cf * days_bs / period_days
 //
 // The two branches do NOT collapse at full precision: the n==1 branch
 // uses simple-interest (linear) discounting of the single remaining cash
@@ -119,18 +116,16 @@ Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t
     return price;
   }
 
-  // Multi-period branch: discount each cash flow by v^(t1+i).
-  const double v = 1.0 / (1.0 + yfreq);
-  double dirty = 0.0;
-  for (std::int32_t i = 0; i < n; ++i) {
-    const double cf_i = (i == n - 1) ? (cf + red) : cf;
-    const double disc = std::pow(v, t1 + static_cast<double>(i));
-    if (std::isnan(disc) || std::isinf(disc)) {
-      return ErrorCode::Num;
-    }
-    dirty += cf_i * disc;
+  // Multi-period branch, summed the way Excel does: the redemption term and
+  // the coupon sum are accumulated separately, then added, and the accrued
+  // interest is `cf * (days_bs / period_days)`.
+  const double base = 1.0 + yfreq;
+  const double t_n = static_cast<double>(n - 1) + t1;
+  double coupons = 0.0;
+  for (std::int32_t k = 1; k <= n; ++k) {
+    coupons += cf / excel_power(base, static_cast<double>(k - 1) + t1);
   }
-  const double price = dirty - ai;
+  const double price = red / excel_power(base, t_n) + coupons - cf * cd.days_bs / cd.period_days;
   if (std::isnan(price) || std::isinf(price)) {
     return ErrorCode::Num;
   }

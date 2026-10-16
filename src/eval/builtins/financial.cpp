@@ -375,27 +375,22 @@ Value Npv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 
 // --- RATE(nper, pmt, pv, [fv=0], [type=0], [guess=0.1]) -----------------
 //
-// Solves for the per-period rate r that zeroes the annuity equation:
-//
-//   f(r) = pv*(1+r)^nper
-//        + pmt * (1 + r*type) * ((1+r)^nper - 1) / r
-//        + fv
-//
-// Newton-Raphson iterates up to 100 times to converge to |delta| < 1e-10
-// on the rate, matching IRR's tolerance (see `financial_lazy.cpp`).
-//
-// Special cases:
-//   - `nper < 1`                       -> #NUM! (undefined number of periods)
-//   - `pv + pmt*nper + fv == 0`        -> r = 0 exactly (zero-rate shortcut)
-//   - rate iterate drops below -1      -> #NUM! (log-domain boundary)
-//   - iterate falls within 1e-15 of 0  -> #NUM! (derivative blow-up; caller
-//                                        can retry with a different guess)
-//   - 100 iterations without convergence -> #NUM!
-//
-// The damped Newton step halves the update when |f/df| exceeds 1.0 to
-// keep oscillations on bad initial guesses from walking past the root;
-// this matches the heuristic used by most open-source RATE
-// implementations and by Excel in practice.
+// Solves f(r) = pv*q + pmt*(((q-1)/r)*(1+r*type)) + fv = 0 with q = (1+r)^nper
+// by the secant method, step for step as Excel does:
+//   - q is `financial_detail::excel_power(1+r, nper)`; f(0) is the linear form;
+//   - the second point is guess -/+ 0.001 against the sign of f(guess);
+//   - at most 200 secant steps, accepted when both |dx| and |f| are < 1e-7;
+//     after the cap the last iterate is kept only if |f| < 1e-4;
+//   - iterates are not domain-guarded; a repeated f, or a root with
+//     1 + r <= 1e-7, is #NUM!.
+double rate_residual(double r, double nper, double pmt, double pv, double fv, double type) {
+  if (r == 0.0) {
+    return pv + pmt * nper + fv;
+  }
+  const double q = financial_detail::excel_power(1.0 + r, nper);
+  return pv * q + pmt * (((q - 1.0) / r) * (1.0 + r * type)) + fv;
+}
+
 Value Rate(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   auto input = read_rate_args(args, arity);
   if (!input) {
@@ -406,94 +401,58 @@ Value Rate(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double pv = input.value().pv;
   const double fv = input.value().fv;
   const double type = input.value().type;
-  double rate = input.value().guess;
 
   if (nper < 1.0) {
     return Value::error(ErrorCode::Num);
   }
-  // Zero-rate degenerate case: if the linear residual is zero the answer
-  // is r = 0 exactly. Avoids the division-by-r blow-up in NR.
-  if (pv + pmt * nper + fv == 0.0) {
-    return Value::number(0.0);
-  }
 
-  constexpr int kMaxIter = 100;
-  constexpr double kTolerance = 1.0e-10;
-  constexpr double kRateFloor = 1.0e-15;
-  // Residual gate on the accepted root, mirroring IRR/XIRR: step
-  // convergence alone can settle the iterate at a point where the TVM
-  // residual is still large, so a converged rate is verified against the
-  // equation before it is published.
-  constexpr double kResidualTolerance = 1.0e-6;
-  for (int iter = 0; iter < kMaxIter; ++iter) {
-    if (rate <= -1.0) {
-      return Value::error(ErrorCode::Num);
-    }
-    if (std::fabs(rate) < kRateFloor) {
-      // The analytic f/df limit at r=0 exists, but evaluating the
-      // generic form divides by r. Nudging away from 0 by kRateFloor
-      // recovers a well-defined derivative; if we're truly at the root
-      // the zero-rate shortcut above has already handled it.
-      rate = rate < 0.0 ? -kRateFloor : kRateFloor;
-    }
-    const double pow_term = std::pow(1.0 + rate, nper);
-    const double pow_term_m1 = pow_term - 1.0;
-    const double f = pv * pow_term + pmt * (1.0 + rate * type) * pow_term_m1 / rate + fv;
-    // df/dr = d/dr [pv*(1+r)^n]
-    //       + d/dr [pmt*(1+r*type) * ((1+r)^n - 1) / r]
-    //       = pv*n*(1+r)^(n-1)
-    //       + pmt*type * ((1+r)^n - 1) / r
-    //       + pmt*(1+r*type) * (n*r*(1+r)^(n-1) - ((1+r)^n - 1)) / r^2
-    const double pow_nm1 = std::pow(1.0 + rate, nper - 1.0);
-    const double df = pv * nper * pow_nm1 + pmt * type * pow_term_m1 / rate +
-                      pmt * (1.0 + rate * type) * (nper * rate * pow_nm1 - pow_term_m1) / (rate * rate);
-    if (df == 0.0 || std::isnan(df) || std::isinf(df) || std::isnan(f) || std::isinf(f)) {
-      return Value::error(ErrorCode::Num);
-    }
-    double step = f / df;
-    // Damped Newton step: halve the update when |f/df| exceeds 1.0. A raw
-    // Newton step can overshoot badly from a poor initial guess (the TVM
-    // function is steep near rate = -1 and near a high-nper root), letting
-    // the iterate jump the wrong side of a singularity and either diverge
-    // or settle on a different root than Excel reports. Halving the large
-    // first steps keeps the iterate in the basin of the principal root
-    // without slowing convergence on well-conditioned inputs. The damping
-    // factor is heuristic; it is monitored against the oracle corpus.
-    if (std::fabs(step) > 1.0) {
-      step *= 0.5;
-    }
-    const double new_rate = rate - step;
-    if (std::isnan(new_rate) || std::isinf(new_rate)) {
-      return Value::error(ErrorCode::Num);
-    }
-    if (std::fabs(new_rate - rate) < kTolerance) {
-      // Degenerate fixed point at rate == -1 (or dangerously close): the
-      // TVM relation (1+r)^n is zero there, so the algebra that produced
-      // this convergence is ill-defined. Excel returns #NUM! instead of
-      // publishing a spurious -1.0 root. Without this clamp we happily
-      // "converged" on `RATE(10, -1200, 2000, 0, 1)` where the iterate
-      // slides toward -1 and never crosses out.
-      if (new_rate <= -1.0 + kTolerance) {
-        return Value::error(ErrorCode::Num);
-      }
-      // Residual gate: a converged step must also zero the TVM equation.
-      // The damping above can stall the iterate at a non-root on
-      // pathological inputs; reject those as non-convergent rather than
-      // publishing a spurious rate. The equation's terms scale with
-      // pv * (1+r)^nper, so the residual is compared relative to that
-      // magnitude (an absolute bound would be unreachable for large pv).
-      const double pow_check = std::pow(1.0 + new_rate, nper);
-      const double annuity = pmt * (1.0 + new_rate * type) * (pow_check - 1.0) / new_rate;
-      const double residual = pv * pow_check + annuity + fv;
-      const double scale = std::fabs(pv * pow_check) + std::fabs(annuity) + std::fabs(fv) + 1.0;
-      if (!std::isfinite(residual) || std::fabs(residual) > kResidualTolerance * scale) {
-        return Value::error(ErrorCode::Num);
-      }
-      return finalize(new_rate);
-    }
-    rate = new_rate;
+  constexpr int kMaxSteps = 200;
+  constexpr double kConvergence = 1.0e-7;
+  constexpr double kCapResidual = 1.0e-4;
+  constexpr double kRateFloor = 1.0e-7;
+  constexpr double kSecondPointOffset = 1.0e-3;
+  const bool fractional = std::trunc(nper) != nper;
+  const auto residual = [&](double r) { return rate_residual(r, nper, pmt, pv, fv, type); };
+  const auto out_of_domain = [&](double r) { return fractional && !(1.0 + r > 0.0); };
+
+  double x0 = input.value().guess;
+  if (out_of_domain(x0)) {
+    return Value::error(ErrorCode::Num);
   }
-  return Value::error(ErrorCode::Num);
+  double f0 = residual(x0);
+  double x1 = f0 > 0.0 ? x0 - kSecondPointOffset : x0 + kSecondPointOffset;
+  if (out_of_domain(x1)) {
+    return Value::error(ErrorCode::Num);
+  }
+  double f1 = residual(x1);
+  double x2 = x1;
+  double f2 = f1;
+  bool converged = false;
+  for (int step = 0; step < kMaxSteps; ++step) {
+    if (f1 == f0) {
+      return Value::error(ErrorCode::Num);
+    }
+    x2 = x1 - f1 * (x1 - x0) / (f1 - f0);
+    if (out_of_domain(x2)) {
+      return Value::error(ErrorCode::Num);
+    }
+    f2 = residual(x2);
+    if (std::fabs(x2 - x1) < kConvergence && std::fabs(f2) < kConvergence) {
+      converged = true;
+      break;
+    }
+    x0 = x1;
+    f0 = f1;
+    x1 = x2;
+    f1 = f2;
+  }
+  if (!converged && !(std::fabs(f2) < kCapResidual)) {
+    return Value::error(ErrorCode::Num);
+  }
+  if (!(1.0 + x2 > kRateFloor)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return finalize(x2);
 }
 
 // --- IPMT(rate, per, nper, pv, [fv=0], [type=0]) ------------------------

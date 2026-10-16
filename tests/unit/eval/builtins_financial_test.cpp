@@ -434,11 +434,11 @@ TEST(FinancialRATE, CarLoanConverges) {
   EXPECT_NEAR(v.as_number(), 0.006183413161254, 1e-8);
 }
 
-TEST(FinancialRATE, ZeroRateShortcut) {
-  // pv + pmt*nper + fv == 0 -> exact zero-rate answer (no NR needed).
+TEST(FinancialRATE, ZeroRateRootIsTheSecantIterate) {
+  // Excel has no zero-rate shortcut: the secant iterate lands at -1.96e-10.
   const Value v = EvalSource("=RATE(10, -100, 1000)");
   ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+  EXPECT_EQ(v.as_number(), -1.963351707292562e-10);
 }
 
 TEST(FinancialRATE, ExplicitGuessMatches) {

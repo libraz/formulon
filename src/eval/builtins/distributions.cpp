@@ -300,25 +300,11 @@ Value BetaInv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // Above the median the upper tail is solved instead: 1 - p is exact there,
   // while I_y near 1 is flat across many doubles of y (I_y(a,b) = 1 - I_{1-y}(b,a)).
   const bool upper = p > 0.5;
-  const double target = upper ? 1.0 - p : p;
-  const double shape1 = upper ? beta_shape : alpha;
-  const double shape2 = upper ? alpha : beta_shape;
-  const auto cdf = [shape1, shape2](double y) { return stats::regularized_incomplete_beta(shape1, shape2, y); };
-  double lo = 0.0;
-  double hi = 1.0;
-  for (int i = 0; i < 600; ++i) {
-    const double mid = 0.5 * (lo + hi);
-    const double value = cdf(mid);
-    if (!std::isfinite(value)) {
-      return Value::error(ErrorCode::Num);
-    }
-    if (value < target) {
-      lo = mid;
-    } else {
-      hi = mid;
-    }
+  const double root =
+      upper ? stats::beta_inverse_tail(1.0 - p, beta_shape, alpha) : stats::beta_inverse_tail(p, alpha, beta_shape);
+  if (!std::isfinite(root)) {
+    return Value::error(ErrorCode::Num);
   }
-  const double root = 0.5 * (lo + hi);
   const double y = upper ? 1.0 - root : root;
   return finalize(a + y * (b - a));
 }

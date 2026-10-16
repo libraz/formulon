@@ -683,40 +683,18 @@ Value FDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return finite_number_result(FDistRtCore(x, d1, d2));
 }
 
-// Inverts Snedecor's F CDF with a dynamically expanded bracket. The upper
-// tail is compared directly so probabilities near one retain their useful
-// precision; fixed [1e-10, 1e10] brackets incorrectly capped valid df=1
-// quantiles around 1e23.
-static double FInvCore(double p, double d1, double d2) noexcept {
-  const bool use_right_tail = p > 0.5;
-  const double target = use_right_tail ? 1.0 - p : p;
-  double lo = 0.0;
-  double hi = 1.0;
-  for (int i = 0; i < 1024; ++i) {
-    const double probability = use_right_tail ? FDistRtCore(hi, d1, d2) : FDistCdf(hi, d1, d2);
-    const bool needs_larger = use_right_tail ? probability > target : probability < target;
-    if (!needs_larger) {
-      break;
-    }
-    if (hi > std::numeric_limits<double>::max() * 0.5) {
-      return std::numeric_limits<double>::quiet_NaN();
-    }
-    hi *= 2.0;
-  }
-  for (int i = 0; i < 160; ++i) {
-    const double mid = lo + (hi - lo) * 0.5;
-    const double probability = use_right_tail ? FDistRtCore(mid, d1, d2) : FDistCdf(mid, d1, d2);
-    const bool needs_larger = use_right_tail ? probability > target : probability < target;
-    if (needs_larger) {
-      lo = mid;
-    } else {
-      hi = mid;
-    }
-    if (hi - lo <= 1e-12 * std::max(1.0, hi)) {
-      break;
-    }
-  }
-  return lo + (hi - lo) * 0.5;
+// Inverts Snedecor's F CDF through the inverse incomplete beta, on whichever
+// side keeps the target probability exact: `x = d2*y / (d1*(1-y))` with
+// `y = I^-1(p; d1/2, d2/2)`, or from the complementary root
+// `z = I^-1(1-p; d2/2, d1/2)` as `x = d2*(1-z) / (d1*z)` near `p -> 1`.
+static double FInvFromLowerProbability(double p, double d1, double d2) noexcept {
+  const double y = stats::beta_inverse_tail(p, d1 / 2.0, d2 / 2.0);
+  return d2 * y / (d1 * (1.0 - y));
+}
+
+static double FInvFromUpperProbability(double q, double d1, double d2) noexcept {
+  const double z = stats::beta_inverse_tail(q, d2 / 2.0, d1 / 2.0);
+  return d2 * (1.0 - z) / (d1 * z);
 }
 
 // F.INV(probability, d1, d2) - inverse of Snedecor's F CDF. `p` lies in
@@ -739,7 +717,8 @@ Value FInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (p == 0.0) {
     return Value::number(0.0);
   }
-  return finite_number_result(FInvCore(p, d1, d2));
+  return finite_number_result(p > 0.5 ? FInvFromUpperProbability(1.0 - p, d1, d2)
+                                      : FInvFromLowerProbability(p, d1, d2));
 }
 
 // F.INV.RT(probability, d1, d2) - inverse of the right-tailed F CDF.
@@ -760,7 +739,8 @@ Value FInvRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (p == 1.0) {
     return Value::number(0.0);
   }
-  return finite_number_result(FInvCore(1.0 - p, d1, d2));
+  return finite_number_result(p <= 0.5 ? FInvFromUpperProbability(p, d1, d2)
+                                       : FInvFromLowerProbability(1.0 - p, d1, d2));
 }
 
 // ---------------------------------------------------------------------------
