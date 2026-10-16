@@ -781,6 +781,14 @@ TEST(NumberFormatGeneral, FractionTrimmedAndScientific) {
   EXPECT_EQ(RenderEnUs(-2.7e-18, "General"), "-2.7E-18");
 }
 
+TEST(NumberFormatGeneral, ExponentOf99BudgetsThreeDigits) {
+  EXPECT_EQ(RenderEnUs(1.23456789012345E+98, "General"), "1.23457E+98");
+  EXPECT_EQ(RenderEnUs(1.23456789012345E+99, "General"), "1.2346E+99");
+  EXPECT_EQ(RenderEnUs(-1.23456789012345E+99, "General"), "-1.2346E+99");
+  EXPECT_EQ(RenderEnUs(1.23456789012345E-99, "General"), "1.2346E-99");
+  EXPECT_EQ(RenderEnUs(1.23456789012345E+100, "General"), "1.2346E+100");
+}
+
 TEST(NumberFormatGeneral, JaJpKeywordMatchesEnglishGeneral) {
   // ja-JP spells the built-in General format code "G/標準" (this is the
   // literal numFmtId=0 keyword Excel 365 ja-JP stores, not a translation

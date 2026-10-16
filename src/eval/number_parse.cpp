@@ -91,25 +91,16 @@ std::string_view strip_currency(std::string_view s) noexcept {
   return s;
 }
 
-// Strips a trailing Euro suffix (`23€` -> `23`). Mac Excel 365 accepts Euro
-// both as prefix and suffix, with or without a blank before it, in every
-// locale that accepts Euro (nl-NL, a prefix-currency locale, included); no
-// other symbol is accepted as a suffix.
-std::string_view strip_trailing_euro(std::string_view s) noexcept {
-  constexpr std::string_view kEuro = "\xE2\x82\xAC";
-  if (s.size() < kEuro.size() || s.substr(s.size() - kEuro.size()) != kEuro) {
-    return s;
+// Strips a trailing currency suffix the locale accepts (`23€`, `1 ₽`), with
+// or without a blank before it.
+std::string_view strip_trailing_currency(std::string_view s) noexcept {
+  for (const std::string_view symbol : locale_facts(current_eval_profile()).accepted_currency_suffix) {
+    if (!symbol.empty() && s.size() >= symbol.size() && s.substr(s.size() - symbol.size()) == symbol) {
+      s.remove_suffix(symbol.size());
+      return trim_ascii(s);
+    }
   }
-  const LocaleFacts& facts = locale_facts(current_eval_profile());
-  bool accepted = false;
-  for (const std::string_view symbol : facts.accepted_currency) {
-    accepted = accepted || symbol == kEuro;
-  }
-  if (!accepted) {
-    return s;
-  }
-  s.remove_suffix(kEuro.size());
-  return trim_ascii(s);
+  return s;
 }
 
 // Assembles a canonical C-locale numeric string (digits, one optional `.`,
@@ -250,13 +241,13 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, int per
       }
     }
   }
-  // Back: a Euro suffix (one currency side only) and the closing `)`, in
+  // Back: a currency suffix (one currency side only) and the closing `)`, in
   // either order: "(5)€", "(5€)".
-  const auto take_euro = [&]() {
+  const auto take_suffix = [&]() {
     if (currency) {
       return;
     }
-    const std::string_view before = strip_trailing_euro(s);
+    const std::string_view before = strip_trailing_currency(s);
     if (before.size() != s.size()) {
       s = before;
       currency = true;
@@ -264,14 +255,14 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, int per
     }
   };
   trim_back_blanks();
-  take_euro();
+  take_suffix();
   if (paren) {
     if (s.empty() || s.back() != ')') {
       return false;
     }
     s.remove_suffix(1);
     trim_back_blanks();
-    take_euro();
+    take_suffix();
   }
   if (s.empty() || (currency && percent_count > 0)) {
     return false;

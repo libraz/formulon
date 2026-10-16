@@ -589,8 +589,9 @@ constexpr LocaleFacts kJapaneseFacts{
     kInvariantFormatLetters,  // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"¥", false, false, false, true, true, 0U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
-    {"$", "€", "¥", "￥"},                       // value_dollar_prefix, value_euro_prefix, value_yen_prefix
-    "$",                                         // usdollar.usdollar_two_decimals
+    {"$", "€", "¥", "￥", "US$", ""},            // value_dollar_prefix, value_euro_prefix, value_yen_prefix
+    {"€", ""},
+    "$",  // usdollar.usdollar_two_decimals
     DateOrder::kYMD,
     false,                          // value_dotted_ymd
     KanjiDateText::kAll,            // datevalue_timevalue.datevalue_kanji_with_terminator
@@ -606,6 +607,7 @@ constexpr LocaleFacts kJapaneseFacts{
     true,  // datevalue_timevalue.timevalue_space_dot
     "AM",  // text_format.text_time_am
     "PM",  // text_format.text_time_pm
+    {},
     true,  // text_format.text_time_a_p
     DbcsCodepage::kJis0208,
     true,                   // code_char_jp_probes.char_halfwidth_kata_177
@@ -658,8 +660,9 @@ constexpr LocaleFacts kEnglishFacts{
     kInvariantFormatLetters,  // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"$", false, false, true, false, true, 2U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
-    {"$", "€", "", ""},                          // value_dollar_prefix, value_euro_prefix
-    "$",                                         // usdollar.usdollar_two_decimals
+    {"$", "€", "", "", "", ""},                  // value_dollar_prefix, value_euro_prefix
+    {"€", ""},
+    "$",  // usdollar.usdollar_two_decimals
     DateOrder::kMDY,
     false,  // value_dotted_ymd
     KanjiDateText::kNone,
@@ -675,6 +678,7 @@ constexpr LocaleFacts kEnglishFacts{
     true,  // datevalue_timevalue.timevalue_space_dot
     "AM",  // text_format.text_time_am
     "PM",  // text_format.text_time_pm
+    {},
     true,  // text_format.text_time_a_p
     DbcsCodepage::kNone,
     false,
@@ -730,23 +734,25 @@ constexpr LocaleFacts kGermanFacts{
     {'J', 'M', 'T', 'h', 'm', 's', true, true, false, 'a'},
     kNoLetterAliases,
     {"€", true, true, false, false, true, 2U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
-    {"€", "", "", ""},                          // value_euro_prefix, value_dollar_prefix
-    "",                                         // usdollar.usdollar_two_decimals
-    DateOrder::kDMY,                            // value_coercion_probes.value_slash_date_short
-    true,                                       // value_dotted_dmy
-    KanjiDateText::kNone,                       // datevalue_timevalue.datevalue_kanji_with_terminator
-    false,                                      // datevalue_timevalue.timevalue_jp_kanji_units
-    false,                                      // datevalue_timevalue.datevalue_era_reiwa_full
-    RLetter::kLiteral,                          // locale_tokens.text_letter_r_date, text_letter_rr_date
-    false,                                      // locale_tokens.value_korean_ymd
+    {"€", "", "", "", "", ""},                  // value_euro_prefix, value_dollar_prefix
+    {"€", ""},
+    "",                    // usdollar.usdollar_two_decimals
+    DateOrder::kDMY,       // value_coercion_probes.value_slash_date_short
+    true,                  // value_dotted_dmy
+    KanjiDateText::kNone,  // datevalue_timevalue.datevalue_kanji_with_terminator
+    false,                 // datevalue_timevalue.timevalue_jp_kanji_units
+    false,                 // datevalue_timevalue.datevalue_era_reiwa_full
+    RLetter::kLiteral,     // locale_tokens.text_letter_r_date, text_letter_rr_date
+    false,                 // locale_tokens.value_korean_ymd
     MonthNameText::kLocalPrefix,
-    {},
+    {"", "", "Mrz", "", "", "", "", "", "", "", "", ""},
     false,
-    true,                 // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
-    true,                 // datevalue_timevalue.timevalue_trailing_dot
-    true,                 // datevalue_timevalue.timevalue_space_dot
-    "AM",                 // text_format.text_time_am
-    "PM",                 // text_format.text_time_pm
+    true,  // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
+    true,  // datevalue_timevalue.timevalue_trailing_dot
+    true,  // datevalue_timevalue.timevalue_space_dot
+    "AM",  // text_format.text_time_am
+    "PM",  // text_format.text_time_pm
+    {},
     true,                 // text_format.text_time_a_p
     DbcsCodepage::kNone,  // lenb_hangul
     false,
@@ -802,23 +808,25 @@ constexpr LocaleFacts kFrenchFacts{
     {'a', 'm', 'j', 'h', 'm', 's', false, false, false, '\0'},
     kNoLetterAliases,
     {"€", true, true, true, false, true, 2U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
-    {"€", "", "", ""},                         // value_euro_prefix, value_dollar_prefix
-    "",                                        // usdollar.usdollar_two_decimals
-    DateOrder::kDMY,                           // value_coercion_probes.value_slash_date_short
-    false,                                     // value_dotted_dmy
-    KanjiDateText::kNone,                      // datevalue_timevalue.datevalue_kanji_with_terminator
-    false,                                     // datevalue_timevalue.timevalue_jp_kanji_units
-    false,                                     // datevalue_timevalue.datevalue_era_reiwa_full
-    RLetter::kLiteral,                         // locale_tokens.text_letter_r_date, text_letter_rr_date
-    false,                                     // locale_tokens.value_korean_ymd
+    {"€", "", "", "", "", ""},                 // value_euro_prefix, value_dollar_prefix
+    {"€", ""},
+    "",                    // usdollar.usdollar_two_decimals
+    DateOrder::kDMY,       // value_coercion_probes.value_slash_date_short
+    false,                 // value_dotted_dmy
+    KanjiDateText::kNone,  // datevalue_timevalue.datevalue_kanji_with_terminator
+    false,                 // datevalue_timevalue.timevalue_jp_kanji_units
+    false,                 // datevalue_timevalue.datevalue_era_reiwa_full
+    RLetter::kLiteral,     // locale_tokens.text_letter_r_date, text_letter_rr_date
+    false,                 // locale_tokens.value_korean_ymd
     MonthNameText::kLocalPrefix,
     {"", "", "", "", "", "jun", "jul", "", "", "", "", ""},
     false,
-    true,                 // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
-    false,                // datevalue_timevalue.timevalue_trailing_dot
-    false,                // datevalue_timevalue.timevalue_space_dot
-    "AM",                 // text_format.text_time_am
-    "PM",                 // text_format.text_time_pm
+    true,   // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
+    false,  // datevalue_timevalue.timevalue_trailing_dot
+    false,  // datevalue_timevalue.timevalue_space_dot
+    "AM",   // text_format.text_time_am
+    "PM",   // text_format.text_time_pm
+    {},
     true,                 // text_format.text_time_a_p
     DbcsCodepage::kNone,  // lenb_hangul
     false,
@@ -871,7 +879,8 @@ constexpr LocaleFacts kChineseFacts{
     kInvariantFormatLetters,  // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"¥", false, false, true, false, true, 2U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
-    {"$", "€", "¥", ""},            // value_dollar_prefix, value_euro_prefix, value_yen_prefix; ￥ unmeasured
+    {"$", "€", "¥", "US$", "", ""},  // value_dollar_prefix, value_euro_prefix, value_yen_prefix; ￥ unmeasured
+    {"€", ""},
     "$",                            // usdollar.usdollar_two_decimals
     DateOrder::kYMD,                // locale_profile_measurements.datevalue_two_digit_year
     false,                          // value_dotted_ymd
@@ -883,11 +892,12 @@ constexpr LocaleFacts kChineseFacts{
     MonthNameText::kEnglishPrefix,  // value_month_name_en
     {},
     false,
-    true,                   // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
-    true,                   // datevalue_timevalue.timevalue_trailing_dot
-    true,                   // datevalue_timevalue.timevalue_space_dot
-    "AM",                   // text_format.text_time_am
-    "PM",                   // text_format.text_time_pm
+    true,  // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
+    true,  // datevalue_timevalue.timevalue_trailing_dot
+    true,  // datevalue_timevalue.timevalue_space_dot
+    "AM",  // text_format.text_time_am
+    "PM",  // text_format.text_time_pm
+    {"上午", "下午"},
     true,                   // text_format.text_time_a_p
     DbcsCodepage::kGb2312,  // lenb_kanji_not_in_gb2312
     false,                  // code_char_jp_probes.char_halfwidth_kata_177
@@ -940,23 +950,25 @@ constexpr LocaleFacts kKoreanFacts{
     kInvariantFormatLetters,  // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"₩", false, false, true, false, true, 0U},  // text.dollar_negative_minus_sign, text.dollar_zero
-    {"$", "€", "₩", ""},                         // value_dollar_prefix, value_euro_prefix, value_won_prefix
-    "$",                                         // usdollar.usdollar_two_decimals
-    DateOrder::kYMD,                             // locale_profile_measurements.datevalue_two_digit_year
-    true,                                        // value_dotted_ymd
-    KanjiDateText::kNone,                        // datevalue_timevalue.datevalue_kanji_with_terminator
-    false,                                       // datevalue_timevalue.timevalue_jp_kanji_units
-    false,                                       // datevalue_timevalue.datevalue_era_reiwa_full
-    RLetter::kLiteral,                           // locale_tokens.text_letter_r_date, text_letter_rr_date
-    true,                                        // locale_tokens.value_korean_ymd
-    MonthNameText::kEnglishPrefix,               // value_month_name_en
+    {"$", "€", "₩", "US$", "￦", ""},            // value_dollar_prefix, value_euro_prefix, value_won_prefix
+    {"€", ""},
+    "$",                            // usdollar.usdollar_two_decimals
+    DateOrder::kYMD,                // locale_profile_measurements.datevalue_two_digit_year
+    true,                           // value_dotted_ymd
+    KanjiDateText::kNone,           // datevalue_timevalue.datevalue_kanji_with_terminator
+    false,                          // datevalue_timevalue.timevalue_jp_kanji_units
+    false,                          // datevalue_timevalue.datevalue_era_reiwa_full
+    RLetter::kLiteral,              // locale_tokens.text_letter_r_date, text_letter_rr_date
+    true,                           // locale_tokens.value_korean_ymd
+    MonthNameText::kEnglishPrefix,  // value_month_name_en
     {},
     false,
-    false,                   // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
-    true,                    // datevalue_timevalue.timevalue_trailing_dot
-    true,                    // datevalue_timevalue.timevalue_space_dot
-    "AM",                    // text_format.text_time_am
-    "PM",                    // text_format.text_time_pm
+    false,  // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
+    true,   // datevalue_timevalue.timevalue_trailing_dot
+    true,   // datevalue_timevalue.timevalue_space_dot
+    "AM",   // text_format.text_time_am
+    "PM",   // text_format.text_time_pm
+    {},
     true,                    // text_format.text_time_a_p
     DbcsCodepage::kKsX1001,  // code_hangul
     false,                   // code_char_jp_probes.char_halfwidth_kata_177
@@ -1010,23 +1022,25 @@ constexpr LocaleFacts kThaiFacts{
     kInvariantFormatLetters,  // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"฿", false, false, true, false, true, 2U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
-    {"€", "฿", "", ""},                          // value_euro_prefix, value_baht_prefix, value_dollar_prefix
-    "",                                          // usdollar.usdollar_two_decimals
-    DateOrder::kDMY,                             // value_coercion_probes.value_slash_date_short
-    false,                                       // value_dotted_dmy
-    KanjiDateText::kNone,                        // datevalue_timevalue.datevalue_kanji_with_terminator
-    false,                                       // datevalue_timevalue.timevalue_jp_kanji_units
-    false,                                       // datevalue_timevalue.datevalue_era_reiwa_full
-    RLetter::kLiteral,                           // locale_tokens.text_letter_r_date, text_letter_rr_date
-    false,                                       // locale_tokens.value_korean_ymd
+    {"€", "฿", "", "", "", ""},                  // value_euro_prefix, value_baht_prefix, value_dollar_prefix
+    {"€", ""},
+    "",                    // usdollar.usdollar_two_decimals
+    DateOrder::kDMY,       // value_coercion_probes.value_slash_date_short
+    false,                 // value_dotted_dmy
+    KanjiDateText::kNone,  // datevalue_timevalue.datevalue_kanji_with_terminator
+    false,                 // datevalue_timevalue.timevalue_jp_kanji_units
+    false,                 // datevalue_timevalue.datevalue_era_reiwa_full
+    RLetter::kLiteral,     // locale_tokens.text_letter_r_date, text_letter_rr_date
+    false,                 // locale_tokens.value_korean_ymd
     MonthNameText::kEnglishExact,
     {},
     false,
-    true,                 // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
-    false,                // datevalue_timevalue.timevalue_trailing_dot
-    true,                 // datevalue_timevalue.timevalue_space_dot
-    "AM",                 // text_format.text_time_am
-    "PM",                 // text_format.text_time_pm
+    true,   // datevalue_timevalue.timevalue_fractional_seconds, timevalue_comma_fraction
+    false,  // datevalue_timevalue.timevalue_trailing_dot
+    true,   // datevalue_timevalue.timevalue_space_dot
+    "AM",   // text_format.text_time_am
+    "PM",   // text_format.text_time_pm
+    {},
     true,                 // text_format.text_time_a_p
     DbcsCodepage::kNone,  // lenb_hangul
     false,
@@ -1082,8 +1096,9 @@ constexpr LocaleFacts kRussianFacts{
     {'y', 'M', 'd', 'h', 'm', 's', true, true, true, 'a'},
     kRussianLetterAliases,
     {"₽", true, true, false, false, true,
-     2U},                  // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
-    {"€", "", "", ""},     // value_euro_prefix, value_dollar_prefix, value_yen_prefix
+     2U},                       // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
+    {"€", "", "", "", "", ""},  // value_euro_prefix, value_dollar_prefix, value_yen_prefix
+    {"€", "₽"},
     "",                    // usdollar.usdollar_two_decimals
     DateOrder::kDMY,       // value_coercion_probes.value_slash_date_short
     true,                  // value_dotted_dmy, value_dotted_ymd
@@ -1095,11 +1110,12 @@ constexpr LocaleFacts kRussianFacts{
     MonthNameText::kLocalPrefix,
     {},
     false,
-    true,                 // timevalue_comma_fraction
-    true,                 // datevalue_timevalue.timevalue_trailing_dot
-    true,                 // datevalue_timevalue.timevalue_space_dot
-    "AM",                 // text_format.text_time_am
-    "PM",                 // text_format.text_time_pm
+    true,  // timevalue_comma_fraction
+    true,  // datevalue_timevalue.timevalue_trailing_dot
+    true,  // datevalue_timevalue.timevalue_space_dot
+    "AM",  // text_format.text_time_am
+    "PM",  // text_format.text_time_pm
+    {},
     true,                 // text_format.text_time_a_p
     DbcsCodepage::kNone,  // lenb_hangul
     false,                // code_char_jp_probes.char_halfwidth_kata_177
@@ -1153,8 +1169,9 @@ constexpr LocaleFacts kTraditionalChineseFacts{
     kInvariantFormatLetters,  // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"$", false, false, true, false, true,
-     2U},                           // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
-    {"$", "€", "", ""},             // value_dollar_prefix, value_euro_prefix, value_yen_prefix
+     2U},                              // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
+    {"$", "€", "NT$", "US$", "", ""},  // value_dollar_prefix, value_euro_prefix, value_yen_prefix
+    {"€", ""},
     "US$",                          // usdollar.usdollar_two_decimals
     DateOrder::kYMD,                // locale_profile_measurements.datevalue_two_digit_year
     false,                          // value_dotted_ymd
@@ -1166,11 +1183,12 @@ constexpr LocaleFacts kTraditionalChineseFacts{
     MonthNameText::kEnglishPrefix,  // value_month_name_en
     {},
     true,
-    true,                             // datevalue_timevalue.timevalue_fractional_seconds
-    true,                             // datevalue_timevalue.timevalue_trailing_dot
-    true,                             // datevalue_timevalue.timevalue_space_dot
-    "AM",                             // text_format.text_time_am
-    "PM",                             // text_format.text_time_pm
+    true,  // datevalue_timevalue.timevalue_fractional_seconds
+    true,  // datevalue_timevalue.timevalue_trailing_dot
+    true,  // datevalue_timevalue.timevalue_space_dot
+    "AM",  // text_format.text_time_am
+    "PM",  // text_format.text_time_pm
+    {"上午", "下午"},
     true,                             // text_format.text_time_a_p
     DbcsCodepage::kBig5,              // code_char_jp_probes (Big5, no ETEN rows), lenb_kanji_not_in_gb2312
     false,                            // code_char_jp_probes.char_halfwidth_kata_177
@@ -1226,8 +1244,9 @@ constexpr LocaleFacts kItalianFacts{
     {'a', 'm', 'g', 'h', 'm', 's', false, false, false, '\0'},
     kNoLetterAliases,
     {"€", true, true, false, false, true,
-     2U},                  // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
-    {"€", "", "", ""},     // value_euro_prefix, value_dollar_prefix, value_yen_prefix
+     2U},                       // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
+    {"€", "", "", "", "", ""},  // value_euro_prefix, value_dollar_prefix, value_yen_prefix
+    {"€", ""},
     "",                    // usdollar.usdollar_two_decimals
     DateOrder::kDMY,       // value_coercion_probes.value_slash_date_short
     false,                 // value_dotted_dmy, value_dotted_ymd
@@ -1239,11 +1258,12 @@ constexpr LocaleFacts kItalianFacts{
     MonthNameText::kLocalPrefix,
     {},
     false,
-    true,                 // timevalue_comma_fraction
-    false,                // datevalue_timevalue.timevalue_trailing_dot
-    false,                // datevalue_timevalue.timevalue_space_dot
-    "AM",                 // text_format.text_time_am
-    "PM",                 // text_format.text_time_pm
+    true,   // timevalue_comma_fraction
+    false,  // datevalue_timevalue.timevalue_trailing_dot
+    false,  // datevalue_timevalue.timevalue_space_dot
+    "AM",   // text_format.text_time_am
+    "PM",   // text_format.text_time_pm
+    {},
     true,                 // text_format.text_time_a_p
     DbcsCodepage::kNone,  // lenb_hangul
     false,                // code_char_jp_probes.char_halfwidth_kata_177
@@ -1298,8 +1318,9 @@ constexpr LocaleFacts kDutchFacts{
     {'j', 'm', 'd', 'u', 'm', 's', false, false, false, 'a'},
     kNoLetterAliases,
     {"€", false, true, true, false, true,
-     2U},                  // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
-    {"€", "", "", ""},     // value_euro_prefix, value_dollar_prefix, value_yen_prefix
+     2U},                       // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
+    {"€", "", "", "", "", ""},  // value_euro_prefix, value_dollar_prefix, value_yen_prefix
+    {"€", ""},
     "",                    // usdollar.usdollar_two_decimals
     DateOrder::kDMY,       // value_coercion_probes.value_slash_date_short
     false,                 // value_dotted_dmy, value_dotted_ymd
@@ -1311,11 +1332,12 @@ constexpr LocaleFacts kDutchFacts{
     MonthNameText::kLocalPrefix,
     {},
     false,
-    true,                 // timevalue_comma_fraction
-    false,                // datevalue_timevalue.timevalue_trailing_dot
-    false,                // datevalue_timevalue.timevalue_space_dot
-    "AM",                 // text_format.text_time_am
-    "PM",                 // text_format.text_time_pm
+    true,   // timevalue_comma_fraction
+    false,  // datevalue_timevalue.timevalue_trailing_dot
+    false,  // datevalue_timevalue.timevalue_space_dot
+    "AM",   // text_format.text_time_am
+    "PM",   // text_format.text_time_pm
+    {},
     true,                 // text_format.text_time_a_p
     DbcsCodepage::kNone,  // lenb_hangul
     false,                // code_char_jp_probes.char_halfwidth_kata_177
@@ -1377,8 +1399,9 @@ constexpr LocaleFacts kSpanishFacts{
     kIberianLetters,  // months_aaaa, months_mmmm, months_dd, text_format.text_time_hh_mm_ss, weekdays_aaaa
     kNoLetterAliases,
     {"€", true, true, false, false, true,
-     2U},                  // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
-    {"€", "", "", ""},     // value_euro_prefix, value_dollar_prefix, value_yen_prefix
+     2U},                       // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
+    {"€", "", "", "", "", ""},  // value_euro_prefix, value_dollar_prefix, value_yen_prefix
+    {"€", ""},
     "",                    // usdollar.usdollar_two_decimals
     DateOrder::kDMY,       // value_coercion_probes.value_slash_date_short
     false,                 // value_dotted_dmy, value_dotted_ymd
@@ -1390,11 +1413,12 @@ constexpr LocaleFacts kSpanishFacts{
     MonthNameText::kLocalPrefix,
     {},
     false,
-    true,                 // timevalue_comma_fraction
-    false,                // datevalue_timevalue.timevalue_trailing_dot
-    false,                // datevalue_timevalue.timevalue_space_dot
-    "a.\u202Fm.",         // text_format.text_time_am
-    "p.\u202Fm.",         // text_format.text_time_pm
+    true,          // timevalue_comma_fraction
+    false,         // datevalue_timevalue.timevalue_trailing_dot
+    false,         // datevalue_timevalue.timevalue_space_dot
+    "a.\u202Fm.",  // text_format.text_time_am
+    "p.\u202Fm.",  // text_format.text_time_pm
+    {},
     false,                // text_format.text_time_a_p
     DbcsCodepage::kNone,  // lenb_hangul
     false,                // code_char_jp_probes.char_halfwidth_kata_177
@@ -1450,8 +1474,9 @@ constexpr LocaleFacts kMexicanSpanishFacts{
     kIberianLetters,  // months_aaaa, months_mmmm, months_dd, text_format.text_time_hh_mm_ss, weekdays_aaaa
     kNoLetterAliases,
     {"$", false, false, false, false, true,
-     2U},                  // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
-    {"$", "€", "", ""},    // value_dollar_prefix, value_euro_prefix, value_yen_prefix
+     2U},                        // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
+    {"$", "€", "", "", "", ""},  // value_dollar_prefix, value_euro_prefix, value_yen_prefix
+    {"€", ""},
     "",                    // usdollar.usdollar_two_decimals
     DateOrder::kDMY,       // value_coercion_probes.value_slash_date_short
     false,                 // value_dotted_dmy, value_dotted_ymd
@@ -1463,11 +1488,12 @@ constexpr LocaleFacts kMexicanSpanishFacts{
     MonthNameText::kLocalPrefix,
     {},
     false,
-    true,                 // datevalue_timevalue.timevalue_fractional_seconds
-    true,                 // datevalue_timevalue.timevalue_trailing_dot
-    true,                 // datevalue_timevalue.timevalue_space_dot
-    "a.m.",               // text_format.text_time_am
-    "p.m.",               // text_format.text_time_pm
+    true,    // datevalue_timevalue.timevalue_fractional_seconds
+    true,    // datevalue_timevalue.timevalue_trailing_dot
+    true,    // datevalue_timevalue.timevalue_space_dot
+    "a.m.",  // text_format.text_time_am
+    "p.m.",  // text_format.text_time_pm
+    {},
     false,                // text_format.text_time_a_p
     DbcsCodepage::kNone,  // lenb_hangul
     false,                // code_char_jp_probes.char_halfwidth_kata_177
@@ -1523,8 +1549,9 @@ constexpr LocaleFacts kPortugueseFacts{
     kIberianLetters,  // months_aaaa, months_mmmm, months_dd, text_format.text_time_hh_mm_ss, weekdays_aaaa
     kNoLetterAliases,
     {"R$", false, true, false, false, true,
-     2U},                  // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
-    {"€", "", "", ""},     // value_euro_prefix, value_dollar_prefix, value_yen_prefix
+     2U},                         // text.dollar_negative_minus_sign, usdollar.dollar_rounds_to_negative_zero
+    {"€", "R$", "", "", "", ""},  // value_euro_prefix, value_dollar_prefix, value_yen_prefix
+    {"€", ""},
     "",                    // usdollar.usdollar_two_decimals
     DateOrder::kDMY,       // value_coercion_probes.value_slash_date_short
     false,                 // value_dotted_dmy, value_dotted_ymd
@@ -1536,11 +1563,12 @@ constexpr LocaleFacts kPortugueseFacts{
     MonthNameText::kLocalPrefix,
     {},
     false,
-    true,                 // timevalue_comma_fraction
-    false,                // datevalue_timevalue.timevalue_trailing_dot
-    false,                // datevalue_timevalue.timevalue_space_dot
-    "AM",                 // text_format.text_time_am
-    "PM",                 // text_format.text_time_pm
+    true,   // timevalue_comma_fraction
+    false,  // datevalue_timevalue.timevalue_trailing_dot
+    false,  // datevalue_timevalue.timevalue_space_dot
+    "AM",   // text_format.text_time_am
+    "PM",   // text_format.text_time_pm
+    {},
     true,                 // text_format.text_time_a_p
     DbcsCodepage::kNone,  // lenb_hangul
     false,                // code_char_jp_probes.char_halfwidth_kata_177

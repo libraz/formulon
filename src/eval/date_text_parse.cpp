@@ -47,6 +47,9 @@ constexpr char kKanjiByou[4] = {'\xE7', '\xA7', '\x92', '\0'};    // 秒 second
 constexpr char kHangulNyeon[4] = {'\xEB', '\x85', '\x84', '\0'};  // 년 year
 constexpr char kHangulWol[4] = {'\xEC', '\x9B', '\x94', '\0'};    // 월 month
 constexpr char kHangulIl[4] = {'\xEC', '\x9D', '\xBC', '\0'};     // 일 day
+constexpr char kHangulSi[4] = {'\xEC', '\x8B', '\x9C', '\0'};     // 시 hour
+constexpr char kHangulBun[4] = {'\xEB', '\xB6', '\x84', '\0'};    // 분 minute
+constexpr char kHangulCho[4] = {'\xEC', '\xB4', '\x88', '\0'};    // 초 second
 
 // 6-byte UTF-8 sequences for the five Japanese era names.
 constexpr char kEraReiwa[7] = {'\xE4', '\xBB', '\xA4', '\xE5', '\x92', '\x8C', '\0'};   // 令和
@@ -171,28 +174,6 @@ std::string fold_date_text(std::string_view s) {
     ++i;
   }
   return out;
-}
-
-// Scans 1..`max_digits` ASCII digits from the head of `s`, writes the parsed
-// integer into `*out`, and advances `s` past them. Returns the number of
-// digits consumed (0 if `s` did not start with a digit).
-std::size_t scan_digits(std::string_view& s, int max_digits, int* out) noexcept {
-  std::size_t i = 0;
-  int value = 0;
-  while (i < s.size() && i < static_cast<std::size_t>(max_digits)) {
-    const char c = s[i];
-    if (!is_digit(c)) {
-      break;
-    }
-    value = value * 10 + (c - '0');
-    ++i;
-  }
-  if (i == 0) {
-    return 0;
-  }
-  *out = value;
-  s.remove_prefix(i);
-  return i;
 }
 
 // A whole run of digits; the value saturates so any length stays representable.
@@ -408,22 +389,31 @@ bool parse_kanji_date(DigitRun first, std::string_view s, int current_year, Kanj
   return current_year_serial(current_year, first.value, day.value, out_serial);
 }
 
-// Finishes the `<y>년 <m>월 <d>일` form after the year unit; blanks may follow
-// the year and month units.
+// One U+0020, then a digit run closed by the hangul `unit`.
+bool scan_spaced_hangul_field(std::string_view* s, const char (&unit)[4], DigitRun* out) noexcept {
+  if (s->size() < 2 || (*s)[0] != ' ' || !is_digit((*s)[1])) {
+    return false;
+  }
+  s->remove_prefix(1);
+  return scan_run_with_unit(s, unit, out);
+}
+
+// Finishes `<y>년 <m>월 <d>일` after the year unit: exactly one blank between
+// the parts, fields with any leading zeros. A year below 100 is the year in
+// 4263..4362 ending in those digits; 1900..9999 is the year itself.
 bool finish_hangul_ymd(std::string_view s, DigitRun year, double* out_serial, std::string_view* rest) noexcept {
-  skip_blanks(&s);
-  int month = 0;
-  if (scan_digits(s, 2, &month) == 0 || !starts_with_utf8(s, kHangulWol)) {
+  DigitRun month{};
+  DigitRun day{};
+  if (!scan_spaced_hangul_field(&s, kHangulWol, &month) || !scan_spaced_hangul_field(&s, kHangulIl, &day)) {
     return false;
   }
-  s.remove_prefix(3);
-  skip_blanks(&s);
-  int day = 0;
-  if (scan_digits(s, 2, &day) == 0 || !starts_with_utf8(s, kHangulIl)) {
+  int full_year = year.value;
+  if (year.value < 100) {
+    full_year = year.value >= 63 ? 4200 + year.value : 4300 + year.value;
+  } else if (year.value < 1900) {
     return false;
   }
-  s.remove_prefix(3);
-  if (!written_year_serial(year, month, day, out_serial)) {
+  if (!serial_from_parsed_ymd(full_year, 4, month.value, day.value, out_serial)) {
     return false;
   }
   *rest = s;
@@ -760,8 +750,8 @@ void date_candidates(std::string_view s, int current_year, DateCandidates* out) 
     return;
   }
   if (starts_with_utf8(s, kHangulNyeon)) {
-    if (facts.hangul_ymd_text && finish_hangul_ymd(s.substr(3), first, &serial, &rest)) {
-      out->add(serial, rest);
+    if (facts.hangul_date_time_text && finish_hangul_ymd(s.substr(3), first, &serial, &rest)) {
+      out->add(serial, rest, true);
     }
     return;
   }
@@ -834,8 +824,31 @@ std::size_t match_marker_name(std::string_view s, std::string_view name) noexcep
   return i;
 }
 
+// Parses the hangul time form `H시 M분[ S초]` (h <= 23, m <= 59, s <= 59) with
+// exactly one blank between the parts. It takes no fraction, marker or
+// trailing separator.
+bool parse_hangul_time_text(std::string_view s, double* out_days, std::string_view* rest) noexcept {
+  DigitRun hour{};
+  DigitRun minute{};
+  DigitRun second{0, 0};
+  if (!scan_run_with_unit(&s, kHangulSi, &hour) || !scan_spaced_hangul_field(&s, kHangulBun, &minute)) {
+    return false;
+  }
+  if (!s.empty() && !scan_spaced_hangul_field(&s, kHangulCho, &second)) {
+    return false;
+  }
+  if (hour.value > 23 || minute.value > 59 || second.value > 59) {
+    return false;
+  }
+  const double seconds = hour.value * 3600.0 + minute.value * 60.0 + second.value;
+  *out_days = seconds / static_cast<double>(date_time::kSecondsPerDay);
+  *rest = s;
+  return true;
+}
+
 // Consumes a 12-hour marker after at least one blank: `A`, `P`, `AM` or `PM`
-// in any case as a whole word, or the locale's own spelling.
+// in any case as a whole word, the locale's own spelling, or one of its further
+// spellings.
 bool scan_meridiem(std::string_view* s, bool* pm) noexcept {
   std::string_view tail = *s;
   if (!skip_blanks(&tail) || tail.empty()) {
@@ -844,13 +857,19 @@ bool scan_meridiem(std::string_view* s, bool* pm) noexcept {
   const LocaleFacts& facts = profile_facts();
   for (const bool is_pm : {false, true}) {
     const std::string_view name = is_pm ? facts.pm_name : facts.am_name;
-    if (name == (is_pm ? "PM" : "AM")) {
-      continue;
-    }
-    const std::size_t len = match_marker_name(tail, name);
+    const std::size_t len = name == (is_pm ? "PM" : "AM") ? 0 : match_marker_name(tail, name);
     if (len > 0 && (tail.size() == len || tail[len] == ' ')) {
       *pm = is_pm;
       *s = tail.substr(len);
+      return true;
+    }
+    // The further spellings end at anything but an ASCII letter or digit (`下午.`).
+    const std::string_view text_name = facts.meridiem_text_names[is_pm ? 1 : 0];
+    if (!text_name.empty() && tail.substr(0, text_name.size()) == text_name &&
+        (tail.size() == text_name.size() ||
+         (!is_ascii_alpha(tail[text_name.size()]) && !is_digit(tail[text_name.size()])))) {
+      *pm = is_pm;
+      *s = tail.substr(text_name.size());
       return true;
     }
   }
@@ -1030,10 +1049,14 @@ bool recognise(std::string_view s, int current_year, DateTimeText* out) noexcept
   {
     std::string_view probe = s;
     DigitRun hour{};
-    if (facts.kanji_time_text && scan_run(&probe, &hour) && starts_with_utf8(probe, kKanjiJi)) {
+    const bool digits = scan_run(&probe, &hour);
+    const bool kanji = digits && facts.kanji_time_text && starts_with_utf8(probe, kKanjiJi);
+    const bool hangul = digits && facts.hangul_date_time_text && starts_with_utf8(probe, kHangulSi);
+    if (kanji || hangul) {
       double days = 0.0;
       std::string_view rest;
-      if (!parse_kanji_time_text(s, &days, &rest) || !rest.empty()) {
+      const bool parsed = kanji ? parse_kanji_time_text(s, &days, &rest) : parse_hangul_time_text(s, &days, &rest);
+      if (!parsed || !rest.empty()) {
         return false;
       }
       *out = DateTimeText{days, days, false};

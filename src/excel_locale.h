@@ -184,7 +184,9 @@ struct LocaleFacts {
   std::array<FormatLetterAlias, 10> format_letter_aliases;
   Currency currency;
   /// Currency prefixes VALUE accepts; empty slots are unused.
-  std::array<std::string_view, 4> accepted_currency;
+  std::array<std::string_view, 6> accepted_currency;
+  /// Currency suffixes VALUE accepts, with or without a blank before them; empty slots are unused.
+  std::array<std::string_view, 2> accepted_currency_suffix;
   /// Symbol USDOLLAR formats US dollars with; empty when USDOLLAR is DOLLAR.
   std::string_view usdollar_symbol;
   /// Field order of numeric date text and the reading of `MMM N` (a year when day-first).
@@ -195,8 +197,8 @@ struct LocaleFacts {
   bool kanji_time_text;
   bool japanese_era;
   RLetter r_letter;
-  /// Date text takes the `2024년 3월 15일` form.
-  bool hangul_ymd_text;
+  /// Date and time text take the hangul forms `2024년 3월 15일` and `1시 30분 5초`.
+  bool hangul_date_time_text;
   MonthNameText month_name_text;
   /// Further month spellings date text takes as a whole token, January first; empty slots are unused.
   std::array<std::string_view, 12> month_extra_names;
@@ -211,6 +213,8 @@ struct LocaleFacts {
   /// AM / PM marker spellings, which time text also accepts.
   std::string_view am_name;
   std::string_view pm_name;
+  /// Further AM / PM marker spellings time text accepts, AM first; empty when none.
+  std::array<std::string_view, 2> meridiem_text_names;
   /// `A/P` is the short AM / PM marker rather than letters of the format dialect.
   bool short_meridiem;
   DbcsCodepage dbcs_codepage;

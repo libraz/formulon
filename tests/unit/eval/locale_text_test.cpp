@@ -280,6 +280,99 @@ TEST(LocaleDateInput, MarkerSpellings) {
   }
 }
 
+TEST(LocaleDateInput, ExtraMonthSpellingInGerman) {
+  const ScopedEvalProfile scope(mac_profile(ExcelLocale::kDeDE));
+  EXPECT_EQ(date_of("2 Mrz 2026"), 46083.0);
+  EXPECT_EQ(date_of("Mrz 2"), 37316.0);
+}
+
+TEST(LocaleDateInput, HangulDateAndTime) {
+  {
+    const ScopedEvalProfile scope(mac_profile(ExcelLocale::kKoKR));
+    EXPECT_EQ(date_of("2026\xEB\x85\x84 1\xEC\x9B\x94 2\xEC\x9D\xBC"), 46024.0);
+    // A year below 100 lands in 4263..4362; 100..1899 is no year.
+    EXPECT_EQ(date_of("26\xEB\x85\x84 1\xEC\x9B\x94 2\xEC\x9D\xBC"), 886081.0);
+    EXPECT_EQ(date_of("68\xEB\x85\x84 2\xEC\x9B\x94 29\xEC\x9D\xBC"), 864955.0);
+    EXPECT_EQ(date_of("0059\xEB\x85\x84 1\xEC\x9B\x94 1\xEC\x9D\xBC"), 898133.0);
+    EXPECT_TRUE(rejects("150\xEB\x85\x84 1\xEC\x9B\x94 1\xEC\x9D\xBC"));
+    // Exactly one blank between the parts, and no time after it.
+    EXPECT_TRUE(
+        rejects("2026\xEB\x85\x84"
+                "1\xEC\x9B\x94 2\xEC\x9D\xBC"));
+    EXPECT_TRUE(rejects("2026\xEB\x85\x84  1\xEC\x9B\x94 2\xEC\x9D\xBC"));
+    EXPECT_TRUE(rejects("2026\xEB\x85\x84 1\xEC\x9B\x94 2\xEC\x9D\xBC 1:30"));
+    EXPECT_EQ(date_of("1\xEC\x8B\x9C 30\xEB\xB6\x84"), 0.0625);
+    EXPECT_EQ(date_of("1\xEC\x8B\x9C 30\xEB\xB6\x84 5\xEC\xB4\x88"), (5400.0 + 5.0) / 86400.0);
+    EXPECT_TRUE(
+        rejects("1\xEC\x8B\x9C"
+                "30\xEB\xB6\x84"));
+    EXPECT_TRUE(rejects("1\xEC\x8B\x9C"));
+    EXPECT_TRUE(rejects("1:30 \xEC\x98\xA4\xED\x9B\x84"));
+  }
+  {
+    const ScopedEvalProfile scope(mac_365_ja_jp_profile());
+    EXPECT_TRUE(rejects("1\xEC\x8B\x9C 30\xEB\xB6\x84"));
+  }
+}
+
+TEST(LocaleDateInput, ChineseMeridiemMarkers) {
+  for (const ExcelLocale locale : {ExcelLocale::kZhCN, ExcelLocale::kZhTW}) {
+    const ScopedEvalProfile scope(mac_profile(locale));
+    EXPECT_EQ(date_of("1:30 \xE4\xB8\x8B\xE5\x8D\x88"), 0.5625);
+    EXPECT_EQ(date_of("12:00 \xE4\xB8\x8A\xE5\x8D\x88"), 0.0);
+    EXPECT_EQ(date_of("1:30 \xE4\xB8\x8B\xE5\x8D\x88."), 0.5625);
+    EXPECT_EQ(date_of("1:30 \xE4\xB8\x8B\xE5\x8D\x88 2026/1/2"), 46024.5625);
+    EXPECT_EQ(date_of("2026/1/2 1:30 \xE4\xB8\x8B\xE5\x8D\x88"), 46024.5625);
+    EXPECT_TRUE(rejects("1:30\xE4\xB8\x8B\xE5\x8D\x88"));
+    EXPECT_TRUE(rejects("13:30 \xE4\xB8\x8B\xE5\x8D\x88"));
+    EXPECT_TRUE(rejects("\xE4\xB8\x8B\xE5\x8D\x88 1:30"));
+  }
+  const ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  EXPECT_TRUE(rejects("1:30 \xE4\xB8\x8B\xE5\x8D\x88"));
+}
+
+TEST(LocaleNumberInput, CurrencySymbolsAreLocaleData) {
+  double v = 0.0;
+  {
+    const ScopedEvalProfile scope(mac_365_ja_jp_profile());
+    ASSERT_TRUE(parse_excel_number("US$1,000", &v));
+    EXPECT_EQ(v, 1000.0);
+  }
+  {
+    const ScopedEvalProfile scope(mac_profile(ExcelLocale::kKoKR));
+    ASSERT_TRUE(
+        parse_excel_number("\xEF\xBF\xA6"
+                           "1.5",
+                           &v));
+    EXPECT_EQ(v, 1.5);
+  }
+  {
+    const ScopedEvalProfile scope(mac_profile(ExcelLocale::kZhTW));
+    ASSERT_TRUE(parse_excel_number("NT$-1", &v));
+    EXPECT_EQ(v, -1.0);
+  }
+  {
+    const ScopedEvalProfile scope(mac_profile(ExcelLocale::kPtBR));
+    ASSERT_TRUE(parse_excel_number("(R$1)", &v));
+    EXPECT_EQ(v, -1.0);
+    ASSERT_TRUE(parse_excel_number("R$1,5", &v));
+    EXPECT_EQ(v, 1.5);
+  }
+  {
+    const ScopedEvalProfile scope(mac_profile(ExcelLocale::kRuRU));
+    ASSERT_TRUE(parse_excel_number("1,5 \xE2\x82\xBD", &v));
+    EXPECT_EQ(v, 1.5);
+    EXPECT_FALSE(
+        parse_excel_number("\xE2\x82\xBD"
+                           "1",
+                           &v));
+  }
+  {
+    const ScopedEvalProfile scope(mac_profile(ExcelLocale::kEnUS));
+    EXPECT_FALSE(parse_excel_number("US$1", &v));
+  }
+}
+
 TEST(LocaleNumberInput, SpaceGroupCapsTheMixedFractionNumerator) {
   double v = 0.0;
   const ScopedEvalProfile scope(mac_profile(ExcelLocale::kFrFR));

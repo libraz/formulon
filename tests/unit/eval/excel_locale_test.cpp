@@ -95,6 +95,7 @@ void ExpectFactsEqual(const LocaleFacts& lhs, const LocaleFacts& rhs) {
   EXPECT_EQ(lhs.currency.negative_zero_signed, rhs.currency.negative_zero_signed);
   EXPECT_EQ(lhs.currency.default_decimals, rhs.currency.default_decimals);
   EXPECT_EQ(lhs.accepted_currency, rhs.accepted_currency);
+  EXPECT_EQ(lhs.accepted_currency_suffix, rhs.accepted_currency_suffix);
   EXPECT_EQ(lhs.usdollar_symbol, rhs.usdollar_symbol);
   EXPECT_EQ(lhs.date_order, rhs.date_order);
   EXPECT_EQ(lhs.dotted_date, rhs.dotted_date);
@@ -102,7 +103,7 @@ void ExpectFactsEqual(const LocaleFacts& lhs, const LocaleFacts& rhs) {
   EXPECT_EQ(lhs.kanji_time_text, rhs.kanji_time_text);
   EXPECT_EQ(lhs.japanese_era, rhs.japanese_era);
   EXPECT_EQ(lhs.r_letter, rhs.r_letter);
-  EXPECT_EQ(lhs.hangul_ymd_text, rhs.hangul_ymd_text);
+  EXPECT_EQ(lhs.hangul_date_time_text, rhs.hangul_date_time_text);
   EXPECT_EQ(lhs.month_name_text, rhs.month_name_text);
   EXPECT_EQ(lhs.month_extra_names, rhs.month_extra_names);
   EXPECT_EQ(lhs.leading_separator_current_year, rhs.leading_separator_current_year);
@@ -111,6 +112,7 @@ void ExpectFactsEqual(const LocaleFacts& lhs, const LocaleFacts& rhs) {
   EXPECT_EQ(lhs.meridiem_dot_spaced, rhs.meridiem_dot_spaced);
   EXPECT_EQ(lhs.am_name, rhs.am_name);
   EXPECT_EQ(lhs.pm_name, rhs.pm_name);
+  EXPECT_EQ(lhs.meridiem_text_names, rhs.meridiem_text_names);
   EXPECT_EQ(lhs.short_meridiem, rhs.short_meridiem);
   EXPECT_EQ(lhs.dbcs_codepage, rhs.dbcs_codepage);
   EXPECT_EQ(lhs.halfwidth_kana_single_byte, rhs.halfwidth_kana_single_byte);
@@ -201,7 +203,7 @@ void ExpectJapaneseFacts(const LocaleFacts& facts) {
   EXPECT_FALSE(facts.currency.negative_parens);
   EXPECT_TRUE(facts.currency.negative_zero_signed);
   EXPECT_EQ(facts.currency.default_decimals, 0U);
-  EXPECT_EQ(facts.accepted_currency, (std::array<std::string_view, 4>{"$", "€", "¥", "￥"}));
+  EXPECT_EQ(facts.accepted_currency, (std::array<std::string_view, 6>{"$", "€", "¥", "￥", "US$", ""}));
   EXPECT_EQ(facts.date_order, DateOrder::kYMD);
   EXPECT_EQ(facts.kanji_date_text, KanjiDateText::kAll);
   EXPECT_TRUE(facts.kanji_time_text);
@@ -245,7 +247,7 @@ void ExpectEnglishFacts(const LocaleFacts& facts) {
   EXPECT_TRUE(facts.currency.negative_parens);
   EXPECT_TRUE(facts.currency.negative_zero_signed);
   EXPECT_EQ(facts.currency.default_decimals, 2U);
-  EXPECT_EQ(facts.accepted_currency, (std::array<std::string_view, 4>{"$", "€", "", ""}));
+  EXPECT_EQ(facts.accepted_currency, (std::array<std::string_view, 6>{"$", "€", "", "", "", ""}));
   EXPECT_EQ(facts.date_order, DateOrder::kMDY);
   EXPECT_EQ(facts.kanji_date_text, KanjiDateText::kNone);
   EXPECT_FALSE(facts.kanji_time_text);

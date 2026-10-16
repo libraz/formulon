@@ -185,13 +185,14 @@ void format_general(std::string& out, double v) {
   // between stays in fixed form even if it grows long (e.g. `0.00000001`).
   const bool use_scientific = (exp10 >= 11 || exp10 <= -9);
   if (use_scientific) {
-    // How wide is the `E+XX` / `E-YYY` tail?
+    // How wide is the `E+XX` / `E-YYY` tail? Excel budgets three exponent
+    // digits from |exp| >= 99 (`1.2346E+99`, against `1.23457E+98`).
     int exp_abs = exp10 < 0 ? -exp10 : exp10;
     int exp_digits = 1;
     if (exp_abs >= 10) {
       exp_digits = 2;
     }
-    if (exp_abs >= 100) {
+    if (exp_abs >= 99) {
       exp_digits = 3;
     }
     // Budget 11 chars total. Layout: `X.FFF...E+YY` with 1 int digit, a
