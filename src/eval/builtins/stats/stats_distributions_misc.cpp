@@ -215,14 +215,14 @@ Value FisherInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // GAUSS(x) - probability that a standard-normal variable falls in [0, x].
 // Equivalent to `NORM.S.DIST(x, TRUE) - 0.5`, i.e.
-// `0.5 * erfc(-x / sqrt(2)) - 0.5`. Defined for all finite x.
+// `normal_cdf(x) - 0.5`. Defined for all finite x.
 Value Gauss(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto x_arg = read_number_arg(args, 0);
   if (!x_arg) {
     return Value::error(x_arg.error());
   }
   const double x = x_arg.value();
-  return finite_number_result(0.5 * std::erfc(-x / std::sqrt(2.0)) - 0.5);
+  return finite_number_result(stats::normal_cdf(x) - 0.5);
 }
 
 // PHI(x) - standard-normal PDF: exp(-x^2 / 2) / sqrt(2 * pi). Defined for

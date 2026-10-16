@@ -7,6 +7,7 @@
 //     handbook values, order truncation, negative-order rejection, and
 //     singularity handling (x <= 0) for the second-kind members.
 
+#include <string>
 #include <string_view>
 
 #include "eval/function_registry.h"
@@ -321,6 +322,33 @@ TEST(EngineeringSpecialAnalysisToolPak, ErfOmittedUpperLimitIsNA) {
   const Value v = EvalSource("=ERF(0.5,)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+// ERF structure: odd, ERFC(-x) = 2 - ERFC(x), the PRECISE names are aliases.
+TEST(BuiltinsEngineeringSpecialStructure, OddnessAndAliases) {
+  for (const char* x : {"0.25", "0.5", "0.75", "1.5", "3"}) {
+    const std::string pos(x);
+    const std::string neg = "-" + pos;
+    const Value erf_pos = EvalSource("=ERF(" + pos + ")");
+    const Value erf_neg = EvalSource("=ERF(" + neg + ")");
+    const Value erfc_pos = EvalSource("=ERFC(" + pos + ")");
+    const Value erfc_neg = EvalSource("=ERFC(" + neg + ")");
+    ASSERT_TRUE(erf_pos.is_number() && erf_neg.is_number() && erfc_pos.is_number() && erfc_neg.is_number()) << x;
+    EXPECT_EQ(erf_neg.as_number(), -erf_pos.as_number()) << x;
+    EXPECT_EQ(erfc_neg.as_number(), 2.0 - erfc_pos.as_number()) << x;
+    EXPECT_EQ(EvalSource("=ERF.PRECISE(" + pos + ")").as_number(), erf_pos.as_number()) << x;
+    EXPECT_EQ(EvalSource("=ERFC.PRECISE(" + neg + ")").as_number(), erfc_neg.as_number()) << x;
+  }
+}
+
+TEST(BuiltinsEngineeringSpecialStructure, ErfBeyondHalfIsOneMinusErfc) {
+  const Value erf = EvalSource("=ERF(2)");
+  const Value erfc = EvalSource("=ERFC(2)");
+  ASSERT_TRUE(erf.is_number() && erfc.is_number());
+  EXPECT_EQ(erf.as_number(), 1.0 - erfc.as_number());
+  const Value erf_s = EvalSource("=ERF(0.25)");
+  const Value erfc_s = EvalSource("=ERFC(0.25)");
+  EXPECT_EQ(erfc_s.as_number(), 1.0 - erf_s.as_number());
 }
 
 }  // namespace

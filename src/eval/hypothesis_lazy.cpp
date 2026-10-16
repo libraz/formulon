@@ -423,8 +423,8 @@ Value eval_z_test_lazy(const parser::AstNode& call, Arena& arena, const Function
 
   // Z-statistic on the sample mean under the null hypothesis μ == x.
   const double z = (mean - x) / (sigma / std::sqrt(n));
-  // One-tailed upper area: `1 - Φ(z) = 0.5 * erfc(z / sqrt(2))`.
-  const double p = 0.5 * std::erfc(z / std::sqrt(2.0));
+  // One-tailed upper area: `1 - Φ(z) = Φ(-z)`.
+  const double p = stats::normal_cdf(-z);
   return to_finite_value(p);
 }
 

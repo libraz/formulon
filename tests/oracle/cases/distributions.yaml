@@ -20,6 +20,7 @@ cases:
   - id: norm_dist_cdf_one
     description: "CDF of N(0, 1) at 1 ~ 0.841345"
     formula: "=NORM.DIST(1, 0, 1, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norm_dist_scaled
     description: "N(100, 15) CDF at 105 ~ 0.630559"
@@ -184,6 +185,7 @@ cases:
   - id: gauss_one
     description: "NORM.S.DIST(1, TRUE) - 0.5 ~ 0.341345"
     formula: "=GAUSS(1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: phi_zero
     description: "1 / sqrt(2*pi) ~ 0.398942"
@@ -326,6 +328,7 @@ cases:
   - id: gauss_negative
     description: "GAUSS is odd: GAUSS(-1) = -GAUSS(1)"
     formula: "=GAUSS(-1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gauss_two
     description: "NORM.S.DIST(2, TRUE) - 0.5 ~ 0.477250"
@@ -365,6 +368,7 @@ cases:
   - id: norm_s_dist_negative_cdf
     description: "Standard-normal CDF at z=-1 ~ 0.158655"
     formula: "=NORM.S.DIST(-1, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norm_s_dist_z2_pdf
     description: "Standard-normal PDF at z=2 ~ 0.053991"
@@ -374,6 +378,7 @@ cases:
   - id: norm_s_inv_lower_tail
     description: "Lower-tail z_{0.025} ~ -1.959964"
     formula: "=NORM.S.INV(0.025)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norm_s_inv_p_zero_is_num
     description: "p <= 0 yields #NUM!"

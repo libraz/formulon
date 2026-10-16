@@ -81,11 +81,13 @@ cases:
     description: "One-tailed z-test with supplied sigma = 2"
     setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6, A6: 5, A7: 4, A8: 2, A9: 1, A10: 9 }
     formula: "=Z.TEST(A1:A10, 4, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: z_test_sample_sigma
     description: "One-tailed z-test using the sample standard deviation"
     setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6, A6: 5, A7: 4, A8: 2, A9: 1, A10: 9 }
     formula: "=Z.TEST(A1:A10, 4)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ztest_legacy_matches
     description: "Legacy ZTEST must match Z.TEST exactly"
@@ -368,11 +370,13 @@ cases:
     description: "ZTEST one-tailed with supplied sigma=2"
     setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6, A6: 5, A7: 4, A8: 2, A9: 1, A10: 9 }
     formula: "=ZTEST(A1:A10, 4, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ztest_sample_sigma
     description: "ZTEST one-tailed using sample standard deviation"
     setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6, A6: 5, A7: 4, A8: 2, A9: 1, A10: 9 }
     formula: "=ZTEST(A1:A10, 4)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ztest_x_outside_range
     description: "ZTEST with x far below sample mean — extreme tail probability"

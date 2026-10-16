@@ -483,8 +483,7 @@ Value LognormDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   }
   const double z = (std::log(x) - mean) / sd;
   if (parsed.value().cumulative) {
-    // P(X <= x) = Phi(z) = 0.5 * erfc(-z / sqrt(2)).
-    return finalize(0.5 * std::erfc(-z / std::sqrt(2.0)));
+    return finalize(stats::normal_cdf(z));
   }
   const double r = std::exp(-0.5 * z * z) / (x * sd * std::sqrt(2.0 * kDistPi));
   return finalize(r);

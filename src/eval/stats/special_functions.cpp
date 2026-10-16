@@ -453,6 +453,40 @@ double regularized_incomplete_beta(double a, double b, double x) noexcept {
   return cf.converged ? 1.0 - bt * cf.value / b : cf.value;
 }
 
+namespace {
+
+// Kernels behind the ERF structure; `x` is non-negative in both.
+double erf_kernel_small(double x) noexcept {
+  return std::erf(x);
+}
+
+double erfc_kernel(double x) noexcept {
+  return std::erfc(x);
+}
+
+constexpr double kErfSmallLimit = 0.5;
+
+}  // namespace
+
+double erf_excel(double x) noexcept {
+  const double a = std::fabs(x);
+  const double r = a <= kErfSmallLimit ? erf_kernel_small(a) : 1.0 - erfc_kernel(a);
+  return std::signbit(x) ? -r : r;
+}
+
+double erfc_excel(double x) noexcept {
+  const double a = std::fabs(x);
+  if (a <= kErfSmallLimit) {
+    return 1.0 - erf_excel(x);
+  }
+  const double r = erfc_kernel(a);
+  return std::signbit(x) ? 2.0 - r : r;
+}
+
+double normal_cdf(double z) noexcept {
+  return erfc_excel(-z * 0.7071067811865476) / 2.0;
+}
+
 }  // namespace stats
 }  // namespace eval
 }  // namespace formulon

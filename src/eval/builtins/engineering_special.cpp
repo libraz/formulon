@@ -56,6 +56,7 @@
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
+#include "eval/stats/special_functions.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "utils/subnormal_flush.h"
@@ -129,7 +130,7 @@ Value Erf(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(a.error());
   }
   if (arity == 1) {
-    const double r = std::erf(a.value());
+    const double r = stats::erf_excel(a.value());
     if (std::isnan(r)) {
       return Value::error(ErrorCode::Num);
     }
@@ -144,7 +145,7 @@ Value Erf(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   }
   const double lower = a.value();
   const double upper = b.value();
-  const double r = std::erf(upper) - std::erf(lower);
+  const double r = stats::erf_excel(upper) - stats::erf_excel(lower);
   if (std::isnan(r)) {
     return Value::error(ErrorCode::Num);
   }
@@ -158,13 +159,13 @@ Value ErfPrecise(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return Erf(args, 1, arena);
 }
 
-// ERFC(x) = 1 - erf(x). Uses std::erfc for better precision in the tail.
+// ERFC(x) = 1 - erf(x), evaluated as the direct tail beyond |x| > 0.5.
 Value Erfc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto a = coerce_real_arg(args[0]);
   if (!a) {
     return Value::error(a.error());
   }
-  const double r = std::erfc(a.value());
+  const double r = stats::erfc_excel(a.value());
   if (std::isnan(r)) {
     return Value::error(ErrorCode::Num);
   }

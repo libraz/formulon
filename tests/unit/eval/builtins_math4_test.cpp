@@ -896,6 +896,79 @@ TEST(BuiltinsMath4BoolRangeCell, GcdLcmMultinomialAreValue) {
   }
 }
 
+// Excel builds FACT as a backward product and COSH / SINH / TANH from EXP;
+// the expected values are Mac Excel 365 results, compared bit for bit.
+TEST(BuiltinsMath4ExcelBits, FactBackwardProduct) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=FACT(25)", 1.5511210043330984e+25},  {"=FACT(26)", 4.032914611266057e+26},
+      {"=FACT(28)", 3.048883446117138e+29},   {"=FACT(30)", 2.652528598121911e+32},
+      {"=FACT(32)", 2.6313083693369355e+35},  {"=FACT(34)", 2.952327990396041e+38},
+      {"=FACT(100)", 9.332621544394418e+157}, {"=FACT(170)", 7.257415615308004e+306},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(BuiltinsMath4ExcelBits, HyperbolicFromExp) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=SINH(1.0)", 1.1752011936438014},
+      {"=COSH(1.0)", 1.5430806348152437},
+      {"=TANH(1.0)", 0.7615941559557649},
+      {"=COTH(1.0)", 1.3130352854993315},
+      {"=SINH(-1.0)", -1.1752011936438014},
+      {"=COSH(-1.0)", 1.5430806348152437},
+      {"=TANH(-1.0)", -0.7615941559557649},
+      {"=COTH(-1.0)", -1.3130352854993315},
+      {"=SINH(2.0)", 3.626860407847019},
+      {"=COSH(2.0)", 3.7621956910836314},
+      {"=TANH(2.0)", 0.964027580075817},
+      {"=COTH(2.0)", 1.037314720727548},
+      {"=SINH(-3.5)", -16.542627287634996},
+      {"=COSH(-3.5)", 16.572824671057315},
+      {"=TANH(-3.5)", -0.9981778976111987},
+      {"=COTH(-3.5)", -1.0018254285064434},
+      {"=SINH(10.0)", 11013.232874703393},
+      {"=COSH(10.0)", 11013.232920103324},
+      {"=TANH(10.0)", 0.9999999958776926},
+      {"=COTH(10.0)", 1.0000000041223074},
+      {"=SINH(-10.0)", -11013.232874703393},
+      {"=COSH(-10.0)", 11013.232920103324},
+      {"=TANH(-10.0)", -0.9999999958776926},
+      {"=COTH(-10.0)", -1.0000000041223074},
+      {"=SINH(20.0)", 242582597.70489514},
+      {"=COSH(20.0)", 242582597.70489514},
+      {"=TANH(20.0)", 1.0},
+      {"=COTH(20.0)", 1.0},
+      {"=SINH(50.0)", 2.592352764293536e+21},
+      {"=COSH(50.0)", 2.592352764293536e+21},
+      {"=TANH(50.0)", 1.0},
+      {"=COTH(50.0)", 1.0},
+      {"=SINH(400.0)", 2.610734844882072e+173},
+      {"=COSH(400.0)", 2.610734844882072e+173},
+      {"=TANH(400.0)", 1.0},
+      {"=COTH(400.0)", 1.0},
+      {"=COSH(0.0625)", 1.0019537608656677},
+      {"=COSH(0.5)", 1.1276259652063807},
+      {"=COSH(0.75)", 1.2946832846768448},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

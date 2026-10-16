@@ -40,9 +40,7 @@ static Value NormDistCompute(double x, double mean, double sd, bool cumulative) 
   const double z = (x - mean) / sd;
   double r;
   if (cumulative) {
-    // P(X <= x) = 0.5 * erfc(-z / sqrt(2)). `std::erfc` is the
-    // complementary error function, available since C++11 <cmath>.
-    r = 0.5 * std::erfc(-z / std::sqrt(2.0));
+    r = stats::normal_cdf(z);
   } else {
     r = std::exp(-0.5 * z * z) / (sd * std::sqrt(2.0 * kStatsPi));
   }
@@ -406,7 +404,7 @@ static constexpr double kTDistAsymptoticDfThreshold = 1.0e6;
 // `1 - normal_cdf(x)` so it stays accurate for the large positive `x` the
 // asymptotic path below is evaluated at.
 static double NormalRightTail(double x) noexcept {
-  return 0.5 * std::erfc(x / std::sqrt(2.0));
+  return stats::normal_cdf(-x);
 }
 
 // Two-term asymptotic expansion of the Student's t right tail for large df

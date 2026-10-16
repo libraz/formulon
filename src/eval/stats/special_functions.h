@@ -88,6 +88,18 @@ double gamma_quantile(double a, double prob, bool upper) noexcept;
 /// caller translates NaN into `#NUM!`.
 double regularized_incomplete_beta(double a, double b, double x) noexcept;
 
+/// Excel's ERF / ERF.PRECISE of one argument: odd, direct for `|x| <= 0.5`,
+/// `1 - erfc` beyond. NaN propagates.
+double erf_excel(double x) noexcept;
+
+/// Excel's ERFC / ERFC.PRECISE: `1 - erf` for `|x| <= 0.5`, the direct tail
+/// beyond, with `erfc(-x) = 2 - erfc(x)`. NaN propagates.
+double erfc_excel(double x) noexcept;
+
+/// Standard normal CDF as Excel's NORM.S.DIST(z, TRUE) evaluates it:
+/// `erfc_excel(-z * 0.7071067811865476) / 2`.
+double normal_cdf(double z) noexcept;
+
 }  // namespace stats
 }  // namespace eval
 }  // namespace formulon

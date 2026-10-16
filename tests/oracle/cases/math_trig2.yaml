@@ -240,6 +240,7 @@ cases:
 
   - id: coth_of_one
     formula: "=COTH(1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: coth_large_approaches_one
     formula: "=COTH(1000)"

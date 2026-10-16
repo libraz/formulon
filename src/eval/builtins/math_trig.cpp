@@ -231,20 +231,46 @@ Value Atan2(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // forward hyperbolics SINH / COSH, can arise from overflow at `|x|` beyond
 // roughly 710) and surfaces `#NUM!` in that case, mirroring ACOS / ASIN.
 
-// SINH(x) - hyperbolic sine. Overflow (|x| beyond ~710) yields +/-Inf from
-// std::sinh, caught by the finite-check and reported as `#NUM!`.
+// Excel builds the hyperbolics from EXP: SINH and TANH for |x| >= 1, COSH for
+// every x. The |x| < 1 branches of SINH / TANH are not decoded and keep libm.
+double hyp_exp(double x) {
+  return current_eval_profile().host == ExcelHost::kWin365 ? x87_exp(x) : std::exp(x);
+}
+
+double sinh_excel(double x) {
+  return std::fabs(x) < 1.0 ? std::sinh(x) : (hyp_exp(x) - hyp_exp(-x)) / 2.0;
+}
+
+double cosh_excel(double x) {
+  return (hyp_exp(x) + hyp_exp(-x)) / 2.0;
+}
+
+double tanh_excel(double x) {
+  if (std::fabs(x) < 1.0) {
+    return std::tanh(x);
+  }
+  const double c = cosh_excel(x);
+  if (std::isinf(c)) {
+    // exp overflows on both sides; the ratio tends to +/-1.
+    return x > 0.0 ? 1.0 : -1.0;
+  }
+  return sinh_excel(x) / c;
+}
+
+// SINH(x) - hyperbolic sine. Overflow (|x| beyond ~710) yields +/-Inf,
+// caught by the finite-check and reported as `#NUM!`.
 Value Sinh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_unary_math(&std::sinh, args);
+  return apply_unary_math(&sinh_excel, args);
 }
 
 // COSH(x) - hyperbolic cosine. Overflow yields +Inf -> `#NUM!`.
 Value Cosh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_unary_math(&std::cosh, args);
+  return apply_unary_math(&cosh_excel, args);
 }
 
 // TANH(x) - hyperbolic tangent. Asymptotic to +/-1; no domain restriction.
 Value Tanh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_unary_math(&std::tanh, args);
+  return apply_unary_math(&tanh_excel, args);
 }
 
 // ASINH(x) - inverse hyperbolic sine. Domain: all reals. Excel evaluates the
@@ -355,19 +381,15 @@ Value Csch(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   });
 }
 
-// COTH(x) - hyperbolic cotangent, `cosh(x) / sinh(x)`. `sinh(0) == 0`
-// -> `#DIV/0!`; asymptotic to +/-1 as `|x| -> inf`.
+// COTH(x) - hyperbolic cotangent, `1 / TANH(x)`. `TANH(0) == 0` -> `#DIV/0!`;
+// asymptotic to +/-1 as `|x| -> inf`.
 Value Coth(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return apply_unary_value(args, [](double x) {
-    const double s = std::sinh(x);
-    if (s == 0.0) {
+    const double t = tanh_excel(x);
+    if (t == 0.0) {
       return Value::error(ErrorCode::Div0);
     }
-    if (std::isinf(s)) {
-      // sinh and cosh overflow together; the ratio tends to +/-1.
-      return Value::number((x > 0.0) ? 1.0 : -1.0);
-    }
-    return to_finite_value(std::cosh(x) / s);
+    return to_finite_value(1.0 / t);
   });
 }
 

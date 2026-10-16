@@ -40,15 +40,20 @@ using builtins_detail::snap_to_integer;
 using builtins_detail::to_finite_value;
 
 // Factorial table for n = 0..170 (double precision). 170! is the largest
-// factorial representable as a finite double; 171! overflows to +Inf.
+// factorial representable as a finite double; 171! overflows to +Inf. Each
+// entry is the backward product n * (n-1) * ... * 1, as Excel evaluates FACT.
 // Initialised lazily on first use via a function-local static, so
 // translation-unit ordering does not matter.
 inline const double* factorial_table() {
   static const auto kTable = [] {
     std::array<double, 171> table{};
     table[0] = 1.0;
-    for (std::size_t i = 1; i <= 170; ++i) {
-      table[i] = table[i - 1] * static_cast<double>(i);
+    for (std::size_t n = 1; n <= 170; ++n) {
+      double r = 1.0;
+      for (std::size_t i = n; i >= 1; --i) {
+        r *= static_cast<double>(i);
+      }
+      table[n] = r;
     }
     return table;
   }();

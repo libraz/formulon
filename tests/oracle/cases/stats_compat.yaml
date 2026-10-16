@@ -208,6 +208,7 @@ cases:
   - id: norminv_lower_tail
     description: "Lower 2.5% quantile = -1.96"
     formula: "=NORMINV(0.025, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norminv_p_zero_is_num
     description: "p=0 is unbounded; Excel surfaces #NUM!"
@@ -223,6 +224,7 @@ cases:
   - id: normsdist_negative
     description: "Symmetry: NORMSDIST(-1) = 1 - NORMSDIST(1)"
     formula: "=NORMSDIST(-1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: normsinv_median
     description: "p=0.5 -> 0 (standard-normal median)"
@@ -230,6 +232,7 @@ cases:
 
   - id: normsinv_lower_tail
     formula: "=NORMSINV(0.025)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: normsinv_p_zero_is_num
     formula: "=NORMSINV(0)"

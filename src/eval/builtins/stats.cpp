@@ -40,6 +40,7 @@
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
+#include "eval/stats/special_functions.h"
 #include "numeric_aggregate_kernels.h"
 #include "utils/arena.h"
 #include "utils/cancellation_snap.h"
@@ -292,7 +293,7 @@ double InverseStandardNormal(double p) {
   // iterations are harmless but unnecessary; one pass brings the
   // absolute error well below `1e-12` for p in (1e-300, 1 - 1e-16).
   for (int i = 0; i < 2; ++i) {
-    const double phi_cdf = 0.5 * std::erfc(-z / std::sqrt(2.0));
+    const double phi_cdf = stats::normal_cdf(z);
     const double phi_pdf = std::exp(-0.5 * z * z) / std::sqrt(2.0 * kStatsPi);
     if (phi_pdf == 0.0) {
       break;
