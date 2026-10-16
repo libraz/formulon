@@ -389,6 +389,7 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   assign_value_sort_keys(assign_value_sort_keys, col_tree, col_levels, 0U);
 
   PivotResult result;
+  result.sum_totals_as_state = sum_totals_follow_accumulator(table);
   std::vector<HierNode*> row_leaves;
   std::vector<HierNode*> col_leaves;
   finalize_hierarchy(row_tree, row_levels, 0U, result.rows, row_leaves, result.text_storage);
@@ -538,9 +539,14 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
             for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
               const Aggregation agg = spec.has_value() ? *spec : table.data_fields()[df_idx].aggregation;
               const std::uint32_t field_index = table.data_fields()[df_idx].field_index;
-              row_values[df_idx] = both_axes ? aggregate_row_partials_or_blank(agg, cache, buckets, subtotal_rows,
-                                                                               all_col_leaves, field_index, result)
-                                             : aggregate_records_or_blank(agg, cache, all_records, field_index, result);
+              const MissingStats missing =
+                  spec.has_value()
+                      ? missing_custom_subtotal_stats(table, depth, agg, table.data_fields()[df_idx].aggregation)
+                      : MissingStats{};
+              row_values[df_idx] = both_axes
+                                       ? aggregate_row_partials_or_blank(agg, cache, buckets, subtotal_rows,
+                                                                         all_col_leaves, field_index, result, missing)
+                                       : aggregate_records_or_blank(agg, cache, all_records, field_index, result);
               for (std::size_t c = 0; c < col_leaf_count; ++c) {
                 col_values[c][df_idx] = aggregate_records_or_blank(agg, cache, col_records[c], field_index, result);
               }

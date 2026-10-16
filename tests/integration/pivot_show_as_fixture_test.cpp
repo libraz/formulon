@@ -208,7 +208,8 @@ INSTANTIATE_TEST_SUITE_P(
                       ShowAsFixture{"S8_pctRunR__sum.xlsx"}, ShowAsFixture{"S8e_pctdiffPrevR__sum.xlsx"},
                       ShowAsFixture{"S8e_runR__sum.xlsx"}, ShowAsFixture{"S8g_index__sum.xlsx"},
                       ShowAsFixture{"S8g_pctdiffR1__sum.xlsx"}, ShowAsFixture{"K1_parentRow__sum.xlsx"},
-                      ShowAsFixture{"K1_parentRegion__sum.xlsx"}, ShowAsFixture{"K1_rankDescGrp__sum.xlsx"}),
+                      ShowAsFixture{"K1_parentRegion__sum.xlsx"}, ShowAsFixture{"K1_rankDescGrp__sum.xlsx"},
+                      ShowAsFixture{"RKa__sum.xlsx"}, ShowAsFixture{"P1Z22__sum.xlsx"}),
     FixtureName);
 
 }  // namespace

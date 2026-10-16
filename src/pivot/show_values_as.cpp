@@ -333,12 +333,27 @@ Cell base_mode_cell(const Grid& g, const BaseSpec& s, std::size_t ri, std::size_
     if (run.error()) {
       return run;
     }
-    // The total across the base field is the cell with that level collapsed.
+    // At the base level the total across the base field is the cell with that level collapsed;
+    // deeper rows divide by the sum over all their siblings. A total with no value is blank.
     Cell total;
     if (p.size() == d + 1) {
       total = base_cell_by_path(g, s, ri, ci, Path(p.begin(), p.begin() + static_cast<std::ptrdiff_t>(d)));
+    } else {
+      for (const std::size_t li : sib) {
+        const Cell x = base_cell(g, s, ri, ci, li);
+        if (x.error()) {
+          total = x;
+          break;
+        }
+        if (!x.blank()) {
+          total = total.blank() ? x : make_num(total.n + x.n);
+        }
+      }
     }
-    if (total.blank() || total.error() || total.n == 0.0) {
+    if (total.blank()) {
+      return Cell{};
+    }
+    if (total.error() || total.n == 0.0) {
       return make_err(ErrorCode::Div0);
     }
     return make_num(run.n / total.n);

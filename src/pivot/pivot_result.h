@@ -142,6 +142,10 @@ struct PivotResult {
   /// `row_leaf_totals` for the bottom "Grand Total" row.
   std::vector<std::vector<Value>> col_leaf_totals;
 
+  /// Set when a row field carries a non-Sum custom subtotal: every Sum total then follows the
+  /// accumulator model of the other functions instead of chaining the rendered cells.
+  bool sum_totals_as_state = false;
+
   /// Lifetime-stable backing store for any `Value::text` payload appearing
   /// in `values`, `subtotals`, `grand_total`, or axis `identity`. The
   /// evaluator may need to surface text values from the source cache (e.g.

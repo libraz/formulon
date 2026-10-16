@@ -140,6 +140,16 @@ class AggregateState {
     }
   }
 
+  /// Zeroes the statistics a 2-D combination did not carry.
+  void drop(const MissingStats& missing) {
+    if (missing.count) {
+      numbers_ = 0U;
+    }
+    if (missing.sum_of_squares) {
+      s2_ = 0.0;
+    }
+  }
+
   /// True when no non-blank record contributed: the cell renders blank.
   bool all_blank() const { return non_blank_ == 0U; }
 
@@ -157,6 +167,7 @@ class AggregateState {
     switch (aggregation_) {
       case Aggregation::Average:
         return numbers_ == 0U ? Value::error(ErrorCode::Div0) : finite_number(s_ / n);
+      case Aggregation::Sum:
       case Aggregation::Product:
       case Aggregation::Min:
       case Aggregation::Max:
@@ -383,8 +394,8 @@ Value aggregate_records_or_blank(Aggregation aggregation, const PivotCache& cach
   if (state.all_blank()) {
     return Value::blank();
   }
-  // Sum keeps its own snapped chain.
-  return aggregation == Aggregation::Sum
+  // Sum keeps its own snapped chain unless its totals follow the accumulator model.
+  return aggregation == Aggregation::Sum && !result.sum_totals_as_state
              ? reify(apply_record_aggregation(aggregation, cache, records, field_index), result)
              : state.finish();
 }
@@ -395,11 +406,59 @@ Value aggregate_records_or_blank(Aggregation aggregation, const PivotCache& cach
   return aggregate_records_or_blank(aggregation, cache, RecordIndexView(records), field_index, result);
 }
 
+namespace {
+
+bool keeps_count(Aggregation a) {
+  return a == Aggregation::Average || a == Aggregation::CountNumbers || a == Aggregation::StdDev ||
+         a == Aggregation::StdDevP || a == Aggregation::Var || a == Aggregation::VarP;
+}
+
+bool keeps_sum_of_squares(Aggregation a) {
+  return a == Aggregation::StdDev || a == Aggregation::StdDevP || a == Aggregation::Var || a == Aggregation::VarP;
+}
+
+}  // namespace
+
+MissingStats missing_custom_subtotal_stats(const PivotTable& table, std::size_t depth, Aggregation custom,
+                                           Aggregation data_aggregation) {
+  if (depth == 0U) {
+    return {};
+  }
+  bool count = keeps_count(data_aggregation);
+  bool squares = keeps_sum_of_squares(data_aggregation);
+  for (std::size_t k = 0; k < depth && k < table.row_field_order().size(); ++k) {
+    const std::uint32_t field_index = table.row_field_order()[k];
+    if (field_index >= table.fields().size()) {
+      continue;
+    }
+    for (const SubtotalFn fn : table.fields()[field_index].subtotal_fns) {
+      const Aggregation above = static_cast<Aggregation>(static_cast<std::uint8_t>(fn));
+      count = count || keeps_count(above);
+      squares = squares || keeps_sum_of_squares(above);
+    }
+  }
+  return {keeps_count(custom) && !count, keeps_sum_of_squares(custom) && !squares};
+}
+
+bool sum_totals_follow_accumulator(const PivotTable& table) {
+  for (const std::uint32_t field_index : table.row_field_order()) {
+    if (field_index >= table.fields().size()) {
+      continue;
+    }
+    for (const SubtotalFn fn : table.fields()[field_index].subtotal_fns) {
+      if (fn != SubtotalFn::Sum) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 Value aggregate_row_partials_or_blank(Aggregation aggregation, const PivotCache& cache, const RecordBuckets& buckets,
                                       const std::vector<std::size_t>& row_leaves,
                                       const std::vector<std::size_t>& col_leaves, std::uint32_t field_index,
-                                      PivotResult& result) {
-  if (aggregation == Aggregation::Sum) {
+                                      PivotResult& result, const MissingStats& missing) {
+  if (aggregation == Aggregation::Sum && !result.sum_totals_as_state) {
     std::vector<RecordIndexSpan> spans;
     return aggregate_records_or_blank(
         aggregation, cache, make_leaf_set_record_view(buckets, row_leaves, col_leaves, spans), field_index, result);
@@ -416,6 +475,10 @@ Value aggregate_row_partials_or_blank(Aggregation aggregation, const PivotCache&
       }
     }
     total.combine(row);
+  }
+  // One column leaf is a 1-D total and exact.
+  if (col_leaves.size() > 1U) {
+    total.drop(missing);
   }
   return total.all_blank() ? Value::blank() : total.finish();
 }
@@ -467,7 +530,7 @@ void recompute_sum_totals_from_cells(const PivotTable& table, PivotResult& resul
   const std::size_t row_subtotal_count = std::min(result.row_subtotals.size(), row_subtotal_leaf_sets.size());
 
   for (std::size_t df = 0; df < table.data_fields().size(); ++df) {
-    if (table.data_fields()[df].aggregation != Aggregation::Sum) {
+    if (table.data_fields()[df].aggregation != Aggregation::Sum || result.sum_totals_as_state) {
       continue;
     }
     auto is_sum = [](const std::optional<Aggregation>& spec) {

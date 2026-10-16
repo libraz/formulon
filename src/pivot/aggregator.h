@@ -133,13 +133,30 @@ Value aggregate_records_or_blank(Aggregation aggregation, const PivotCache& cach
                                  const std::vector<std::size_t>& records, std::uint32_t field_index,
                                  PivotResult& result);
 
+/// Statistics a custom subtotal reads in a 2-D combination but no function above it keeps.
+struct MissingStats {
+  bool count = false;           ///< The numeric count `n` reads as 0.
+  bool sum_of_squares = false;  ///< The sum of squares reads as 0.
+};
+
+/// Statistics missing from the 2-D total of a custom subtotal of `custom` at row depth `depth`.
+/// A custom subtotal on a field below the first sees only the statistics the data field's
+/// function and the custom functions of the fields above it keep; the first field is exact.
+MissingStats missing_custom_subtotal_stats(const PivotTable& table, std::size_t depth, Aggregation custom,
+                                           Aggregation data_aggregation);
+
+/// True when a row field carries a non-Sum custom subtotal. Excel then totals Sum data fields
+/// with the accumulator model, not from the rendered cells.
+bool sum_totals_follow_accumulator(const PivotTable& table);
+
 /// A total across both axes: every row leaf's one-axis state over `col_leaves`
 /// is combined raw (no snap, no flush) top to bottom. Sum keeps its record
-/// chain, since its totals are rebuilt from the rendered cells afterwards.
+/// chain unless `result.sum_totals_as_state`, since its totals are otherwise rebuilt from
+/// the rendered cells afterwards.
 Value aggregate_row_partials_or_blank(Aggregation aggregation, const PivotCache& cache, const RecordBuckets& buckets,
                                       const std::vector<std::size_t>& row_leaves,
                                       const std::vector<std::size_t>& col_leaves, std::uint32_t field_index,
-                                      PivotResult& result);
+                                      PivotResult& result, const MissingStats& missing = {});
 
 }  // namespace formulon::pivot
 

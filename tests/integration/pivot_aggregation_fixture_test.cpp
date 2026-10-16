@@ -5,7 +5,8 @@
 // whose pivot Excel refreshed and saved, so the sheet cells inside the pivot's
 // `ref` are Excel's own numbers. The cases cover filtered record order (hidden
 // items, a selected page item, label and value filters), `subtotalHiddenItems`,
-// and the total strips of deep hierarchies. Numbers are compared bit for bit.
+// the total strips of deep hierarchies, and Sum totals beside non-Sum custom
+// subtotals. Numbers are compared bit for bit.
 
 #include <algorithm>
 #include <cstdint>
@@ -146,7 +147,11 @@ INSTANTIATE_TEST_SUITE_P(ExcelSaved, PivotAggregationFixture,
                                            AggregationFixture{"G1__average.xlsx"}, AggregationFixture{"Gx__count.xlsx"},
                                            AggregationFixture{"OF1__sum.xlsx"}, AggregationFixture{"D1__max.xlsx"},
                                            AggregationFixture{"D2__max.xlsx"}, AggregationFixture{"OV__max.xlsx"},
-                                           AggregationFixture{"K4__average.xlsx"}, AggregationFixture{"L22__var.xlsx"}),
+                                           AggregationFixture{"K4__average.xlsx"}, AggregationFixture{"L22__var.xlsx"},
+                                           AggregationFixture{"V1Z22__sum.xlsx"}, AggregationFixture{"V3Z22__sum.xlsx"},
+                                           AggregationFixture{"V4Z21__sum.xlsx"}, AggregationFixture{"C9__sum.xlsx"},
+                                           AggregationFixture{"W1K1__var.xlsx"},
+                                           AggregationFixture{"FHQ__average.xlsx"}),
                          FixtureName);
 
 }  // namespace

@@ -1011,7 +1011,8 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         const ColSubtotal& subtotal = result.col_subtotals[col_entry.subtotal_index];
         const Aggregation aggregation =
             subtotal.aggregation.has_value() ? *subtotal.aggregation : table.data_fields()[df].aggregation;
-        if (aggregation != Aggregation::Sum && df < subtotal.total.size() && !subtotal.total[df].is_blank()) {
+        if ((aggregation != Aggregation::Sum || result.sum_totals_as_state) && df < subtotal.total.size() &&
+            !subtotal.total[df].is_blank()) {
           append_cell(cells, total_row, col, reify_value(cells, subtotal.total[df]), kind, 0,
                       data_field_name(table, df), data_field_format(table, df));
           continue;

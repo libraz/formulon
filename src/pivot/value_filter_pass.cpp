@@ -141,9 +141,13 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
     for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.values.size(); ++df_idx) {
       const PivotDataField& df = table.data_fields()[df_idx];
       const Aggregation aggregation = subtotal.aggregation.value_or(df.aggregation);
+      const MissingStats missing =
+          subtotal.aggregation.has_value()
+              ? missing_custom_subtotal_stats(table, subtotal.depth, aggregation, df.aggregation)
+              : MissingStats{};
       subtotal.values[df_idx] =
           both_axes ? aggregate_row_partials_or_blank(aggregation, cache, buckets, rows, surviving_col_leaves,
-                                                      df.field_index, result)
+                                                      df.field_index, result, missing)
                     : aggregate_records_or_blank(aggregation, cache, subtotal_records, df.field_index, result);
     }
     for (std::size_t c = 0; c < subtotal.col_values.size() && c < surviving_col_leaves.size(); ++c) {
